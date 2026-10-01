@@ -162,20 +162,48 @@ module ContainerStrategies
     # A session runs about as long as the token lives, so one handed a token with
     # minutes left dies halfway through on an opaque 401. The sweep only tops up in
     # the last stretch of a token's life — the launch has to check for itself.
-    test "before_exec tops up a token that would expire mid-session" do
+    #
+    # The refresh rotates the grant and the vendor revokes the access token it replaced,
+    # so the container must get the new pair: the one from before the refresh is dead on
+    # arrival ("Login expired · Please run /login").
+    test "before_exec tops up a token that would expire mid-session and hands the container the new one" do
+      runtime = stub_container_runtime
+      Thread.current[:session_context_runtime] = nil
       @credential.update!(config_data: {
         "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
                              "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
       })
-      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
-        .to_return(status: 200,
-                   body: { access_token: "fresh-tok", refresh_token: "fresh-ref", expires_in: 3_600 }.to_json,
-                   headers: { "Content-Type" => "application/json" })
-      SessionContextService.stubs(:assemble_session_context)
+      stub_token_refresh(access_token: "fresh-tok", refresh_token: "fresh-ref")
 
       run_before_exec(build_strategy)
 
       assert_equal "fresh-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+      written = JSON.parse(runtime.fs.fetch("/home/claude/.claude/.credentials.json"))
+      assert_equal %w[fresh-tok fresh-ref], written["claudeAiOauth"].values_at("accessToken", "refreshToken")
+    ensure
+      cleanup_runtime_overrides
+    end
+
+    # A container handed the replaced design token gets "DesignSync needs design-system
+    # authorization", and the user signs in to Design again for a login that was fine.
+    test "before_exec hands the container the topped-up design token, not the one it replaced" do
+      runtime = stub_container_runtime
+      Thread.current[:session_context_runtime] = nil
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "base-tok", "refreshToken" => "base-ref",
+                             "expiresAt" => (3.hours.from_now.to_f * 1000).to_i },
+        "designOauth" => { "accessToken" => "old-design-tok", "refreshToken" => "old-design-ref",
+                           "expiresAt" => (15.minutes.from_now.to_f * 1000).to_i, "clientId" => "design-client" }
+      })
+      stub_token_refresh(access_token: "fresh-design-tok", refresh_token: "fresh-design-ref")
+
+      run_before_exec(build_strategy)
+
+      written = JSON.parse(runtime.fs.fetch("/home/claude/.claude/.credentials.json"))
+      assert_equal %w[fresh-design-tok fresh-design-ref], written["designOauth"].values_at("accessToken", "refreshToken")
+      assert_equal "base-tok", written.dig("claudeAiOauth", "accessToken")
+    ensure
+      cleanup_runtime_overrides
     end
 
     # Nothing inside the container can recover from a rejected base login, so the
@@ -945,6 +973,13 @@ module ContainerStrategies
         route_token: @session.route_token,
         credential: cred
       )
+    end
+
+    def stub_token_refresh(access_token:, refresh_token:)
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200,
+                   body: { access_token: access_token, refresh_token: refresh_token, expires_in: 28_800 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
     end
 
     # Drive before_exec with the container plumbing stubbed out — these tests are
