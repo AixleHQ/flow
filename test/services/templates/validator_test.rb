@@ -50,8 +50,8 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_match(%r{\A/surprise: .*disallowed additional property}, errors.first)
   end
 
-  test "a template may require only an integration a user can connect" do
-    Integration::CONNECTABLE_PROVIDERS.each do |provider|
+  test "a template may require only an integration a user can connect, or a tracker" do
+    [ *Integration::CONNECTABLE_PROVIDERS, Trackers::CAPABILITY ].each do |provider|
       errors = errors_for do |d|
         d["requires"]["integrations"] = [ provider ]
         d["tools"].first["requires_integration"] = provider

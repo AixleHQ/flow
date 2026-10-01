@@ -111,4 +111,16 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_equal [ "tracker.issue.status_changed", "other_workflows" ], [ entry["event_type"], entry["aixle_changes"] ]
     assert_match(/any tracker of the installing project/, result.notes.join)
   end
+
+  test "a workflow using a tracker tool exports a tracker requirement the installer can resolve" do
+    tool = create(:tool, :system, name: "tracker_update_issue", requires_integration: Trackers::CAPABILITY)
+    step = @source.workflows.sole.steps.order(:position).first
+    step.update!(tool_ids: step.tool_ids + [ tool.id ])
+
+    result = export
+
+    assert_includes result.package.definition.dig("requires", "integrations"), Trackers::CAPABILITY
+    item = install(result.package).install.setup_items.find_by!(ref: "integration:#{Trackers::CAPABILITY}")
+    assert_equal "Connect a task tracker (Jira or Azure DevOps)", Templates::Presenter.setup_item(item)[:label]
+  end
 end
