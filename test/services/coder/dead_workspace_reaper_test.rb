@@ -141,6 +141,24 @@ module Coder
       end
     end
 
+    test "with the health probe disabled a dead agent is kept but a failed build is still deleted" do
+      service = FakeWorkspaceService.new(workspaces: [
+        running("aixle-prod-1", "u1"),
+        running("aixle-prod-2", "u2", status: "failed")
+      ])
+      original = Settings.coder.health_probe_enabled
+      Settings.coder.health_probe_enabled = false
+      begin
+        sweep = -> { build_reaper(workspace_service: service, health_check: Coder::HealthCheck.new(@integration)).reap }
+        sweep.call
+        travel(11.minutes) { sweep.call }
+      ensure
+        Settings.coder.health_probe_enabled = original
+      end
+
+      assert_equal [ "u2" ], service.deleted_ids
+    end
+
     test "failed builds are capped per sweep like dead ones" do
       service = FakeWorkspaceService.new(workspaces: (1..6).map { |i| running("aixle-prod-#{i}", "u#{i}", status: "failed") })
       build_reaper(workspace_service: service).reap

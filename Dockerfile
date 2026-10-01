@@ -16,19 +16,21 @@ RUN apk add --no-cache tzdata bash curl libpq postgresql-client vips yaml gcompa
 # Only present in the Rails image; the workflow-step image deliberately does NOT
 # receive the CLI or Coder env vars.
 #
-# Downloads the linux amd64 build from the GitHub release tarball (~175MB
-# compressed, ~400MB installed) and ships a single `coder` binary plus
-# license/readme files. The binary is this large because Coder only publishes
-# "fat" builds — every release (all OSes/arches) embeds the web dashboard, so
-# there's no official CLI-only artifact to switch to. A slim, dashboard-less
-# binary exists as an internal build target in the coder repo (`make
-# build/coder-slim_...`) but isn't published anywhere, including their own
-# Docker images — using it here would mean building coder from source
-# in-tree. Decided that's not worth it just to talk to workspaces over SSH;
-# keeping the official fat binary.
+# Downloads the linux build for the image's architecture (`TARGETARCH`, set by
+# BuildKit; Coder's tarballs use the same `amd64`/`arm64` names) from the GitHub
+# release tarball (~175MB compressed, ~400MB installed) and ships a single
+# `coder` binary plus license/readme files. The binary is this large because
+# Coder only publishes "fat" builds — every release (all OSes/arches) embeds
+# the web dashboard, so there's no official CLI-only artifact to switch to. A
+# slim, dashboard-less binary exists as an internal build target in the coder
+# repo (`make build/coder-slim_...`) but isn't published anywhere, including
+# their own Docker images — using it here would mean building coder from
+# source in-tree. Decided that's not worth it just to talk to workspaces over
+# SSH; keeping the official fat binary.
 ARG CODER_CLI_VERSION=v2.34.5
+ARG TARGETARCH
 RUN set -eux; \
-    curl -fsSL "https://github.com/coder/coder/releases/download/${CODER_CLI_VERSION}/coder_${CODER_CLI_VERSION#v}_linux_amd64.tar.gz" \
+    curl -fsSL "https://github.com/coder/coder/releases/download/${CODER_CLI_VERSION}/coder_${CODER_CLI_VERSION#v}_linux_${TARGETARCH}.tar.gz" \
         -o /tmp/coder.tar.gz && \
     mkdir -p /tmp/coder-extract && \
     tar -xzf /tmp/coder.tar.gz -C /tmp/coder-extract && \

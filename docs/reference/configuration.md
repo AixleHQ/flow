@@ -183,7 +183,7 @@ per-project namespaces and network policies separate them.
 | Variable                           | Required | Default  | Purpose                                                                 |
 | ---------------------------------- | -------- | -------- | ----------------------------------------------------------------------- |
 | `CODER_AWAIT_BUILD_TIMEOUT`        | no       | `240`    | Seconds `await_build` polls a workspace build for.                      |
-| `CODER_HEALTH_PROBE_ENABLED`       | no       | `true`   | `false` falls back to passive (agent-reported) health filtering, and also disables the dead-workspace reaper. |
+| `CODER_HEALTH_PROBE_ENABLED`       | no       | `true`   | `false` falls back to passive (agent-reported) health filtering. The reaper then cannot confirm a dead agent and stops deleting those workspaces, but still deletes ones whose last start or stop failed; `CODER_REAP_ENABLED=false` stops all deletion. |
 | `CODER_HEALTH_PROBE_TIMEOUT`       | no       | `15`     | Seconds the active SSH health probe may take.                           |
 | `CODER_HEALTH_LOAD_FACTOR`         | no       | `2.0`    | Reject a workspace when its 1-minute load average exceeds `cores × this`. |
 | `CODER_UNHEALTHY_COOLDOWN_MINUTES` | no       | `30`     | How long a workspace stays out of the pool after failing a probe.       |
@@ -327,7 +327,7 @@ customer's service account only, which needs nothing here.
 | ------------------------------ | -------- | ---------------------- | ------------------------------------------------------------- |
 | `MCP_REGISTRY_BASE_URL`        | no       | official MCP registry  | Point the connector catalog at a private subregistry implementing the same API. |
 | `GITHUB_PUBLIC_READ_TOKEN`     | no       | unset                  | Raises the `api.github.com` limit from 60 to 5,000 requests/hour for the paths that read public repositories: the skills catalog, BMAD module tags, the template catalog, and checking a public repository you attach. The anonymous 60/hour is per source IP, so every agent container shares one budget. Needs no scopes; never use a tenant installation token. |
-| `URL_SAFETY_TRUSTED_HOSTS`     | no       | empty                  | Comma-separated public hostnames allowed to resolve to a private IP (split-horizon DNS for our own staging hosts). |
+| `URL_SAFETY_TRUSTED_HOSTS`     | no       | empty                  | Comma-separated public hostnames allowed to resolve to a private IP (split-horizon DNS for our own staging hosts). Only the Coder integration reads it — its URL check, API calls and `coder ssh`; every other URL check (MCP servers, OAuth endpoints, identity providers) ignores it. |
 | `TOOL_RESULTS_RETENTION_DAYS`  | no       | `30`                   | How long a tool result's stored payload is kept.               |
 | `CONTEXT_TOKEN_BUDGET`         | no       | `6000`                 | Token budget for rendered prompt context.                      |
 

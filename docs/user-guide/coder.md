@@ -16,14 +16,14 @@ Any member who can change the project connects it; viewers cannot.
 
 ## Before you connect
 
-- **An account for Flow.** Flow acts as the account the token belongs to: it
-  lists the workspaces the token can see, starts them, creates new ones in
-  that account, deletes dead ones, and runs commands on them with `coder ssh`.
-  Use an account kept for Flow rather than your own.
-- **A pool.** The pool is every workspace the token can see whose name starts
-  with the connection's machine name prefix. Without a prefix it is every
-  workspace the token can see, which with an admin's token includes other
-  people's. Set a prefix.
+- **An account for Flow.** Flow acts as the account the token belongs to and
+  uses only the workspaces that account owns: it starts them, creates new ones
+  in that account, deletes dead ones, and runs commands on them with
+  `coder ssh`. Use an account kept for Flow rather than your own.
+- **A pool.** The pool is every workspace the token's account owns whose name
+  starts with the connection's machine name prefix, or every workspace it owns
+  when there is no prefix. Other people's workspaces are never in the pool,
+  even with an admin's token.
 - **`git` on the workspaces**, if agents should clone repositories onto them.
 
 ## Connecting
@@ -51,8 +51,8 @@ the prefix and the lock TTL. A failed check still saves a row, named **Coder
 
 **Edit settings** on the row opens **Coder settings** with the same three
 fields. Clearing **Default template** stops Flow creating workspaces. Clearing
-**Machine name prefix** widens the pool to every workspace the token can see,
-and stops Flow deleting dead ones.
+**Machine name prefix** widens the pool to every workspace the token's account
+owns, and stops Flow deleting dead ones.
 
 The URL and the token cannot be changed in place. Connecting again adds a
 second connection instead of replacing the first, so remove the old row
@@ -144,9 +144,9 @@ whose delete build failed is left alone for you to deal with.
 
 - **The `coder` CLI.** Flow runs `coder ssh` from its own app containers, not
   from the agent containers, so the app containers need a network path to
-  Coder. The Flow image ships the CLI (build argument `CODER_CLI_VERSION`,
-  default `v2.34.5`). An image built without it cannot run commands on
-  workspaces.
+  Coder. The Flow image ships the CLI for its own architecture, amd64 or arm64
+  (build argument `CODER_CLI_VERSION`, default `v2.34.5`). An image built
+  without it cannot run commands on workspaces.
 - **Private Coder deployments.** Flow refuses a Coder URL that is, or resolves
   to, a private or internal address. It sends API calls to the host's public
   IPv4 address from public DNS. If your Coder is only reachable inside your
@@ -188,13 +188,13 @@ environment variables. The full list is in the
   says **Active** — the token expired or was revoked after you connected.
   Connect again with a new token, then remove the old row.
 - **`coder_allocate_machine: ExhaustedError: …`** — no workspace could be
-  handed out. The message says why: no workspaces match the prefix, they are
-  held by other sessions, they failed to start, or they are unhealthy. Free
-  some, add some, or set a default template. The message ends with "no
-  default_template configured on the integration, so the pool cannot grow"
-  even when a template is set and creating a workspace from it failed. If you
-  see that with a template set, check that the template name matches one the
-  token's account can use.
+  handed out. The message says why: the token's account owns no workspaces
+  matching the prefix, they are held by other sessions, they failed to start,
+  or they are unhealthy. It ends with why Flow could not add one: no default
+  template is set, or "creating a workspace from template … failed" and
+  Coder's reason. Free some, add some, or set a default template. A "template
+  not found" means the name does not match a template the token's account can
+  use.
 - **"session does not hold the lock for workspace …"** — the lock lapsed
   after **Lock TTL** minutes without a Coder call, and possibly went to
   another session. Allocate again.
