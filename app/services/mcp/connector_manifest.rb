@@ -58,7 +58,7 @@ module MCP
     # docker/base/Dockerfile, not against what the registry suggests: a manifest
     # names the runtime its publisher used, which says nothing about ours.
     #
-    #   npx  — node:22-slim base image
+    #   npx  — node:26-slim base image
     #   uvx  — copied from Astral's image; the runtime the MCP ecosystem
     #          overwhelmingly publishes against for Python servers
     #   pipx — also present, and used when a publisher explicitly asks for it
