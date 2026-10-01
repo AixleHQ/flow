@@ -50,7 +50,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
+import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 
@@ -119,7 +119,23 @@ export const IntegrationsContent = ({
   const [connectMenuOpened, setConnectMenuOpened] = useState(false);
 
   const [azureOpen, setAzureOpen] = useState(false);
+  const [azureSignIn, setAzureSignIn] = useState<AzureSignIn | null>(null);
   const azureAvailable = !!azureDevops?.enabled;
+
+  // Back from "Sign in with Microsoft": the server holds the sign-in, and the
+  // dialog picks up where it left off.
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const handle = query.get('azure_setup');
+    const organization = query.get('azure_organization');
+    if (!handle || !organization) return;
+    setAzureSignIn({ handle, organization });
+    setAzureOpen(true);
+    query.delete('azure_setup');
+    query.delete('azure_organization');
+    const rest = query.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+  }, []);
 
   const [githubOpen, setGithubOpen] = useState(false);
 
@@ -810,7 +826,11 @@ export const IntegrationsContent = ({
       {azureDevops && (
         <AzureDevopsConnectModal
           opened={azureOpen}
-          onClose={() => setAzureOpen(false)}
+          onClose={() => {
+            setAzureOpen(false);
+            setAzureSignIn(null);
+          }}
+          signIn={azureSignIn}
           basePath={basePath}
           azureDevops={azureDevops}
         />

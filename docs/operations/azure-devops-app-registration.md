@@ -64,18 +64,24 @@ Done once per Flow deployment, by whoever owns the deployment.
      never serve another directory; see §0 before choosing it.
    - *Any Entra ID Tenant + Personal Microsoft accounts* and *Personal accounts
      only* — not these, ever.
-4. **Redirect URI:** leave blank, despite the form saying a value is required for
-   most authentication scenarios — that note is about browser sign-in flows.
-   Client credentials never redirect.
+4. **Redirect URI:** platform **Web**,
+   `https://<your domain>/integrations/azure_devops/oauth/callback`. It is for
+   **Sign in with Microsoft**, the way an organization administrator proves
+   control when connecting; the connection itself runs on client credentials,
+   which never redirect. Add one per domain the deployment answers on.
 5. Register, then copy from the **Overview** page:
    - **Application (client) ID** → `AZURE_DEVOPS_CLIENT_ID`
    - **Directory (tenant) ID** → the `TENANT_ID` for step 5, if the organization
      is in this same tenant
 
-**Do not add any API permissions.** Azure DevOps does not use Entra application
-permissions — it has its own permission system, and access is granted in step 4.
-Adding `vso.*` scopes or Graph permissions here does nothing and invites a
-reviewer to ask why they are there.
+**API permissions: add exactly one,** **Azure DevOps → Delegated →
+user_impersonation**. It is what an administrator's sign-in asks for, and only
+while connecting: the token proves they administer the organization, adds the
+application to it and is discarded. The connection's own access is granted in
+step 4 inside Azure DevOps, not here — no application permissions, no `vso.*`
+or Graph scopes. Admin consent is not needed in your own tenant; customers
+approve the application when they sign in, which is also what creates its
+service principal in their directory (step 3 is then unnecessary).
 
 ---
 
@@ -113,6 +119,10 @@ Flow prefers the certificate when both are configured.
 ---
 
 ## 3. Provision the service principal in the customer tenant
+
+Only for a customer connecting with an administrator **personal access token**.
+Signing in with Microsoft approves the application, and that creates its service
+principal; nobody needs to run this.
 
 **Skip this entire section for single-tenant.** Registering the app already
 created its service principal in your own tenant.

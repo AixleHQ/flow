@@ -125,7 +125,7 @@ Azure projects is listed on the project's **Trackers** page, where it can be
 made the primary tracker, set read-only or detached.
 
 Connecting is self-service — someone who administers the organization
-pastes a personal access token once, and the connection runs on Aixle's
+signs in with Microsoft once (or pastes a personal access token), and the connection runs on Aixle's
 own identity afterwards, not on that token. The full walkthrough,
 including what differs between the SaaS and self-hosted deployments, is
 on the [Azure DevOps](/docs/azure-devops) page.

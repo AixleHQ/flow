@@ -47,9 +47,10 @@ module AzureDevops
     # After that the binding itself is the proof — it was established by someone
     # who demonstrated control, and asking a colleague to produce another
     # administrator token just to connect a second project would be theatre.
-    def inspect!(organization:, personal_access_token: nil)
+    def inspect!(organization:, admin: nil)
       tenant = TenantDiscovery.call(organization)
       bound = existing_installation(tenant)
+      same_directory!(admin, tenant)
 
       if bound&.active?
         # A token widens the approved set. Without one this branch could only
@@ -57,8 +58,8 @@ module AzureDevops
         # wanted a second Azure project had no way to add it: `complete!` can
         # widen the installation, and nothing ever showed the wider list to
         # choose from.
-        if personal_access_token.present?
-          proof = OwnershipProof.new(organization: organization, personal_access_token: personal_access_token)
+        if admin
+          proof = OwnershipProof.new(organization: organization, admin: admin)
           verified = proof.call
 
           return Inspection.new(
@@ -74,18 +75,18 @@ module AzureDevops
           organization: tenant.organization, tenant_id: tenant.tenant_id,
           identity: nil, already_bound: true,
           # Listed with the APPLICATION's credential, and therefore only what it
-          # can actually reach — no PAT involved on this path at all.
+          # can actually reach — no administrator involved on this path at all.
           projects: application_projects(bound)
         )
       end
 
-      if personal_access_token.blank?
+      if admin.nil?
         raise ValidationFailed,
-              "Connecting '#{tenant.organization}' for the first time needs a personal access token " \
-              "from someone who can administer it."
+              "Connecting '#{tenant.organization}' for the first time needs someone who can administer it " \
+              "to sign in with Microsoft, or their personal access token."
       end
 
-      proof = OwnershipProof.new(organization: organization, personal_access_token: personal_access_token)
+      proof = OwnershipProof.new(organization: organization, admin: admin)
       verified = proof.call
 
       Inspection.new(
@@ -97,12 +98,13 @@ module AzureDevops
     # Phase two. Everything here is idempotent: re-running it on an organization
     # already bound updates the approved project list rather than duplicating
     # anything.
-    def complete!(organization:, personal_access_token: nil, project_ids:)
+    def complete!(organization:, project_ids:, admin: nil)
       project_ids = Array(project_ids).map(&:to_s).uniq
       raise ValidationFailed, "Choose at least one Azure project" if project_ids.empty?
 
       tenant = TenantDiscovery.call(organization)
       bound = existing_installation(tenant)
+      same_directory!(admin, tenant)
 
       # Already bound and the projects are already approved: nothing to prove and
       # nothing to change in Azure.
@@ -110,11 +112,13 @@ module AzureDevops
         return bound
       end
 
-      if personal_access_token.blank?
-        raise ValidationFailed, "A personal access token is required to approve new projects for this organization"
+      if admin.nil?
+        raise ValidationFailed,
+              "Approving new projects for this organization needs an administrator to sign in with Microsoft, " \
+              "or their personal access token"
       end
 
-      OwnershipProof.call(organization: organization, personal_access_token: personal_access_token)
+      OwnershipProof.call(organization: organization, admin: admin)
 
       installation = build_installation(tenant, project_ids)
 
@@ -123,7 +127,7 @@ module AzureDevops
       # the `oid` claim — so nobody has to find it in the portal and paste it.
       principal_object_id = service_principal_object_id(installation)
 
-      entitle!(organization: organization, personal_access_token: personal_access_token,
+      entitle!(organization: organization, admin: admin,
                principal_object_id: principal_object_id, project_ids: project_ids)
 
       # Spend the token once more, on a permission rather than on a resource:
@@ -135,8 +139,7 @@ module AzureDevops
       # Best effort. An organization that refuses it still gets a working
       # connection; its CI gates resolve through the recovery sweep instead of
       # through events, which is slower and not broken.
-      grant_service_hook_permission(installation, principal_object_id,
-                                    personal_access_token, project_ids)
+      grant_service_hook_permission(installation, principal_object_id, admin, project_ids)
 
       # Prove it worked using the APPLICATION's credential rather than the
       # user's token. Until this passes, the binding would be a promise about
@@ -149,6 +152,17 @@ module AzureDevops
     end
 
     private
+
+    # A Microsoft sign-in proves control of the directory it came from, so it
+    # proves nothing about an organization backed by another one.
+    def same_directory!(admin, tenant)
+      return unless admin&.sign_in?
+      return if admin.tenant_id.to_s.casecmp?(tenant.tenant_id.to_s)
+
+      raise NotAuthorized,
+            "You signed in to a different Microsoft directory than the one '#{tenant.organization}' belongs to. " \
+            "Sign in with an account in that organization's directory."
+    end
 
     # What the application itself can see, for an organization already bound.
     # Intersected with the approved list, same as everywhere else: Azure's answer
@@ -204,7 +218,7 @@ module AzureDevops
     #
     # An application already entitled comes back as a failed operation rather
     # than an error status, which is the normal case on a re-run.
-    def entitle!(organization:, personal_access_token:, principal_object_id:, project_ids:)
+    def entitle!(organization:, admin:, principal_object_id:, project_ids:)
       body = {
         accessLevel: { accountLicenseType: BASIC_LICENSE },
         servicePrincipal: { origin: "aad", originId: principal_object_id, subjectKind: "servicePrincipal" },
@@ -215,7 +229,7 @@ module AzureDevops
 
       response = Faraday.new(url: ENTITLEMENTS_HOST) { |f| transport(f) }
                         .post("/#{ERB::Util.url_encode(organization)}/_apis/serviceprincipalentitlements") do |req|
-        req.headers["Authorization"] = "Basic #{Base64.strict_encode64(":#{personal_access_token}")}"
+        req.headers["Authorization"] = admin.authorization
         req.headers["Content-Type"] = "application/json"
         req.params["api-version"] = ENTITLEMENTS_VERSION
         req.body = body.to_json
@@ -226,9 +240,9 @@ module AzureDevops
       # Same browser-shaped refusal as in OwnershipProof: a redirect or an HTML
       # body means the token was rejected, not that the request was malformed.
       if (300..399).cover?(response.status) || response.headers["content-type"].to_s.include?("text/html")
-        raise NotAuthorized, "That personal access token is not valid for '#{organization}'"
+        raise NotAuthorized, "That #{admin.describe} is not accepted by '#{organization}'"
       end
-      raise NotAuthorized, "That token cannot add the application to '#{organization}'" if response.status == 403
+      raise NotAuthorized, "That #{admin.describe} cannot add the application to '#{organization}'" if response.status == 403
 
       raise Error.new("Azure refused to add the application to the organization (#{response.status})",
                       code: "entitlement_failed", status: response.status)
@@ -236,10 +250,10 @@ module AzureDevops
       raise Error.new("Could not reach Azure DevOps (#{e.class})", code: "azure_unreachable")
     end
 
-    def grant_service_hook_permission(installation, principal_object_id, personal_access_token, project_ids)
+    def grant_service_hook_permission(installation, principal_object_id, admin, project_ids)
       ServiceHookGrant.new(
         organization: installation.organization_slug,
-        personal_access_token: personal_access_token,
+        admin: admin,
         tenant_id: installation.tenant_id,
         principal_object_id: principal_object_id
       ).call(project_ids)

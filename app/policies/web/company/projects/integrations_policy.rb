@@ -16,6 +16,7 @@ module Web
         # requires proving control of that organization to Azure itself.
         def azure_devops_inspect? = manage_integrations?
         def azure_devops_connect? = manage_integrations?
+        def azure_devops_sign_in? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def github_app_install? = manage_integrations?
         def jira_oauth_start? = manage_integrations?

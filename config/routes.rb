@@ -410,6 +410,9 @@ Rails.application.routes.draw do
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
     # The one redirect URI registered on Aixle's Atlassian OAuth app.
     get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
+    # Redirect URI on Aixle's Entra application for an administrator's sign-in.
+    get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
+                                                    as: :azure_devops_oauth_callback
 
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,
@@ -522,6 +525,8 @@ Rails.application.routes.draw do
               # `connect` entitles the application and records the binding.
               post :azure_devops_inspect
               post :azure_devops_connect
+              # "Sign in with Microsoft" instead of an administrator PAT.
+              get :azure_devops_sign_in
               # Jira: the OAuth app redirect, and the service-account check
               # that lists what a credential can see before it is saved.
               get :jira_oauth_start

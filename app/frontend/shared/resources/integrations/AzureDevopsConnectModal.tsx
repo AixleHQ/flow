@@ -8,13 +8,14 @@ import {
   Modal,
   MultiSelect,
   PasswordInput,
+  Radio,
   Stack,
   Text,
   TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface AzureDevopsProject {
   id: string;
@@ -28,12 +29,21 @@ export interface AzureDevopsProps {
   clientId?: string | null;
 }
 
+/** A Microsoft sign-in the server holds, to resume the dialog with after the redirect back. */
+export interface AzureSignIn {
+  handle: string;
+  organization: string;
+}
+
 interface Props {
   opened: boolean;
   onClose: () => void;
   basePath: string;
   azureDevops: AzureDevopsProps;
+  signIn?: AzureSignIn | null;
 }
+
+type Proof = 'sign_in' | 'admin_pat';
 
 // Mirrors AzureDevops::IntegrationService::ALL_CAPABILITIES. These are Aixle's
 // operation profile, not Azure's ACLs: unticking one stops the request being
@@ -81,10 +91,11 @@ const postJson = async (url: string, body: Record<string, unknown>) => {
   return payload;
 };
 
-export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops }: Props) => {
+export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops, signIn }: Props) => {
   const patAvailable = !!azureDevops.patModeEnabled;
 
   const [authMode, setAuthMode] = useState<'service_principal' | 'pat'>('service_principal');
+  const [proof, setProof] = useState<Proof>('sign_in');
   const [organization, setOrganization] = useState('');
   const [adminPat, setAdminPat] = useState('');
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -100,6 +111,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
 
   const reset = useCallback(() => {
     setAuthMode('service_principal');
+    setProof('sign_in');
     setOrganization('');
     setAdminPat('');
     setInspection(null);
@@ -125,7 +137,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     try {
       const result = (await postJson(`${basePath}/azure_devops_inspect`, {
         organization: organization.trim(),
-        personal_access_token: adminPat.trim(),
+        ...(signIn ? { sign_in: signIn.handle } : { personal_access_token: adminPat.trim() }),
       })) as Inspection;
       setInspection(result);
       // Nothing is preselected: a connection reaches what someone chose,
@@ -136,7 +148,19 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     } finally {
       setVerifying(false);
     }
-  }, [adminPat, basePath, organization]);
+  }, [adminPat, basePath, organization, signIn]);
+
+  // Back from Microsoft: the sign-in is held on the server, so verify with it
+  // straight away instead of asking for anything again.
+  useEffect(() => {
+    if (!opened || !signIn) return;
+    setOrganization(signIn.organization);
+    setProof('sign_in');
+  }, [opened, signIn]);
+
+  useEffect(() => {
+    if (opened && signIn && organization === signIn.organization && !inspection && !verifying && !error) void verify();
+  }, [error, inspection, opened, organization, signIn, verify, verifying]);
 
   // Step two: entitle the application in the organization, record the binding,
   // then create the project connection on top of it.
@@ -147,7 +171,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     try {
       const bound = (await postJson(`${basePath}/azure_devops_connect`, {
         organization: inspection.organization,
-        personal_access_token: adminPat.trim(),
+        ...(signIn ? { sign_in: signIn.handle } : { personal_access_token: adminPat.trim() }),
         project_ids: projectIds,
       })) as { installationId: number };
 
@@ -181,7 +205,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
       setError(e instanceof Error ? e.message : 'Could not connect Azure DevOps');
       setLoading(false);
     }
-  }, [adminPat, basePath, capabilities, close, inspection, projectIds]);
+  }, [adminPat, basePath, capabilities, close, inspection, projectIds, signIn]);
 
   const submitPat = useCallback(() => {
     if (!organization.trim() || !patProjectId.trim() || !pat.trim()) return;
@@ -235,7 +259,53 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               disabled={!!inspection}
             />
 
-            {!inspection && azureDevops.clientId && (
+            {!inspection && !signIn && (
+              <Radio.Group value={proof} onChange={(value) => setProof(value as Proof)}>
+                <Stack gap="sm">
+                  <Radio
+                    value="sign_in"
+                    label="I administer the organization and can sign in with Microsoft (Recommended)"
+                    description="Aixle gets its own identity in your organization: a service principal with its own access, never a person's token. Microsoft asks you to approve Aixle once, and that approval also adds Aixle's application to your directory."
+                  />
+                  <Radio
+                    value="admin_pat"
+                    label="I'll prove it with an administrator personal access token"
+                    description="For a directory where you cannot approve applications yourself. The token is used once and never stored, and the connection still runs on Aixle's own identity."
+                  />
+                </Stack>
+              </Radio.Group>
+            )}
+
+            {!inspection && proof === 'sign_in' && !signIn && (
+              <>
+                <Text size="sm" c="dimmed">
+                  You will be sent to Microsoft to sign in as an administrator of this organization, then returned here
+                  to choose its projects.
+                </Text>
+                <Group justify="space-between">
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    onClick={verify}
+                    loading={verifying}
+                    disabled={!organization.trim()}
+                  >
+                    Already connected for your company? Continue without signing in
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`${basePath}/azure_devops_sign_in?organization=${encodeURIComponent(organization.trim())}`}
+                    disabled={!organization.trim()}
+                  >
+                    Sign in with Microsoft
+                  </Button>
+                </Group>
+              </>
+            )}
+
+            {!inspection && signIn && verifying && <Text size="sm">Checking your Microsoft sign-in…</Text>}
+
+            {!inspection && proof === 'admin_pat' && azureDevops.clientId && (
               // Shown BEFORE verifying, not only after it fails: this is the one
               // step that happens outside Flow, in a different portal, and
               // usually by a different person. Finding out about it from an
@@ -251,7 +321,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               </Alert>
             )}
 
-            {!inspection && (
+            {!inspection && proof === 'admin_pat' && (
               <>
                 <PasswordInput
                   label="Administrator personal access token"
@@ -272,7 +342,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                 <Alert color="green" icon={<IconCheck size={16} />} title="Organization verified">
                   <Text size="sm">
                     {inspection.alreadyBound
-                      ? `Your company has already connected this organization${inspection.identity ? `, and ${inspection.identity} approved more projects just now` : ', so no token was needed'}.`
+                      ? `Your company has already connected this organization${inspection.identity ? `, and ${inspection.identity} can approve more projects now` : ', so no sign-in was needed'}.`
                       : `Verified${inspection.identity ? ` as ${inspection.identity}` : ''}. Aixle will be added to this organization with a Basic access level.`}
                   </Text>
                 </Alert>
@@ -372,7 +442,9 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                 setError(null);
               }}
             >
-              {authMode === 'pat' ? 'Use Aixle’s own identity instead' : 'Use a personal access token instead'}
+              {authMode === 'pat'
+                ? 'Use Aixle’s own identity instead'
+                : 'Connect as yourself with a personal access token instead'}
             </Button>
           ) : (
             <span />
