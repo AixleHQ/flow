@@ -25,6 +25,7 @@ import peopleAndAccess from './people-and-access.md?raw';
 import personas from './personas.md?raw';
 import plansAndLimits from './plans-and-limits.md?raw';
 import projectHome from './project-home.md?raw';
+import promptGuide from './prompt-guide.md?raw';
 import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
 import repositories from './repositories.md?raw';
@@ -263,6 +264,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: workflows,
     toc: extractToc(workflows),
+  },
+  'prompt-guide': {
+    title: 'Prompt guide',
+    section: 'User guide',
+    content: promptGuide,
+    toc: extractToc(promptGuide),
   },
   'triggers-and-gates': {
     title: 'Triggers and Gates',

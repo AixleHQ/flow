@@ -52,14 +52,15 @@ export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPan
             <span className={classes.instrDot} title="Required" />
           </label>
           <p className={classes.fieldHelp}>
-            Use <code>{'{{artifact_name}}'}</code> to reference workflow assets.{' '}
-            <a href="#" onClick={(e) => e.preventDefault()}>
+            The agent receives these instructions exactly as written. Point it at files by path, e.g.{' '}
+            <code>/workspace/assets/…</code>.{' '}
+            <a href="/docs/prompt-guide" target="_blank" rel="noopener noreferrer">
               Prompt guide <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
             </a>
           </p>
           <textarea
             className={classes.instrTa}
-            placeholder="Enter instructions… Use {{artifact_name}} for variable references."
+            placeholder="Enter instructions… What should the agent do, and when is it done?"
             aria-label="Step instructions"
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}

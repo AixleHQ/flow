@@ -42,7 +42,7 @@ layout:
 ├── assets/             ← pre-loaded input files (read-only-ish)
 │   ├── <workflow base assets>
 │   ├── <run-time assets>
-│   └── <task assets, if board-triggered>
+│   └── <outputs of Run-after steps>
 ├── repo/               ← Git repositories the step selected
 │   └── <repo_name>/    ← the repository's source branch checked out, every branch fetched
 └── references/         ← reference docs (only in Aixle Builder sessions)
@@ -96,3 +96,5 @@ build narrowly and add up.
 | Agent can't reach an MCP server                               | MCP server credentials missing in **Config Items**, or wrong `transport`.                   |
 | Container hangs in "pulling image"                            | Run `make build-agents` to rebuild the runtime images locally.                              |
 | `cost_cents` is `null` on a finished session                  | The runtime didn't emit usage events. Check the session logs in **Admin → Session Logs**.   |
+
+For how to write the instructions a step gives its agent, see the [Prompt guide](prompt-guide.md).

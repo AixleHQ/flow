@@ -13,6 +13,7 @@ Read in any order:
 
 - **[Board](board.md)** — projects, columns, cards, and column → workflow bindings.
 - **[Workflows](workflows.md)** — DAG steps, retries, approval gates, parallel runs.
+- **[Prompt guide](prompt-guide.md)** — writing session instructions an agent can run.
 - **[Agents](agents.md)** — personas, the container, and how session context is built.
 - **[Runtimes](runtimes.md)** — the seven LLM CLIs (Claude Code, Cursor CLI,
   Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials,
