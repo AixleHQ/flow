@@ -20,6 +20,7 @@ import github from './github.md?raw';
 import gitlab from './gitlab.md?raw';
 import integrations from './integrations.md?raw';
 import jira from './jira.md?raw';
+import linear from './linear.md?raw';
 import mcp from './mcp.md?raw';
 import peopleAndAccess from './people-and-access.md?raw';
 import personas from './personas.md?raw';
@@ -306,6 +307,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: jira,
     toc: extractToc(jira),
+  },
+  linear: {
+    title: 'Linear',
+    section: 'User guide',
+    content: linear,
+    toc: extractToc(linear),
   },
   trackers: {
     title: 'Trackers',
