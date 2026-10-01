@@ -41,6 +41,13 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
     refute_includes data.keys, "credentials"
   end
 
+  test "get_integration_setup_url refuses a provider that cannot be connected" do
+    body = call_tool("get_integration_setup_url", { project_id: @project.id, provider: "linear" })
+
+    assert error?(body)
+    assert_match(%r{/provider}, text(body))
+  end
+
   # The regression: chaining `.ui_visible` onto `visible_for_project` left only
   # project-scoped custom tools, so a project without any answered `[]`.
   test "list_project_tools lists attachable platform tools for a project with no custom tools" do

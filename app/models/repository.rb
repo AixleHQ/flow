@@ -11,8 +11,8 @@ class Repository < ApplicationRecord
     "gitlab.com" => "gitlab"
   }.freeze
 
-  # Providers a repository can be cloned from. Integrations also cover Linear,
-  # Coder and Slack, none of which host git.
+  # Providers a repository can be cloned from. Integrations also cover Coder,
+  # Slack and Jira, none of which host git.
   CODE_HOST_PROVIDERS = %w[github gitlab azure_devops].freeze
 
   # Azure project and repository names may contain spaces and other characters

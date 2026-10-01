@@ -92,7 +92,12 @@ module Templates
       detail = item.detail
       case item.kind
       when "secret" then "Add the secret #{detail['name']}"
-      when "integration" then "Connect #{detail['provider'].to_s.titleize}"
+      when "integration"
+        if detail["provider"] == Trackers::CAPABILITY
+          "Connect a task tracker (Jira or Azure DevOps)"
+        else
+          "Connect #{detail['provider'].to_s.titleize}"
+        end
       when "repository" then "Attach a repository (#{detail['key']})"
       when "oauth" then "Sign in to #{detail['name']}"
       when "probe" then "Could not reach #{detail['name']}"

@@ -120,10 +120,11 @@
             "enum": [
               "github",
               "gitlab",
-              "linear",
               "slack",
               "azure_devops",
-              "coder"
+              "coder",
+              "jira",
+              "tracker"
             ]
           },
           "uniqueItems": true
@@ -662,10 +663,11 @@
                 "enum": [
                   "github",
                   "gitlab",
-                  "linear",
                   "slack",
                   "azure_devops",
-                  "coder"
+                  "coder",
+                  "jira",
+                  "tracker"
                 ]
               },
               "files": {
