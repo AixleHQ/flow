@@ -5,7 +5,7 @@ require "test_helper"
 # Deployed environments run Action Cable on Redis; the test env runs it on the
 # `test` adapter, so without this nothing in the suite ever loads the Redis one.
 # Loading it is what checks the installed redis gem against the versions the
-# adapter accepts — the check a redis 6 bump would otherwise fail only at boot.
+# adapter accepts — the check a redis major bump would otherwise fail only at boot.
 class ActionCableRedisTest < ActiveSupport::TestCase
   test "the deployed cable adapter loads with the bundled redis gem" do
     assert_nothing_raised { require "action_cable/subscription_adapter/redis" }

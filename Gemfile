@@ -72,12 +72,11 @@ gem "rails-i18n"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 # gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-# Only deployed environments load Action Cable's Redis adapter — the test env's
-# cable adapter is `test`, so CI never runs cable pub/sub. The adapter accepts
-# redis < 7 since Rails 8.1.4, but redis 6 defaults to RESP3: held below 6 until
-# a bump is checked against real pub/sub. test/config/action_cable_redis_test.rb
-# loads the adapter to catch a redis version it rejects.
-gem "redis", ">= 4", "< 6"
+# Action Cable's Redis adapter asks for redis >= 4, < 7 when it loads, and only
+# deployed environments load it: the test env's cable adapter is `test`, so CI
+# never exercises cable pub/sub. test/config/action_cable_redis_test.rb loads
+# the adapter to catch a redis version it rejects.
+gem "redis", ">= 4", "< 7"
 
 # Temporal workflow orchestration (official SDK)
 gem "temporalio"
