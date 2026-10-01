@@ -688,15 +688,23 @@ module Coder
         if [ -z "$BASE" ]; then echo "#{JOB_MARKER} state=unknown exit_code="; exit 0; fi
         STATE=running
         CODE=""
+        # Liveness first, the exit file second. The wrapper publishes its exit
+        # file before it exits, so once its pid is seen dead, an exit file that
+        # is still missing was never published. Read the other way round, a job
+        # that finished between the two reads is reported as `died`.
+        WRAPPER=""
+        if [ -f "$BASE.pid" ]; then
+          PID=$(cat "$BASE.pid" 2>/dev/null)
+          if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then WRAPPER=alive; else WRAPPER=gone; fi
+        fi
         # `-s`, not `-f`: the wrapper publishes the exit file by rename, but one
         # launched before that change still truncates it first, and a poll that
         # lands in between must not report a finished job with no exit code.
         if [ -s "$BASE.exit" ]; then
           STATE=exited
           CODE=$(cat "$BASE.exit" 2>/dev/null)
-        elif [ -f "$BASE.pid" ]; then
-          PID=$(cat "$BASE.pid" 2>/dev/null)
-          if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then STATE=running; else STATE=died; fi
+        elif [ "$WRAPPER" = gone ]; then
+          STATE=died
         fi
         echo "#{JOB_MARKER} state=$STATE exit_code=$CODE"
         echo "#{JOB_META_SEPARATOR}"

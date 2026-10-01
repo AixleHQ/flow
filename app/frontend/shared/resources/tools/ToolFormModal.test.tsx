@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -20,6 +20,45 @@ vi.mock('./ToolFileEditor', async () => {
   const { createElement } = await import('react');
   return { ToolFileEditor: () => createElement('div', null, 'Content') };
 });
+
+// vitest does not stop a test that times out: its remaining steps keep running while the next test
+// renders, and their `screen` queries then land on that test's form — a late Create click there is a
+// real submit the next test observes. A user bound to its own test refuses to act once it is over.
+function setupUser() {
+  const user = userEvent.setup();
+  let finished = false;
+  onTestFinished(() => {
+    finished = true;
+  });
+  return new Proxy(user, {
+    get(target, key, receiver) {
+      const value: unknown = Reflect.get(target, key, receiver);
+      if (typeof value !== 'function') return value;
+      return (...args: unknown[]) => {
+        if (finished) throw new Error(`user.${String(key)}() called after its test finished`);
+        return value.apply(target, args);
+      };
+    },
+  });
+}
+
+type User = ReturnType<typeof setupUser>;
+
+// One input event per field rather than one per character: every keystroke re-renders the whole
+// drawer, which is what pushed the submit tests past their timeout on a loaded runner. The click is
+// not redundant with clear(): the drawer's focus trap takes focus on a timer after it opens, so the
+// first action of a test loses focus to the Close button, and a paste right after it lands there.
+async function fillIn(user: User, field: HTMLElement, value: string) {
+  await user.click(field);
+  await user.clear(field);
+  await user.paste(value);
+}
+
+async function fillBasicInfo(user: User) {
+  await fillIn(user, screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+  await fillIn(user, screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+  await fillIn(user, screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+}
 
 const editTool = {
   id: 7,
@@ -57,14 +96,17 @@ describe('ToolFormModal', () => {
   });
 
   it('clicking the drawer close button calls onClose', async () => {
+    const user = setupUser();
     const onClose = vi.fn();
     renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
   });
 
   it('does NOT fire a backend request when required fields are empty (validation blocks submit)', async () => {
+    const user = setupUser();
+
     // The component's zodResolver runs on submit and, with this zod version, throws while
     // building error messages — React 19 re-emits that as a window "error" event. We swallow
     // exactly that expected event so the run stays green; the assertion below proves submit was
@@ -74,7 +116,7 @@ describe('ToolFormModal', () => {
     try {
       renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-      await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+      await user.click(screen.getByRole('button', { name: 'Create' }));
 
       expect(router.post).not.toHaveBeenCalled();
       expect(router.patch).not.toHaveBeenCalled();
@@ -84,13 +126,12 @@ describe('ToolFormModal', () => {
   });
 
   it('a valid create submit fires router.post to basePath with the tool payload', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await fillBasicInfo(user);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() =>
       expect(router.post).toHaveBeenCalledWith(
@@ -109,13 +150,14 @@ describe('ToolFormModal', () => {
   });
 
   it('a valid edit submit fires router.patch to basePath/{id}', async () => {
+    const user = setupUser();
     renderPage(
       <ToolFormModal opened onClose={vi.fn()} editTool={editTool} configItemNames={[]} basePath="/projects/1/tools" />,
     );
 
     await waitFor(() => expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue('My Custom Tool'));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(router.patch).toHaveBeenCalledWith(
@@ -148,28 +190,31 @@ describe('ToolFormModal', () => {
   });
 
   it('normalizes the Name field: uppercase and punctuation become lowercase + underscores', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
     const name = screen.getByRole('textbox', { name: /^name$/i });
-    await userEvent.type(name, 'My-Cool Tool!');
+    await user.type(name, 'My-Cool Tool!');
 
     await waitFor(() => expect(name).toHaveValue('my_cool_tool_'));
   });
 
   it('shows the empty-files message and a zero count on the Files tab by default', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
 
     expect(screen.getByText(/no files\. add files to mount into the container\./i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add file/i })).toBeInTheDocument();
   });
 
   it('Add File adds a file row (pre-filled /workspace/ path) and bumps the Files tab count', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
 
     expect(screen.getByRole('textbox', { name: /^path$/i })).toHaveValue('/workspace/');
     expect(screen.getByRole('tab', { name: /files \(1\)/i })).toBeInTheDocument();
@@ -178,65 +223,65 @@ describe('ToolFormModal', () => {
   });
 
   it('shows a path-validation error when the file path does not start with /workspace/', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
 
     const path = screen.getByRole('textbox', { name: /^path$/i });
-    await userEvent.clear(path);
-    await userEvent.type(path, '/etc/passwd');
+    await fillIn(user, path, '/etc/passwd');
 
     expect(await screen.findByText('Path must start with /workspace/')).toBeInTheDocument();
   });
 
   it('removing a newly-added (unsaved) file row drops it and resets the count to zero', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
     expect(screen.getByRole('tab', { name: /files \(1\)/i })).toBeInTheDocument();
 
     // The trash ActionIcon is the only button rendered without text inside the file panel.
     const panel = screen.getByRole('tabpanel');
     const buttons = within(panel).getAllByRole('button');
     const trash = buttons.find((b) => b.textContent === '');
-    await userEvent.click(trash as HTMLElement);
+    await user.click(trash as HTMLElement);
 
     expect(screen.getByRole('tab', { name: /files \(0\)/i })).toBeInTheDocument();
     expect(screen.getByText(/no files\. add files to mount into the container\./i)).toBeInTheDocument();
   });
 
   it('switching a file to Upload mode reveals the click-to-select dropzone', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
 
     // Text mode active by default → editor "Content" label visible.
     expect(screen.getByText('Content')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('radio', { name: /upload/i }));
+    await user.click(screen.getByRole('radio', { name: /upload/i }));
 
     expect(await screen.findByText(/click to select a file/i)).toBeInTheDocument();
     expect(screen.queryByText('Content')).not.toBeInTheDocument();
   });
 
   it('submitting with an invalid file path is blocked, fires no request, and jumps to the Files tab', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
     // Fill valid basic fields so the only blocker is the bad file path.
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Scraper Tool');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await fillBasicInfo(user);
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
     const path = screen.getByRole('textbox', { name: /^path$/i });
-    await userEvent.clear(path);
-    await userEvent.type(path, '/bad/place');
+    await fillIn(user, path, '/bad/place');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     // handleSubmit bails (setActiveTab('files'), no router call).
     await waitFor(() =>
@@ -247,6 +292,7 @@ describe('ToolFormModal', () => {
   });
 
   it('renders the config MultiSelect options on the Secrets tab', async () => {
+    const user = setupUser();
     renderPage(
       <ToolFormModal
         opened
@@ -256,17 +302,18 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /secrets/i }));
+    await user.click(screen.getByRole('tab', { name: /secrets/i }));
 
     expect(screen.getByText(/select secrets to inject as environment variables/i)).toBeInTheDocument();
 
     // Open the searchable MultiSelect dropdown and assert the seeded options appear.
-    await userEvent.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
+    await user.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
     expect(await screen.findByText('OPENAI_API_KEY')).toBeInTheDocument();
     expect(screen.getByText('DATABASE_URL')).toBeInTheDocument();
   });
 
   it('pre-fills existing tool files (path + count) in edit mode', async () => {
+    const user = setupUser();
     const toolWithFiles = {
       ...editTool,
       toolFiles: [
@@ -291,11 +338,12 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(1\)/i }));
     expect(screen.getByRole('textbox', { name: /^path$/i })).toHaveValue('/workspace/run.py');
   });
 
   it('shows the existing uploaded-file row with a Download link for a binary tool file in edit mode', async () => {
+    const user = setupUser();
     const toolWithBinary = {
       ...editTool,
       toolFiles: [
@@ -320,7 +368,7 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(1\)/i }));
 
     expect(screen.getByText('data.bin')).toBeInTheDocument();
     const download = screen.getByRole('link', { name: /download/i });
@@ -329,20 +377,18 @@ describe('ToolFormModal', () => {
   });
 
   it('a valid create submit with a text file includes it in tool_files_attributes', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await fillBasicInfo(user);
 
     // Add a file with a valid /workspace/ path so it survives handleSubmit's path guard.
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
     const path = screen.getByRole('textbox', { name: /^path$/i });
-    await userEvent.clear(path);
-    await userEvent.type(path, '/workspace/run.py');
+    await fillIn(user, path, '/workspace/run.py');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     // No uploads → the JSON (non-FormData) branch: activeFiles are mapped into toolFilesAttributes.
     // ToolFileEditor is stubbed and never emits onChange, so the file's content stays ''.
@@ -363,20 +409,19 @@ describe('ToolFormModal', () => {
   });
 
   it('submitting an upload-mode file with no file selected is blocked and jumps to the Files tab', async () => {
+    const user = setupUser();
     renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
     // Valid basic fields so the only blocker is the missing upload.
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await fillBasicInfo(user);
 
     // Add a file (default /workspace/ path is valid), switch to Upload mode, select nothing.
-    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
-    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
-    await userEvent.click(screen.getByRole('radio', { name: /upload/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await user.click(screen.getByRole('button', { name: /add file/i }));
+    await user.click(screen.getByRole('radio', { name: /upload/i }));
     expect(await screen.findByText(/click to select a file/i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     // handleSubmit's uploadFileMissing guard bails: no request, tab forced to Files.
     await waitFor(() =>
@@ -387,6 +432,7 @@ describe('ToolFormModal', () => {
   });
 
   it('removing a saved file in edit mode marks it _destroy and Save submits the deletion', async () => {
+    const user = setupUser();
     const toolWithFiles = {
       ...editTool,
       toolFiles: [
@@ -411,20 +457,20 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));
+    await user.click(screen.getByRole('tab', { name: /files \(1\)/i }));
 
     // The trash ActionIcon is the only text-less button in the file panel.
     const panel = screen.getByRole('tabpanel');
     const trash = within(panel)
       .getAllByRole('button')
       .find((b) => b.textContent === '');
-    await userEvent.click(trash as HTMLElement);
+    await user.click(trash as HTMLElement);
 
     // A saved row (has id) is kept but hidden as _destroy → count drops and the empty message returns.
     expect(screen.getByRole('tab', { name: /files \(0\)/i })).toBeInTheDocument();
     expect(screen.getByText(/no files\. add files to mount into the container\./i)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(router.patch).toHaveBeenCalledWith(
@@ -441,6 +487,7 @@ describe('ToolFormModal', () => {
   });
 
   it('selecting a config item includes it in the submit payload', async () => {
+    const user = setupUser();
     renderPage(
       <ToolFormModal
         opened
@@ -450,15 +497,13 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await fillBasicInfo(user);
 
-    await userEvent.click(screen.getByRole('tab', { name: /secrets/i }));
-    await userEvent.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
-    await userEvent.click(await screen.findByRole('option', { name: 'OPENAI_API_KEY' }));
+    await user.click(screen.getByRole('tab', { name: /secrets/i }));
+    await user.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
+    await user.click(await screen.findByRole('option', { name: 'OPENAI_API_KEY' }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() =>
       expect(router.post).toHaveBeenCalledWith(
@@ -472,13 +517,12 @@ describe('ToolFormModal', () => {
   });
 
   it('closes the modal via the router onSuccess callback after a create submit', async () => {
+    const user = setupUser();
     const onClose = vi.fn();
     renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await fillBasicInfo(user);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(router.post).toHaveBeenCalled());
 
@@ -490,13 +534,12 @@ describe('ToolFormModal', () => {
   });
 
   it('surfaces server-side field errors from the router onError callback', async () => {
+    const user = setupUser();
     const onClose = vi.fn();
     renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
-    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
-    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await fillBasicInfo(user);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(router.post).toHaveBeenCalled());
 
