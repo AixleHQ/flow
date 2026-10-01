@@ -54,6 +54,13 @@ class ProjectTracker < ApplicationRecord
     usable? && read_write?
   end
 
+  # A mention is matched against the connection's own account in the tracker,
+  # which an Azure connection learns from its first write and a Jira one has
+  # only when that account is kept for Aixle (Trackers::Provider#identity).
+  def recognizes_mentions?
+    tracker_provider.identity.present?
+  end
+
   def make_primary!
     transaction do
       ProjectTracker.for_project(project).where.not(id: id).where(primary: true).update_all(primary: false)

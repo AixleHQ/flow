@@ -34,19 +34,26 @@ project's first tracker becomes its primary. A Jira connection whose projects
 change gets trackers for the new ones, and the trackers of projects it no
 longer covers are detached.
 
+To get a tracker for another external project, add the project to its
+connection on the **Integrations** page; when there is nothing to add here, the
+page says so and links there.
+
 **Add tracker** appears only when one of this project's connections covers an
-external project that has no row here yet. It asks for the **Connection**, the
-**Project**, a **Handle**, and whether it is **Read-only** or the
-**Primary tracker**. A tracker added while the project has no primary becomes
-the primary.
+external project that has no row here yet. Connecting creates a tracker for
+every external project the connection covers, so this is rare. It asks for the
+**Connection**, the **Project**, a **Handle**, and whether it is **Read-only**
+or the **Primary tracker**. A tracker added while the project has no primary
+becomes the primary.
 
 ### Handle
 
 The handle is what agents and triggers call a tracker: an agent passes it as
 `tracker`, and the trigger form lists trackers as `Name (handle)`. It is
 lowercase letters, digits and dashes, unique in the project, and derived from
-the external project's name unless you type one. The page has no way to change
-it afterwards.
+the external project's name unless you type one. **Edit handle** (the pencil on
+the row) changes it. Triggers point at the tracker, not at its handle, so they
+are not affected; workflow instructions that name the old handle need the new
+one.
 
 ### Primary
 
@@ -82,12 +89,17 @@ connection or the tracker itself:
 
 - agents stop reaching its issues; in a run that tracker started, the
   `tracker_*` tools return an error instead of falling back to another tracker;
-- its triggers stay but stop firing, and the workflow's Triggers tab shows
-  them as listening to a "detached tracker";
+- its triggers stay, still switched on, but stop firing. The workflow's
+  Triggers tab shows them as listening to "*handle* (detached, not firing)".
+  They stay editable: the trigger form keeps the detached tracker and says the
+  trigger does not fire. A trigger cannot be moved onto a detached tracker;
 - links from board tasks to its issues stay.
 
-**Attach again** on the row brings it back, and its triggers fire again.
-Reconnecting does not bring back a tracker you detached.
+**Attach again** on the row brings it back, and its triggers fire again. When
+the connection no longer covers the external project — a Jira project taken
+off the connection, for example — attaching is refused with that reason: add
+the project to the connection on the **Integrations** page first. Reconnecting
+does not bring back a tracker you detached.
 
 Removing the connection itself removes its trackers. Their triggers are
 switched off first, and from then on show as listening to any tracker.
@@ -114,15 +126,16 @@ is missing: "Add a board to this project first: the issue gets a task in one of
 its columns", or "Create a workflow first: moving an issue to the column starts
 it". Create the board (**Tasks → Create your task board**) or the workflow
 (**Workflows**), then come back. If the project is not meant to have a board, add a tracker
-trigger from the workflow instead (below) and set its subject to
-**None — project-level run**.
+trigger from the workflow instead (below): without a board its subject is
+**None — project-level run**, and the subjects that create a task are greyed
+out.
 
 ### The drawer
 
 | Field | What to choose |
 | --- | --- |
-| **Start a workflow when** | **An issue moves to a column**, or **Aixle is mentioned in a comment** |
-| **Column** | The column on the tracker's board. The suggestions are the board's columns; a typed name must match the board exactly, including case |
+| **Start a workflow when** | **An issue moves to a column**, or **Aixle is mentioned in a comment** — greyed out, with the reason, while Flow cannot recognise a mention (below) |
+| **Column** | The column on the tracker's board, picked from its columns. Only when Flow cannot read them do you type the name, and the drawer warns that it is not checked: it must match the board exactly, including case |
 | **Workflow** | The workflow to start |
 | **Task column** | Where the issue's board task is created, the first time |
 
@@ -146,7 +159,9 @@ An ordinary tracker trigger on the chosen workflow:
 The trigger runs as you. It appears on the workflow's **Triggers** tab as
 "Issue moves to Ready for AI" or "Aixle is mentioned in a comment", where you
 edit, switch off or delete it like any other trigger. Connecting the same
-column again adds a second trigger, and both fire.
+column to the same workflow again is refused, since the workflow already has
+that trigger; connecting it to another workflow adds a trigger there, and both
+workflows start.
 
 Flow never moves the issue because a run started or finished. Say in the
 workflow's instructions where the issue goes next — "In Progress" when work
@@ -160,7 +175,9 @@ A mention is recognised only once Flow knows its own account in the tracker:
 - **Jira** — a service-account connection, or an Atlassian account marked
   **This Atlassian account is kept for Aixle**.
 
-Until then, a mention trigger never fires.
+Until then, a mention trigger never fires: the drawer greys out
+**Aixle is mentioned in a comment** and says why, and the trigger form says so
+under **Only when Aixle is mentioned**.
 
 ---
 
@@ -189,10 +206,12 @@ event cannot be changed once the trigger exists.
 
 - **Tracker** — one tracker, or **Any tracker in this project**. Any tracker
   keeps the trigger working while a project moves from one tracker to another.
+  A trigger whose tracker was detached keeps it, marked detached.
 - **Moves to** — for status changes: one or more columns. Blank fires on any
   status change. Names match exactly, including case.
 - **Only when Aixle is mentioned** — for comments. On by default; the mention
-  rules are the same as for the shortcut.
+  rules are the same as for the shortcut, and the form says when a mention
+  cannot start the trigger yet.
 - **Text contains** — for issue events, the issue's title and description; for
   comments, the comment. Case-sensitive.
 - **Changes made by Aixle** — see below.
@@ -203,17 +222,21 @@ There is no assignee condition: an **Issue is assigned** trigger fires on every
 assignee change in the trackers it listens to. The API and the personal MCP tool
 `create_workflow_trigger` accept any filter over the event data —
 `issue.type`, `issue.labels` (with the `includes` operator),
-`change.to.category`, `change.to` for an assignee — but editing such a trigger
-in the form replaces its filter with what the form shows.
+`change.to.category`, `change.to` for an assignee. The form lists such
+conditions under **Other conditions** and keeps them when you save.
+
+A workflow takes a tracker trigger once: a second one with the same event,
+tracker and conditions is refused, because the two would start the workflow
+twice for every event.
 
 ### The board task
 
 | **Subject** | The run is about |
 | --- | --- |
-| **The issue's task — create it the first time** (default) | The board task linked to the issue; if there is none, a new one in the **Task column**, linked to it |
+| **The issue's task — create it the first time** (default in a project with a board) | The board task linked to the issue; if there is none, a new one in the **Task column**, linked to it |
 | **The issue's task, if it has one** | The linked task, or no task at all |
 | **A new task every time** | A new linked task in the **Task column**, each time |
-| **None — project-level run** | No task |
+| **None — project-level run** (default in a project without a board) | No task |
 
 A new task is titled `{{issue.key}} {{issue.title}}` unless you give a
 **Task title template**, and its description links the issue and carries its

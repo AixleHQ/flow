@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
-import { TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
+import { isAttached, TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
 import { TriggerFormPanel } from './TriggerFormPanel';
 import type { Trigger } from './types';
 
@@ -121,7 +121,9 @@ const AIXLE_CHANGE_LABELS: Record<string, string> = {
 function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
   if (t.kind === 'tracker') {
     const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
-    const scope = t.project_tracker_id ? (tracker?.handle ?? 'detached tracker') : 'any tracker';
+    let scope = 'any tracker';
+    if (t.project_tracker_id) scope = tracker ? tracker.handle : 'detached tracker';
+    if (tracker && !isAttached(tracker)) scope = `${tracker.handle} (detached, not firing)`;
     return `${scope} · ${AIXLE_CHANGE_LABELS[t.aixle_changes ?? 'ignore'] ?? t.aixle_changes}`;
   }
   if (t.kind === 'column') return `${t.trigger_mode ?? 'auto'} · cooldown ${t.cooldown_seconds ?? 0}s`;
@@ -322,7 +324,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, trackers
                     name: 'Incoming webhook',
                     desc: 'When an authenticated request arrives',
                   },
-                  ...(trackers.length > 0
+                  ...(trackers.some(isAttached)
                     ? [
                         {
                           kind: 'tracker',

@@ -355,6 +355,31 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('any tracker · chains from other workflows')).toBeInTheDocument();
   });
 
+  it('marks a tracker trigger whose tracker is detached as not firing', async () => {
+    installFetch({
+      triggers: [
+        {
+          id: 14,
+          kind: 'tracker',
+          event_type: 'tracker.issue.created',
+          project_tracker_id: 6,
+          aixle_changes: 'ignore',
+          filter_predicate: {},
+        },
+      ],
+    });
+
+    renderPage(
+      <TriggersTab
+        {...baseProps({
+          trackers: [{ id: 6, handle: 'legacy', name: 'Legacy', provider: 'jira', status: 'detached' }],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText('legacy (detached, not firing) · ignores Aixle changes')).toBeInTheDocument();
+  });
+
   it('renders an unknown trigger kind with the raw event type badge and webhook-style title', async () => {
     installFetch({ triggers: [{ id: 9, kind: 'custom', event_type: 'CUSTOM.EVENT', filter_predicate: {} }] });
 

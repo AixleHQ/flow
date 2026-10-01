@@ -10,6 +10,7 @@ import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } fro
 import type { SharedProps } from 'shared/ui';
 
 import {
+  isAttached,
   trackerTriggerPayload,
   trackerValueFromTrigger,
   type TrackerOption,
@@ -305,7 +306,7 @@ export function TriggerFormPanel({
     { value: 'schedule', label: 'On schedule' },
     { value: 'slack', label: 'Slack message' },
     { value: 'webhook', label: 'Incoming webhook' },
-    ...(trackers.length > 0 || kind === 'tracker' ? [{ value: 'tracker', label: 'Task tracker event' }] : []),
+    ...(trackers.some(isAttached) || kind === 'tracker' ? [{ value: 'tracker', label: 'Task tracker event' }] : []),
   ];
 
   return (

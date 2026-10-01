@@ -13,4 +13,9 @@ class ProjectTrackerResource < ApplicationResource
   attribute :usable do |tracker|
     tracker.usable?
   end
+
+  typelize :boolean
+  attribute :mentions_recognized do |tracker|
+    tracker.recognizes_mentions?
+  end
 end
