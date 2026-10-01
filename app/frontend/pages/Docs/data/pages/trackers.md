@@ -198,6 +198,8 @@ event cannot be changed once the trigger exists.
 - **Changes made by Aixle** — see below.
 - **Subject (what the run is about)**, **Task column**, **Task title template**
   — see below.
+- **Comment on the issue when a run fails** — on by default; see
+  [When a run fails](#when-a-run-fails).
 
 There is no assignee condition: an **Issue is assigned** trigger fires on every
 assignee change in the trackers it listens to. The API and the personal MCP tool
@@ -249,6 +251,12 @@ acts as a person who did not mark the account as kept for Aixle, only the
 matched changes count, so that person's own edits still start triggers set to
 ignore Aixle.
 
+The tracker may send the event before it has answered the write. Flow records
+which issue a write is about before sending it, so the event is still matched.
+A new issue is known only from the tracker's answer, so an **Issue is created**
+event waits, for up to about a minute, while an agent's create in the same
+tracker project is still unanswered.
+
 Two limits apply whatever the triggers say:
 
 - **Chain depth** — counting the run a person's change started as the first,
@@ -266,9 +274,10 @@ delivery works:
 
 - **Azure Boards** — `workitem.created`, `workitem.updated` and
   `workitem.commented` Service Hooks, created for the connection's Azure
-  projects the first time a tracker trigger is created or switched on. **Test
-  connection** retries only the CI hooks; to retry these, save the trigger
-  again. See [Service Hooks](/docs/azure-devops#service-hooks).
+  projects the first time a tracker trigger is created or switched on.
+  **Test connection** on the **Integrations** page checks them with Azure,
+  recreates any that are missing or were refused, and names the ones Azure
+  still refuses. See [Service Hooks](/docs/azure-devops#service-hooks).
 - **Jira** — a webhook Flow registers for an Atlassian-account connection, or
   one a Jira admin adds for a service-account connection. See
   [The webhook](/docs/jira#the-webhook).
@@ -291,8 +300,8 @@ When a run a tracker event started fails or is cancelled, Flow posts one
 comment on the issue — the only write the platform makes on its own: which
 workflow failed, the failed step and its error, and a link to the run. Nothing
 is posted to a read-only tracker. The comment counts as a change made by
-Aixle. The trigger form has no switch for it; a trigger created through the API
-can turn it off with `notify_on_failure: false`.
+Aixle. It is on by default; turn off **Comment on the issue when a run fails**
+on the trigger form (`notify_on_failure: false` through the API) to stop it.
 
 ---
 

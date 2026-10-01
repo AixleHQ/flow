@@ -175,7 +175,8 @@ a column, is assigned, or gets a comment. **Connect a board column** on the
 Trackers page sets up the common case — add one column such as "Ready for AI"
 to the board, and moving a work item there starts the workflow on a board task
 linked to it. The `workitem.*` Service Hooks this needs are created the first
-time such a trigger is enabled, through the same permission CI gates use.
+time such a trigger is enabled, through the same permission CI gates use, and
+**Test connection** checks and repairs them like the CI ones.
 
 ## Adding Azure projects later
 
@@ -205,12 +206,22 @@ URL. Ordinary `git fetch` and `git push` work with no extra step.
 ## Service Hooks
 
 Flow subscribes to build and pull-request events so a CI gate on a board card
-closes the moment a build finishes rather than on the next reconciliation sweep.
+closes the moment a build finishes rather than on the next reconciliation sweep,
+and, once a Boards trigger waits for them, to the `workitem.*` events that start
+it.
 
 They are provisioned automatically, using the permission granted in step 3, and
 owned by the application — not by the administrator who connected, so their
 leaving does not stop the events. If they cannot be created, the connection
-still works; gates just resolve on the five-minute recovery sweep instead.
+still works; gates just resolve on the five-minute recovery sweep instead, and
+Boards triggers do not fire.
+
+**Test connection** on the connection's row is the check and the repair. It
+asks Azure for the state of every hook, recreates the ones that are missing,
+were refused or were deleted in Azure, and says how it went: green when every
+hook is in place, red with each hook that is still not delivering and why —
+`permission_denied`, for example, or `probation` when Azure has throttled one
+after failed deliveries.
 
 Azure posts these inbound, so it needs a host it can reach. Flow uses the
 deployment's own domain. Set `AZURE_DEVOPS_WEBHOOK_BASE_URL` only when that
@@ -240,3 +251,4 @@ subscription, report it healthy, and fail every delivery in silence.
 | *"The Git repository … does not exist or you do not have permissions"* | Almost always a **Stakeholder** license, not a missing repository | Raise the identity to Basic |
 | *"cannot read the chosen projects yet"* | Entitlement is not always instant | Try again shortly; nothing is recorded until the application can actually read them |
 | CI gates always close about ten minutes late | Service Hooks were never provisioned | **Test connection**, which is the retry path |
+| A Boards trigger never fires | Its `workitem.*` Service Hooks are missing, refused or on probation | **Test connection** recreates them, or names the ones Azure still refuses |
