@@ -60,7 +60,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
                                                                                      connected_by: other_user))
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
-      args: [ { repository_id: other.id, pipeline_id: 7000, status: "success", mr_iid: nil } ]) do
+      args: [ { repository_id: other.id, pipeline_id: 7000, status: "success" } ]) do
       post_json(pipeline_payload(status: "success", pipeline_id: 7000), token: other_secret, event: "Pipeline Hook")
     end
   end
@@ -91,7 +91,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
       args: [ { repository_id: @repository.id, pipeline_id: 5000,
-                status: "success", mr_iid: nil } ]) do
+                status: "success" } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end
 
@@ -103,7 +103,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
       args: [ { repository_id: @repository.id, pipeline_id: 5001,
-                status: "failed", mr_iid: nil } ]) do
+                status: "failed" } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end
 
@@ -115,7 +115,19 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
       args: [ { repository_id: @repository.id, pipeline_id: 5002,
-                status: "canceled", mr_iid: nil } ]) do
+                status: "canceled" } ]) do
+      post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
+    end
+
+    assert_response :ok
+  end
+
+  # The reconciliation sweep resolves on `skipped` too, and counts it as a pass.
+  test "enqueues ResolveGitlabPipelineJob when pipeline is skipped" do
+    payload = pipeline_payload(status: "skipped", pipeline_id: 5003)
+
+    assert_enqueued_with(job: ResolveGitlabPipelineJob,
+      args: [ { repository_id: @repository.id, pipeline_id: 5003, status: "skipped" } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end
 

@@ -330,4 +330,34 @@ class IntegrationTest < ActiveSupport::TestCase
       other_company.destroy
     end
   end
+
+  # ====== GitLab hooks ======
+
+  test "removing a GitLab connection removes the hooks its repositories registered" do
+    integration = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
+    project = create(:project, company: @company, owner: @user)
+    hooked = create(:repository, full_name: "group/app", integration: integration, scope: project,
+                                 webhook_secret: "s" * 64, gitlab_hook_id: 42)
+    create(:repository, full_name: "group/lib", integration: integration, scope: project)
+    gitlab = Fakes::FakeGitlabService.new
+    Gitlab::RepositoryService.stubs(:new).returns(gitlab)
+
+    integration.destroy!
+
+    assert_equal [ hooked.id ], gitlab.calls_for(:remove).map { |call| call.args.first.id }
+    assert_not Repository.exists?(hooked.id)
+  end
+
+  test "a hook GitLab refuses to delete does not keep the connection" do
+    integration = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
+    create(:repository, full_name: "group/app", integration: integration, webhook_secret: "s" * 64,
+                        gitlab_hook_id: 42, scope: create(:project, company: @company, owner: @user))
+    gitlab = mock("gitlab repository service")
+    gitlab.stubs(:remove).raises(StandardError, "403 Forbidden")
+    Gitlab::RepositoryService.stubs(:new).returns(gitlab)
+
+    integration.destroy!
+
+    assert_not Integration.exists?(integration.id)
+  end
 end

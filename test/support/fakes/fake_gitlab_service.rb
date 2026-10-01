@@ -78,12 +78,13 @@ module Fakes
       @branches.fetch(full_name, DEFAULT_BRANCHES)
     end
 
-    # Mirrors the real adapter's observable effect: stamp a webhook_secret on the
-    # repository and return it. Skips the network the real adapter would hit.
+    # Mirrors the real adapter's observable effect: stamp a webhook_secret and
+    # the hook's id on the repository and return the secret. Skips the network
+    # the real adapter would hit.
     def configure(repository)
       record(:configure, repository)
       secret = SecureRandom.hex(32)
-      repository.update!(webhook_secret: secret)
+      repository.update!(webhook_secret: secret, gitlab_hook_id: calls_for(:configure).size)
       secret
     end
 

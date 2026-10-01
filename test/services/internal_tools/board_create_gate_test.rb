@@ -264,6 +264,14 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
 
   # == gitlab_pipeline_completed ==
 
+  test "advertises the fields a gitlab_pipeline_completed gate is created from" do
+    properties = InternalTools::BoardCreateGate.tool_definition.input_schema["properties"]
+
+    assert_equal "integer", properties.dig("pipeline_id", "type")
+    assert_includes properties.dig("pipeline_id", "description"), "gitlab_pipeline_completed"
+    assert_includes properties.dig("repo_full_name", "description"), "gitlab_pipeline_completed"
+  end
+
   test "creates a gitlab_pipeline_completed gate with valid params" do
     result = InternalTools::BoardCreateGate.new(
       params: {

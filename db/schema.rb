@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -853,6 +853,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_180000) do
     t.string "external_organization_id"
     t.string "external_project_id"
     t.string "full_name", null: false
+    t.bigint "gitlab_hook_id"
     t.bigint "integration_id"
     t.boolean "is_private", default: false
     t.datetime "last_fetched_at"

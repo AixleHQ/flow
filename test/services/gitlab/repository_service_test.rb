@@ -15,6 +15,7 @@ module Gitlab
     # GitLab percent-encodes "group/app" to "group%2Fapp"; tolerate either form
     # in case the HTTP stack normalizes the encoded slash.
     ENCODED_APP = %r{group(?:%2F|/)app}
+    HOOKS = %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z}
 
     setup do
       @company = create(:company)
@@ -87,64 +88,130 @@ module Gitlab
       assert_equal %w[main develop], result
     end
 
-    test "configure stores a secret and registers a pipeline webhook via POST /hooks" do
+    test "configure registers a pipeline hook and keeps its id and secret on the repository" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
-
-      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
-        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: [].to_json)
-      stub_request(:post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
+      stub_request(:post, HOOKS)
         .to_return(status: 201, headers: { "Content-Type" => "application/json" },
           body: gl_hook(id: 7, url: WEBHOOK_URL, pipeline_events: true).to_json)
 
       Gitlab::RepositoryService.new(@integration).configure(repository)
       repository.reload
 
-      assert_not_nil repository.webhook_secret
       assert_equal 64, repository.webhook_secret.length
-      assert_requested :post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z} do |req|
+      assert_equal 7, repository.gitlab_hook_id
+      assert_requested :post, HOOKS do |req|
         body = URI.decode_www_form(req.body).to_h
         body["url"] == WEBHOOK_URL && body["pipeline_events"] == "true" && body["token"] == repository.webhook_secret
       end
     end
 
-    # The old hook carries a secret that is about to stop matching.
-    test "configure replaces this deployment's earlier hook on the project" do
+    # Another Flow project, or another company, may have attached the same GitLab
+    # project: its hook sits at the same URL and must keep working.
+    test "configure leaves every other hook on the project alone" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
-      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
-        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-          body: [ gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true),
-                  gl_hook(id: 43, url: "https://ci.example.com/hook", pipeline_events: true) ].to_json)
-      delete_ours = stub_request(:delete, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/42\z})
-                    .to_return(status: 204)
-      stub_request(:post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
+      stub_request(:post, HOOKS)
         .to_return(status: 201, headers: { "Content-Type" => "application/json" },
           body: gl_hook(id: 44, url: WEBHOOK_URL, pipeline_events: true).to_json)
 
       Gitlab::RepositoryService.new(@integration).configure(repository)
 
-      assert_requested delete_ours
-      assert_not_requested :delete, %r{/hooks/43\z}
+      assert_not_requested :get, HOOKS
+      assert_not_requested :delete, %r{/hooks/\d+\z}
     end
 
-    test "remove deletes only the webhook whose url matches this deployment" do
-      repository = create(:repository, full_name: "group/app", integration: @integration,
-        scope: @project, webhook_secret: "existing-secret")
+    test "configure replaces only the hook this repository registered before" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "old-secret", gitlab_hook_id: 42)
+      delete_ours = stub_request(:delete, hook_url(42)).to_return(status: 204)
+      stub_request(:post, HOOKS)
+        .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+          body: gl_hook(id: 45, url: WEBHOOK_URL, pipeline_events: true).to_json)
 
-      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
-        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-          body: [
-            gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true),
-            gl_hook(id: 99, url: "https://other.example.com/webhooks/other", pipeline_events: false)
-          ].to_json)
-      delete_42 = stub_request(:delete, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/42\z})
-        .to_return(status: 204)
-      delete_99 = stub_request(:delete, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/99\z})
-        .to_return(status: 204)
+      Gitlab::RepositoryService.new(@integration).configure(repository)
+
+      assert_requested delete_ours
+      assert_equal 45, repository.reload.gitlab_hook_id
+      assert_not_equal "old-secret", repository.webhook_secret
+    end
+
+    test "configure still registers when its earlier hook was already deleted in GitLab" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "old-secret", gitlab_hook_id: 42)
+      stub_request(:delete, hook_url(42))
+        .to_return(status: 404, headers: { "Content-Type" => "application/json" },
+          body: { message: "404 Not found" }.to_json)
+      stub_request(:post, HOOKS)
+        .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+          body: gl_hook(id: 46, url: WEBHOOK_URL, pipeline_events: true).to_json)
+
+      Gitlab::RepositoryService.new(@integration).configure(repository)
+
+      assert_equal 46, repository.reload.gitlab_hook_id
+    end
+
+    test "configure points the hook at GITLAB_WEBHOOK_BASE_URL when it is set" do
+      Settings.stubs(:gitlab).returns(OpenStruct.new(endpoint: GITLAB_API, webhook_base_url: "https://tunnel.example.dev/"))
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
+      stub_request(:post, HOOKS)
+        .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+          body: gl_hook(id: 8, url: "https://tunnel.example.dev/webhooks/gitlab", pipeline_events: true).to_json)
+
+      Gitlab::RepositoryService.new(@integration).configure(repository)
+
+      assert_requested :post, HOOKS do |req|
+        URI.decode_www_form(req.body).to_h["url"] == "https://tunnel.example.dev/webhooks/gitlab"
+      end
+    end
+
+    test "remove deletes the repository's own hook by id, whatever else is on the project" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "existing-secret", gitlab_hook_id: 42)
+      delete_42 = stub_request(:delete, hook_url(42)).to_return(status: 204)
 
       Gitlab::RepositoryService.new(@integration).remove(repository)
 
       assert_requested delete_42
-      assert_not_requested delete_99
+      assert_not_requested :get, HOOKS
+    end
+
+    # Rows registered before hook ids were kept: GitLab never returns a hook's
+    # token, so a hook at our URL is only provably this row's when no other row
+    # could own it.
+    test "remove of a row without a kept id deletes the hooks at our URL no other row owns" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "legacy-secret")
+      other_project = create(:project, company: @company, owner: @user)
+      create(:repository, full_name: "group/app", integration: @integration, scope: other_project,
+                          webhook_secret: "kept-secret", gitlab_hook_id: 50)
+      stub_request(:get, HOOKS)
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+          body: [ gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true),
+                  gl_hook(id: 50, url: WEBHOOK_URL, pipeline_events: true),
+                  gl_hook(id: 99, url: "https://ci.example.com/hook", pipeline_events: true) ].to_json)
+      delete_42 = stub_request(:delete, hook_url(42)).to_return(status: 204)
+
+      Gitlab::RepositoryService.new(@integration).remove(repository)
+
+      assert_requested delete_42
+      assert_not_requested :delete, hook_url(50)
+      assert_not_requested :delete, hook_url(99)
+    end
+
+    test "remove of a row without a kept id deletes nothing while another such row names the project" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "legacy-secret")
+      other_company = create(:company)
+      other_user = create(:user, :employee, company: other_company)
+      create(:repository, full_name: "group/app", webhook_secret: "other-legacy-secret",
+                          scope: create(:project, company: other_company, owner: other_user),
+                          integration: create(:integration, :gitlab, :active, company: other_company,
+                                                                               connected_by: other_user))
+      hooks = stub_request(:get, HOOKS)
+
+      Gitlab::RepositoryService.new(@integration).remove(repository)
+
+      assert_not_requested hooks
+      assert_not_requested :delete, %r{/hooks/\d+\z}
     end
 
     test "remove makes no GitLab call when webhook_secret is blank" do
@@ -160,6 +227,10 @@ module Gitlab
     end
 
     private
+
+    def hook_url(id)
+      %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/#{id}\z}
+    end
 
     def gl_project(path:, branch:, visibility:, description:)
       name = path.split("/").last

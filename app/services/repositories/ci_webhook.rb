@@ -6,14 +6,19 @@ module Repositories
   # delivery by it. GitHub delivers through the app installation and Azure DevOps
   # through its service hooks, so there is nothing to register for them.
   #
-  # Best effort: a token without Maintainer rights cannot add a hook, and the gate
-  # reconciler still resolves the gates, only later. The failure is logged, never
-  # raised into adding or removing the repository.
+  # Best effort: a token without Maintainer rights cannot add a hook, and a
+  # deployment GitLab cannot reach registers none; the gate reconciler still
+  # resolves the gates, only later. The failure is logged, never raised into
+  # adding or removing the repository.
   module CiWebhook
     module_function
 
     def register(repository)
       return unless gitlab?(repository)
+      unless Gitlab::AppConfig.webhooks_enabled?
+        Gitlab::AppConfig.log_unreachable_once
+        return
+      end
 
       Gitlab::RepositoryService.new(repository.integration).configure(repository)
     rescue StandardError => e

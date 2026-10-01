@@ -8,6 +8,8 @@ module Repositories
       @company = create(:company)
       @user = create(:user, company: @company)
       @project = create(:project, company: @company, owner: @user)
+      Settings.stubs(:protocol).returns("https")
+      Settings.stubs(:domain).returns("flow.example.com")
     end
 
     def repository_on(provider)
@@ -33,6 +35,18 @@ module Repositories
       ::Gitlab::RepositoryService.stubs(:new).returns(gitlab)
 
       assert_nil CiWebhook.register(repository)
+    end
+
+    test "a deployment GitLab cannot reach registers no hook" do
+      Settings.stubs(:protocol).returns("http")
+      Settings.stubs(:domain).returns("localhost:4000")
+      repository = repository_on(:gitlab)
+      gitlab = Fakes::FakeGitlabService.new
+      ::Gitlab::RepositoryService.stubs(:new).returns(gitlab)
+
+      assert_nil CiWebhook.register(repository)
+      assert_not gitlab.called?(:configure)
+      assert_nil repository.reload.webhook_secret
     end
 
     test "nothing is registered for a GitHub repository" do

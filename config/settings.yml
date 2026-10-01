@@ -257,6 +257,9 @@ github:
 
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
+  # Where GitLab posts pipeline events, when DOMAIN is not reachable from GitLab
+  # (a tunnel in development). A host GitLab cannot reach registers no hooks.
+  webhook_base_url: "<%= ENV['GITLAB_WEBHOOK_BASE_URL'] %>"
 
 # Credential vending for the in-container git helper (GitHub and GitLab
 # repositories). Reached over the internal network, like cloud.credentials_url.
