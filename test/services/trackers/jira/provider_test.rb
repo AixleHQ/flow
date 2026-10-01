@@ -39,6 +39,12 @@ class Trackers::Jira::ProviderTest < ActiveSupport::TestCase
     assert_equal({ "state" => "Ready for AI", "board_column" => "Ready for AI", "priority" => "Medium" }, issue.fields)
   end
 
+  test "a board URL names its issue in the selectedIssue parameter" do
+    issue = @provider.get_issue("10000", "https://acme.atlassian.net/jira/software/projects/ENG/boards/7?selectedIssue=ENG-1")
+
+    assert_equal "ENG-1", issue.key
+  end
+
   test "an issue in another Jira project is refused, whatever its id" do
     error = assert_raises(Trackers::Error) { @provider.get_issue("10000", "OPS-1") }
 
