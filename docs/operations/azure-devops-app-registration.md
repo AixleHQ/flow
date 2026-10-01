@@ -116,6 +116,17 @@ Upload `flow-azure.crt` under **Certificates → Upload certificate**, then set:
 
 Flow prefers the certificate when both are configured.
 
+**Microsoft sign-in on the same registration.** One registration can also be
+the deployment's "Sign in with Microsoft": add
+`https://<your domain>/auth/microsoft/callback` as a second **Web** redirect
+URI, and give `MICROSOFT_CLIENT_ID`, `MICROSOFT_PRIVATE_KEY` and
+`MICROSOFT_CERT_THUMBPRINT` the same values as their `AZURE_DEVOPS_*`
+counterparts. Sign-in requests only the OpenID scopes `openid profile email`,
+so nothing is added under API permissions for it. Do add the `upn` optional
+claim to the ID token (**Token configuration**): without it a Microsoft
+sign-in creates an account but joins no company by domain. See
+[Configuring sign-in methods](../user-guide/configuring-sso.md).
+
 ---
 
 ## 3. Provision the service principal in the customer tenant

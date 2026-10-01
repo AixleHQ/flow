@@ -11,7 +11,7 @@ toggle for a provider their instance cannot complete a sign-in with.
 
 ```ruby
 when :google     then Settings.google_oauth&.client_id.present?
-when :microsoft  then Settings.microsoft_oauth&.client_id.present?
+when :microsoft  then OmniAuth::Strategies::Microsoft.configured?(Settings.microsoft_oauth)
 when :password, :passkey, :magic_link, :totp then true
 ```
 
@@ -49,13 +49,23 @@ Register an application in **your** tenant, not a customer's.
   could sign in.
 - Reply URL: `https://<your host>/auth/microsoft/callback` — the path is
   `microsoft`, because the strategy is registered under that name.
-- A **client secret**, not a certificate.
+- A **certificate** under *Certificates & secrets*. The installation keeps its
+  private key and thumbprint, and signs a short-lived assertion for every
+  sign-in; nothing reusable crosses the wire.
 
 ```
 MICROSOFT_CLIENT_ID=…
-MICROSOFT_CLIENT_SECRET=…
+MICROSOFT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+…
+-----END PRIVATE KEY-----"
+MICROSOFT_CERT_THUMBPRINT=…
 MICROSOFT_TENANT_ID=common
 ```
+
+A client secret (`MICROSOFT_CLIENT_SECRET`) also works, and is used only when no
+private key is set. The same registration can serve the
+[Azure DevOps integration](/docs/azure-devops): give both features the same
+client id and certificate.
 
 `MICROSOFT_TENANT_ID` is the **authority** — which directory's login endpoint to
 send people to. Leave it `common`: pinning a multi-tenant registration to its own

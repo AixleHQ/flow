@@ -275,7 +275,9 @@ customer's service account only, which needs nothing here.
 | `GOOGLE_CLIENT_SECRET`       | no       | unset              | Google SSO client secret.                                     |
 | `SUPER_ADMIN_EMAIL`          | no       | `admin@operator.example` | The super admin `db/seeds.rb` creates (development and test only). |
 | `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. Domain auto-join trusts only an address its tenant shows it owns, so add the `upn` (or `xms_edov`) optional claim to the ID token; without it Microsoft sign-ins create accounts but join nobody. |
-| `MICROSOFT_CLIENT_SECRET`    | no       | unset              | Its client secret.                                            |
+| `MICROSOFT_PRIVATE_KEY`      | no       | unset              | PEM private key of a certificate uploaded to that registration. When set, the app authenticates with a signed certificate assertion and `MICROSOFT_CLIENT_SECRET` is ignored. |
+| `MICROSOFT_CERT_THUMBPRINT`  | no       | unset              | That certificate's SHA-1 thumbprint, as the Entra portal shows it. |
+| `MICROSOFT_CLIENT_SECRET`    | no       | unset              | A client secret instead of the certificate. Used only when no private key is set. |
 | `MICROSOFT_TENANT_ID`        | no       | `common`           | Which Entra directory to accept. `common` accepts any work or school tenant; a GUID restricts sign-in to that one. |
 | `AUTH_ENABLED_KINDS`         | no       | unset              | Comma-separated allowlist narrowing which sign-in methods this deployment offers. Availability is already derived from which credentials are present, so this only ever offers LESS — an installation with no Microsoft credentials never offers Microsoft however this is set. |
 | `ADMIN_PASSWORD`             | no       | unset              | First-boot bootstrap password for that admin.                  |

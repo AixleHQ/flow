@@ -33,9 +33,15 @@ google_oauth:
 # tenant_id stays `common` so any customer's directory can sign in, which is what
 # "log in with Microsoft" means in practice. Each customer's Global Administrator
 # still has to grant tenant-wide admin consent once.
+#
+# The app authenticates with its certificate (private_key + thumbprint) when a
+# key is set, and with the client secret otherwise. The PEM goes through
+# `to_json` for the reason given under azure_devops below.
 microsoft_oauth:
   client_id: <%= ENV['MICROSOFT_CLIENT_ID'] %>
   client_secret: <%= ENV['MICROSOFT_CLIENT_SECRET'] %>
+  private_key: <%= ENV['MICROSOFT_PRIVATE_KEY'].to_json %>
+  certificate_thumbprint: "<%= ENV['MICROSOFT_CERT_THUMBPRINT'] %>"
   tenant_id: <%= ENV['MICROSOFT_TENANT_ID'] || 'common' %>
 
 rails:
