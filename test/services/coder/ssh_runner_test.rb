@@ -1095,6 +1095,31 @@ module Coder
       end
     end
 
+    # A wrapper publishes its exit file and exits in two steps, and the poll
+    # reads the exit file and the wrapper's liveness in two steps too. When the
+    # wrapper finished between the poll's two reads, a job that succeeded was
+    # reported as `died` — a vanished runner the agent may re-run. The shim
+    # places the wrapper's last act exactly there: the poll's read of the pid
+    # file is what publishes the exit file.
+    test "job status reports a job that finished between its two reads as exited, not died" do
+      dead_pid = Process.spawn("true").tap { |pid| Process.wait(pid) }
+
+      with_exit_published_on_pid_read do |shim_env|
+        in_local_shell_workspace(env: shim_env) do |runner, job_dir|
+          base = File.join(job_dir, "justdone")
+          File.write("#{base}.meta", "job_id=justdone\npid=#{dead_pid}\nreason=completed\nexit_code=0\n")
+          File.write("#{base}.pid", "#{dead_pid}\n")
+          File.write("#{base}.exit.tmp", "0\n")
+
+          status = runner.job_status(workspace_name: "ws-1", job_id: "justdone")
+
+          assert_equal "exited", status[:state], describe_status(status)
+          assert_equal 0, status[:exit_code]
+          assert_equal "completed", status[:reason]
+        end
+      end
+    end
+
     # Termination before the normal exit-file write: the wrapper is signalled
     # while the command is running, which used to leave the job with no exit
     # code, no end time and no reason.
@@ -1388,11 +1413,11 @@ module Coder
     # Runs the remote command through the local shell instead of `coder ssh`.
     # `Open3.popen3` is captured before it is stubbed, so the stub can still
     # reach the real implementation.
-    def in_local_shell_workspace
+    def in_local_shell_workspace(env: {})
       real_popen3 = Open3.method(:popen3)
       job_dir     = Dir.mktmpdir("aixle-jobs")
-      local_shell = lambda { |env, *argv, **opts, &blk|
-        real_popen3.call(env.merge("AIXLE_JOB_DIR" => job_dir), "sh", "-c", argv.last, **opts, &blk)
+      local_shell = lambda { |cli_env, *argv, **opts, &blk|
+        real_popen3.call(cli_env.merge(env, "AIXLE_JOB_DIR" => job_dir), "sh", "-c", argv.last, **opts, &blk)
       }
 
       Open3.stub(:popen3, local_shell) do
@@ -1400,6 +1425,28 @@ module Coder
       end
     ensure
       FileUtils.remove_entry(job_dir) if job_dir && File.directory?(job_dir)
+    end
+
+    # A `cat` that, when it is asked for a job's pid file, first renames that
+    # job's `.exit.tmp` into place — the wrapper's own last act before it exits.
+    def with_exit_published_on_pid_read
+      real_cat = ENV.fetch("PATH").split(File::PATH_SEPARATOR)
+                    .map { |dir| File.join(dir, "cat") }
+                    .find { |path| File.executable?(path) }
+
+      Dir.mktmpdir("aixle-shim") do |dir|
+        shim = File.join(dir, "cat")
+        File.write(shim, <<~SH)
+          #!/bin/sh
+          case "$1" in
+            *.pid) if [ -e "${1%.pid}.exit.tmp" ]; then mv "${1%.pid}.exit.tmp" "${1%.pid}.exit"; fi ;;
+          esac
+          exec #{real_cat} "$@"
+        SH
+        File.chmod(0o755, shim)
+
+        yield "PATH" => [ dir, ENV.fetch("PATH") ].join(File::PATH_SEPARATOR)
+      end
     end
 
     def poll_until_finished(runner, job_id, timeout: 15)
