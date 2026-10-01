@@ -18,9 +18,24 @@ module Trackers
     ISSUE_BUDGET = 10
     ATTRIBUTION_WINDOW = 10.minutes
 
-    def initialize(integration)
+    # A create names its issue only once the tracker answers, and the tracker's
+    # event can arrive first. Such an event is retried — WRITE_RETRY_ATTEMPTS
+    # runs, WRITE_RETRY_WAIT apart — while a create on its project is still
+    # waiting for an answer. A create pending for longer than CREATE_IN_FLIGHT
+    # (a few requests at their read timeouts) is a crashed one, not in flight.
+    WRITE_RETRY_WAIT = 5.seconds
+    WRITE_RETRY_ATTEMPTS = 12
+    CREATE_IN_FLIGHT = 2.minutes
+
+    # Raised instead of publishing an event a create still in flight may have caused.
+    class WriteInFlight < StandardError; end
+
+    # `wait_for_writes: false` publishes such an event as it stands: the caller's
+    # last attempt.
+    def initialize(integration, wait_for_writes: false)
       @integration = integration
       @provider = Provider.for(integration)
+      @wait_for_writes = wait_for_writes
     end
 
     def process(notification)
@@ -82,17 +97,31 @@ module Trackers
         return { "aixle" => true, "attributed" => true, "workflow_run_id" => operation.workflow_run_id,
                  "workflow_id" => operation.workflow_id, "chain" => chain, "depth" => chain.size }
       end
+      if @wait_for_writes && create_in_flight?(notification)
+        raise WriteInFlight, "a create in #{notification.scope_id} has not been answered yet"
+      end
       return unless @provider.own_actor?(notification.actor)
 
       { "aixle" => true, "attributed" => false, "chain" => [], "depth" => 1 }
     end
 
+    def ledger(notification)
+      TrackerOperation.joins(:project_tracker)
+                      .where(project_trackers: { integration_id: @integration.id, external_scope_id: notification.scope_id })
+    end
+
+    def create_in_flight?(notification)
+      notification.kind == :issue_created &&
+        ledger(notification).where(operation: "create_issue", state: "pending", issue_id: nil)
+                            .where(created_at: CREATE_IN_FLIGHT.ago..).exists?
+    end
+
+    # A write still in flight recorded the issue as its caller named it, which
+    # on Jira may be the key rather than the id.
     def matching_operation(notification, issue, events)
-      recent = TrackerOperation.joins(:project_tracker)
-                               .where(project_trackers: { integration_id: @integration.id, external_scope_id: notification.scope_id })
-                               .where(issue_id: issue.id, state: %w[pending succeeded])
-                               .where(created_at: ATTRIBUTION_WINDOW.ago..)
-                               .order(created_at: :desc)
+      recent = ledger(notification).where(issue_id: [ issue.id, issue.key ].compact_blank.uniq, state: %w[pending succeeded])
+                                   .where(created_at: ATTRIBUTION_WINDOW.ago..)
+                                   .order(created_at: :desc)
       case notification.kind
       when :issue_created then recent.find_by(operation: "create_issue")
       when :comment_created then recent.find_by(operation: "add_comment")

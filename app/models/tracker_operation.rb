@@ -52,8 +52,17 @@ class TrackerOperation < ApplicationRecord
     end
   end
 
-  def succeed!(result, result_ref: nil)
-    update!(state: :succeeded, result: result.as_json, result_ref: result_ref&.to_s, error_code: nil)
+  # In one update: between two, a succeeded create with no issue yet would be
+  # neither matched to its event nor waited for (Trackers::EventPipeline).
+  def succeed!(result, result_ref: nil, issue_id: nil)
+    update!(state: :succeeded, result: result.as_json, result_ref: result_ref&.to_s, error_code: nil,
+            issue_id: issue_id&.to_s || self.issue_id)
+  end
+
+  # Before a refused write is sent again. Events are matched only to pending
+  # and succeeded rows, so a resend still marked failed would go unattributed.
+  def retry!
+    update!(state: :pending, error_code: nil)
   end
 
   def fail!(error_code)

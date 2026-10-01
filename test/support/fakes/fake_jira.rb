@@ -48,6 +48,7 @@ module FakeJira
       @webhook_registry = {}
       @next_id = 20_000
       @failures = {}
+      @before_answering = {}
       add_issue(id: "10100", key: "ENG-1", summary: "It breaks", status_id: "10004", project: PROJECTS[0])
       add_issue(id: "10200", key: "OPS-1", summary: "Rotate keys", status_id: "1", project: PROJECTS[1])
     end
@@ -63,6 +64,12 @@ module FakeJira
     # The next call to `method` raises `error`.
     def fail_next(method, error)
       @failures[method] = error
+    end
+
+    # The next call to `method` runs `block` once Jira has applied it and before
+    # it answers: a webhook that reaches Aixle while the request is in flight.
+    def before_answering(method, &block)
+      @before_answering[method] = block
     end
 
     def calls_to(method)
@@ -213,7 +220,9 @@ module FakeJira
       failure = @failures.delete(method)
       raise failure if failure
 
-      yield
+      result = yield
+      @before_answering.delete(method)&.call
+      result
     end
 
     def find_project!(id_or_key)

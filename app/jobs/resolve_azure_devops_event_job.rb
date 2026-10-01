@@ -9,6 +9,8 @@
 # for a merge that never happened.
 class ResolveAzureDevopsEventJob < ApplicationJob
   queue_as :default
+  retry_on Trackers::EventPipeline::WriteInFlight, wait: Trackers::EventPipeline::WRITE_RETRY_WAIT,
+                                                   attempts: Trackers::EventPipeline::WRITE_RETRY_ATTEMPTS
 
   def perform(subscription_id:, event_type:, resource: {})
     subscription = AzureDevopsSubscription.find_by(id: subscription_id)
@@ -33,7 +35,10 @@ class ResolveAzureDevopsEventJob < ApplicationJob
 
   def publish_tracker_event(subscription, event_type, resource)
     notification = Trackers::AzureDevops::Notifications.parse(event_type, resource, scope_id: subscription.azure_project_id)
-    Trackers::EventPipeline.new(subscription.integration).process(notification) if notification
+    return unless notification
+
+    retries_left = executions < Trackers::EventPipeline::WRITE_RETRY_ATTEMPTS
+    Trackers::EventPipeline.new(subscription.integration, wait_for_writes: retries_left).process(notification)
   end
 
   def resolve_build(integration, resource)
