@@ -76,7 +76,7 @@ class GateService
 
     # `repository` is the one the delivery authenticated as: its gates, and no
     # other project's that happens to name the same GitLab path.
-    def resolve_gitlab_pipeline(repo_full_name:, pipeline_id:, status:, mr_iid: nil, repository: nil)
+    def resolve_gitlab_pipeline(repo_full_name:, pipeline_id:, status:, repository: nil)
       scope = repository ? Gate.for_projects([ repository.scope_id ]) : Gate.for_repository(repo_full_name)
       gates = scope
         .pending

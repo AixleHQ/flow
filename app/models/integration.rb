@@ -17,6 +17,10 @@ class Integration < ApplicationRecord
   # project connection draws its credentials from. Null in PAT mode.
   belongs_to :azure_devops_installation, optional: true
   has_many :repositories, dependent: :destroy
+  # Each GitLab repository has a hook in GitLab that would outlive it. Collected
+  # before the repositories go, removed once the removal has committed.
+  before_destroy :collect_ci_webhook_repositories, prepend: true, if: :gitlab?
+  after_destroy_commit :unregister_ci_webhooks, if: :gitlab?
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
@@ -318,6 +322,13 @@ class Integration < ApplicationRecord
     end
   end
 
+  def collect_ci_webhook_repositories
+    @ci_webhook_repositories = repositories.select { |repository| repository.webhook_secret.present? }
+  end
+
+  def unregister_ci_webhooks
+    Array(@ci_webhook_repositories).each { |repository| Repositories::CiWebhook.unregister(repository) }
+  end
 
   def release_slack_workspace
     team_id = settings.to_h["team_id"]

@@ -19,16 +19,12 @@ class Webhooks::GitlabController < ActionController::API
   def handle_pipeline
     payload = request.request_parameters
     status = payload.dig("object_attributes", "status")
-    return unless status.in?(%w[success failed canceled])
-
-    pipeline_id = payload.dig("object_attributes", "id")
-    mr_iid = payload.dig("merge_request", "iid")
+    return unless status.in?(Gitlab::PipelineStatusService::TERMINAL_STATUSES)
 
     ResolveGitlabPipelineJob.perform_later(
       repository_id: @repository.id,
-      pipeline_id: pipeline_id,
-      status: status,
-      mr_iid: mr_iid
+      pipeline_id: payload.dig("object_attributes", "id"),
+      status: status
     )
   end
 

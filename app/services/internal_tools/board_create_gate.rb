@@ -52,9 +52,17 @@ module InternalTools
             type: "integer",
             description: "(github_checks_completed) Pull request number"
           },
+          pipeline_id: {
+            type: "integer",
+            description: "(gitlab_pipeline_completed) GitLab pipeline id: CI_PIPELINE_ID inside the pipeline, " \
+                         "`id` from the pipelines API, or the number in a .../-/pipelines/<id> URL. Not the " \
+                         "per-project `iid`."
+          },
           repo_full_name: {
             type: "string",
-            description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo"
+            description: "(github_checks_completed, github_workflow_completed, gitlab_pipeline_completed) " \
+                         "The repository as this project lists it: owner/repo on GitHub, the full project path " \
+                         "on GitLab (e.g. group/subgroup/app). It must be attached to the task's project."
           }
         }
       })

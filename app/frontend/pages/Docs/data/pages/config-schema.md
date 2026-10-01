@@ -217,6 +217,7 @@ stored on the integration row, not environment variables.
 | `GITHUB_APP_CLIENT_ID`         | no       | unset                         | The App's OAuth client id. With the secret below (and "Request user authorization (OAuth) during installation" on the App), a new installation connects only for a user who can see it on GitHub — and then one GitHub organization can be connected to several companies. Unset, an installation belongs to the first company that connects it. |
 | `GITHUB_APP_CLIENT_SECRET`     | no       | unset                         | The App's OAuth client secret, paired with `GITHUB_APP_CLIENT_ID`. |
 | `GITLAB_ENDPOINT`              | no       | `https://gitlab.com/api/v4`   | GitLab API base URL. Repositories clone from the same host. |
+| `GITLAB_WEBHOOK_BASE_URL`      | no       | `<protocol>://<domain>`       | Where GitLab posts pipeline events (`/webhooks/gitlab` is appended). Set it only when the deployment's own domain is not reachable from GitLab (a tunnel in development). A loopback host registers no hooks, and neither does a private one unless `GITLAB_ENDPOINT` is itself on a private host. |
 | `GIT_CREDENTIALS_URL`                   | no       | `<internal base>/agents/git/credentials`       | Where the in-container git credential helper asks for a short-lived GitHub or GitLab token. Never a public host: the request carries a per-session vending key. |
 
 None of the `GITHUB_APP_*` variables is needed to connect GitHub: a project can

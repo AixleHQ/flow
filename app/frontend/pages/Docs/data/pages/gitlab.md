@@ -105,33 +105,35 @@ workflow step calls `board_create_gate` with:
 - `gate_type`: `gitlab_pipeline_completed`
 - `repo_full_name`: the repository as Flow lists it, for example
   `group/subgroup/app`. It must be attached to the task's project.
-- `pipeline_id`: the GitLab pipeline id.
-
-The tool does not list `pipeline_id` among the parameters it advertises, so
-name that parameter in the step's instructions.
+- `pipeline_id`: the GitLab pipeline id, `CI_PIPELINE_ID` inside the
+  pipeline or the number at the end of its `/-/pipelines/<id>` URL. The
+  per-project `iid` does not work.
 
 ### The pipeline hook
 
 When you add a GitLab repository, Flow gives the GitLab project a hook at
-`https://<your domain>/webhooks/gitlab`. The hook carries **Pipeline events**
-only and has its own secret token. Before adding it, Flow deletes any earlier
-hook this deployment put on that project, because the old secret no longer
-matches. Removing the repository from Flow deletes the hook.
+`<PROTOCOL>://<DOMAIN>/webhooks/gitlab`, or under `GITLAB_WEBHOOK_BASE_URL`
+when the operator sets it. The hook carries **Pipeline events** only and has
+its own secret token. Each repository owns its hook: when several Flow
+projects, in one company or in several, attach the same GitLab project, each
+one gets a hook of its own. Removing the repository from Flow, or the GitLab
+connection it came through, deletes that repository's hook and no other.
 
 GitLab calls the hook each time a pipeline changes status. When the pipeline
-finishes as `success`, `failed` or `canceled`, the gate waiting on it resolves.
-`success` passes, and the other two fail.
+finishes as `success`, `failed`, `canceled` or `skipped`, the gate waiting on
+it resolves. `success` and `skipped` pass, and the other two fail.
 
-The hook can be missing: the token's user may not be a Maintainer, or GitLab
-may not be able to reach your domain. In that case Flow adds the repository
-anyway and shows no warning. Gates still resolve, but later, through the
-reconciliation sweep:
+The hook can be missing. The token's user may not be a Maintainer, or GitLab
+may not be able to reach the hook address. When that address is a loopback or
+private host (`localhost`, `10.x`, `*.internal` and the like) and GitLab is
+not on a private network itself, Flow registers no hook at all and says so
+once in the server log. Either way Flow adds the repository and shows no
+warning. Gates still resolve, but later, through the reconciliation sweep:
 
 - Every five minutes, Flow asks GitLab about the gates that have been pending
   for at least ten minutes. It asks about each gate at most once every ten
   minutes.
-- A finished pipeline resolves its gate the same way it would through the hook,
-  and `skipped` counts as a pass.
+- A finished pipeline resolves its gate the same way it would through the hook.
 - Pipelines that are running, `manual` or `scheduled` keep the gate waiting.
 - If GitLab says the pipeline does not exist, the gate is marked **stale** at
   once. A gate that has no result when its TTL runs out (12 hours by default)
@@ -153,9 +155,8 @@ new connection, and its repositories have to move to that connection:
    steps that listed them.
 
 Do step 2 before step 3. A repository cannot be attached twice in one project.
-Removing a connection does remove its repositories, but it does not delete
-their GitLab hooks. Those hooks stay in GitLab, and every call they make gets a
-401, until someone deletes them there.
+Removing a connection also removes its repositories and deletes their GitLab
+hooks.
 
 ---
 
@@ -179,8 +180,10 @@ GITLAB_ENDPOINT=https://gitlab.example.com/api/v4
   remotes. Over plain HTTP the first clone works, but every later fetch or push
   fails to authenticate.
 - The pipeline hook points at `<PROTOCOL>://<DOMAIN>/webhooks/gitlab`, built
-  from the deployment's own `PROTOCOL` and `DOMAIN`. GitLab must be able to
-  reach that address. There is no separate setting for the webhook host.
+  from the deployment's own `PROTOCOL` and `DOMAIN`, unless
+  `GITLAB_WEBHOOK_BASE_URL` names another base URL. GitLab must be able to
+  reach that address. A GitLab on a private host may use a private address
+  for it; a GitLab on a public host gets no hook at a private one.
 - **Public repository** still means gitlab.com only.
 
 Sessions get the token from Flow's credential endpoint, `GIT_CREDENTIALS_URL`,
@@ -193,11 +196,9 @@ because each request carries a key for that session. See
 - The only way to connect is a personal access token, which acts as its owner.
   There is no OAuth app and no group-level install.
 - Each deployment reaches one GitLab instance.
-- Each GitLab project carries one Flow hook per deployment. If another Flow
-  project, in any company on the deployment, already attached the same GitLab
-  project, attaching it again replaces the first hook. The first project's
-  gates then resolve only through the sweep. Removing either repository removes
-  the one hook that is left.
+- A repository attached before Flow kept track of each hook can leave its
+  hook in GitLab when it is removed: Flow cannot tell that hook apart while
+  another such repository attaches the same GitLab project.
 - There are no merge-request tools, no GitLab CLI and no GitLab triggers.
   GitLab issues cannot be used as a tracker: [Trackers](/docs/trackers)
   supports Jira and Azure Boards.
@@ -211,7 +212,7 @@ because each request carries a key for that session. See
 | The **Repository** picker is empty | The token's user is not a member of any project, or GitLab refused the token | Check the user's project memberships. Replace an expired token |
 | An agent says a repository is missing from its session | The clone failed. Flow leaves failed clones out of what it tells the agent. Usual causes: the token expired or was revoked, the user lost access, the source branch is gone, or the container cannot reach the GitLab host | Fix the cause. The next session clones again |
 | `git fetch` or `git push` fails to authenticate mid-session | The token expired or was revoked. On self-managed GitLab, GitLab may be served over HTTP | Replace the token. Serve GitLab over HTTPS |
-| Gates resolve ten minutes or more after the pipeline ends | The hook is missing: the token's user is not a Maintainer, GitLab cannot reach your domain, or another Flow project attached the same GitLab project later | Using a token with the Maintainer role, remove the repository, add it again, then add it back to the steps that listed it |
+| Gates resolve ten minutes or more after the pipeline ends | The hook is missing: the token's user is not a Maintainer, or GitLab cannot reach the hook address. A loopback or private address registers no hook, and the server log says so | Operator: set `GITLAB_WEBHOOK_BASE_URL` to an address GitLab can reach. Then, using a token with the Maintainer role, remove the repository, add it again, and add it back to the steps that listed it |
 | Gate goes stale with `CI pipeline <id> on <repo> cannot be read: pipeline <id> not found in <repo>` | Wrong pipeline id or repository path | Create the gate again with the right values |
 | Gate goes stale with `no CI result after …` | The pipeline was still running or waiting on a manual job, or GitLab could not be read for the whole TTL | Check the pipeline. If the last probe names `Gitlab::Error::Unauthorized`, the token stopped working |
-| GitLab's hook log shows `401` responses | A leftover hook. Its repository was removed together with the connection, or Flow could not delete the hook | Delete that hook in GitLab |
+| GitLab's hook log shows `401` responses | A leftover hook. Flow could not delete it when its repository was removed, or the repository was attached before Flow kept track of each hook | Delete that hook in GitLab |
