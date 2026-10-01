@@ -28,6 +28,9 @@ class TriggerBinding < ApplicationRecord
   TRACKER_SOURCE = "tracker"
 
   SCHEDULE_EVENT_TYPE = "schedule.fired"
+  SLACK_EVENT_TYPE = "slack.message"
+  SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
+                        "Integrations page first — until then no mention can reach this trigger."
   # /help is answered before any binding runs, so a trigger whose text command
   # is that word would appear in the catalog and never fire. Compare the
   # command itself (optional leading slash), not whether a looser operator
@@ -88,6 +91,24 @@ class TriggerBinding < ApplicationRecord
     event_type == SCHEDULE_EVENT_TYPE
   end
 
+  def slack?
+    event_type == SLACK_EVENT_TYPE
+  end
+
+  # save! for a person creating or editing a trigger: refuses to create or switch
+  # on a Slack trigger while the company has no active Slack install. Not a
+  # validation, so a workspace disconnected later does not make every other save
+  # of the triggers it served fail.
+  def save_checking_slack!
+    if slack? && enabled? && (new_record? || enabled_changed?) && !slack_connected?
+      valid? # report the binding's other problems alongside this one
+      errors.add(:base, SLACK_NOT_CONNECTED)
+      raise ActiveRecord::RecordInvalid, self
+    end
+
+    save!
+  end
+
   # May this binding start its workflow right now? Off, or bound to a deleted
   # workflow, it may not — whatever still calls it (a stale schedule, a queued event).
   def live?
@@ -97,10 +118,12 @@ class TriggerBinding < ApplicationRecord
   # Does the event data satisfy every condition in the predicate? Supports
   # equality (scalar values), operator objects ({"op","value"}) and dot-path
   # fields. Empty predicate ⇒ matches any event of this type. See TriggerFilter.
+  # A Slack message's text compares without regard to case: people type
+  # "Deploy" and "deploy" for the same command.
   def matches?(data)
     return false unless tracker_scope_matches?(data) && aixle_change_allowed?(data)
 
-    TriggerFilter.match?(filter_predicate, data)
+    TriggerFilter.match?(filter_predicate, data, ignore_case: slack? ? %w[text] : [])
   end
 
   def tracker_event?
@@ -108,6 +131,10 @@ class TriggerBinding < ApplicationRecord
   end
 
   private
+
+  def slack_connected?
+    Integration.active.exists?(provider: :slack, company_id: project&.company_id)
+  end
 
   def tracker_scope_matches?(data)
     return true unless tracker_event? && project_tracker_id
@@ -164,7 +191,7 @@ class TriggerBinding < ApplicationRecord
   end
 
   def slack_command_not_reserved
-    return unless event_type == "slack.message"
+    return unless slack?
     return unless filter_predicate.is_a?(Hash)
 
     value = slack_text_command

@@ -149,9 +149,12 @@ class IntegrationResource < ApplicationResource
     integration.coder? ? integration.coder_lock_ttl_minutes : nil
   end
 
+  # The deployment's one Slack events endpoint, the same for every workspace.
   typelize "string | null"
   attribute :slack_request_url do |integration|
-    integration.slack? ? integration.settings&.dig("request_url") : nil
+    next nil unless integration.slack?
+
+    "#{Settings.protocol}://#{Settings.domain}#{Rails.application.routes.url_helpers.slack_events_webhook_path}"
   end
 
   # ----- Jira -----

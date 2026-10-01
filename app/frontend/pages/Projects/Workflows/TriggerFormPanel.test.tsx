@@ -258,8 +258,30 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       kind: 'slack',
       filter_predicate: { channel: 'C42', text: { op: 'contains', value: 'deploy' } },
       notify_on_failure: true,
+      cooldown_seconds: 0,
       subject_policy: 'none',
     });
+  });
+
+  it('posts the cooldown set on a slack trigger, and 0 for a cleared one', async () => {
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+
+    const cooldown = screen.getByRole('textbox', { name: 'Cooldown (s)' });
+    await userEvent.clear(cooldown);
+    await userEvent.type(cooldown, '300');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchSpy, 'POST').trigger.cooldown_seconds).toBe(300);
+
+    fetchSpy.mockClear();
+    await userEvent.clear(cooldown);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchSpy, 'POST').trigger.cooldown_seconds).toBe(0);
   });
 
   it('reports slack failures back by default and stops when the switch is turned off', async () => {
@@ -498,6 +520,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       event_type: 'slack.message',
       filter_predicate: { channel: 'C1', text: { op: 'regex', value: 'deploy' } },
       subject_policy: 'none',
+      cooldown_seconds: 120,
       enabled: true,
     };
     const fetchSpy = installFetch();
@@ -506,6 +529,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     expect(screen.getByPlaceholderText('C0123ABC (blank = any)')).toHaveValue('C1');
     expect(screen.getByPlaceholderText('ship it (optional)')).toHaveValue('deploy');
+    expect(screen.getByRole('textbox', { name: 'Cooldown (s)' })).toHaveValue('120');
     const enabledSwitch = screen.getByRole('switch', { name: 'Enabled' });
     expect(enabledSwitch).toBeChecked();
 
@@ -520,6 +544,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     );
     const trigger = bodyOf(fetchSpy, 'PATCH').trigger;
     expect(trigger.filter_predicate).toEqual({ channel: 'C1', text: { op: 'regex', value: 'deploy' } });
+    expect(trigger.cooldown_seconds).toBe(120);
     expect(trigger.enabled).toBe(false);
     expect(trigger.kind).toBeUndefined(); // edits never resend the (locked) kind
   });

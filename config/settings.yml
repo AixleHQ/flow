@@ -356,7 +356,8 @@ slack:
   client_id: "<%= ENV['SLACK_CLIENT_ID'] %>"
   client_secret: "<%= ENV['SLACK_CLIENT_SECRET'] %>"
   signing_secret: "<%= ENV['SLACK_SIGNING_SECRET'] %>"
-  # Bot scopes requested at install time (space-separated per Slack's OAuth spec).
+  # Bot scopes requested at install time, comma-separated as Slack's OAuth v2
+  # authorize URL expects (Slack::Oauth also accepts spaces here).
   scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write' %>
 
 jira:

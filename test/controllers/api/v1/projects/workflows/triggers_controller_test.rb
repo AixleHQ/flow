@@ -21,6 +21,10 @@ module Api
             JSON.parse(response.body)
           end
 
+          def connect_slack!
+            create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+          end
+
           test "index lists column and event triggers for the workflow" do
             ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
             create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
@@ -50,6 +54,7 @@ module Api
           end
 
           test "create slack trigger persists a TriggerBinding" do
+            connect_slack!
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {
                 project_id: @project.id, workflow_id: @workflow.id,
@@ -62,6 +67,7 @@ module Api
           end
 
           test "a slack trigger reports failures back to Slack unless it is switched off" do
+            connect_slack!
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
               trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
@@ -80,6 +86,25 @@ module Api
             assert_response :success
             assert_not json["notify_on_failure"]
             assert_not binding.reload.notify_on_failure
+          end
+
+          test "a slack trigger is refused, on create and when switched on, until the company connects Slack" do
+            assert_no_difference -> { TriggerBinding.count } do
+              post :create, params: {
+                project_id: @project.id, workflow_id: @workflow.id,
+                trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+              }
+            end
+            assert_response :unprocessable_entity
+            assert_equal [ TriggerBinding::SLACK_NOT_CONNECTED ], json["errors"]
+
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                               event_type: "slack.message", enabled: false)
+            patch :update, params: {
+              project_id: @project.id, workflow_id: @workflow.id, id: binding.id, trigger: { enabled: true }
+            }
+            assert_response :unprocessable_entity
+            assert_not binding.reload.enabled
           end
 
           test "create webhook trigger provisions an endpoint and returns its url + secret" do
@@ -155,6 +180,7 @@ module Api
           end
 
           test "creating a trigger records the signed-in user as its creator" do
+            connect_slack!
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
               trigger: { kind: "column", board_column_id: @column.id, trigger_mode: "auto", cooldown_seconds: 5 }

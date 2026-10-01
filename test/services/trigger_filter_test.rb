@@ -63,4 +63,26 @@ class TriggerFilterTest < ActiveSupport::TestCase
   test "unknown operator does not match" do
     assert_not TriggerFilter.match?({ "x" => { "op" => "nonsense", "value" => 1 } }, { "x" => 1 })
   end
+
+  test "fields named in ignore_case compare without regard to case, and only those" do
+    data = { "text" => "Deploy Staging", "channel" => "C1" }
+    match = ->(predicate) { TriggerFilter.match?(predicate, data, ignore_case: %w[text]) }
+
+    assert match.call({ "text" => "deploy staging" })
+    assert match.call({ "text" => { "op" => "eq", "value" => "DEPLOY STAGING" } })
+    assert match.call({ "text" => { "op" => "starts_with", "value" => "deploy" } })
+    assert match.call({ "text" => { "op" => "contains", "value" => "staging" } })
+    assert match.call({ "text" => { "op" => "in", "value" => [ "deploy staging", "rollback" ] } })
+    assert_not match.call({ "text" => { "op" => "ne", "value" => "deploy staging" } })
+    assert_not match.call({ "channel" => "c1" })
+    assert_not TriggerFilter.match?({ "text" => "deploy staging" }, data)
+  end
+
+  test "an ignore_case regex keeps its escapes and still honours an inline (?-i)" do
+    match = ->(pattern, text) { TriggerFilter.match?({ "text" => { "op" => "regex", "value" => pattern } }, { "text" => text }, ignore_case: %w[text]) }
+
+    assert match.call("\\Adeploy \\D+\\z", "Deploy Staging")
+    assert_not match.call("\\Adeploy \\D+\\z", "Deploy 42")
+    assert_not match.call("(?-i)\\ADeploy", "deploy staging")
+  end
 end

@@ -89,6 +89,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
   end
 
   test "create_workflow_trigger creates a slack trigger with a filter predicate" do
+    create(:integration, provider: :slack, status: :active, company: @company, project: nil)
     body = call_tool("create_workflow_trigger",
                      { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",
                        name: "on mention", filter_predicate: { channel: "C123" },
@@ -185,6 +186,18 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_not event.enabled
     assert_equal({ "channel" => "C9" }, event.filter_predicate)
     assert_equal "standup", event.name
+  end
+
+  test "update_workflow_trigger will not switch a slack trigger on before Slack is connected" do
+    event = event_trigger!(enabled: false)
+
+    body = call_tool("update_workflow_trigger",
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",
+                       trigger_id: event.id, enabled: true })
+
+    assert error?(body)
+    assert_includes text(body), TriggerBinding::SLACK_NOT_CONNECTED
+    assert_not event.reload.enabled
   end
 
   test "delete_workflow_trigger removes each kind" do

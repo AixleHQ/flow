@@ -143,6 +143,9 @@ export function TriggerFormPanel({
   const [notifyOnFailure, setNotifyOnFailure] = useState(editing?.notify_on_failure ?? true);
   const [textContains, setTextContains] = useState(editSlack?.value ?? '');
   const [textOp, setTextOp] = useState(editSlack?.op ?? 'contains');
+  const [slackCooldown, setSlackCooldown] = useState<number | string>(
+    editing?.kind === 'slack' ? (editing.cooldown_seconds ?? 0) : 0,
+  );
 
   const [verification, setVerification] = useState('shared_token');
   const [secret, setSecret] = useState('');
@@ -192,6 +195,7 @@ export function TriggerFormPanel({
         if (channel.trim()) filter.channel = channel.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
         trigger.notify_on_failure = notifyOnFailure;
+        trigger.cooldown_seconds = slackCooldown === '' ? 0 : slackCooldown;
       } else if (kind === 'webhook') {
         if (!isEdit) {
           trigger.verification_strategy = verification;
@@ -265,6 +269,7 @@ export function TriggerFormPanel({
     notifyOnFailure,
     textContains,
     textOp,
+    slackCooldown,
     verification,
     secret,
     condField,
@@ -799,7 +804,26 @@ export function TriggerFormPanel({
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, marginBottom: 12 }}>
-                    @mention /help lists this channel&apos;s commands. The word help can&apos;t be used as a pattern.
+                    Matched against the message after the @mention, ignoring case. @mention /help lists this
+                    channel&apos;s commands. The word help can&apos;t be used as a pattern.
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <NumberInput
+                      label="Cooldown (s)"
+                      description="After a run starts, matching mentions start nothing for this long. 0 starts a run for every matching mention."
+                      value={slackCooldown}
+                      onChange={setSlackCooldown}
+                      min={0}
+                      styles={{
+                        label: { fontSize: 13, fontWeight: 500, color: 'var(--text-1)', marginBottom: 5 },
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <Switch

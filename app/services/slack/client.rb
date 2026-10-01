@@ -22,11 +22,6 @@ module Slack
         })
       end
 
-      # Validate a bot token (and learn its team/bot identity). Raises on failure.
-      def auth_test(token:)
-        post("auth.test", token: token)
-      end
-
       # Post a message as the bot. `blocks` (Block Kit) and `thread_ts` (reply in
       # a thread) are optional; `reply_broadcast` additionally surfaces a threaded
       # reply in the channel. Requires the chat:write scope. Returns the posted

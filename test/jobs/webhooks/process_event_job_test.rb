@@ -124,6 +124,56 @@ module Webhooks
       assert_equal integration.id, event.data["integration_id"]
     end
 
+    def bot_install(bot_user_id: "U0BOT")
+      integration = Integration.create!(provider: :slack, company: @user.companies.first, project: nil,
+        connected_by: @user, name: "Acme", status: :active)
+      integration.update!(credentials_data: { "bot_token" => "xoxb-1", "bot_user_id" => bot_user_id })
+      @endpoint.update!(config: { "integration_id" => integration.id })
+      integration
+    end
+
+    def mention(text, key:)
+      received({ "type" => "event_callback", "event_id" => key, "team_id" => "T1",
+                 "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1", "text" => text, "ts" => "5.5" } },
+               key: key)
+    end
+
+    test "matches text conditions against what was typed after the bot's mention and hands the run Slack's text" do
+      bot_install
+      @binding.update!(filter_predicate: { "channel" => "C1", "text" => { "op" => "eq", "value" => "deploy staging & tag" } })
+      raw = "<@U0BOT>  Deploy Staging &amp; tag "
+
+      WorkflowService.expects(:enqueue).with(
+        has_entries(shared_context: has_entries("slack" => has_entries("text" => raw)))
+      ).once.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(mention(raw, key: "EvCmd").id)
+
+      event = TriggerEvent.find_by!(event_type: "slack.message")
+      assert_equal "Deploy Staging & tag", event.data["text"]
+      assert_equal raw, event.data["raw_text"]
+    end
+
+    test "keeps a leading mention of someone other than the bot in the matched text" do
+      bot_install
+      stub_slack_client!
+      @binding.update!(filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
+
+      WorkflowService.expects(:enqueue).never
+
+      Webhooks::ProcessEventJob.perform_now(mention("<@U0ALICE> <@U0BOT> deploy", key: "EvOther").id)
+
+      assert_equal "<@U0ALICE> <@U0BOT> deploy", TriggerEvent.find_by!(event_type: "slack.message").data["text"]
+    end
+
+    test "drops a leading mention, label and all, when the install cannot say who the bot is" do
+      @binding.update!(filter_predicate: { "text" => { "op" => "eq", "value" => "ship it" } })
+
+      WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(mention("<@U0BOT|flow> Ship it", key: "EvNoBot").id)
+    end
+
     test "a mention inside a thread carries both the message ts and its thread" do
       payload = {
         "type" => "event_callback", "event_id" => "EvThread", "team_id" => "T1",

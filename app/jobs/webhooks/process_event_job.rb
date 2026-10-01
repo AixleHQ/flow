@@ -7,6 +7,10 @@ module Webhooks
   class ProcessEventJob < ApplicationJob
     queue_as :default
 
+    # Slack sends message text in its own markup: these three characters arrive
+    # as entities, and a mention as <@U…> or <@U…|name>.
+    SLACK_ENTITIES = { "&amp;" => "&", "&lt;" => "<", "&gt;" => ">" }.freeze
+
     def perform(received_webhook_id)
       received = ReceivedWebhook.find_by(id: received_webhook_id)
       return if received.nil? || received.status == "processed"
@@ -57,6 +61,7 @@ module Webhooks
       return nil unless kind == "app_mention"
       return nil if event["bot_id"].present? # safety: ignore bot-authored mentions
 
+      integration_id = endpoint.config.to_h["integration_id"]
       {
         event_type: "slack.message",
         subject: event["channel"],
@@ -64,16 +69,35 @@ module Webhooks
           "slack_event_type" => kind,
           "channel" => event["channel"],
           "user" => event["user"],
-          "text" => event["text"],
+          # What trigger conditions match: the request as the person typed it.
+          # raw_text is Slack's own text, which is what the run is handed.
+          "text" => slack_request_text(event["text"], slack_bot_user_id(integration_id)),
+          "raw_text" => event["text"],
           "team" => payload["team_id"],
           # Reply coordinates + attachments, carried into the run via shared_context
           # (replies) and File ingestion (input assets).
           "ts" => event["ts"],
           "thread_ts" => event["thread_ts"].presence || event["ts"],
           "files" => normalize_slack_files(event["files"]),
-          "integration_id" => endpoint.config.to_h["integration_id"]
+          "integration_id" => integration_id
         }.compact
       }
+    end
+
+    # "<@UBOT> Deploy &amp; tag" → "Deploy & tag": the leading mention of the
+    # bot dropped, entities decoded, whitespace trimmed. When the install can't
+    # say who the bot is, any leading mention is dropped.
+    def slack_request_text(text, bot_user_id)
+      return nil if text.nil?
+
+      id = bot_user_id.present? ? Regexp.escape(bot_user_id) : "[A-Z0-9]+"
+      text.sub(/\A\s*<@#{id}(?:\|[^>]*)?>/, "").gsub(/&(?:amp|lt|gt);/, SLACK_ENTITIES).strip
+    end
+
+    def slack_bot_user_id(integration_id)
+      return nil if integration_id.blank?
+
+      Integration.find_by(id: integration_id)&.credentials_data_for_display&.dig("bot_user_id")
     end
 
     # Keep only the file fields we need (and only well-formed entries); nil when
