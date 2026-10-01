@@ -4,20 +4,28 @@ require "test_helper"
 
 module Coder
   class AllocatorTest < ActiveSupport::TestCase
+    # Like Coder, it lists every workspace an admin token can see unless asked
+    # for the token's own (`owner:me`, contract-tested in workspace_service_test).
+    # A workspace without an "owner_name" belongs to the token's account.
     class FakeWorkspaceService
+      TOKEN_OWNER = "flow-bot"
+
       attr_accessor :workspaces, :started_ids, :awaited_ids, :created
 
-      def initialize(workspaces: [], created: nil, failing_start_ids: [])
+      def initialize(workspaces: [], created: nil, failing_start_ids: [], create_failure: nil)
         @workspaces        = workspaces
         @started_ids       = []
         @awaited_ids       = []
         @created           = created
         @failing_start_ids = failing_start_ids
+        @create_failure    = create_failure
       end
 
-      def list(prefix: nil)
-        return @workspaces if prefix.blank?
-        @workspaces.select { |w| w["name"].to_s.start_with?(prefix) }
+      def list(prefix: nil, own: false)
+        visible = own ? @workspaces.select { |w| w.fetch("owner_name", TOKEN_OWNER) == TOKEN_OWNER } : @workspaces
+        return visible if prefix.blank?
+
+        visible.select { |w| w["name"].to_s.start_with?(prefix) }
       end
 
       def start(workspace_id)
@@ -36,6 +44,8 @@ module Coder
       end
 
       def create_workspace(name:, template_name: nil, template_id: nil)
+        raise Coder::WorkspaceService::OperationError, @create_failure if @create_failure
+
         @created || {
           "id"           => "new-#{name}",
           "name"         => name,
@@ -215,8 +225,48 @@ module Coder
       error = assert_raises(Coder::Allocator::ExhaustedError) do
         build_allocator(workspace_service: ws).allocate
       end
-      assert_match(/no workspaces match prefix "aixle-prod"/, error.message)
+      assert_match(/the token's Coder account owns no workspaces matching prefix "aixle-prod"/, error.message)
       assert_match(/no default_template configured/, error.message)
+    end
+
+    test "never allocates a workspace another Coder user owns, even without a prefix" do
+      @integration.update!(settings: @integration.settings.merge("machine_prefix" => ""))
+      theirs = running("alice-dev", "a1").merge("owner_name" => "alice")
+      ours   = { "id" => "u1", "name" => "aixle-1",
+                 "latest_build" => { "transition" => "stop", "job" => { "status" => "succeeded" } } }
+      ws = FakeWorkspaceService.new(workspaces: [ theirs, ours ])
+
+      result = build_allocator(workspace_service: ws).allocate
+
+      assert_equal "aixle-1", result[:workspace_name]
+      assert_nil @integration.integration_data.find_by(key: "coder:workspace_lock:alice-dev")
+
+      ws.workspaces = [ theirs ]
+      error = assert_raises(Coder::Allocator::ExhaustedError) do
+        build_allocator(workspace_service: ws).allocate
+      end
+      assert_match(/\Athe token's Coder account owns no workspaces; /, error.message)
+      assert_nil @integration.integration_data.find_by(key: "coder:workspace_lock:alice-dev")
+    end
+
+    test "ExhaustedError says why creating from the default template failed" do
+      @integration.update!(settings: @integration.settings.merge("default_template" => "tpl-x"))
+      ws = FakeWorkspaceService.new(
+        workspaces:     [ running("aixle-prod-1", "u1") ],
+        create_failure: "create_workspace failed: create_workspace failed: HTTP 403 — Forbidden."
+      )
+      Coder::LockService.new(@integration).acquire(
+        workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER"
+      )
+
+      error = assert_raises(Coder::Allocator::ExhaustedError) do
+        build_allocator(workspace_service: ws).allocate
+      end
+
+      assert_match(/1 held by other sessions \(aixle-prod-1\)/, error.message)
+      assert_match(/creating a workspace from template "tpl-x" failed: create_workspace failed: .*HTTP 403 — Forbidden\./,
+                   error.message)
+      assert_no_match(/no default_template configured/, error.message)
     end
 
     test "ExhaustedError names the sessions-held workspaces instead of claiming the pool is empty" do

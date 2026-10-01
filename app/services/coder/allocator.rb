@@ -3,11 +3,11 @@
 module Coder
   # Allocator — lock-first workspace allocation for a Coder integration.
   #
-  # Lists candidate workspaces by the integration's configured prefix, sorts
-  # running ones first, then attempts to acquire the lock for each candidate
-  # in turn. If all candidates are held by other sessions, falls through to
-  # creating a new workspace (when the integration is configured with a
-  # default template).
+  # Lists the workspaces the integration's token owns under its configured
+  # prefix, sorts running ones first, then attempts to acquire the lock for
+  # each candidate in turn. If all candidates are held by other sessions,
+  # falls through to creating a new workspace (when the integration is
+  # configured with a default template).
   #
   # Health gating (see `Coder::HealthCheck`) sits on top of that: a candidate
   # the Coder agent reports as broken, or one under quarantine from a recent
@@ -57,7 +57,7 @@ module Coder
     def allocate(note: nil, acquired_by: nil, exclude: [])
       excluded = Array(exclude).map(&:to_s).map(&:strip).reject(&:empty?)
 
-      candidates = @workspace_service.list(prefix: prefix).sort_by do |w|
+      candidates = @workspace_service.list(prefix: prefix, own: true).sort_by do |w|
         status = w["latest_build"]&.dig("transition") == "start" && w.dig("latest_build", "job", "status") == "succeeded" ? 0 : 1
         [ status, w["name"].to_s ]
       end
@@ -123,9 +123,17 @@ module Coder
         return build_result(workspace_id: ws_id, workspace_name: ws_name, status: status, lock: lock)
       end
 
+      create_failure = nil
       if @integration.coder_default_template.present?
-        created = create_workspace_or_nil(note: note, acquired_by: acquired_by)
-        return created if created
+        begin
+          return create_and_lock(note: note, acquired_by: acquired_by)
+        rescue Coder::WorkspaceService::OperationError => e
+          # Creation is the preferred escape from an unhealthy pool, but it is
+          # not the last one: fall through to the deferred candidates instead
+          # of failing the allocation outright.
+          Rails.logger.warn("[Coder::Allocator] create_workspace failed: #{e.message}")
+          create_failure = e.message
+        end
       end
 
       fallback = allocate_deferred(deferred, note: note, acquired_by: acquired_by)
@@ -133,7 +141,7 @@ module Coder
 
       raise ExhaustedError, exhausted_message(
         candidates: candidates, held: held, start_failures: start_failures,
-        skipped: skipped, deferred: deferred
+        skipped: skipped, deferred: deferred, create_failure: create_failure
       )
     end
 
@@ -194,30 +202,24 @@ module Coder
       nil
     end
 
-    def create_workspace_or_nil(note:, acquired_by:)
+    def create_and_lock(note:, acquired_by:)
       created = create_new_workspace
       ws_id   = created["id"].to_s
       ws_name = created["name"].to_s
       lock    = acquire_lock(ws_name, ws_id, note: note, acquired_by: acquired_by)
 
       build_result(workspace_id: ws_id, workspace_name: ws_name, status: "starting", lock: lock)
-    rescue Coder::WorkspaceService::OperationError => e
-      # Creation is the preferred escape from an unhealthy pool, but it is not
-      # the last one: fall through to the deferred candidates instead of
-      # failing the allocation outright.
-      Rails.logger.warn("[Coder::Allocator] create_workspace failed: #{e.message}")
-      nil
     end
 
-    # Reaching this point means every candidate was unusable AND no default
-    # template is configured (a configured one either returns a workspace or
-    # raises its own `OperationError`). The old single sentence claimed "no
-    # workspaces available" for all of those, which read as an empty pool even
-    # when the pool was full and merely locked — so spell out which it was.
-    def exhausted_message(candidates:, held:, start_failures:, skipped: [], deferred: [])
+    # An empty pool, a full-but-locked one and a template that will not build
+    # each need a different fix, so the message names which it was.
+    # `create_failure` comes from an `OperationError`, which `WorkspaceService`
+    # has already stripped of the session token.
+    def exhausted_message(candidates:, held:, start_failures:, skipped: [], deferred: [], create_failure: nil)
       pool =
         if candidates.empty?
-          prefix ? "no workspaces match prefix #{prefix.inspect}" : "the Coder account has no workspaces"
+          owned = "the token's Coder account owns no workspaces"
+          prefix ? "#{owned} matching prefix #{prefix.inspect}" : owned
         else
           reasons = []
           reasons << "#{held.size} held by other sessions (#{held.join(', ')})" if held.any?
@@ -230,7 +232,14 @@ module Coder
           "none of the #{candidates.size} workspaces in the pool could be allocated — #{reasons.join('; ')}"
         end
 
-      "#{pool}; no default_template configured on the integration, so the pool cannot grow"
+      growth =
+        if create_failure
+          "creating a workspace from template #{@integration.coder_default_template.inspect} failed: #{create_failure}"
+        else
+          "no default_template configured on the integration, so the pool cannot grow"
+        end
+
+      "#{pool}; #{growth}"
     end
 
     def prefix

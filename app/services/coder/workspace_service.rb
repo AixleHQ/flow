@@ -15,6 +15,7 @@ module Coder
     # `CODER_AWAIT_BUILD_TIMEOUT`). The numeric fallback matches DD-14 / OQ-6.
     DEFAULT_BUILD_TIMEOUT  = (Settings.coder&.await_build_timeout || 240).to_i
     DEFAULT_BUILD_INTERVAL = 3   # seconds
+    EXPLANATION_LIMIT      = 300
 
     def initialize(integration)
       @integration = integration
@@ -79,7 +80,7 @@ module Coder
         )
         status = build.dig("job", "status").to_s
         return build if status == "succeeded"
-        raise OperationError, "build #{build_id} failed: status=#{status}" if %w[failed canceled].include?(status)
+        raise OperationError, build_failure(build_id, build) if %w[failed canceled].include?(status)
         raise OperationError, "await_build timed out after #{timeout}s" if Time.current >= deadline
 
         sleep interval
@@ -108,10 +109,38 @@ module Coder
         template_id:   tpl_id
       )
     rescue Coder::Api::ApiError => e
-      raise OperationError, "create_workspace failed: #{@token.redact(e.message)}"
+      raise OperationError, "create_workspace failed: #{with_coder_explanation(e)}"
     end
 
     private
+
+    # Coder refuses a request with `{"message": ..., "detail": ...}`; the status
+    # alone does not tell a missing template parameter from an exhausted quota.
+    def with_coder_explanation(error)
+      plain = @token.redact(error.message)
+      return plain unless error.is_a?(Coder::Api::HTTPError)
+
+      body = JSON.parse(error.body.to_s)
+      return plain unless body.is_a?(Hash)
+
+      message, detail = body.values_at("message", "detail").map { |part| part.to_s.strip }
+      explanation = [ message, ("(#{detail})" if detail.present?) ].compact_blank.join(" ")
+      explanation.empty? ? plain : "#{plain} — #{redacted_excerpt(explanation)}"
+    rescue JSON::ParserError
+      plain
+    end
+
+    def build_failure(build_id, build)
+      message = "build #{build_id} failed: status=#{build.dig('job', 'status')}"
+      error   = build.dig("job", "error").to_s.strip
+      error.empty? ? message : "#{message} — #{redacted_excerpt(error)}"
+    end
+
+    # Redact before truncating: a cut through the token would leave a fragment
+    # the redaction no longer matches.
+    def redacted_excerpt(text)
+      @token.redact(text).truncate(EXPLANATION_LIMIT)
+    end
 
     def coder_url
       @token.coder_url

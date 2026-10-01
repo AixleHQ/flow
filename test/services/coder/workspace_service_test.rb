@@ -36,6 +36,18 @@ module Coder
       assert_equal %w[aixle-prod-1 aixle-prod-2], result.map { |w| w["name"] }
     end
 
+    test "list(own: true) asks Coder only for the token owner's workspaces" do
+      own = stub_request(:get, "#{@base}/api/v2/workspaces")
+              .with(query: { q: "owner:me" })
+              .to_return(status: 200, body: { workspaces: [ { id: "u1", name: "aixle-prod-1" } ] }.to_json,
+                         headers: { "Content-Type" => "application/json" })
+
+      result = @service.list(prefix: "aixle-prod-", own: true)
+
+      assert_equal %w[aixle-prod-1], result.map { |w| w["name"] }
+      assert_requested own
+    end
+
     test "list raises OperationError on non-200" do
       stub_request(:get, "#{@base}/api/v2/workspaces").to_return(status: 500)
       assert_raises(Coder::WorkspaceService::OperationError) { @service.list }
@@ -86,11 +98,28 @@ module Coder
       assert_equal "succeeded", build["job"]["status"]
     end
 
-    test "await_build raises on failed job" do
-      stub_get("/api/v2/workspacebuilds/build-1", { id: "build-1", job: { status: "failed" } })
-      assert_raises(Coder::WorkspaceService::OperationError) do
+    test "await_build raises on failed job with the provisioner's error" do
+      stub_get("/api/v2/workspacebuilds/build-1", {
+        id: "build-1", job: { status: "failed", error: "terraform apply: InsufficientInstanceCapacity" }
+      })
+
+      err = assert_raises(Coder::WorkspaceService::OperationError) do
         @service.await_build("build-1", timeout: 1, interval: 0)
       end
+      assert_equal "build build-1 failed: status=failed — terraform apply: InsufficientInstanceCapacity", err.message
+    end
+
+    test "create_workspace failure carries Coder's explanation without the session token" do
+      token = @integration.credentials_data["session_token"]
+      stub_post("/api/v2/users/#{@integration.coder_user_id}/workspaces",
+                { message: "Unable to create workspace.", detail: "rejected token #{token}" }, status: 400)
+
+      err = assert_raises(Coder::WorkspaceService::OperationError) do
+        @service.create_workspace(name: "aixle-prod-1", template_id: "tpl-1")
+      end
+
+      assert_match(/HTTP 400 — Unable to create workspace\. \(rejected token \[REDACTED\]\)/, err.message)
+      assert_no_match(/#{Regexp.escape(token)}/, err.message)
     end
 
     test "redacts the session token from network error messages" do
