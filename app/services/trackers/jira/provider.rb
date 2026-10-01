@@ -263,7 +263,7 @@ module Trackers
           uri = URI.parse(value)
           return unless uri.host.to_s.casecmp?(site_host.to_s)
 
-          uri.path[%r{/browse/([^/?#]+)}, 1] || CGI.parse(uri.query.to_s)["selectedIssue"]&.first
+          uri.path[%r{/browse/([^/?#]+)}, 1] || URI.decode_www_form(uri.query.to_s).to_h["selectedIssue"]
         else
           value
         end
