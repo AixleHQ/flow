@@ -39,6 +39,11 @@ module Trackers
     # True when `ref` (a URL or key) unmistakably names an issue in `scope_id`.
     def owns_reference?(_scope_id, _ref) = false
 
+    # The issue id or key `ref` names, read off `ref` itself without asking the
+    # tracker; nil when it cannot be. A write records it before it is sent, so
+    # an event that overtakes the write's answer is still matched to it.
+    def issue_identifier(_ref) = nil
+
     # Who this connection acts as in the tracker ({ "id", "name" }), once known.
     def identity
       integration.settings.to_h["tracker_identity"].presence

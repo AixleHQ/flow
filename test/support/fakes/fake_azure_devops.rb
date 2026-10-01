@@ -320,6 +320,14 @@ module FakeAzureDevops
       @work_item = work_item
       @error = error
       @calls = []
+      @before_answering = {}
+    end
+
+    # The next call to `method` runs `block` once Azure has applied it and
+    # before it answers: a Service Hook delivery that reaches Aixle while the
+    # request is in flight.
+    def before_answering(method, &block)
+      @before_answering[method] = block
     end
 
     def work_item_types(project_id: nil)
@@ -376,7 +384,7 @@ module FakeAzureDevops
       record(:add_comment, work_item_id: work_item_id, text: text, project_id: project_id)
       raise @error if @error
 
-      { id: 2, created_at: Time.current.iso8601 }
+      answer(:add_comment) { { id: 2, created_at: Time.current.iso8601 } }
     end
 
     def create(type:, fields: {}, project_id: nil)
@@ -386,7 +394,7 @@ module FakeAzureDevops
       record(:create, type: type, fields: fields, project_id: project_id)
       raise @error if @error
 
-      @work_item.merge(type: type, title: fields[:title])
+      answer(:create) { @work_item.merge(type: type, title: fields[:title]) }
     end
 
     def update(work_item_id, fields: {}, expected_revision: nil, project_id: nil)
@@ -395,7 +403,7 @@ module FakeAzureDevops
                      project_id: project_id)
       raise @error if @error
 
-      @work_item.merge(fields).merge(rev: @work_item[:rev] + 1)
+      answer(:update) { @work_item.merge(fields).merge(rev: @work_item[:rev] + 1) }
     end
 
     def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil, project_id: nil)
@@ -405,6 +413,14 @@ module FakeAzureDevops
       raise @error if @error
 
       @work_item.merge(relations: [ { rel: "ArtifactLink", url: artifact_id } ])
+    end
+
+    private
+
+    def answer(method)
+      result = yield
+      @before_answering.delete(method)&.call
+      result
     end
   end
 

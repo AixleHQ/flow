@@ -3,6 +3,8 @@
 require "test_helper"
 
 class InternalTools::TrackerToolsTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     with_azure_devops_enabled
     @integration = create(:integration, :azure_devops, :active)
@@ -111,6 +113,30 @@ class InternalTools::TrackerToolsTest < ActiveSupport::TestCase
 
     link = @task.external_resources.sole
     assert_equal [ "azure_devops", "11", @tracker.id ], [ link.provider, link.external_id, link.data["project_tracker_id"] ]
+  end
+
+  # Azure names the work item only in its answer to the create, and its Service
+  # Hook can arrive first: the event waits for the answer rather than passing
+  # for a person's change and starting the workflow again.
+  test "a work item created event that overtakes the create waits for it, then is attributed to the run" do
+    @workflow.steps.update_all(allow_non_interactive: true)
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "tracker.issue.created")
+    subscription = create(:azure_devops_subscription, integration: @integration, event_type: "workitem.created",
+                                                      azure_project_id: @tracker.external_scope_id)
+    @fakes.work_items.before_answering(:create) do
+      ResolveAzureDevopsEventJob.perform_now(
+        subscription_id: subscription.id, event_type: "workitem.created",
+        resource: { "id" => 11, "rev" => 1, "fields" => { "System.ChangedBy" => "Ada <ada@example.com>" } }
+      )
+    end
+    WorkflowService.expects(:enqueue).never
+
+    tool_ok(run_tool(InternalTools::TrackerCreateIssue, type: "Bug", title: "It breaks"))
+
+    assert_equal 0, TriggerEvent.count
+    perform_enqueued_jobs(only: ResolveAzureDevopsEventJob)
+    origin = TriggerEvent.sole.data["origin"]
+    assert_equal [ true, @workflow_run.id ], origin.values_at("attributed", "workflow_run_id")
   end
 
   test "an identical retry in the same session replays the first result instead of filing twice" do

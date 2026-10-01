@@ -37,6 +37,56 @@ module AzureDevops
                    @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
     end
 
+    def verify_connection
+      stub_request(:get, %r{/_apis/projects/#{@integration.azure_project_id}})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { id: @integration.azure_project_id, name: "Customer Platform" }.to_json)
+      IntegrationService.new(company: @integration.company, connected_by: @integration.connected_by,
+                             project: @integration.project).test(@integration)
+    end
+
+    # Boards triggers depend on the workitem.* hooks. Enabling a trigger creates
+    # them, but only once; testing the connection is what checks and repairs them.
+    test "with a Boards trigger waiting, testing a connection provisions the work item hooks too" do
+      with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+      stub_create
+      project = @integration.project
+      create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: @integration.connected_by,
+                               event_type: "tracker.issue.status_changed", project_tracker: create(:project_tracker, integration: @integration))
+
+      result = verify_connection
+
+      assert_equal AzureDevopsSubscription::EVENT_TYPES.sort, @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
+      assert_equal [ :active, false, "Connection verified. Service Hooks are in place for CI and Boards events" ],
+                   result.values_at(:status, :warning, :message)
+    end
+
+    test "testing a connection recreates a hook that was deleted in Azure" do
+      with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+      gone = create(:azure_devops_subscription, integration: @integration, azure_project_id: @integration.azure_project_id,
+                                                azure_subscription_id: "sub-gone")
+      stub_request(:get, %r{/_apis/hooks/subscriptions/sub-gone}).to_return(status: 404, body: "")
+      stub_create(id: "sub-new")
+
+      result = verify_connection
+
+      assert_equal [ "active", "sub-new" ], [ gone.reload.status.to_s, gone.azure_subscription_id ]
+      assert_equal "Connection verified. Service Hooks are in place for CI events", result[:message]
+    end
+
+    # Failures used to be logged and nothing else: the connection reported itself
+    # verified while no event could ever arrive.
+    test "a hook Azure refuses is named in the result, and the connection stays verified" do
+      with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+      stub_request(:post, %r{/_apis/hooks/subscriptions}).to_return(status: 403, body: "")
+
+      result = verify_connection
+
+      assert_equal [ :active, true ], result.values_at(:status, :warning)
+      assert_equal "Connection verified, but these Service Hooks are not delivering: build.complete, " \
+                   "git.pullrequest.merged, git.pullrequest.updated in Customer Platform (permission_denied)", result[:message]
+    end
+
     # Found live: a subscription carrying an unrecognized filter value is
     # accepted, reported enabled, and never fires. `buildStatus: "Completed"`
     # reads perfectly and is not one of the values Azure accepts, so the only

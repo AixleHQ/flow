@@ -169,6 +169,15 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
       </div>
 
       <div style={{ marginBottom: 12 }}>
+        <Switch
+          label="Comment on the issue when a run fails"
+          checked={value.notifyOnFailure}
+          onChange={(e) => set({ notifyOnFailure: e.currentTarget.checked })}
+        />
+        <Hint>Also when a run is cancelled. Nothing is posted to a read-only tracker.</Hint>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
         <FieldLabel>Subject (what the run is about)</FieldLabel>
         <Select
           aria-label="Subject"

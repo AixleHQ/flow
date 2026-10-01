@@ -42,19 +42,21 @@ module InternalTools
       end
 
       # Claims the ledger row before the provider call, so a retry is recognised
-      # and the tracker event the write causes can be attributed to this run.
+      # and the tracker event the write causes can be attributed to this run —
+      # also when that event arrives before the call returns, which is why the
+      # issue (payload[:issue]) is recorded up front.
       # A failed claim may be retried — the provider refused it, nothing was
       # written — but an unknown one may not.
       def with_write(tracker, operation, payload, change: {})
         key = params[:operation_key].presence || automatic_key(operation, payload)
+        issue_id = payload[:issue].presence && tracker.tracker_provider.issue_identifier(payload[:issue])
         record, state = TrackerOperation.claim!(project_tracker: tracker, key: key, operation: operation,
-                                                payload: payload, change: change, **run_attribution)
+                                                payload: payload, change: change, issue_id: issue_id, **run_attribution)
         return replayed(record) if state == :replayed && !record.failed?
 
-        record.update!(state: :pending, error_code: nil) if record.failed?
+        record.retry! if record.failed?
         value = yield
-        record.succeed!(value, result_ref: value.id)
-        record.update!(issue_id: value.is_a?(Trackers::Comment) ? value.issue_id : value.id)
+        record.succeed!(value, result_ref: value.id, issue_id: value.is_a?(Trackers::Comment) ? value.issue_id : value.id)
         success(value.as_json.merge("operation_key" => key).to_json)
       rescue Trackers::Error::OutcomeUnknown => e
         record&.unknown!

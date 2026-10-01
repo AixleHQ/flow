@@ -263,7 +263,19 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
 
     post test_connection_company_project_integration_path(@project, integration)
 
-    assert_equal "Connection verified", flash[:notice]
+    assert_equal "Connection verified. Azure cannot reach this deployment, so it has no Service Hooks", flash[:notice]
+    assert integration.reload.active?
+  end
+
+  test "a verified connection whose Service Hooks Azure refuses says so in red" do
+    integration = create_connected_integration
+    with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+    stub_request(:post, %r{/_apis/hooks/subscriptions}).to_return(status: 403, body: "")
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_match(/\AConnection verified, but these Service Hooks are not delivering: build\.complete.*\(permission_denied\)\z/,
+                 flash[:alert])
     assert integration.reload.active?
   end
 

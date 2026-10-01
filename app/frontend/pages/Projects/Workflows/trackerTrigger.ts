@@ -23,6 +23,7 @@ export interface TrackerTriggerValue {
   mentionOnly: boolean;
   textContains: string;
   aixleChanges: AixleChanges;
+  notifyOnFailure: boolean;
   subjectPolicy: string;
   subjectColumnId: string | null;
   subjectTitleTemplate: string;
@@ -82,6 +83,7 @@ export function trackerValueFromTrigger(trigger: Trigger | null, defaultColumnId
     statuses: Array.isArray(status?.value) ? status.value.map(String) : [],
     mentionOnly: trigger ? formShows(MENTION_FIELD, predicate[MENTION_FIELD], eventType) : true,
     textContains: typeof text?.value === 'string' ? text.value : '',
+    notifyOnFailure: trigger?.notify_on_failure ?? true,
     aixleChanges: (trigger?.aixle_changes as AixleChanges | undefined) ?? 'ignore',
     subjectPolicy: trigger?.subject_policy ?? (defaultColumnId ? 'find_or_create_task' : 'none'),
     subjectColumnId: trigger?.subject_column_id?.toString() ?? defaultColumnId,
@@ -112,6 +114,7 @@ export function trackerTriggerPayload(value: TrackerTriggerValue, isEdit: boolea
     aixle_changes: value.aixleChanges,
     filter_predicate: filter,
     subject_policy: value.subjectPolicy,
+    notify_on_failure: value.notifyOnFailure,
   };
   if (!isEdit) payload.event_type = value.eventType;
   if (value.subjectPolicy !== 'none') {

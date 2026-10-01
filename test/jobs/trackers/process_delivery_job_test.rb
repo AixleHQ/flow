@@ -38,6 +38,21 @@ class Trackers::ProcessDeliveryJobTest < ActiveJob::TestCase
     assert_equal [ "ENG-1 It breaks", "https://acme.atlassian.net/browse/ENG-1" ], [ @task.title, @task.external_resources.sole.url ]
   end
 
+  test "an issue-created delivery waits for a create still in flight, and its last attempt publishes it as it stands" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @project.owner, event_type: "tracker.issue.created")
+    create(:tracker_operation, project_tracker: @integration.project_trackers.find_by!(external_scope_id: "10000"),
+                               operation: "create_issue", state: "pending", issue_id: nil)
+    notification = Trackers::Notification.build(kind: :issue_created, scope_id: "10000", issue_id: "10100", revision: "1",
+                                                actor: { id: "557058:ada", name: "Ada" })
+    delivery = TrackerDelivery.record(subscription: @subscription, dedup_key: "created-1", notifications: [ notification ])
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+
+    perform_enqueued_jobs(only: Trackers::ProcessDeliveryJob) { Trackers::ProcessDeliveryJob.perform_later(delivery.id) }
+
+    assert_performed_jobs Trackers::EventPipeline::WRITE_RETRY_ATTEMPTS, only: Trackers::ProcessDeliveryJob
+    assert_equal [ "processed", nil ], [ delivery.reload.status, TriggerEvent.sole.data["origin"] ]
+  end
+
   test "a delivery for a connection that is no longer active is skipped" do
     delivery = deliver([ { field: "status", from: "To Do", to: "Done" } ])
     @integration.update!(status: :error)

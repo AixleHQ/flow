@@ -140,6 +140,32 @@ class Trackers::EventPipelineTest < ActiveSupport::TestCase
     assert_equal [ true, "@Aixle please look" ], [ event.data.dig("comment", "mentions_me"), event.data.dig("comment", "text") ]
   end
 
+  test "an issue created while a create of Aixle's is unanswered waits for it, until the last attempt" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "tracker.issue.created")
+    create(:tracker_operation, project_tracker: @tracker, operation: "create_issue", state: "pending", issue_id: nil)
+    created = Trackers::Notification.build(kind: :issue_created, scope_id: @scope, issue_id: "11", revision: 1, actor: { name: "Ada" })
+
+    assert_raises(Trackers::EventPipeline::WriteInFlight) do
+      Trackers::EventPipeline.new(@integration, wait_for_writes: true).process(created)
+    end
+    assert_equal 0, TriggerEvent.count
+
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+    assert_nil pipeline.process(created).sole.data["origin"]
+  end
+
+  test "a create left pending past any request's timeout holds no event up" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "tracker.issue.created")
+    create(:tracker_operation, project_tracker: @tracker, operation: "create_issue", state: "pending", issue_id: nil,
+                               created_at: 3.minutes.ago)
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+
+    created = Trackers::Notification.build(kind: :issue_created, scope_id: @scope, issue_id: "11", revision: 1, actor: { name: "Ada" })
+    Trackers::EventPipeline.new(@integration, wait_for_writes: true).process(created)
+
+    assert_equal 1, TriggerEvent.count
+  end
+
   test "an agent's transition sets the state, and the column move it causes is still attributed to its run" do
     intake_binding
     create(:tracker_operation, project_tracker: @tracker, issue_id: "11", workflow_id: @workflow.id,

@@ -38,7 +38,8 @@ module PersonalTools
       param :enabled, type: :boolean, description: "Whether the trigger fires. Defaults to true; column triggers are always on."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings. Defaults to 5 for column triggers, 0 otherwise."
       param :notify_on_failure, type: :boolean,
-            description: "Post to the triggering Slack thread when a run from this trigger fails, with the error (default true; Slack triggers only)."
+            description: "When a run from this trigger fails, say so where it came from: in the Slack thread, with the error, " \
+                         "or as a comment on the tracker issue (also on cancel). Default true; no effect on other trigger kinds."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
                              description: "Which board task the run is about: none, existing_task, create_task, or " \
                                           "find_or_create_task (tracker triggers: reuse the task linked to the " \

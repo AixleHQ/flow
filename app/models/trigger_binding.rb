@@ -38,9 +38,9 @@ class TriggerBinding < ApplicationRecord
   RESERVED_SLACK_COMMAND = /\A\/?help\z/i
 
   # notify_on_failure (default true) — when a run this binding started fails,
-  # say so in the Slack thread it came from, with what it failed with. Only
-  # Slack-born runs carry the reply coordinates, so it is a no-op on every other
-  # trigger kind; see Slack::RunFailureNotifier.
+  # say so where it came from: in the Slack thread (Slack::RunFailureNotifier),
+  # or, for a tracker event, as a comment on the issue, also when the run is
+  # cancelled (Trackers::RunStatusReporter). A no-op on every other trigger kind.
 
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }

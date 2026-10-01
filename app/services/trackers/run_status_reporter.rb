@@ -38,6 +38,7 @@ module Trackers
       )
       return if state == :replayed && !record.failed?
 
+      record.retry! if record.failed?
       comment = tracker.tracker_provider.add_comment(tracker.external_scope_id, issue_id, text)
       record.succeed!(comment, result_ref: comment.id)
     rescue Error::OutcomeUnknown

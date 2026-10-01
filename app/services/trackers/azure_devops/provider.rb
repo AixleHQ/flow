@@ -46,6 +46,12 @@ module Trackers
         project.casecmp?(scope_id.to_s) || project.casecmp?(integration.azure_project_names[scope_id.to_s].to_s)
       end
 
+      def issue_identifier(ref)
+        work_item_id!(ref).to_s
+      rescue Error
+        nil
+      end
+
       # `statuses` are the board's columns — what an issue moves between on the
       # board, and what triggers match. `states` are the workflow states a
       # transition sets. Without a board (or when Azure will not list it) the

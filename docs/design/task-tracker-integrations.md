@@ -485,12 +485,19 @@ caused it**.
 
 1. Every write a `tracker_*` tool makes is recorded in `tracker_operations` **before** the provider
    call (state `pending`, then `succeeded`/`failed`). The row carries the run and workflow that
-   made it, the run's chain, and what it changes. A notification can arrive before the API call
-   returns, and it still finds the row.
-2. When a notification comes back, the job matches it to the ledger:
-   - created comments and issues: exact match on the returned id (`result_ref`);
-   - status and assignee changes: the same issue, field and `to` value, within a short window of
-     the write (10 minutes, to be tuned).
+   made it, the run's chain, what it changes and, for a write to an existing issue, the issue as
+   the caller named it (`Provider#issue_identifier`: the id, or on Jira possibly the key; the id
+   replaces it once the call returns). A notification can arrive before the API call returns, and
+   it still finds the row.
+2. When a notification comes back, the job matches it to the ledger — pending or succeeded rows
+   for the same issue (its id or key), within a short window of the write (10 minutes, to be
+   tuned):
+   - created comments: an `add_comment` row;
+   - created issues: a `create_issue` row. A create learns its issue only from the provider's
+     answer, so while a `create_issue` on the same external project is still pending without an
+     issue (and younger than two minutes), the job does not publish the event but retries it —
+     twelve runs, five seconds apart — and the last run publishes it as it stands;
+   - status and assignee changes: the same field and `to` value.
 3. A matched event carries its origin:
 
    ```json
@@ -586,7 +593,8 @@ cancelled**. A failed agent cannot report its own failure, so this is the one wr
 with its tools.
 
 - **Setting.** The binding's `status_reporting`, from the Teams design, replaces
-  `notify_on_failure` (which governs the comment until that lands). Tracker bindings offer `none` and `failures`, with `failures` as the
+  `notify_on_failure` (which governs the comment until that lands; on by default, and the tracker
+  trigger form's "Comment on the issue when a run fails" switch). Tracker bindings offer `none` and `failures`, with `failures` as the
   default. `lifecycle` is not offered for trackers: progress on the issue is the agent's job.
 - **Seam.** `Trackers::RunStatusReporter` is one of the origin reporters behind the shared
   run-transition seam (`docs/design/teams-integration.md` §17, on its own branch):

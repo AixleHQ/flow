@@ -61,6 +61,24 @@ class Trackers::RunStatusReporterTest < ActiveSupport::TestCase
     assert_equal "failed", TrackerOperation.sole.state
   end
 
+  test "a comment resent after a refusal is attributed to the run, even when its event overtakes it" do
+    @run.update!(state: "failed")
+    @fakes.work_items.instance_variable_set(:@error, AzureDevops::RateLimited.new("slow"))
+    assert_raises(Triggers::ReportToOriginJob::Retryable) { Trackers::RunStatusReporter.report(@dispatch, "failed") }
+    @fakes.work_items.instance_variable_set(:@error, nil)
+
+    events = nil
+    @fakes.work_items.before_answering(:add_comment) do
+      comment = Trackers::Notification.build(kind: :comment_created, scope_id: @tracker.external_scope_id, issue_id: "11",
+                                             revision: 9, comment_text: "Aixle: the Intake run failed", actor: { name: "Ada" })
+      events = Trackers::EventPipeline.new(@integration).process(comment)
+    end
+    Trackers::RunStatusReporter.report(@dispatch, "failed")
+
+    assert_equal [ true, @run.id ], events.sole.data["origin"].values_at("attributed", "workflow_run_id")
+    assert_equal "succeeded", TrackerOperation.sole.state
+  end
+
   test "failing or cancelling a run announces the transition for every dispatch that started it" do
     assert_enqueued_with(job: Triggers::ReportRunTransitionJob, args: [ @dispatch.id, "failed" ]) { @run.fail! }
 

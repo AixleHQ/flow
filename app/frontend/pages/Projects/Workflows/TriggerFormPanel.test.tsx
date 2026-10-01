@@ -790,8 +790,22 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'ignore',
         filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
         subject_policy: 'find_or_create_task',
+        notify_on_failure: true,
         subject_column_id: '1',
       });
+    });
+
+    it('comments on the issue when a run fails unless the switch is turned off', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'tracker', trackers })} />);
+
+      const notify = screen.getByRole('switch', { name: /comment on the issue when a run fails/i });
+      expect(notify).toBeChecked();
+      await userEvent.click(notify);
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'POST').trigger.notify_on_failure).toBe(false);
     });
 
     it('edits a tracker trigger without resending its event type', async () => {
@@ -804,6 +818,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         subject_policy: 'none',
         filter_predicate: { 'comment.mentions_me': true },
+        notify_on_failure: false,
         enabled: true,
       };
       renderPage(<TriggerFormPanel {...baseProps({ editing, trackers })} />);
@@ -818,6 +833,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         filter_predicate: { 'comment.mentions_me': true },
         subject_policy: 'none',
+        notify_on_failure: false,
         enabled: true,
       });
     });

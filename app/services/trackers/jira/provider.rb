@@ -43,6 +43,12 @@ module Trackers
         key.present? && key.split("-").first.casecmp?(project_key(scope_id).to_s)
       end
 
+      def issue_identifier(ref)
+        issue_ref!(ref)
+      rescue Error
+        nil
+      end
+
       def ensure_event_delivery!
         Subscriptions.new(integration).ensure!
       end
