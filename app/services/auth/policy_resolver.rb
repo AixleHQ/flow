@@ -91,10 +91,38 @@ module Auth
       company.company_memberships.active.includes(user: :user_identities).filter_map do |membership|
         user = membership.user
         next if user.nil? || user.super_admin?
-        next if (user.user_identities.map(&:identity_provider_id) & usable).any?
+        next if holds_usable_method?(user.user_identities.map(&:identity_provider_id), usable)
 
         user
       end
+    end
+
+    # The same rule from the member's side: the companies that accept `identity`
+    # and would accept none of what `user` has left once it is gone. A company
+    # that accepted none of their identities before is not this removal's doing.
+    def companies_stranded_without(user, identity)
+      return [] if user.super_admin?
+
+      remaining = user.user_identities.where.not(id: identity.id).pluck(:identity_provider_id)
+      company_ids = user.company_memberships.active.select(:company_id)
+      accepted = accepting_policies.where(company_id: company_ids)
+                                   .pluck(:company_id, :identity_provider_id)
+                                   .group_by(&:first).transform_values { |pairs| pairs.map(&:last) }
+
+      stranded_ids = accepted.filter_map do |company_id, provider_ids|
+        company_id if provider_ids.include?(identity.identity_provider_id) && !holds_usable_method?(remaining, provider_ids)
+      end
+      Company.where(id: stranded_ids).order(:name).to_a
+    end
+
+    # Of these kinds, the ones at least one of these companies accepts.
+    def accepted_kinds(company_ids:, kinds:)
+      accepting_policies.where(company_id: company_ids, identity_providers: { kind: kinds })
+                        .distinct.pluck("identity_providers.kind")
+    end
+
+    def holds_usable_method?(held_provider_ids, accepted_provider_ids)
+      (held_provider_ids & accepted_provider_ids).any?
     end
   end
 end

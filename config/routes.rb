@@ -392,6 +392,7 @@ Rails.application.routes.draw do
       # surface (CAP-4, AD-18).
       get :security, on: :member
     end
+    resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
     # The confirmation link a stranger is emailed: opening it is the proof of
     # the address, and the only thing that writes the company.
     resource :workspace, only: %i[new create], controller: "workspaces" do

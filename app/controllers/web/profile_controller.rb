@@ -35,11 +35,13 @@ class Web::ProfileController < Web::ApplicationController
   # page, because connecting a client and choosing what that client may do are
   # a task of their own — and the tool picker alone is longer than the rest of
   # the profile put together.
-  # The person's own security surface: their passkeys, their one-time codes and
-  # every live session they hold. All of it is theirs — no company-admin surface
-  # reaches these (AD-18).
+  # The person's own security surface: their sign-in methods, passkeys,
+  # one-time codes and every live session they hold. All of it is theirs — no
+  # company-admin surface reaches these (AD-18).
   def security
     render inertia: "Profile/Security", props: {
+      sign_in_methods: sign_in_methods,
+      linkable_kinds: Auth::SignInMethods.linkable_kinds(current_user),
       passkeys: current_user.webauthn_credentials.order(created_at: :desc).map { |c|
         { id: c.id, name: c.display_name, last_used_at: c.last_used_at, created_at: c.created_at }
       },
@@ -187,6 +189,21 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   private
+
+  def sign_in_methods
+    current_user.user_identities.includes(:identity_provider).order(:created_at).map do |identity|
+      removable = Auth::SignInMethods::REMOVABLE_KINDS.include?(identity.kind.to_s)
+      {
+        id: identity.id,
+        kind: identity.kind.to_s,
+        name: identity.identity_provider.display_name,
+        email: identity.email,
+        last_used_at: identity.last_used_at,
+        removable: removable,
+        removal_refusal: removable ? Auth::SignInMethods.removal_refusal(current_user, identity) : nil
+      }
+    end
+  end
 
   # Leaving a company you own projects in hands them over first.
   def project_handovers

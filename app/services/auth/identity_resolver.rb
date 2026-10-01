@@ -15,6 +15,9 @@ module Auth
     # and links this one from inside their session.
     class LinkRequiredError < StandardError; end
     class SuperAdminProviderError < StandardError; end
+    # Linking was asked for, but this (provider, subject) already belongs to a
+    # different account. An identity never moves between accounts by linking.
+    class IdentityTakenError < StandardError; end
 
     # `auto_join:` is false when the caller is LINKING an existing credential
     # rather than completing a sign-in. Domain auto-join is a policy for someone
@@ -28,7 +31,34 @@ module Auth
     def resolve
       raise Auth::Method::Failure, "incomplete assertion" unless assertion.valid?
 
-      user = find_by_identity || promote_existing_user || create_user
+      attach(find_by_identity || promote_existing_user || create_user)
+    end
+
+    # Attaches the assertion to `user`, who is signed in and asked for this
+    # method from their own settings (AD-25). Matched on (provider, subject)
+    # alone: the address the assertion carries is never consulted, which is why
+    # an unverified Microsoft address may be linked here but never adopts an
+    # account at sign-in.
+    def link_to(user)
+      raise Auth::Method::Failure, "incomplete assertion" unless assertion.valid?
+
+      owner = find_by_identity
+      if owner && owner != user
+        raise IdentityTakenError, "this #{provider.display_name} account is linked to a different account"
+      end
+
+      attach(user)
+    end
+
+    # Deleting is writing: removal goes through the single writer too (AD-3).
+    # Whether removing it is allowed is Auth::SignInMethods' question.
+    def self.unlink(identity)
+      identity.destroy!
+    end
+
+    private
+
+    def attach(user)
       enforce_super_admin_password_only!(user)
 
       # A soft-deleted account resolves but is never linked or auto-joined: the
@@ -42,8 +72,6 @@ module Auth
       end
       user
     end
-
-    private
 
     attr_reader :assertion
 

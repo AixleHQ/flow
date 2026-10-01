@@ -40,7 +40,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   oauth_error: 'An error occurred during authentication. Please try again.',
   super_admin_password_only: 'Administrator accounts sign in with a password only.',
   link_required:
-    'An account already exists for that address. Sign in the way you usually do, then add this method from your security settings.',
+    'An account already exists for that address. Sign in the way you usually do, then link this method under Profile → Security → Sign-in methods.',
+  link_expired:
+    'Your session ended before the link finished, so nothing was linked. Sign in, then link the method again from Profile → Security.',
   no_workspace: 'No workspace matches that email address. Please contact your administrator.',
   domain_has_workspace: 'Your email domain already has a workspace, and signing in that way did not add you to it.',
 };

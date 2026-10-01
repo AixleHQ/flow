@@ -169,6 +169,50 @@ module Auth
       assert_equal "bob@squatted.test", created.email
     end
 
+    test "linking attaches an identity by subject, whatever address it carries" do
+      user = create(:user, company: @company)
+      microsoft = IdentityProvider.deployment!("microsoft")
+      other_company = create(:company, :auto_accept)
+
+      # An unverified address at another workspace's domain: at sign-in this
+      # could neither adopt the account nor be trusted for auto-join. Linking
+      # never reads it.
+      assertion = Auth::Assertion.new(provider: microsoft, subject: "oid-linked",
+                                      email: "someone@#{other_company.email_domain}",
+                                      email_verified: false, email_domain_verified: true)
+
+      assert_no_difference [ "User.count", "CompanyMembership.count" ] do
+        assert_equal user, Auth::IdentityResolver.new(assertion, auto_join: false).link_to(user)
+      end
+      assert_equal user, UserIdentity.find_by(identity_provider: microsoft, subject: "oid-linked").user
+    end
+
+    test "linking never moves an identity that belongs to someone else" do
+      owner = create(:user, company: @company)
+      create(:user_identity, user: owner, identity_provider: @google, subject: "sub-owned")
+      someone_else = create(:user, company: @company)
+
+      assert_raises(Auth::IdentityResolver::IdentityTakenError) do
+        Auth::IdentityResolver.new(
+          assertion_for(@google, subject: "sub-owned", email: someone_else.email), auto_join: false
+        ).link_to(someone_else)
+      end
+
+      assert_equal owner, UserIdentity.find_by(identity_provider: @google, subject: "sub-owned").user
+      assert_equal 0, someone_else.user_identities.for_kind("google").count
+    end
+
+    test "a super admin cannot link anything but a password" do
+      super_admin = create(:user, :super_admin)
+
+      assert_raises(Auth::IdentityResolver::SuperAdminProviderError) do
+        Auth::IdentityResolver.new(
+          assertion_for(@google, subject: "sub-operator", email: super_admin.email), auto_join: false
+        ).link_to(super_admin)
+      end
+      assert_equal 0, super_admin.user_identities.for_kind("google").count
+    end
+
     test "a new user in an unknown domain raises rather than creating anything" do
       assert_no_difference "User.count" do
         assert_raises(Auth::IdentityResolver::NoWorkspaceError) do

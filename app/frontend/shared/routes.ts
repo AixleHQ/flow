@@ -122,6 +122,16 @@ export function webhookIngressPath(slug: ScalarType, options?: object): string {
   return "/" + "webhooks" + "/" + "in" + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /webhooks/trackers/app/jira(.:format) */
+export function trackerAppWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "trackers" + "/" + "app" + "/" + "jira" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/trackers/:endpoint_token(.:format) */
+export function trackerWebhookPath(endpoint_token: ScalarType, options?: object): string {
+  return "/" + "webhooks" + "/" + "trackers" + "/" + endpoint_token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["endpoint_token","format"]);
+}
+
 /** /webhooks/slack/events(.:format) */
 export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1212,6 +1222,16 @@ export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/sign_in_methods(.:format) */
+export function signInMethodsPath(options?: object): string {
+  return "/" + "profile" + "/" + "sign_in_methods" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/sign_in_methods/:id(.:format) */
+export function signInMethodPath(id: ScalarType, options?: object): string {
+  return "/" + "profile" + "/" + "sign_in_methods" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /workspace/confirm(.:format) */
 export function confirmWorkspacePath(options?: object): string {
   return "/" + "workspace" + "/" + "confirm" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1240,6 +1260,16 @@ export function userPath(id: ScalarType, options?: object): string {
 /** /integrations/slack/oauth/callback(.:format) */
 export function slackOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/jira/oauth/callback(.:format) */
+export function jiraOauthCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "jira" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/azure_devops/oauth/callback(.:format) */
+export function azureDevopsOauthCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "azure_devops" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /oauth/client-metadata.json(.:format) */
@@ -1532,9 +1562,34 @@ export function azureDevopsConnectCompanyProjectIntegrationsPath(project_id: Sca
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/azure_devops_sign_in(.:format) */
+export function azureDevopsSignInCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_sign_in" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/jira_oauth_start(.:format) */
+export function jiraOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "jira_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/jira_inspect(.:format) */
+export function jiraInspectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "jira_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/integrations/:id/test_connection(.:format) */
 export function testConnectionCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "test_connection" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/jira_projects(.:format) */
+export function jiraProjectsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "jira_projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/jira_webhook(.:format) */
+export function jiraWebhookCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "jira_webhook" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/integrations(.:format) */
