@@ -32,7 +32,7 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 | **Column binding** | a card enters a bound column (`auto`) | Board settings, per column |
 | **Manual** | you press *Run* on a task or workflow | the UI / API |
 | **Schedule** *(planned)* | a timer fires (interval / cron / calendar) | the workflow's Triggers |
-| **Slack message** | a message / mention / reaction matches | the workflow's Triggers |
+| **Slack message** | someone mentions the app in a channel and the message matches | the workflow's Triggers |
 | **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers |
 | **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, or *Connect a board column* on the Trackers page |
 
@@ -87,14 +87,16 @@ A trigger can carry a **filter** over the event payload, so it fires only on
 matching events:
 
 ```
-Slack:   channel = #deploys   AND   text = "ship it"
+Slack:   channel = C0123ABCD  AND   text contains "ship it"
 Webhook: ref = refs/heads/main AND   repository.name = my-app
 ```
 
-Filters are stored as `filter_predicate` and matched by exact key/value
-containment against the event data. Conditions are AND-ed.
+Filters are stored as `filter_predicate`. Each condition compares one field of
+the event data with an operator — `eq`, `ne`, `contains`, `not_contains`,
+`starts_with`, `ends_with`, `gt`, `gte`, `lt`, `lte`, `present`, `blank`, `in`,
+`includes` or `regex` — and the conditions are AND-ed.
 
-> **info** v1 matching is **exact equality**. Richer operators (`contains`, regex, comparisons) are a planned extension — until then the editor shows them disabled.
+> **info** A Slack channel is matched by its ID (such as `C0123ABCD`), not its name. What a Slack text condition is compared with is on the [Slack](/docs/slack) page.
 
 ## Gates
 
@@ -158,10 +160,9 @@ event. So the four CI states are always distinguishable on the card:
 `list_gates` returns the same fields (age, TTL, source, diagnostic reason,
 reconciliation log) for an agent, and `delete_gate` still clears a gate by hand.
 
-So the same CI webhook can do one of two things: **resolve a gate** on a
-waiting task (today's path), or — if you bind a workflow to a `ci.completed`
-event — **start a run** directly. Wait-resolution is the special case;
-event-to-workflow matching is the general one.
+The CI webhooks resolve gates on waiting tasks; they do not start runs. To start
+a workflow from a CI or repository event, point the provider's webhook at an
+incoming webhook trigger (below) — see [GitHub](/docs/github) for an example.
 
 > **tip** A card "stuck" in a bound column almost always has a pending gate. Open it: the CI gates panel names the run it is waiting on and how long it has been waiting, and clearing the gate re-evaluates the binding. A gate marked **CI stale** has already stopped blocking the column — read its reason before re-running anything.
 

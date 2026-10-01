@@ -899,6 +899,11 @@ for.
      attributed through the ledger only; the account counts as Aixle's own (mentions, the
      actor fallback) only when it is marked as kept for Aixle. A service account always is.
    - **REST v2** for issues and comments: v3 accepts and returns only Atlassian Document Format.
+   - **Personal data.** An app that keeps account ids must report them to Atlassian's Personal Data
+     Reporting API every cycle and attest to it before it may be shared. `tracker_accounts` holds the
+     ids seen (event actors, assignees, connection identities); `TrackerPersonalDataWorkflow` reports
+     them daily as their 7-day cycle comes round and erases a closed account's id and name from events,
+     runs, the write ledger and connections. Deliveries are purged after a week. Free text is not traced.
 3. **GitHub Projects** (committed), and GitHub Issues if they fall out cheaply: through the
    existing GitHub App and `Webhooks::GithubController` (§9.3). The scope unit is decided here.
 4. **Linear**: API-registered webhooks with `Linear-Signature` HMAC. Until then, the dead `linear`

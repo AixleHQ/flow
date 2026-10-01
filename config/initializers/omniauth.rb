@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "omniauth/entra_id"
+require_relative "../../lib/omniauth/strategies/microsoft"
 
 Rails.application.config.middleware.use OmniAuth::Builder do
   provider :google_oauth2, Settings.google_oauth.client_id, Settings.google_oauth.client_secret, {
@@ -15,13 +15,15 @@ Rails.application.config.middleware.use OmniAuth::Builder do
   # Registered only when this installation actually has Microsoft credentials.
   # A strategy without them answers every request with a redirect to a broken
   # consent screen, which is worse than not offering the button at all — and
-  # Auth::DeploymentProviders.configured_kinds keeps the two in step.
-  if Settings.microsoft_oauth&.client_id.present?
-    provider :entra_id, {
-      client_id: Settings.microsoft_oauth.client_id,
-      client_secret: Settings.microsoft_oauth.client_secret,
-      tenant_id: Settings.microsoft_oauth.tenant_id.presence || "common",
-      name: "microsoft"
+  # Auth::DeploymentProviders.configured_kinds asks the same question.
+  microsoft = Settings.microsoft_oauth
+  if OmniAuth::Strategies::Microsoft.configured?(microsoft)
+    provider OmniAuth::Strategies::Microsoft, {
+      client_id: microsoft.client_id,
+      client_secret: microsoft.client_secret.presence,
+      private_key: microsoft.private_key.presence,
+      certificate_thumbprint: microsoft.certificate_thumbprint.presence,
+      tenant_id: microsoft.tenant_id.presence || "common"
     }
   end
 end

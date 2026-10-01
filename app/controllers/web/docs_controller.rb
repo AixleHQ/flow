@@ -35,7 +35,8 @@ class Web::DocsController < Web::ApplicationController
              agent-capabilities repositories ai-builder
              people-and-access signing-in secrets templates analytics company-workspace examples
              user-guide quick-start agents runtimes tools mcp board workflows
-             triggers-and-gates integrations azure-devops jira configuration configuring-sso reference cli-ref
+             triggers-and-gates integrations github gitlab azure-devops jira trackers slack coder
+             configuration configuring-sso reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze
 
   def page_exists?(slug)

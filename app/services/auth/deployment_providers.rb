@@ -37,7 +37,7 @@ module Auth
       # These run through a deployment-level OmniAuth strategy, which cannot be
       # registered without credentials.
       when :google then Settings.google_oauth&.client_id.present?
-      when :microsoft then Settings.microsoft_oauth&.client_id.present?
+      when :microsoft then OmniAuth::Strategies::Microsoft.configured?(Settings.microsoft_oauth)
       else false
       end
     end

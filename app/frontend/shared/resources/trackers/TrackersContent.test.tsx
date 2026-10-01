@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildProjectTracker } from 'test/factories/projectTracker';
+import { answerFetch } from 'test/fetchStub';
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { TrackersContent } from './TrackersContent';
@@ -11,6 +12,10 @@ const basePath = '/company/projects/7/trackers';
 const scopes = [
   { integrationId: 42, integrationName: 'acme/Ops', provider: 'azure_devops', scopes: [{ id: 'p2', name: 'Ops' }] },
 ];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('TrackersContent', () => {
   it('shows each tracker with its handle, role and status', () => {
@@ -113,6 +118,40 @@ describe('TrackersContent', () => {
     renderPage(<TrackersContent projectId={7} trackers={[]} availableScopes={[]} basePath={basePath} />);
     expect(screen.queryByRole('button', { name: 'Add tracker' })).not.toBeInTheDocument();
     expect(screen.getByText('No trackers')).toBeInTheDocument();
+  });
+
+  it('offers connecting a board column even before the project can use one, and says what is missing', async () => {
+    const { unmount } = renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[buildProjectTracker()]}
+        availableScopes={[]}
+        workflows={[{ id: 3, name: 'Review the fix' }]}
+        basePath={basePath}
+      />,
+    );
+    const blocked = screen.getByRole('button', { name: 'Connect a board column' });
+    expect(blocked).toHaveAttribute('aria-disabled', 'true');
+
+    await userEvent.hover(blocked);
+    expect(await screen.findByText(/Add a board to this project first/)).toBeInTheDocument();
+    await userEvent.click(blocked);
+    expect(screen.queryByRole('dialog', { name: 'Connect Customer Platform' })).not.toBeInTheDocument();
+    unmount();
+
+    answerFetch({ 'GET /company/projects/7/trackers/:id/statuses': { statuses: [] } });
+    renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[buildProjectTracker()]}
+        availableScopes={[]}
+        workflows={[{ id: 3, name: 'Review the fix' }]}
+        boardColumns={[{ id: 9, name: 'Backlog' }]}
+        basePath={basePath}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Connect a board column' }));
+    expect(await screen.findByRole('dialog', { name: 'Connect Customer Platform' })).toBeInTheDocument();
   });
 
   it('hides every mutation from a read-only viewer', () => {

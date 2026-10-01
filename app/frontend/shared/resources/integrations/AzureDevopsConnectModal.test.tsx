@@ -51,6 +51,10 @@ const pickProjects = async (user: ReturnType<typeof userEvent.setup>, names: str
   }
 };
 
+// Signing in with Microsoft is the default; these tests walk the PAT alternative.
+const choosePat = (user: ReturnType<typeof userEvent.setup>) =>
+  user.click(screen.getByRole('radio', { name: /administrator personal access token/ }));
+
 describe('AzureDevopsConnectModal', () => {
   beforeEach(() => {
     vi.mocked(router.post).mockClear();
@@ -76,6 +80,7 @@ describe('AzureDevopsConnectModal', () => {
       return { payload: inspectionPayload() };
     });
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
@@ -93,17 +98,21 @@ describe('AzureDevopsConnectModal', () => {
     const user = userEvent.setup();
     mockFetch(() => ({ payload: inspectionPayload({ alreadyBound: true, identity: null }) }));
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.click(screen.getByRole('button', { name: 'Verify organization' }));
 
-    expect(await screen.findByText(/already connected this organization, so no token was needed/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/already connected this organization, so no sign-in was needed/),
+    ).toBeInTheDocument();
   });
 
   it('preselects nothing — a connection reaches what someone chose', async () => {
     const user = userEvent.setup();
     mockFetch(() => ({ payload: inspectionPayload() }));
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
@@ -121,6 +130,7 @@ describe('AzureDevopsConnectModal', () => {
         : { payload: { installationId: 7, organization: 'contoso' } },
     );
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
@@ -150,6 +160,7 @@ describe('AzureDevopsConnectModal', () => {
     const user = userEvent.setup();
     mockFetch(() => ({ ok: false, payload: { error: 'not_authorized', message: 'That token cannot administer it' } }));
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'nope');
@@ -171,6 +182,7 @@ describe('AzureDevopsConnectModal', () => {
       },
     }));
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
@@ -185,6 +197,7 @@ describe('AzureDevopsConnectModal', () => {
       url.endsWith('azure_devops_inspect') ? { payload: inspectionPayload() } : { payload: { installationId: 7 } },
     );
     renderModal();
+    await choosePat(user);
 
     await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
@@ -212,8 +225,10 @@ describe('AzureDevopsConnectModal', () => {
   // away and coming back, so the command is on screen before anything is typed
   // — with this deployment's own client id, which documentation cannot carry
   // because it differs between the hosted deployment and every self-hosted one.
-  it('shows the directory step with this deployment’s client id, before verifying', () => {
+  it('shows the directory step with this deployment’s client id, before verifying', async () => {
+    const user = userEvent.setup();
     renderModal({ clientId: 'a734e297-bc89-4c1e-81c7-e8697e671206' });
+    await choosePat(user);
 
     expect(screen.getByText(/One step in your Entra directory first/)).toBeInTheDocument();
     expect(screen.getByText(/az ad sp create --id a734e297-bc89-4c1e-81c7-e8697e671206/)).toBeInTheDocument();
@@ -235,9 +250,53 @@ describe('AzureDevopsConnectModal', () => {
     const user = userEvent.setup();
     renderModal({ patModeEnabled: true });
 
-    await user.click(screen.getByRole('button', { name: /Use a personal access token instead/ }));
+    await user.click(screen.getByRole('button', { name: /Connect as yourself with a personal access token instead/ }));
 
     expect(screen.getByText('This acts as you, not as Aixle')).toBeInTheDocument();
     expect(screen.getByLabelText(/Azure project ID/)).toBeInTheDocument();
+  });
+
+  it('signs in with Microsoft by default, sending the organization along', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    expect(screen.getByRole('radio', { name: /sign in with Microsoft \(Recommended\)/ })).toBeChecked();
+    await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
+
+    expect(screen.getByRole('link', { name: 'Sign in with Microsoft' })).toHaveAttribute(
+      'href',
+      `${BASE}/azure_devops_sign_in?organization=contoso`,
+    );
+    expect(screen.queryByLabelText(/Administrator personal access token/)).not.toBeInTheDocument();
+  });
+
+  it('resumes after the sign-in: verifies with it and connects with it, never asking for a token', async () => {
+    const user = userEvent.setup();
+    const bodies: Record<string, unknown>[] = [];
+    mockFetch((url, body) => {
+      bodies.push(body);
+      return url.endsWith('azure_devops_connect')
+        ? { payload: { installationId: 9, organization: 'contoso', projects: [PROJECT_ID] } }
+        : { payload: inspectionPayload({ identity: 'grace@contoso.com' }) };
+    });
+    renderPage(
+      <AzureDevopsConnectModal
+        opened
+        onClose={() => {}}
+        basePath={BASE}
+        azureDevops={{ enabled: true, patModeEnabled: false }}
+        signIn={{ handle: 'held-1', organization: 'contoso' }}
+      />,
+    );
+
+    expect(await screen.findByText(/Verified as grace@contoso.com/)).toBeInTheDocument();
+    await pickProjects(user, ['Customer Platform']);
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+    expect(bodies).toEqual([
+      { organization: 'contoso', sign_in: 'held-1' },
+      { organization: 'contoso', sign_in: 'held-1', project_ids: [PROJECT_ID] },
+    ]);
   });
 });

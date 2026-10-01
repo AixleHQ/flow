@@ -124,6 +124,20 @@ OAuth 2.0 (3LO) app for the whole deployment at
 Use one app per deployment: Atlassian allows one webhook URL per app, and
 Flow removes webhooks its app registered that no connection holds.
 
+## Personal data
+
+Flow keeps Atlassian account ids where it needs them — who made a change an
+event is about, who an issue was assigned to, which account a connection acts
+as — and nothing else about those people beyond the display name next to the
+id. As Atlassian requires of apps that do, Flow reports those ids to
+Atlassian's Personal Data Reporting API once a week, and when Atlassian answers
+that an account is closed, erases its id and name from tracker events, runs,
+tracker writes and connections ("Former user" takes their place). Webhook
+deliveries are deleted after a week.
+
+Text that only mentions someone — an issue description copied into a task, an
+agent's transcript — is not traced back to an account and is not erased.
+
 ## When something is wrong
 
 - **Test connection** on the row re-reads the site and the projects.

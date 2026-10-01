@@ -143,6 +143,12 @@ workflows:
       - name: trackers_refresh_subscriptions_activity
         task_queue: aixle_ruby
 
+  - name: tracker_personal_data_workflow
+    owner: aixle_ruby
+    activities:
+      - name: trackers_report_personal_data_activity
+        task_queue: aixle_ruby
+
   - name: workflow_execution_workflow
     owner: aixle_ruby
     activities:

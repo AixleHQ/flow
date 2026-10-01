@@ -42,7 +42,7 @@ team members.
 | Database / Redis / Temporal           | `.env.development`                     |
 | Google OAuth / GitHub App credentials | `.env.development` (host)              |
 | GitHub App private key                | `.env.development` (host)              |
-| GitLab / Linear access token          | **Company → Integrations** (in-app)    |
+| GitLab / Coder access token           | **Project → Integrations** (in-app)    |
 | Anthropic / OpenAI / etc. API keys    | **Profile → Agent Credentials** (per-user) |
 | Third-party API key for an MCP server | **Config Items** (project or company)  |
 | Project-specific URL or feature flag  | **Config Items**                       |

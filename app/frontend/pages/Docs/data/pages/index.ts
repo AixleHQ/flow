@@ -9,12 +9,15 @@ import azureDevops from './azure-devops.md?raw';
 import board from './board.md?raw';
 import changelogProductAreas from './changelog-product-areas.md?raw';
 import cliRef from './cli-ref.md?raw';
+import coder from './coder.md?raw';
 import companyWorkspace from './company-workspace.md?raw';
 import configSchema from './config-schema.md?raw';
 import configuration from './configuration.md?raw';
 import configuringSso from './configuring-sso.md?raw';
 import examples from './examples.md?raw';
 import gettingStarted from './getting-started.md?raw';
+import github from './github.md?raw';
+import gitlab from './gitlab.md?raw';
 import integrations from './integrations.md?raw';
 import jira from './jira.md?raw';
 import mcp from './mcp.md?raw';
@@ -31,10 +34,12 @@ import secrets from './secrets.md?raw';
 import sessionQueues from './session-queues.md?raw';
 import sessionsAndRuns from './sessions-and-runs.md?raw';
 import signingIn from './signing-in.md?raw';
+import slack from './slack.md?raw';
 import startingWork from './starting-work.md?raw';
 import tasks from './tasks.md?raw';
 import templates from './templates.md?raw';
 import tools from './tools.md?raw';
+import trackers from './trackers.md?raw';
 import triggersAndGates from './triggers-and-gates.md?raw';
 import userGuideOutline from './user-guide-outline.md?raw';
 import userGuide from './user-guide.md?raw';
@@ -271,6 +276,18 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     content: integrations,
     toc: extractToc(integrations),
   },
+  github: {
+    title: 'GitHub',
+    section: 'User guide',
+    content: github,
+    toc: extractToc(github),
+  },
+  gitlab: {
+    title: 'GitLab',
+    section: 'User guide',
+    content: gitlab,
+    toc: extractToc(gitlab),
+  },
   'azure-devops': {
     title: 'Azure DevOps',
     section: 'User guide',
@@ -282,6 +299,24 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: jira,
     toc: extractToc(jira),
+  },
+  trackers: {
+    title: 'Trackers',
+    section: 'User guide',
+    content: trackers,
+    toc: extractToc(trackers),
+  },
+  slack: {
+    title: 'Slack',
+    section: 'User guide',
+    content: slack,
+    toc: extractToc(slack),
+  },
+  coder: {
+    title: 'Coder',
+    section: 'User guide',
+    content: coder,
+    toc: extractToc(coder),
   },
   configuration: {
     title: 'Configuration',

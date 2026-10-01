@@ -34,14 +34,14 @@ describe('Docs/DocsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open search' }));
 
     const searchInput = await screen.findByRole('textbox', { name: 'Search documentation' });
-    // "gitlab" only appears in the Integrations result description -> a single result.
+    // "gitlab" only appears in the GitLab page's title and description -> a single result.
     await userEvent.type(searchInput, 'gitlab');
 
-    const result = await screen.findByRole('button', { name: /Integrations/ });
+    const result = await screen.findByRole('button', { name: /GitLab/ });
     await userEvent.click(result);
 
     await waitFor(() => {
-      expect(router.visit).toHaveBeenCalledWith('/docs/integrations');
+      expect(router.visit).toHaveBeenCalledWith('/docs/gitlab');
     });
   });
 });

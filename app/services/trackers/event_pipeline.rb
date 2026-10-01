@@ -33,6 +33,7 @@ module Trackers
       return [] if events.empty?
 
       origin = origin_for(notification, issue, events)
+      TrackerAccount.remember!(provider: @integration.provider, account_ids: @provider.account_ids(notification))
       trackers.flat_map do |tracker|
         next [] if over_limits?(tracker, issue, origin)
 

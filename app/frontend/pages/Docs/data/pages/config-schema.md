@@ -275,7 +275,9 @@ customer's service account only, which needs nothing here.
 | `GOOGLE_CLIENT_SECRET`       | no       | unset              | Google SSO client secret.                                     |
 | `SUPER_ADMIN_EMAIL`          | no       | `admin@operator.example` | The super admin `db/seeds.rb` creates (development and test only). |
 | `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. Domain auto-join trusts only an address its tenant shows it owns, so add the `upn` (or `xms_edov`) optional claim to the ID token; without it Microsoft sign-ins create accounts but join nobody. |
-| `MICROSOFT_CLIENT_SECRET`    | no       | unset              | Its client secret.                                            |
+| `MICROSOFT_PRIVATE_KEY`      | no       | unset              | PEM private key of a certificate uploaded to that registration. When set, the app authenticates with a signed certificate assertion and `MICROSOFT_CLIENT_SECRET` is ignored. |
+| `MICROSOFT_CERT_THUMBPRINT`  | no       | unset              | That certificate's SHA-1 thumbprint, as the Entra portal shows it. |
+| `MICROSOFT_CLIENT_SECRET`    | no       | unset              | A client secret instead of the certificate. Used only when no private key is set. |
 | `MICROSOFT_TENANT_ID`        | no       | `common`           | Which Entra directory to accept. `common` accepts any work or school tenant; a GUID restricts sign-in to that one. |
 | `AUTH_ENABLED_KINDS`         | no       | unset              | Comma-separated allowlist narrowing which sign-in methods this deployment offers. Availability is already derived from which credentials are present, so this only ever offers LESS — an installation with no Microsoft credentials never offers Microsoft however this is set. |
 | `ADMIN_PASSWORD`             | no       | unset              | First-boot bootstrap password for that admin.                  |
@@ -283,7 +285,7 @@ customer's service account only, which needs nothing here.
 | `SESSION_MAX_AGE_HOURS`      | no       | `720` (30 days)    | A browser sign-in is ended this long after it began, however much it is used. |
 | `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. |
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
-| `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies Slack event and interaction payloads.                |
+| `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies the Slack event payloads posted to `/webhooks/slack/events`. |
 | `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write` | Bot scopes requested at install time. |
 | `SENTRY_OAUTH_CLIENT_ID`     | no       | unset              | Client ID of the Sentry OAuth app users connect their org with. |
 | `SENTRY_OAUTH_CLIENT_SECRET` | no       | unset              | Its client secret.                                            |
@@ -324,7 +326,7 @@ customer's service account only, which needs nothing here.
 | Variable                       | Required | Default                | Purpose                                                       |
 | ------------------------------ | -------- | ---------------------- | ------------------------------------------------------------- |
 | `MCP_REGISTRY_BASE_URL`        | no       | official MCP registry  | Point the connector catalog at a private subregistry implementing the same API. |
-| `GITHUB_PUBLIC_READ_TOKEN`     | no       | unset                  | Raises the `api.github.com` limit from 60 to 5,000 requests/hour for the two paths that read public repositories (skills catalog, BMAD module tags). The anonymous 60/hour is per source IP, so every agent container shares one budget. Needs no scopes; never use a tenant installation token. |
+| `GITHUB_PUBLIC_READ_TOKEN`     | no       | unset                  | Raises the `api.github.com` limit from 60 to 5,000 requests/hour for the paths that read public repositories: the skills catalog, BMAD module tags, the template catalog, and checking a public repository you attach. The anonymous 60/hour is per source IP, so every agent container shares one budget. Needs no scopes; never use a tenant installation token. |
 | `URL_SAFETY_TRUSTED_HOSTS`     | no       | empty                  | Comma-separated public hostnames allowed to resolve to a private IP (split-horizon DNS for our own staging hosts). |
 | `TOOL_RESULTS_RETENTION_DAYS`  | no       | `30`                   | How long a tool result's stored payload is kept.               |
 | `CONTEXT_TOKEN_BUDGET`         | no       | `6000`                 | Token budget for rendered prompt context.                      |

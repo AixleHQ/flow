@@ -201,6 +201,34 @@ describe('IntegrationsContent', () => {
     vi.mocked(globalThis.fetch).mockReset();
   });
 
+  it('reopens the Azure dialog where the Microsoft sign-in left off', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        organization: 'contoso',
+        tenantId: 't',
+        identity: 'grace@contoso.com',
+        alreadyBound: false,
+        projects: [],
+      }),
+    } as Response);
+    window.history.pushState({}, '', '/company/projects/1/integrations?azure_setup=held-1&azure_organization=contoso');
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        azureDevops={azureDevopsProps}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(await screen.findByText(/Verified as grace@contoso.com/)).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+    window.history.pushState({}, '', '/');
+    vi.mocked(globalThis.fetch).mockReset();
+  });
+
   it('shows the empty state when there are no integrations', () => {
     renderPage(
       <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,

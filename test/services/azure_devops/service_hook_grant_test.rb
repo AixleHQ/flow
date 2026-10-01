@@ -17,7 +17,7 @@ module AzureDevops
       @tenant = "79e1cf7c-9e26-468d-81f6-ce6f3b9783dd"
       @oid = "9550df62-80e0-4551-821e-ba38e4a7e876"
       @project = SecureRandom.uuid
-      @grant = ServiceHookGrant.new(organization: "contoso", personal_access_token: "admin-pat",
+      @grant = ServiceHookGrant.new(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
                                     tenant_id: @tenant, principal_object_id: @oid)
     end
 
@@ -95,7 +95,7 @@ module AzureDevops
 
       error = assert_raises(NotAuthorized) { @grant.call([ @project ]) }
 
-      assert_match(/not valid for/, error.message)
+      assert_match(/personal access token is not accepted by/, error.message)
     end
 
     test "an unexpected status is a coded error rather than a raw provider message" do
@@ -109,12 +109,12 @@ module AzureDevops
 
     test "nothing is attempted without a token or a service principal" do
       assert_raises(ValidationFailed) do
-        ServiceHookGrant.new(organization: "contoso", personal_access_token: "",
+        ServiceHookGrant.new(organization: "contoso", admin: AdminCredential.pat(""),
                              tenant_id: @tenant, principal_object_id: @oid).call([ @project ])
       end
 
       assert_raises(ValidationFailed) do
-        ServiceHookGrant.new(organization: "contoso", personal_access_token: "pat",
+        ServiceHookGrant.new(organization: "contoso", admin: AdminCredential.pat("pat"),
                              tenant_id: @tenant, principal_object_id: nil).call([ @project ])
       end
     end

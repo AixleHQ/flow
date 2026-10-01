@@ -120,19 +120,31 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     end
   end
 
+  # Azure DevOps through "Sign in with Microsoft": an organization
+  # administrator consents to Aixle's application at Microsoft, and comes back
+  # to the connect dialog (Web::Integrations::AzureDevopsOauthController).
+  def azure_devops_sign_in
+    # allow_other_host: login.microsoftonline.com, built from deployment Settings.
+    redirect_to AzureDevops::AdminSignIn.authorize_url(project: current_project, user: current_user,
+                                                       organization: params[:organization].to_s),
+                allow_other_host: true
+  rescue AzureDevops::Error => e
+    redirect_to company_project_integrations_path(current_project), alert: e.message
+  end
+
   # Step one of Azure DevOps self-service onboarding: prove the caller
   # administers the organization, and show what it holds.
   #
-  # The personal access token is used inside this request and nowhere else — it
-  # is not persisted, not logged, and not what the connection later runs on.
-  # It is the proof that this company may bind this organization at all, which
-  # is the one thing our application's own access cannot establish: with a
+  # The proof is a Microsoft sign-in (held server-side under `sign_in`) or a
+  # personal access token, used inside this request and nowhere else — not
+  # persisted, not logged, and not what the connection later runs on. It is
+  # the proof that this company may bind this organization at all, which is the
+  # one thing our application's own access cannot establish: with a
   # multi-tenant application the answer to "can we reach that organization" is
   # legitimately yes for every customer that installed us.
   def azure_devops_inspect
     result = azure_onboarding.inspect!(
-      organization: params[:organization].to_s,
-      personal_access_token: params[:personal_access_token].to_s
+      organization: params[:organization].to_s, admin: azure_admin_credential
     )
 
     render json: {
@@ -151,10 +163,9 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # approved project list rather than duplicating it.
   def azure_devops_connect
     installation = azure_onboarding.complete!(
-      organization: params[:organization].to_s,
-      personal_access_token: params[:personal_access_token].to_s,
-      project_ids: params[:project_ids]
+      organization: params[:organization].to_s, admin: azure_admin_credential, project_ids: params[:project_ids]
     )
+    AzureDevops::AdminSignIn.release(params[:sign_in])
 
     render json: { installationId: installation.id, organization: installation.organization_slug,
                    projects: installation.allowed_project_ids }
@@ -358,6 +369,13 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   def jira_project_id_params
     Array(params[:project_ids]).map(&:to_s).compact_blank.uniq
+  end
+
+  def azure_admin_credential
+    return AzureDevops::AdminCredential.pat(params[:personal_access_token]) if params[:sign_in].blank?
+
+    AzureDevops::AdminSignIn.fetch(params[:sign_in], user: current_user, organization: params[:organization]) ||
+      raise(AzureDevops::NotAuthorized, "Your Microsoft sign-in has expired. Sign in again to continue.")
   end
 
   def azure_onboarding

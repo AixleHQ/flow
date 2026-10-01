@@ -196,7 +196,19 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'integrations',
     title: 'Integrations',
     section: 'User guide',
-    desc: 'Connect Aixle Flow with GitHub, GitLab, Linear, Coder, and Slack.',
+    desc: 'Every integration a project can connect, what each gives, and the webhook endpoints outside services call.',
+  },
+  {
+    slug: 'github',
+    title: 'GitHub',
+    section: 'User guide',
+    desc: 'Connect GitHub with the GitHub App or a personal access token: repositories, git and gh in sessions, CI gates, starting workflows from GitHub, and the self-hosted app.',
+  },
+  {
+    slug: 'gitlab',
+    title: 'GitLab',
+    section: 'User guide',
+    desc: 'Connect GitLab with a personal access token: repositories, cloning in sessions, pipeline gates and their hook, self-managed GitLab.',
   },
   {
     slug: 'azure-devops',
@@ -209,6 +221,24 @@ export const SEARCH_INDEX: SearchResult[] = [
     title: 'Jira',
     section: 'User guide',
     desc: 'Connect Jira Cloud with an Atlassian account or a service account, add the admin webhook tracker triggers need, and how board columns become statuses.',
+  },
+  {
+    slug: 'trackers',
+    title: 'Trackers',
+    section: 'User guide',
+    desc: 'Azure Boards and Jira as trackers: the Trackers page, primary and read-only, connecting a board column, tracker triggers, the tracker tools and who a write is attributed to.',
+  },
+  {
+    slug: 'slack',
+    title: 'Slack',
+    section: 'User guide',
+    desc: 'Install the Slack app for a company: start workflows by mentioning it, replies and failure notices in the thread, the slack tools, and the self-hosted Slack app.',
+  },
+  {
+    slug: 'coder',
+    title: 'Coder',
+    section: 'User guide',
+    desc: 'Connect a Coder deployment so agents can allocate remote workspaces, run commands there and release them; locks, health checks and dead-workspace cleanup.',
   },
   {
     slug: 'configuration',

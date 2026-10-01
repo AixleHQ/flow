@@ -13,12 +13,13 @@ module AzureDevops
   # Knowing the name is not proof either — organization names are short, guessable
   # and usually public.
   #
-  # So the requester proves it, once, with a personal access token. The token is
-  # used to call an endpoint only an organization administrator can call, and is
-  # then discarded: it is never written to the database, never logged, and never
-  # leaves the request it arrived in. What survives is the binding it justified.
+  # So the requester proves it, once: by signing in with Microsoft, or with a
+  # personal access token (AdminCredential). Either is used to call an endpoint
+  # only an organization administrator can call, and is then discarded: it is
+  # never written to the database, never logged, and never outlives the
+  # onboarding. What survives is the binding it justified.
   #
-  # The PAT needs **Member Entitlement Management (read & write)** — the same
+  # A PAT needs **Member Entitlement Management (read & write)** — the same
   # permission family as adding a user to the organization, which is exactly the
   # authority being claimed — and **Security (manage)**, which onboarding spends
   # on one grant so the application can manage its own Service Hooks afterwards
@@ -31,20 +32,20 @@ module AzureDevops
 
     Result = Struct.new(:organization, :identity, :verified_at, keyword_init: true)
 
-    def self.call(organization:, personal_access_token:)
-      new(organization: organization, personal_access_token: personal_access_token).call
+    def self.call(organization:, admin:)
+      new(organization: organization, admin: admin).call
     end
 
-    def initialize(organization:, personal_access_token:, logger: Rails.logger)
+    def initialize(organization:, admin:, logger: Rails.logger)
       @organization = organization.to_s.strip
-      @pat = personal_access_token.to_s
+      @admin = admin
       @logger = logger
     end
 
     # Raises unless the token can administer the organization. Returns who it
     # belongs to, for the audit trail on the binding.
     def call
-      raise ValidationFailed, "A personal access token is required" if @pat.blank?
+      raise ValidationFailed, "Sign in with Microsoft or give a personal access token" if @admin.nil?
 
       response = get("_apis/userentitlements", "$top" => 1)
 
@@ -53,23 +54,18 @@ module AzureDevops
       # rule is "did we get JSON": anything else means we were not
       # authenticated, whatever the status line says.
       if signed_out?(response)
-        raise NotAuthorized,
-              "That personal access token is not valid for organization '#{@organization}'. " \
-              "Check it has not expired and was created in this organization."
+        raise NotAuthorized, not_valid_message
       end
 
       case response.status
       when 200 then Result.new(organization: @organization, identity: identity_of(response), verified_at: Time.current)
       when 401
-        raise NotAuthorized, "That personal access token is not valid for organization '#{@organization}'"
+        raise NotAuthorized, not_valid_message
       when 403
         # Authenticated and refused: a real token from someone who is not an
         # administrator. Distinct from 401 on purpose — the message tells them
         # which of the two to fix.
-        raise NotAuthorized,
-              "That token works, but it cannot administer '#{@organization}'. " \
-              "Connecting an organization has to be done by someone who can add users to it, " \
-              "with a token carrying Member Entitlement Management (read & write)."
+        raise NotAuthorized, not_admin_message
       when 404
         raise NotFound, "No Azure DevOps organization named '#{@organization}'"
       else
@@ -99,10 +95,7 @@ module AzureDevops
       end
 
       if signed_out?(response) || [ 401, 403 ].include?(response.status)
-        raise NotAuthorized,
-              "That token proved you administer '#{@organization}', but it cannot list its projects. " \
-              "Add the Project and team (read) scope to it — Azure does not include project access " \
-              "in the Member Entitlement Management scope."
+        raise NotAuthorized, cannot_list_message
       end
       unless response.status == 200
         raise Error.new("Azure answered #{response.status} while listing the organization's projects",
@@ -137,12 +130,38 @@ module AzureDevops
       end
     end
 
-    # Basic with an empty username is how Azure DevOps takes a PAT.
-    def authorization
-      "Basic #{Base64.strict_encode64(":#{@pat}")}"
+    def authorization = @admin.authorization
+
+    def not_valid_message
+      return "Your Microsoft sign-in is not accepted by '#{@organization}'. Sign in again with an account in its directory." if @admin.sign_in?
+
+      "That personal access token is not valid for organization '#{@organization}'. " \
+        "Check it has not expired and was created in this organization."
     end
 
+    def not_admin_message
+      if @admin.sign_in?
+        return "You are signed in, but your account cannot administer '#{@organization}'. " \
+               "Connecting an organization has to be done by someone who can add users to it."
+      end
+
+      "That token works, but it cannot administer '#{@organization}'. " \
+        "Connecting an organization has to be done by someone who can add users to it, " \
+        "with a token carrying Member Entitlement Management (read & write)."
+    end
+
+    def cannot_list_message
+      return "You administer '#{@organization}', but your account cannot list its projects." if @admin.sign_in?
+
+      "That token proved you administer '#{@organization}', but it cannot list its projects. " \
+        "Add the Project and team (read) scope to it — Azure does not include project access " \
+        "in the Member Entitlement Management scope."
+    end
+
+    # A sign-in names the person itself; for a PAT the entitlement listing is all there is.
     def identity_of(response)
+      return @admin.identity if @admin.sign_in?
+
       body = JSON.parse(response.body)
       # Best effort: the binding records who vouched, and a missing display name
       # must not fail a verification that otherwise succeeded.

@@ -1,265 +1,47 @@
 # Integrations
 
-Aixle Flow integrates with Git hosts (for repo mounting and CI waits),
-OAuth providers (for sign-in), and MCP servers (for tools).
+An integration is a connection from a Flow project to an outside service. It
+is what lets agents clone and push code, read and change issues, post to chat,
+or run on remote machines, and it is what lets events in those services start
+workflows. Connect them from the project's **Integrations** page.
 
-## Git hosts
+Each integration has its own page:
 
-### GitHub
-
-GitHub connects two ways, and **Connect → GitHub** asks which before it
-does anything:
-
-| Path | Who it is for | What it gives |
+| Integration | What it gives a project | Page |
 | --- | --- | --- |
-| **GitHub App** (recommended) | Someone who can install an app on the org or account | Short-lived, repository-scoped installation tokens; org-wide repository access; webhooks that close CI gates the moment a check finishes |
-| **Personal access token** | A developer trying Aixle out | A connection with no app to install and no `GITHUB_APP_*` on the deployment. Acts as the token's owner; no webhooks |
+| **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, CI gates on checks and workflow runs | [GitHub](/docs/github) |
+| **GitLab** | Repositories cloned in sessions, CI gates on pipelines | [GitLab](/docs/gitlab) |
+| **Azure DevOps** | Repositories and pull requests, Azure Boards as a tracker, Service Hooks | [Azure DevOps](/docs/azure-devops) |
+| **Jira** | Jira Cloud projects as trackers: tracker triggers and the `tracker_*` tools | [Jira](/docs/jira) |
+| **Slack** | Workflows started by mentioning the app, replies and failure notices in the thread, the `slack_*` tools | [Slack](/docs/slack) |
+| **Coder** | Remote workspaces an agent can allocate, run commands on and release | [Coder](/docs/coder) |
 
-#### GitHub App (production)
+Azure Boards and Jira are both **trackers**. What a tracker is, the project's
+**Trackers** page, the one-column intake and tracker triggers are described
+once, on [Trackers](/docs/trackers).
 
-Aixle Flow installs as a **GitHub App** — this gives it a per-repo
-installation token used to clone, push, and watch checks.
+Two things look like integrations but live elsewhere:
 
-1. Go to [github.com/settings/apps](https://github.com/settings/apps)
-   and create a new App. Or for the org-level App, go to your org's
-   Apps settings.
-2. Required permissions: **Repository → Contents (Read & write)**,
-   **Pull requests (Read & write)**, **Checks (Read)**, **Actions
-   (Read)**, **Metadata (Read)**.
-3. Subscribe to webhook events: `check_suite` and `workflow_run` — the
-   two that CI gates resolve on. A finished check suite makes the gate
-   ask GitHub for every suite on the pull request's current head, so a
-   quick suite finishing first does not pass the gate on its own.
-4. Webhook URL: `https://<your-host>/webhooks/github`.
-5. Set a webhook secret and copy it to `GITHUB_WEBHOOK_SECRET` in
-   `.env.development`.
-6. Copy the App ID, slug, and Private Key into `GITHUB_APP_ID`,
-   `GITHUB_APP_SLUG`, and `GITHUB_APP_PRIVATE_KEY`.
-
-When users install the App on their repos, Aixle Flow stores the
-installation and exposes those repos to projects.
-
-#### Personal access token (local try-out)
-
-A local deployment usually has no GitHub App, nobody with rights to
-install one, and no address github.com can call back. Pick **I'm a
-developer and just want to try it** in the connect dialog and paste a
-token instead; the connection goes active without `GITHUB_APP_ID`, a
-private key or an install callback, and you can then attach any
-repository the token reaches and clone it in an agent session.
-
-A personal access token cannot be narrowed per call the way an App's
-installation token is: every session and every tool that works on one of
-these repositories is handed the token itself, with everything it can
-reach. Prefer a fine-grained token limited to the repositories you
-connect.
-
-Scopes to give the token. A personal access token reaches exactly what
-it was granted, so a missing one makes that one capability fail — not
-the connection:
-
-- **Classic token:** `repo` covers everything below on private
-  repositories; `public_repo` covers the same on public ones only. A
-  token with neither is refused at connect time rather than failing
-  later at clone time. Add `workflow` if agents will edit files under
-  `.github/workflows` — GitHub rejects that push without it.
-- **Fine-grained token,** on the repositories you mean to attach:
-
-  | To do this | Grant |
-  | --- | --- |
-  | Clone and fetch | **Metadata** read + **Contents** read |
-  | Push | **Contents** write |
-  | Edit `.github/workflows` | **Workflows** write |
-  | Open and answer pull requests | **Pull requests** write |
-  | Resolve CI gates | **Checks** read + **Actions** read |
-
-Aixle's own board tasks, workflows and sessions are not GitHub objects
-and need no scope at all. There are no server-side GitHub pull-request
-tools either — an agent opens a PR itself, with `gh` or the API, using
-this token, which is why **Pull requests** write matters for a
-fine-grained one.
-
-What the token path does *not* do, on purpose:
-
-- **It acts as you.** Clones, pushes and pull requests carry the token
-  owner's own permissions and authorship, and the token stops working
-  when that person's access does. Use the App in production.
-- **No GitHub webhooks.** GitHub delivers installation webhooks to an
-  App, not to a token, and a local deployment is usually unreachable
-  from github.com anyway. CI gates that wait on `check_suite` or
-  `workflow_run` therefore resolve by polling (the gate reconciler's
-  sweep) rather than the moment a check finishes — and not at all if
-  this deployment cannot reach api.github.com.
-- **Tokens expire.** GitHub expires personal access tokens, and an
-  expired one shows up as a 401 on the next clone or fetch. Re-connect
-  with a new token; pasting one replaces the stored token on the same
-  connection, keeping its attached repositories.
-
-The token is stored encrypted, write-only: it is never rendered back,
-and changing it means pasting a new one. An App connection and a token
-connection can both exist in the same project, and existing App
-connections are untouched by any of this.
-
-### GitLab
-
-GitLab connects through a **personal/project access token**, not an
-OAuth app. Add the integration under **Company → Integrations** (or at
-the project level) and paste a token with `api` scope.
-
-- `GITLAB_ENDPOINT` — set this only for self-managed GitLab; it defaults
-  to `https://gitlab.com/api/v4`.
-- Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
-  a per-repository secret. Adding a GitLab repository registers the
-  project's pipeline hook with that secret, and removing it deletes the
-  hook; that needs a token with the Maintainer role on the project.
-  Without the hook, pipeline gates still resolve, by the gate
-  reconciler's polling, only later.
-
-### Azure DevOps
-
-Azure DevOps is **project-scoped**: one connection names one Azure
-organization and one or more Azure projects inside it. Agents clone,
-push, open and review pull requests, and read and update Azure Boards
-work items — in those projects and nowhere else. Each of those Azure
-projects is listed on the project's **Trackers** page, where it can be
-made the primary tracker, set read-only or detached.
-
-Connecting is self-service, with one step outside Flow:
-
-1. **Once per directory,** an Entra administrator instantiates Aixle's
-   application in your tenant: `az ad sp create --id <client id>`, with
-   the client id your Aixle operator publishes. Nothing is consented to
-   and no permission is granted — it only makes the application nameable
-   in your organization. Aixle's private key is never shared, and you do
-   not register an application of your own.
-2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
-   type your organization name, and paste a personal access token from
-   someone who can administer it. The token needs three scopes:
-   **Member Entitlement Management (read & write)**, **Project and team
-   (read)**, and **Security (manage)**. They are not in the short list the
-   token form shows first — click **Show all scopes**.
-
-The second scope is spent on a single permission: it lets Aixle create
-its own Service Hooks, which is how a CI gate on a board task closes the
-moment a build finishes instead of on the next five-minute sweep. Without
-it the connection still works — gates just resolve more slowly. Aixle
-does not create the hooks *with* your token on purpose: a subscription
-made that way belongs to you, and stops firing when you leave.
-
-That token is used once, in that request: it proves the organization is
-yours, and it adds Aixle to it with a **Basic** access level and
-Contributor rights on the project you pick. It is never stored, and the
-connection runs on Aixle's own identity afterwards — not on your token.
-Colleagues connecting further Flow projects against the same organization
-are not asked for one, because the first connection already established
-it — they choose from the Azure projects that connection approved.
-
-Reaching an Azure project outside that set needs a token again: the
-approved list is the company's boundary on the organization, not a
-per-connection preference, so widening it is the same act as
-establishing it. Paste one and the full list of projects you can
-administer is offered, with the approved ones already among them.
-
-The selected Azure projects are fixed for the life of the connection.
-Adding one later would silently widen what every agent and every tool in
-the Flow project can already reach, and removing one would leave
-repositories and work-item references pointing at a project the
-connection no longer covers — so connect again instead.
-
-Where a connection covers more than one project, tools that act on a
-project rather than on a repository (work items, builds) take an explicit
-project id. They refuse rather than pick one, so which project an agent
-filed a bug in never depends on ordering.
-
-Operations run as the **application's identity**, not as the person who
-connected it — pull requests and comments are authored by it, and an
-employee leaving does not revoke it. Repositories authenticate through a
-credential helper that fetches a short-lived token per git operation, so
-nothing is stored in the checkout; ordinary `git fetch` and `git push`
-work with no extra step.
-
-**The Azure tools are not something you attach.** There is no Azure group
-in the tool picker: an agent gets the work-item and build tools as soon
-as the project has a connection, and the pull-request tools as soon as
-the session has an Azure repository attached. Attaching the repository is
-the opt-in. This is deliberate — a picker would let someone attach half a
-set, so an agent could open a pull request and then be unable to answer
-the review it started.
-
-What an agent may *do* with them is still yours to set: the capability
-checkboxes on the connection decide which calls are sent at all, and
-completing pull requests stays off unless you tick it.
-
-Notes and limits:
-
-- **Azure DevOps Services on `dev.azure.com` with Git repositories
-  only.** Azure DevOps Server (on-premises), TFVC, Artifacts, Test Plans
-  and Wiki management are out of scope.
-- An organization backed by a personal Microsoft account, with no
-  connected Entra tenant, cannot use a service principal at all. Those
-  organizations need the optional personal-access-token mode, which
-  acts as the token's owner and carries that person's permissions.
-- Completing or merging a pull request, reviewers and votes, Azure
-  Pipelines and Service Hooks are a later parity extension.
-- The connect entry appears only once an operator has configured the
-  deployment's Entra application (`AZURE_DEVOPS_CLIENT_ID` plus a
-  certificate or secret), or switched on personal-access-token mode.
-  There is no separate enable flag.
-
-### Jira
-
-Jira Cloud connects **per project**: one connection names one Jira site
-and the Jira projects picked on it, each of which becomes a tracker on
-the project's **Trackers** page — for tracker triggers and the
-`tracker_*` tools. It connects with an Atlassian account (through the
-deployment's Atlassian app) or with a service account's OAuth
-credential; the walkthrough is on the [Jira](/docs/jira) page.
-
-- An Atlassian-account connection registers its webhook itself; a
-  service-account connection needs a Jira admin to add one, from the
-  values **Webhook setup** shows.
-- A tracker's statuses are the columns of the Jira project's board.
-
-### Linear
-
-Linear is supported as an issue-tracker integration (connected under
-**Company → Integrations**). It is used to pull task context into runs.
-
-## OAuth sign-in
-
-### Google
-
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
-2. Enable the **People API** under **APIs & Services → Library**.
-3. Create an OAuth 2.0 Client ID. Authorized redirect URI for local dev:
-   `http://localhost:4000/auth/google/callback`. Production:
-   `https://<your-host>/auth/google/callback`.
-4. Put the values into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-
-Without Google OAuth configured, the Google login button redirects to
-`/auth/failure`. Password-based login still works.
-
-## MCP servers
-
-The **Model Context Protocol** is how external tools reach agents. Add
-servers under **Company → MCP Servers** or **Project → MCP Servers**,
-over `http`, `sse`, or `stdio`. The platform's own internal
-`aixle-tools` server is always connected.
-
-See the dedicated [MCP servers](mcp.md) page for transports, the
-internal server, Config Items credentials, and URL-safety rules — and
-[Tools](tools.md) for what the tools themselves are.
+- **Sign-in with Google or Microsoft** is configured by whoever runs the
+  installation: [Configuring sign-in methods](/docs/configuring-sso).
+- **Tools from other services** (Linear, Notion, Sentry and the like) come from
+  MCP servers, added on the project's **Connectors** page:
+  [MCP servers](/docs/mcp).
 
 ## Webhooks reference
 
-| Source        | Endpoint                          | Auth                                        |
-| ------------- | --------------------------------- | ------------------------------------------- |
-| GitHub        | `POST /webhooks/github`                      | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
-| GitLab        | `POST /webhooks/gitlab`                      | Per-repository secret                       |
-| Azure DevOps  | `POST /webhooks/azure_devops/<endpoint id>`  | HTTP Basic, one password per subscription   |
-| Jira          | `POST /webhooks/trackers/<endpoint token>`, or `/webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
+The endpoints outside services call. All of them are public (no session) and
+each verifies the caller its own way.
 
-All of them are public (no session auth). GitHub, GitLab and Jira are verified by
-signature; Azure DevOps sends none, so the subscription's own password is
-the entire credential — which is why the endpoint id in the URL is a
-route, never a secret.
+| Source | Endpoint | Verified by |
+| --- | --- | --- |
+| GitHub | `POST /webhooks/github` | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
+| GitLab | `POST /webhooks/gitlab` | A secret per repository hook |
+| Azure DevOps | `POST /webhooks/azure_devops/<endpoint id>` | HTTP Basic, one password per subscription |
+| Jira | `POST /webhooks/trackers/<endpoint token>`, or `POST /webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
+| Slack | `POST /webhooks/slack/events` | Slack's request signature with `SLACK_SIGNING_SECRET` |
+| Incoming webhook trigger | `POST /webhooks/in/<slug>` | What the trigger is set to: HMAC SHA-256, a shared token header, or nothing |
+
+Azure DevOps sends no signature, so the subscription's own password is the
+whole credential. That is why the endpoint id in its URL is only a route, never
+a secret.

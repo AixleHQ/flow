@@ -44,7 +44,7 @@ layout:
 │   ├── <run-time assets>
 │   └── <task assets, if board-triggered>
 ├── repo/               ← Git repositories the step selected
-│   └── <repo_name>/    ← default branch checked out, every branch fetched
+│   └── <repo_name>/    ← the repository's source branch checked out, every branch fetched
 └── references/         ← reference docs (only in Aixle Builder sessions)
 ```
 
