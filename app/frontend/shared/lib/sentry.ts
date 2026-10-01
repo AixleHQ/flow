@@ -9,6 +9,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 // authorization code. They are replaced before anything leaves the browser.
 const TOKEN_PATH = /\/(invitations|share)\/[^/?#]+/g;
 const SECRET_QUERY_PARAMS = ['code', 'state', 'token', 'tkn', 'session_key', 'ticket'];
+const PII_NAME_FRAGMENTS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
 
 export const scrubUrl = (url: string): string => {
   const [beforeHash] = url.split('#');
@@ -59,7 +60,22 @@ export const initSentry = (settings: SharedSettings): void => {
     tracePropagationTargets: [/^\//, new RegExp(`^https?://${escapeRegExp(domain)}(?=[/:?#]|$)`)],
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
-    sendDefaultPii: false,
+    // Unset, Sentry 11 collects user info, cookies, headers and bodies. This is the
+    // `sendDefaultPii: false` baseline of Sentry 10, as its migration guide spells it out.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: { deny: PII_NAME_FRAGMENTS }, response: { deny: PII_NAME_FRAGMENTS } },
+      httpBodies: [],
+      urlQueryParams: { deny: PII_NAME_FRAGMENTS },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
+    },
+    // Span streaming, Sentry 11's default, never calls beforeSendTransaction, and that
+    // hook is what keeps invitation and share tokens out of transaction names.
+    traceLifecycle: 'static',
     beforeSend: (event) => scrubEvent(event),
     beforeSendTransaction: (event) => scrubEvent(event),
   });

@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import * as Sentry from '@sentry/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { scrubUrl } from './sentry';
+import type { SharedSettings } from 'shared/ui/types';
+
+import { initSentry, scrubUrl } from './sentry';
 
 describe('scrubUrl', () => {
   it('replaces invitation and share-link tokens in the path', () => {
@@ -18,5 +21,36 @@ describe('scrubUrl', () => {
 
   it('leaves ordinary URLs untouched', () => {
     expect(scrubUrl('/company/projects/12/board')).toBe('/company/projects/12/board');
+  });
+});
+
+describe('initSentry', () => {
+  const settings: SharedSettings = {
+    env: 'production',
+    domain: 'flow.example.com',
+    githubAppSlug: null,
+    appVersion: 'test',
+    sentryFrontendDsn: 'https://public@o1.ingest.sentry.io/1',
+  };
+
+  afterEach(async () => {
+    await Sentry.getClient()?.close();
+  });
+
+  it('sends transactions with the token scrubbed and without inferring the IP', async () => {
+    const sent: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      sent.push(String(init?.body));
+      return new Response('{}');
+    });
+    initSentry(settings);
+
+    Sentry.startSpan({ name: '/invitations/s3cr3t', forceTransaction: true }, () => {});
+    await Sentry.flush(2000);
+
+    const envelopes = sent.join('\n');
+    expect(envelopes).toContain('"transaction":"/invitations/[token]"');
+    expect(envelopes).toContain('"infer_ip":"never"');
+    expect(envelopes).not.toContain('s3cr3t');
   });
 });
