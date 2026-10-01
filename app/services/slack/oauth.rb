@@ -11,6 +11,10 @@ module Slack
     STATE_TTL = 10.minutes
 
     class << self
+      def enabled?
+        Settings.slack&.client_id.present? && Settings.slack&.client_secret.present?
+      end
+
       def authorize_url(project:, user:)
         query = URI.encode_www_form(
           client_id: Settings.slack.client_id,

@@ -47,25 +47,46 @@ module Slack
       assert_equal "code-1", fake.oauth_exchanges.last[:code]
     end
 
-    test "create_from_oauth records an error integration when Slack rejects the code" do
+    # A refusal used to leave a company-wide error row each time, which only a
+    # company admin could remove.
+    test "create_from_oauth saves nothing when Slack rejects the code" do
       # The fake always returns a successful exchange, so the rejection path stays
       # on a Mocha stub (the canonical fake has no seam to raise Slack::Client::Error).
       Slack::Client.expects(:exchange_code).raises(Slack::Client::Error.new("invalid_code"))
 
-      integration = service.create_from_oauth(code: "bad")
+      integration = nil
+      assert_no_difference -> { Integration.count } do
+        integration = service.create_from_oauth(code: "bad")
+      end
 
-      assert integration.persisted?
+      assert_not integration.persisted?
       assert integration.error?
       assert_match(/invalid_code/, integration.settings["error"])
     end
 
-    test "create_from_oauth errors when Slack returns no workspace id" do
+    test "create_from_oauth saves nothing when Slack returns no workspace id" do
       stub_slack_oauth(team_id: "")
 
-      integration = service.create_from_oauth(code: "code-1")
+      integration = nil
+      assert_no_difference -> { Integration.count } do
+        integration = service.create_from_oauth(code: "code-1")
+      end
 
       assert integration.error?
       assert_match(/workspace id/, integration.settings["error"])
+    end
+
+    test "a refused reconnect leaves the existing install as it was" do
+      fake = stub_slack_oauth(team_id: "T123")
+      installed = service.create_from_oauth(code: "c1")
+      fake.team_id = ""
+
+      assert service.create_from_oauth(code: "c2").error?
+
+      installed.reload
+      assert installed.active?
+      assert_nil installed.settings["error"]
+      assert_equal 1, @company.integrations.where(provider: :slack).count
     end
 
     test "rejects a workspace already connected to another company (no hijack)" do
@@ -76,7 +97,29 @@ module Slack
 
       stub_slack_oauth(team_id: "T123")
 
-      integration = service.create_from_oauth(code: "c")
+      integration = nil
+      assert_no_difference -> { Integration.count } do
+        integration = service.create_from_oauth(code: "c")
+      end
+
+      assert integration.error?
+      assert_match(/another organization/, integration.settings["error"])
+    end
+
+    # The early check missed a claim made concurrently; the endpoint write
+    # catches it, and the install it was about to anchor is not kept.
+    test "losing the race for a workspace's endpoint keeps no install" do
+      other = create(:user, :with_company)
+      create(:webhook_endpoint, slug: "slack-team-T123", provider: :slack,
+        verification_strategy: :slack_v0, company: other.companies.first, created_by: other,
+        config: { "team_id" => "T123" })
+      WebhookEndpoint.stubs(:find_by).with(slug: "slack-team-T123").returns(nil)
+      stub_slack_oauth(team_id: "T123")
+
+      integration = nil
+      assert_no_difference -> { Integration.count } do
+        integration = service.create_from_oauth(code: "c")
+      end
 
       assert integration.error?
       assert_match(/another organization/, integration.settings["error"])

@@ -261,6 +261,25 @@ describe('IntegrationsContent', () => {
     );
   });
 
+  it('keeps the GitLab dialog open with the reason when GitLab refuses the token', async () => {
+    renderPage(
+      <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+    await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-expired');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+    const options = vi.mocked(router.post).mock.lastCall?.[2] as
+      { onError?: (errors: Record<string, string>) => void } | undefined;
+    act(() => options?.onError?.({ personalAccessToken: 'GitLab rejected this token.' }));
+
+    expect(within(dialog).getByText('GitLab rejected this token.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /Connect GitLab/i })).toBeInTheDocument();
+  });
+
   it('keeps the GitLab Connect button disabled until a token is entered', async () => {
     renderPage(
       <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
@@ -739,7 +758,12 @@ describe('IntegrationsContent', () => {
 
     it('connecting Slack from the empty state in a project navigates to the OAuth start URL', async () => {
       renderPage(
-        <IntegrationsContent title="Project Integrations" basePath="/projects/42/integrations" integrations={[]} />,
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[]}
+          slack={{ enabled: true }}
+        />,
         { props: settingsProps },
       );
 
@@ -754,6 +778,7 @@ describe('IntegrationsContent', () => {
           title="Project Integrations"
           basePath="/projects/42/integrations"
           integrations={[makeIntegration({ id: 1, name: 'Existing GitHub', scopeIndicator: 'project' })]}
+          slack={{ enabled: true }}
         />,
         { props: settingsProps },
       );
@@ -762,6 +787,21 @@ describe('IntegrationsContent', () => {
       await userEvent.click(await screen.findByRole('menuitem', { name: /Slack/i }));
 
       expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start');
+    });
+
+    it('does not offer Slack on a deployment with no Slack app', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[]}
+          slack={{ enabled: false }}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByRole('button', { name: /GitLab/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Slack' })).not.toBeInTheDocument();
     });
 
     it('does not offer Slack in a company (non-project) context', async () => {
@@ -945,6 +985,31 @@ describe('IntegrationsContent', () => {
       );
     });
 
+    it('tests the connection and replaces its session token from the row', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Test connection for Acme Coder' }));
+      expect(router.post).toHaveBeenCalledWith('/projects/42/integrations/9/test_connection', {}, expect.anything());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+      await userEvent.type(within(dialog).getByLabelText('Session Token'), 'tok-new');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/42/integrations/9',
+        { sessionToken: 'tok-new' },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
     it('hides the edit action for a company-wide integration in a project context', () => {
       renderPage(
         <IntegrationsContent
@@ -956,6 +1021,73 @@ describe('IntegrationsContent', () => {
       );
 
       expect(screen.queryByRole('button', { name: /Edit settings/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('GitLab token', () => {
+    const gitlabIntegration = (overrides: Partial<Integration> = {}) =>
+      makeIntegration({ id: 11, name: 'alice', provider: 'gitlab', scopeIndicator: 'project', ...overrides });
+
+    it('says why a connection needs attention', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[
+            gitlabIntegration({
+              status: 'error',
+              settings: { error: "GitLab no longer accepts this connection's token. Replace the token." },
+            }),
+          ]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(
+        screen.getByText("GitLab no longer accepts this connection's token. Replace the token."),
+      ).toBeInTheDocument();
+    });
+
+    it('replaces the token and keeps the dialog open when GitLab refuses the new one', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[gitlabIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for alice' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+      await userEvent.type(within(dialog).getByLabelText('Personal Access Token'), 'glpat-new');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/42/integrations/11',
+        { personalAccessToken: 'glpat-new' },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+
+      const options = vi.mocked(router.patch).mock.lastCall?.[2] as
+        { onError?: (errors: Record<string, string>) => void } | undefined;
+      act(() => options?.onError?.({ personalAccessToken: 'GitLab rejected this token.' }));
+
+      expect(within(dialog).getByText('GitLab rejected this token.')).toBeInTheDocument();
+    });
+
+    it('offers no token actions to a viewer', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[gitlabIntegration()]}
+        />,
+        { props: { ...settingsProps, projectPermissions: { canExecute: false, canManage: false } } },
+      );
+
+      expect(screen.queryByRole('button', { name: /Replace token/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Test connection/i })).not.toBeInTheDocument();
     });
   });
 });

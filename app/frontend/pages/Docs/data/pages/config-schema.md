@@ -284,7 +284,7 @@ customer's service account only, which needs nothing here.
 | `ADMIN_PASSWORD`             | no       | unset              | First-boot bootstrap password for that admin.                  |
 | `SESSION_IDLE_TIMEOUT_HOURS` | no       | `336` (14 days)    | A browser sign-in unused for this long is ended; the person signs in again. |
 | `SESSION_MAX_AGE_HOURS`      | no       | `720` (30 days)    | A browser sign-in is ended this long after it began, however much it is used. |
-| `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. |
+| `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. Without it and `SLACK_CLIENT_SECRET`, projects are not offered Slack. |
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
 | `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies the Slack event payloads posted to `/webhooks/slack/events`. |
 | `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write` | Bot scopes requested at install time. |

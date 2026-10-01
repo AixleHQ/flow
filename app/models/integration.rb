@@ -49,11 +49,6 @@ class Integration < ApplicationRecord
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
   }
 
-  # personal_access_token lives in encrypted credentials — no DB lookup possible.
-  def self.find_or_build_gitlab_for_token(company:, connected_by:, project:)
-    company.integrations.build(provider: :gitlab, connected_by: connected_by, project: project)
-  end
-
   # A GitHub PAT connection has no installation to match on, so the project
   # alone identifies it: one PAT connection per project. Reconnecting replaces
   # the token on that row rather than stacking a second connection to the same

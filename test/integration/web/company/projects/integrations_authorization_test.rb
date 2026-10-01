@@ -39,6 +39,7 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
   end
 
   test "slack_oauth_start is a project write (redirects to Slack)" do
+    with_slack_app
     assert_project_write do
       get slack_oauth_start_company_project_integrations_path(@project)
     end

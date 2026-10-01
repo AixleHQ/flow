@@ -4,7 +4,7 @@ import type { Integration, Project } from '@/types/generated';
 
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
-import { IntegrationsContent } from 'shared/resources/integrations/IntegrationsContent';
+import { IntegrationsContent, type SlackProps } from 'shared/resources/integrations/IntegrationsContent';
 import type { JiraProps } from 'shared/resources/integrations/JiraConnectModal';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -15,10 +15,12 @@ interface Props {
   azureDevops?: AzureDevopsProps;
   github?: GithubProps;
   jira?: JiraProps;
+  slack?: SlackProps;
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, jira } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, integrations, azureDevops, github, jira, slack } = usePage<{ props: Props }>()
+    .props as unknown as Props;
 
   return (
     <>
@@ -30,6 +32,7 @@ const IntegrationsPage = () => {
         azureDevops={azureDevops}
         github={github}
         jira={jira}
+        slack={slack}
       />
     </>
   );

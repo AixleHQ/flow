@@ -513,9 +513,9 @@ Rails.application.routes.draw do
               get :statuses
             end
           end
-          # `update` edits provider settings only (Coder's template / prefix /
-          # lock TTL) — credentials are replaced by reconnecting, which has to
-          # re-verify them against the provider.
+          # `update` edits what a provider allows in place (Coder's pool
+          # settings, a replacement GitLab/Coder/Azure token, Jira's projects);
+          # a replacement token is verified against the provider first.
           resources :integrations, only: %i[index create update destroy] do
             collection do
               get :slack_oauth_start

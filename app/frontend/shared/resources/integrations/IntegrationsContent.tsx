@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
+  Alert,
   Anchor,
   Badge,
   Box,
@@ -22,6 +23,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconAlertCircle,
   IconBrandAzure,
   IconBrandGithub,
   IconBrandJira,
@@ -30,6 +32,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconCopy,
+  IconKey,
   IconLink,
   IconPencil,
   IconPlus,
@@ -59,6 +62,11 @@ export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
 export type { JiraProps } from './JiraConnectModal';
 
+export interface SlackProps {
+  /** False on a deployment with no Slack app (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET unset). */
+  enabled: boolean;
+}
+
 interface IntegrationsContentProps {
   integrations: Integration[];
   basePath: string;
@@ -71,6 +79,8 @@ interface IntegrationsContentProps {
   github?: GithubProps;
   // Absent on the company page: Jira connects to a project.
   jira?: JiraProps;
+  // Absent on the company page.
+  slack?: SlackProps;
 }
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
@@ -105,6 +115,11 @@ const SCOPE_COLORS: Record<string, string> = {
 // Mirrors the server-side fallback in Coder::LockService#ttl_minutes.
 const DEFAULT_CODER_LOCK_TTL = 120;
 
+const TOKEN_PROVIDERS = new Set(['gitlab', 'coder']);
+
+const errorMessage = (errors: unknown, fallback: string) =>
+  (typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '') || fallback;
+
 export const IntegrationsContent = ({
   integrations,
   basePath,
@@ -112,6 +127,7 @@ export const IntegrationsContent = ({
   azureDevops,
   github,
   jira,
+  slack,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -144,6 +160,7 @@ export const IntegrationsContent = ({
   const [jiraProjectsTarget, setJiraProjectsTarget] = useState<Integration | null>(null);
   const [jiraWebhookTarget, setJiraWebhookTarget] = useState<Integration | null>(null);
   const jiraAvailable = isProjectContext && !!jira;
+  const slackAvailable = isProjectContext && !!slack?.enabled;
 
   // The Atlassian app's callback lands here with the connection still to finish.
   useEffect(() => {
@@ -155,6 +172,24 @@ export const IntegrationsContent = ({
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
   const [gitlabLoading, setGitlabLoading] = useState(false);
+  const [gitlabError, setGitlabError] = useState<string | null>(null);
+
+  const closeGitlabModal = useCallback(() => {
+    setGitlabOpen(false);
+    setGitlabPat('');
+    setGitlabError(null);
+  }, []);
+
+  const [tokenTarget, setTokenTarget] = useState<Integration | null>(null);
+  const [replacementToken, setReplacementToken] = useState('');
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  const closeTokenModal = useCallback(() => {
+    setTokenTarget(null);
+    setReplacementToken('');
+    setTokenError(null);
+  }, []);
 
   const [coderOpen, setCoderOpen] = useState(false);
   const [coderUrl, setCoderUrl] = useState('');
@@ -250,6 +285,7 @@ export const IntegrationsContent = ({
 
   const handleConnectGitlab = useCallback(() => {
     if (!gitlabPat.trim()) return;
+    setGitlabError(null);
     setGitlabLoading(true);
 
     router.post(
@@ -260,17 +296,30 @@ export const IntegrationsContent = ({
       },
       {
         preserveScroll: true,
-        onSuccess: () => {
-          setGitlabOpen(false);
-          setGitlabPat('');
-        },
-        onError: () => {
-          notifications.show({ message: 'Failed to connect GitLab', color: 'red' });
-        },
+        onSuccess: closeGitlabModal,
+        onError: (errors) => setGitlabError(errorMessage(errors, 'Failed to connect GitLab')),
         onFinish: () => setGitlabLoading(false),
       },
     );
-  }, [basePath, gitlabPat]);
+  }, [basePath, closeGitlabModal, gitlabPat]);
+
+  const handleReplaceToken = useCallback(() => {
+    const token = replacementToken.trim();
+    if (!tokenTarget || !token) return;
+    setTokenError(null);
+    setTokenLoading(true);
+
+    router.patch(
+      `${basePath}/${tokenTarget.id}`,
+      tokenTarget.provider === 'coder' ? { sessionToken: token } : { personalAccessToken: token },
+      {
+        preserveScroll: true,
+        onSuccess: closeTokenModal,
+        onError: (errors) => setTokenError(errorMessage(errors, 'Failed to replace the token')),
+        onFinish: () => setTokenLoading(false),
+      },
+    );
+  }, [basePath, closeTokenModal, replacementToken, tokenTarget]);
 
   const handleConnectCoder = useCallback(() => {
     const trimmedUrl = coderUrl.trim();
@@ -299,12 +348,7 @@ export const IntegrationsContent = ({
       onSuccess: () => {
         closeCoderModal();
       },
-      onError: (errors) => {
-        const message =
-          typeof errors === 'object' && errors ? Object.values(errors).join(' ') : 'Failed to connect Coder';
-        setCoderError(message || 'Failed to connect Coder');
-        notifications.show({ message: 'Failed to connect Coder', color: 'red' });
-      },
+      onError: (errors) => setCoderError(errorMessage(errors, 'Failed to connect Coder')),
       onFinish: () => setCoderLoading(false),
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
@@ -336,7 +380,7 @@ export const IntegrationsContent = ({
     );
   }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
-  // Re-verify an Azure, Jira or GitHub connection. "Test" and "repair" are the same
+  // Re-verify a connection. "Test" and "repair" are the same
   // operation: the integration id and what hangs off it are kept either way, and
   // a failed check never replaces a working credential.
   const handleTestConnection = useCallback(
@@ -407,7 +451,7 @@ export const IntegrationsContent = ({
                     Jira
                   </Menu.Item>
                 )}
-                {isProjectContext && (
+                {slackAvailable && (
                   <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                     Slack
                   </Menu.Item>
@@ -495,7 +539,7 @@ export const IntegrationsContent = ({
                         Jira
                       </Button>
                     )}
-                    {isProjectContext && (
+                    {slackAvailable && (
                       <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                         Slack
                       </Button>
@@ -616,6 +660,13 @@ export const IntegrationsContent = ({
                                   } (${integration.jiraAuthMode === 'oauth' ? 'Atlassian account' : 'service account'})`}
                             </Text>
                           )}
+                          {TOKEN_PROVIDERS.has(integration.provider) &&
+                            integration.status === 'error' &&
+                            typeof integration.settings.error === 'string' && (
+                              <Text fz={11} c="var(--app-danger-fg)" truncate maw={260}>
+                                {integration.settings.error}
+                              </Text>
+                            )}
                           {integration.provider === 'coder' && integration.coderUrl && (
                             <Text fz={11} c="dimmed" truncate maw={200}>
                               {integration.coderUrl}
@@ -765,6 +816,30 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
+                        {TOKEN_PROVIDERS.has(integration.provider) && canExecute && !readOnly && (
+                          <>
+                            <Tooltip label="Test connection">
+                              <ActionIcon
+                                aria-label={`Test connection for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => handleTestConnection(integration)}
+                              >
+                                <IconRefresh size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="Replace token">
+                              <ActionIcon
+                                aria-label={`Replace token for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setTokenTarget(integration)}
+                              >
+                                <IconKey size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </>
+                        )}
                         {integration.provider === 'coder' && canExecute && !readOnly && (
                           <Tooltip label="Edit settings">
                             <ActionIcon
@@ -836,16 +911,7 @@ export const IntegrationsContent = ({
         github={github}
       />
 
-      <Modal
-        opened={gitlabOpen}
-        onClose={() => {
-          setGitlabOpen(false);
-          setGitlabPat('');
-        }}
-        title="Connect GitLab"
-        centered
-        size="sm"
-      >
+      <Modal opened={gitlabOpen} onClose={closeGitlabModal} title="Connect GitLab" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Enter a GitLab Personal Access Token with <b>api</b> scope to connect your GitLab account.
@@ -860,14 +926,13 @@ export const IntegrationsContent = ({
             }}
             autoFocus
           />
+          {gitlabError && (
+            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+              {gitlabError}
+            </Alert>
+          )}
           <Group justify="flex-end">
-            <Button
-              variant="default"
-              onClick={() => {
-                setGitlabOpen(false);
-                setGitlabPat('');
-              }}
-            >
+            <Button variant="default" onClick={closeGitlabModal}>
               Cancel
             </Button>
             <Button onClick={handleConnectGitlab} loading={gitlabLoading} disabled={!gitlabPat.trim()}>
@@ -952,6 +1017,39 @@ export const IntegrationsContent = ({
               }
             >
               Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={!!tokenTarget} onClose={closeTokenModal} title="Replace token" centered size="sm">
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            {tokenTarget?.provider === 'coder'
+              ? 'Paste a new Coder session token. It is checked against Coder before it replaces the current one.'
+              : 'Paste a new GitLab personal access token with the api scope. It is checked against GitLab before it replaces the current one.'}{' '}
+            Repositories and settings stay as they are.
+          </Text>
+          <PasswordInput
+            label={tokenTarget?.provider === 'coder' ? 'Session Token' : 'Personal Access Token'}
+            value={replacementToken}
+            onChange={(e) => setReplacementToken(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleReplaceToken();
+            }}
+            autoFocus
+          />
+          {tokenError && (
+            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+              {tokenError}
+            </Alert>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeTokenModal}>
+              Cancel
+            </Button>
+            <Button onClick={handleReplaceToken} loading={tokenLoading} disabled={!replacementToken.trim()}>
+              Replace
             </Button>
           </Group>
         </Stack>
