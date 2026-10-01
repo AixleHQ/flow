@@ -201,8 +201,7 @@ regenerate a complete, machine-checked attribution list before a release:
 ```sh
 # Ruby — full gem license report
 bundle install
-gem install license_finder
-license_finder report --format=markdown
+bundle exec license_finder report --format=markdown
 
 # JavaScript — full npm license report
 yarn install
