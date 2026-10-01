@@ -21,10 +21,12 @@ module Billing
 
     # One closed hour of the whole installation, as one record.
     #
-    # AWS accepts one record per product per account per hour and answers a
-    # second with DuplicateRequestException. That refusal means "recorded", so it
-    # is answered with :duplicate rather than an exception; otherwise the ledger
-    # would replay an hour AWS already has until the window closed.
+    # AWS accepts one record per dimension per hour per pod, and answers a second
+    # for the same hour carrying a different quantity with
+    # DuplicateRequestException. That refusal means "recorded", so it is answered
+    # with :duplicate rather than an exception; otherwise the ledger would replay
+    # an hour AWS already has until the window closed. An identical repeat is
+    # idempotent and simply returns the original record id.
     def meter_usage(dimension:, quantity:, occurred_at:, allocations: {})
       api do
         begin
