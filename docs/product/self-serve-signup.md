@@ -54,6 +54,18 @@ Typing a work address at `/login` whose domain no workspace has claimed is not a
 refusal where signup is open — it carries through to the form with the address
 already filled in.
 
+Someone at a domain that **does** have a workspace, but who is not in it, is
+never shown the form: it could only refuse the domain. This happens when the
+workspace does not accept the method they signed in with, or when that method did
+not prove their address. A redirect sign-in (Google, Microsoft) that ends this
+way is not signed in. It lands back on `/login`, which explains what happened.
+Anyone already signed in who reaches `/workspace/new` gets the same explanation
+in place of the form. If the workspace has proved its domain, the explanation
+names the workspace and the sign-ins it accepts that add people from the domain.
+Otherwise it names neither and points the person to an invitation, because
+auto-join does not run for an unproved domain. The details reach `/login` in the
+flash and never in the URL, so a link cannot make the page name a workspace.
+
 ---
 
 ## 2. Proving the domain

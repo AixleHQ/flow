@@ -31,6 +31,15 @@ claim is unique.
 If no workspace claims your domain, you are told so plainly instead of being
 given an account that belongs nowhere.
 
+If a workspace does claim your domain but signing in did not add you to it, you
+are told how to get in, not handed a form for a second workspace that could only
+be refused. Two ways work: sign in with a method that adds people from your
+domain (Google, Microsoft or the workspace's own connection, whichever it
+accepts), or ask one of its administrators to invite you. A password, a passkey
+or an email sign-in link only lets in people who are already members. Until the
+workspace has proved the domain, the screen does not name it, and an invitation
+is the only way in.
+
 ## How a workspace decides what it accepts
 
 **Settings → Access** lists every method this workspace takes. Turning

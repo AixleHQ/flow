@@ -105,6 +105,9 @@ class Web::WorkspacesController < Web::ApplicationController
       # A stranger types the address they will own the workspace with; someone
       # signed in has already proved theirs and is not asked again.
       needs_email: !signed_in?,
+      # Where the signed-in person's domain already has a workspace, which is the
+      # whole of that screen: the form could only be refused.
+      claimed_domain: (Auth::ClaimedDomain.for(current_user)&.to_h if signed_in?),
       # What they get before anyone asks them for a card, which is the part of
       # the bargain the form was silent about.
       free_queue_hours: Billing::Trial.queue_hours

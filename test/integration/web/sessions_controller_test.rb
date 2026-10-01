@@ -153,6 +153,56 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path(error: "no_workspace")
   end
 
+  def strict_corp
+    company = create(:company, :auto_accept, name: "Strict Corp", email_domain: "strict-corp.test")
+    CompanyAuthPolicy.find_by!(company: company, identity_provider: IdentityProvider.deployment!("microsoft"))
+                     .update!(enabled: false)
+    company
+  end
+
+  def sign_in_with_microsoft_at_strict_corp
+    with_mocked_microsoft_auth(email: "new@strict-corp.test", upn: "new@strict-corp.test") do
+      get OmniAuthHelper::MICROSOFT_CALLBACK_PATH
+    end
+  end
+
+  # A verified domain that auto-accepts people, in a company that does not take
+  # Microsoft. Auto-join declining is the security rule; this is about what the
+  # person is told, which used to be "pending approval" when nothing was pending.
+  test "omniauth: a sign-in the domain's workspace does not accept is told the way in, and gets no session" do
+    strict_corp
+
+    sign_in_with_microsoft_at_strict_corp
+
+    assert_redirected_to login_path(error: "domain_has_workspace")
+    user = User.find_by!(email: "new@strict-corp.test")
+    assert_empty user.company_memberships
+    refute UserSession.live.exists?(user: user)
+
+    follow_redirect!
+    assert_inertia_props do |props|
+      assert_equal "Strict Corp", props.dig(:claimedDomain, :workspaceName)
+      assert_equal [ "Google" ], props.dig(:claimedDomain, :joinMethods)
+    end
+
+    # The details travel in the flash, so a link to the same screen names nobody.
+    get login_path(error: "domain_has_workspace")
+    assert_inertia_props { |props| assert_nil props[:claimedDomain] }
+  end
+
+  # Where anyone may sign a company up, the same person used to be signed in and
+  # handed the signup form, which could only refuse the domain — silently.
+  test "omniauth: where signup is open, a claimed domain is not sent to the signup form" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: true))
+    strict_corp
+
+    sign_in_with_microsoft_at_strict_corp
+
+    assert_redirected_to login_path(error: "domain_has_workspace")
+    refute UserSession.live.exists?(user: User.find_by!(email: "new@strict-corp.test"))
+  end
+
   test "omniauth: an existing member is signed in without any new membership" do
     membership_count = -> { @user.company_memberships.count }
 

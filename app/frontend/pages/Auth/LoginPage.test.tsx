@@ -183,6 +183,37 @@ describe('LoginPage', () => {
       expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
     });
 
+    it("explains a sign-in that left the person outside their domain's workspace", () => {
+      renderPage(<LoginPage />, {
+        props: {
+          error: 'domain_has_workspace',
+          claimedDomain: {
+            domain: 'acme.test',
+            workspaceName: 'Acme',
+            joinMethods: ['Google'],
+            approvalRequired: false,
+          },
+        },
+      });
+
+      expect(screen.getByRole('heading', { name: 'Your domain already has a workspace' })).toBeInTheDocument();
+      expect(screen.getByText(/belongs to the/)).toHaveTextContent('acme.test belongs to the Acme workspace.');
+      expect(screen.getByText(/^Sign in with/)).toHaveTextContent(
+        'Sign in with Google and you join Acme straight away.',
+      );
+      expect(screen.getByRole('link', { name: 'Back to sign in' })).toHaveAttribute('href', '/login');
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    // The details come only with the redirect itself, so a reload or a shared
+    // link still explains — without naming anyone's workspace.
+    it('names no workspace once the details are gone', () => {
+      renderPage(<LoginPage />, { props: { error: 'domain_has_workspace' } });
+
+      expect(screen.getByText(/Sign in with another method it accepts/)).toBeInTheDocument();
+      expect(screen.queryByText(/belongs to the/)).not.toBeInTheDocument();
+    });
+
     it('shows a "Welcome back!" notification after a successful login', async () => {
       const form = makeFormStub({ email: 'person@acme.test', password: 'secret', rememberMe: false });
       renderPage(<LoginPage />, { props: stepTwo(), form });

@@ -5,6 +5,7 @@ import { IconArrowLeft } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { loginIdentifyPath, loginPath } from 'shared/routes';
 import { BrandLockup, PageShell } from 'shared/ui';
@@ -25,6 +26,8 @@ interface PageProps {
   /** Exactly what this workspace accepts. Nothing else is drawn. */
   methods?: string[];
   dead_end?: boolean;
+  /** Set only on the redirect from a sign-in that left the person outside their domain's workspace. */
+  claimedDomain?: ClaimedDomain | null;
   [key: string]: unknown;
 }
 
@@ -39,6 +42,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   link_required:
     'An account already exists for that address. Sign in the way you usually do, then add this method from your security settings.',
   no_workspace: 'No workspace matches that email address. Please contact your administrator.',
+  domain_has_workspace: 'Your email domain already has a workspace, and signing in that way did not add you to it.',
 };
 
 function NoWorkspaceScreen() {
@@ -60,6 +64,36 @@ function NoWorkspaceScreen() {
   );
 }
 
+// Without the details (a reload, or a link someone shared) the screen still
+// says what happened, but names no workspace.
+function DomainHasWorkspaceScreen({ claim }: { claim?: ClaimedDomain | null }) {
+  return (
+    <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
+      <Center mb={32}>
+        <BrandLockup />
+      </Center>
+      <Title order={3} ta="center" mb="sm" className={classes.noWorkspaceHeading}>
+        Your domain already has a workspace
+      </Title>
+      <Stack gap="xs" mb="xl">
+        <Text size="sm" c="dimmed">
+          Signing in that way did not add you to it.
+        </Text>
+        {claim ? (
+          <ClaimedDomainNotice claim={claim} />
+        ) : (
+          <Text size="sm" c="dimmed">
+            Sign in with another method it accepts, or ask one of its administrators to invite you.
+          </Text>
+        )}
+      </Stack>
+      <Button component="a" href={loginPath()} fullWidth size="md" variant="outline">
+        Back to sign in
+      </Button>
+    </Paper>
+  );
+}
+
 // Split by step. The address is settled on step one and is not editable on
 // step two, so a complaint about it there would have nowhere to appear.
 const emailSchema = z.string().min(1, 'Email is required').email('Invalid email format');
@@ -75,6 +109,7 @@ const LoginPage = () => {
   const acceptedMethods = (usePage<PageProps>().props.methods as string[] | undefined) ?? [];
   const deadEnd = usePage<PageProps>().props.dead_end === true;
   const passwordless = (usePage<PageProps>().props.passwordlessMethods as string[] | undefined) ?? [];
+  const claimedDomain = usePage<PageProps>().props.claimedDomain;
   const errorShownRef = useRef(false);
   const [clientErrors, setClientErrors] = useState<Record<string, string | undefined>>({});
 
@@ -157,6 +192,15 @@ const LoginPage = () => {
       <PageShell variant="centered">
         <Head title="Sign in — Aixle Flow" />
         <NoWorkspaceScreen />
+      </PageShell>
+    );
+  }
+
+  if (error === 'domain_has_workspace') {
+    return (
+      <PageShell variant="centered">
+        <Head title="Sign in — Aixle Flow" />
+        <DomainHasWorkspaceScreen claim={claimedDomain} />
       </PageShell>
     );
   }
