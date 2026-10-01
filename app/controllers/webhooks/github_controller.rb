@@ -13,6 +13,8 @@ class Webhooks::GithubController < ActionController::API
       handle_workflow_run
     when "installation"
       handle_installation
+    when *Trackers::Github::Notifications::TRACKED.keys
+      Trackers::Github::Webhooks.receive(event, request.request_parameters, delivery_id: request.headers["X-GitHub-Delivery"])
     end
 
     head :ok
@@ -74,7 +76,8 @@ class Webhooks::GithubController < ActionController::API
     installation_id = Integer(payload.dig("installation", "id"), exception: false)
     return unless installation_id
 
-    Github::InstallationEvents.apply(action: payload["action"].to_s, installation_id: installation_id)
+    Github::InstallationEvents.apply(action: payload["action"].to_s, installation_id: installation_id,
+                                     permissions: payload.dig("installation", "permissions"))
   end
 
   def verify_signature

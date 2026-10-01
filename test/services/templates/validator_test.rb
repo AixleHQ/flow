@@ -60,8 +60,8 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     end
 
     errors = errors_for do |d|
-      d["requires"]["integrations"] = [ "linear" ]
-      d["tools"].first["requires_integration"] = "linear"
+      d["requires"]["integrations"] = [ "trello" ]
+      d["tools"].first["requires_integration"] = "trello"
     end
     assert_match(%r{/requires/integrations/0}, errors.join)
     assert_match(%r{/tools/0/requires_integration}, errors.join)

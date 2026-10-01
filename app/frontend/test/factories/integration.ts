@@ -32,6 +32,15 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   jiraSites: [],
   jiraIdentity: null,
   jiraDedicatedIdentity: false,
+  githubProjectsSupported: false,
+  githubProjectsPermitted: null,
+  githubProjects: [],
+  linearAuthMode: null,
+  linearWorkspaceUrl: null,
+  linearTeams: [],
+  linearIdentity: null,
+  linearDedicatedIdentity: false,
+  linearWebhookError: null,
   // Always present, empty for every provider but Azure DevOps: the operation
   // profile and the covered projects are lists the server always serializes,
   // not optional fields.

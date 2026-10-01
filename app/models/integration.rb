@@ -7,9 +7,7 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  # `linear` stays in the provider enum only because a row may still carry it.
-  # It has no connect flow and must not be offered anywhere.
-  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira].freeze
+  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear].freeze
 
   enumerize :provider, in: %i[github gitlab linear coder slack azure_devops jira], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
@@ -25,6 +23,9 @@ class Integration < ApplicationRecord
   # before the repositories go, removed once the removal has committed.
   before_destroy :collect_ci_webhook_repositories, prepend: true, if: :gitlab?
   after_destroy_commit :unregister_ci_webhooks, if: :gitlab?
+  # An API-key connection registered its Linear webhooks itself; nothing else removes them.
+  before_destroy :collect_linear_webhooks, prepend: true, if: :linear?
+  after_destroy_commit :remove_linear_webhooks, if: :linear?
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
@@ -308,6 +309,18 @@ class Integration < ApplicationRecord
 
   def unregister_ci_webhooks
     Array(@ci_webhook_repositories).each { |repository| Repositories::CiWebhook.unregister(repository) }
+  end
+
+  def collect_linear_webhooks
+    return unless settings.to_h["auth_mode"] == "api_key"
+
+    @linear_api_key = credentials_data["api_key"]
+    @linear_webhook_ids = tracker_subscriptions.live.where(strategy: "api").where.not(provider_subscription_id: nil)
+                                               .pluck(:provider_subscription_id)
+  end
+
+  def remove_linear_webhooks
+    Trackers::Linear::Subscriptions.release(api_key: @linear_api_key, webhook_ids: @linear_webhook_ids)
   end
 
   def release_slack_workspace

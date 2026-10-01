@@ -74,4 +74,46 @@ class Webhooks::TrackersControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal [ subscription.id ], TrackerDelivery.pluck(:tracker_subscription_id)
   end
+
+  def linear_issue_update(timestamp: (Time.current.to_f * 1000).to_i)
+    { type: "Issue", action: "update", organizationId: FakeLinear::Api::ORGANIZATION, webhookTimestamp: timestamp,
+      createdAt: "2026-10-01T10:00:00.000Z", actor: { id: "u-ada", name: "Ada" },
+      data: { id: FakeLinear::Api::ISSUE_1, teamId: FakeLinear::Api::ENG, stateId: "st-ready", state: { name: "Ready for AI" },
+              updatedAt: "2026-10-01T10:00:00.000Z" },
+      updatedFrom: { stateId: "st-backlog" } }
+  end
+
+  def linear_headers(raw, secret, delivery: "ld-1")
+    { "CONTENT_TYPE" => "application/json", "Linear-Delivery" => delivery, "Linear-Signature" => linear_signature(raw, secret) }
+  end
+
+  test "a team webhook of an API-key Linear connection is authenticated with its subscription's secret" do
+    linear = create(:integration, :linear, :active)
+    subscription = linear.tracker_subscriptions.create!(strategy: "api", status: "active", external_scope_id: FakeLinear::Api::ENG, secret: "team-secret")
+    raw = linear_issue_update.to_json
+
+    assert_enqueued_with(job: Trackers::ProcessDeliveryJob) do
+      post "/webhooks/trackers/#{subscription.endpoint_token}", params: raw, headers: linear_headers(raw, "team-secret")
+    end
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: raw, headers: linear_headers(raw, "wrong")
+
+    assert_response :unauthorized
+    delivery = TrackerDelivery.sole
+    assert_equal [ "ld-1", [ "status" ] ], [ delivery.dedup_key, delivery.notification_objects.sole.changes.pluck(:field) ]
+  end
+
+  test "the Linear app's webhook reaches the workspace's OAuth connections, and a replayed one is refused" do
+    with_linear_oauth_app
+    linear = create(:integration, :linear_oauth, :active)
+    subscription = linear.tracker_subscriptions.create!(strategy: "app", status: "active")
+    raw = linear_issue_update.to_json
+    stale = linear_issue_update(timestamp: ((Time.current - 5.minutes).to_f * 1000).to_i).to_json
+
+    post "/webhooks/trackers/app/linear", params: stale, headers: linear_headers(stale, "linear-app-webhook-secret")
+    assert_response :unauthorized
+
+    post "/webhooks/trackers/app/linear", params: raw, headers: linear_headers(raw, "linear-app-webhook-secret")
+    assert_response :ok
+    assert_equal subscription, TrackerDelivery.sole.tracker_subscription
+  end
 end

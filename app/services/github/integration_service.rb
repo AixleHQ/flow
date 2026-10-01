@@ -31,15 +31,16 @@ module Github
       begin
         info = Github::TokenService.new(integration).verify_installation
         integration.name = info[:account_login]
-        integration.settings = {
+        integration.settings = integration.settings.to_h.slice("github_projects").merge(
           auth_mode: "app",
           # Kept separately from `name`, which is a display label: Repository
           # checks the owner of every attached repo against this login, because
           # a clone token is scoped by repo NAME within this account.
           account_login: info[:account_login],
           account_type: info[:account_type],
-          target_type: info[:target_type]
-        }
+          target_type: info[:target_type],
+          app_permissions: info[:permissions]
+        ).stringify_keys
         integration.status = :active
       rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
         integration.name = "GitHub (unverified)" if integration.name.blank?
@@ -126,7 +127,43 @@ module Github
       failed(integration, e.record.errors.full_messages.to_sentence)
     end
 
+    # The organization's GitHub projects, for the picker on the connection.
+    def available_projects(integration)
+      projects_api!(integration).projects(integration.github_account_login).reject { |p| p[:closed] }
+    end
+
+    # The projects the connection covers: each becomes a tracker of this
+    # project, and one no longer chosen is detached. Every project must have its
+    # Status field, which is what the board's columns are.
+    def configure_projects(integration, project_ids:)
+      ids = Array(project_ids).map(&:to_s).compact_blank.uniq
+      api = projects_api!(integration)
+      previous = Array(integration.settings.to_h["github_projects"]).index_by { |p| p["id"] }
+      chosen = ids.map do |id|
+        field = previous.dig(id, "status_field").presence || Trackers::Github::Provider::DEFAULT_STATUS_FIELD
+        project = api.project(id, field: field)
+        raise ConfigurationError, "#{project[:title]} belongs to another account" unless project[:owner].to_s.casecmp?(integration.github_account_login.to_s)
+        raise ConfigurationError, "#{project[:title]} has no single-select field named #{field}" unless project[:field]
+
+        { "id" => project[:id], "number" => project[:number], "title" => project[:title], "url" => project[:url], "status_field" => field }
+      end
+
+      integration.update!(settings: integration.settings.to_h.merge("github_projects" => chosen))
+      Trackers::Provisioning.ensure_for!(integration)
+      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: chosen.pluck("id")).find_each(&:detach!)
+      Trackers::Provider.for(integration).ensure_event_delivery! if chosen.any?
+      integration
+    end
+
     private
+
+    def projects_api!(integration)
+      unless integration.github_app? && integration.settings.to_h["account_type"] == "Organization"
+        raise ConfigurationError, "GitHub Projects need the GitHub App installed on an organization"
+      end
+
+      Github::ProjectsApi.for(integration)
+    end
 
     def failed(integration, message, extra = {})
       integration.update_columns(status: "error", updated_at: Time.current,
@@ -137,7 +174,7 @@ module Github
     def verified_settings(integration, info)
       integration.settings.to_h.except("error", "installation_state", "token_scopes").merge(
         "account_login" => info[:account_login], "account_type" => info[:account_type],
-        "target_type" => info[:target_type], "token_scopes" => info[:scopes]
+        "target_type" => info[:target_type], "token_scopes" => info[:scopes], "app_permissions" => info[:permissions]
       ).compact
     end
 

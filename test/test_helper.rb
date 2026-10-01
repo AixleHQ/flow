@@ -96,6 +96,8 @@ class ActiveSupport::TestCase
   include SlackTestHelper
   include AzureDevopsTestHelper
   include JiraTestHelper
+  include LinearTestHelper
+  include GithubProjectsTestHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper
   # Add more helper methods to be used by all tests here...

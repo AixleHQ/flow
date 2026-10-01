@@ -373,6 +373,18 @@ jira:
   # tunnel in development). A loopback or private host registers no webhooks.
   webhook_base_url: "<%= ENV['JIRA_WEBHOOK_BASE_URL'] %>"
 
+linear:
+  # One Linear OAuth app per deployment, installed with actor=app. Optional —
+  # without it Linear connects with a personal API key only.
+  client_id: "<%= ENV['LINEAR_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['LINEAR_OAUTH_CLIENT_SECRET'] %>"
+  # The signing secret of the app's own webhook (Linear generates it when the
+  # webhook is enabled in the app's settings).
+  webhook_secret: "<%= ENV['LINEAR_WEBHOOK_SECRET'] %>"
+  # Where Linear posts webhooks, when DOMAIN is not reachable from Linear (a
+  # tunnel in development). A loopback or private host registers no webhooks.
+  webhook_base_url: "<%= ENV['LINEAR_WEBHOOK_BASE_URL'] %>"
+
 coder:
   # Operator-configurable knobs for the Coder MCP services (workspace
   # allocation, health gating, ssh runner).

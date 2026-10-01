@@ -311,7 +311,69 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     assert_response :ok
   end
 
+  test "an organization owner's approval of new permissions is recorded on the installation's connections" do
+    company = create(:company)
+    user = create(:user, company: company)
+    integration = github_connection(create(:project, company: company, owner: user), user, "4242")
+    payload = { action: "new_permissions_accepted",
+                installation: { id: 4242, permissions: { organization_projects: "write", issues: "write" } } }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "installation"
+    post_raw(payload)
+
+    assert_equal({ "organization_projects" => "write", "issues" => "write" }, integration.reload.settings["app_permissions"])
+  end
+
+  # == tracker events ==
+
+  test "a board move on a tracked project is recorded once per delivery and processed" do
+    integration = tracked_github_connection
+    payload = { action: "edited", installation: { id: integration.github_installation_id }, sender: { id: 1, login: "ada" },
+                projects_v2_item: { node_id: "PVTI_1", project_node_id: FakeGithub::ProjectsApi::ROADMAP,
+                                    content_node_id: "I_kwDOissue1", content_type: "Issue", updated_at: "2026-10-01T10:00:00Z" },
+                changes: { field_value: { field_type: "single_select", field_name: "Status",
+                                          from: { id: "opt-todo", name: "Todo" }, to: { id: "opt-ready", name: "Ready for AI" } } } }.to_json
+
+    assert_enqueued_with(job: Trackers::ProcessDeliveryJob) { deliver_tracker_event("projects_v2_item", payload, "d-1") }
+    assert_no_enqueued_jobs(only: Trackers::ProcessDeliveryJob) { deliver_tracker_event("projects_v2_item", payload, "d-1") }
+
+    subscription = integration.tracker_subscriptions.sole
+    assert_equal [ "app", "active" ], [ subscription.strategy.to_s, subscription.status.to_s ]
+    assert subscription.last_event_at.present?
+    assert_equal [ "status" ], TrackerDelivery.sole.notification_objects.sole.changes.pluck(:field)
+  end
+
+  test "tracker events are not recorded while no tracker trigger waits for them" do
+    integration = tracked_github_connection(trigger: false)
+    payload = { action: "created", installation: { id: integration.github_installation_id },
+                issue: { node_id: "I_kwDOissue1" }, comment: { node_id: "IC_1", body: "hi" } }.to_json
+
+    deliver_tracker_event("issue_comment", payload, "d-2")
+
+    assert_response :ok
+    assert_equal 0, TrackerDelivery.count
+  end
+
   private
+
+  def tracked_github_connection(trigger: true)
+    Settings.stubs(:github).returns(OpenStruct.new(webhook_secret: WEBHOOK_SECRET, app_slug: "aixle-flow"))
+    integration = create(:integration, :github_projects, :active)
+    Trackers::Provisioning.ensure_for!(integration)
+    if trigger
+      create(:trigger_binding, project: integration.project, workflow: create(:workflow, scope: integration.project),
+                               created_by: integration.project.owner, event_type: "tracker.issue.status_changed")
+    end
+    integration
+  end
+
+  def deliver_tracker_event(event, payload, delivery_id)
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = event
+    @request.headers["X-GitHub-Delivery"] = delivery_id
+    post_raw(payload)
+  end
 
   def github_connection(project, user, installation_id)
     integration = build(:integration, :github, :active, company: project.company, project: project, connected_by: user)

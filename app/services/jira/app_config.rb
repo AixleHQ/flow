@@ -18,16 +18,6 @@ module Jira
       Settings.jira&.webhook_base_url.presence || "#{Settings.protocol}://#{Settings.domain}"
     end
 
-    # Atlassian accepts a webhook to a host it cannot reach and then fails every
-    # delivery in silence, so a loopback or private host registers none.
-    def webhooks_enabled?
-      host = URI.parse(webhook_base_url.to_s).host.to_s
-      return false unless host.include?(".")
-      return false if host.end_with?(".local", ".internal", ".localdomain")
-
-      !host.match?(/\A(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/)
-    rescue URI::InvalidURIError
-      false
-    end
+    def webhooks_enabled? = Trackers.public_webhook_url?(webhook_base_url)
   end
 end

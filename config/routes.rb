@@ -58,6 +58,7 @@ Rails.application.routes.draw do
   # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
   post "/webhooks/in/:slug", to: "webhooks/ingress#receive", as: :webhook_ingress
   post "/webhooks/trackers/app/jira", to: "webhooks/trackers#receive_app", as: :tracker_app_webhook
+  post "/webhooks/trackers/app/linear", to: "webhooks/trackers#receive_linear_app", as: :tracker_linear_app_webhook
   post "/webhooks/trackers/:endpoint_token", to: "webhooks/trackers#receive", as: :tracker_webhook
 
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
@@ -411,6 +412,8 @@ Rails.application.routes.draw do
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
     # The one redirect URI registered on Aixle's Atlassian OAuth app.
     get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
+    # The one redirect URI registered on Aixle's Linear OAuth app.
+    get "integrations/linear/oauth/callback", to: "integrations/linear_oauth#callback", as: :linear_oauth_callback
     # Redirect URI on Aixle's Entra application for an administrator's sign-in.
     get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
                                                     as: :azure_devops_oauth_callback
@@ -532,10 +535,16 @@ Rails.application.routes.draw do
               # that lists what a credential can see before it is saved.
               get :jira_oauth_start
               post :jira_inspect
+              # Linear: the OAuth app redirect, and the API-key check that
+              # lists the teams a key can see before it is saved.
+              get :linear_oauth_start
+              post :linear_inspect
             end
             member do
               post :test_connection
               get :jira_projects
+              get :github_projects
+              get :linear_teams
               get :jira_webhook
             end
           end

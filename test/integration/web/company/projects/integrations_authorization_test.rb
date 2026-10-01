@@ -93,6 +93,36 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     end
   end
 
+  test "linear_oauth_start is a project write (redirects to Linear)" do
+    with_linear_oauth_app
+    assert_project_write do
+      get linear_oauth_start_company_project_integrations_path(@project)
+    end
+  end
+
+  # A missing key is refused in the body, after authorization passed.
+  test "linear_inspect is a project write" do
+    assert_project_write(allowed: :unprocessable_content) do
+      post linear_inspect_company_project_integrations_path(@project), params: {}, as: :json
+    end
+  end
+
+  test "linear_teams is a project write" do
+    stub_linear!
+    linear = create(:integration, :linear, :active, project: @project, company: @company, connected_by: @owner)
+    assert_project_write(allowed: :success) do
+      get linear_teams_company_project_integration_path(@project, linear), as: :json
+    end
+  end
+
+  test "github_projects is a project write" do
+    stub_github_projects!
+    github = create(:integration, :github_projects, :active, project: @project, company: @company, connected_by: @owner)
+    assert_project_write(allowed: :success) do
+      get github_projects_company_project_integration_path(@project, github), as: :json
+    end
+  end
+
   test "azure_devops_sign_in is a project write (redirects to Microsoft)" do
     with_azure_devops_enabled
     stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/git/repositories})

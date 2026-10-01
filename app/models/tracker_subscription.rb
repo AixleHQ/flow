@@ -13,7 +13,8 @@ class TrackerSubscription < ApplicationRecord
   encryption_key :integrations_key
   encrypted_column :encrypted_secret
 
-  enumerize :strategy, in: %i[manual api], predicates: true
+  # `app`: the provider's own app delivers (the GitHub App, Linear's OAuth app), so there is nothing to register.
+  enumerize :strategy, in: %i[manual api app], predicates: true
   enumerize :status, in: %i[pending active failing expired disabled], default: :pending, predicates: true, scope: true
 
   belongs_to :integration

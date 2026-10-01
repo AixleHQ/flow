@@ -48,6 +48,35 @@ describe('TrackersContent', () => {
     expect(within(legacy).getByText('Connection inactive')).toBeInTheDocument();
   });
 
+  it('names each provider as its trackers are known', () => {
+    renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[
+          buildProjectTracker({ id: 7, name: 'Roadmap', handle: 'roadmap', provider: 'github', primary: false }),
+          buildProjectTracker({
+            id: 8,
+            name: 'Engineering',
+            handle: 'engineering',
+            provider: 'linear',
+            primary: false,
+          }),
+        ]}
+        availableScopes={[]}
+        basePath={basePath}
+      />,
+    );
+
+    expect(within(screen.getByRole('row', { name: /^Roadmap/ })).getByText('GitHub Projects')).toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /^Engineering/ })).getByText('Linear')).toBeInTheDocument();
+  });
+
+  it('points an empty page at every way to get a tracker', () => {
+    renderPage(<TrackersContent projectId={7} trackers={[]} availableScopes={[]} basePath={basePath} />);
+
+    expect(screen.getByText(/pick GitHub Projects on a GitHub connection/)).toBeInTheDocument();
+  });
+
   it('makes another tracker primary and toggles read-only through the tracker endpoint', async () => {
     renderPage(
       <TrackersContent

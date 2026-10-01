@@ -124,6 +124,7 @@
               "azure_devops",
               "coder",
               "jira",
+              "linear",
               "tracker"
             ]
           },
@@ -667,6 +668,7 @@
                   "azure_devops",
                   "coder",
                   "jira",
+                  "linear",
                   "tracker"
                 ]
               },

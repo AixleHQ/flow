@@ -3,7 +3,7 @@
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
   def index
     integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by, :azure_devops_installation)
+                              .includes(:connected_by, :azure_devops_installation, :tracker_subscriptions)
                               .order(created_at: :desc)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
@@ -12,6 +12,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       azure_devops: azure_devops_props,
       github: github_props,
       jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
+      linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       slack: { enabled: Slack::Oauth.enabled? }
     }
   end
@@ -25,6 +26,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when "coder" then create_coder
     when "azure_devops" then create_azure_devops
     when "jira" then create_jira
+    when "linear" then create_linear
     else
       redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{params[:provider]}"
     end
@@ -41,6 +43,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # or its pool settings.
     return update_azure_devops(integration) if integration.azure_devops?
     return update_jira(integration) if integration.jira?
+    return update_linear(integration) if integration.linear?
+    return update_github_projects(integration) if integration.github? && params.key?(:github_project_ids)
     return replace_gitlab_token(integration) if integration.gitlab?
     return replace_coder_token(integration) if params.key?(:session_token)
 
@@ -76,6 +80,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     integration = Integration.for_project(current_project).find(params[:id])
     service_class = {
       "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
+      "linear" => Linear::IntegrationService,
       "github" => Github::IntegrationService, "gitlab" => Gitlab::IntegrationService,
       "coder" => Coder::IntegrationService
     }[integration.provider.to_s]
@@ -207,6 +212,45 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       events: [ "Issue: created", "Issue: updated", "Comment: created" ],
       jql: keys.any? ? "project IN (#{keys.join(', ')})" : nil, lastEventAt: subscription.last_event_at
     }
+  end
+
+  # Linear through Aixle's OAuth app, which a workspace admin installs.
+  def linear_oauth_start
+    unless Linear::AppConfig.oauth_enabled?
+      return redirect_to company_project_integrations_path(current_project), alert: "Linear's OAuth app is not configured"
+    end
+
+    # allow_other_host: linear.app, built from deployment Settings.
+    redirect_to Linear::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
+  end
+
+  # Who an API key acts as and the teams it can see, before anything is saved.
+  def linear_inspect
+    inspection = linear_service.inspect_api_key(api_key: params[:api_key].to_s)
+    identity = inspection.identity
+    render json: { identity: { id: identity[:id], name: identity[:name] }, organization: identity[:organization],
+                   teams: inspection.teams }
+  rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # The teams a Linear connection can see — the picker that finishes an OAuth
+  # connection, or changes one.
+  def linear_teams
+    integration = Integration.for_project(current_project).where(provider: :linear).find(params[:id])
+    render json: { teams: linear_service.available_teams(integration) }
+  rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # The organization projects a GitHub App connection can put on the Trackers
+  # page, and the ones it already covers.
+  def github_projects
+    integration = Integration.for_project(current_project).where(provider: :github).find(params[:id])
+    render json: { projects: github_service.available_projects(integration),
+                   selected: Array(integration.settings.to_h["github_projects"]).pluck("id") }
+  rescue Trackers::Error, Github::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
   end
 
   # Kick off a GitHub App installation for this project. The GitHub App "Setup URL"
@@ -355,6 +399,42 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   def coder_service
     Coder::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  def github_service
+    Github::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  def update_github_projects(integration)
+    github_service.configure_projects(integration, project_ids: Array(params[:github_project_ids]))
+    redirect_to company_project_integrations_path(current_project), notice: "GitHub projects saved"
+  rescue Trackers::Error, Github::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "GitHub Projects: #{e.message}"
+  end
+
+  def linear_service
+    Linear::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  def create_linear
+    integration = linear_service.connect_api_key(
+      api_key: params[:api_key].to_s, team_ids: Array(params[:team_ids]), dedicated_identity: params[:dedicated_identity]
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} connected"
+  rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "Linear connection failed: #{e.message}"
+  end
+
+  # The teams, and for an API key whether its account is kept for Aixle. The
+  # key itself is replaced by connecting again, which verifies it.
+  def update_linear(integration)
+    integration = linear_service.configure(
+      integration, team_ids: Array(params[:team_ids]),
+                   dedicated_identity: params.key?(:dedicated_identity) ? params[:dedicated_identity] : nil
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} saved"
+  rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "Linear: #{e.message}"
   end
 
   def jira_service

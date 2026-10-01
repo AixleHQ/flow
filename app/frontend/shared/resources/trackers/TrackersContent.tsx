@@ -38,7 +38,12 @@ interface Props {
 
 type TrackerChanges = { status: 'active' } | { primary: true } | { access: 'read_write' | 'read_only' };
 
-const PROVIDER_LABELS: Record<string, string> = { azure_devops: 'Azure Boards', jira: 'Jira' };
+const PROVIDER_LABELS: Record<string, string> = {
+  azure_devops: 'Azure Boards',
+  github: 'GitHub Projects',
+  jira: 'Jira',
+  linear: 'Linear',
+};
 
 const statusBadge = (tracker: ProjectTracker) => {
   if (tracker.status === 'detached')
@@ -137,7 +142,7 @@ export const TrackersContent = ({
           <EmptyState
             icon={<IconTicket size={22} />}
             title="No trackers"
-            description="Connect Azure DevOps or Jira on the Integrations page; each project a connection covers becomes a tracker here."
+            description="Connect Azure DevOps, Jira or Linear on the Integrations page, or pick GitHub Projects on a GitHub connection; each project or team a connection covers becomes a tracker here."
             action={addButton}
           />
         </Box>

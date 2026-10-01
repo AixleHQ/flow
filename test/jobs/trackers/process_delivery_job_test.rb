@@ -61,4 +61,28 @@ class Trackers::ProcessDeliveryJobTest < ActiveJob::TestCase
 
     assert_equal [ "skipped", { "reason" => "integration inactive" } ], [ delivery.reload.status, delivery.detail ]
   end
+
+  test "a GitHub comment heard by every tracked board starts a run only where the issue is" do
+    stub_github_projects!
+    integration = create(:integration, :github_projects, :active)
+    integration.settings["github_projects"] << { "id" => FakeGithub::ProjectsApi::OPS, "number" => 2, "title" => "Ops" }
+    integration.save!
+    Trackers::Provisioning.ensure_for!(integration)
+    project = integration.project
+    create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: project.owner,
+                             event_type: "tracker.comment.created", subject_policy: :none)
+    notifications = [ FakeGithub::ProjectsApi::ROADMAP, FakeGithub::ProjectsApi::OPS ].map do |scope|
+      Trackers::Notification.build(kind: :comment_created, scope_id: scope, issue_id: "I_kwDOissue1", comment_id: "IC_1",
+                                   comment_text: "Hey @aixle-flow", actor: { id: "2", name: "bo" })
+    end
+    delivery = TrackerDelivery.record(subscription: Trackers::Provider.for(integration).subscription, dedup_key: "gh-1",
+                                      notifications: notifications)
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+
+    Trackers::ProcessDeliveryJob.perform_now(delivery.id)
+
+    assert_equal [ "processed", { "outside_scope" => 1 } ], [ delivery.reload.status, delivery.detail ]
+    event = TriggerEvent.sole
+    assert_equal [ "Roadmap", true ], [ ProjectTracker.find(event.data.dig("tracker", "id")).name, event.data.dig("comment", "mentions_me") ]
+  end
 end

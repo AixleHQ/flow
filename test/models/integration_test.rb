@@ -238,9 +238,8 @@ class IntegrationTest < ActiveSupport::TestCase
     assert_equal %w[github gitlab linear coder slack azure_devops jira], Integration.provider.values.map(&:to_s)
   end
 
-  test "connectable providers are provider values, and linear is not one of them" do
+  test "connectable providers are provider values" do
     assert_empty Integration::CONNECTABLE_PROVIDERS - Integration.provider.values
-    assert_not_includes Integration::CONNECTABLE_PROVIDERS, "linear"
   end
 
   test "status enumerize values" do
