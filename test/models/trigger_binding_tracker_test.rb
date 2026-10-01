@@ -13,7 +13,7 @@ class TriggerBindingTrackerTest < ActiveSupport::TestCase
   end
 
   def binding(**attributes)
-    build(:trigger_binding, project: @project, workflow: @workflow, event_type: "tracker.issue.created", **attributes)
+    build(:trigger_binding, **{ project: @project, workflow: @workflow, event_type: "tracker.issue.created" }.merge(attributes))
   end
 
   test "a tracker binding may name only an attached tracker of its own project" do
@@ -21,6 +21,31 @@ class TriggerBindingTrackerTest < ActiveSupport::TestCase
 
     @tracker.detach!
     refute_predicate binding(project_tracker: @tracker), :valid?
+  end
+
+  test "a binding keeps the tracker it names through a detach, so it stays editable without widening" do
+    kept = binding(project_tracker: @tracker).tap(&:save!)
+    elsewhere = binding.tap(&:save!)
+    @tracker.detach!
+
+    assert kept.reload.update(aixle_changes: "always", filter_predicate: { "issue.type" => "Bug" })
+    assert_equal @tracker.id, kept.project_tracker_id
+    refute elsewhere.update(project_tracker: @tracker)
+    assert_includes elsewhere.errors[:project_tracker], "must be an attached tracker of this project"
+  end
+
+  test "a workflow takes a tracker trigger once: a copy would start it twice per event" do
+    column = { "change.to.name" => { "op" => "in", "value" => [ "Ready for AI" ] } }
+    original = binding(project_tracker: @tracker, filter_predicate: column).tap(&:save!)
+
+    copy = binding(project_tracker: @tracker, filter_predicate: column.deep_dup)
+    refute_predicate copy, :valid?
+    assert_includes copy.errors[:workflow], "already has a trigger for this tracker event with the same conditions"
+
+    assert binding(project_tracker: @tracker, filter_predicate: { "change.to.name" => { "op" => "in", "value" => [ "Review" ] } }).valid?
+    assert binding(filter_predicate: column).valid?, "any tracker is a different trigger"
+    assert binding(project_tracker: @tracker, filter_predicate: column, workflow: create(:workflow, scope: @project)).valid?
+    assert original.update(aixle_changes: "always"), "saving the original is not a copy of itself"
   end
 
   test "a binding scoped to one tracker matches only that tracker's events" do

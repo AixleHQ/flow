@@ -54,6 +54,18 @@ class ProjectTrackerTest < ActiveSupport::TestCase
     refute_includes ProjectTracker.usable, second
   end
 
+  test "mentions are recognised once the connection knows its own account in the tracker" do
+    azure = create(:project_tracker, integration: @integration)
+    refute_predicate azure, :recognizes_mentions?
+    @integration.update!(settings: @integration.settings.merge("tracker_identity" => { "id" => "me-1", "name" => "Aixle" }))
+    assert_predicate azure.reload, :recognizes_mentions?
+
+    service_account = create(:integration, :jira, :active)
+    assert_predicate create(:project_tracker, integration: service_account, external_scope_id: "10000"), :recognizes_mentions?
+    person = create(:integration, :jira_oauth, :active)
+    refute_predicate create(:project_tracker, integration: person, external_scope_id: "10000"), :recognizes_mentions?
+  end
+
   test "a tracker is usable only while it is active and its connection is active" do
     tracker = create(:project_tracker, integration: @integration)
     assert tracker.usable?

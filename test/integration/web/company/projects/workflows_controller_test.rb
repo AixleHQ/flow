@@ -51,6 +51,18 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_inertia_page "Projects/Workflows/BuilderPage"
   end
 
+  test "builder lists every tracker, detached ones too, and whether each recognises a mention of Aixle" do
+    integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    create(:project_tracker, integration: integration, handle: "boards", status: "detached")
+    wf = create(:workflow, scope: @project)
+
+    get builder_company_project_workflow_path(@project, wf)
+
+    assert_inertia_props do |props|
+      props[:trackers].map { |t| [ t[:handle], t[:status], t[:mentionsRecognized] ] } == [ [ "boards", "detached", false ] ]
+    end
+  end
+
   # The picker is the only way to put an asset on a workflow step, so a company
   # asset missing here is invisible even though every other surface offers it and
   # the step would happily mount it.

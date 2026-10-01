@@ -426,7 +426,11 @@ operand, so `labels contains "ai"` would also match `"main"`.
   with no default.
 - **`project_tracker_id`** selects one tracker. `null` means any tracker in the project, which is
   what a migration period wants (§8). Validation: the tracker belongs to the binding's project and
-  is not detached.
+  is not detached when the binding is created on it or moved to it. A binding whose tracker is
+  detached later keeps it and stays editable; it does not fire, because a detached tracker
+  publishes no events, and fires again once the tracker is attached again.
+- **One per workflow**: a workflow cannot hold two tracker bindings with the same event type,
+  tracker and filter, since every matching binding starts its own run.
 - **Filters** are an ordinary `filter_predicate`. Examples:
   `{"change.to.name": {"op": "in", "value": ["Ready for AI"]}}`,
   `{"change.to.category": "done"}`, `{"issue.type": "Bug"}`,
@@ -554,7 +558,8 @@ them. The lightest adoption step is **one column**: the customer adds a status s
 "Ready for AI" to the board, and moving a ticket there starts a workflow.
 
 - **Setup.** "Connect a board column" on the project's Trackers page is a three-step shortcut:
-  pick the tracker, pick the column (statuses from `describe`), pick the workflow. It creates an
+  pick the tracker, pick the column (statuses from `describe`; a typed name only when they cannot
+  be read, since the filter matches it exactly), pick the workflow. It creates an
   ordinary `tracker.issue.status_changed` binding with `change.to.name in [column]`,
   `find_or_create_task` and `aixle_changes: ignore`. Nothing about it is special afterwards; it
   can be edited like any trigger. A marketplace template ("Tracker intake") ships the same thing
@@ -719,8 +724,9 @@ Example: bugs live in YouTrack and product work in Jira.
 5. **Relink** where it matters. A board task can hold links to the Jira issue and the imported
    YouTrack issue. `tracker_link_task` (or a one-off script using the importer's key mapping) adds
    the second link. Identity mapping between trackers is not automatic.
-6. **Detach** Jira. Its triggers are disabled, its links stay visible read-only on the tasks, and
-   its connection can be disconnected.
+6. **Detach** Jira. Its triggers stop firing (they keep the tracker, and fire again if it is
+   attached again), its links stay visible read-only on the tasks, and its connection can be
+   disconnected.
 
 ## 9. Platform integrations: Azure DevOps and GitHub
 

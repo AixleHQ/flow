@@ -61,6 +61,30 @@ class Web::Company::Projects::TrackersControllerTest < ActionDispatch::Integrati
     assert @tracker.reload.active?
   end
 
+  test "attaching a tracker its connection no longer covers says why instead of failing" do
+    @tracker.detach!
+    @integration.update!(settings: @integration.settings.merge("azure_project_ids" => [ @second ]))
+
+    patch company_project_tracker_path(@project, @tracker), params: { tracker: { status: "active" } }
+
+    assert_redirected_to company_project_trackers_path(@project)
+    assert_predicate @tracker.reload, :detached?
+    follow_redirect!
+    assert_inertia_props do |props|
+      assert_match(/no longer covers Customer Platform\. Add it to the connection on the Integrations page/, props[:errors][:status])
+    end
+  end
+
+  test "a handle another tracker has is refused with a readable reason" do
+    create(:project_tracker, integration: @integration, external_scope_id: @second, handle: "ops")
+
+    patch company_project_tracker_path(@project, @tracker), params: { tracker: { handle: "ops" } }
+
+    assert_equal "boards", @tracker.reload.handle
+    follow_redirect!
+    assert_inertia_props { |props| assert_equal "Handle has already been taken", props[:errors][:handle] }
+  end
+
   test "statuses lists the tracker's board columns for the pickers" do
     with_azure_devops_enabled
     stub_azure_devops!(integration: @integration)

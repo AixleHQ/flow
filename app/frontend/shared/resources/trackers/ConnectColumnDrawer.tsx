@@ -1,4 +1,4 @@
-import { Alert, Autocomplete, Button, Select, Stack, Text } from '@mantine/core';
+import { Alert, Button, Select, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useState } from 'react';
 
@@ -8,6 +8,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
+import { mentionBlocker } from './mentions';
 import { useTrackerStatuses } from './useTrackerStatuses';
 
 export interface IntakeOption {
@@ -28,7 +29,11 @@ type Entry = 'status' | 'mention';
 // The one-column intake (docs/design/task-tracker-integrations.md §6.8): an
 // ordinary tracker trigger, set up in three choices.
 export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumns, onClose }: Props) => {
-  const statuses = useTrackerStatuses(projectId, tracker?.id ?? null);
+  const board = useTrackerStatuses(projectId, tracker?.id ?? null);
+  const mentionReason = tracker ? mentionBlocker(tracker) : null;
+  // The trigger matches the column's name exactly, so typing one is the fallback
+  // for a board whose columns could not be read.
+  const typeColumn = board.failed || (!board.loading && board.statuses.length === 0);
   const [entry, setEntry] = useState<Entry>('status');
   const [status, setStatus] = useState('');
   const [workflowId, setWorkflowId] = useState<string | null>(null);
@@ -45,7 +50,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
     setError(null);
   }, [tracker, workflows, boardColumns]);
 
-  const ready = Boolean(workflowId && columnId && (entry === 'mention' || status.trim()));
+  const ready = Boolean(workflowId && columnId && (entry === 'mention' ? !mentionReason : status.trim()));
 
   const submit = async () => {
     if (!tracker || !workflowId) return;
@@ -100,25 +105,38 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
         {error && <Alert color="red">{error}</Alert>}
         <Select
           label="Start a workflow when"
+          description={mentionReason ? `A mention cannot start a workflow yet. ${mentionReason}` : undefined}
           data={[
             { value: 'status', label: 'An issue moves to a column' },
-            { value: 'mention', label: 'Aixle is mentioned in a comment' },
+            { value: 'mention', label: 'Aixle is mentioned in a comment', disabled: Boolean(mentionReason) },
           ]}
           value={entry}
           onChange={(v) => setEntry((v as Entry) ?? 'status')}
           allowDeselect={false}
         />
-        {entry === 'status' && (
-          <Autocomplete
-            label="Column"
-            description="A column on the tracker's board. Add one such as “Ready for AI” for Aixle."
-            placeholder="Ready for AI"
-            data={statuses}
-            value={status}
-            onChange={setStatus}
-            withAsterisk
-          />
-        )}
+        {entry === 'status' &&
+          (typeColumn ? (
+            <TextInput
+              label="Column"
+              description="Aixle could not read the columns of the tracker's board, so this name is not checked. Type it exactly as the board shows it, including case."
+              placeholder="Ready for AI"
+              value={status}
+              onChange={(e) => setStatus(e.currentTarget.value)}
+              withAsterisk
+            />
+          ) : (
+            <Select
+              label="Column"
+              description="A column of the tracker's board. Missing one such as “Ready for AI”? Add it on the board, then open this again."
+              placeholder={board.loading ? 'Loading the board’s columns…' : 'Pick a column'}
+              data={board.statuses}
+              value={status || null}
+              onChange={(v) => setStatus(v ?? '')}
+              disabled={board.loading}
+              searchable
+              withAsterisk
+            />
+          ))}
         <Select
           label="Workflow"
           data={workflows.map((w) => ({ value: w.id.toString(), label: w.name }))}

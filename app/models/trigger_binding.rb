@@ -50,6 +50,9 @@ class TriggerBinding < ApplicationRecord
   validate :slack_command_not_reserved
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
+  validate :tracker_binding_not_duplicated, if: -> {
+    tracker_event? && (new_record? || will_save_change_to_filter_predicate? || will_save_change_to_project_tracker_id?)
+  }
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
@@ -126,10 +129,25 @@ class TriggerBinding < ApplicationRecord
     end
   end
 
+  # A binding keeps the tracker it names through a detach, so it stays editable
+  # without being widened to any tracker; it just cannot be moved onto one.
   def project_tracker_in_project
-    return if project_tracker && project_tracker.project_id == project_id && !project_tracker.detached?
+    return if project_tracker && project_tracker.project_id == project_id &&
+              (!project_tracker.detached? || !will_save_change_to_project_tracker_id?)
 
     errors.add(:project_tracker, "must be an attached tracker of this project")
+  end
+
+  # Every binding a tracker event matches starts its own run, so a copy would
+  # start the workflow twice per event.
+  def tracker_binding_not_duplicated
+    copies = TriggerBinding.where(project_id: project_id, workflow_id: workflow_id, event_type: event_type,
+                                  project_tracker_id: project_tracker_id)
+                           .where("filter_predicate = ?::jsonb", filter_predicate.to_json)
+    copies = copies.where.not(id: id) if persisted?
+    return unless copies.exists?
+
+    errors.add(:workflow, "already has a trigger for this tracker event with the same conditions")
   end
 
   def ensure_tracker_event_delivery

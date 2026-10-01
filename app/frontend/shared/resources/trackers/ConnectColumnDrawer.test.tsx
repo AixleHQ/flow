@@ -41,7 +41,9 @@ describe('ConnectColumnDrawer', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('combobox', { name: 'Column' }));
+    const column = screen.getByRole('combobox', { name: 'Column' });
+    await waitFor(() => expect(column).toBeEnabled());
+    await userEvent.click(column);
     await userEvent.click(await screen.findByRole('option', { name: 'Ready for AI' }));
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
@@ -57,6 +59,55 @@ describe('ConnectColumnDrawer', () => {
       subject_column_id: '9',
       aixle_changes: 'ignore',
     });
+  });
+
+  it("falls back to a typed column, and warns that it is not checked, when the board's columns cannot be read", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init) =>
+        Promise.resolve(init?.method === 'POST' ? json({ id: 1 }, 201) : json({ error: 'Forbidden' }, 422)),
+      );
+    renderPage(
+      <ConnectColumnDrawer
+        projectId={7}
+        tracker={buildProjectTracker()}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const column = await screen.findByRole('textbox', { name: 'Column' });
+    expect(screen.getByText(/could not read the columns of the tracker's board/)).toBeInTheDocument();
+    await userEvent.type(column, 'Ready for AI');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' })),
+    );
+    const post = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST');
+    expect(JSON.parse((post?.[1] as RequestInit).body as string).trigger.filter_predicate).toEqual({
+      'change.to.name': { op: 'in', value: ['Ready for AI'] },
+    });
+  });
+
+  it('does not offer a mention where Aixle cannot recognise one, and says why', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(json({ statuses: [] })));
+    renderPage(
+      <ConnectColumnDrawer
+        projectId={7}
+        tracker={buildProjectTracker({ provider: 'jira', mentionsRecognized: false })}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/This Jira connection acts as a person/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: 'Start a workflow when' }));
+    expect(await screen.findByRole('option', { name: 'Aixle is mentioned in a comment' })).toHaveAttribute(
+      'data-combobox-disabled',
+    );
   });
 
   it('shows why the server refused, such as a workflow that cannot run unattended', async () => {

@@ -53,8 +53,11 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.map { |c|
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
       } || [],
-      trackers: ProjectTracker.for_project(current_project).where.not(status: :detached).order(:created_at)
-                              .map { |t| { id: t.id, handle: t.handle, name: t.name, provider: t.provider } },
+      # Detached ones too: a trigger keeps the tracker it names through a detach.
+      trackers: ProjectTracker.for_project(current_project).includes(:integration).order(:created_at).map { |t|
+        { id: t.id, handle: t.handle, name: t.name, provider: t.provider, status: t.status,
+          mentions_recognized: t.recognizes_mentions? }
+      },
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
       agents: InertiaRails.defer(group: "resources") {

@@ -796,5 +796,116 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         enabled: true,
       });
     });
+
+    it('keeps conditions set through the API that the form has no field for, and lists them', async () => {
+      const fetchSpy = installFetch();
+      const editing: Trigger = {
+        id: 22,
+        kind: 'tracker',
+        event_type: 'tracker.issue.status_changed',
+        project_tracker_id: null,
+        aixle_changes: 'ignore',
+        subject_policy: 'none',
+        filter_predicate: {
+          'change.to.name': { op: 'in', value: ['Ready for AI'] },
+          'issue.type': 'Bug',
+          'issue.labels': { op: 'includes', value: 'ai' },
+        },
+        enabled: true,
+      };
+      renderPage(<TriggerFormPanel {...baseProps({ editing, trackers })} />);
+
+      expect(screen.getByText('issue.type = "Bug"')).toBeInTheDocument();
+      expect(screen.getByText('issue.labels includes "ai"')).toBeInTheDocument();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Text contains' }), 'login');
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' })),
+      );
+      expect(bodyOf(fetchSpy, 'PATCH').trigger.filter_predicate).toEqual({
+        'change.to.name': { op: 'in', value: ['Ready for AI'] },
+        'issue.type': 'Bug',
+        'issue.labels': { op: 'includes', value: 'ai' },
+        text: { op: 'contains', value: 'login' },
+      });
+    });
+
+    it('defaults to a project-level run where the project has no board', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'tracker', trackers, columns: [] })} />);
+
+      expect(screen.getByDisplayValue('None — project-level run')).toBeInTheDocument();
+      expect(screen.getByText('This project has no board, so a run cannot get a new task.')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' })),
+      );
+      const trigger = bodyOf(fetchSpy, 'POST').trigger;
+      expect(trigger.subject_policy).toBe('none');
+      expect(trigger).not.toHaveProperty('subject_column_id');
+    });
+
+    it('keeps a trigger on its detached tracker and says it does not fire', async () => {
+      const fetchSpy = installFetch();
+      const editing: Trigger = {
+        id: 23,
+        kind: 'tracker',
+        event_type: 'tracker.issue.created',
+        project_tracker_id: 6,
+        aixle_changes: 'ignore',
+        subject_policy: 'none',
+        filter_predicate: {},
+        enabled: true,
+      };
+      const withDetached = [
+        ...trackers,
+        { id: 6, handle: 'legacy', name: 'Legacy', provider: 'jira', status: 'detached' },
+      ];
+      renderPage(<TriggerFormPanel {...baseProps({ editing, trackers: withDetached })} />);
+
+      expect(screen.getByDisplayValue('Legacy (legacy) — detached')).toBeInTheDocument();
+      expect(screen.getByText(/This tracker is detached, so the trigger does not fire/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' })),
+      );
+      expect(bodyOf(fetchSpy, 'PATCH').trigger.project_tracker_id).toBe('6');
+    });
+
+    it('is not offered when every tracker is detached', async () => {
+      renderPage(
+        <TriggerFormPanel
+          {...baseProps({
+            trackers: [{ id: 6, handle: 'legacy', name: 'Legacy', provider: 'jira', status: 'detached' }],
+          })}
+        />,
+      );
+      await userEvent.click(screen.getByDisplayValue('Task enters column'));
+      expect(screen.queryByRole('option', { name: 'Task tracker event' })).not.toBeInTheDocument();
+    });
+
+    it('says when a mention cannot start the trigger yet', () => {
+      const editing: Trigger = {
+        id: 24,
+        kind: 'tracker',
+        event_type: 'tracker.comment.created',
+        project_tracker_id: 5,
+        aixle_changes: 'ignore',
+        subject_policy: 'none',
+        filter_predicate: { 'comment.mentions_me': true },
+        enabled: true,
+      };
+      installFetch();
+      renderPage(
+        <TriggerFormPanel {...baseProps({ editing, trackers: [{ ...trackers[0], mentionsRecognized: false }] })} />,
+      );
+
+      expect(
+        screen.getByText(/This trigger cannot fire yet\. Aixle learns its own Azure DevOps account/),
+      ).toBeInTheDocument();
+    });
   });
 });

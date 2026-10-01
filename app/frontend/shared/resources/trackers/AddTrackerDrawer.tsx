@@ -21,12 +21,12 @@ interface Props {
   availableScopes: AvailableScopeGroup[];
 }
 
-const HANDLE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+export const HANDLE_FORMAT = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 const schema = z.object({
   integrationId: z.string().min(1, 'Pick a connection'),
   externalScopeId: z.string().min(1, 'Pick a project'),
-  handle: z.string().refine((v) => v === '' || HANDLE.test(v), 'Lowercase letters, digits and dashes'),
+  handle: z.string().refine((v) => v === '' || HANDLE_FORMAT.test(v), 'Lowercase letters, digits and dashes'),
   readOnly: z.boolean(),
   primary: z.boolean(),
 });

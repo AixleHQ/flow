@@ -1,5 +1,5 @@
-import { router } from '@inertiajs/react';
-import { ActionIcon, Badge, Box, Button, Group, Table, Text, Tooltip } from '@mantine/core';
+import { Link, router } from '@inertiajs/react';
+import { ActionIcon, Anchor, Badge, Box, Button, Group, Table, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
@@ -7,6 +7,7 @@ import {
   IconLink,
   IconLock,
   IconLockOpen,
+  IconPencil,
   IconPlus,
   IconStar,
   IconTicket,
@@ -17,12 +18,14 @@ import { useState } from 'react';
 import type { ProjectTracker } from '@/types/generated';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { companyProjectIntegrationsPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { AddTrackerDrawer, type AvailableScopeGroup } from './AddTrackerDrawer';
 import { ConnectColumnDrawer, type IntakeOption } from './ConnectColumnDrawer';
+import { EditHandleDrawer } from './EditHandleDrawer';
 
 interface Props {
   projectId: number;
@@ -68,6 +71,7 @@ export const TrackersContent = ({
   const { canExecute } = useProjectPermissions();
   const [addOpen, setAddOpen] = useState(false);
   const [intakeFor, setIntakeFor] = useState<ProjectTracker | null>(null);
+  const [handleFor, setHandleFor] = useState<ProjectTracker | null>(null);
   const connectColumnBlocker =
     boardColumns.length === 0
       ? 'Add a board to this project first: the issue gets a task in one of its columns'
@@ -82,7 +86,8 @@ export const TrackersContent = ({
       {
         preserveScroll: true,
         onSuccess: () => notifications.show({ message, color: 'green' }),
-        onError: () => notifications.show({ message: 'Failed to update tracker', color: 'red' }),
+        onError: (errors) =>
+          notifications.show({ message: Object.values(errors)[0] ?? 'Failed to update tracker', color: 'red' }),
       },
     );
   };
@@ -92,8 +97,8 @@ export const TrackersContent = ({
       title: 'Detach tracker',
       children: (
         <Text size="sm">
-          Detach <b>{tracker.name}</b>? Agents stop reaching its issues. Nothing changes in the tracker, and you can
-          attach it again later.
+          Detach <b>{tracker.name}</b>? Agents stop reaching its issues, and its triggers stop firing until you attach
+          it again. Nothing changes in the tracker.
         </Text>
       ),
       labels: { confirm: 'Detach', cancel: 'Cancel' },
@@ -138,10 +143,19 @@ export const TrackersContent = ({
         </Box>
       ) : (
         <>
-          <Group mb="lg">
+          <Group mb="lg" justify="space-between">
             <ResourceCount>
               {trackers.length} {trackers.length === 1 ? 'tracker' : 'trackers'}
             </ResourceCount>
+            {canExecute && availableScopes.length === 0 && (
+              <Text fz={12} c="dimmed">
+                Each project a connection covers is a tracker here. To add one, add the project to its connection on{' '}
+                <Anchor component={Link} href={companyProjectIntegrationsPath(projectId)} fz={12}>
+                  Integrations
+                </Anchor>
+                .
+              </Text>
+            )}
           </Group>
           <ResourceTableShell>
             <Table highlightOnHover>
@@ -150,7 +164,7 @@ export const TrackersContent = ({
                   <ResourceTh>Tracker</ResourceTh>
                   <ResourceTh>Connection</ResourceTh>
                   <ResourceTh>Status</ResourceTh>
-                  <ResourceTh align="right" w={130}>
+                  <ResourceTh align="right" w={160}>
                     Actions
                   </ResourceTh>
                 </Table.Tr>
@@ -191,6 +205,16 @@ export const TrackersContent = ({
                       <Table.Td>
                         {canExecute && (
                           <Group gap={4} justify="flex-end" wrap="nowrap">
+                            <Tooltip label="Edit handle">
+                              <ActionIcon
+                                aria-label="Edit handle"
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setHandleFor(tracker)}
+                              >
+                                <IconPencil size={16} />
+                              </ActionIcon>
+                            </Tooltip>
                             {detached ? (
                               <Tooltip label="Attach again">
                                 <ActionIcon
@@ -279,6 +303,7 @@ export const TrackersContent = ({
         boardColumns={boardColumns}
         onClose={() => setIntakeFor(null)}
       />
+      <EditHandleDrawer tracker={handleFor} basePath={basePath} onClose={() => setHandleFor(null)} />
       <AddTrackerDrawer
         opened={addOpen}
         onClose={() => setAddOpen(false)}

@@ -108,6 +108,51 @@ describe('TrackersContent', () => {
     );
   });
 
+  it('says why attaching again was refused', async () => {
+    vi.mocked(router.patch).mockImplementationOnce((_url, _data, options) => {
+      (options as { onError?: (errors: Record<string, string>) => void }).onError?.({
+        status:
+          'Jira · acme no longer covers Legacy. Add it to the connection on the Integrations page, then attach it again.',
+      });
+    });
+    renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[buildProjectTracker({ id: 6, name: 'Legacy', status: 'detached', primary: false })]}
+        availableScopes={[]}
+        basePath={basePath}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Attach again' }));
+
+    expect(await screen.findByText(/no longer covers Legacy/)).toBeInTheDocument();
+  });
+
+  it("changes a tracker's handle", async () => {
+    renderPage(
+      <TrackersContent projectId={7} trackers={[buildProjectTracker()]} availableScopes={[]} basePath={basePath} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit handle' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit handle' });
+    const handle = within(dialog).getByRole('textbox', { name: 'Handle' });
+    await userEvent.clear(handle);
+    await userEvent.type(handle, 'Legacy Jira');
+    expect(within(dialog).getByText('Lowercase letters, digits and dashes')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Save handle' })).toBeDisabled();
+
+    await userEvent.clear(handle);
+    await userEvent.type(handle, 'legacy-jira');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save handle' }));
+
+    expect(router.patch).toHaveBeenLastCalledWith(
+      `${basePath}/5`,
+      { tracker: { handle: 'legacy-jira' } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
   it('offers adding a tracker only when a connection has an unmapped project and the user can write', () => {
     const { unmount } = renderPage(
       <TrackersContent projectId={7} trackers={[]} availableScopes={scopes} basePath={basePath} />,
@@ -118,6 +163,17 @@ describe('TrackersContent', () => {
     renderPage(<TrackersContent projectId={7} trackers={[]} availableScopes={[]} basePath={basePath} />);
     expect(screen.queryByRole('button', { name: 'Add tracker' })).not.toBeInTheDocument();
     expect(screen.getByText('No trackers')).toBeInTheDocument();
+  });
+
+  it('points to the Integrations page as the way to get another tracker when there is nothing to add', () => {
+    renderPage(
+      <TrackersContent projectId={7} trackers={[buildProjectTracker()]} availableScopes={[]} basePath={basePath} />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Integrations' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/integrations',
+    );
   });
 
   it('offers connecting a board column even before the project can use one, and says what is missing', async () => {
