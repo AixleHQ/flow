@@ -226,4 +226,21 @@ describe('Projects/Members/MembersPage', () => {
 
     expect(screen.queryByRole('button', { name: 'Make owner' })).not.toBeInTheDocument();
   });
+
+  it('asks before closing the add drawer over a picked user, and closes once the user discards', async () => {
+    renderAuthedPage(<MembersPage />, { props: baseProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Collaborator' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Add Collaborator' });
+    await userEvent.click(within(drawer).getByRole('combobox', { name: /select user/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Cy Outsider (cy@apollo.test)' }));
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(screen.getByRole('dialog', { name: 'Add Collaborator' })).toBeInTheDocument();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add Collaborator' })).not.toBeInTheDocument());
+    expect(router.post).not.toHaveBeenCalled();
+  });
 });

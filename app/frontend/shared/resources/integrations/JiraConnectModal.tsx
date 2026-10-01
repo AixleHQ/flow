@@ -25,6 +25,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 export interface JiraProps {
   oauthEnabled: boolean;
 }
@@ -94,6 +96,9 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
     setError(null);
   }, [onClose]);
 
+  const dirty = siteUrl !== '' || clientId !== '' || clientSecret !== '' || projectIds.length > 0;
+  const requestClose = useConfirmClose(dirty, close);
+
   const check = useCallback(async () => {
     setError(null);
     setChecking(true);
@@ -136,7 +141,7 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
   }, [basePath, clientId, clientSecret, close, projectIds, siteUrl]);
 
   return (
-    <Modal opened={opened} onClose={close} title="Connect Jira" size="lg">
+    <Modal opened={opened} onClose={requestClose} title="Connect Jira" size="lg">
       <Stack gap="md">
         {jira.oauthEnabled && (
           <SegmentedControl
@@ -156,7 +161,7 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
               account you sign in with — use an account kept for Aixle if its changes should not appear as yours.
             </Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={requestClose}>
                 Cancel
               </Button>
               <Button component="a" href={`${basePath}/jira_oauth_start`}>
@@ -203,7 +208,7 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
               </>
             )}
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={requestClose}>
                 Cancel
               </Button>
               {inspection ? (
@@ -266,6 +271,15 @@ export const JiraProjectsModal = ({ integration, onClose, basePath }: ProjectsPr
     };
   }, [basePath, cloudId, integration, pickSite]);
 
+  const covered = integration?.jiraProjects.map((p) => p.id) ?? [];
+  const dirty =
+    !!integration &&
+    (cloudId !== null ||
+      dedicated !== integration.jiraDedicatedIdentity ||
+      projectIds.length !== covered.length ||
+      projectIds.some((id) => !covered.includes(id)));
+  const requestClose = useConfirmClose(dirty, onClose);
+
   const save = useCallback(() => {
     if (!integration) return;
     setSaving(true);
@@ -286,7 +300,7 @@ export const JiraProjectsModal = ({ integration, onClose, basePath }: ProjectsPr
   }, [basePath, cloudId, dedicated, integration, onClose, projectIds]);
 
   return (
-    <Modal opened={!!integration} onClose={onClose} title="Jira projects" size="lg">
+    <Modal opened={!!integration} onClose={requestClose} title="Jira projects" size="lg">
       <Stack gap="md">
         {pickSite && (
           <Select
@@ -325,7 +339,7 @@ export const JiraProjectsModal = ({ integration, onClose, basePath }: ProjectsPr
           />
         )}
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
+          <Button variant="default" onClick={requestClose}>
             Cancel
           </Button>
           <Button onClick={save} loading={saving} disabled={!projects || projectIds.length === 0}>

@@ -660,7 +660,7 @@ describe('IntegrationsContent', () => {
       expect(router.post).not.toHaveBeenCalled();
     });
 
-    it('cancelling the Coder modal closes it and clears the entered fields', async () => {
+    it('cancelling the Coder modal asks first, then closes it and clears the entered fields', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
@@ -670,12 +670,45 @@ describe('IntegrationsContent', () => {
       await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
+      const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+      expect(screen.getByRole('dialog', { name: /Connect Coder/i })).toBeInTheDocument();
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
       await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect Coder/i })).not.toBeInTheDocument());
       expect(router.post).not.toHaveBeenCalled();
 
       // Reopening yields a pristine form: closeCoderModal ran resetCoderForm on cancel.
       const reopened = await openCoderModal();
       expect(within(reopened).getByPlaceholderText('https://coder.example.com')).toHaveValue('');
+    });
+
+    it('closes an untouched Coder modal without asking, even with Advanced opened', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.click(within(dialog).getByText('Advanced'));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect Coder/i })).not.toBeInTheDocument());
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    });
+
+    it('treats a changed lock TTL as unsaved input', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.click(within(dialog).getByText('Advanced'));
+      await userEvent.type(within(dialog).getByLabelText('Lock TTL (minutes)'), '0');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: /Connect Coder/i })).toBeInTheDocument();
     });
 
     it('surfaces the server error message in the dialog when the Coder connect fails', async () => {
@@ -714,6 +747,27 @@ describe('IntegrationsContent', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect GitLab/i })).not.toBeInTheDocument());
       expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it('asks before closing over a typed token, then closes and clears it on Discard', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+      await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-draft');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+
+      const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+      expect(screen.getByRole('dialog', { name: /Connect GitLab/i })).toBeInTheDocument();
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect GitLab/i })).not.toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      const reopened = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+      expect(within(reopened).getByPlaceholderText('glpat-...')).toHaveValue('');
     });
 
     it('pressing Enter in the token field submits the GitLab connection', async () => {
@@ -985,6 +1039,47 @@ describe('IntegrationsContent', () => {
       );
     });
 
+    it('closes the settings it opened with, untouched, without asking', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Coder settings/i })).not.toBeInTheDocument());
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    });
+
+    it('asks before closing over an edited setting, and closes on Discard', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+      await userEvent.type(within(dialog).getByLabelText('Machine name prefix'), '-eu');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+
+      const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+      expect(screen.getByRole('dialog', { name: /Coder settings/i })).toBeInTheDocument();
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Coder settings/i })).not.toBeInTheDocument());
+      expect(router.patch).not.toHaveBeenCalled();
+    });
+
     it('tests the connection and replaces its session token from the row', async () => {
       renderPage(
         <IntegrationsContent
@@ -1074,6 +1169,47 @@ describe('IntegrationsContent', () => {
       act(() => options?.onError?.({ personalAccessToken: 'GitLab rejected this token.' }));
 
       expect(within(dialog).getByText('GitLab rejected this token.')).toBeInTheDocument();
+    });
+
+    it('closes the replace-token dialog straight away while it is empty', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[gitlabIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for alice' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Replace token/i })).not.toBeInTheDocument());
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    });
+
+    it('asks before throwing away a pasted replacement token', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[gitlabIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for alice' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+      await userEvent.type(within(dialog).getByLabelText('Personal Access Token'), 'glpat-new');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+      expect(screen.getByRole('dialog', { name: /Replace token/i })).toBeInTheDocument();
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Replace token/i })).not.toBeInTheDocument());
+      expect(router.patch).not.toHaveBeenCalled();
     });
 
     it('offers no token actions to a viewer', () => {

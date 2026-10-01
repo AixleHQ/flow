@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildIntegration } from 'test/factories/integration';
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { JiraConnectModal, JiraProjectsModal, JiraWebhookModal } from './JiraConnectModal';
 
@@ -106,6 +106,35 @@ describe('JiraConnectModal', () => {
 
     expect(await screen.findByText('Atlassian refused the credential: access_denied')).toBeInTheDocument();
   });
+
+  it('asks before closing over a half-entered service account, and clears it once discarded', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPage(<JiraConnectModal opened onClose={onClose} basePath={BASE} jira={{ oauthEnabled: false }} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Jira site' }), 'acme.atlassian.net');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Connect Jira' })).toBeInTheDocument();
+
+    await user.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox', { name: 'Jira site' })).toHaveValue('');
+  });
+
+  it('closes without asking when nothing was entered', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPage(<JiraConnectModal opened onClose={onClose} basePath={BASE} jira={{ oauthEnabled: true }} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
 });
 
 describe('JiraProjectsModal', () => {
@@ -153,6 +182,62 @@ describe('JiraProjectsModal', () => {
 
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(router.patch).toHaveBeenCalledWith(`${BASE}/5`, { projectIds: ['10000', '10001'] }, expect.anything());
+  });
+
+  it('asks before closing over a changed project selection', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: { projects: PROJECTS } }));
+    const integration = jiraIntegration({
+      status: 'active',
+      jiraAuthMode: 'service_account',
+      jiraSites: [],
+      jiraProjects: [PROJECTS[0]],
+    });
+    renderPage(<JiraProjectsModal integration={integration} onClose={onClose} basePath={BASE} />);
+
+    await pickProject(user, 'Operations (OPS)');
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Jira projects' })).toBeInTheDocument();
+
+    await user.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a toggled dedicated-account flag as unsaved input', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: { projects: PROJECTS } }));
+    const integration = jiraIntegration({ status: 'active', jiraSites: [], jiraProjects: [PROJECTS[0]] });
+    renderPage(<JiraProjectsModal integration={integration} onClose={onClose} basePath={BASE} />);
+
+    await user.click(screen.getByRole('checkbox', { name: 'This Atlassian account is kept for Aixle' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an untouched connection without asking', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: { projects: PROJECTS } }));
+    const integration = jiraIntegration({
+      status: 'active',
+      jiraSites: [],
+      jiraProjects: [PROJECTS[0], PROJECTS[1]],
+      jiraDedicatedIdentity: true,
+    });
+    renderPage(<JiraProjectsModal integration={integration} onClose={onClose} basePath={BASE} />);
+
+    await screen.findByRole('combobox', { name: /Jira projects/ });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 });
 

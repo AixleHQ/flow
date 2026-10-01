@@ -1,6 +1,8 @@
 import { Center, Loader } from '@mantine/core';
+import { useState } from 'react';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { useCreateOptions } from './useCreateOptions';
@@ -18,12 +20,15 @@ interface Props {
  */
 export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
   const options = useCreateOptions(opened);
+  const [dirty, setDirty] = useState(false);
+  const requestClose = useConfirmClose(dirty, onClose);
 
   return (
-    <ResourceDrawer opened={opened} onClose={onClose} title="New session" bare>
+    <ResourceDrawer opened={opened} onClose={requestClose} title="New session" bare>
       {options ? (
         <SessionNewForm
           layout="drawer"
+          onDirtyChange={setDirty}
           projectId={projectId}
           agentModels={options.agentModels}
           agents={options.agents}

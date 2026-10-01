@@ -64,6 +64,7 @@ import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -154,6 +155,16 @@ const taskSchema = z.object({
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
+
+const EMPTY_TASK_FORM: TaskFormValues = {
+  title: '',
+  description: '',
+  taskType: 'not_specified',
+  priority: '',
+  assigneeId: null,
+  parentTaskId: null,
+  boardColumnId: '',
+};
 
 function normalizeTask(t: Task): Task {
   return {
@@ -427,16 +438,24 @@ const BoardPage = () => {
 
   const form = useForm<TaskFormValues>({
     validate: zodResolver(taskSchema),
-    initialValues: {
-      title: '',
-      description: '',
-      taskType: 'not_specified',
-      priority: '',
-      assigneeId: null,
-      parentTaskId: null,
-      boardColumnId: '',
-    },
+    initialValues: EMPTY_TASK_FORM,
   });
+
+  // The form's initial values are its dirty baseline and what reset() restores, so a column
+  // preset is written there rather than set as a change: otherwise a drawer opened from a column
+  // reads as unsaved before anything is typed.
+  const resetCreateForm = useCallback(
+    (boardColumnId = '') => {
+      form.setInitialValues({ ...EMPTY_TASK_FORM, boardColumnId });
+      form.reset();
+    },
+    [form],
+  );
+
+  const closeCreate = useCallback(() => {
+    setCreateOpen(false);
+    resetCreateForm();
+  }, [resetCreateForm]);
 
   // Epics available as a parent in the create drawer. Nesting is one level deep, so an epic
   // itself never gets a parent — the field is hidden when Type is Epic (see below). The list comes
@@ -464,8 +483,7 @@ const BoardPage = () => {
             },
           }),
         });
-        setCreateOpen(false);
-        form.reset();
+        closeCreate();
         setLocalTasks((prev) => [...prev, normalizeTask(created)]);
         // cable will confirm with authoritative server state
       } catch (error) {
@@ -473,7 +491,7 @@ const BoardPage = () => {
       }
       setLoading(false);
     },
-    [board, project.id, form, setLocalTasks],
+    [board, project.id, closeCreate, setLocalTasks],
   );
 
   const handleDeleteTask = useCallback(
@@ -495,9 +513,11 @@ const BoardPage = () => {
   });
 
   const openCreateForColumn = (columnId: number) => {
-    form.setFieldValue('boardColumnId', String(columnId));
+    resetCreateForm(String(columnId));
     setCreateOpen(true);
   };
+
+  const requestCloseCreate = useConfirmClose(form.isDirty(), closeCreate);
 
   const handleToggleCollapse = useCallback(
     (colId: number) => {
@@ -592,17 +612,15 @@ const BoardPage = () => {
       } else if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         searchInputRef.current?.focus();
-      } else if (e.key === 'Escape') {
-        if (bulkMode) {
-          exitBulkMode();
-          return;
-        }
-        closeTask();
+      } else if (e.key === 'Escape' && bulkMode && !(e.target as HTMLElement)?.closest?.('[role="dialog"]')) {
+        // Dialogs, the task drawer included, handle their own Escape and ask before discarding
+        // input. Acting on it here too would skip that question, or unmount the bulk Add tag prompt.
+        exitBulkMode();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTask, canExecute, bulkMode, exitBulkMode]);
+  }, [canExecute, bulkMode, exitBulkMode]);
 
   if (!board) {
     return (
@@ -1048,10 +1066,7 @@ const BoardPage = () => {
       {/* Create Task Drawer (AC-15) */}
       <Drawer
         opened={canExecute && createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          form.reset();
-        }}
+        onClose={requestCloseCreate}
         position="right"
         size={620}
         withCloseButton
@@ -1287,14 +1302,7 @@ const BoardPage = () => {
               flexShrink: 0,
             }}
           >
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                setCreateOpen(false);
-                form.reset();
-              }}
-            >
+            <Button variant="default" size="sm" onClick={requestCloseCreate}>
               Cancel
             </Button>
             <Button type="submit" size="sm" loading={loading}>

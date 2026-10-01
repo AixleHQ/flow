@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildProject } from 'test/factories/project';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
@@ -449,5 +449,71 @@ describe('Projects/Workflows/WorkflowsPage', () => {
       { workflow: { name: 'Release Flow', description: 'Ships on tag' } },
       expect.objectContaining({ preserveScroll: true }),
     );
+  });
+
+  // --- Closing over unsaved input ----------------------------------------------------------------
+  it('asks before closing the Edit modal over unsaved edits, and closes once they are discarded', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([workflow({ id: 3, name: 'Nightly Build' })]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit name & description' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /name/i }), ' v2');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(screen.getByRole('dialog', { name: 'Edit Workflow' })).toBeInTheDocument();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Workflow' })).not.toBeInTheDocument());
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit name & description' }));
+    const reopened = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+    expect(within(reopened).getByRole('textbox', { name: /name/i })).toHaveValue('Nightly Build');
+    await userEvent.click(within(reopened).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Workflow' })).not.toBeInTheDocument());
+  });
+
+  it('closes an untouched Edit modal, seeded with the workflow, without asking', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([workflow({ id: 3, name: 'Nightly Build' })]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit name & description' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+    expect(within(dialog).getByRole('textbox', { name: /name/i })).toHaveValue('Nightly Build');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Workflow' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('closes the Edit modal without asking once the edit is saved', async () => {
+    vi.mocked(router.patch).mockImplementationOnce((_url, _data, options) => {
+      (options as { onSuccess?: () => void }).onSuccess?.();
+    });
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([workflow({ id: 3, name: 'Nightly Build' })]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit name & description' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /name/i }), ' v2');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Workflow' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a New Workflow draft across a close, so closing it does not ask', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Workflow' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New Workflow' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /name/i }), 'Release Flow');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New Workflow' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Workflow' }));
+    const reopened = await screen.findByRole('dialog', { name: 'New Workflow' });
+    expect(within(reopened).getByRole('textbox', { name: /name/i })).toHaveValue('Release Flow');
   });
 });

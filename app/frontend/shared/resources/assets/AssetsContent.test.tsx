@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Asset, Folder } from '@/types/generated';
 import { answerFetch } from 'test/fetchStub';
-import { act, renderPage, screen, userEvent, within } from 'test/renderPage';
+import { act, fireEvent, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import { emitUppy } from 'test/uppyMock';
 
 import { AssetsContent, resolveAssetDrop } from './AssetsContent';
@@ -699,6 +699,52 @@ describe('AssetsContent', () => {
       id: 'ddd444-plan.txt',
       storage: 'cache',
       metadata: { filename: 'plan.txt' },
+    });
+  });
+
+  describe('closing the upload modal', () => {
+    const uploadDialog = () => screen.getByRole('dialog', { name: 'Upload Assets' });
+    const discardDialog = () => screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+
+    it('asks before discarding uploaded files that are waiting for Save, and clears them on Discard', async () => {
+      renderPage(<AssetsContent {...baseProps} assets={[]} />);
+      await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+      completeUpload([{ name: 'notes.md', key: 'cache/abc123-notes.md' }]);
+      await screen.findByRole('button', { name: /save 1 file/i });
+
+      await userEvent.keyboard('{Escape}');
+
+      const discard = await discardDialog();
+      expect(uploadDialog()).toBeInTheDocument();
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Upload Assets' })).not.toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+      expect(within(uploadDialog()).getByText(/click to select files or drag/i)).toBeInTheDocument();
+    });
+
+    it('asks before cancelling files that are still uploading', async () => {
+      renderPage(<AssetsContent {...baseProps} assets={[]} />);
+      await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+      fireEvent.drop(within(uploadDialog()).getByText(/click to select files or drag/i), {
+        dataTransfer: { files: [new File(['# notes'], 'notes.md', { type: 'text/markdown' })] },
+      });
+      expect(await within(uploadDialog()).findByText(/uploading/i)).toBeInTheDocument();
+
+      await userEvent.click(within(uploadDialog()).getByRole('button', { name: 'Clear' }));
+
+      expect(await discardDialog()).toBeInTheDocument();
+      expect(uploadDialog()).toBeInTheDocument();
+    });
+
+    it('closes an empty upload modal without asking', async () => {
+      renderPage(<AssetsContent {...baseProps} assets={[]} />);
+      await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+      await userEvent.click(within(uploadDialog()).getByRole('button', { name: 'Clear' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Upload Assets' })).not.toBeInTheDocument());
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
     });
   });
 

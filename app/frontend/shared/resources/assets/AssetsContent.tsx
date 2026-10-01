@@ -46,6 +46,7 @@ import type { Asset, AssetVersion, Folder } from '@/types/generated';
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -404,8 +405,10 @@ export function AssetsContent({
     setUploadFolder('');
     setUploadFolderError(null);
     setUploadProgress(0);
+    setIsUploading(false);
     uppyRef.current?.cancelAll();
   }, []);
+  const requestCloseUpload = useConfirmClose(isUploading || uploadedFiles.length > 0, handleCloseUpload);
 
   const openUpload = useCallback(
     (folder: string) => {
@@ -785,7 +788,7 @@ export function AssetsContent({
       )}
 
       {/* Upload Modal */}
-      <Modal opened={uploadOpen} onClose={handleCloseUpload} title="Upload Assets" centered size="md">
+      <Modal opened={uploadOpen} onClose={requestCloseUpload} title="Upload Assets" centered size="md">
         <Stack gap="md">
           {uploadedFiles.length > 0 ? (
             <>

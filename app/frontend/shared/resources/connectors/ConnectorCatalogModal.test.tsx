@@ -279,5 +279,15 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
       expect(within(modal).getByText('Install option')).toBeInTheDocument();
       expect(within(modal).getByRole('radio', { name: /Hosted endpoint/ })).toBeInTheDocument();
     });
+
+    it('leaves Escape to the install drawer, so an unsaved install keeps the catalog behind it', async () => {
+      const modal = await openInstall([connector()]);
+      await userEvent.type(within(modal).getByLabelText(/API_TOKEN/), 'tok_123');
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Browse connectors' })).toBeInTheDocument();
+    });
   });
 });

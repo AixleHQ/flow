@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { AwsConnectionModal } from './AwsConnectionModal';
 
@@ -170,5 +170,47 @@ describe('AwsConnectionModal', () => {
     await fillAndContinue();
 
     expect(await screen.findByText(/grants you no accounts/i)).toBeInTheDocument();
+  });
+
+  it('asks before abandoning a sign-in that has started, and closes on Discard', async () => {
+    scriptFetch({ create: CREATED, poll: [{ body: { status: 'pending', interval: 60 } }] });
+    const onClose = vi.fn();
+    renderPage(<AwsConnectionModal opened onClose={onClose} />);
+
+    await fillAndContinue();
+    await screen.findByRole('link', { name: /Approve in AWS/i });
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Connect AWS Bedrock' })).toBeInTheDocument();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes without asking before a sign-in has started, keeping what was typed', async () => {
+    const onClose = vi.fn();
+    const { rerender } = renderPage(<AwsConnectionModal opened onClose={onClose} />);
+
+    await userEvent.type(screen.getByLabelText(/Start URL/i), START_URL);
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+
+    rerender(<AwsConnectionModal opened={false} onClose={onClose} />);
+    rerender(<AwsConnectionModal opened onClose={onClose} />);
+    expect(await screen.findByLabelText(/Start URL/i)).toHaveValue(START_URL);
+  });
+
+  it('renders inline, with no dialog of its own, when embedded in another modal', async () => {
+    scriptFetch({ create: CREATED, poll: [{ body: { status: 'pending', interval: 60 } }] });
+    renderPage(<AwsConnectionModal embedded opened onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await fillAndContinue();
+
+    expect(await screen.findByRole('link', { name: /Approve in AWS/i })).toHaveAttribute('href', VERIFICATION_URL);
   });
 });

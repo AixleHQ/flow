@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import type { Repository } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z.object({
@@ -16,6 +17,8 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+
+const EMPTY_VALUES: FormData = { sourceBranch: '', purpose: '', description: '' };
 
 interface Props {
   repo: Pick<Repository, 'id' | 'fullName' | 'sourceBranch' | 'purpose' | 'description' | 'integration'> | null;
@@ -29,23 +32,16 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
 
   const form = useForm<FormData>({
     validate: zodResolver(schema),
-    initialValues: {
-      sourceBranch: '',
-      purpose: '',
-      description: '',
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   useEffect(() => {
-    if (repo) {
-      form.setValues({
-        sourceBranch: repo.sourceBranch,
-        purpose: repo.purpose ?? '',
-        description: repo.description ?? '',
-      });
-    } else {
-      form.reset();
-    }
+    form.setInitialValues(
+      repo
+        ? { sourceBranch: repo.sourceBranch, purpose: repo.purpose ?? '', description: repo.description ?? '' }
+        : EMPTY_VALUES,
+    );
+    form.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo]);
 
@@ -64,10 +60,12 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
     );
   };
 
+  const requestClose = useConfirmClose(form.isDirty(), onClose);
+
   return (
     <ResourceDrawer
       opened={!!repo}
-      onClose={onClose}
+      onClose={requestClose}
       title={`Edit ${repo?.fullName ?? 'Repository'}`}
       footer={
         <Button type="submit" form="edit-repository-form" fullWidth loading={loading}>

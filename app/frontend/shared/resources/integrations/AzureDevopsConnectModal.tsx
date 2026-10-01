@@ -17,6 +17,8 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 export interface AzureDevopsProject {
   id: string;
   name: string;
@@ -126,6 +128,19 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     onClose();
     reset();
   }, [onClose, reset]);
+
+  // A resumed dialog is already carrying a Microsoft sign-in, and closing drops it: getting it
+  // back means signing in again.
+  const dirty =
+    !!signIn ||
+    organization !== '' ||
+    adminPat !== '' ||
+    projectIds.length > 0 ||
+    patProjectId !== '' ||
+    pat !== '' ||
+    capabilities.length !== DEFAULT_CAPABILITIES.length ||
+    capabilities.some((c) => !DEFAULT_CAPABILITIES.includes(c));
+  const requestClose = useConfirmClose(dirty, close);
 
   // Step one: prove this company may bind the organization at all, and see what
   // it holds. An organization already bound needs no token — the binding is the
@@ -243,7 +258,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
   const missingPrincipal = !!error && error.includes('missing a service principal');
 
   return (
-    <Modal opened={opened} onClose={close} title="Connect Azure DevOps" centered size="lg">
+    <Modal opened={opened} onClose={requestClose} title="Connect Azure DevOps" centered size="lg">
       <Stack gap="md">
         {authMode === 'service_principal' ? (
           <>
@@ -450,7 +465,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
             <span />
           )}
           <Group gap="sm">
-            <Button variant="default" onClick={close}>
+            <Button variant="default" onClick={requestClose}>
               Cancel
             </Button>
             {authMode === 'pat' ? (

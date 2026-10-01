@@ -52,17 +52,49 @@ describe('shared/components/CreateProjectModal', () => {
     );
   });
 
-  it('resets, clears errors and closes when Cancel is clicked', async () => {
+  it('asks before discarding a typed project on Cancel, then resets, clears errors and closes', async () => {
     const onClose = vi.fn();
     const form = makeFormStub({ name: 'Draft', description: '' });
     renderPage(<CreateProjectModal opened onClose={onClose} />, { form });
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(screen.getByRole('dialog', { name: 'Create New Project' })).toBeInTheDocument();
+    expect(form.reset).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
     expect(form.reset).toHaveBeenCalled();
     expect(form.clearErrors).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(form.post).not.toHaveBeenCalled();
+  });
+
+  it('asks before the X discards a typed description', async () => {
+    const onClose = vi.fn();
+    const form = makeFormStub({ name: '', description: 'Customer onboarding' });
+    renderPage(<CreateProjectModal opened onClose={onClose} />, { form });
+
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Create New Project' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an empty form straight away, without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(<CreateProjectModal opened onClose={onClose} />);
+
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Create New Project' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 
   it('shows a validation error alert when the name field has an error', () => {

@@ -5,6 +5,7 @@ import { IconAdjustments, IconPlayerPlay, IconRobot, IconSitemap } from '@tabler
 import { useEffect, useMemo, useState } from 'react';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
 
@@ -127,6 +128,16 @@ export function RunWorkflowDrawer({
 
   const canSubmit = !!workflow && !!agentRuntime && steps.length > 0 && !starting;
 
+  // Mirrors what the open-effect resets. The runtime pick survives a close, and the per-step
+  // switches only exist in Custom mode, which already counts.
+  const dirty =
+    workflowId !== (initialWorkflowId ?? null) ||
+    mode !== 'automatic' ||
+    selectedRepoIds.length > 0 ||
+    selectedAssetIds.length > 0 ||
+    requestedModel !== null;
+  const requestClose = useConfirmClose(dirty, onClose);
+
   const handleSubmit = () => {
     if (!canSubmit || !workflow) return;
 
@@ -160,7 +171,7 @@ export function RunWorkflowDrawer({
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={onClose}
+      onClose={requestClose}
       // The drawer names what you are about to run as soon as you have chosen.
       title={workflow ? `Run: ${workflow.name}` : 'Run workflow'}
       footer={

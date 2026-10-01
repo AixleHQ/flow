@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { AzureDevopsProps } from './AzureDevopsConnectModal';
 import { AzureDevopsConnectModal } from './AzureDevopsConnectModal';
@@ -11,11 +11,11 @@ const PROJECT_ID = '11111111-1111-1111-1111-111111111111';
 const SECOND_PROJECT_ID = '33333333-3333-3333-3333-333333333333';
 const BASE = '/company/projects/1/integrations';
 
-const renderModal = (props: Partial<AzureDevopsProps> = {}) =>
+const renderModal = (props: Partial<AzureDevopsProps> = {}, onClose = () => {}) =>
   renderPage(
     <AzureDevopsConnectModal
       opened
-      onClose={() => {}}
+      onClose={onClose}
       basePath={BASE}
       azureDevops={{ enabled: true, patModeEnabled: false, ...props }}
     />,
@@ -298,5 +298,68 @@ describe('AzureDevopsConnectModal', () => {
       { organization: 'contoso', sign_in: 'held-1' },
       { organization: 'contoso', sign_in: 'held-1', project_ids: [PROJECT_ID] },
     ]);
+  });
+
+  it('asks before closing over a typed organization, and starts over once discarded', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({}, onClose);
+
+    await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Connect Azure DevOps' })).toBeInTheDocument();
+
+    await user.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/Azure organization/)).toHaveValue('');
+  });
+
+  it('treats an unticked capability as unsaved input', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({}, onClose);
+
+    await user.click(screen.getByRole('checkbox', { name: /Complete pull requests/ }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes without asking when nothing was entered, whichever proof is picked', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderModal({}, onClose);
+
+    await choosePat(user);
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before dropping a Microsoft sign-in the dialog resumed with', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: inspectionPayload({ identity: 'grace@contoso.com' }) }));
+    renderPage(
+      <AzureDevopsConnectModal
+        opened
+        onClose={onClose}
+        basePath={BASE}
+        azureDevops={{ enabled: true, patModeEnabled: false }}
+        signIn={{ handle: 'held-1', organization: 'contoso' }}
+      />,
+    );
+
+    await screen.findByText(/Verified as grace@contoso.com/);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

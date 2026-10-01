@@ -551,4 +551,56 @@ describe('ToolFormModal', () => {
     // A rejected submit leaves the modal open.
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('asks before closing a new tool the user has started filling in', async () => {
+    const onClose = vi.fn();
+    renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an added file row as unsaved input', async () => {
+    const onClose = vi.fn();
+    renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an untouched edit without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <ToolFormModal opened onClose={onClose} editTool={editTool} configItemNames={[]} basePath="/projects/1/tools" />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue('My Custom Tool'));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens Create empty after an edit, and closes it without asking', async () => {
+    const onClose = vi.fn();
+    const { rerender } = renderPage(
+      <ToolFormModal opened onClose={onClose} editTool={editTool} configItemNames={[]} basePath="/projects/1/tools" />,
+    );
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue('My Custom Tool'));
+
+    rerender(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue(''));
+    expect(screen.getByRole('textbox', { name: /docker image/i })).toHaveValue('');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

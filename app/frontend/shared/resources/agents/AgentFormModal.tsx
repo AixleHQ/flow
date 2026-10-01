@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import type { Agent } from '@/types/generated';
 
-import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { EmojiPicker } from 'shared/ui/EmojiPicker';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
@@ -24,6 +24,15 @@ const agentSchema = z.object({
   communicationStyle: z.string().max(2000).optional(),
   principles: z.string().max(2000).optional(),
 });
+
+const EMPTY_VALUES = {
+  name: '',
+  title: '',
+  icon: '',
+  persona: '',
+  communicationStyle: '',
+  principles: '',
+};
 
 type EditableAgent = Pick<Agent, 'id' | 'name' | 'title' | 'icon' | 'persona' | 'communicationStyle' | 'principles'> &
   Partial<Pick<Agent, 'currentVersionNumber'>>;
@@ -42,14 +51,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
 
   const form = useForm({
     validate: zodResolver(agentSchema),
-    initialValues: {
-      name: '',
-      title: '',
-      icon: '',
-      persona: '',
-      communicationStyle: '',
-      principles: '',
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   useEffect(() => {
@@ -63,18 +65,22 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
           communicationStyle: editAgent.communicationStyle || '',
           principles: editAgent.principles || '',
         };
-        form.setValues(values);
-        form.resetDirty(values);
+        form.setInitialValues(values);
+        form.reset();
       } else if (duplicateAgent) {
-        form.setValues({
+        const values = {
           name: `${duplicateAgent.name}_copy`,
           title: `${duplicateAgent.title} (Copy)`,
           icon: duplicateAgent.icon || '',
           persona: duplicateAgent.persona,
           communicationStyle: duplicateAgent.communicationStyle || '',
           principles: duplicateAgent.principles || '',
-        });
+        };
+        form.setInitialValues(values);
+        form.reset();
       } else {
+        // reset() returns to the last initial values, which an edit or a duplicate replaced.
+        form.setInitialValues(EMPTY_VALUES);
         form.reset();
       }
     }
@@ -121,16 +127,14 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
     form.setFieldValue('name', value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
   };
 
-  const unsaved = isEditMode && form.isDirty();
-  const handleClose = () => {
-    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
-    onClose();
-  };
+  const dirty = form.isDirty();
+  const unsaved = isEditMode && dirty;
+  const requestClose = useConfirmClose(dirty, onClose);
 
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={handleClose}
+      onClose={requestClose}
       title={isEditMode ? 'Edit Agent' : duplicateAgent ? 'Duplicate Agent' : 'Create Agent'}
       footer={
         <Stack gap="xs">

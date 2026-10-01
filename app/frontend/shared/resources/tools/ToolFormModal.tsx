@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 import type { Tool, ToolFile } from '@/types/generated';
 
-import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
@@ -39,6 +39,15 @@ const toolSchema = z.object({
   command: z.string().max(2000).optional(),
   requiredConfigItems: z.array(z.string()).optional(),
 });
+
+const EMPTY_VALUES = {
+  name: '',
+  displayName: '',
+  description: '',
+  dockerImage: '',
+  command: '',
+  requiredConfigItems: [] as string[],
+};
 
 type EditableTool = Pick<
   Tool,
@@ -93,14 +102,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
   const form = useForm({
     validate: zodResolver(toolSchema),
-    initialValues: {
-      name: '',
-      displayName: '',
-      description: '',
-      dockerImage: '',
-      command: '',
-      requiredConfigItems: [] as string[],
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   useEffect(() => {
@@ -115,8 +117,8 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
           command: editTool.command || '',
           requiredConfigItems: editTool.requiredConfigItems || [],
         };
-        form.setValues(values);
-        form.resetDirty(values);
+        form.setInitialValues(values);
+        form.reset();
         const loaded = editTool.toolFiles.map((f) => ({
           id: f.id,
           path: f.path,
@@ -128,7 +130,10 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
         initialFiles.current = JSON.stringify(loaded);
         setFiles(loaded);
       } else {
+        // reset() returns to the last initial values, which an edit replaced.
+        form.setInitialValues(EMPTY_VALUES);
         form.reset();
+        initialFiles.current = '[]';
         setFiles([]);
       }
     }
@@ -293,16 +298,14 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
   const visibleFiles = files.filter((f) => !f._destroy);
 
-  const unsaved = isEditMode && (form.isDirty() || JSON.stringify(files) !== initialFiles.current);
-  const handleClose = () => {
-    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
-    onClose();
-  };
+  const dirty = form.isDirty() || JSON.stringify(files) !== initialFiles.current;
+  const unsaved = isEditMode && dirty;
+  const requestClose = useConfirmClose(dirty, onClose);
 
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={handleClose}
+      onClose={requestClose}
       title={isEditMode ? 'Edit Tool' : 'Create Tool'}
       footer={
         <Stack gap="xs">

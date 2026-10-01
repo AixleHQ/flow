@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Menu, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Button, Group, Menu, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import {
   IconAlertTriangle,
@@ -15,9 +15,12 @@ import {
   IconUserOff,
   IconX,
 } from '@tabler/icons-react';
+import { useState } from 'react';
 
 import type BoardColumn from 'types/generated/BoardColumn';
 import type BoardMember from 'types/generated/BoardMember';
+
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 
 export type BulkAction = 'delete' | 'archive' | 'move_to_column' | 'set_priority' | 'set_assignee' | 'add_tag';
 
@@ -108,6 +111,56 @@ const dangerBtnStyle = {
   },
 };
 
+function AddTagModal({
+  opened,
+  onClose,
+  onAdd,
+}: {
+  opened: boolean;
+  onClose: () => void;
+  onAdd: (tag: string) => void;
+}) {
+  const [tag, setTag] = useState('');
+
+  const close = () => {
+    setTag('');
+    onClose();
+  };
+  const requestClose = useConfirmClose(tag.trim() !== '', close);
+
+  const submit = () => {
+    const trimmed = tag.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    close();
+  };
+
+  return (
+    <Modal opened={opened} onClose={requestClose} title="Add tag">
+      <Stack gap="sm">
+        <TextInput
+          label="Tag name"
+          placeholder="e.g. needs-review"
+          data-autofocus
+          value={tag}
+          onChange={(e) => setTag(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+          }}
+        />
+        <Group justify="flex-end">
+          <Button variant="default" size="xs" onClick={requestClose}>
+            Cancel
+          </Button>
+          <Button size="xs" onClick={submit}>
+            Add tag
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function SelectionBar({
   active,
   selectedCount,
@@ -120,6 +173,8 @@ export function SelectionBar({
   onBulkTag,
   onClear,
 }: SelectionBarProps) {
+  const [tagPromptOpen, setTagPromptOpen] = useState(false);
+
   if (!canExecute || (!active && selectedCount === 0)) return null;
 
   const hasSelection = selectedCount > 0;
@@ -158,51 +213,6 @@ export function SelectionBar({
       labels: { confirm: 'Move', cancel: 'Cancel' },
       confirmProps: { color: 'blue' },
       onConfirm: () => onAction('move_to_column', col.id),
-    });
-  };
-
-  const openTagPrompt = () => {
-    let tagValue = '';
-    modals.open({
-      title: 'Add tag',
-      children: (
-        <Stack gap="sm">
-          <TextInput
-            label="Tag name"
-            placeholder="e.g. needs-review"
-            data-autofocus
-            onChange={(e) => {
-              tagValue = e.currentTarget.value;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const trimmed = tagValue.trim();
-                if (trimmed) {
-                  onBulkTag(trimmed);
-                  modals.closeAll();
-                }
-              }
-            }}
-          />
-          <Group justify="flex-end">
-            <Button variant="default" size="xs" onClick={() => modals.closeAll()}>
-              Cancel
-            </Button>
-            <Button
-              size="xs"
-              onClick={() => {
-                const trimmed = tagValue.trim();
-                if (trimmed) {
-                  onBulkTag(trimmed);
-                  modals.closeAll();
-                }
-              }}
-            >
-              Add tag
-            </Button>
-          </Group>
-        </Stack>
-      ),
     });
   };
 
@@ -360,11 +370,12 @@ export function SelectionBar({
         variant="default"
         leftSection={<IconTag size={12} />}
         styles={btnStyle}
-        onClick={openTagPrompt}
+        onClick={() => setTagPromptOpen(true)}
         disabled={!hasSelection}
       >
         Add tag
       </Button>
+      <AddTagModal opened={tagPromptOpen} onClose={() => setTagPromptOpen(false)} onAdd={onBulkTag} />
 
       {/* Archive */}
       <Button

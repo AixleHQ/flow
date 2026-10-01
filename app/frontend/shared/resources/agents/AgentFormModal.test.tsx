@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { AgentFormModal } from './AgentFormModal';
 
@@ -258,7 +258,6 @@ describe('AgentFormModal', () => {
 
   it('flags unsaved edits and asks before closing over them', async () => {
     const onClose = vi.fn();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPage(<AgentFormModal opened onClose={onClose} editAgent={editAgent} basePath="/projects/1/agents" />);
 
     expect(screen.queryByText(/Unsaved changes/)).not.toBeInTheDocument();
@@ -266,7 +265,46 @@ describe('AgentFormModal', () => {
 
     expect(screen.getByText('Unsaved changes — press Save to keep them')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(confirm).toHaveBeenCalled();
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
     expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before closing a new agent the user has started typing', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} basePath="/projects/1/agents" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /persona/i }), 'A helpful agent.');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an untouched duplicate without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} duplicateAgent={editAgent} basePath="/projects/1/agents" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('opens Create empty after an edit, and closes it without asking', async () => {
+    const onClose = vi.fn();
+    const { rerender } = renderPage(
+      <AgentFormModal opened onClose={onClose} editAgent={editAgent} basePath="/projects/1/agents" />,
+    );
+    expect(screen.getByRole('textbox', { name: /title/i })).toHaveValue('Business Analyst');
+
+    rerender(<AgentFormModal opened onClose={onClose} basePath="/projects/1/agents" />);
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /title/i })).toHaveValue(''));
+    expect(screen.getByRole('textbox', { name: /persona/i })).toHaveValue('');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
