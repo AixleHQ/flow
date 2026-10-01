@@ -5,11 +5,11 @@ ARG UV_VERSION=0.9.29
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # =============================================================================
-# tmux builder — 3.6+ for mode 2031 (light/dark theme reporting). Debian bookworm
-# ships 3.3a, which neither asks the browser terminal for its background nor tells
+# tmux builder — 3.6+ for mode 2031 (light/dark theme reporting). Debian trixie
+# ships 3.5a, which neither asks the browser terminal for its background nor tells
 # the agent CLI when the app switches theme.
 # =============================================================================
-FROM node:24-slim AS tmux-builder
+FROM node:26-slim AS tmux-builder
 ARG TMUX_VERSION=3.7c
 ARG TMUX_SHA256=7c60cae9a0e25288e2e24750aafc9e8800fc7fd4555e447e1b29ee4201cfb3bf
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,13 +31,13 @@ RUN curl -fsSL -o /tmp/tmux.tar.gz \
 # changes don't invalidate expensive agent CLI install layers.
 #
 # Components:
-#   - Node.js 24 (Debian slim for glibc compatibility)
+#   - Node.js 26 (Debian slim for glibc compatibility)
 #   - ttyd (web terminal)
 #   - OpenVSCode Server (browser IDE)
 #   - MITM proxy for request/response logging
 #   - Common development tools (uv/uvx and pipx for Python MCP servers)
 # =============================================================================
-FROM node:24-slim
+FROM node:26-slim
 
 # -----------------------------------------------------------------------------
 # System dependencies
@@ -83,7 +83,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     g++ \
     # tmux runtime lib (tmux itself is built in the tmux-builder stage).
-    libevent-core-2.1-7 \
+    libevent-core-2.1-7t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
@@ -112,7 +112,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # -----------------------------------------------------------------------------
 # MITM proxy for request/response logging
 # -----------------------------------------------------------------------------
-RUN python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==10.2.4
+RUN python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==11.0.2
 
 # The interception CA is generated per container at start (logger/start-mitm.sh),
 # never here: one baked into the image put its private key in every copy of a
@@ -223,9 +223,11 @@ RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && npm cache clean 
 #     installByDefault, but it is only launched by a CHANNEL-LESS headless
 #     Chromium. Every browser session here goes through @playwright/mcp, which
 #     requests the chrome-for-testing channel, i.e. the chrome binary below.
-#   * libgl1-mesa-dri + libllvm15 (~130 MiB) and Xvfb — Chrome renders WebGL via
-#     its own bundled SwiftShader (libvk_swiftshader.so), never Mesa, and nothing
-#     in this repo starts a virtual X server.
+#   * libgl1-mesa-dri and Xvfb — Chrome renders WebGL via its own bundled
+#     SwiftShader (libvk_swiftshader.so), never Mesa, and nothing in this repo
+#     starts a virtual X server. On trixie this no longer takes LLVM with it:
+#     libgbm1, which Chrome links, depends on mesa-libgallium, which keeps
+#     libllvm19 + libz3-4 (~180 MiB) installed.
 #   * CJK/Thai fallback fonts — fonts-liberation + fonts-noto-color-emoji stay, so
 #     Latin text and emoji still render; only CJK/Thai glyphs degrade to tofu.
 # The probe below is the guard: it launches the browser exactly the way the MCP
