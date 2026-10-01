@@ -55,6 +55,11 @@ module Trackers
         Notifications.parse(payload, projects: jira_projects)
       end
 
+      def account_ids(notification)
+        [ notification.actor[:id], *notification.changes.select { |c| c[:field] == "assignee" }.flat_map { |c| [ c[:from_id], c[:to_id] ] } ]
+          .compact_blank.uniq
+      end
+
       def delivery_id(request, _payload)
         request.headers["X-Atlassian-Webhook-Identifier"].presence
       end
@@ -170,7 +175,9 @@ module Trackers
         translate do
           current = scoped!(api.issue(issue_ref!(ref)), scope_id)
           unassign = assignee.blank? || UNASSIGNED.include?(assignee.to_s.downcase)
-          api.assign(current[:id], unassign ? nil : account_id!(scope_id, assignee))
+          account = unassign ? nil : account_id!(scope_id, assignee)
+          api.assign(current[:id], account)
+          TrackerAccount.remember!(provider: integration.provider, account_ids: [ account ])
           issue_from(api.issue(current[:id]), scope_id)
         end
       end
@@ -279,7 +286,7 @@ module Trackers
           scope_id: scope_id.to_s, updated_at: raw[:updated_at],
           fields: {
             "state" => state&.dig(:name), "board_column" => column, "priority" => raw[:priority], "due_date" => raw[:due_date],
-            "parent" => raw[:parent], "components" => raw[:components].presence, "assignee_id" => raw.dig(:assignee, :id)
+            "parent" => raw[:parent], "components" => raw[:components].presence
           }.compact
         )
       end

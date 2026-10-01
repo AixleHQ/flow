@@ -202,6 +202,13 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Atlassian's Personal Data Reporting API: daily, so each account id is
+  # reported once its 7-day cycle comes round (Trackers::Jira::PersonalDataReporter).
+  - workflow: tracker_personal_data_workflow
+    cron: "17 5 * * *"
+    overlap: skip
+    enabled: true
+
   # Reminds invitees whose invitation is unaccepted and within 2 days of the
   # 7-day expiry. Hourly is plenty: `reminded_at` makes it idempotent, so the
   # cadence only affects how promptly the single reminder goes out.

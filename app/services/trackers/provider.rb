@@ -91,6 +91,9 @@ module Trackers
       nil
     end
 
+    # The tracker account ids a notification carries, for TrackerAccount.
+    def account_ids(_notification) = []
+
     # Deliveries through /webhooks/trackers (providers without a receiver of their own).
     def authentic_delivery?(_request, _raw_body, _subscription) = false
     def parse_delivery(_payload, _subscription) = []
