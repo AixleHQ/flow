@@ -41,6 +41,10 @@ class Web::SessionsController < Web::ApplicationController
       return
     end
 
+    # A link abandoned at the provider must not turn the next sign-in started
+    # from this page into a refused link (see #omniauth).
+    Auth::LinkIntent.discard(session)
+
     render inertia: "Auth/LoginPage", props: {
       error: params[:error],
       # Pre-fill support for the invitation flow (/login?email=...). Echoed
@@ -99,6 +103,15 @@ class Web::SessionsController < Web::ApplicationController
     # One port, one adapter per kind (AD-2): the callback resolves a provider row
     # and asks the registry, instead of naming a service class.
     provider = Auth::Registry.provider_for_omniauth(params[:provider].presence || "google")
+
+    if (intent = Auth::LinkIntent.take(session))
+      return complete_link(provider) if intent.honoured_for?(current_user_session, provider)
+      # The session that asked for the link has ended. Carrying on as a sign-in
+      # could create an account, or sign this browser into one, that nobody
+      # asked for.
+      return redirect_to(login_path(error: "link_expired")) unless signed_in?
+    end
+
     assertion = Auth::Registry.for(provider).complete(auth_hash: request.env["omniauth.auth"])
     user = Auth::IdentityResolver.new(assertion).resolve
 
@@ -153,11 +166,31 @@ class Web::SessionsController < Web::ApplicationController
   end
 
   def failure
+    if Auth::LinkIntent.take(session) && signed_in?
+      return redirect_to(security_profile_path, alert: "Linking did not finish. Nothing was added to your account.")
+    end
+
     error_type = params[:message] || "oauth_failed"
     redirect_to login_path(error: error_type)
   end
 
   private
+
+  # Attached to the person already signed in, never resolved by address — which
+  # is why Microsoft can be added here although a Microsoft sign-in never adopts
+  # an existing account (AD-25). No domain auto-join: nobody is arriving.
+  def complete_link(provider)
+    assertion = Auth::Registry.for(provider).complete(auth_hash: request.env["omniauth.auth"])
+    Auth::IdentityResolver.new(assertion, auto_join: false).link_to(current_user)
+    prove_additional_method(provider)
+    redirect_to security_profile_path, notice: "#{provider.display_name} is linked. You can sign in with it from now on."
+  rescue Auth::IdentityResolver::IdentityTakenError
+    redirect_to security_profile_path,
+                alert: "That #{provider.display_name} account already belongs to a different account here, " \
+                       "so it was not added to yours."
+  rescue StandardError
+    redirect_to security_profile_path, alert: "Linking #{provider.display_name} failed. Nothing was added to your account."
+  end
 
   # Onboarding lives on the membership the user will land in — the switcher's
   # remembered company, else the oldest. Resolved here rather than read off the

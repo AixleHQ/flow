@@ -153,12 +153,42 @@ What it does and does not do:
 
 ## Your account
 
-**Profile → Security** shows what you hold: your passkeys, whether codes are on,
-and every device signed in. A sign-in you do not recognise can be ended from
-there.
+**Profile → Security** shows what you hold: the methods you sign in with, your
+passkeys, whether codes are on, and every device signed in. A sign-in you do not
+recognise can be ended from there.
+
+### Linking a method
 
 Signing in with a method your account has never used before does not silently
 attach it. If an account already exists for your address, Flow asks you to sign
-in the way you usually do and add the new method from inside your session —
-because an email address in an assertion is not by itself proof that the person
-holding it owns that address.
+in the way you usually do and link the new method from **Profile → Security →
+Sign-in methods** — because an email address in an assertion is not by itself
+proof that the person holding it owns that address. Microsoft is the usual case:
+it never asserts that an address is verified, so a Microsoft sign-in can create
+an account but never take over one that exists.
+
+Press **Link Google** or **Link Microsoft** and sign in to that account at the
+provider. It is added to the account you are signed in to, matched by the
+provider's own identifier for you, so its address does not have to match yours.
+Only the providers this installation offers and one of your workspaces accepts
+are listed.
+
+- An account at the provider that is already linked to someone else here stays
+  theirs. Linking it to yours is refused.
+- The link has to finish in the session that started it. If you were signed out
+  while you were away at the provider, nothing is linked: sign in and start
+  again.
+- There is no separate password prompt. The page is behind the same check as
+  every other: a session that does not satisfy your workspace is asked to
+  confirm first.
+
+### Removing a method
+
+Google, Microsoft and a workspace's own connection can be removed. A password, a
+passkey and an email sign-in link are not removed from this list — they come
+back the next time you use them; a passkey is removed under **Passkeys**.
+
+Removing is refused when it would leave you with no way in that one of your
+workspaces accepts, or with no way in at all. The page says so, and names the
+workspace, before you press anything. An administrator acting as you can neither
+link nor remove a method.

@@ -27,6 +27,11 @@ governance, community health — carry none.
   refused instead of overwriting it.
 - **Agents**, **Skills**, **Wrappers**, **Connectors**: the same version
   history, diff and revert. Connector secrets never enter a version.
+- **Profile**: *Sign-in methods* on Profile → Security. A signed-in person can
+  link Google or Microsoft to their account and remove a linked method. Removal
+  is refused while it is their only way into a workspace they belong to. The
+  "an account already exists" sign-in error sends people here, and until now
+  the page it named had no way to do it.
 - **Sessions & Runs**: the run page names the workflow version each session
   launched with, and says when the workflow was saved mid-run.
 - Apache License 2.0, `NOTICE` attribution file, and third-party license

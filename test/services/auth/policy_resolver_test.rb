@@ -126,5 +126,27 @@ module Auth
 
       refute_includes stranded, super_admin
     end
+
+    test "companies_stranded_without names the companies a removal would leave with no accepted method" do
+      google_identity = create(:user_identity, user: @user, identity_provider: @google)
+      strict = create(:company, name: "Strict Co")
+      create(:company_membership, user: @user, company: strict, role: "employee", state: "active")
+      CompanyAuthPolicy.find_by!(company: strict, identity_provider: @password).update!(enabled: false)
+
+      # Strict accepts Google but not the password the user also holds.
+      assert_equal [ strict ], Auth::PolicyResolver.companies_stranded_without(@user, google_identity)
+
+      # A company that never accepted the removed method is not this removal's doing.
+      CompanyAuthPolicy.find_by!(company: strict, identity_provider: @google).update!(enabled: false)
+      assert_empty Auth::PolicyResolver.companies_stranded_without(@user, google_identity)
+    end
+
+    test "companies_stranded_without counts a second identity of the same kind as a way in" do
+      first = create(:user_identity, user: @user, identity_provider: @google)
+      create(:user_identity, user: @user, identity_provider: @google)
+      policy_for(@password).update!(enabled: false)
+
+      assert_empty Auth::PolicyResolver.companies_stranded_without(@user, first)
+    end
   end
 end

@@ -106,7 +106,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'signing-in',
     title: 'Signing in & SSO',
     section: 'Using Flow',
-    desc: 'Every way to prove who you are, which methods a workspace accepts, connecting your own OpenID Connect provider, passkeys and authentication codes, and directory sync.',
+    desc: 'Every way to prove who you are, which methods a workspace accepts, connecting your own OpenID Connect provider, linking and removing Google or Microsoft from your account, passkeys and authentication codes, and directory sync.',
   },
   {
     slug: 'secrets',

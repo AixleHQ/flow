@@ -40,6 +40,11 @@ GOOGLE_CLIENT_SECRET=…
 The URI must match exactly. A Web client will not accept "any localhost port" —
 each host you run on needs its own entry.
 
+Linking Google or Microsoft from **Profile → Security** goes through the same
+callback as signing in, so it needs no redirect URI of its own. The intent to
+link is kept in the session, never in the URL, and only a session that is still
+live when the provider returns can complete it.
+
 ## Microsoft (Entra ID)
 
 Register an application in **your** tenant, not a customer's.
@@ -83,7 +88,9 @@ Two things worth knowing before customers arrive:
   So an assertion is never evidence that the person controls the address it
   carries. It can create an account under the usual domain rules; attaching
   Microsoft to an account that already exists is an explicit act from a session
-  that is already authenticated.
+  that is already authenticated — **Profile → Security → Sign-in methods → Link
+  Microsoft**. That link is matched on `oid`, never on the address, and is
+  refused when the Microsoft account already belongs to someone else.
 
 Google is treated differently because Google Workspace does assert
 `email_verified`, and that claim is worth something.

@@ -102,6 +102,16 @@ Every assertion is checked against the row it claims to satisfy (AD-13): `iss` a
 
 Passkeys are the one credential kind the company does not own (AD-18). A passkey lives on the user's own device and works across every company they belong to, so registration, listing and deletion belong to the user alone and no company-admin surface touches them. A company may still decline to *accept* a passkey — disabling it in the policy stops a passkey proof from satisfying that company, which an SSO-only buyer will want — but it never deletes or invalidates the credential, which remains usable everywhere else.
 
+### 4.4.1 Linking a method from inside a session
+
+AD-25 denies a deployment-wide federated provider the right to adopt an existing account, so the way to add one is from the account itself: **Profile → Security → Sign-in methods** (`Web::SignInMethodsController`). The request phase is the ordinary POST-only OmniAuth one. The intent to link is held in the session (`Auth::LinkIntent`) — bound to the `UserSession` that asked, single-use, ten minutes — and never in a callback parameter, which an attacker can make a victim's browser open.
+
+The callback attaches the assertion's `(provider, subject)` to the signed-in user through `IdentityResolver#link_to`: never by email, and with no domain auto-join, because nobody is arriving. An identity that already belongs to another account is refused, never moved. An intent whose session has ended attaches nothing and signs nobody in — carrying on as a sign-in could create an account the person did not ask for.
+
+**No recent-sign-in timer.** The pages sit behind the entry gate (AD-5), so the session already holds a proof its current company accepts, and an unsatisfied one is sent to step-up first. That is the bar a passkey registration meets today, and a passkey is an equally durable credential. A recency requirement ("sudo mode") is the deferred *step-up for sensitive actions*; when it is adopted it belongs on passkey and code enrolment as much as here. An impersonated session can neither link nor remove: a method linked there would let the operator back in without impersonating.
+
+Removing applies AD-7's stranding rule to one person (`PolicyResolver.companies_stranded_without`): refused when a company that accepts the removed method would accept none of the identities left, or when it is the last identity at all, checked and written under a lock on the user. Password, passkey and emailed-link identities are not removable there — their next use recreates them.
+
 ### 4.5 No SAML, and why that costs little
 
 There are two ways to support SAML in a Ruby application and both were rejected.

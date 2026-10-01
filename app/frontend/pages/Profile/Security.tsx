@@ -5,10 +5,30 @@ import { useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { formatDateMedium } from 'shared/lib/formatDate';
 import { createCredential, isSupported } from 'shared/lib/webauthn';
-import { confirmTotpPath, passkeyOptionsPath, passkeyPath, passkeysPath, totpPath } from 'shared/routes';
+import {
+  confirmTotpPath,
+  passkeyOptionsPath,
+  passkeyPath,
+  passkeysPath,
+  signInMethodPath,
+  signInMethodsPath,
+  totpPath,
+} from 'shared/routes';
 
 import { ProfileTabs } from './ProfileTabs';
+
+interface SignInMethod {
+  id: number;
+  kind: string;
+  name: string;
+  email: string | null;
+  lastUsedAt: string | null;
+  removable: boolean;
+  /** Why Remove would be refused, said before the person tries. */
+  removalRefusal: string | null;
+}
 
 interface Passkey {
   id: number;
@@ -26,6 +46,9 @@ interface SessionRow {
 }
 
 interface PageProps {
+  signInMethods: SignInMethod[];
+  /** Redirect providers this person may link: offered here and accepted by a company of theirs. */
+  linkableKinds: string[];
   passkeys: Passkey[];
   totpEnabled: boolean;
   sessions: SessionRow[];
@@ -45,7 +68,82 @@ async function postJson(url: string, body: unknown) {
   return { ok: response.ok, data: await response.json().catch(() => ({})) };
 }
 
-export default function Security({ passkeys, totpEnabled, sessions }: PageProps) {
+const LINKABLE_LABELS: Record<string, string> = { google: 'Google', microsoft: 'Microsoft' };
+
+// A real form POST, not router.post: linking ends at the provider's own page,
+// and an Inertia XHR cannot follow a cross-origin redirect. POST rather than a
+// link for CVE-2015-9284. The kind travels in the body; the server keeps the
+// intent to link in the session.
+const LinkMethodButton = ({ kind }: { kind: string }) => {
+  const label = `Link ${LINKABLE_LABELS[kind] ?? kind}`;
+  return (
+    <form method="post" action={signInMethodsPath()} aria-label={label}>
+      <input type="hidden" name="authenticity_token" value={getCsrfToken()} />
+      <input type="hidden" name="kind" value={kind} />
+      <Button type="submit" size="compact-sm" variant="default">
+        {label}
+      </Button>
+    </form>
+  );
+};
+
+function SignInMethodsSection({ methods, linkableKinds }: { methods: SignInMethod[]; linkableKinds: string[] }) {
+  return (
+    <Paper p="md" radius="md" withBorder>
+      <Stack gap="sm">
+        <Group justify="space-between">
+          <Title order={4}>Sign-in methods</Title>
+          {linkableKinds.length > 0 && (
+            <Group gap="xs">
+              {linkableKinds.map((kind) => (
+                <LinkMethodButton key={kind} kind={kind} />
+              ))}
+            </Group>
+          )}
+        </Group>
+        <Text size="sm" c="dimmed">
+          The ways you can sign in to this account. A Google or Microsoft account is added only when you sign in to it
+          from here — never because its address matches yours.
+        </Text>
+        {methods.length === 0 && <Text size="sm">No sign-in methods recorded yet.</Text>}
+        {methods.map((method) => (
+          <Stack key={method.id} gap={2}>
+            <Group justify="space-between" wrap="nowrap">
+              <div>
+                <Text size="sm" fw={500}>
+                  {method.name}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {method.email ?? 'No address'} ·{' '}
+                  {method.lastUsedAt ? `last used ${formatDateMedium(method.lastUsedAt)}` : 'not used yet'}
+                </Text>
+              </div>
+              {method.removable && (
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="red"
+                  disabled={method.removalRefusal !== null}
+                  aria-label={`Remove ${method.name} (${method.email ?? 'no address'})`}
+                  onClick={() => router.delete(signInMethodPath(method.id))}
+                >
+                  Remove
+                </Button>
+              )}
+            </Group>
+            {method.removable && method.removalRefusal && (
+              <Text size="xs" c="dimmed">
+                {method.removalRefusal}
+              </Text>
+            )}
+          </Stack>
+        ))}
+      </Stack>
+    </Paper>
+  );
+}
+
+export default function Security({ signInMethods, linkableKinds, passkeys, totpEnabled, sessions }: PageProps) {
   const [busy, setBusy] = useState(false);
   const [totpSetup, setTotpSetup] = useState<{ secret: string; qrCode: string | null } | null>(null);
   const [code, setCode] = useState('');
@@ -78,6 +176,8 @@ export default function Security({ passkeys, totpEnabled, sessions }: PageProps)
       <Stack gap="lg">
         <Head title="Security" />
         <ProfileTabs active="security" />
+
+        <SignInMethodsSection methods={signInMethods} linkableKinds={linkableKinds} />
 
         <Paper p="md" radius="md" withBorder>
           <Stack gap="sm">
