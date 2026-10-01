@@ -517,6 +517,18 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal "new-tok", cred.reload.config_data.dig("claudeAiOauth", "accessToken")
   end
 
+  # The launch writes the very object it asked into the container, and the refresh
+  # revokes the access token it replaced.
+  test "refresh_if_expiring! leaves the caller holding the renewed token" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 20.minutes.from_now))
+    stub_token_endpoint
+
+    cred.refresh_if_expiring!
+
+    assert_equal %w[new-tok new-ref], cred.config_data["claudeAiOauth"].values_at("accessToken", "refreshToken")
+  end
+
   # Rotating while another container runs on these tokens invalidates the copy it is
   # using — one session about to start would take the others down with it.
   test "refresh_if_expiring! defers to a container already holding the tokens" do

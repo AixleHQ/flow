@@ -322,7 +322,13 @@ class AgentCredential < ApplicationRecord
 
       renew!(source: :launch, margin_ms: within.in_milliseconds)
     end
-    return outcome unless outcome == :busy
+    unless outcome == :busy
+      # The adapter persists through AgentCredential.from_artifacts — another instance —
+      # and the launch writes this one into the container. Without the reload it hands
+      # over the tokens the refresh just revoked.
+      reload
+      return outcome
+    end
 
     await_refresh
     return :not_needed unless expiring_within?(within)
