@@ -113,7 +113,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                           .test(integration)
 
     if result[:status] == :active
-      redirect_to company_project_integrations_path(current_project), notice: "Connection verified"
+      redirect_to company_project_integrations_path(current_project),
+                  (result[:warning] ? :alert : :notice) => result[:message] || "Connection verified"
     else
       redirect_to company_project_integrations_path(current_project),
                   alert: "Connection failed: #{result[:message]}"

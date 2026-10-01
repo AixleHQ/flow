@@ -87,6 +87,20 @@ module AzureDevops
       raise e
     end
 
+    # Each wanted subscription that is not delivering, and why: never created,
+    # refused (its error code), disabled, or on probation.
+    def undelivered(event_types)
+      rows = integration.azure_devops_subscriptions.where(event_type: event_types)
+                        .index_by { |subscription| [ subscription.azure_project_id, subscription.event_type ] }
+      integration.azure_project_ids.product(event_types).filter_map do |project_id, event_type|
+        row = rows[[ project_id, event_type ]]
+        next if row&.active? && row.azure_subscription_id.present?
+
+        { project_id: project_id, event_type: event_type,
+          reason: row.nil? ? "missing" : (row.error_code.presence || row.status.to_s) }
+      end
+    end
+
     # Ask Azure what state each subscription is actually in. A subscription on
     # probation is not delivering, and from this side that is indistinguishable
     # from "nothing has happened" — so it is read and recorded rather than

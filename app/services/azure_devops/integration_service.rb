@@ -131,19 +131,22 @@ module AzureDevops
 
     # Re-verify an existing connection without touching its id or repository
     # attachments, and without replacing a working credential when the check
-    # fails. `test` never mutates Azure.
+    # fails. In Azure, `test` changes nothing but this connection's own Service
+    # Hooks.
     def test(integration)
       project_info = verify_selected_project!(integration)
       apply_verified(integration, project_info)
-      # Also the retry path for Service Hooks. They are provisioned once, at
-      # connect time, and best-effort — so a connection made while webhooks were
-      # switched off, or while this identity could not yet create them, would
-      # otherwise never get them at all and CI gates would fall back to the
-      # five-minute sweep forever. `ensure_all!` is idempotent, and so is the
-      # tracker provisioning after it.
-      provision_subscriptions(integration)
+      # Also the check-and-repair path for Service Hooks. They are provisioned
+      # once, at connect time (or when a Boards trigger is enabled), and
+      # best-effort — so a connection made while webhooks were switched off,
+      # while this identity could not yet create them, or whose hooks were
+      # deleted in Azure, would otherwise never get them back: CI gates would
+      # fall back to the five-minute sweep and Boards triggers would never fire.
+      # `ensure_all!` is idempotent, and so is the tracker provisioning after it.
+      hooks = provision_subscriptions(integration, check: true)
       Trackers::Provisioning.ensure_for!(integration)
-      { status: :active, project: project_info }
+      { status: :active, project: project_info, service_hooks: hooks,
+        message: verified_message(integration, hooks), warning: hooks.present? && hooks[:undelivered] != [] }
     rescue Error => e
       record_error(integration, e.code)
       # The message goes to the caller, which puts it in a flash — not into
@@ -232,14 +235,50 @@ module AzureDevops
     # Creating them needs organization-level permission this connection may not
     # have, and everything on demand works without them — so a failure is logged
     # and the subscription row carries its own error, rather than failing a
-    # connection that is otherwise fine. Testing the connection retries it.
-    def provision_subscriptions(integration)
+    # connection that is otherwise fine. Testing the connection retries it,
+    # after `check` has asked Azure which of them still exist.
+    #
+    # The `workitem.*` hooks are wanted once a Boards trigger waits for this
+    # connection's trackers; enabling the trigger creates them too
+    # (Trackers::EnsureEventDeliveryJob), but a trigger for any tracker may
+    # predate the connection.
+    #
+    # Returns nil when no hooks can exist here, else the event types wanted and
+    # which of them are not delivering (nil when that could not be found out).
+    def provision_subscriptions(integration, check: false)
       return unless AppConfig.webhooks_enabled?
 
-      SubscriptionService.new(integration).ensure_all!
+      event_types = AzureDevopsSubscription::GATE_EVENT_TYPES
+      event_types += AzureDevopsSubscription::TRACKER_EVENT_TYPES if tracker_events_awaited?(integration)
+      service = SubscriptionService.new(integration)
+      service.refresh_status! if check
+      service.ensure_all!(event_types: event_types)
+      { event_types: event_types, undelivered: service.undelivered(event_types) }
     rescue StandardError => e
       Rails.logger.warn("[AzureDevops::IntegrationService] subscription setup skipped for " \
                         "integration #{integration.id}: #{e.class}: #{e.message}")
+      { event_types: event_types, undelivered: nil }
+    end
+
+    def tracker_events_awaited?(integration)
+      TriggerBinding.active.where(project_id: integration.project_id, event_type: Trackers::EventPipeline::EVENT_TYPES)
+                    .where(project_tracker_id: [ nil, *integration.project_trackers.ids ]).exists?
+    end
+
+    def verified_message(integration, hooks)
+      return "Connection verified. Azure cannot reach this deployment, so it has no Service Hooks" if hooks.nil?
+      return "Connection verified, but its Service Hooks could not be checked" if hooks[:undelivered].nil?
+
+      if hooks[:undelivered].empty?
+        events = hooks[:event_types].intersect?(AzureDevopsSubscription::TRACKER_EVENT_TYPES) ? "CI and Boards" : "CI"
+        return "Connection verified. Service Hooks are in place for #{events} events"
+      end
+
+      names = integration.azure_project_names
+      failing = hooks[:undelivered].group_by { |hook| hook.values_at(:project_id, :reason) }.map do |(project_id, reason), group|
+        "#{group.pluck(:event_type).join(', ')} in #{names[project_id].presence || project_id} (#{reason})"
+      end
+      "Connection verified, but these Service Hooks are not delivering: #{failing.join('; ')}"
     end
 
     # The one check that matters at connect time: the selected project must be
