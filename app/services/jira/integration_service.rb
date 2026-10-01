@@ -172,6 +172,7 @@ module Jira
     # Who the connection acts as. Only an account kept for Aixle is its tracker
     # identity: a person's own edits must not pass for Aixle's.
     def identity_settings(identity, dedicated:)
+      TrackerAccount.remember!(provider: "jira", account_ids: [ identity[:id] ])
       {
         "identity_display_name" => identity[:name], "dedicated_identity" => dedicated,
         "tracker_identity" => { "id" => identity[:id], "name" => identity[:name] }.compact

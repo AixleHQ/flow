@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1419,6 +1419,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_170000) do
 
   add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
   add_check_constraint "tools", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "tools_tenant_columns", validate: false
+
+  create_table "tracker_accounts", force: :cascade do |t|
+    t.string "account_id", null: false
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.datetime "first_seen_at", null: false
+    t.datetime "last_seen_at", null: false
+    t.string "provider", null: false
+    t.datetime "reported_at"
+    t.string "status", default: "active", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "account_id"], name: "index_tracker_accounts_on_provider_and_account_id", unique: true
+    t.index ["provider", "status", "reported_at"], name: "index_tracker_accounts_on_provider_and_status_and_reported_at"
+  end
 
   create_table "tracker_deliveries", force: :cascade do |t|
     t.datetime "created_at", null: false
