@@ -8,6 +8,7 @@ class BoardTaskDashboard < Administrate::BaseDashboard
 
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
+    number: Field::Number,
     board: Field::BelongsTo,
     board_column: Field::BelongsTo,
     assignee: Field::BelongsTo.with_options(optional: true),
@@ -34,6 +35,7 @@ class BoardTaskDashboard < Administrate::BaseDashboard
 
   COLLECTION_ATTRIBUTES = %i[
     id
+    number
     title
     board
     board_column
@@ -45,6 +47,7 @@ class BoardTaskDashboard < Administrate::BaseDashboard
 
   SHOW_PAGE_ATTRIBUTES = %i[
     id
+    number
     title
     board
     board_column

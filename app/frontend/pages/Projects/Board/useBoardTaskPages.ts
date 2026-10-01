@@ -65,17 +65,17 @@ interface ColumnPage<T> {
 export function boardFilterParams(filters: BoardTaskFilters): URLSearchParams {
   const params = new URLSearchParams();
   // Plain attribute filters go through ransack (BoardTask.ransackable_attributes).
-  // Search matches either the title or the task ID. The two predicates live in a ransack OR
-  // grouping (`q[g][0][...]` with the combinator `q[g][0][m]=or` set inside the group) so the OR
-  // stays scoped to search and does not leak into the sibling filters below, which keep ANDing at
-  // the top level via ransack's default. A term is treated as an ID only when
-  // it is a plain integer (one optional leading `#`, matching the displayed `#id` format); title
+  // Search matches either the title or the board-local task number. The two predicates live in a
+  // ransack OR grouping (`q[g][0][...]` with the combinator `q[g][0][m]=or` set inside the group) so
+  // the OR stays scoped to search and does not leak into the sibling filters below, which keep
+  // ANDing at the top level via ransack's default. A term is treated as a number only when
+  // it is a plain integer (one optional leading `#`, matching the displayed `#N` format); title
   // matching always uses the raw term.
   if (filters.search) {
     params.set('q[g][0][m]', 'or');
     params.set('q[g][0][title_cont]', filters.search);
-    const idTerm = filters.search.trim().replace(/^#/, '');
-    if (/^\d+$/.test(idTerm)) params.set('q[g][0][id_eq]', idTerm);
+    const numberTerm = filters.search.trim().replace(/^#/, '');
+    if (/^\d+$/.test(numberTerm)) params.set('q[g][0][number_eq]', numberTerm);
   }
   if (filters.assigneeId) params.set('q[assignee_id_eq]', filters.assigneeId);
   if (filters.taskType) params.set('q[task_type_eq]', filters.taskType);

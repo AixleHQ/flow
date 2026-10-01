@@ -29,8 +29,29 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     task = create(:board_task, board: board, board_column: col)
 
     Bullet.enable = false
-    get company_project_board_path(@project, task: task.id)
+    get company_project_board_path(@project, task: task.number)
     assert_inertia_page "Projects/Board/BoardPage"
+  ensure
+    Bullet.enable = true
+  end
+
+  # The `?task=` param is the number the card shows, which restarts on every board —
+  # so it must not be read as the global id of some other task.
+  test "show opens the task by its board number, not by id" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    create_list(:board_task, 3, board: other_board, board_column: other_column)
+    board = create(:board, project: @project)
+    col = create(:board_column, board: board)
+    create(:board_task, board: board, board_column: col)
+    second = create(:board_task, board: board, board_column: col, title: "Second on this board")
+
+    Bullet.enable = false
+    get company_project_board_path(@project, task: 2)
+
+    assert_inertia_props do |props|
+      props[:selectedTask][:id] == second.id && props[:selectedTask][:number] == 2
+    end
   ensure
     Bullet.enable = true
   end
@@ -58,7 +79,7 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     task = create(:board_task, board: board, board_column: col, parent_task: epic)
 
     Bullet.enable = false
-    get company_project_board_path(@project, task: task.id)
+    get company_project_board_path(@project, task: task.number)
     assert_inertia_page "Projects/Board/BoardPage"
 
     # The archived epic is absent from the board's task list, so the detail payload has to

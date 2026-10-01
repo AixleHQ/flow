@@ -29,6 +29,7 @@ class BoardTask < ApplicationRecord
   validate :assignee_is_project_member, if: -> { assignee_id.present? }
 
   before_validation :assign_next_position, on: :create
+  before_create :assign_number
   after_commit :touch_board
   after_commit :broadcast_task_updates
 
@@ -74,7 +75,7 @@ class BoardTask < ApplicationRecord
   end
 
   def self.ransackable_attributes(_auth_object = nil)
-    %w[id title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
+    %w[id number title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)
@@ -95,6 +96,10 @@ class BoardTask < ApplicationRecord
     return if position.present?
 
     self.position = board_column&.board_tasks&.maximum(:position).to_i + 1
+  end
+
+  def assign_number
+    self.number = board.next_task_number!
   end
 
   def column_belongs_to_board

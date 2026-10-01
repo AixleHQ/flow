@@ -36,6 +36,15 @@ class Board < ApplicationRecord
     end
   end
 
+  # Bumping and reading the counter in one UPDATE row-locks the board until the
+  # transaction ends, so concurrent creates on one board get distinct numbers.
+  # The counter only grows: a deleted task's number is never handed out again.
+  def next_task_number!
+    self.class.connection.select_value(self.class.sanitize_sql_array([ <<~SQL.squish, id ]))
+      UPDATE boards SET last_task_number = last_task_number + 1 WHERE id = ? RETURNING last_task_number
+    SQL
+  end
+
   def self.ransackable_attributes(_auth_object = nil)
     %w[name preset_origin created_at updated_at]
   end

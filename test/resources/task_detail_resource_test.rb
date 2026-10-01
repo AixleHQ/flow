@@ -20,8 +20,9 @@ class TaskDetailResourceTest < ActiveSupport::TestCase
 
     children = TaskDetailResource.new(@epic.reload).to_h["childTasks"]
 
-    assert_equal [ { "id" => first.id, "title" => "Add address form", "taskType" => "bug" },
-                   { "id" => second.id, "title" => "Add card form", "taskType" => "story" } ], children
+    assert_equal [ { "id" => first.id, "number" => first.number, "title" => "Add address form", "taskType" => "bug" },
+                   { "id" => second.id, "number" => second.number, "title" => "Add card form", "taskType" => "story" } ],
+                 children
   end
 
   test "the agent-facing payload keeps the children in the Ruby spelling" do
@@ -30,7 +31,14 @@ class TaskDetailResourceTest < ActiveSupport::TestCase
 
     children = TaskDetailResource.new(@epic.reload, params: { snake_keys: true }).to_h["child_tasks"]
 
-    assert_equal [ { id: child.id, title: "Add card form", task_type: "story" } ], children
+    assert_equal [ { id: child.id, number: child.number, title: "Add card form", task_type: "story" } ], children
+  end
+
+  test "parent_task_number is the parent's board number" do
+    child = create(:board_task, board: @board, board_column: @column, parent_task: @epic)
+
+    assert_equal @epic.number, TaskDetailResource.new(child).to_h["parentTaskNumber"]
+    assert_nil TaskDetailResource.new(@epic).to_h["parentTaskNumber"]
   end
 
   test "a task without children serializes an empty child list" do

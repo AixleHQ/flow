@@ -117,7 +117,7 @@ interface Props {
   tasksPageSize?: number;
   // Board-wide filter/picker options, which can no longer be derived from `tasks`.
   boardTags?: string[];
-  epics?: Array<{ id: number; title: string }>;
+  epics?: Array<{ id: number; number: number; title: string }>;
   members: BoardMember[];
   workflows: BoardWorkflow[];
   viewPresets?: BoardViewPreset[];
@@ -178,7 +178,7 @@ const DEFAULT_TASKS_PAGE_SIZE = 25;
 // would have it re-derive its state on every render for nothing.
 const NO_TASKS: Task[] = [];
 const NO_COLUMNS: Column[] = [];
-const NO_EPICS: Array<{ id: number; title: string }> = [];
+const NO_EPICS: Array<{ id: number; number: number; title: string }> = [];
 
 const BoardPage = () => {
   const {
@@ -322,58 +322,42 @@ const BoardPage = () => {
     });
   }, []);
 
-  // The task id a click just requested but whose props haven't landed yet — drives the sidebar
-  // skeleton below. Cleared on the request's own `onFinish`, guarded by id so a stale response
+  // The task number a click just requested but whose props haven't landed yet — drives the sidebar
+  // skeleton below. Cleared on the request's own `onFinish`, guarded by number so a stale response
   // for an already-superseded click can't clear a newer one's pending state.
-  const [pendingTaskId, setPendingTaskId] = useState<number | null>(null);
+  const [pendingTaskNumber, setPendingTaskNumber] = useState<number | null>(null);
 
-  // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
-  // lives on a page no column has loaded.
+  // Opening by the board-local task number (the `?task=` param), for a task the board may not hold
+  // a card for — an epic's child or parent that lives on a page no column has loaded.
   //
   // Scoped to just the selected task's own props: the board list, columns, tags, epics,
   // members, etc. don't move when a card is opened or closed. Without this `only`, every
   // click re-ran the full board query set (issue #563).
-  const openTaskById = useCallback(
-    (taskId: number) => {
-      setPendingTaskId(taskId);
+  const openTaskByNumber = useCallback(
+    (taskNumber: number | null) => {
+      setPendingTaskNumber(taskNumber);
       router.get(
         boardUrl,
-        { task: taskId },
+        { task: taskNumber },
         {
           preserveState: true,
           preserveScroll: true,
           only: TASK_DETAIL_PROPS,
-          onFinish: () => setPendingTaskId((id) => (id === taskId ? null : id)),
+          onFinish: () => setPendingTaskNumber((n) => (n === taskNumber ? null : n)),
         },
       );
     },
     [boardUrl],
   );
 
-  const openTask = useCallback(
-    (task: Task | null) => {
-      const taskId = task?.id ?? null;
-      setPendingTaskId(taskId);
-      router.get(
-        boardUrl,
-        { task: taskId },
-        {
-          preserveState: true,
-          preserveScroll: true,
-          only: TASK_DETAIL_PROPS,
-          onFinish: () => setPendingTaskId((id) => (id === taskId ? null : id)),
-        },
-      );
-    },
-    [boardUrl],
-  );
+  const openTask = useCallback((task: Task | null) => openTaskByNumber(task?.number ?? null), [openTaskByNumber]);
 
   // URL each task card links to. Kept in sync with openTask so a plain click and
   // "open in new tab" land on the same task detail view.
-  const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.id}`, [boardUrl]);
+  const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.number}`, [boardUrl]);
 
   const closeTask = useCallback(() => {
-    setPendingTaskId(null);
+    setPendingTaskNumber(null);
     router.get(boardUrl, {}, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
   }, [boardUrl]);
 
@@ -1021,13 +1005,13 @@ const BoardPage = () => {
 
       <TaskDetailSidebar
         task={selectedTask}
-        pendingTaskId={pendingTaskId}
+        pendingTaskNumber={pendingTaskNumber}
         allTasks={localTasks}
         epics={epics ?? NO_EPICS}
         knownTags={allTags}
         onClose={closeTask}
         onDelete={handleDeleteTask}
-        onOpenTaskId={openTaskById}
+        onOpenTaskNumber={openTaskByNumber}
         projectId={project.id}
         columns={columns}
         members={members}

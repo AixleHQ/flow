@@ -17,7 +17,7 @@ module Api
 
             tasks = scope
               .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
-              .then { |s| exact_id_search? ? s.reorder(Arel.sql("(board_tasks.id = #{exact_search_id})::int DESC"), :position, :id) : s.in_board_order }
+              .then { |s| exact_number_search? ? s.reorder(exact_number_first, :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
             waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
@@ -176,14 +176,19 @@ module Api
             end
           end
 
-          # Returns the parsed integer id when the search is an exact-id lookup (q[g][0][id_eq]
-          # is present), nil otherwise. Used to promote the matching card to the top of results.
-          def exact_search_id
-            q_params.dig(:g, :"0", :id_eq).presence&.to_i
+          # Returns the parsed task number when the search is an exact-number lookup
+          # (q[g][0][number_eq] is present), nil otherwise. Used to promote the matching card
+          # to the top of results.
+          def exact_search_number
+            q_params.dig(:g, :"0", :number_eq).presence&.to_i
           end
 
-          def exact_id_search?
-            exact_search_id.present?
+          def exact_number_search?
+            exact_search_number.present?
+          end
+
+          def exact_number_first
+            Arel.sql(BoardTask.sanitize_sql_array([ "(board_tasks.number = ?)::int DESC", exact_search_number ]))
           end
 
           def task_params

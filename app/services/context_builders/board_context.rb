@@ -31,7 +31,7 @@ module ContextBuilders
       lines << "You are working on a specific task from the project board."
       lines << ""
       lines << "- **Board:** #{board.name}"
-      lines << "- **Task:** #{task.title} (id: #{task.id})"
+      lines << "- **Task:** ##{task.number} #{task.title} (id: #{task.id})"
       lines << "- **Column:** #{column.name}" if column
       lines << "- **Priority:** #{task.priority}" if task.priority.present?
       lines << "- **Description:** #{task.description.truncate(500)}" if task.description.present?

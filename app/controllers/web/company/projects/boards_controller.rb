@@ -57,7 +57,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       board_tags: -> { board.board_tasks.active.distinct.pluck(Arel.sql("unnest(tags)")).compact.sort },
       epics: -> {
         board.board_tasks.active.where(task_type: "epic").order(:title).limit(EPIC_OPTIONS_LIMIT)
-             .pluck(:id, :title).map { |id, title| { id: id, title: title } }
+             .pluck(:id, :number, :title).map { |id, number, title| { id: id, number: number, title: title } }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
       workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
@@ -128,7 +128,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   def find_task(board)
     board.board_tasks
          .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
-         .find_by(id: params[:task])
+         .find_by(number: params[:task])
     # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
     # parent_task so TaskDetailResource.parent_task_title does not fire an extra query
   end
