@@ -103,7 +103,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # operation: repair keeps the integration id and its repository attachments.
   def test_connection
     integration = Integration.for_project(current_project).find(params[:id])
-    service_class = { "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService }[integration.provider.to_s]
+    service_class = { "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
+                      "github" => Github::IntegrationService }[integration.provider.to_s]
     unless service_class
       return redirect_to company_project_integrations_path(current_project),
                          alert: "This integration has no connection test"
@@ -235,8 +236,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # plaintext `project:<id>` (replayable, forgeable — oauth-unification §7). GitHub
   # echoes `state` back to the deployment-wide callback (GithubSetupController).
   def github_app_install
-    slug = Settings.github.app_slug
-    if slug.blank?
+    unless Github::TokenService.app_configured?
       redirect_to company_project_integrations_path(current_project), alert: "GitHub App is not configured"
       return
     end
@@ -250,14 +250,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       provider: "github_setup"
     )
     # allow_other_host: github.com install URL built from deployment Settings — never user-supplied.
-    redirect_to "https://github.com/apps/#{slug}/installations/new?state=#{CGI.escape(state)}",
+    redirect_to "https://github.com/apps/#{Settings.github.app_slug}/installations/new?state=#{CGI.escape(state)}",
                 allow_other_host: true
   end
 
   private
 
-  # GitHub connects two ways. The App path posts an installation id GitHub
-  # handed back after the install; the PAT path posts a token pasted into the
+  # GitHub connects two ways. The App path arrives on GitHub's post-install
+  # redirect (GithubSetupController); the PAT path posts a token pasted into the
   # dialog. Which credential is read is decided by the declared mode, never by
   # which parameter happens to be present — switching mode in the dialog must
   # not be able to submit the other path's credential.
@@ -284,17 +284,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                          } }
     end
 
-    # "Link to project": the installation must already be one of the company's.
-    # New installations only arrive through GithubSetupController.
-    integration = service.create(installation_id: params[:installation_id].to_s)
-
-    if integration.persisted? && integration.active?
-      redirect_to company_project_integrations_path(current_project), notice: "Github integration connected"
-    else
-      redirect_to company_project_integrations_path(current_project),
-                  alert: integration.errors.full_messages.to_sentence.presence ||
-                         integration.settings&.dig("error") || "Failed to connect Github"
-    end
+    redirect_to company_project_integrations_path(current_project),
+                alert: "The GitHub App connects through its install on GitHub — choose Connect → GitHub"
   end
 
   # Whether the GitHub App path can be walked on this deployment at all.
@@ -304,7 +295,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # "GitHub App is not configured" is worse than one that says so up front, and
   # on such a deployment the dialog opens on the path that works.
   def github_props
-    { app_configured: Settings.github.app_slug.present? && Settings.github.app_id.present? }
+    { app_configured: Github::TokenService.app_configured? }
   end
 
   # Whether the page may offer Azure DevOps at all, and nothing else.

@@ -195,6 +195,15 @@ class TerminalSessionResource < ApplicationResource
     session.repositories.map(&:id)
   end
 
+  # Attached repositories that did not clone, and why. They are left out of
+  # the agent's context, so without this a missing checkout has no explanation.
+  typelize "Array<{ id: number; fullName: string; error: string }>"
+  attribute :failed_repositories do |session|
+    next [] unless viewable_for?(session)
+
+    Array(session.metadata&.dig("failed_repos")).map { |f| f.to_h.slice("id", "full_name", "error") }
+  end
+
   typelize "string | null"
   attribute :user_name do |session|
     session.user&.name

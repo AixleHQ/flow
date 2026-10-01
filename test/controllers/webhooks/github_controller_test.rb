@@ -281,7 +281,44 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     assert_response :ok
   end
 
+  # == installation ==
+
+  test "an uninstall on GitHub takes down the connections on that installation" do
+    company = create(:company)
+    user = create(:user, company: company)
+    project = create(:project, company: company, owner: user)
+    uninstalled = github_connection(project, user, "4242")
+    unrelated = github_connection(project, user, "5151")
+    payload = { action: "deleted", installation: { id: 4242, account: { login: "acme-corp" } } }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "installation"
+    post_raw(payload)
+
+    assert_response :ok
+    assert_equal "error", uninstalled.reload.status.to_s
+    assert_equal Github::InstallationEvents::UNINSTALLED, uninstalled.settings["error"]
+    assert unrelated.reload.active?
+  end
+
+  test "an installation event without an installation id changes nothing" do
+    payload = { action: "deleted" }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "installation"
+    post_raw(payload)
+
+    assert_response :ok
+  end
+
   private
+
+  def github_connection(project, user, installation_id)
+    integration = build(:integration, :github, :active, company: project.company, project: project, connected_by: user)
+    integration.credentials_data = { "installation_id" => installation_id }
+    integration.save!
+    integration
+  end
 
   def sign_payload(body)
     digest = OpenSSL::HMAC.hexdigest("SHA256", WEBHOOK_SECRET, body)

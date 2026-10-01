@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -203,23 +204,30 @@ export const IntegrationsContent = ({
 
   const hasFilters = !!search || scopeFilter !== 'all';
 
-  const alreadyLinkedInstallationIds = useMemo(
-    () =>
-      new Set(
-        integrations.filter((i) => i.scopeIndicator === 'project' && i.installationId).map((i) => i.installationId),
-      ),
-    [integrations],
-  );
-
   const handleDelete = useCallback(
     (integration: Integration) => {
       modals.openConfirmModal({
         title: 'Remove Integration',
         children: (
-          <Text size="sm">
-            Are you sure you want to remove <b>{integration.name}</b>? This will also disconnect all repositories linked
-            through this integration.
-          </Text>
+          <Stack gap="xs">
+            <Text size="sm">
+              Are you sure you want to remove <b>{integration.name}</b>? This will also disconnect all repositories
+              linked through this integration.
+            </Text>
+            {integration.githubAuthMode === 'app' && (
+              <Text size="sm">
+                The GitHub App stays installed on GitHub, where other projects may still use it.{' '}
+                {integration.githubUrl ? (
+                  <Anchor href={integration.githubUrl} target="_blank" size="sm">
+                    Uninstall it on GitHub
+                  </Anchor>
+                ) : (
+                  'Uninstall it on GitHub'
+                )}{' '}
+                if nothing else needs it.
+              </Text>
+            )}
+          </Stack>
         ),
         labels: { confirm: 'Remove', cancel: 'Cancel' },
         confirmProps: { color: 'red' },
@@ -239,22 +247,6 @@ export const IntegrationsContent = ({
   // GitHub) and a pasted personal access token. Opening it used to go straight
   // to the install, which dead-ended anyone who cannot install an app.
   const handleConnectGithub = useCallback(() => setGithubOpen(true), []);
-
-  const handleLinkToProject = useCallback(
-    (integration: Integration) => {
-      if (!integration.installationId) return;
-      router.post(
-        basePath,
-        { provider: 'github', installationId: integration.installationId },
-        {
-          preserveScroll: true,
-          onSuccess: () => notifications.show({ message: `${integration.name} linked to project`, color: 'green' }),
-          onError: () => notifications.show({ message: 'Failed to link integration', color: 'red' }),
-        },
-      );
-    },
-    [basePath],
-  );
 
   const handleConnectGitlab = useCallback(() => {
     if (!gitlabPat.trim()) return;
@@ -344,7 +336,7 @@ export const IntegrationsContent = ({
     );
   }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
-  // Re-verify an Azure or Jira connection. "Test" and "repair" are the same
+  // Re-verify an Azure, Jira or GitHub connection. "Test" and "repair" are the same
   // operation: the integration id and what hangs off it are kept either way, and
   // a failed check never replaces a working credential.
   const handleTestConnection = useCallback(
@@ -532,12 +524,6 @@ export const IntegrationsContent = ({
             <Table.Tbody>
               {filtered.map((integration) => {
                 const readOnly = isProjectContext && integration.scopeIndicator === 'company';
-                const canLink =
-                  isProjectContext &&
-                  readOnly &&
-                  integration.status === 'active' &&
-                  integration.installationId &&
-                  !alreadyLinkedInstallationIds.has(integration.installationId);
 
                 return (
                   <Table.Tr key={integration.id}>
@@ -612,6 +598,13 @@ export const IntegrationsContent = ({
                                 : ''}
                             </Text>
                           )}
+                          {integration.githubError && (
+                            <Tooltip label={integration.githubError} multiline maw={360}>
+                              <Text fz={11} c="red.6" truncate maw={260}>
+                                {integration.githubError}
+                              </Text>
+                            </Tooltip>
+                          )}
                           {/* Whose identity it acts as matters most on a 3LO
                               connection, which acts as the person who signed in. */}
                           {integration.provider === 'jira' && (
@@ -668,15 +661,15 @@ export const IntegrationsContent = ({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
-                        {canExecute && canLink && (
-                          <Tooltip label="Link to project">
+                        {integration.provider === 'github' && canExecute && !readOnly && (
+                          <Tooltip label="Test connection">
                             <ActionIcon
-                              aria-label="Link to project"
+                              aria-label={`Test connection for ${integration.name}`}
                               variant="subtle"
                               size="sm"
-                              onClick={() => handleLinkToProject(integration)}
+                              onClick={() => handleTestConnection(integration)}
                             >
-                              <IconLink size={16} />
+                              <IconRefresh size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}

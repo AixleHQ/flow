@@ -72,6 +72,12 @@ module Oauth
       nil
     end
 
+    # Signed by us but no longer verifying: its TTL has passed. Tells a link
+    # that simply took too long apart from one that is not ours at all.
+    def expired?(state)
+      state.present? && VERIFIER.call.valid_message?(state.to_s) && decode(state).nil?
+    end
+
     # Single-use consume: read + delete the cached side-data for this nonce.
     # Returns { "code_verifier" => ..., "user_id" => ... } the FIRST time, and nil
     # on replay or after TTL expiry. Callers MUST treat nil as "already used or

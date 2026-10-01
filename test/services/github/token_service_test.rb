@@ -114,6 +114,53 @@ module Github
       assert_equal({ contents: "read", pull_requests: "write" }, info[:permissions])
     end
 
+    test "verify_installation reports a suspended installation" do
+      stub_request(:get, "https://api.github.com/app/installations/12345")
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { id: 12_345, account: { login: "acme-corp", type: "Organization" },
+                           target_type: "Organization", permissions: {},
+                           suspended_at: "2026-09-30T12:00:00Z" }.to_json)
+
+      info = Github::TokenService.new(@integration).verify_installation
+
+      assert info[:suspended_at].present?
+    end
+
+    test "verify_installation says an installation GitHub no longer has was uninstalled" do
+      stub_request(:get, "https://api.github.com/app/installations/12345")
+        .to_return(status: 404, headers: { "Content-Type" => "application/json" },
+                   body: { message: "Not Found" }.to_json)
+
+      error = assert_raises(Github::TokenService::AuthenticationError) do
+        Github::TokenService.new(@integration).verify_installation
+      end
+      assert_match(/uninstalled/, error.message)
+    end
+
+    test "verify_installation tells a GitHub outage apart from a bad credential" do
+      stub_request(:get, "https://api.github.com/app/installations/12345")
+        .to_return(status: 502, headers: { "Content-Type" => "application/json" }, body: { message: "Bad Gateway" }.to_json)
+
+      assert_raises(Github::TokenService::UnavailableError) do
+        Github::TokenService.new(@integration).verify_installation
+      end
+    end
+
+    test "app_configured? needs the App's id, slug and private key" do
+      Settings.github.stubs(:app_slug).returns("aixle-app")
+      Settings.github.stubs(:private_key).returns("")
+      assert Github::TokenService.app_configured?
+
+      Settings.github.stubs(:private_key_path).returns(nil)
+      assert_not Github::TokenService.app_configured?
+
+      Settings.github.stubs(:private_key).returns("-----BEGIN RSA PRIVATE KEY-----")
+      assert Github::TokenService.app_configured?
+
+      Settings.github.stubs(:app_slug).returns(nil)
+      assert_not Github::TokenService.app_configured?
+    end
+
     test "raises ConfigurationError when app_id is blank" do
       Settings.github.stubs(:app_id).returns(nil)
 

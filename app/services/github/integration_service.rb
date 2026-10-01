@@ -5,24 +5,19 @@ module Github
     class ConfigurationError < StandardError; end
     class AuthenticationError < StandardError; end
 
-    def initialize(company:, connected_by:, project: nil)
+    def initialize(company:, connected_by:, project:)
       @company = company
       @connected_by = connected_by
       @project = project
     end
 
-    # `via_setup:` — the id arrived on GitHub's own post-install redirect, with
-    # our signed state. Only that path may connect an installation the company
-    # does not hold yet (and, where the App's OAuth credentials are configured,
-    # only for an installation the person completing the install can see).
-    # Everywhere else — "link to project" — the id has to be one the company
-    # already holds; the App's JWT can read every installation, so its existence
-    # proves nothing about who installed it.
-    def create(installation_id:, via_setup: false, oauth_code: nil)
-      unless via_setup || Integration.github_installation_held_by?(@company, installation_id)
-        return refused("This GitHub installation is not connected to this workspace")
-      end
-      if via_setup && Github::InstallationOwnership.enforced? &&
+    # The id arrives on GitHub's own post-install redirect, with our signed
+    # state (GithubSetupController). Where the App's OAuth credentials are
+    # configured, it connects only an installation the person completing the
+    # install can see: the App's JWT can read every installation, so its
+    # existence proves nothing about who installed it.
+    def create(installation_id:, oauth_code: nil)
+      if Github::InstallationOwnership.enforced? &&
          !Github::InstallationOwnership.new(code: oauth_code).includes?(installation_id)
         return refused("Could not confirm you have access to this GitHub installation")
       end
@@ -112,7 +107,39 @@ module Github
       integration
     end
 
+    # A working connection is repaired in place, keeping its repositories. A
+    # GitHub outage leaves the status alone: it says nothing about the credential.
+    def test(integration)
+      token_service = Github::TokenService.new(integration)
+      info = integration.github_pat? ? token_service.verify_token : token_service.verify_installation
+      if info[:suspended_at].present?
+        return failed(integration, InstallationEvents::SUSPENDED, "installation_state" => "suspended")
+      end
+
+      integration.update!(name: info[:account_login], status: :active, settings: verified_settings(integration, info))
+      { status: :active }
+    rescue Github::TokenService::UnavailableError => e
+      { status: :error, message: e.message }
+    rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
+      failed(integration, e.message)
+    rescue ActiveRecord::RecordInvalid => e
+      failed(integration, e.record.errors.full_messages.to_sentence)
+    end
+
     private
+
+    def failed(integration, message, extra = {})
+      integration.update_columns(status: "error", updated_at: Time.current,
+                                 settings: integration.settings.to_h.merge(extra).merge("error" => message))
+      { status: :error, message: message }
+    end
+
+    def verified_settings(integration, info)
+      integration.settings.to_h.except("error", "installation_state", "token_scopes").merge(
+        "account_login" => info[:account_login], "account_type" => info[:account_type],
+        "target_type" => info[:target_type], "token_scopes" => info[:scopes]
+      ).compact
+    end
 
     def refused(message)
       @company.integrations.build(

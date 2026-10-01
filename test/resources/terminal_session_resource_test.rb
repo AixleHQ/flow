@@ -129,6 +129,20 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_nil anonymous["ideUrl"]
   end
 
+  # A failed clone is left out of the agent's context; this is how the person
+  # watching the session learns which repository is missing, and why.
+  test "repositories that did not clone are reported to those who may see the session" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",
+                                                        metadata: { "failed_repos" => [
+                                                          { "id" => 3, "full_name" => "acme/api", "error" => "Integration not active" }
+                                                        ] })
+
+    own = TerminalSessionResource.new(session, params: { viewer: @user }).to_h
+
+    assert_equal [ { "id" => 3, "fullName" => "acme/api", "error" => "Integration not active" } ], own["failedRepositories"]
+    assert_equal [], payload(session)["failedRepositories"]
+  end
+
   test "config files keep their paths through every camelizing pass" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
                                                         session_config: { "config_files" => { "/workspace/.aixle/references/guide.md" => "# Guide" } })

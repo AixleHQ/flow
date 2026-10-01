@@ -50,39 +50,20 @@ class Integration < ApplicationRecord
     company.integrations.build(provider: :gitlab, connected_by: connected_by, project: project)
   end
 
-  # A GitHub PAT connection has no installation to match on, so the scope alone
-  # identifies it: one PAT connection per project (or per company, for the
-  # company-wide rows that predate project scoping). Reconnecting replaces the
-  # token on that row rather than stacking a second connection to the same
+  # A GitHub PAT connection has no installation to match on, so the project
+  # alone identifies it: one PAT connection per project. Reconnecting replaces
+  # the token on that row rather than stacking a second connection to the same
   # account — a PAT expires and gets re-pasted often, and every re-paste would
   # otherwise leave the previous, dead connection behind for someone to clean up.
   def self.find_or_build_github_for_pat(company:, connected_by:, project:)
-    scoped =
-      if project
-        company.integrations.where(project_id: project.id, provider: :github)
-      else
-        company.integrations.company_wide.where(provider: :github)
-      end
-
-    scoped.find(&:github_pat?) ||
+    company.integrations.where(project_id: project.id, provider: :github).find(&:github_pat?) ||
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
   end
 
   def self.find_or_build_github_for_installation(company:, connected_by:, project:, installation_id:)
-    scoped =
-      if project
-        company.integrations.where(project_id: project.id, provider: :github)
-      else
-        company.integrations.company_wide.where(provider: :github)
-      end
-
-    scoped.find_by(github_installation_id: installation_id.to_i) ||
+    company.integrations.where(project_id: project.id, provider: :github)
+           .find_by(github_installation_id: installation_id.to_i) ||
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
-  end
-
-  # Whether this company already holds the installation (on any of its rows).
-  def self.github_installation_held_by?(company, installation_id)
-    company.integrations.where(provider: :github, github_installation_id: installation_id.to_i).exists?
   end
 
   def credentials_data=(hash)

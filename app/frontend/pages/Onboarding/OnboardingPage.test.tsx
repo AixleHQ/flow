@@ -63,6 +63,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   configItemIds: [],
   inputAssetIds: [],
   repositoryIds: [],
+  failedRepositories: [],
   userName: null,
   userEmail: null,
   projectName: null,

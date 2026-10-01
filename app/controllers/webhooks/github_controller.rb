@@ -11,6 +11,8 @@ class Webhooks::GithubController < ActionController::API
       handle_check_suite
     when "workflow_run"
       handle_workflow_run
+    when "installation"
+      handle_installation
     end
 
     head :ok
@@ -65,6 +67,14 @@ class Webhooks::GithubController < ActionController::API
       run_id: run_id,
       conclusion: conclusion
     )
+  end
+
+  def handle_installation
+    payload = request.request_parameters
+    installation_id = Integer(payload.dig("installation", "id"), exception: false)
+    return unless installation_id
+
+    Github::InstallationEvents.apply(action: payload["action"].to_s, installation_id: installation_id)
   end
 
   def verify_signature

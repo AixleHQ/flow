@@ -47,6 +47,12 @@ change them later, change the installation's repository access on GitHub — the
 row's **Settings** icon links to the installation — and Flow's next listing
 follows.
 
+The connection follows the installation. Uninstall the app on GitHub and the row
+turns to **Error** with *The GitHub App was uninstalled on GitHub*; suspend the
+installation and it is in error until you unsuspend it, when it comes back by
+itself. The row's **Test connection** asks GitHub again and repairs the row
+when the installation answers.
+
 If the app option is greyed out with *Unavailable on this deployment*, the
 deployment has no GitHub App; see
 [Self-hosted: the GitHub App](#self-hosted-the-github-app).
@@ -96,10 +102,10 @@ thing fail, not the connection.
 - **No webhooks.** GitHub delivers webhooks to an app, not to a token. CI gates
   resolve by polling instead — and not at all if the deployment cannot reach
   github.com.
-- **Tokens expire.** An expired token shows up as a failed clone or fetch.
-  Connect again with a new token: it replaces the stored one on the same
-  connection, which keeps its repositories. A new token GitHub refuses changes
-  nothing — the old one stays.
+- **Tokens expire.** An expired token shows up as a failed clone or fetch, and
+  as an error on the row's **Test connection**. Connect again with a new token:
+  it replaces the stored one on the same connection, which keeps its
+  repositories. A new token GitHub refuses changes nothing — the old one stays.
 
 The token is stored encrypted and never shown again; changing it means pasting
 a new one. A project has at most one token connection, beside any number of app
@@ -129,7 +135,8 @@ paste its github.com URL. It is cloned without credentials, so agents can read i
 but not push.
 
 Removing a GitHub connection also removes every repository attached through it.
-It does not uninstall the app on GitHub; do that on GitHub.
+It does not uninstall the app on GitHub, where other projects may still use it;
+the confirmation links to the installation, to uninstall it there.
 
 ## In a session
 
@@ -139,6 +146,9 @@ field. When the session starts, each one is cloned under `/workspace/repo/`:
 - The **source branch** is checked out. Every other branch and the full commit
   history are there too (`git branch -r` lists them); file contents of other
   revisions download the first time they are needed.
+- A repository that fails to clone is left out of the agent's list of
+  repositories. The session page names it under *did not clone*, with the
+  reason.
 - No token is written into the checkout, the remote URL or the environment. A
   credential helper asks Flow for a fresh credential on every `git fetch` and
   `git push`, so a long session outlives the hour an installation token lasts.
@@ -246,7 +256,9 @@ the operator registers one GitHub App for the whole deployment:
 3. **Repository permissions:** Contents read & write, Pull requests read & write,
    Checks read, Actions read, Metadata read. Add Workflows read & write if agents
    will change files under `.github/workflows`.
-4. **Events:** Check suite and Workflow run — the two CI gates resolve on. Flow
+4. **Events:** Check suite and Workflow run — the two CI gates resolve on.
+   GitHub also sends every app its `installation` events, with no subscription;
+   Flow follows an uninstall, a suspension and an unsuspension from them. Flow
    ignores every other event.
 5. If organizations other than the app's owner will install it, make it
    installable on any account.
@@ -259,9 +271,9 @@ the operator registers one GitHub App for the whole deployment:
    GITHUB_WEBHOOK_SECRET=<the webhook secret>
    ```
 
-The connect dialog offers the app once `GITHUB_APP_ID` and `GITHUB_APP_SLUG` are
-set. The key is read when a connection is verified, so a missing or bad key shows
-up as a connection in error, not at boot.
+The connect dialog offers the app once `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and a
+private key are set. The key itself is read when a connection is verified, so a
+key that does not parse shows up as a connection in error, not at boot.
 
 - `GITHUB_APP_PRIVATE_KEY` takes the PEM with real newlines, with `\n` escapes,
   or on one line. For a key mounted as a file, set `GITHUB_APP_PRIVATE_KEY_PATH`
@@ -299,9 +311,6 @@ new installation is refused.
 
 - **github.com only.** Clones and API calls go to github.com; GitHub Enterprise
   Server is not supported.
-- **No connection test.** A GitHub row has no **Test connection**, and its status
-  does not follow GitHub: an app uninstalled there still reads active in Flow,
-  while its clones fail and its gates wait until they go stale.
 - **No GitHub event triggers, and GitHub Issues is not a tracker.** Use an
   Incoming webhook trigger (above); trackers are Jira and Azure Boards — see
   [Trackers](/docs/trackers).
@@ -312,18 +321,22 @@ new installation is refused.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | *"You are not authorized to perform this action."* | You are a viewer in this company, and viewers cannot connect | Ask a company admin to change your role, or someone who can change the project |
-| *"GitHub App is not configured"*, or the app option is greyed out | The deployment has no `GITHUB_APP_SLUG` or `GITHUB_APP_ID` | Use a token, or have the operator register the app |
-| *"Connect a GitHub integration from within a project."* | The return from GitHub carried no valid link: more than ten minutes passed, the install was started on GitHub rather than from Flow, or another company is selected | Start again from the project's **Integrations** page |
+| *"GitHub App is not configured"*, or the app option is greyed out | The deployment is missing `GITHUB_APP_ID`, `GITHUB_APP_SLUG` or the private key (`GITHUB_APP_PRIVATE_KEY`, or a `GITHUB_APP_PRIVATE_KEY_PATH` file that exists) | Use a token, or have the operator register the app |
+| *"The GitHub setup link expired — open the project's Integrations page and connect GitHub again."* | More than ten minutes passed between **Continue to GitHub** and the return | Start again from the project's **Integrations** page |
+| *"Connect a GitHub integration from within a project."* | The return from GitHub carried no link Flow issued: the install was started on GitHub rather than from Flow, or another company is selected | Start again from the project's **Integrations** page |
 | *"GitHub setup link expired or already used — start the connection again."* | The return link was used before, or by a different Flow user | Start again |
 | Back on **Integrations**, nothing connected, no message | GitHub returned without an installation — for example, you requested the app from an organization owner instead of installing it | Connect again once it is installed |
 | *"This GitHub installation is already connected to another workspace"* | Another company holds this installation | The operator can enable user authorization ([above](#who-may-connect-an-installation)) |
 | *"Could not confirm you have access to this GitHub installation"* | The GitHub user who finished the install cannot see it, or the app's user authorization is off while its client credentials are set | Install as someone who can see it; operator: turn the authorization on |
-| A row in error, named *GitHub (unverified)* if it never verified, with *"Failed to verify installation: …"*, *"GitHub App ID not configured"*, *"GitHub App private key not configured …"*, *"GitHub App private key file not found at …"* or *"Invalid PEM format"* | The deployment's app configuration | Fix it and connect the same installation again; the row is reused |
+| A row in error, named *GitHub (unverified)* if it never verified, with *"Failed to verify installation: …"*, *"GitHub App ID not configured"*, *"GitHub App private key not configured …"*, *"GitHub App private key file not found at …"* or *"Invalid PEM format"* | The deployment's app configuration | Fix it, then select the row's **Test connection** |
+| A row in error with *"The GitHub App was uninstalled on GitHub. …"*, or *"GitHub has no installation … of this app — it was uninstalled"* | The app was uninstalled from that account | Install it again — that is a new connection — and remove this one |
+| A row in error with *"The GitHub App installation is suspended on GitHub. …"* | An owner of the account suspended the installation | Unsuspend it on GitHub; the row comes back by itself |
+| **Test connection** answers *"Connection failed: GitHub did not answer: …"* | GitHub had an outage; the row keeps its status | Try again later |
 | *"GitHub rejected this token — it is invalid, revoked or expired."* | Exactly that | A new token |
 | *"This token has no repository access. …"* | A classic token without `repo` or `public_repo` | Add the scope, or use a new token |
 | *"… must belong to the `account` GitHub installation"* when adding a repository | The repository's owner is not the account the app is installed on | Install the app on that account too |
 | A repository is missing from **Add Repository** | The installation was not granted it, or the token cannot see it | Grant it on GitHub, or widen the token |
-| A repository is missing from the agent's list of repositories | Its clone failed: the connection is not active, the source branch is gone, or GitHub refused the credential | Check the connection and the repository's source branch, then start a new session |
+| *"A repository did not clone"* on the session page, and the repository is missing from the agent's list | The connection is not active, the source branch is gone, or GitHub refused the credential — the reason is on the session page | Check the connection and the repository's source branch, then start a new session |
 | `git push` or `git fetch` fails with a 403, *Invalid username or password* or *could not read Username* | A checkout without the credential helper | The agent runs `refresh_github_token`, then retries |
 | A push changing `.github/workflows` is rejected | No `workflow` scope, or no Workflows permission on the app | Add it |
 | *"gh: no platform credential for this call — run it inside a checkout under /workspace/repo, or pass -R `owner/repo` …"* | `gh` could not tell which attached repository the call is for | Run it inside the checkout, or pass `-R` |

@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -15,6 +16,7 @@ import {
 import { type HotkeyItem, useClipboard, useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
+  IconAlertTriangle,
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
@@ -508,6 +510,32 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       {header}
 
       <div className={isTerminal ? classes.body : `${classes.body} ${classes.bodyLive}`}>
+        {s.failedRepositories.length > 0 && (
+          <Alert
+            color="orange"
+            variant="light"
+            icon={<IconAlertTriangle size={16} />}
+            title={
+              s.failedRepositories.length === 1
+                ? 'A repository did not clone'
+                : `${s.failedRepositories.length} repositories did not clone`
+            }
+          >
+            <Stack gap={4}>
+              {s.failedRepositories.map((repo) => (
+                <Text key={repo.id} size="sm" style={{ wordBreak: 'break-word' }}>
+                  <b>{repo.fullName}</b> — {repo.error}
+                </Text>
+              ))}
+              <Text size="xs" c="dimmed">
+                The agent has no checkout of {s.failedRepositories.length === 1 ? 'it' : 'them'}. Check the connection
+                on the project&rsquo;s Integrations page and the repository&rsquo;s source branch, then start a new
+                session.
+              </Text>
+            </Stack>
+          </Alert>
+        )}
+
         {frame}
 
         {isTerminal && s.errorMessage && (
