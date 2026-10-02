@@ -17,24 +17,15 @@ import {
   type TrackerTriggerValue,
 } from './trackerTrigger';
 import { TrackerTriggerFields } from './TrackerTriggerFields';
-import type { Trigger } from './types';
-
-interface ColumnOption {
-  id: number;
-  name: string;
-  boundWorkflowName?: string | null;
-}
-
-interface StepOption {
-  id: number;
-  name: string;
-}
+import type { Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
 interface TriggerFormPanelProps {
   projectId: number;
-  workflowId: number;
-  columns: ColumnOption[];
-  sessions: StepOption[];
+  // The workflow the trigger belongs to. Without one (the project's Triggers
+  // page), a new trigger's workflow is picked in the form.
+  workflowId?: number;
+  workflows?: TriggerWorkflowOption[];
+  columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
   editing: Trigger | null;
   defaultKind: string;
@@ -110,7 +101,8 @@ function webhookFilterFromPredicate(pred: Record<string, unknown>): { field: str
 
 export function TriggerFormPanel({
   projectId,
-  workflowId,
+  workflowId: fixedWorkflowId,
+  workflows = [],
   columns,
   trackers = [],
   editing,
@@ -125,6 +117,10 @@ export function TriggerFormPanel({
   const editWebhook = editing?.kind === 'webhook' ? webhookFilterFromPredicate(editPred) : null;
 
   const [kind, setKind] = useState<Kind>((editing?.kind as Kind) ?? (defaultKind as Kind));
+  const [pickedWorkflowId, setPickedWorkflowId] = useState<string | null>(
+    editing?.workflow_id?.toString() ?? (workflows.length === 1 ? workflows[0].id.toString() : null),
+  );
+  const workflowId = fixedWorkflowId ?? editing?.workflow_id ?? (pickedWorkflowId ? Number(pickedWorkflowId) : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set after a webhook is created: keeps the panel open on a success view showing
@@ -179,6 +175,10 @@ export function TriggerFormPanel({
   const cronDesc = describeCron(cron);
 
   const submit = useCallback(async () => {
+    if (!workflowId) {
+      setError('Choose the workflow this trigger starts');
+      return;
+    }
     setSaving(true);
     setError(null);
     const trigger: Record<string, unknown> = isEdit ? {} : { kind };
@@ -297,7 +297,7 @@ export function TriggerFormPanel({
   const creatorName = isEdit ? (editing?.created_by?.name ?? null) : (currentUser?.name ?? null);
   // A missing creator only blocks the off-board kinds; on a column trigger it is
   // just an unknown, so it is not flagged red.
-  const creatorTone = creatorName ? null : runsAsCreator ? 'var(--err)' : 'var(--text-3)';
+  const creatorTone = creatorName ? null : runsAsCreator ? 'var(--app-danger-fg)' : 'var(--app-text-tertiary)';
   const creatorHint = creatorName
     ? runsAsCreator
       ? 'Unattended runs from this trigger belong to this user and use their credentials.'
@@ -336,8 +336,8 @@ export function TriggerFormPanel({
           bottom: 0,
           width: 480,
           maxWidth: '92vw',
-          background: 'var(--bg-card)',
-          borderLeft: '1px solid var(--border)',
+          background: 'var(--app-bg-paper)',
+          borderLeft: '1px solid var(--app-border-default)',
           zIndex: 91,
           display: 'flex',
           flexDirection: 'column',
@@ -351,11 +351,11 @@ export function TriggerFormPanel({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 24px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--app-border-default)',
             flexShrink: 0,
           }}
         >
-          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--app-text-primary)' }}>
             {isEdit ? 'Edit trigger' : 'Add trigger'}
           </div>
           <button
@@ -365,18 +365,18 @@ export function TriggerFormPanel({
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: 'var(--text-3)',
+              color: 'var(--app-text-tertiary)',
               padding: 6,
               borderRadius: 4,
               display: 'flex',
               transition: 'all 0.12s',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
-              (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--app-text-primary)';
+              (e.currentTarget as HTMLElement).style.background = 'var(--app-bg-hover)';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--app-text-tertiary)';
               (e.currentTarget as HTMLElement).style.background = 'none';
             }}
           >
@@ -390,20 +390,62 @@ export function TriggerFormPanel({
           <>
             {/* Body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+              {fixedWorkflowId === undefined && (
+                <div style={{ marginBottom: 16 }}>
+                  {isEdit ? (
+                    <>
+                      <label
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: 'var(--app-text-primary)',
+                          display: 'block',
+                          marginBottom: 5,
+                        }}
+                      >
+                        Workflow
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, color: 'var(--app-text-primary)' }}>
+                          {editing?.workflow_name ?? 'Unknown workflow'}
+                        </span>
+                        <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <Select
+                      label="Workflow"
+                      placeholder="The workflow this trigger starts"
+                      data={workflows.map((w) => ({ value: w.id.toString(), label: w.name }))}
+                      value={pickedWorkflowId}
+                      onChange={setPickedWorkflowId}
+                      searchable
+                      allowDeselect={false}
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Trigger type */}
               <div style={{ marginBottom: 16 }}>
                 <label
-                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: 'var(--app-text-primary)',
+                    display: 'block',
+                    marginBottom: 5,
+                  }}
                 >
                   Trigger type
                 </label>
                 {isEdit ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, color: 'var(--text-1)' }}>
+                    <span style={{ fontSize: 13, color: 'var(--app-text-primary)' }}>
                       {kindOptions.find((o) => o.value === kind)?.label ?? kind}
                     </span>
-                    <IconLock size={12} style={{ color: 'var(--text-3)' }} />
-                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Type is locked when editing</span>
+                    <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
+                    <span style={{ fontSize: 12, color: 'var(--app-text-tertiary)' }}>Type is locked when editing</span>
                   </div>
                 ) : (
                   <Select
@@ -413,8 +455,8 @@ export function TriggerFormPanel({
                     allowDeselect={false}
                     styles={{
                       input: {
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
+                        background: 'var(--app-bg-paper)',
+                        border: '1px solid var(--app-border-default)',
                         borderRadius: 5,
                         fontSize: 13,
                       },
@@ -426,18 +468,24 @@ export function TriggerFormPanel({
               {/* Creator — recorded on create, never editable */}
               <div style={{ marginBottom: 16 }}>
                 <label
-                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: 'var(--app-text-primary)',
+                    display: 'block',
+                    marginBottom: 5,
+                  }}
                 >
                   {runsAsCreator ? 'Runs as' : 'Created by'}
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <IconUser size={13} style={{ color: creatorTone ?? 'var(--text-3)' }} />
-                  <span style={{ fontSize: 13, color: creatorTone ?? 'var(--text-1)' }}>
+                  <IconUser size={13} style={{ color: creatorTone ?? 'var(--app-text-tertiary)' }} />
+                  <span style={{ fontSize: 13, color: creatorTone ?? 'var(--app-text-primary)' }}>
                     {creatorName ?? 'Unknown'}
                   </span>
-                  <IconLock size={12} style={{ color: 'var(--text-3)' }} />
+                  <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{creatorHint}</div>
+                <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4 }}>{creatorHint}</div>
               </div>
 
               {/* Column fields */}
@@ -448,7 +496,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -464,8 +512,8 @@ export function TriggerFormPanel({
                       disabled={isEdit}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -478,7 +526,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 6,
                         }}
@@ -488,8 +536,8 @@ export function TriggerFormPanel({
                       <div
                         style={{
                           display: 'inline-flex',
-                          background: 'var(--bg-raised)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 8,
                           padding: 3,
                           gap: 2,
@@ -503,8 +551,8 @@ export function TriggerFormPanel({
                               padding: '6px 20px',
                               fontSize: 12,
                               fontWeight: 500,
-                              color: mode === m ? 'var(--text-1)' : 'var(--text-2)',
-                              background: mode === m ? 'var(--bg-card)' : 'transparent',
+                              color: mode === m ? 'var(--app-text-primary)' : 'var(--app-text-secondary)',
+                              background: mode === m ? 'var(--app-bg-paper)' : 'transparent',
                               borderRadius: 4,
                               border: 'none',
                               cursor: 'pointer',
@@ -523,7 +571,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -536,8 +584,8 @@ export function TriggerFormPanel({
                         min={0}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -556,14 +604,14 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
                     >
                       Cron
                     </label>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', marginBottom: 6, lineHeight: 1.5 }}>
                       minute · hour · day-of-month · month · day-of-week
                     </div>
                     <TextInput
@@ -573,8 +621,8 @@ export function TriggerFormPanel({
                       error={cron.trim() && !cronDesc.ok ? 'Invalid cron' : undefined}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -583,7 +631,7 @@ export function TriggerFormPanel({
                     <div
                       style={{
                         fontSize: 12,
-                        color: cronDesc.ok ? 'var(--mantine-color-green-6)' : 'var(--text-3)',
+                        color: cronDesc.ok ? 'var(--mantine-color-green-6)' : 'var(--app-text-tertiary)',
                         marginTop: 6,
                       }}
                     >
@@ -595,7 +643,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -610,8 +658,8 @@ export function TriggerFormPanel({
                       nothingFoundMessage="No timezone"
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -623,7 +671,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -637,8 +685,8 @@ export function TriggerFormPanel({
                       allowDeselect={false}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -652,7 +700,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -665,8 +713,8 @@ export function TriggerFormPanel({
                           onChange={setSubjectColumnId}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -678,7 +726,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -691,8 +739,8 @@ export function TriggerFormPanel({
                           onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -723,7 +771,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -736,8 +784,8 @@ export function TriggerFormPanel({
                       onChange={(e) => setChannel(e.currentTarget.value)}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -750,7 +798,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -769,8 +817,8 @@ export function TriggerFormPanel({
                         allowDeselect={false}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -782,7 +830,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -795,8 +843,8 @@ export function TriggerFormPanel({
                         onChange={(e) => setTextContains(e.currentTarget.value)}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -804,7 +852,7 @@ export function TriggerFormPanel({
                       />
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4, marginBottom: 12 }}>
                     Matched against the message after the @mention, ignoring case. @mention /help lists this
                     channel&apos;s commands. The word help can&apos;t be used as a pattern.
                   </div>
@@ -816,10 +864,10 @@ export function TriggerFormPanel({
                       onChange={setSlackCooldown}
                       min={0}
                       styles={{
-                        label: { fontSize: 13, fontWeight: 500, color: 'var(--text-1)', marginBottom: 5 },
+                        label: { fontSize: 13, fontWeight: 500, color: 'var(--app-text-primary)', marginBottom: 5 },
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -839,7 +887,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -853,8 +901,8 @@ export function TriggerFormPanel({
                       allowDeselect={false}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -868,7 +916,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -881,8 +929,8 @@ export function TriggerFormPanel({
                           onChange={setSubjectColumnId}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -894,7 +942,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -907,8 +955,8 @@ export function TriggerFormPanel({
                           onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -930,7 +978,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -948,8 +996,8 @@ export function TriggerFormPanel({
                           allowDeselect={false}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -961,7 +1009,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -974,8 +1022,8 @@ export function TriggerFormPanel({
                           onChange={(e) => setSecret(e.currentTarget.value)}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -984,7 +1032,7 @@ export function TriggerFormPanel({
                       </div>
                     </div>
                   )}
-                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--app-text-secondary)', marginBottom: 8 }}>
                     Only when (optional)
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', gap: 10, marginBottom: 12 }}>
@@ -993,7 +1041,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -1006,8 +1054,8 @@ export function TriggerFormPanel({
                         onChange={(e) => setCondField(e.currentTarget.value)}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -1019,7 +1067,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -1033,8 +1081,8 @@ export function TriggerFormPanel({
                         allowDeselect={false}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -1046,7 +1094,7 @@ export function TriggerFormPanel({
                         style={{
                           fontSize: 13,
                           fontWeight: 500,
-                          color: 'var(--text-1)',
+                          color: 'var(--app-text-primary)',
                           display: 'block',
                           marginBottom: 5,
                         }}
@@ -1059,8 +1107,8 @@ export function TriggerFormPanel({
                         onChange={(e) => setCondValue(e.currentTarget.value)}
                         styles={{
                           input: {
-                            background: 'var(--bg-card)',
-                            border: '1px solid var(--border)',
+                            background: 'var(--app-bg-paper)',
+                            border: '1px solid var(--app-border-default)',
                             borderRadius: 5,
                             fontSize: 13,
                           },
@@ -1073,7 +1121,7 @@ export function TriggerFormPanel({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: 'var(--text-1)',
+                        color: 'var(--app-text-primary)',
                         display: 'block',
                         marginBottom: 5,
                       }}
@@ -1087,8 +1135,8 @@ export function TriggerFormPanel({
                       allowDeselect={false}
                       styles={{
                         input: {
-                          background: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
+                          background: 'var(--app-bg-paper)',
+                          border: '1px solid var(--app-border-default)',
                           borderRadius: 5,
                           fontSize: 13,
                         },
@@ -1102,7 +1150,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -1115,8 +1163,8 @@ export function TriggerFormPanel({
                           onChange={setSubjectColumnId}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -1128,7 +1176,7 @@ export function TriggerFormPanel({
                           style={{
                             fontSize: 13,
                             fontWeight: 500,
-                            color: 'var(--text-1)',
+                            color: 'var(--app-text-primary)',
                             display: 'block',
                             marginBottom: 5,
                           }}
@@ -1141,8 +1189,8 @@ export function TriggerFormPanel({
                           onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
                           styles={{
                             input: {
-                              background: 'var(--bg-card)',
-                              border: '1px solid var(--border)',
+                              background: 'var(--app-bg-paper)',
+                              border: '1px solid var(--app-border-default)',
                               borderRadius: 5,
                               fontSize: 13,
                             },
@@ -1169,7 +1217,7 @@ export function TriggerFormPanel({
                 justifyContent: 'flex-end',
                 gap: 10,
                 padding: '16px 24px',
-                borderTop: '1px solid var(--border)',
+                borderTop: '1px solid var(--app-border-default)',
                 flexShrink: 0,
               }}
             >
@@ -1177,22 +1225,22 @@ export function TriggerFormPanel({
                 onClick={onClose}
                 style={{
                   background: 'none',
-                  border: '1px solid var(--border)',
+                  border: '1px solid var(--app-border-default)',
                   borderRadius: 6,
                   padding: '8px 16px',
                   fontSize: 13,
                   fontWeight: 500,
-                  color: 'var(--text-2)',
+                  color: 'var(--app-text-secondary)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   transition: 'all 0.12s',
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
-                  (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--app-text-primary)';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--app-bg-hover)';
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--text-2)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--app-text-secondary)';
                   (e.currentTarget as HTMLElement).style.background = 'none';
                 }}
               >
@@ -1200,16 +1248,21 @@ export function TriggerFormPanel({
               </button>
               <button
                 onClick={submit}
-                disabled={saving || (kind === 'schedule' && !cronDesc.ok)}
+                disabled={saving || !workflowId || (kind === 'schedule' && !cronDesc.ok)}
                 style={{
-                  background: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-dim)' : 'var(--accent)',
+                  background:
+                    saving || (kind === 'schedule' && !cronDesc.ok)
+                      ? 'var(--app-action-selected)'
+                      : 'var(--app-primary)',
                   border: 'none',
                   borderRadius: 6,
                   padding: '8px 16px',
                   fontSize: 13,
                   fontWeight: 600,
                   color:
-                    saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-muted)' : 'var(--app-on-primary)',
+                    saving || (kind === 'schedule' && !cronDesc.ok)
+                      ? 'var(--app-accent-muted)'
+                      : 'var(--app-on-primary)',
                   cursor: saving || (kind === 'schedule' && !cronDesc.ok) ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit',
                   transition: 'all 0.12s',
@@ -1228,14 +1281,14 @@ export function TriggerFormPanel({
 function CopyRow({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--app-text-primary)', marginBottom: 5 }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <div
           style={{
             flex: 1,
             fontSize: 12,
             fontFamily: 'monospace',
-            color: 'var(--text-2)',
+            color: 'var(--app-text-secondary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -1278,17 +1331,19 @@ function WebhookCreatedView({
   return (
     <>
       <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text-primary)', marginBottom: 4 }}>
           Webhook trigger created
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
           Point your source at this URL. It is an idempotent start API for this workflow.
         </div>
         <CopyRow label="Request URL" value={created.url} />
         {created.secret && <CopyRow label="Secret" value={created.secret} />}
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>Example request ({authLabel})</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--app-text-primary)' }}>
+              Example request ({authLabel})
+            </div>
             <CopyButton value={curl}>
               {({ copied, copy }) => (
                 <Button
@@ -1308,18 +1363,18 @@ function WebhookCreatedView({
               fontFamily: 'monospace',
               whiteSpace: 'pre',
               overflowX: 'auto',
-              background: 'var(--bg-raised)',
-              border: '1px solid var(--border)',
+              background: 'var(--app-bg-paper)',
+              border: '1px solid var(--app-border-default)',
               padding: 8,
               borderRadius: 6,
               margin: 0,
-              color: 'var(--text-1)',
+              color: 'var(--app-text-primary)',
             }}
           >
             {curl}
           </pre>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
+        <div style={{ fontSize: 12, color: 'var(--app-text-secondary)' }}>
           Runs the workflow as you — the trigger&apos;s creator.
         </div>
       </div>
@@ -1329,14 +1384,14 @@ function WebhookCreatedView({
           justifyContent: 'flex-end',
           gap: 10,
           padding: '16px 24px',
-          borderTop: '1px solid var(--border)',
+          borderTop: '1px solid var(--app-border-default)',
           flexShrink: 0,
         }}
       >
         <button
           onClick={onDone}
           style={{
-            background: 'var(--accent)',
+            background: 'var(--app-primary)',
             border: 'none',
             borderRadius: 6,
             padding: '8px 16px',

@@ -43,7 +43,7 @@ module Api
             when "column"
               binding = column_bindings.find(params[:id])
               binding.update!(column_binding_params)
-              render json: serialize_column(binding)
+              render json: serializer.column(binding)
             else
               binding = current_workflow.trigger_bindings.find(params[:id])
               binding.assign_attributes(trigger_binding_params)
@@ -82,16 +82,12 @@ module Api
           end
 
           def serialize_result(result)
-            return serialize_column(result.trigger) if result.kind == "column"
+            return serializer.column(result.trigger) if result.kind == "column"
 
-            payload = serialize_binding(result.trigger)
-            return payload unless result.webhook_endpoint
-
-            payload.merge(
-              webhook_url: webhook_url(result.webhook_endpoint.slug),
-              webhook_secret: result.webhook_endpoint.secret,
-              verification_strategy: result.webhook_endpoint.verification_strategy
-            )
+            endpoint = result.webhook_endpoint
+            payload = serialize_binding(result.trigger, endpoint: endpoint)
+            # The secret is shown once, on create.
+            endpoint ? payload.merge(webhook_secret: endpoint.secret) : payload
           end
 
           # ---- params ----
@@ -111,72 +107,25 @@ module Api
           # ---- serialization ----
 
           def serialized_triggers
-            column_bindings.includes(:board_column, :created_by).map { |b| serialize_column(b) } +
-              current_workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |b| serialize_binding(b) }
+            bindings = current_workflow.trigger_bindings.includes(:created_by, :workflow).order(:created_at).to_a
+            event_serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(bindings))
+            column_bindings.includes(:board_column, :created_by, :workflow).map { |b| serializer.column(b) } +
+              bindings.map { |b| event_serializer.binding(b) }
+          end
+
+          def serializer
+            @serializer ||= WorkflowTriggers::Serializer.new
+          end
+
+          def serialize_binding(binding, endpoint: nil)
+            endpoints = endpoint ? { binding.event_type => endpoint } : WorkflowTriggers::Serializer.endpoints_for([ binding ])
+            WorkflowTriggers::Serializer.new(webhook_endpoints: endpoints).binding(binding)
           end
 
           def column_bindings
             ColumnWorkflowBinding
               .joins(board_column: :board)
               .where(boards: { project_id: current_project.id }, workflow_id: current_workflow.id)
-          end
-
-          def serialize_column(binding)
-            {
-              id: binding.id,
-              kind: "column",
-              event_type: "board.column_changed",
-              board_column_id: binding.board_column_id,
-              column_name: binding.board_column.name,
-              trigger_mode: binding.trigger_mode,
-              cooldown_seconds: binding.cooldown_seconds,
-              created_by: serialize_creator(binding.created_by),
-              enabled: true
-            }
-          end
-
-          def serialize_binding(binding)
-            {
-              id: binding.id,
-              kind: binding_kind(binding.event_type),
-              event_type: binding.event_type,
-              name: binding.name,
-              filter_predicate: binding.filter_predicate,
-              trigger_mode: binding.trigger_mode,
-              subject_policy: binding.subject_policy,
-              subject_column_id: binding.subject_column_id,
-              subject_title_template: binding.subject_title_template,
-              schedule_config: binding.schedule_config,
-              cooldown_seconds: binding.cooldown_seconds,
-              notify_on_failure: binding.notify_on_failure,
-              project_tracker_id: binding.project_tracker_id,
-              aixle_changes: binding.aixle_changes,
-              created_by: serialize_creator(binding.created_by),
-              enabled: binding.enabled
-            }
-          end
-
-          # Who a trigger runs as. nil for rows created before the creator was
-          # recorded (and for a deleted account, whose reference is nullified) —
-          # the UI shows those as "Unknown" and an unattended fire is skipped.
-          def serialize_creator(user)
-            return nil unless user
-
-            { id: user.id, name: user.name }
-          end
-
-          def binding_kind(event_type)
-            case event_type
-            when "slack.message" then "slack"
-            when "schedule.fired" then "schedule"
-            when /\Awebhook\./ then "webhook"
-            when /\Atracker\./ then "tracker"
-            else "event"
-            end
-          end
-
-          def webhook_url(slug)
-            "https://#{Settings.domain}/webhooks/in/#{slug}"
           end
         end
       end

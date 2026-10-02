@@ -17,23 +17,17 @@ import type { Trigger } from './types';
 
 type PanelProps = ComponentProps<typeof TriggerFormPanel>;
 
-// ColumnOption / StepOption / Trigger are local interfaces (no Typelizer type, so no factory exists);
+// TriggerColumnOption / Trigger are local interfaces (no Typelizer type, so no factory exists);
 // these literals match those interfaces exactly.
 const columns: PanelProps['columns'] = [
   { id: 1, name: 'Backlog' },
   { id: 2, name: 'In Progress', boundWorkflowName: 'Other Flow' },
 ];
 
-const sessions: PanelProps['sessions'] = [
-  { id: 10, name: 'Triage' },
-  { id: 11, name: 'Build' },
-];
-
 const baseProps = (overrides: Partial<PanelProps> = {}): PanelProps => ({
   projectId: 7,
   workflowId: 3,
   columns,
-  sessions,
   editing: null,
   defaultKind: 'column',
   onClose: vi.fn(),
@@ -947,6 +941,57 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       expect(
         screen.getByText(/This trigger cannot fire yet\. Aixle learns its own Azure DevOps account/),
       ).toBeInTheDocument();
+    });
+  });
+  describe('on the project Triggers page', () => {
+    const workflows = [
+      { id: 3, name: 'Intake' },
+      { id: 4, name: 'Release' },
+    ];
+
+    it('asks which workflow a new trigger starts, and posts to that workflow', async () => {
+      const fetchSpy = installFetch(() => json({ id: 1 }, 201));
+      renderPage(<TriggerFormPanel {...baseProps({ workflowId: undefined, workflows })} />);
+
+      const save = screen.getByRole('button', { name: 'Add trigger' });
+      expect(save).toBeDisabled();
+
+      await userEvent.click(screen.getByRole('combobox', { name: 'Workflow' }));
+      await userEvent.click(await screen.findByRole('option', { name: 'Release' }));
+      await userEvent.click(save);
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v1/projects/7/workflows/4/triggers',
+          expect.objectContaining({ method: 'POST' }),
+        ),
+      );
+    });
+
+    it('keeps an edited trigger on its own workflow', async () => {
+      const fetchSpy = installFetch();
+      const editing: Trigger = {
+        id: 9,
+        kind: 'schedule',
+        event_type: 'schedule.fired',
+        schedule_config: { cron: '0 9 * * 1-5', timezone: 'UTC' },
+        subject_policy: 'none',
+        enabled: true,
+        workflow_id: 4,
+        workflow_name: 'Release',
+      };
+      renderPage(<TriggerFormPanel {...baseProps({ workflowId: undefined, workflows, editing })} />);
+
+      expect(screen.getByText('Release')).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Workflow' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v1/projects/7/workflows/4/triggers/9',
+          expect.objectContaining({ method: 'PATCH' }),
+        ),
+      );
     });
   });
 });

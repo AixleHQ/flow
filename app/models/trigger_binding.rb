@@ -27,6 +27,7 @@ class TriggerBinding < ApplicationRecord
   TRACKER_EVENT_PREFIX = "tracker."
   TRACKER_SOURCE = "tracker"
 
+  WEBHOOK_EVENT_PREFIX = "webhook."
   SCHEDULE_EVENT_TYPE = "schedule.fired"
   SLACK_EVENT_TYPE = "slack.message"
   SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
@@ -89,6 +90,9 @@ class TriggerBinding < ApplicationRecord
   after_commit :reconcile_schedule, on: %i[create update], if: :schedule_needs_reconcile?
   after_commit :remove_schedule, on: :destroy, if: :reconcile_schedule?
   after_commit :ensure_tracker_event_delivery, on: %i[create update], if: -> { tracker_event? && enabled? }
+  # A webhook trigger's endpoint is found by its event type, not by a key, so
+  # nothing else turns it off: removing the trigger would leave its URL live.
+  after_destroy_commit :disable_webhook_endpoint, if: :webhook?
 
   def schedule?
     event_type == SCHEDULE_EVENT_TYPE
@@ -129,11 +133,22 @@ class TriggerBinding < ApplicationRecord
     TriggerFilter.match?(filter_predicate, data, ignore_case: slack? ? %w[text] : [])
   end
 
+  def webhook?
+    event_type.to_s.start_with?(WEBHOOK_EVENT_PREFIX)
+  end
+
   def tracker_event?
     event_type.to_s.start_with?(TRACKER_EVENT_PREFIX)
   end
 
   private
+
+  def disable_webhook_endpoint
+    return if TriggerBinding.where(project_id: project_id, event_type: event_type).exists?
+
+    WebhookEndpoint.where(project_id: project_id).where("config ->> 'event_type' = ?", event_type)
+                   .update_all(enabled: false, updated_at: Time.current)
+  end
 
   def slack_connected?
     Integration.active.exists?(provider: :slack, company_id: project&.company_id)

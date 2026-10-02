@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
 module PersonalTools
-  # Shared lookup and serialization for the workflow-trigger tools, mirroring
+  # Shared lookup for the workflow-trigger tools, mirroring
   # Api::V1::Projects::Workflows::TriggersController — one surface over two
   # record kinds:
   #   column                                       → ColumnWorkflowBinding (card enters a board column)
   #   slack / schedule / webhook / event / tracker → TriggerBinding
-  # The UI and the personal MCP must describe the same trigger the same way, so
-  # the field sets below stay in step with the controller's serializers.
+  # Both describe a trigger through WorkflowTriggers::Serializer.
   module WorkflowTriggerSupport
     KINDS = %w[column slack schedule webhook event tracker].freeze
     TRIGGER_MODES = %w[auto manual].freeze
@@ -65,57 +64,17 @@ module PersonalTools
     end
 
     def serialize_column(trigger)
-      {
-        id: trigger.id,
-        kind: "column",
-        event_type: "board.column_changed",
-        board_column_id: trigger.board_column_id,
-        column_name: trigger.board_column.name,
-        trigger_mode: trigger.trigger_mode,
-        cooldown_seconds: trigger.cooldown_seconds,
-        created_by: serialize_creator(trigger.created_by),
-        enabled: true
-      }
+      WorkflowTriggers::Serializer.new.column(trigger)
     end
 
-    def serialize_binding(trigger)
-      {
-        id: trigger.id,
-        kind: binding_kind(trigger.event_type),
-        event_type: trigger.event_type,
-        name: trigger.name,
-        filter_predicate: trigger.filter_predicate,
-        trigger_mode: trigger.trigger_mode,
-        subject_policy: trigger.subject_policy,
-        subject_column_id: trigger.subject_column_id,
-        subject_title_template: trigger.subject_title_template,
-        schedule_config: trigger.schedule_config,
-        cooldown_seconds: trigger.cooldown_seconds,
-        notify_on_failure: trigger.notify_on_failure,
-        project_tracker_id: trigger.project_tracker_id,
-        aixle_changes: trigger.aixle_changes,
-        created_by: serialize_creator(trigger.created_by),
-        enabled: trigger.enabled
-      }
+    def serialize_binding(trigger, endpoint: nil)
+      endpoints = endpoint ? { trigger.event_type => endpoint } : WorkflowTriggers::Serializer.endpoints_for([ trigger ])
+      WorkflowTriggers::Serializer.new(webhook_endpoints: endpoints).binding(trigger)
     end
 
-    # Who the trigger runs as. nil when the creator was never recorded (rows
-    # older than the field) or the account was deleted — the off-board kinds
-    # skip an unattended fire in that state.
-    def serialize_creator(user)
-      return nil unless user
-
-      { id: user.id, name: user.name }
-    end
-
-    def binding_kind(event_type)
-      case event_type
-      when "slack.message" then "slack"
-      when "schedule.fired" then "schedule"
-      when /\Awebhook\./ then "webhook"
-      when /\Atracker\./ then "tracker"
-      else "event"
-      end
+    def serialize_bindings(triggers)
+      serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(triggers))
+      triggers.map { |trigger| serializer.binding(trigger) }
     end
   end
 end

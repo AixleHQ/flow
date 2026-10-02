@@ -24,8 +24,8 @@ module PersonalTools
       authorize!(project, :show?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
 
-      triggers = column_bindings(project, workflow).includes(:board_column, :created_by).map { |t| serialize_column(t) } +
-                 workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |t| serialize_binding(t) }
+      triggers = column_bindings(project, workflow).includes(:board_column, :created_by, :workflow).map { |t| serialize_column(t) } +
+                 serialize_bindings(workflow.trigger_bindings.includes(:created_by, :workflow).order(:created_at).to_a)
       success(project_id: project.id, workflow_id: workflow.id, triggers: triggers)
     end
   end

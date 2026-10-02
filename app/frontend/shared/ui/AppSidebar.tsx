@@ -3,6 +3,7 @@ import { Drawer, Menu, Popover, ScrollArea, Tooltip, UnstyledButton } from '@man
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconAlertTriangle,
+  IconBolt,
   IconChartBar,
   IconCheck,
   IconCheckbox,
@@ -55,6 +56,7 @@ import {
   companyProjectPath,
   companyProjectRepositoriesPath,
   companyProjectTrackersPath,
+  companyProjectTriggersPath,
   companyProjectSessionsPath,
   companyProjectSettingsPath,
   companyProjectSkillsPath,
@@ -128,6 +130,7 @@ const buildProjectNavGroups = (projectId: string): NavGroup[] => [
     items: [
       { label: 'Tasks', icon: <IconCheckbox size={18} />, path: companyProjectBoardPath(projectId) },
       { label: 'Workflows', icon: <IconGitMerge size={18} />, path: companyProjectWorkflowsPath(projectId) },
+      { label: 'Triggers', icon: <IconBolt size={18} />, path: companyProjectTriggersPath(projectId) },
       // One entry: agent sessions and workflow runs share a single list.
       { label: 'Sessions & Runs', icon: <IconTerminal2 size={18} />, path: companyProjectSessionsPath(projectId) },
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyProjectAssetsPath(projectId) },

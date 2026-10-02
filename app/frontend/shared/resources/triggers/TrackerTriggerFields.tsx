@@ -17,15 +17,22 @@ import {
 } from './trackerTrigger';
 
 const inputStyles = {
-  input: { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 5, fontSize: 13 },
+  input: {
+    background: 'var(--app-bg-paper)',
+    border: '1px solid var(--app-border-default)',
+    borderRadius: 5,
+    fontSize: 13,
+  },
 };
 
 function FieldLabel({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', marginBottom: 5 }}>{children}</div>;
+  return (
+    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--app-text-primary)', marginBottom: 5 }}>{children}</div>
+  );
 }
 
 function Hint({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{children}</div>;
+  return <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4 }}>{children}</div>;
 }
 
 const NEEDS_COLUMN = ['find_or_create_task', 'create_task'];
@@ -83,7 +90,7 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
       <div style={{ marginBottom: 12 }}>
         <FieldLabel>When</FieldLabel>
         {isEdit ? (
-          <div style={{ fontSize: 13, color: 'var(--text-1)' }}>
+          <div style={{ fontSize: 13, color: 'var(--app-text-primary)' }}>
             {TRACKER_EVENT_OPTIONS.find((o) => o.value === value.eventType)?.label ?? value.eventType}
           </div>
         ) : (
@@ -145,7 +152,7 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
         <div style={{ marginBottom: 12 }}>
           <FieldLabel>Other conditions</FieldLabel>
           {otherConditions.map(([field, condition]) => (
-            <div key={field} style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-2)' }}>
+            <div key={field} style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--app-text-secondary)' }}>
               {describeCondition(field, condition)}
             </div>
           ))}

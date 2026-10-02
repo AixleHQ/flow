@@ -196,7 +196,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'triggers-and-gates',
     title: 'Triggers and Gates',
     section: 'User guide',
-    desc: 'How workflows start and pause: triggers (column, manual, schedule, Slack, webhook) vs gates (CI checks); subject_policy; the webhook start API.',
+    desc: "How workflows start and pause: triggers (column, manual, schedule, chat, webhook, tracker) vs gates (CI checks); the project's Triggers page; subject_policy; the webhook start API.",
   },
   {
     slug: 'integrations',

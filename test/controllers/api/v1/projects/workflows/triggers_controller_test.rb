@@ -119,6 +119,12 @@ module Api
             assert_match %r{/webhooks/in/wh-}, json["webhook_url"]
             assert_equal "shh", json["webhook_secret"]
             assert_match(/\Awebhook\./, json["event_type"])
+
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+            listed = json["triggers"].sole
+            assert_equal [ "hmac_sha256", @workflow.id ], listed.values_at("verification_strategy", "workflow_id")
+            assert_match %r{/webhooks/in/wh-}, listed["webhook_url"]
+            assert_not listed.key?("webhook_secret")
           end
 
           test "a webhook trigger created without a strategy demands a generated shared token" do
@@ -242,6 +248,17 @@ module Api
               delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id }
             end
             assert_response :no_content
+          end
+
+          test "destroying a webhook trigger turns its endpoint off" do
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id, trigger: { kind: "webhook", subject_policy: "none" } }
+            binding = TriggerBinding.find(json["id"])
+            endpoint = WebhookEndpoint.find_by!(slug: json["webhook_url"].split("/").last)
+
+            delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id }
+
+            assert_response :no_content
+            assert_not endpoint.reload.enabled
           end
 
           test "destroy removes a column trigger" do

@@ -13,6 +13,7 @@ import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { ApiError, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { useUnsavedChangesGuard } from 'shared/lib/hooks/useUnsavedChangesGuard';
 import type { ToolGroup } from 'shared/lib/toolPicker';
+import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -24,7 +25,6 @@ import { SessionEditorPanel } from './SessionEditorPanel';
 import { SessionTreeNav } from './SessionTreeNav';
 import type { Selection } from './SessionTreeNav';
 import { StepEditorPanel } from './StepEditorPanel';
-import type { TrackerOption } from './trackerTrigger';
 import { TriggersTab } from './TriggersTab';
 
 type ProjectOrNull = Project | null;
@@ -104,7 +104,7 @@ const BuilderPage = () => {
   // What the server holds: the editor is dirty while its state differs from this.
   const [savedSnapshot, setSavedSnapshot] = useState(() => snapshotOf(initialWorkflow, initialSteps));
   const [saving, setSaving] = useState(false);
-  // The Trackers page links straight to a workflow's triggers.
+  // The Trackers and Triggers pages link straight to a workflow's triggers.
   const [activeTab, setActiveTab] = useState<string>(() =>
     new URLSearchParams(window.location.search).get('tab') === 'triggers' ? 'triggers' : 'sessions',
   );
@@ -534,7 +534,6 @@ const BuilderPage = () => {
               projectId={project.id}
               workflowId={workflow.id}
               columns={boardColumns ?? []}
-              sessions={sortedSteps.map((s) => ({ id: s.id, name: s.name }))}
               trackers={trackers ?? []}
               readOnly={readOnly}
             />
