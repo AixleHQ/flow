@@ -30,6 +30,13 @@ module Trackers
     # Raised instead of publishing an event a create still in flight may have caused.
     class WriteInFlight < StandardError; end
 
+    # Whether any trigger waits for this connection's events — what a receiver
+    # checks before it records a delivery from a provider that sends everything.
+    def self.awaited_by?(integration)
+      projects = ProjectTracker.usable.where(integration: integration).select(:project_id)
+      TriggerBinding.active.where(project_id: projects, event_type: EVENT_TYPES).exists?
+    end
+
     # `wait_for_writes: false` publishes such an event as it stands: the caller's
     # last attempt.
     def initialize(integration, wait_for_writes: false)

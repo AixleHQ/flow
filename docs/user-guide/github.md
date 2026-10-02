@@ -8,7 +8,10 @@ repositories it reaches on the project's **Repositories** page, and from then on
 - `git fetch`, `git push` and `gh` work inside the session with a short-lived
   credential fetched on every call — nothing is stored in the container;
 - a workflow step can park a board task until a pull request's checks or a GitHub
-  Actions run finish (a CI gate).
+  Actions run finish (a CI gate);
+- the organization's GitHub Projects you pick become **trackers**: tracker
+  triggers start workflows from the board, and agents work its issues with the
+  `tracker_*` tools ([GitHub Projects as a tracker](#github-projects-as-a-tracker)).
 
 Any member who can change the project connects it; viewers cannot.
 
@@ -198,10 +201,11 @@ stops holding the card, but never counts as a pass. See
 
 ## Starting a workflow from GitHub
 
-The connection's webhooks only close CI gates; no trigger listens to them. To
-start a workflow when something happens on GitHub — a pull request opened, a
-push to `main` — point a GitHub webhook at an **Incoming webhook** trigger. This
-works with either kind of connection, or with none.
+The connection's webhooks close CI gates, and start tracker triggers for the
+projects picked as trackers ([below](#github-projects-as-a-tracker)). To start a
+workflow on anything else — a pull request opened, a push to `main` — point a
+GitHub webhook at an **Incoming webhook** trigger. This works with either kind
+of connection, or with none.
 
 1. On the workflow's **Triggers** tab, select **Add a trigger**, choose
    **Incoming webhook**, and set **Verification** to **HMAC SHA-256**. Leave
@@ -226,6 +230,78 @@ The payload reaches the agent only through a task. Set
 **Task column**: the new card's description carries the JSON, and
 **Task title template** takes fields from it, such as `{{pull_request.title}}`.
 Every step of the workflow needs auto-run, because nobody is there to start one.
+
+## GitHub Projects as a tracker
+
+A GitHub project (the boards at `github.com/orgs/<org>/projects`) can be a
+**tracker**, like a Jira project or an Azure Boards project: tracker triggers
+start workflows when an issue lands on the board, moves to another column, is
+assigned or gets a comment, and agents read and change its issues with the
+`tracker_*` tools. What trackers are and how their triggers work is on
+[Trackers](/docs/trackers).
+
+It needs an **app** connection on an **organization**. GitHub gives apps no
+access at all to projects owned by a personal account — no API and no
+webhooks — and a token connection gets no webhooks either.
+
+### Picking the projects
+
+Select **GitHub Projects** on the GitHub connection's row on the
+**Integrations** page, and tick the organization's projects to use. Each
+becomes a tracker on the project's **Trackers** page; one you untick later is
+detached. Every project picked needs a single-select field named **Status** —
+GitHub's default board columns. Closed projects are not listed.
+
+### The board is the scope
+
+- **Statuses** are the options of the project's Status field: the board's
+  columns. GitHub gives them no category, so Flow infers one from the name —
+  "canceled", "won't do", "not planned", "duplicate" are `canceled`; "done",
+  "closed", "complete", "shipped", "merged", "resolved" are `done`; "in
+  progress", "doing", "review", "testing", "QA", "blocked", "started" are
+  `in_progress`; anything else is `todo`.
+- **Issues** are the issues and pull requests on the board. Draft items are
+  left out: they have no repository, number or comments. An issue that is not
+  on the board is not this tracker's, whichever repository it is in.
+- An issue's key is `owner/repo#number`. Agents refer to an issue by that key,
+  its URL (`…/issues/12` or `…/pull/12`) or its node id; a bare number is
+  refused, since it names no repository.
+
+### Events
+
+| Trigger event | Fires when |
+| --- | --- |
+| **Issue is created** | An issue or pull request is added to the board — by hand, by the project's auto-add workflow, or by converting a draft |
+| **Issue moves to a status (column)** | The item's Status changes |
+| **Issue is assigned** | Someone is assigned to an issue on the board; removing an assignee fires nothing |
+| **Comment is added** | Someone comments on an issue or pull request on the board |
+
+An issue opened in a repository but never added to the board starts nothing.
+GitHub sends Flow every issue and comment of every repository the app can see;
+Flow keeps only those for a project that has a tracker trigger, and drops the
+ones whose issue is not on the board. GitHub does not retry a delivery that
+failed.
+
+### Tools
+
+- **Writes are made as the app**, shown on GitHub as `<app-slug>[bot]`. A
+  comment mentioning `@<app-slug>` matches a trigger's "mentions Aixle"
+  condition.
+- `tracker_create_issue` files the issue in `fields.repository`
+  (`owner/repo`), which may be left out when the Flow project has exactly one
+  repository of that organization attached. The issue is then added to the
+  board. `type` is `Issue` or one of the organization's issue types.
+- `tracker_update_issue` changes title, description and labels, and
+  `fields.state` (`open` or `closed`). GitHub issues have no revision number,
+  so `expected_revision` is refused.
+- `tracker_transition_issue` takes a Status option by name.
+- `tracker_assign_issue` takes a GitHub login and makes that person the issue's
+  assignee; `none` clears it. Only people with access to the repository can be
+  assigned. `tracker_list_users` is not available: GitHub assigns by login.
+- `tracker_search_issues` takes GitHub's
+  [project filter syntax](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/filtering-projects)
+  in `native_query`, such as `label:bug updated:>@today-1w`. It filters this
+  project's items and nothing else.
 
 ## Tools
 
@@ -254,12 +330,15 @@ the operator registers one GitHub App for the whole deployment:
 2. **Webhook:** active, URL `https://<your domain>/webhooks/github`, with a
    secret.
 3. **Repository permissions:** Contents read & write, Pull requests read & write,
-   Checks read, Actions read, Metadata read. Add Workflows read & write if agents
-   will change files under `.github/workflows`.
-4. **Events:** Check suite and Workflow run — the two CI gates resolve on.
-   GitHub also sends every app its `installation` events, with no subscription;
-   Flow follows an uninstall, a suspension and an unsuspension from them. Flow
-   ignores every other event.
+   Issues read & write, Checks read, Actions read, Metadata read. Add Workflows
+   read & write if agents will change files under `.github/workflows`.
+   **Organization permissions:** Projects read & write. Issues and Projects are
+   what GitHub Projects trackers need.
+4. **Events:** Check suite and Workflow run — the two CI gates resolve on — and
+   Issues, Issue comment and Projects v2 item, for tracker triggers. GitHub
+   also sends every app its `installation` events, with no subscription; Flow
+   follows an uninstall, a suspension, an unsuspension and an approval of new
+   permissions from them. Flow ignores every other event.
 5. If organizations other than the app's owner will install it, make it
    installable on any account.
 6. Generate a private key, and configure Flow:
@@ -270,6 +349,14 @@ the operator registers one GitHub App for the whole deployment:
    GITHUB_APP_PRIVATE_KEY="<the PEM>"
    GITHUB_WEBHOOK_SECRET=<the webhook secret>
    ```
+
+Adding permissions to an app that is already installed asks every account it is
+installed on to approve them: GitHub emails the organization's owners, and the
+installation keeps its old permissions until one of them approves. Until then a
+GitHub Projects tracker's calls fail with *"The Aixle GitHub App needs the
+Projects (organization) and Issues (repository) permissions, approved by an
+organization owner"*. Flow records the approval when GitHub reports it, and
+**Test connection** reads the installation's permissions again.
 
 The connect dialog offers the app once `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and a
 private key are set. The key itself is read when a connection is verified, so a
@@ -311,9 +398,10 @@ new installation is refused.
 
 - **github.com only.** Clones and API calls go to github.com; GitHub Enterprise
   Server is not supported.
-- **No GitHub event triggers, and GitHub Issues is not a tracker.** Use an
-  Incoming webhook trigger (above); trackers are Jira and Azure Boards — see
-  [Trackers](/docs/trackers).
+- **Trackers are organization projects only.** A repository's issues are a
+  tracker only through a GitHub project that holds them; projects of a personal
+  account cannot be used at all. Other GitHub events start workflows through an
+  Incoming webhook trigger (above).
 - **The repository picker lists at most 1,000 repositories.**
 
 ## When something goes wrong
@@ -341,6 +429,11 @@ new installation is refused.
 | A push changing `.github/workflows` is rejected | No `workflow` scope, or no Workflows permission on the app | Add it |
 | *"gh: no platform credential for this call — run it inside a checkout under /workspace/repo, or pass -R `owner/repo` …"* | `gh` could not tell which attached repository the call is for | Run it inside the checkout, or pass `-R` |
 | *"gh: the platform returned no credential for … — the session may have ended or lost access"* | The session ended, or the repository's connection is no longer active | Check the connection |
+| **GitHub Projects** is missing on the connection's row | A token connection, or the app installed on a personal account | Install the app on the organization |
+| *"The Aixle GitHub App needs the Projects (organization) and Issues (repository) permissions, approved by an organization owner"* | The installation has not been granted them yet | An organization owner approves the app's updated permissions on GitHub |
+| *"… has no single-select field named Status"* when picking projects | The project's columns come from another field, or it has none | Add a single-select Status field to the project |
+| *"… is not on this tracker's GitHub project"* | The issue exists but is not on the tracker's board | Add it to the board, or use the tracker it is on |
+| *"Name the repository in fields.repository …"* from `tracker_create_issue` | The Flow project has several (or no) repositories of that organization | Pass `fields.repository` |
 | *"Repository … is not linked to this task's project"* from `board_create_gate` | The gate names a repository the project has not attached | Attach it, or fix `repo_full_name` |
 | CI gates close only ten minutes or more after CI finishes | No webhook reached Flow: a token connection, a missing `GITHUB_WEBHOOK_SECRET`, or a deployment github.com cannot reach | Use the app, and check the webhook secret and URL |
 | **CI stale** with *"… cannot be read: …"* | The pull request, run or repository can no longer be read | Read the reason on the card, then re-run what is needed |

@@ -31,6 +31,7 @@ import {
   IconChevronRight,
   IconCopy,
   IconKey,
+  IconLayoutKanban,
   IconLink,
   IconPencil,
   IconPlus,
@@ -55,11 +56,14 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
+import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
+import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
 export type { JiraProps } from './JiraConnectModal';
+export type { LinearProps } from './LinearConnectModal';
 
 export interface SlackProps {
   /** False on a deployment with no Slack app (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET unset). */
@@ -78,6 +82,8 @@ interface IntegrationsContentProps {
   github?: GithubProps;
   // Absent on the company page: Jira connects to a project.
   jira?: JiraProps;
+  // Absent on the company page: Linear connects to a project.
+  linear?: LinearProps;
   // Absent on the company page.
   slack?: SlackProps;
 }
@@ -94,6 +100,7 @@ const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number
   if (provider === 'slack') return <IconBrandSlack size={size} />;
   if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
   if (provider === 'jira') return <IconBrandJira size={size} />;
+  if (provider === 'linear') return <IconLayoutKanban size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -104,6 +111,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   slack: 'Slack',
   azure_devops: 'Azure DevOps',
   jira: 'Jira',
+  linear: 'Linear',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -126,6 +134,7 @@ export const IntegrationsContent = ({
   azureDevops,
   github,
   jira,
+  linear,
   slack,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
@@ -154,6 +163,7 @@ export const IntegrationsContent = ({
   }, []);
 
   const [githubOpen, setGithubOpen] = useState(false);
+  const [githubProjectsTarget, setGithubProjectsTarget] = useState<Integration | null>(null);
 
   const [jiraOpen, setJiraOpen] = useState(false);
   const [jiraProjectsTarget, setJiraProjectsTarget] = useState<Integration | null>(null);
@@ -161,11 +171,21 @@ export const IntegrationsContent = ({
   const jiraAvailable = isProjectContext && !!jira;
   const slackAvailable = isProjectContext && !!slack?.enabled;
 
-  // The Atlassian app's callback lands here with the connection still to finish.
+  const [linearOpen, setLinearOpen] = useState(false);
+  const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
+  const linearAvailable = isProjectContext && !!linear;
+
+  // The Atlassian and Linear apps' callbacks land here with the connection still to finish.
   useEffect(() => {
-    const pendingId = Number(new URLSearchParams(window.location.search).get('jira_setup'));
-    const pending = pendingId ? integrations.find((i) => i.id === pendingId && i.provider === 'jira') : undefined;
-    if (pending) setJiraProjectsTarget(pending);
+    const query = new URLSearchParams(window.location.search);
+    const pending = (param: string, provider: string) => {
+      const id = Number(query.get(param));
+      return id ? integrations.find((i) => i.id === id && i.provider === provider) : undefined;
+    };
+    const jiraPending = pending('jira_setup', 'jira');
+    if (jiraPending) setJiraProjectsTarget(jiraPending);
+    const linearPending = pending('linear_setup', 'linear');
+    if (linearPending) setLinearTeamsTarget(linearPending);
   }, [integrations]);
 
   const [gitlabOpen, setGitlabOpen] = useState(false);
@@ -469,6 +489,11 @@ export const IntegrationsContent = ({
                     Jira
                   </Menu.Item>
                 )}
+                {linearAvailable && (
+                  <Menu.Item leftSection={<IconLayoutKanban size={16} />} onClick={() => setLinearOpen(true)}>
+                    Linear
+                  </Menu.Item>
+                )}
                 {slackAvailable && (
                   <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                     Slack
@@ -555,6 +580,15 @@ export const IntegrationsContent = ({
                         onClick={() => setJiraOpen(true)}
                       >
                         Jira
+                      </Button>
+                    )}
+                    {linearAvailable && (
+                      <Button
+                        variant="outline"
+                        leftSection={<IconLayoutKanban size={16} />}
+                        onClick={() => setLinearOpen(true)}
+                      >
+                        Linear
                       </Button>
                     )}
                     {slackAvailable && (
@@ -678,6 +712,27 @@ export const IntegrationsContent = ({
                                   } (${integration.jiraAuthMode === 'oauth' ? 'Atlassian account' : 'service account'})`}
                             </Text>
                           )}
+                          {integration.githubProjects.length > 0 && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {`projects: ${integration.githubProjects.map((p) => p.title).join(', ')}`}
+                            </Text>
+                          )}
+                          {integration.provider === 'linear' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.status === 'inactive'
+                                ? 'Choose the Linear teams to finish connecting'
+                                : `${integration.linearTeams.map((t) => t.key).join(', ') || 'no teams'} · as ${
+                                    integration.linearIdentity ?? integration.connectedBy.name
+                                  } (${integration.linearAuthMode === 'oauth' ? 'Linear app' : 'API key'})`}
+                            </Text>
+                          )}
+                          {integration.linearWebhookError && (
+                            <Tooltip label={integration.linearWebhookError} multiline maw={360}>
+                              <Text fz={11} c="red.6" truncate maw={260}>
+                                {integration.linearWebhookError}
+                              </Text>
+                            </Tooltip>
+                          )}
                           {TOKEN_PROVIDERS.has(integration.provider) &&
                             integration.status === 'error' &&
                             typeof integration.settings.error === 'string' && (
@@ -739,6 +794,18 @@ export const IntegrationsContent = ({
                               onClick={() => handleTestConnection(integration)}
                             >
                               <IconRefresh size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.githubProjectsSupported && canExecute && !readOnly && (
+                          <Tooltip label="GitHub Projects">
+                            <ActionIcon
+                              aria-label={`GitHub Projects for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => setGithubProjectsTarget(integration)}
+                            >
+                              <IconLayoutKanban size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}
@@ -834,6 +901,46 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
+                        {integration.provider === 'linear' && canExecute && !readOnly && (
+                          <>
+                            {integration.status !== 'inactive' && (
+                              <Tooltip label="Test connection">
+                                <ActionIcon
+                                  aria-label={`Test connection for ${integration.name}`}
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => handleTestConnection(integration)}
+                                >
+                                  <IconRefresh size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            <Tooltip label="Linear teams">
+                              <ActionIcon
+                                aria-label={`Linear teams for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setLinearTeamsTarget(integration)}
+                              >
+                                <IconPencil size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </>
+                        )}
+                        {integration.provider === 'linear' && integration.linearWorkspaceUrl && !readOnly && (
+                          <Tooltip label="Open in Linear">
+                            <ActionIcon
+                              aria-label={`Open ${integration.name} in Linear`}
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={integration.linearWorkspaceUrl}
+                              target="_blank"
+                            >
+                              <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {TOKEN_PROVIDERS.has(integration.provider) && canExecute && !readOnly && (
                           <>
                             <Tooltip label="Test connection">
@@ -908,6 +1015,28 @@ export const IntegrationsContent = ({
           />
         </>
       )}
+
+      {linear && (
+        <>
+          <LinearConnectModal
+            opened={linearOpen}
+            onClose={() => setLinearOpen(false)}
+            basePath={basePath}
+            linear={linear}
+          />
+          <LinearTeamsModal
+            integration={linearTeamsTarget}
+            onClose={() => setLinearTeamsTarget(null)}
+            basePath={basePath}
+          />
+        </>
+      )}
+
+      <GithubProjectsModal
+        integration={githubProjectsTarget}
+        onClose={() => setGithubProjectsTarget(null)}
+        basePath={basePath}
+      />
 
       {azureDevops && (
         <AzureDevopsConnectModal

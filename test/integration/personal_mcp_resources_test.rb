@@ -42,7 +42,7 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
   end
 
   test "get_integration_setup_url refuses a provider that cannot be connected" do
-    body = call_tool("get_integration_setup_url", { project_id: @project.id, provider: "linear" })
+    body = call_tool("get_integration_setup_url", { project_id: @project.id, provider: "trello" })
 
     assert error?(body)
     assert_match(%r{/provider}, text(body))

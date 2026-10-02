@@ -26,7 +26,7 @@ export const HANDLE_FORMAT = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 const schema = z.object({
   integrationId: z.string().min(1, 'Pick a connection'),
-  externalScopeId: z.string().min(1, 'Pick a project'),
+  externalScopeId: z.string().min(1, 'Pick a project or team'),
   handle: z.string().refine((v) => v === '' || HANDLE_FORMAT.test(v), 'Lowercase letters, digits and dashes'),
   readOnly: z.boolean(),
   primary: z.boolean(),
@@ -66,6 +66,8 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
     () => availableScopes.find((g) => String(g.integrationId) === form.values.integrationId),
     [availableScopes, form.values.integrationId],
   );
+
+  const scopeLabel = group?.provider === 'linear' ? 'Team' : 'Project';
 
   const pickScope = (scopeId: string | null) => {
     form.setFieldValue('externalScopeId', scopeId ?? '');
@@ -120,8 +122,8 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
             withAsterisk
           />
           <Select
-            label="Project"
-            placeholder="Select project..."
+            label={scopeLabel}
+            placeholder={`Select ${scopeLabel.toLowerCase()}...`}
             data={(group?.scopes ?? []).map((s) => ({ value: s.id, label: s.name }))}
             disabled={!group}
             allowDeselect={false}
@@ -131,7 +133,7 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
           />
           <TextInput
             label="Handle"
-            description="What agents and triggers call this tracker. Suggested from the project name."
+            description={`What agents and triggers call this tracker. Suggested from the ${scopeLabel.toLowerCase()} name.`}
             placeholder="customer-platform"
             {...form.getInputProps('handle')}
           />

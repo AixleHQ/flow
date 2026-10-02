@@ -105,4 +105,28 @@ class Web::Company::Projects::TrackersControllerTest < ActionDispatch::Integrati
       props[:workflows].map { |w| w[:name] } == [ "Intake" ] && props[:boardColumns].map { |c| c[:name] } == [ "Inbox" ]
     end
   end
+
+  test "each tracker's triggers are listed, with the statuses and mention switch the trigger form edits" do
+    workflow = create(:workflow, scope: @project, name: "Intake")
+    column = create(:board_column, board: create(:board, project: @project), name: "Inbox", position: 1)
+    create(:trigger_binding, project: @project, workflow: workflow, created_by: @user, project_tracker: @tracker,
+                             event_type: "tracker.issue.status_changed", subject_policy: :find_or_create_task, subject_column: column,
+                             filter_predicate: { "change.to.name" => { "op" => "in", "value" => [ "Ready for AI" ] } })
+    create(:trigger_binding, project: @project, workflow: workflow, created_by: @user, enabled: false,
+                             event_type: "tracker.comment.created", filter_predicate: { "comment.mentions_me" => true })
+    deleted = create(:workflow, scope: @project, name: "Gone")
+    create(:trigger_binding, project: @project, workflow: deleted, created_by: @user, event_type: "tracker.issue.created")
+    deleted.update!(deleted_at: Time.current)
+
+    get company_project_trackers_path(@project)
+
+    assert_inertia_props do |props|
+      props[:triggers].map { |t| t.slice("workflowName", "projectTrackerId", "eventType", "enabled", "statuses", "mentionsOnly") } == [
+        { "workflowName" => "Intake", "projectTrackerId" => @tracker.id, "eventType" => "tracker.issue.status_changed",
+          "enabled" => true, "statuses" => [ "Ready for AI" ], "mentionsOnly" => false },
+        { "workflowName" => "Intake", "projectTrackerId" => nil, "eventType" => "tracker.comment.created",
+          "enabled" => false, "statuses" => [], "mentionsOnly" => true }
+      ]
+    end
+  end
 end

@@ -46,6 +46,29 @@ describe('AddTrackerDrawer', () => {
     );
   });
 
+  it('asks for a team on a Linear connection', async () => {
+    renderPage(
+      <AddTrackerDrawer
+        opened
+        onClose={vi.fn()}
+        basePath="/company/projects/7/trackers"
+        availableScopes={[
+          {
+            integrationId: 9,
+            integrationName: 'Linear · Acme',
+            provider: 'linear',
+            scopes: [{ id: 't-eng', name: 'Engineering' }],
+          },
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: /team/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Engineering' }));
+    expect(screen.getByRole('textbox', { name: /handle/i })).toHaveValue('engineering');
+    expect(screen.queryByRole('combobox', { name: /^project/i })).not.toBeInTheDocument();
+  });
+
   it('refuses a handle that is not lowercase letters, digits and dashes', async () => {
     renderPage(
       <AddTrackerDrawer opened onClose={vi.fn()} basePath="/company/projects/7/trackers" availableScopes={scopes} />,

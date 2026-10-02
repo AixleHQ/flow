@@ -301,6 +301,62 @@ module Github
       assert_equal %w[repo], integration.reload.settings["token_scopes"]
     end
 
+    test "reconnecting the installation keeps the projects it covers and records what GitHub granted" do
+      stub_token_service(installation: FakeGithub::TokenService::DEFAULT_INSTALLATION.merge(
+        permissions: { organization_projects: "write", issues: "write" }
+      ))
+      first = service.create(installation_id: "12345")
+      first.update!(settings: first.settings.merge("github_projects" => [ { "id" => "PVT_kwDOroadmap" } ]))
+
+      again = service.create(installation_id: "12345")
+
+      assert_equal first.id, again.id
+      assert_equal [ "PVT_kwDOroadmap" ], again.reload.settings["github_projects"].pluck("id")
+      assert_equal({ "organization_projects" => "write", "issues" => "write" }, again.settings["app_permissions"])
+    end
+
+    test "choosing projects provisions their trackers and detaches the ones dropped" do
+      github = stub_github_projects!
+      integration = create(:integration, :github_projects, :active, company: @company, project: @project, connected_by: @user)
+
+      service.configure_projects(integration, project_ids: [ FakeGithub::ProjectsApi::ROADMAP, FakeGithub::ProjectsApi::OPS ])
+
+      assert_equal %w[Ops Roadmap], ProjectTracker.for_project(@project).order(:name).pluck(:name)
+      assert_equal "Status", integration.reload.settings["github_projects"].last["status_field"]
+      assert_equal [ "app" ], integration.tracker_subscriptions.pluck(:strategy)
+
+      service.configure_projects(integration, project_ids: [ FakeGithub::ProjectsApi::OPS ])
+
+      assert_equal({ "Ops" => "active", "Roadmap" => "detached" }, ProjectTracker.for_project(@project).pluck(:name, :status).to_h)
+      assert_equal 3, github.calls_to(:project).size
+    end
+
+    test "the picker asks GitHub for the installation's permissions and says when Projects is missing" do
+      stub_github_projects!
+      stub_token_service(installation: FakeGithub::TokenService::DEFAULT_INSTALLATION.merge(permissions: { contents: "read" }))
+      integration = create(:integration, :github_projects, :active, company: @company, project: @project, connected_by: @user)
+
+      error = assert_raises(Github::IntegrationService::ConfigurationError) { service.available_projects(integration) }
+
+      assert_match(/not been granted the Projects and Issues permissions on acme-corp/, error.message)
+      assert_equal({ "contents" => "read" }, integration.reload.settings["app_permissions"])
+    end
+
+    test "a project without its status field, or a user installation, cannot be chosen" do
+      stub_github_projects!
+      integration = create(:integration, :github_projects, :active, company: @company, project: @project, connected_by: @user)
+      integration.settings["github_projects"][0]["status_field"] = "Stage"
+      integration.save!
+
+      error = assert_raises(Github::IntegrationService::ConfigurationError) do
+        service.configure_projects(integration, project_ids: [ FakeGithub::ProjectsApi::ROADMAP ])
+      end
+      assert_match(/no single-select field named Stage/, error.message)
+
+      integration.update!(settings: integration.settings.merge("account_type" => "User"))
+      assert_raises(Github::IntegrationService::ConfigurationError) { service.available_projects(integration) }
+    end
+
     private
 
     def connect_elsewhere(installation_id)

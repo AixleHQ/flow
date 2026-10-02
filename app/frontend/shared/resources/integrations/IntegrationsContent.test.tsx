@@ -201,6 +201,124 @@ describe('IntegrationsContent', () => {
     vi.mocked(globalThis.fetch).mockReset();
   });
 
+  // == Linear ==
+
+  const linearIntegration = (overrides: Partial<Integration> = {}): Integration =>
+    makeIntegration({
+      id: 9,
+      name: 'Linear · Acme',
+      provider: 'linear',
+      scopeIndicator: 'project',
+      linearAuthMode: 'api_key',
+      linearWorkspaceUrl: 'https://linear.app/acme',
+      linearTeams: [
+        { id: 't-eng', key: 'ENG', name: 'Engineering' },
+        { id: 't-ops', key: 'OPS', name: 'Operations' },
+      ],
+      linearIdentity: 'Aixle Bot',
+      ...overrides,
+    });
+
+  it('offers Linear in a project, and says which teams a connection covers, as whom and why events stall', async () => {
+    const user = userEvent.setup();
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[
+          linearIntegration({ linearWebhookError: "Only a Linear workspace admin's API key can register webhooks." }),
+        ]}
+        linear={{ oauthEnabled: false }}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('ENG, OPS · as Aixle Bot (API key)')).toBeInTheDocument();
+    expect(screen.getByText("Only a Linear workspace admin's API key can register webhooks.")).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open Linear · Acme in Linear/ })).toHaveAttribute(
+      'href',
+      'https://linear.app/acme',
+    );
+    expect(screen.getByRole('button', { name: /Test connection for Linear/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Connect/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Linear' }));
+    expect(await screen.findByRole('dialog', { name: 'Connect Linear' })).toBeInTheDocument();
+  });
+
+  it('does not offer Linear outside a project', () => {
+    renderPage(<IntegrationsContent title="Integrations" basePath="/company/integrations" integrations={[]} />, {
+      props: settingsProps,
+    });
+
+    expect(screen.queryByRole('button', { name: 'Linear' })).not.toBeInTheDocument();
+  });
+
+  it('opens the team picker for the connection the Linear app just made', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({ ok: true, json: async () => ({ teams: [] }) } as Response);
+    window.history.pushState({}, '', '/company/projects/1/integrations?linear_setup=9');
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[linearIntegration({ status: 'inactive', linearAuthMode: 'oauth', linearTeams: [] })]}
+        linear={{ oauthEnabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Linear teams' })).toBeInTheDocument();
+    expect(screen.getByText('Choose the Linear teams to finish connecting')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Test connection for Linear/ })).not.toBeInTheDocument();
+    window.history.pushState({}, '', '/');
+    vi.mocked(globalThis.fetch).mockReset();
+  });
+
+  // == GitHub Projects ==
+
+  it('lists the GitHub projects a connection covers and opens their picker from the row', async () => {
+    const user = userEvent.setup();
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ projects: [], selected: [] }),
+    } as Response);
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[
+          makeIntegration({
+            scopeIndicator: 'project',
+            githubAuthMode: 'app',
+            githubProjectsSupported: true,
+            githubProjects: [
+              { id: 'PVT_1', number: 5, title: 'Roadmap', url: 'https://github.com/orgs/acme/projects/5' },
+            ],
+          }),
+        ]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('projects: Roadmap')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'GitHub Projects for Acme GitHub' }));
+    expect(await screen.findByRole('dialog', { name: 'GitHub Projects' })).toBeInTheDocument();
+    vi.mocked(globalThis.fetch).mockReset();
+  });
+
+  it('offers no GitHub Projects on a connection that cannot carry them', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[makeIntegration({ scopeIndicator: 'project', githubAuthMode: 'pat' })]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.queryByRole('button', { name: /GitHub Projects for/ })).not.toBeInTheDocument();
+  });
+
   it('reopens the Azure dialog where the Microsoft sign-in left off', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: true,

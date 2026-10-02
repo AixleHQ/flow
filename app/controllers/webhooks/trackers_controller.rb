@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Tracker webhook receiver for providers whose events do not arrive through an
-# existing receiver (Azure and GitHub have their own). The provider
+# existing receiver (Azure and GitHub have their own): Jira and Linear. The provider
 # authenticates the request and reduces it to Trackers::Notification — IDs and
 # change hints only; the pipeline re-reads the issue itself.
 class Webhooks::TrackersController < ActionController::API
@@ -34,6 +34,21 @@ class Webhooks::TrackersController < ActionController::API
 
     payload = JSON.parse(raw)
     Trackers::Jira::Webhooks.app_subscriptions(payload).each do |subscription|
+      accept(subscription, Trackers::Provider.for(subscription.integration), payload, raw)
+    end
+    head :ok
+  rescue JSON::ParserError
+    head :bad_request
+  end
+
+  # The one webhook of Aixle's Linear OAuth app, for every workspace that
+  # installed it; the payload names the workspace.
+  def receive_linear_app
+    raw = request.raw_post
+    return head :unauthorized unless Trackers::Linear::Webhooks.app_signed?(request, raw)
+
+    payload = JSON.parse(raw)
+    Trackers::Linear::Webhooks.app_subscriptions(payload).each do |subscription|
       accept(subscription, Trackers::Provider.for(subscription.integration), payload, raw)
     end
     head :ok

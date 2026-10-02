@@ -268,6 +268,19 @@ customer's service account only, which needs nothing here.
 | `JIRA_OAUTH_CLIENT_SECRET`  | no       | unset                   | The app's secret. It also verifies the JWT on the app's webhook deliveries. |
 | `JIRA_WEBHOOK_BASE_URL`     | no       | `<protocol>://<domain>` | Where Jira posts webhooks. Set it only when the deployment's domain is not reachable from Atlassian (a tunnel in development); a loopback or private host registers no webhooks. |
 
+### Linear
+
+One Linear OAuth app per deployment, installed by each workspace with
+`actor=app` (see `docs/user-guide/linear.md`). Optional: without it Linear
+connects with a personal API key only, which needs nothing here.
+
+| Variable                     | Required | Default                 | Purpose |
+| ---------------------------- | -------- | ----------------------- | ------- |
+| `LINEAR_OAUTH_CLIENT_ID`     | no       | unset                   | Client id of the deployment's Linear app. With the secret, it turns on connecting with the app. |
+| `LINEAR_OAUTH_CLIENT_SECRET` | no       | unset                   | The app's secret. |
+| `LINEAR_WEBHOOK_SECRET`      | no       | unset                   | The signing secret of the app's webhook (`/webhooks/trackers/app/linear`). Without it every delivery to that URL is refused. |
+| `LINEAR_WEBHOOK_BASE_URL`    | no       | `<protocol>://<domain>` | Where API-key connections' webhooks point. Set it only when the deployment's domain is not reachable from Linear (a tunnel in development); a loopback or private host registers no webhooks. |
+
 ## Auth & OAuth providers
 
 | Variable                     | Required | Default            | Purpose                                                      |

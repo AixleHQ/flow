@@ -104,7 +104,10 @@ const BuilderPage = () => {
   // What the server holds: the editor is dirty while its state differs from this.
   const [savedSnapshot, setSavedSnapshot] = useState(() => snapshotOf(initialWorkflow, initialSteps));
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>('sessions');
+  // The Trackers page links straight to a workflow's triggers.
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'triggers' ? 'triggers' : 'sessions',
+  );
   const [selection, setSelection] = useState<Selection | null>(() =>
     initialSteps.length > 0 ? { mode: 'session', sessionId: initialSteps[0].id } : null,
   );

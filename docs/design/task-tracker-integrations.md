@@ -1,6 +1,7 @@
 # Task tracker integrations — technical design
 
-Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366**
+Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366;
+phase 3 (GitHub Projects) and phase 4 (Linear) implemented on `artempartos/feat-github-projects-linear` (PR TBD)**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -245,8 +246,11 @@ set), and then no other project can link it.
 ```ruby
 module Trackers
   PROVIDERS = {
-    "youtrack" => Trackers::Youtrack::Provider,
-    # "jira" => Trackers::Jira::Provider, ...
+    "azure_devops" => "Trackers::AzureDevops::Provider",
+    "github" => "Trackers::Github::Provider",
+    "jira" => "Trackers::Jira::Provider",
+    "linear" => "Trackers::Linear::Provider"
+    # "youtrack" => "Trackers::Youtrack::Provider", in phase 5
   }.freeze
 
   # One instance per Integration; owns that connection's client. Every method
@@ -304,16 +308,17 @@ Status        id, name, category (todo | in_progress | done | canceled | nil)
 
 | | YouTrack | Jira Cloud | Linear | GitHub Projects | Azure Boards |
 |---|---|---|---|---|---|
-| Scope unit | project | project | team | project (v2) | project |
-| Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | owner + project node id | organization id |
-| Auth | permanent token of an automation account | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | API key or OAuth app | GitHub App (existing) | existing Azure connection |
-| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
-| Subscription strategy | manual | api + refresh sweep (3LO); manual (service account) | api | GitHub App install | api (existing `SubscriptionService`) |
-| Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous values) | `changes` (to verify) | `fields.{name}.oldValue/newValue` |
-| Status category source | `isResolved` only (todo/done); in-progress set by mapping | `statusCategory` | state `type` | none — mapping required | state category |
+| Scope unit | project | project | team (id; the team key is the identifier prefix) | organization project (v2), by node id; user-owned projects are unreachable for an App | project |
+| Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | `github.com` — node ids are unique across GitHub | organization id |
+| Auth | permanent token of an automation account | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | Two ways (§12, phase 4): the deployment's OAuth app installed with `actor=app` (acts as the app; 24-hour access tokens renewed under a row lock, since refresh tokens rotate), or a personal API key | GitHub App installation (existing); needs Organization *Projects* and Repository *Issues* read & write | existing Azure connection |
+| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | OAuth app: the app's own webhook, one URL for every workspace (`/webhooks/trackers/app/linear`), routed by `organizationId`. API key: one webhook per team via `webhookCreate` (workspace admin only), to the subscription's own URL. Both signed with `Linear-Signature` HMAC-SHA256, `webhookTimestamp` within 60 s | `projects_v2_item`, `issues`, `issue_comment` through the existing `/webhooks/github` receiver, signed with the App's webhook secret | Service Hooks through the existing Azure receiver |
+| Subscription strategy | manual | api + refresh sweep (3LO); manual (service account) | app (OAuth); api (API key) | app | api (existing `SubscriptionService`) |
+| Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous `stateId`, `assigneeId`) | `changes.field_value` with `from`/`to` options | `fields.{name}.oldValue/newValue` |
+| Status category source | `isResolved` only (todo/done); in-progress set by mapping | `statusCategory` | state `type` | none — inferred from the option name | state category |
 
 For GitHub and Azure, `parse` is fed by their existing controllers. Each hands the tracker pipeline
-a `Notification` and never routes through `/webhooks/trackers`.
+a `Notification` and never routes through `/webhooks/trackers`. GitHub still records its
+deliveries in `tracker_deliveries`, against an `app` subscription row of the connection.
 
 ### 5.4 Status and "columns"
 
@@ -381,8 +386,10 @@ A provider whose deliveries are authenticated per subscription can skip the hist
 a hint then takes that subscription's own secret. Azure qualifies (Service Hooks authenticate with a
 per-subscription basic-auth password), so phase 1 trusts its hints. Jira qualifies too: an admin
 webhook signs its body with its subscription's secret, and an app webhook carries a JWT signed with
-the app's client secret, which only Atlassian holds. The history check arrives with the first
-shared-token provider, YouTrack.
+the app's client secret, which only Atlassian holds. GitHub and Linear qualify as well: GitHub
+signs every delivery with the App's webhook secret, and Linear signs with the subscription's
+secret (API key) or the app's (OAuth app). The history check arrives with the first shared-token
+provider, YouTrack.
 
 ### 6.3 Event vocabulary and data
 
@@ -829,8 +836,33 @@ Same shape:
 - `issues` and `projects_v2_item` events reach the tracker pipeline as `Notification`s from the
   existing `Webhooks::GithubController`.
 
-GitHub Issues belong to a repository and Projects to an owner, so the scope unit is decided when
-this provider is designed (phase 3). Repository and PR behaviour is untouched.
+GitHub Issues belong to a repository and Projects to an owner. As built in phase 3:
+
+- **Scope:** an organization-owned Project (v2), keyed by its node id. A connection covers the
+  projects picked on its row (`settings.github_projects`, each with its status field name, `Status`
+  by default); `Github::IntegrationService#configure_projects` provisions their trackers and
+  detaches the ones dropped. Only an App connection on an organization qualifies: GitHub gives an
+  App no API and no webhooks for user-owned projects.
+- **Issue:** an issue or pull request on the board, keyed by its content node id, with
+  `owner/repo#number` as its key. Draft items are excluded. Every read re-checks that the content
+  has an item on the tracker's project; one that does not is `not_found`.
+- **Status:** the project's single-select Status field; a transition sets the item's option
+  (`updateProjectV2ItemFieldValue`). GitHub has no status categories, so the option name decides.
+- **Client:** `Github::ProjectsApi`, over the installation token: GraphQL for the board (projects,
+  fields, items with GitHub's project filter syntax as `native_query`, status changes), REST for
+  issue writes, which take logins and label names as they are.
+- **Events:** `projects_v2_item` (`created`, `converted` → created; `edited` on the status field →
+  status changed), `issues.assigned`, `issue_comment.created`, from the existing
+  `Webhooks::GithubController` (`Trackers::Github::Webhooks`). Each connection on the installation
+  records the delivery against its own `app` subscription, deduplicated by `X-GitHub-Delivery`, and
+  only when a tracker trigger in its project waits (`EventPipeline.awaited_by?`): GitHub sends
+  every issue and comment of every repository the App sees. `issues` and `issue_comment` name no
+  project, so they become one notification per tracked project, and `ProcessDeliveryJob` drops the
+  ones whose issue is not on that board (`not_found`).
+- **Identity:** the App's bot (`<slug>[bot]`) writes everything, so the connection's identity is
+  always dedicated; a mention is `@<slug>`.
+
+Repository and PR behaviour is untouched.
 
 ## 10. Security
 
@@ -918,10 +950,53 @@ for.
      ids seen (event actors, assignees, connection identities); `TrackerPersonalDataWorkflow` reports
      them daily as their 7-day cycle comes round and erases a closed account's id and name from events,
      runs, the write ledger and connections. Deliveries are purged after a week. Free text is not traced.
-3. **GitHub Projects** (committed), and GitHub Issues if they fall out cheaply: through the
-   existing GitHub App and `Webhooks::GithubController` (§9.3). The scope unit is decided here.
-4. **Linear**: API-registered webhooks with `Linear-Signature` HMAC. Until then, the dead `linear`
-   enum value and the user-guide claim that Linear is supported are corrected.
+3. **GitHub Projects** (committed): through the existing GitHub App and
+   `Webhooks::GithubController` (§9.3).
+
+   Where it settled:
+   - **Projects only.** The scope is an organization Project (v2); repository issues without a
+     project were deferred by the user's call on 2026-10-01, to come later as a second scope kind of
+     the same provider.
+   - **Permissions.** The App needs Organization *Projects* and Repository *Issues* read & write, and
+     the `projects_v2_item`, `issues` and `issue_comment` events. Every installation's owner has to
+     approve the added permissions; until then the calls fail with a message saying so. The
+     permissions are recorded at connect and on Test connection, and from the
+     `installation.new_permissions_accepted` webhook.
+   - **Hints trusted.** Deliveries are signed with the App's webhook secret (§6.2).
+   - **Categories by name.** GitHub has no status category; the option name maps to one
+     (canceled, done, in progress patterns; todo otherwise). Per-tracker overrides stay open.
+   - **Creates** go to `fields.repository`, or the one repository of the organization the Aixle
+     project has attached, through REST, and are then added to the board; a create that landed but
+     was not added reports `outcome_unknown` naming the issue, so it is not filed twice.
+   - **`tracker_list_users` is unsupported**: GitHub assigns by login, and listing an organization's
+     members needs another permission.
+   - **`not_found` is not a failure** for a delivery: `ProcessDeliveryJob` counts it as outside the
+     scope and moves on, which the fan-out above needs.
+4. **Linear** (built with phase 3).
+
+   Where it settled:
+   - **Both ways in**, by the user's call on 2026-10-01, like Jira: the deployment's OAuth app,
+     installed by a workspace admin with `actor=app`, and a personal API key.
+   - **OAuth app.** It acts as itself, so its identity is always dedicated. Access tokens last 24
+     hours and refresh tokens rotate, so `Linear::Credential` renews under a row lock, as Jira's
+     does; there is no sweep. Its events come from the app's own webhook, which Linear creates for
+     every workspace that installs the app: one URL (`/webhooks/trackers/app/linear`), signed with
+     the app's secret, routed by the payload's `organizationId` to the `app` subscriptions of that
+     workspace's OAuth connections. Linear offers the app in its mention picker and as an assignee
+     only with its agent scopes (`app:mentionable`, `app:assignable`), which are not requested, so
+     its intake is a state move; a comment that types the app's `@username` still counts as a mention.
+   - **API key.** It acts as its owner; the account counts as Aixle's own only when marked as kept
+     for Aixle. Its events need one webhook per team, registered through `webhookCreate` with a
+     secret of ours when a tracker trigger first waits (`Trackers::Linear::Subscriptions`). Linear
+     lets only a workspace admin's key manage webhooks; a refusal leaves the subscription failing
+     with that reason, and the next ensure retries.
+   - **Verification.** `Linear-Signature` (hex HMAC-SHA256 of the body) and a `webhookTimestamp`
+     within 60 seconds; `Linear-Delivery` deduplicates. Hints are trusted (§6.2).
+   - **Statuses** are the team's workflow states, categorized by state type (triage, backlog,
+     unstarted → todo; started → in progress; completed → done; canceled, duplicate → canceled).
+   - **No `native_query`**: Linear's filters are structured, and the port's filter maps onto
+     `IssueFilter`. One issue type, `Issue`; labels and people are resolved by name, and
+     `tracker_list_users` lists the team's members.
 5. **YouTrack**, last:
    - the `manual` subscription strategy and shared-token authentication (the weakest one);
    - the SSRF-hardened transport copied from PR #271. YouTrack is the only provider on this list
@@ -960,6 +1035,8 @@ Later and additive:
 | 15 | Loop-limit defaults? | **Agreed:** depth 5, 10 Aixle-caused runs per issue per hour, tuned later. |
 | 16 | Scope cuts (no mirroring, no polling, best-effort delivery)? | **Agreed.** Adoption goes through one-column intake instead (§6.8). |
 | 17 | Should the platform move tickets on run start, success and failure ("handoff statuses")? | **Agreed: no.** The agent moves tickets with its tools, as the workflow instructs. The only platform write is the failure comment (§6.9). |
+| 18 | GitHub: Projects (v2), repository issues, or both? | **Agreed 2026-10-01: Projects only** (§9.3). Repository issues are a later scope kind of the same provider. |
+| 19 | Linear authentication, and whom the OAuth app acts as? | **Agreed 2026-10-01: both** the OAuth app and a personal API key; the app is installed with `actor=app`, so it acts as itself (§12, phase 4). |
 
 ### 13.2 Open
 

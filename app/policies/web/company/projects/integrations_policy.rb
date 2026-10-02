@@ -22,6 +22,10 @@ module Web
         def jira_oauth_start? = manage_integrations?
         def jira_inspect? = manage_integrations?
         def jira_projects? = manage_integrations?
+        def github_projects? = manage_integrations?
+        def linear_oauth_start? = manage_integrations?
+        def linear_inspect? = manage_integrations?
+        def linear_teams? = manage_integrations?
         # Returns the webhook secret.
         def jira_webhook? = manage_integrations?
 

@@ -214,7 +214,7 @@ because each request carries a key for that session. See
   another such repository attaches the same GitLab project.
 - There are no merge-request tools, no GitLab CLI and no GitLab triggers.
   GitLab issues cannot be used as a tracker: [Trackers](/docs/trackers)
-  supports Jira and Azure Boards.
+  supports Jira, Azure Boards, GitHub Projects and Linear.
 
 ## When something goes wrong
 

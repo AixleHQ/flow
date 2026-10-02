@@ -27,6 +27,8 @@ import type { Integration } from '@/types/generated';
 
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 
+import { requestJson as requestTrackerJson } from './requestJson';
+
 export interface JiraProps {
   oauthEnabled: boolean;
 }
@@ -53,17 +55,7 @@ interface WebhookSetup {
 
 const DOCS_URL = '/docs/jira';
 
-// JSON rather than an Inertia visit: the dialogs keep their state between steps.
-const requestJson = async (url: string, init: RequestInit = {}) => {
-  const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-  const response = await fetch(url, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message || 'Jira rejected the request');
-  return payload;
-};
+const requestJson = (url: string, init: RequestInit = {}) => requestTrackerJson(url, init, 'Jira rejected the request');
 
 const projectOptions = (projects: JiraProject[]) =>
   projects.map((p) => ({ value: p.id, label: `${p.name} (${p.key})` }));

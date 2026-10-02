@@ -194,4 +194,70 @@ class IntegrationResource < ApplicationResource
   attribute :jira_dedicated_identity do |integration|
     integration.jira? && integration.settings&.dig("dedicated_identity") == true
   end
+
+  # ----- GitHub Projects -----
+
+  # Whether this connection can carry GitHub Projects trackers at all: GitHub
+  # lets an App reach only organization-owned projects.
+  typelize "boolean"
+  attribute :github_projects_supported do |integration|
+    integration.github? && integration.github_app? && integration.settings&.dig("account_type") == "Organization"
+  end
+
+  # What the installation was granted, when GitHub last said. False means an
+  # organization owner has yet to approve the Projects and Issues permissions;
+  # null that the grant was never recorded (connected before it was).
+  typelize "boolean | null"
+  attribute :github_projects_permitted do |integration|
+    permissions = integration.github? ? integration.settings&.dig("app_permissions") : nil
+    next nil unless permissions.is_a?(Hash)
+
+    Github::IntegrationService::PROJECT_PERMISSIONS.all? { |name, levels| levels.include?(permissions[name].to_s) }
+  end
+
+  typelize "Array<{ id: string; number: number; title: string; url: string }>"
+  attribute :github_projects do |integration|
+    next [] unless integration.github?
+
+    Array(integration.settings&.dig("github_projects")).map { |p| p.to_h.slice("id", "number", "title", "url") }
+  end
+
+  # ----- Linear -----
+
+  # "oauth" (Aixle's Linear app) or "api_key".
+  typelize "string | null"
+  attribute :linear_auth_mode do |integration|
+    integration.linear? ? integration.settings&.dig("auth_mode") : nil
+  end
+
+  typelize "string | null"
+  attribute :linear_workspace_url do |integration|
+    key = integration.linear? ? integration.settings&.dig("url_key") : nil
+    key.present? ? "https://linear.app/#{key}" : nil
+  end
+
+  typelize "Array<{ id: string; key: string; name: string }>"
+  attribute :linear_teams do |integration|
+    next [] unless integration.linear?
+
+    Array(integration.settings&.dig("linear_teams")).map { |t| t.to_h.slice("id", "key", "name") }
+  end
+
+  typelize "string | null"
+  attribute :linear_identity do |integration|
+    integration.linear? ? integration.settings&.dig("identity_display_name") : nil
+  end
+
+  typelize "boolean"
+  attribute :linear_dedicated_identity do |integration|
+    integration.linear? && integration.settings&.dig("dedicated_identity") == true
+  end
+
+  # Why events do not reach Aixle, when a webhook could not be registered.
+  typelize "string | null"
+  attribute :linear_webhook_error do |integration|
+    next nil unless integration.linear?
+
+    integration.tracker_subscriptions.find { |s| s.status == "failing" }&.last_error
+  end
 end

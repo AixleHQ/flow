@@ -62,6 +62,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'gitlab', label: 'GitLab' },
       { slug: 'azure-devops', label: 'Azure DevOps' },
       { slug: 'jira', label: 'Jira' },
+      { slug: 'linear', label: 'Linear' },
       { slug: 'trackers', label: 'Trackers' },
       { slug: 'slack', label: 'Slack' },
       { slug: 'coder', label: 'Coder' },

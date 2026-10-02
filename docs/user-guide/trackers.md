@@ -1,8 +1,8 @@
 # Trackers
 
 A **tracker** is a Flow project's link to one external project in a task
-tracker — an Azure Boards project or a Jira project — through a connection made
-on the project's **Integrations** page. The connection holds the credentials;
+tracker — an Azure Boards project, a Jira project, a GitHub project or a Linear
+team — through a connection made on the project's **Integrations** page. The connection holds the credentials;
 the tracker is what agents and triggers address. Through it:
 
 - tracker triggers start workflows when an issue is created, moves to a column,
@@ -10,7 +10,8 @@ the tracker is what agents and triggers address. Through it:
 - agents read and change issues with the `tracker_*` tools.
 
 Both work the same way for every provider. Connecting is per provider: see
-[Azure DevOps](/docs/azure-devops) and [Jira](/docs/jira).
+[Azure DevOps](/docs/azure-devops), [Jira](/docs/jira),
+[GitHub](/docs/github#github-projects-as-a-tracker) and [Linear](/docs/linear).
 
 ---
 
@@ -21,18 +22,20 @@ Open **Trackers** in the project's sidebar, under **Resources**. Each row shows:
 | Column | Shows |
 | --- | --- |
 | **Tracker** | The external project's name, a **Primary** and a **Read-only** badge where they apply, and the handle underneath |
-| **Connection** | The connection it goes through, and the provider: **Azure Boards** or **Jira** |
+| **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects** or **Linear** |
+| **Triggers** | The tracker triggers that listen to it — those set to any tracker appear on every row — each with its workflow, what it waits for and whether it is off. The workflow name opens its **Triggers** tab |
 | **Status** | **Active**, **Connection inactive** or **Detached** |
 
 Viewers see the list but no actions.
 
 ### Where trackers come from
 
-You normally do not add trackers by hand. Connecting Azure DevOps or Jira
+You normally do not add trackers by hand. Connecting Azure DevOps, Jira or
+Linear — or picking projects with **GitHub Projects** on a GitHub connection —
 creates one tracker for each external project the connection covers, and the
-project's first tracker becomes its primary. A Jira connection whose projects
-change gets trackers for the new ones, and the trackers of projects it no
-longer covers are detached.
+project's first tracker becomes its primary. A Jira, Linear or GitHub
+connection whose projects (Linear: teams) change gets trackers for the new
+ones, and the trackers of those it no longer covers are detached.
 
 To get a tracker for another external project, add the project to its
 connection on the **Integrations** page; when there is nothing to add here, the
@@ -79,8 +82,8 @@ A tracker is **usable** when it is not detached and its connection is active.
   **Integrations** page (Test connection, or connect again). Until then agents
   cannot reach the tracker, its events start nothing, and
   **Connect a board column** is not offered.
-- **Detached** — detached by hand, or by a Jira connection that no longer
-  covers the project.
+- **Detached** — detached by hand, or by a Jira, Linear or GitHub connection
+  that no longer covers the project.
 
 ### Detach and attach again
 
@@ -173,7 +176,13 @@ A mention is recognised only once Flow knows its own account in the tracker:
 - **Azure Boards** — after the connection has created, updated, moved or
   assigned a work item at least once;
 - **Jira** — a service-account connection, or an Atlassian account marked
-  **This Atlassian account is kept for Aixle**.
+  **This Atlassian account is kept for Aixle**;
+- **GitHub Projects** — always: the connection writes as the app, and people
+  mention it as `@<app-slug>`;
+- **Linear** — an API-key connection marked
+  **This Linear account is kept for Aixle**. Aixle's Linear app is its own
+  account too, but Linear does not let people mention or assign it, so with the
+  app only state moves and new issues start work.
 
 Until then, a mention trigger never fires: the drawer greys out
 **Aixle is mentioned in a comment** and says why, and the trigger form says so
@@ -195,7 +204,7 @@ in [Triggers and gates](/docs/triggers-and-gates).
 | --- | --- | --- |
 | **Issue moves to a status (column)** | `tracker.issue.status_changed` | The issue moves to another column of the tracker's board |
 | **Issue is created** | `tracker.issue.created` | An issue is created in the tracker's project |
-| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared |
+| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects and Linear only when someone is assigned |
 | **Comment is added** | `tracker.comment.created` | A comment is added to the issue |
 
 A status is a column of the tracker's board where there is one, not the
@@ -304,9 +313,16 @@ delivery works:
 - **Jira** — a webhook Flow registers for an Atlassian-account connection, or
   one a Jira admin adds for a service-account connection. See
   [The webhook](/docs/jira#the-webhook).
+- **GitHub Projects** — the GitHub App's own webhook, once the app has the
+  Projects and Issues permissions and their events. See
+  [GitHub Projects as a tracker](/docs/github#github-projects-as-a-tracker).
+- **Linear** — the webhook of Aixle's Linear app, or for an API-key connection
+  one webhook per team, which only a workspace admin's key can register. See
+  [The webhooks](/docs/linear#the-webhooks).
 
 Either way the tracker has to reach the deployment's domain. With a loopback
-or private host, Flow creates no Service Hooks and registers no Jira webhooks.
+or private host, Flow creates no Service Hooks and registers no Jira or Linear
+webhooks.
 
 Before matching, Flow reads the issue again from the tracker, so the `issue`
 fields a filter sees are its current state. A redelivered event is
@@ -339,7 +355,7 @@ them without attaching anything.
 | --- | --- |
 | `tracker_list` | Lists the project's trackers: handle, provider, primary, access, whether each is usable, and which one started this run |
 | `tracker_describe` | A tracker's statuses with a portable category (todo, in_progress, done, canceled), its issue types and the extra fields that can be set |
-| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query` |
+| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query`, and GitHub Projects its project filter syntax |
 | `tracker_get_issue` | Reads one issue in full, by id, key or URL |
 | `tracker_list_comments` | Lists an issue's comments, paginated |
 | `tracker_list_users` | Finds people an issue can be assigned to; not every tracker can list users |
@@ -353,8 +369,10 @@ them without attaching anything.
 What a status or an assignee is differs by provider. On Azure Boards,
 `tracker_transition_issue` takes a state and the card moves to the column that
 state maps to, and assignees are emails or display names. On Jira it takes a
-column, a workflow status or a transition name. The provider pages have the
-rest.
+column, a workflow status or a transition name. On GitHub Projects it takes a
+Status option and assignees are GitHub logins; on Linear it takes a workflow
+state, and assignees are names, usernames or emails of the team's members. The
+provider pages have the rest.
 
 ### Which tracker a call acts on
 
@@ -364,7 +382,9 @@ Every tool takes an optional `tracker`. The tracker is chosen in this order:
 2. The tracker that started the run. If it is no longer usable, the call fails
    rather than going to another tracker.
 3. For tools that take an issue, the one tracker the issue's reference belongs
-   to: a Jira key such as `APP-12`, or the issue's URL.
+   to: a Jira or Linear key such as `APP-12`, a GitHub `owner/repo#12`, or the
+   issue's URL. A GitHub reference names only the organization, so it decides
+   only when the project has one tracker on that organization.
 4. The primary tracker; when no usable tracker is primary, the only usable one.
 5. Otherwise the call fails and names the handles to choose from.
 
@@ -375,7 +395,8 @@ and the error names the primary tracker when that is a different one.
 
 In the tracker, a change is made by whoever the connection acts as — see
 [What the connection runs as](/docs/azure-devops#what-the-connection-runs-as)
-for Azure DevOps and the table at the top of [Jira](/docs/jira). In Flow, every
+for Azure DevOps, and the tables at the top of [Jira](/docs/jira) and
+[Linear](/docs/linear). On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
 write is recorded before it is sent, with the session, run and workflow that
 made it. That record is how "Changes made by Aixle" knows which run caused an
 event, and it makes retries safe:
@@ -395,3 +416,8 @@ event, and it makes retries safe:
   and board columns as statuses.
   What Aixle keeps about Jira accounts, and when it erases it, is under
   [Personal data](/docs/jira#personal-data).
+- [GitHub](/docs/github#github-projects-as-a-tracker) — organization projects
+  on the GitHub App connection, the permissions the app needs, and the Status
+  field as the board's columns.
+- [Linear](/docs/linear) — Aixle's Linear app or an API key, the per-team
+  webhooks, and workflow states as statuses.

@@ -208,7 +208,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'github',
     title: 'GitHub',
     section: 'User guide',
-    desc: 'Connect GitHub with the GitHub App or a personal access token: repositories, git and gh in sessions, CI gates, starting workflows from GitHub, and the self-hosted app.',
+    desc: 'Connect GitHub with the GitHub App or a personal access token: repositories, git and gh in sessions, CI gates, GitHub Projects as trackers, starting workflows from GitHub, and the self-hosted app.',
   },
   {
     slug: 'gitlab',
@@ -229,10 +229,16 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Connect Jira Cloud with an Atlassian account or a service account, add the admin webhook tracker triggers need, and how board columns become statuses.',
   },
   {
+    slug: 'linear',
+    title: 'Linear',
+    section: 'User guide',
+    desc: 'Connect Linear with the Aixle Linear app or an API key, the per-team webhooks an API key needs a workspace admin for, and how workflow states become statuses.',
+  },
+  {
     slug: 'trackers',
     title: 'Trackers',
     section: 'User guide',
-    desc: 'Azure Boards and Jira as trackers: the Trackers page, primary and read-only, connecting a board column, tracker triggers, the tracker tools and who a write is attributed to.',
+    desc: 'Azure Boards, Jira, GitHub Projects and Linear as trackers: the Trackers page, primary and read-only, connecting a board column, tracker triggers, the tracker tools and who a write is attributed to.',
   },
   {
     slug: 'slack',

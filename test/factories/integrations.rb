@@ -41,10 +41,58 @@ FactoryBot.define do
       end
     end
 
+    # A Linear connection with an API key, covering the ENG and OPS teams of
+    # FakeLinear::Api's workspace.
     trait :linear do
       provider { :linear }
+      name { "Linear · Acme" }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+
+      transient do
+        auth_mode { "api_key" }
+        dedicated_identity { true }
+        linear_teams do
+          [ { "id" => FakeLinear::Api::ENG, "key" => "ENG", "name" => "Engineering" },
+            { "id" => FakeLinear::Api::OPS, "key" => "OPS", "name" => "Operations" } ]
+        end
+      end
+
+      after(:build) do |integration, evaluator|
+        integration.credentials_data =
+          if evaluator.auth_mode == "api_key"
+            { "api_key" => "lin_api_test_#{SecureRandom.hex(8)}" }
+          else
+            { "access_token" => "lin_oauth_token", "refresh_token" => "lin_refresh", "expires_at" => 1.hour.from_now.iso8601 }
+          end
+        integration.settings = {
+          "auth_mode" => evaluator.auth_mode, "organization_id" => FakeLinear::Api::ORGANIZATION, "organization_name" => "Acme",
+          "url_key" => "acme", "linear_teams" => evaluator.linear_teams, "identity_display_name" => "Aixle Bot",
+          "dedicated_identity" => evaluator.dedicated_identity,
+          "tracker_identity" => { "id" => FakeLinear::Api::BOT_ID, "name" => "Aixle Bot", "login" => "aixle" }
+        }
+      end
+    end
+
+    trait :linear_oauth do
+      linear
+      auth_mode { "oauth" }
+    end
+
+    # A GitHub App installation on an organization, covering the Roadmap project
+    # of FakeGithub::ProjectsApi.
+    trait :github_projects do
+      provider { :github }
+      name { "acme-corp" }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+
       after(:build) do |integration|
-        integration.credentials_data = { access_token: "lin_api_test_#{SecureRandom.hex(8)}" }
+        integration.settings = {
+          "auth_mode" => "app", "account_login" => "acme-corp", "account_type" => "Organization",
+          "target_type" => "Organization",
+          "app_permissions" => { "organization_projects" => "write", "issues" => "write", "contents" => "write" },
+          "github_projects" => [ { "id" => FakeGithub::ProjectsApi::ROADMAP, "number" => 1, "title" => "Roadmap",
+                                   "url" => "https://github.com/orgs/acme-corp/projects/1", "status_field" => "Status" } ]
+        }
       end
     end
 
