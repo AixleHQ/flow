@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import { Alert, Button, Select, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useState } from 'react';
@@ -91,6 +92,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
         return;
       }
       notifications.show({ message: 'Column connected', color: 'green' });
+      router.reload({ only: ['triggers'] });
       onClose();
     } finally {
       setSaving(false);

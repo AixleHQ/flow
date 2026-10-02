@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { ActionIcon, Anchor, Badge, Box, Button, Group, Table, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Box, Button, Group, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
@@ -18,7 +18,7 @@ import { useState } from 'react';
 import type { ProjectTracker } from '@/types/generated';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { companyProjectIntegrationsPath } from 'shared/routes';
+import { builderCompanyProjectWorkflowPath, companyProjectIntegrationsPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
@@ -27,10 +27,23 @@ import { AddTrackerDrawer, type AvailableScopeGroup } from './AddTrackerDrawer';
 import { ConnectColumnDrawer, type IntakeOption } from './ConnectColumnDrawer';
 import { EditHandleDrawer } from './EditHandleDrawer';
 
+// A tracker trigger as the Trackers page lists it; projectTrackerId null listens to every tracker.
+export interface TrackerTriggerSummary {
+  id: number;
+  workflowId: number;
+  workflowName: string;
+  projectTrackerId: number | null;
+  eventType: string;
+  enabled: boolean;
+  statuses: string[];
+  mentionsOnly: boolean;
+}
+
 interface Props {
   projectId: number;
   trackers: ProjectTracker[];
   availableScopes: AvailableScopeGroup[];
+  triggers?: TrackerTriggerSummary[];
   workflows?: IntakeOption[];
   boardColumns?: IntakeOption[];
   basePath: string;
@@ -43,6 +56,51 @@ const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub Projects',
   jira: 'Jira',
   linear: 'Linear',
+};
+
+const triggerLabel = (trigger: TrackerTriggerSummary) => {
+  switch (trigger.eventType) {
+    case 'tracker.issue.status_changed':
+      return trigger.statuses.length > 0 ? `moves to ${trigger.statuses.join(', ')}` : 'moves to any status';
+    case 'tracker.issue.created':
+      return 'issue is created';
+    case 'tracker.issue.assigned':
+      return 'issue is assigned';
+    case 'tracker.comment.created':
+      return trigger.mentionsOnly ? 'comment mentions Aixle' : 'comment is added';
+    default:
+      return trigger.eventType;
+  }
+};
+
+const TriggerList = ({ projectId, triggers }: { projectId: number; triggers: TrackerTriggerSummary[] }) => {
+  if (triggers.length === 0)
+    return (
+      <Text fz={12} c="dimmed">
+        None
+      </Text>
+    );
+  return (
+    <Stack gap={4}>
+      {triggers.map((trigger) => (
+        <Box key={trigger.id}>
+          <Anchor
+            component={Link}
+            href={builderCompanyProjectWorkflowPath(projectId, trigger.workflowId, { tab: 'triggers' })}
+            fz={13}
+            c={trigger.enabled ? undefined : 'dimmed'}
+          >
+            {trigger.workflowName}
+          </Anchor>
+          <Text fz={12} c="dimmed">
+            {triggerLabel(trigger)}
+            {trigger.projectTrackerId === null && ' · any tracker'}
+            {!trigger.enabled && ' · off'}
+          </Text>
+        </Box>
+      ))}
+    </Stack>
+  );
 };
 
 const statusBadge = (tracker: ProjectTracker) => {
@@ -69,6 +127,7 @@ export const TrackersContent = ({
   projectId,
   trackers,
   availableScopes,
+  triggers = [],
   workflows = [],
   boardColumns = [],
   basePath,
@@ -168,6 +227,7 @@ export const TrackersContent = ({
                 <Table.Tr>
                   <ResourceTh>Tracker</ResourceTh>
                   <ResourceTh>Connection</ResourceTh>
+                  <ResourceTh>Triggers</ResourceTh>
                   <ResourceTh>Status</ResourceTh>
                   <ResourceTh align="right" w={160}>
                     Actions
@@ -205,6 +265,14 @@ export const TrackersContent = ({
                         <Text fz={12} c="dimmed">
                           {PROVIDER_LABELS[tracker.provider] ?? tracker.provider}
                         </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <TriggerList
+                          projectId={projectId}
+                          triggers={triggers.filter(
+                            (t) => t.projectTrackerId === tracker.id || t.projectTrackerId === null,
+                          )}
+                        />
                       </Table.Td>
                       <Table.Td>{statusBadge(tracker)}</Table.Td>
                       <Table.Td>

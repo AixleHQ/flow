@@ -4,7 +4,7 @@ import type { Project, ProjectTracker } from '@/types/generated';
 
 import type { AvailableScopeGroup } from 'shared/resources/trackers/AddTrackerDrawer';
 import type { IntakeOption } from 'shared/resources/trackers/ConnectColumnDrawer';
-import { TrackersContent } from 'shared/resources/trackers/TrackersContent';
+import { TrackersContent, type TrackerTriggerSummary } from 'shared/resources/trackers/TrackersContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -12,13 +12,14 @@ interface Props {
   project: Project;
   trackers: ProjectTracker[];
   availableScopes: AvailableScopeGroup[];
+  triggers: TrackerTriggerSummary[];
   workflows: IntakeOption[];
   boardColumns: IntakeOption[];
   [key: string]: unknown;
 }
 
 const TrackersPage = () => {
-  const { project, trackers, availableScopes, workflows, boardColumns } = usePage<Props>().props;
+  const { project, trackers, availableScopes, triggers, workflows, boardColumns } = usePage<Props>().props;
 
   return (
     <>
@@ -27,6 +28,7 @@ const TrackersPage = () => {
         projectId={project.id}
         trackers={trackers}
         availableScopes={availableScopes}
+        triggers={triggers}
         workflows={workflows}
         boardColumns={boardColumns}
         basePath={`/company/projects/${project.id}/trackers`}

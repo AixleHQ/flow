@@ -23,6 +23,7 @@ Open **Trackers** in the project's sidebar, under **Resources**. Each row shows:
 | --- | --- |
 | **Tracker** | The external project's name, a **Primary** and a **Read-only** badge where they apply, and the handle underneath |
 | **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects** or **Linear** |
+| **Triggers** | The tracker triggers that listen to it — those set to any tracker appear on every row — each with its workflow, what it waits for and whether it is off. The workflow name opens its **Triggers** tab |
 | **Status** | **Active**, **Connection inactive** or **Detached** |
 
 Viewers see the list but no actions.

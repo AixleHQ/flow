@@ -250,4 +250,51 @@ describe('TrackersContent', () => {
     expect(screen.queryByRole('button', { name: 'Add tracker' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Detach' })).not.toBeInTheDocument();
   });
+  it("lists each tracker's triggers, with the ones that listen to any tracker on every row", () => {
+    renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[
+          buildProjectTracker(),
+          buildProjectTracker({ id: 6, name: 'Legacy', handle: 'legacy', primary: false }),
+        ]}
+        availableScopes={[]}
+        triggers={[
+          {
+            id: 1,
+            workflowId: 30,
+            workflowName: 'Intake',
+            projectTrackerId: 6,
+            eventType: 'tracker.issue.status_changed',
+            enabled: true,
+            statuses: ['Ready for AI'],
+            mentionsOnly: false,
+          },
+          {
+            id: 2,
+            workflowId: 31,
+            workflowName: 'Answer mentions',
+            projectTrackerId: null,
+            eventType: 'tracker.comment.created',
+            enabled: false,
+            statuses: [],
+            mentionsOnly: true,
+          },
+        ]}
+        basePath={basePath}
+      />,
+    );
+
+    const legacy = screen.getByRole('row', { name: /^Legacy/ });
+    expect(within(legacy).getByRole('link', { name: 'Intake' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/workflows/30/builder?tab=triggers',
+    );
+    expect(within(legacy).getByText('moves to Ready for AI')).toBeInTheDocument();
+    expect(within(legacy).getByText('comment mentions Aixle · any tracker · off')).toBeInTheDocument();
+
+    const primary = screen.getByRole('row', { name: /^Customer Platform/ });
+    expect(within(primary).queryByRole('link', { name: 'Intake' })).not.toBeInTheDocument();
+    expect(within(primary).getByRole('link', { name: 'Answer mentions' })).toBeInTheDocument();
+  });
 });

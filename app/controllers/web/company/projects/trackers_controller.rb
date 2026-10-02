@@ -8,6 +8,7 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
       project: project_props,
       trackers: trackers.map { |t| ProjectTrackerResource.new(t).to_h },
       available_scopes: available_scopes(trackers),
+      triggers: tracker_triggers,
       # For the one-column intake shortcut, which wires a tracker trigger to a
       # workflow and a board column for its tasks.
       workflows: Workflow.visible_for_project(current_project).where(deleted_at: nil).order(:name)
@@ -64,6 +65,25 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
 
   def tracker_integrations
     Integration.visible_for_project(current_project).active.where(provider: Trackers::PROVIDERS.keys)
+  end
+
+  # The project's tracker triggers, for the row of the tracker each one listens
+  # to; one with no tracker listens to all of them. The filter goes out as the
+  # statuses and the mention switch the trigger form edits, not as the raw
+  # predicate, whose dotted keys the prop camelizer would rewrite.
+  def tracker_triggers
+    TriggerBinding.where(project_id: current_project.id, event_type: Trackers::EventPipeline::EVENT_TYPES)
+                  .joins(:workflow).merge(Workflow.active).includes(:workflow).order(:id)
+                  .map do |binding|
+      filter = binding.filter_predicate.to_h
+      status = filter["change.to.name"]
+      {
+        id: binding.id, workflow_id: binding.workflow_id, workflow_name: binding.workflow.name,
+        project_tracker_id: binding.project_tracker_id, event_type: binding.event_type, enabled: binding.enabled,
+        statuses: status.is_a?(Hash) && status["op"] == "in" ? Array(status["value"]) : [],
+        mentions_only: filter["comment.mentions_me"] == true
+      }
+    end
   end
 
   # Each connection's external projects that are not mapped into this project yet.
