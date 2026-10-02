@@ -106,18 +106,9 @@ module PersonalTools
     def serialize_result(result)
       return serialize_column(result.trigger) if result.kind == "column"
 
-      payload = serialize_binding(result.trigger)
-      return payload unless result.webhook_endpoint
-
-      payload.merge(
-        webhook_url: webhook_url(result.webhook_endpoint.slug),
-        webhook_secret: result.webhook_endpoint.secret,
-        verification_strategy: result.webhook_endpoint.verification_strategy
-      )
-    end
-
-    def webhook_url(slug)
-      "https://#{Settings.domain}/webhooks/in/#{slug}"
+      endpoint = result.webhook_endpoint
+      payload = serialize_binding(result.trigger, endpoint: endpoint)
+      endpoint ? payload.merge(webhook_secret: endpoint.secret) : payload
     end
   end
 end
