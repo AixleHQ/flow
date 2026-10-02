@@ -315,5 +315,44 @@ module Agents
       # skips raising entirely when this returns nil.
       assert_nil @adapter.credential_preflight(Object.new, Object.new, "abc123")
     end
+
+    # == credential_file_metadata ==
+
+    test "credential_file_metadata stats again when the exec came back with no answer" do
+      path = "/home/user/.agent/config.json"
+      runtime = ContainerRuntime::FakeRuntime.new(filesystem: { path => "0123456789" })
+      runtime.fail_exec("stat -c", stderr: "", exit_code: 1, times: 1)
+
+      details = @adapter.credential_file_metadata(runtime, "abc123", path)
+
+      assert_equal true, details[:exists] # rubocop:disable Minitest/AssertTruthy
+      assert_equal 10, details[:size]
+      assert_equal 2, details[:stat_attempts]
+      assert_nil details[:stat_error]
+      assert_equal 2, runtime.execs.count { |cmd| cmd.join(" ").include?("stat -c") }
+    end
+
+    test "credential_file_metadata names the missing answer when the retry gets none either" do
+      path = "/home/user/.agent/config.json"
+      runtime = ContainerRuntime::FakeRuntime.new(filesystem: { path => "0123456789" })
+      runtime.fail_exec("stat -c", stderr: "", exit_code: 1)
+
+      details = @adapter.credential_file_metadata(runtime, "abc123", path)
+
+      assert_equal false, details[:exists] # rubocop:disable Minitest/RefuteFalse
+      assert_equal 2, details[:stat_attempts]
+      assert_equal "the exec returned no answer", details[:stat_error]
+    end
+
+    test "credential_file_metadata takes a stat that explains its failure at its word" do
+      runtime = ContainerRuntime::FakeRuntime.new(filesystem: {})
+
+      details = @adapter.credential_file_metadata(runtime, "abc123", "/home/user/.agent/config.json")
+
+      assert_equal false, details[:exists] # rubocop:disable Minitest/RefuteFalse
+      assert_equal 1, details[:stat_attempts]
+      assert_match(/cannot stat/, details[:stat_error])
+      assert_equal 1, runtime.execs.count { |cmd| cmd.join(" ").include?("stat -c") }
+    end
   end
 end

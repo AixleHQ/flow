@@ -134,6 +134,52 @@ module ContainerRuntime
       assert client.status_sent, "expected exec to remain open until the status frame"
     end
 
+    test "exec warns when the stream closes before its exit status, and still reports exit 0" do
+      handle = OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+      client = FakeExecWebsocket.new
+      @runtime.stubs(:build_exec_url).returns(URI("wss://example.test/exec"))
+      @runtime.stubs(:websocket_headers).returns({})
+
+      connect = lambda do |_url, **_options, &block|
+        block.call(client)
+        client.trigger(:open)
+        client.trigger(:message, [ 1 ].pack("C") + "partial")
+        client.close
+        client
+      end
+
+      result = nil
+      logs = capture_rails_log do
+        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+      end
+
+      assert_equal [ [ "partial\n" ], [], 0 ], result
+      assert_match(%r{Exec stream closed before its exit status: default/pod \(stdin: no\)}, logs)
+    end
+
+    test "exec that ends with its exit status does not warn about the stream" do
+      handle = OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+      client = FakeExecWebsocket.new
+      @runtime.stubs(:build_exec_url).returns(URI("wss://example.test/exec"))
+      @runtime.stubs(:websocket_headers).returns({})
+
+      connect = lambda do |_url, **_options, &block|
+        block.call(client)
+        client.trigger(:open)
+        client.trigger(:message, [ 3 ].pack("C") + { status: "Success" }.to_json)
+        client.close
+        client
+      end
+
+      result = nil
+      logs = capture_rails_log do
+        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+      end
+
+      assert_equal 0, result[2]
+      assert_no_match(/closed before its exit status/, logs)
+    end
+
     test "read_file returns nil when path blank" do
       assert_nil @runtime.read_file("id", "")
       assert_nil @runtime.read_file("id", nil)

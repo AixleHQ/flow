@@ -753,9 +753,16 @@ module Agents
     end
 
     def credential_file_metadata(runtime, container_id, path)
-      stdout, stderr, status = runtime.exec(
-        container_id, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
-      )
+      stdout, stderr, status = stat_file(runtime, container_id, path)
+      attempts = 1
+      # The stat folds stderr into stdout, so a stat that ran and failed always says
+      # why. A non-zero answer with no output at all is the runtime giving up on the
+      # exec itself (a timed-out Kubernetes exec returns exactly that), which says
+      # nothing about the file — PALAD-AI-TEMPORAL-1W failed a launch on one.
+      if status.to_i.nonzero? && Array(stdout).join.strip.empty? && Array(stderr).join.strip.empty?
+        stdout, stderr, status = stat_file(runtime, container_id, path)
+        attempts = 2
+      end
       output = Array(stdout).join.strip
       size, mode, owner, group = output.split("|", 4) if status.to_i.zero?
       {
@@ -767,7 +774,8 @@ module Agents
         owner: owner,
         group: group,
         stat_exit_status: status.to_i,
-        stat_error: status.to_i.zero? ? nil : Array(stderr).join.strip.presence || output.presence
+        stat_attempts: attempts,
+        stat_error: status.to_i.zero? ? nil : Array(stderr).join.strip.presence || output.presence || "the exec returned no answer"
       }
     end
 
@@ -815,6 +823,14 @@ module Agents
     # (which is strict about padding) accepts a JWT payload segment.
     def base64_pad(str)
       str + ("=" * ((4 - (str.length % 4)) % 4))
+    end
+
+    private
+
+    def stat_file(runtime, container_id, path)
+      runtime.exec(
+        container_id, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
+      )
     end
   end
 end

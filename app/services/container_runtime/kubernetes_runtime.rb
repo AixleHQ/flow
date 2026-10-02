@@ -726,6 +726,7 @@ module ContainerRuntime
       stdout = +""
       stderr = +""
       exit_code = 0
+      status_received = false
       done = false
       error = nil
       error_reported = false
@@ -796,6 +797,7 @@ module ContainerRuntime
           when 3
             mutex.synchronize do
               exit_code = exit_code_parser.call(payload)
+              status_received = true
               done = true
               cv.broadcast
             end
@@ -868,6 +870,13 @@ module ContainerRuntime
         raise error
       elsif error
         Rails.logger.warn("[KubernetesRuntime] Exec error: #{error}")
+      elsif !status_received
+        # v4 and v5 exec both send a Status on channel 3 before closing, Success
+        # included, so a close without one is a cut stream, not a finished command.
+        # It still reports exit 0 (a write_file then reads as written): this
+        # measures how often that happens before it is made a failure.
+        Rails.logger.warn("[KubernetesRuntime] Exec stream closed before its exit status: " \
+                          "#{handle.namespace}/#{handle.pod_name} (stdin: #{stdin_io ? 'yes' : 'no'})")
       end
 
       [ stdout, stderr, exit_code ]
