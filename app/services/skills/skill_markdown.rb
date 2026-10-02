@@ -156,9 +156,21 @@ module Skills
       def safe_yaml(raw)
         return nil if raw.blank?
 
-        YAML.safe_load(raw)
+        scrub_strings(YAML.safe_load(raw))
       rescue Psych::Exception
         nil
+      end
+
+      # #normalize leaves no NUL in the text, but YAML puts it back: the double-quoted
+      # escapes "\0", "\x00" and "\u0000" decode to NUL, and `!!binary` decodes to
+      # arbitrary bytes that need not be UTF-8 at all.
+      def scrub_strings(value)
+        case value
+        when String then value.dup.force_encoding(Encoding::UTF_8).scrub.delete("\0")
+        when Hash then value.to_h { |key, item| [ scrub_strings(key), scrub_strings(item) ] }
+        when Array then value.map { |item| scrub_strings(item) }
+        else value
+        end
       end
 
       def name_errors(name)
