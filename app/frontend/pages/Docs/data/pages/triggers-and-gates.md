@@ -29,18 +29,41 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 
 | Source | Fires when | Where it's configured |
 | ------ | ---------- | --------------------- |
-| **Column binding** | a card enters a bound column (`auto`) | Board settings, per column |
+| **Column binding** | a card enters a bound column (`auto`) | the workflow's Triggers, or the project's Triggers page |
 | **Manual** | you press *Run* on a task or workflow | the UI / API |
-| **Schedule** *(planned)* | a timer fires (interval / cron / calendar) | the workflow's Triggers |
-| **Slack message** | someone mentions the app in a channel and the message matches | the workflow's Triggers |
-| **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers |
-| **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, or *Connect a board column* on the Trackers page |
+| **Schedule** | a timer fires (cron, in a time zone) | the workflow's Triggers, or the project's Triggers page |
+| **Chat message** (Slack) | someone mentions the app in a channel and the message matches | the workflow's Triggers, or the project's Triggers page |
+| **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers, or the project's Triggers page |
+| **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, the project's Triggers page, or *Connect a board column* on the Trackers page |
 
 Column binding and manual are **board-native** — the task already exists.
 Schedule, Slack, webhook and tracker events originate **off the board** and must therefore
 answer "what task, if any, is this run about?" — that is [`subject_policy`](#subjectpolicy).
 
-> **tip** Column bindings stay configured on the Board (one workflow per column, see [Board](/docs/board)). The other sources live on the workflow, so a workflow declares how it launches — like `on:` in CI.
+> **tip** A column starts at most one workflow (see [Board](/docs/board)). Every trigger belongs to a workflow, so a workflow declares how it launches — like `on:` in CI.
+
+## The Triggers page
+
+**Triggers**, under **Work** in the project's sidebar, lists every trigger of
+every workflow in the project in one place. Each card shows:
+
+- what it waits for — the column, the chat and its filter, the tracker and the
+  status, the schedule, or the webhook's verification;
+- the workflow it starts, which opens that workflow's **Triggers** tab;
+- who it runs as, and whether it is switched off.
+
+Filter by **source** — board column, chat (narrowed to the messenger, such as
+Slack), task tracker, schedule, webhook, custom event — and by **workflow**.
+
+People who can write to the project add, edit, switch off and delete triggers
+there with the same form as the workflow's Triggers tab; a new trigger asks
+which workflow it starts, and an existing one keeps its workflow. A board-column
+trigger has no off switch: delete it to stop it. Deleting a webhook trigger also
+turns off its URL. Viewers see the list only.
+
+A workflow can also be started by hand — the run button on a board task, **Run**
+on the workflow, or an agent through the MCP tools. Those starts have no trigger,
+so they do not appear on the page.
 
 ## Who a trigger runs as
 
