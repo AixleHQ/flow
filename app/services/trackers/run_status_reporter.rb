@@ -13,7 +13,7 @@ module Trackers
 
     def applies?(dispatch)
       binding = dispatch.trigger_binding
-      binding&.tracker_event? && binding.notify_on_failure && TriggerSupport.event?(dispatch.trigger_event)
+      binding&.tracker_event? && binding.status_reporting.to_s == "failures" && TriggerSupport.event?(dispatch.trigger_event)
     end
 
     def report(dispatch, transition)

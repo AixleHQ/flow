@@ -5,7 +5,7 @@
 # (docs/design/teams-integration.md §17): one enqueue point on run transitions,
 # one job per reporter, each reporter acting on the run's current state.
 module Triggers
-  ORIGIN_REPORTERS = %w[Trackers::RunStatusReporter].freeze
+  ORIGIN_REPORTERS = %w[Trackers::RunStatusReporter Chat::RunStatusReporter].freeze
 
   def self.origin_reporters
     ORIGIN_REPORTERS.map(&:constantize)

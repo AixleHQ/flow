@@ -23,6 +23,10 @@ class TriggerBinding < ApplicationRecord
   # What a tracker binding does with a change Aixle itself made
   # (docs/design/task-tracker-integrations.md §6.6).
   enumerize :aixle_changes, in: %i[ignore other_workflows always], default: :ignore
+  # What a run this trigger started tells the place it came from: nothing, that
+  # it failed (a comment on the issue, a message in the thread), or — chat
+  # only — a status card that follows the run (docs/design/teams-integration.md §8.2).
+  enumerize :status_reporting, in: %i[none failures lifecycle], default: :failures
 
   TRACKER_EVENT_PREFIX = "tracker."
   TRACKER_SOURCE = "tracker"
@@ -32,16 +36,8 @@ class TriggerBinding < ApplicationRecord
   SLACK_EVENT_TYPE = "slack.message"
   SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
                         "Integrations page first — until then no mention can reach this trigger."
-  # /help is answered before any binding runs, so a trigger whose text command
-  # is that word would appear in the catalog and never fire. Compare the
-  # command itself (optional leading slash), not whether a looser operator
-  # could also match the word.
-  RESERVED_SLACK_COMMAND = /\A\/?help\z/i
-
-  # notify_on_failure (default true) — when a run this binding started fails,
-  # say so where it came from: in the Slack thread (Slack::RunFailureNotifier),
-  # or, for a tracker event, as a comment on the issue, also when the run is
-  # cancelled (Trackers::RunStatusReporter). A no-op on every other trigger kind.
+  # notify_on_failure is the boolean status_reporting replaces; the two are kept
+  # in step until nothing reads it any more.
 
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
@@ -51,7 +47,10 @@ class TriggerBinding < ApplicationRecord
                                 if: -> { subject_column_id.present? && project }
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
-  validate :slack_command_not_reserved
+  validate :chat_command_not_reserved
+  validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
+                               unless: :chat?
+  before_validation :keep_failure_reporting_in_step
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -60,14 +59,18 @@ class TriggerBinding < ApplicationRecord
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
-  # match bindings in that project; company-scoped events (Slack — one workspace
+  # match bindings in that project; company-scoped events (chat — one workspace
   # serves every project of the company) fan out to bindings across all the
   # company's projects.
   scope :for_event, ->(event) {
-    rel = active.where(event_type: event.event_type).joins(:workflow).merge(Workflow.active)
+    chat = Chat.provider_for(event)
     # A generic webhook names its own event type, so without this a sender could
-    # present itself as a tracker event.
+    # present itself as a tracker or chat event.
     next none if event.event_type.to_s.start_with?(TRACKER_EVENT_PREFIX) && event.source != TRACKER_SOURCE
+    next none if Chat.event?(event) && chat.nil?
+
+    rel = active.where(event_type: chat ? Chat.event_types_for(chat) : event.event_type)
+                .joins(:workflow).merge(Workflow.active)
     if event.project_id
       rel.where(project_id: event.project_id)
     elsif event.company_id
@@ -102,6 +105,10 @@ class TriggerBinding < ApplicationRecord
     event_type == SLACK_EVENT_TYPE
   end
 
+  def chat?
+    Chat.event_types.include?(event_type)
+  end
+
   # save! for a person creating or editing a trigger: refuses to create or switch
   # on a Slack trigger while the company has no active Slack install. Not a
   # validation, so a workspace disconnected later does not make every other save
@@ -125,12 +132,12 @@ class TriggerBinding < ApplicationRecord
   # Does the event data satisfy every condition in the predicate? Supports
   # equality (scalar values), operator objects ({"op","value"}) and dot-path
   # fields. Empty predicate ⇒ matches any event of this type. See TriggerFilter.
-  # A Slack message's text compares without regard to case: people type
+  # A chat message's text compares without regard to case: people type
   # "Deploy" and "deploy" for the same command.
   def matches?(data)
     return false unless tracker_scope_matches?(data) && aixle_change_allowed?(data)
 
-    TriggerFilter.match?(filter_predicate, data, ignore_case: slack? ? %w[text] : [])
+    TriggerFilter.match?(filter_predicate, data, ignore_case: chat? ? %w[text] : [])
   end
 
   def webhook?
@@ -223,18 +230,33 @@ class TriggerBinding < ApplicationRecord
     errors.add(:schedule_config, "must include a cron expression") if schedule_config["cron"].blank?
   end
 
-  def slack_command_not_reserved
-    return unless slack?
+  # Help is answered before any binding runs, so a trigger whose text command
+  # is that word would appear in the catalog and never fire. Compare the
+  # command itself (optional leading slash), not whether a looser operator
+  # could also match the word.
+  def chat_command_not_reserved
+    return unless chat?
     return unless filter_predicate.is_a?(Hash)
 
-    value = slack_text_command
+    value = chat_text_command
     return if value.blank?
-    return unless value.to_s.strip.match?(RESERVED_SLACK_COMMAND)
+    return unless value.to_s.strip.match?(Chat::RESERVED_COMMAND)
 
     errors.add(:filter_predicate, "can't use help — that word lists available commands")
   end
 
-  def slack_text_command
+  # Whichever of the two the caller set wins and the other follows: the API, the
+  # personal MCP and templates still write only notify_on_failure.
+  def keep_failure_reporting_in_step
+    silent = status_reporting.to_s == "none"
+    if will_save_change_to_status_reporting? && !will_save_change_to_notify_on_failure?
+      self.notify_on_failure = !silent
+    elsif will_save_change_to_notify_on_failure? && !will_save_change_to_status_reporting?
+      self.status_reporting = notify_on_failure ? (silent ? "failures" : status_reporting) : "none"
+    end
+  end
+
+  def chat_text_command
     text = filter_predicate["text"]
     return nil if text.blank?
 

@@ -7,8 +7,8 @@ module Slack
   # A run launched from Slack is fire-and-forget for the person who typed the
   # mention: they get whatever the agent chose to post back, and nothing at all
   # when the run dies before the agent could post anything — which is exactly
-  # when a failure most needs saying out loud. This closes that hole, opt-out per
-  # trigger (TriggerBinding#notify_on_failure).
+  # when a failure most needs saying out loud. Whether a trigger wants this is
+  # Chat::RunStatusReporter's call (TriggerBinding#status_reporting).
   #
   # Best-effort by construction: every path returns false rather than raising, so
   # a Slack outage can never turn a failed run into a failed state transition.
@@ -20,7 +20,6 @@ module Slack
         slack = run.shared_context.to_h["slack"].to_h
         channel = slack["channel"]
         return false if channel.blank?
-        return false unless notify?(run)
 
         integration = integration_for(run, slack)
         return false if integration.nil?
@@ -37,15 +36,6 @@ module Slack
       end
 
       private
-
-      # The binding that started this run, through the dispatch ledger. A run with
-      # Slack context but no binding (a re-run started by hand from a Slack-born
-      # run, which inherits shared_context) is left alone: nobody asked for a
-      # notification on it.
-      def notify?(run)
-        binding = TriggerDispatch.where(workflow_run_id: run.id).order(:id).last&.trigger_binding
-        binding.present? && binding.notify_on_failure?
-      end
 
       # Reply through the workspace that triggered the run, named in shared_context.
       def integration_for(run, slack)

@@ -10,7 +10,7 @@ module Slack
     class << self
       def call(event)
         return false if event.nil?
-        return false unless event.event_type.to_s.start_with?("slack.")
+        return false unless Chat.event?(event)
 
         channel = event.data.to_h["channel"]
         return false if channel.blank?
