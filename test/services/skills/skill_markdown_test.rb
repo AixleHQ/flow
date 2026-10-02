@@ -119,4 +119,29 @@ class Skills::SkillMarkdownTest < ActiveSupport::TestCase
     assert_equal "Extract PDF text", result.description
     assert_not result.content.include?("\0")
   end
+
+  test "strips null bytes that YAML escapes decode into frontmatter values" do
+    [ '\0', '\x00', '\u0000' ].each do |escape|
+      content = "---\nname: \"pdf#{escape}-processing\"\ntitle: \"PDF#{escape} Processing\"\n" \
+                "description: \"Extract#{escape} PDF text\"\n---\n\n# Steps\n\nDo the thing.\n"
+
+      assert_equal "pdf-processing", Skills::SkillMarkdown.name(content), escape
+      assert_equal "Extract PDF text", Skills::SkillMarkdown.description(content), escape
+
+      result = Skills::SkillMarkdown.parse(content)
+      assert result.valid?, result.error_sentence
+      assert_equal "Extract PDF text", result.description
+      assert_equal "PDF Processing", result.frontmatter["title"]
+    end
+  end
+
+  test "reads a binary-tagged description as UTF-8 without null bytes" do
+    content = "---\nname: pdf-processing\ndescription: !!binary #{[ "Extract\0 PDF \xFF".b ].pack("m0")}\n---\n\nbody\n"
+
+    description = Skills::SkillMarkdown.description(content)
+
+    assert_equal Encoding::UTF_8, description.encoding
+    assert description.valid_encoding?
+    assert_equal "Extract PDF �", description
+  end
 end

@@ -452,6 +452,28 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     assert result.backfilled.positive?
   end
 
+  # The demand sync died on one unwritable row for four days: unstamped, it stayed first
+  # in the queue, so every later run failed on it before anything behind it got a turn.
+  test "a row that cannot be written is reported and rotated without stopping the backfill" do
+    poisoned = create(:catalog_skill, registry_id: "org/top/poisoned", source: "org/top", slug: "poisoned",
+                      description: nil, installs: 900_000, registry_synced_at: 1.week.ago)
+    behind = create(:catalog_skill, registry_id: "org/skills/behind", source: "org/skills", slug: "behind",
+                    description: nil, installs: 1, registry_synced_at: 1.week.ago)
+    @registry.bundle("org/top", "poisoned", skill_md: "---\nname: poisoned\ndescription: Never stored\n---\n\nb",
+                                            content_hash: "sha256:\0")
+    @registry.bundle("org/skills", "behind", skill_md: "---\nname: behind\ndescription: Behind it\n---\n\nb")
+
+    result = nil
+    report = assert_error_reported(ArgumentError) { result = sync }
+
+    assert_equal Skills::CatalogSync::BACKFILL_ERROR_SOURCE, report.source
+    assert_equal "org/top/poisoned", report.context[:registry_id]
+    assert_equal 1, result.failed
+    assert_nil poisoned.reload.description
+    assert_not_nil poisoned.description_checked_at, "an unwritable row must rotate out of the front of the queue"
+    assert_equal "Behind it", behind.reload.description
+  end
+
   # The cap exists so a bulk pass cannot make installing a skill fail while the catalog
   # prettied itself up.
   test "spends no more than its download budget on rows raw cannot answer" do
