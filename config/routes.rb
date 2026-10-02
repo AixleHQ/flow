@@ -64,6 +64,7 @@ Rails.application.routes.draw do
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
   post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
+  post "/webhooks/teams/activities", to: "webhooks/teams#activities", as: :teams_activities_webhook
 
   # Public asset share links (no session auth — reachable by anyone with the
   # token). The viewer renders the asset inside a sandboxed iframe; the token

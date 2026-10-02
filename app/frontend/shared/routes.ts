@@ -142,6 +142,11 @@ export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /webhooks/teams/activities(.:format) */
+export function teamsActivitiesWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "teams" + "/" + "activities" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /share/:token(.:format) */
 export function publicAssetPath(token: ScalarType, options?: object): string {
   return "/" + "share" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);

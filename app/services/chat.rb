@@ -11,7 +11,7 @@ module Chat
   # type and match that provider's messages only.
   LEGACY_EVENT_TYPES = { "slack.message" => "slack" }.freeze
 
-  PROVIDERS = { "slack" => "Chat::SlackProvider" }.freeze
+  PROVIDERS = { "slack" => "Chat::SlackProvider", "teams" => "Chat::TeamsProvider" }.freeze
 
   # Answered before any trigger runs, so no trigger may claim it as its command.
   RESERVED_COMMAND = %r{\A/?help\z}i

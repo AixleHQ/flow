@@ -350,6 +350,20 @@ gates:
   # requests. A backlog drains over successive ticks.
   reconcile_batch_size:     <%= (ENV['GATES_RECONCILE_BATCH_SIZE'] || 100).to_i %>
 
+# Microsoft Teams bot (docs/design/teams-integration.md). The bot is an Entra app
+# with an Azure Bot attached; one deployment normally runs it on the same
+# registration as Microsoft sign-in, so unset credentials fall back to
+# microsoft_oauth (Teams::Config). Teams is offered once the bot's home tenant is
+# set, which is what registering the Azure Bot decides.
+teams:
+  app_id: <%= ENV['TEAMS_APP_ID'] %>
+  private_key: <%= ENV['TEAMS_PRIVATE_KEY'].to_json %>
+  certificate_thumbprint: "<%= ENV['TEAMS_CERT_THUMBPRINT'] %>"
+  # Development only; production runs on the certificate.
+  client_secret: <%= ENV['TEAMS_CLIENT_SECRET'] %>
+  home_tenant_id: <%= ENV['TEAMS_HOME_TENANT_ID'] %>
+  cloud: <%= ENV['TEAMS_CLOUD'] || 'public' %>
+
 slack:
   # One Slack app per Aixle deployment (multi-workspace via OAuth). Companies
   # connect their workspace with one click; these app-level credentials are
