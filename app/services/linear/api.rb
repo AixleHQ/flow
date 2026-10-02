@@ -49,12 +49,15 @@ module Linear
       end.map { |t| { id: t["id"], key: t["key"], name: t["name"] } }
     end
 
-    # The team's workflow states, in board order: [{ id:, name:, type: }].
+    STATE_TYPES = %w[triage backlog unstarted started completed canceled duplicate].freeze
+
+    # The team's workflow states, in board order — by type, then by position
+    # within it, which is only ordered among states of one type: [{ id:, name:, type: }].
     def states(team_id)
       data = @client.query(<<~GRAPHQL, team: team_id.to_s)
         query($team: String!) { team(id: $team) { states(first: 100) { nodes { id name type position } } } }
       GRAPHQL
-      Array(data.dig("team", "states", "nodes")).sort_by { |s| s["position"].to_f }
+      Array(data.dig("team", "states", "nodes")).sort_by { |s| [ STATE_TYPES.index(s["type"]) || STATE_TYPES.size, s["position"].to_f ] }
                                                  .map { |s| { id: s["id"], name: s["name"], type: s["type"] } }
     end
 

@@ -45,11 +45,17 @@ class Linear::ApiTest < ActiveSupport::TestCase
     assert_equal [ { id: "t1", key: "ENG", name: "Engineering" }, { id: "t2", key: "OPS", name: "Operations" } ], @api.teams
   end
 
-  test "a team's states come back in board order" do
-    stub_graphql(data: { team: { states: { nodes: [ { id: "s2", name: "Done", type: "completed", position: 3 },
-                                                    { id: "s1", name: "Todo", type: "unstarted", position: 1 } ] } } })
+  # Positions order states only within a type: a state added later sorts after
+  # every other one by position alone, wherever its type puts it on the board.
+  test "a team's states come back in board order: by type, then by position" do
+    stub_graphql(data: { team: { states: { nodes: [
+      { id: "s4", name: "Done", type: "completed", position: 3 },
+      { id: "s3", name: "Ready for AI", type: "unstarted", position: 1019 },
+      { id: "s2", name: "In Progress", type: "started", position: 2 },
+      { id: "s1", name: "Todo", type: "unstarted", position: 1 }
+    ] } } })
 
-    assert_equal [ { id: "s1", name: "Todo", type: "unstarted" }, { id: "s2", name: "Done", type: "completed" } ], @api.states("t1")
+    assert_equal [ "Todo", "Ready for AI", "In Progress", "Done" ], @api.states("t1").pluck(:name)
   end
 
   test "an issue is read by identifier and normalized" do
