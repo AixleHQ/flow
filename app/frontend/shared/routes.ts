@@ -1532,14 +1532,14 @@ export function companyProjectRepositoryPath(project_id: ScalarType, id: ScalarT
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
-/** /company/projects/:project_id/trackers/:id/statuses(.:format) */
-export function statusesCompanyProjectTrackerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "trackers" + "/" + id + "/" + "statuses" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
-}
-
 /** /company/projects/:project_id/triggers(.:format) */
 export function companyProjectTriggersPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "triggers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/trackers/:id/statuses(.:format) */
+export function statusesCompanyProjectTrackerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "trackers" + "/" + id + "/" + "statuses" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/trackers(.:format) */
