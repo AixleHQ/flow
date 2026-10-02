@@ -40,7 +40,7 @@ const iconButton = {
   background: 'none',
   border: 'none',
   cursor: 'pointer',
-  color: 'var(--text-3)',
+  color: 'var(--app-text-tertiary)',
   padding: 6,
   borderRadius: 4,
   display: 'flex',
@@ -87,8 +87,8 @@ export function TriggerCards({
               flexDirection: 'column',
               gap: 10,
               padding: '14px 16px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
+              background: 'var(--app-bg-paper)',
+              border: '1px solid var(--app-border-default)',
               borderRadius: 8,
               opacity: isDisabled ? 0.55 : 1,
               transition: 'opacity 0.15s, border-color 0.15s',
@@ -100,9 +100,9 @@ export function TriggerCards({
                   width: 32,
                   height: 32,
                   borderRadius: 8,
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-2)',
+                  background: 'var(--app-bg-paper)',
+                  border: '1px solid var(--app-border-default)',
+                  color: 'var(--app-text-secondary)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -116,7 +116,7 @@ export function TriggerCards({
                   style={{
                     fontSize: 14,
                     fontWeight: 600,
-                    color: 'var(--text-1)',
+                    color: 'var(--app-text-primary)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -127,7 +127,7 @@ export function TriggerCards({
                 <div
                   style={{
                     fontSize: 12,
-                    color: 'var(--text-2)',
+                    color: 'var(--app-text-secondary)',
                     marginTop: 2,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -140,9 +140,9 @@ export function TriggerCards({
             </div>
 
             {href && (
-              <div style={{ fontSize: 12, color: 'var(--text-2)', minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', minWidth: 0 }}>
                 Starts{' '}
-                <Link href={href} style={{ color: 'var(--accent-text)' }}>
+                <Link href={href} style={{ color: 'var(--app-primary-strong)' }}>
                   {t.workflow_name ?? 'workflow'}
                 </Link>
               </div>
@@ -183,9 +183,9 @@ export function TriggerCards({
                     fontSize: 10,
                     fontWeight: 600,
                     letterSpacing: '0.04em',
-                    color: 'var(--text-3)',
-                    background: 'var(--bg-raised)',
-                    border: '1px solid var(--border)',
+                    color: 'var(--app-text-tertiary)',
+                    background: 'var(--app-bg-paper)',
+                    border: '1px solid var(--app-border-default)',
                     padding: '2px 8px',
                     borderRadius: 4,
                     textTransform: 'uppercase',
@@ -209,7 +209,7 @@ export function TriggerCards({
                         checked={t.enabled !== false}
                         onChange={(e) => onToggle(t, e.currentTarget.checked)}
                       />
-                      <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+                      <div style={{ width: 1, height: 16, background: 'var(--app-border-default)', margin: '0 4px' }} />
                     </>
                   )}
                   <button aria-label={`Edit ${title}`} onClick={() => onEdit(t)} style={iconButton}>
@@ -234,9 +234,9 @@ export function TriggerCards({
             justifyContent: 'center',
             gap: 8,
             minHeight: 96,
-            border: '1px dashed var(--border)',
+            border: '1px dashed var(--app-border-default)',
             borderRadius: 8,
-            color: 'var(--text-2)',
+            color: 'var(--app-text-secondary)',
             fontSize: 13,
             fontWeight: 500,
             cursor: 'pointer',
