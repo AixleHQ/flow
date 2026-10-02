@@ -33,6 +33,13 @@ describe('Projects/Members/MembersPage', () => {
     expect(screen.getByText('Bo Member')).toBeInTheDocument();
   });
 
+  it('links each member name to their profile', () => {
+    renderAuthedPage(<MembersPage />, { props: baseProps });
+
+    expect(screen.getByRole('link', { name: 'Ada Owner' })).toHaveAttribute('href', '/user/1');
+    expect(screen.getByRole('link', { name: 'Bo Member' })).toHaveAttribute('href', '/user/2');
+  });
+
   it('marks the owner with an Owner badge and hides Remove for them', () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
