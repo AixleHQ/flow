@@ -92,14 +92,14 @@ describe('TriggersContent', () => {
     render();
     await screen.findByRole('article', { name: 'Task enters "Backlog"' });
 
-    await userEvent.click(screen.getByRole('textbox', { name: 'Filter by source' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by source' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Chat · Slack' }));
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByText('1 of 3')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('textbox', { name: 'Filter by source' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by source' }));
     await userEvent.click(await screen.findByRole('option', { name: 'All sources' }));
-    await userEvent.click(screen.getByRole('textbox', { name: 'Filter by workflow' }));
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by workflow' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Intake' }));
     expect(screen.getAllByRole('article').map((a) => a.getAttribute('aria-label'))).toEqual(['Task enters "Backlog"']);
   });
@@ -150,7 +150,7 @@ describe('TriggersContent', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
-    expect(screen.getByRole('textbox', { name: 'Workflow' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Workflow' })).toBeInTheDocument();
   });
 
   it('hides every write control from a read-only viewer', async () => {

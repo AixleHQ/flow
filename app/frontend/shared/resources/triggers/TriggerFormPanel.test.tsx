@@ -956,7 +956,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       const save = screen.getByRole('button', { name: 'Add trigger' });
       expect(save).toBeDisabled();
 
-      await userEvent.click(screen.getByRole('textbox', { name: 'Workflow' }));
+      await userEvent.click(screen.getByRole('combobox', { name: 'Workflow' }));
       await userEvent.click(await screen.findByRole('option', { name: 'Release' }));
       await userEvent.click(save);
 
@@ -983,7 +983,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       renderPage(<TriggerFormPanel {...baseProps({ workflowId: undefined, workflows, editing })} />);
 
       expect(screen.getByText('Release')).toBeInTheDocument();
-      expect(screen.queryByRole('textbox', { name: 'Workflow' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Workflow' })).not.toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
 
       await waitFor(() =>

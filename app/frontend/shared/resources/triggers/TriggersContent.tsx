@@ -14,8 +14,9 @@ import {
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 
+import { CHAT_PROVIDER_LABELS, SOURCE_LABELS, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
-import { CHAT_PROVIDER_LABELS, SOURCE_LABELS, TriggerCards, triggerSource, triggerTitle } from './TriggerCards';
+import { TriggerCards } from './TriggerCards';
 import { TriggerFormPanel } from './TriggerFormPanel';
 import type { Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
@@ -80,14 +81,16 @@ export function TriggersContent({ projectId, workflows, columns, trackers }: Pro
   }, [triggers]);
 
   const workflowOptions = useMemo(
-    () => [{ value: ALL, label: 'All workflows' }, ...workflows.map((w) => ({ value: w.id.toString(), label: w.name }))],
+    () => [
+      { value: ALL, label: 'All workflows' },
+      ...workflows.map((w) => ({ value: w.id.toString(), label: w.name })),
+    ],
     [workflows],
   );
 
   const shown = triggers.filter(
     (t) =>
-      (source === ALL || filterValue(t) === source) &&
-      (workflowId === ALL || t.workflow_id?.toString() === workflowId),
+      (source === ALL || filterValue(t) === source) && (workflowId === ALL || t.workflow_id?.toString() === workflowId),
   );
 
   const remove = (t: Trigger) => {
