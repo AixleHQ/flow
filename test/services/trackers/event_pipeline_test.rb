@@ -140,6 +140,19 @@ class Trackers::EventPipelineTest < ActiveSupport::TestCase
     assert_equal [ true, "@Aixle please look" ], [ event.data.dig("comment", "mentions_me"), event.data.dig("comment", "text") ]
   end
 
+  test "a mention inside code is not a mention" do
+    @integration.update!(settings: @integration.settings.merge("tracker_identity" => { "id" => "me-1", "name" => "Aixle" }))
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+           event_type: "tracker.comment.created", filter_predicate: { "comment.mentions_me" => true })
+    WorkflowService.expects(:enqueue).never
+
+    notification = Trackers::Notification.build(kind: :comment_created, scope_id: @scope, issue_id: "11", revision: 8,
+                                                comment_text: "Quoting you: <code>@Aixle please look</code>", actor: { name: "Ada" })
+    event = pipeline.process(notification).sole
+
+    assert_equal false, event.data.dig("comment", "mentions_me") # rubocop:disable Minitest/RefuteFalse
+  end
+
   test "an issue created while a create of Aixle's is unanswered waits for it, until the last attempt" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "tracker.issue.created")
     create(:tracker_operation, project_tracker: @tracker, operation: "create_issue", state: "pending", issue_id: nil)

@@ -90,7 +90,8 @@ module Trackers
       text = notification.comment_text.to_s
       {
         "id" => notification.comment_id, "author" => notification.actor[:name],
-        "mentions_me" => @provider.mentions_self?(text), "text" => bounded(ActionView::Base.full_sanitizer.sanitize(text))
+        "mentions_me" => @provider.mentions_self?(Trackers.without_code(text)),
+        "text" => bounded(ActionView::Base.full_sanitizer.sanitize(text))
       }.compact
     end
 

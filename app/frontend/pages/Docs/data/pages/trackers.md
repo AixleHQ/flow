@@ -180,9 +180,13 @@ A mention is recognised only once Flow knows its own account in the tracker:
 - **GitHub Projects** — always: the connection writes as the app, and people
   mention it as `@<app-slug>`;
 - **Linear** — an API-key connection marked
-  **This Linear account is kept for Aixle**. Aixle's Linear app is its own
-  account too, but Linear does not let people mention or assign it, so with the
-  app only state moves and new issues start work.
+  **This Linear account is kept for Aixle**, or Aixle's Linear app. Linear's
+  mention picker does not offer the app, but a comment that types its username
+  (`@<app username>`, as its profile in Linear shows it) counts.
+
+A mention inside code — in backticks, a code block, or Jira's `{code}` and
+`{{…}}` — does not count, as it notifies nobody in the tracker either. That is
+also what keeps an agent that quotes a comment back from mentioning itself.
 
 Until then, a mention trigger never fires: the drawer greys out
 **Aixle is mentioned in a comment** and says why, and the trigger form says so
