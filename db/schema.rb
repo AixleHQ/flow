@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_02_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_03_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -375,6 +375,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_090000) do
     t.integer "version", null: false
     t.index ["kind"], name: "index_catalog_templates_on_kind"
     t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
+  end
+
+  create_table "chat_conversations", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.boolean "installed", default: true, null: false
+    t.bigint "integration_id", null: false
+    t.string "kind", null: false
+    t.datetime "last_activity_at"
+    t.string "name"
+    t.string "provider", null: false
+    t.string "service_url"
+    t.string "team_aad_group_id"
+    t.string "team_external_id"
+    t.string "team_name"
+    t.string "tenant_id"
+    t.datetime "updated_at", null: false
+    t.datetime "welcomed_at"
+    t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
+    t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -1794,6 +1814,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_090000) do
   add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
   add_foreign_key "boards", "projects", on_delete: :cascade
+  add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade

@@ -18,8 +18,16 @@ class Webhooks::TeamsController < ActionController::API
 
     # A tenant no company has connected is acknowledged and otherwise ignored.
     endpoint = endpoint_for(activity.dig("channelData", "tenant", "id") || activity.dig("conversation", "tenantId"))
-    return head :ok if endpoint.nil? || !addressed?(activity)
+    integration = Integration.active.find_by(id: endpoint&.config.to_h["integration_id"], provider: :teams)
+    return head :ok if integration.nil?
 
+    case activity["type"]
+    when "installationUpdate" then installation_changed(integration, activity)
+    when "conversationUpdate" then ChatConversation.record_teams!(integration: integration, activity: activity)
+    end
+    return head :ok unless addressed?(activity)
+
+    ChatConversation.record_teams!(integration: integration, activity: activity)
     received = ReceivedWebhook.create!(
       webhook_endpoint: endpoint,
       idempotency_key: "#{activity.dig('conversation', 'id')}:#{activity['id']}",
@@ -46,6 +54,18 @@ class Webhooks::TeamsController < ActionController::API
 
     Array(activity["entities"]).any? do |entity|
       entity["type"] == "mention" && entity.dig("mentioned", "id") == activity.dig("recipient", "id")
+    end
+  end
+
+  def installation_changed(integration, activity)
+    conversation = ChatConversation.record_teams!(integration: integration, activity: activity)
+    return if conversation.nil?
+
+    if activity["action"].to_s.start_with?("remove")
+      conversation.update!(installed: false)
+    else
+      conversation.update!(installed: true)
+      Teams::WelcomeJob.perform_later(conversation.id) if conversation.welcomed_at.nil?
     end
   end
 

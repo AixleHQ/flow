@@ -67,6 +67,25 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 0, ReceivedWebhook.count
   end
 
+  test "being added to a team records the conversation and queues one welcome; removal is remembered" do
+    added = teams_activity(mention: false, type: "installationUpdate", action: "add").except("text", "entities")
+
+    assert_enqueued_with(job: Teams::WelcomeJob) { deliver(added) }
+    conversation = ChatConversation.sole
+    assert_equal [ "19:abc@thread.tacv2", "channel", "Onboarding", "19:team@thread.tacv2", TEAMS_SERVICE_URL ],
+                 conversation.values_at(:external_id, :kind, :name, :team_external_id, :service_url)
+    assert_equal 0, ReceivedWebhook.count
+
+    deliver(added.merge("action" => "remove"))
+    assert_not conversation.reload.installed?
+  end
+
+  test "an addressed message records the conversation it came from" do
+    deliver(teams_activity)
+
+    assert_equal "19:abc@thread.tacv2", ChatConversation.sole.external_id
+  end
+
   test "a 1:1 file's download link is not stored" do
     activity = teams_activity(conversation_type: "personal", mention: false, attachments: [
       { "contentType" => "application/vnd.microsoft.teams.file.download.info", "name" => "brief.pdf",
