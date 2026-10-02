@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { ActionIcon, Avatar, Badge, Box, Button, Group, Select, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { IconCrown, IconPlus, IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
@@ -8,6 +8,7 @@ import type { Project, User } from '@/types/generated';
 
 import { getInitials } from 'shared/lib/getInitials';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { userPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
@@ -164,7 +165,15 @@ const MembersPage = () => {
                           </Avatar>
                           <Box style={{ minWidth: 0 }}>
                             <Group gap={7} wrap="nowrap">
-                              <Text fw={500} size="sm" c="var(--app-text-primary)">
+                              <Text
+                                component={Link}
+                                href={userPath(member.id)}
+                                fw={500}
+                                size="sm"
+                                c="var(--app-text-primary)"
+                                td="none"
+                                style={{ textDecoration: 'none' }}
+                              >
                                 {member.name || member.email}
                               </Text>
                               {isOwner && (
