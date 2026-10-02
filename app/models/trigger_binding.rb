@@ -23,6 +23,10 @@ class TriggerBinding < ApplicationRecord
   # What a tracker binding does with a change Aixle itself made
   # (docs/design/task-tracker-integrations.md §6.6).
   enumerize :aixle_changes, in: %i[ignore other_workflows always], default: :ignore
+  # What a run this trigger started tells the place it came from: nothing, that
+  # it failed (a comment on the issue, a message in the thread), or — chat
+  # only — a status card that follows the run (docs/design/teams-integration.md §8.2).
+  enumerize :status_reporting, in: %i[none failures lifecycle], default: :failures
 
   TRACKER_EVENT_PREFIX = "tracker."
   TRACKER_SOURCE = "tracker"
@@ -32,10 +36,8 @@ class TriggerBinding < ApplicationRecord
   SLACK_EVENT_TYPE = "slack.message"
   SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
                         "Integrations page first — until then no mention can reach this trigger."
-  # notify_on_failure (default true) — when a run this binding started fails,
-  # say so where it came from: in the Slack thread (Slack::RunFailureNotifier),
-  # or, for a tracker event, as a comment on the issue, also when the run is
-  # cancelled (Trackers::RunStatusReporter). A no-op on every other trigger kind.
+  # notify_on_failure is the boolean status_reporting replaces; the two are kept
+  # in step until nothing reads it any more.
 
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
@@ -46,6 +48,9 @@ class TriggerBinding < ApplicationRecord
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
   validate :chat_command_not_reserved
+  validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
+                               unless: :chat?
+  before_validation :keep_failure_reporting_in_step
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -238,6 +243,17 @@ class TriggerBinding < ApplicationRecord
     return unless value.to_s.strip.match?(Chat::RESERVED_COMMAND)
 
     errors.add(:filter_predicate, "can't use help — that word lists available commands")
+  end
+
+  # Whichever of the two the caller set wins and the other follows: the API, the
+  # personal MCP and templates still write only notify_on_failure.
+  def keep_failure_reporting_in_step
+    silent = status_reporting.to_s == "none"
+    if will_save_change_to_status_reporting? && !will_save_change_to_notify_on_failure?
+      self.notify_on_failure = !silent
+    elsif will_save_change_to_notify_on_failure? && !will_save_change_to_status_reporting?
+      self.status_reporting = notify_on_failure ? (silent ? "failures" : status_reporting) : "none"
+    end
   end
 
   def chat_text_command

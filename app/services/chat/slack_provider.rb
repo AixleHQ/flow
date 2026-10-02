@@ -65,6 +65,10 @@ module Chat
       Slack::HelpResponder.call(event)
     end
 
+    def report_failure(run)
+      Slack::RunFailureNotifier.call(run)
+    end
+
     def run_context(event)
       data = event.data.to_h
       legacy = {

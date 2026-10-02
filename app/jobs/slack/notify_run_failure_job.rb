@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 module Slack
-  # Off the state transition: posting to Slack is a network call, and a failed
-  # run must finish failing whether or not Slack answers.
+  # Superseded by Chat::RunStatusReporter on the run-transition seam. Kept for
+  # one release so a job a previous deploy enqueued still finds its class; the
+  # same failure is reported through the seam, so it does nothing.
   class NotifyRunFailureJob < ApplicationJob
     queue_as :default
 
-    def perform(workflow_run_id)
-      run = WorkflowRun.find_by(id: workflow_run_id)
-      Slack::RunFailureNotifier.call(run)
-    end
+    def perform(_workflow_run_id); end
   end
 end
