@@ -126,6 +126,25 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_equal [ match.id ], TriggerBinding.for_event(event).pluck(:id)
   end
 
+  test "a chat message matches chat triggers and the Slack triggers saved before them" do
+    legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+
+    event = create(:trigger_event, event_type: "chat.message", source: "slack:slack-team-T1",
+                                   data: { "provider" => "slack" }, project: @project)
+
+    assert_equal [ legacy.id, chat.id ].sort, TriggerBinding.for_event(event).pluck(:id).sort
+  end
+
+  test "a chat message from anything but its provider's receiver matches no trigger" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+
+    event = create(:trigger_event, event_type: "chat.message", source: "generic:wh-1",
+                                   data: { "provider" => "slack" }, project: @project)
+
+    assert_empty TriggerBinding.for_event(event)
+  end
+
   test "accepts an empty predicate and a scalar or known operator condition" do
     empty = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, filter_predicate: {})
     scalar = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,

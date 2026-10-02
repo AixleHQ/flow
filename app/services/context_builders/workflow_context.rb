@@ -36,7 +36,7 @@ module ContextBuilders
       )
     end
 
-    # When the run was started by a Slack (or other chat) trigger, surface the
+    # When the run was started by a chat trigger, surface the
     # originating message so the agent acts on what the user actually asked for —
     # otherwise it only sees the static step instructions.
     def trigger_message_section
@@ -52,19 +52,27 @@ module ContextBuilders
       <<~MD.strip
         ## Triggering message
 
-        This run was started by a Slack message#{trigger_user_suffix}. Treat it as the user's request and respond to it:
+        This run was started by a #{chat_provider&.label || 'chat'} message#{trigger_user_suffix}. Treat it as the user's request and respond to it:
 
         > #{trigger_message.to_s.gsub("\n", "\n> ")}
       MD
     end
 
     def trigger_user_suffix
-      user = workflow_run.shared_context.to_h.dig("slack", "user")
-      user.present? ? " from <@#{user}>" : ""
+      mention = chat_provider&.mention(chat_origin.dig("actor", "id"))
+      mention.present? ? " from #{mention}" : ""
     end
 
     def trigger_message
-      @trigger_message ||= workflow_run.shared_context.to_h.dig("slack", "text")
+      chat_origin["text"]
+    end
+
+    def chat_origin
+      @chat_origin ||= Chat.origin(workflow_run).to_h
+    end
+
+    def chat_provider
+      Chat.provider(chat_origin["provider"])
     end
 
     def sub_steps_section
