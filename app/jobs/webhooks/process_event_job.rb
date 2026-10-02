@@ -19,8 +19,9 @@ module Webhooks
         return
       end
 
-      # Slack endpoints are company-scoped (one workspace serves every project of
-      # the company) → company-wide fan-out. Other endpoints stay project-scoped.
+      # Chat endpoints are company-scoped (one workspace or tenant serves every
+      # project of the company) → company-wide fan-out. Other endpoints stay
+      # project-scoped.
       TriggerEngine.publish(
         event_type: normalized[:event_type],
         source: "#{endpoint.provider}:#{endpoint.slug}",
@@ -40,6 +41,7 @@ module Webhooks
     def normalize(endpoint, payload)
       case endpoint.provider.to_s
       when "slack"   then Chat::SlackProvider.normalize(endpoint, payload)
+      when "teams"   then Chat::TeamsProvider.normalize(endpoint, payload)
       else                normalize_generic(endpoint, payload)
       end
     end

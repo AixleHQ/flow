@@ -59,7 +59,7 @@ module ContextBuilders
     end
 
     def trigger_user_suffix
-      mention = chat_provider&.mention(chat_origin.dig("actor", "id"))
+      mention = chat_provider&.mention(chat_origin["actor"])
       mention.present? ? " from #{mention}" : ""
     end
 

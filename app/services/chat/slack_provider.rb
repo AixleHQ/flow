@@ -105,8 +105,9 @@ module Chat
     end
 
     # How a reply names the person who sent the message.
-    def mention(actor_id)
-      actor_id.present? ? "<@#{actor_id}>" : nil
+    def mention(actor)
+      id = actor.to_h["id"]
+      id.present? ? "<@#{id}>" : nil
     end
 
     # Each project a company-wide message fans out to gets its own copy of the

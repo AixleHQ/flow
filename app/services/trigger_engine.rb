@@ -356,7 +356,7 @@ class TriggerEngine
     # Routing/transport keys (and Slack's raw markup of a text the card already
     # shows) that aren't part of the user-facing payload and shouldn't leak into
     # the created card's body.
-    INTERNAL_DATA_KEYS = (%w[channel ts thread_ts team integration_id input_asset_ids files raw_text] +
+    INTERNAL_DATA_KEYS = (%w[channel ts thread_ts team integration_id input_asset_ids files raw_text service_url] +
                           Chat::TRANSPORT_KEYS).freeze
 
     # Renders the triggering payload into the created card's description so the
