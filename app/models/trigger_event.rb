@@ -31,7 +31,8 @@ class TriggerEvent < ApplicationRecord
   #   board.column.auto_triggered   — task entered a column with an auto binding
   #   board.task.gate_resolved      — a gate resolved (or was removed)
   #   workflow.manual_requested     — user pressed the manual trigger button
-  #   slack.message                 — inbound Slack message via the gateway
+  #   chat.message                  — inbound chat message (Slack) via its gateway; triggers
+  #                                   saved before the messaging port still read slack.message
   #   webhook.received              — generic inbound webhook via the gateway
   scope :recent, -> { order(created_at: :desc) }
 
