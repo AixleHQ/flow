@@ -23,10 +23,7 @@ module InternalTools
       board_project = board.project
       return error("This board has no project") unless board_project
 
-      # Filtered by the same predicate BoardTask validates an assignee against,
-      # so every id returned here is actually assignable (a collaborator whose
-      # company membership was revoked still has a project_collaborators row).
-      members = board_project.member_users.select { |u| board_project.accessible_by?(u) }.map do |u|
+      members = board_project.assignable_users.map do |u|
         { id: u.id, name: u.name, role: u.id == board_project.owner_id ? "owner" : "collaborator" }
       end
       success({ project_id: board_project.id, members: members }.to_json)

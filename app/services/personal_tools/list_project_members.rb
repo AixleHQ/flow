@@ -15,10 +15,7 @@ module PersonalTools
       project = find_project!
       authorize!(project, :index?, policy: Web::Company::Projects::MembersPolicy, project: project)
 
-      # Filtered by the same predicate BoardTask validates an assignee against,
-      # so every id returned here is actually assignable (a collaborator whose
-      # company membership was revoked still has a project_collaborators row).
-      members = project.member_users.select { |u| project.accessible_by?(u) }.map do |u|
+      members = project.assignable_users.map do |u|
         { id: u.id, name: u.name, email: u.email, role: u.id == project.owner_id ? "owner" : "collaborator" }
       end
       success(project_id: project.id, members: members)

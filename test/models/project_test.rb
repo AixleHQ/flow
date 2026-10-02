@@ -36,6 +36,22 @@ class ProjectTest < ActiveSupport::TestCase
     assert_not @project.accessible_by?(foreign_admin)
   end
 
+  test "assignable_users is the members accessible_by? admits, owner first, in constant queries" do
+    collaborators = create_list(:user, 3, :employee, :onboarding_completed, company: @company)
+    collaborators.each { |user| @project.add_collaborator(user) }
+    revoked = collaborators.last
+    revoked.company_memberships.find_by(company: @company).revoke!
+    create(:user, :admin, :onboarding_completed, company: @company)
+
+    expected = @project.member_users.select { |user| @project.accessible_by?(user) }
+
+    @project.reload
+    assignable = assert_queries_count(2) { @project.assignable_users.to_a }
+    assert_equal @project_owner, assignable.first
+    assert_equal [ @project_owner, *collaborators.first(2) ].to_set, assignable.to_set
+    assert_equal expected.to_set, assignable.to_set
+  end
+
   test "admin? is true for the owner" do
     assert @project.admin?(@project_owner)
   end
