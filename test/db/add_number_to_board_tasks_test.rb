@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20260930120000_add_number_to_board_tasks")
+require Rails.root.join("db/migrate/20260930130000_add_number_to_board_tasks")
 
 # The schema already carries the column, so the backfill is exercised on its own:
 # numbers are scrambled to what an unmigrated row cannot tell apart, then derived again.
