@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18: all eight decisions taken). Spikes (§16) not run yet
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16) under way: the bot gets its token by certificate and Web Chat replies work; Teams install pending
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -307,7 +307,7 @@ flowchart LR
 | Component | Responsibility |
 |---|---|
 | `Chat::Teams::Config` | The deployment's app id, home tenant, credential and cloud endpoint set, read from `Settings.teams`. The feature is available exactly when a usable credential is configured, with no enable flag (the Azure DevOps rule). |
-| `Chat::Teams::TokenService` | Client-credentials tokens: one Connector token from the home tenant (F3); Graph tokens per customer tenant. Encrypted cache with a refresh skew, in the shape of `AzureDevops::AppTokenService`. The client assertion comes from `Entra::ClientAssertion`, which is `AzureDevops::ClientAssertion` moved out so both integrations share it. |
+| `Chat::Teams::TokenService` | Client-credentials tokens: one Connector token from the home tenant (F3); Graph tokens per customer tenant. Encrypted cache with a refresh skew, in the shape of `AzureDevops::AppTokenService`. The client assertion comes from `Entra::ClientAssertion`, which Azure DevOps and Microsoft sign-in already use (#383). |
 | `Chat::Teams::ActivityAuthenticator` | The checklist in §7.1. The OpenID metadata and JWKS are cached for at most 24 h, and refreshed on an unknown `kid`. |
 | `Chat::Teams::ConnectorClient` | Send, reply, update, delete, create conversation, get member, get team, list channels. Talks only to `serviceUrl` values recorded from authenticated activities, and only through `SafeHttp` with a cloud host allowlist. Handles 429, 412 and 5xx with bounded retries. |
 | `Chat::Teams::GraphClient` | Thread and chat history under RSC; message attachments and SharePoint/OneDrive files under file access; uploads into a channel's files folder. |
@@ -354,14 +354,12 @@ deployment holds. Whoever has it can:
 - read and write the files of every organization that granted file access.
 
 So the credential rules are strict:
-- **Every credential on "Aixle Flow" is a certificate.** Sign-in is configured with a client secret
-  (`microsoft_oauth.client_secret`). A client secret authenticates the registration for every flow it
-  serves, not just the flow it was created for. On a shared registration, the certificate-only rule
-  therefore holds only once no secret remains. Phase 1 depends on:
-  1. moving sign-in to the certificate. `omniauth-entra-id` supports private_key_jwt through
-     `certificate_path` (a PKCS#12 file) plus `tenant_id`. Whether that works with the multi-tenant
-     `common` authority is checked in spike 8;
-  2. removing any client secret from the registration.
+- **Every credential on "Aixle Flow" is a certificate.** A client secret authenticates the registration
+  for every flow it serves, not just the flow it was created for, so on a shared registration the
+  certificate-only rule holds only once no secret remains. Sign-in moved to the certificate in #383
+  (verified with the multi-tenant `common` authority), and the deployment no longer configures the
+  secret. What remains before the bot is attached is deleting the now unused secret from the registration
+  itself.
 - **The certificate stays server-side,** in the secret store, and is never copied to a laptop or to
   staging. Workload identity federation, which leaves no secret at all, is the first hardening after
   phase 1.
@@ -873,22 +871,32 @@ Without file access, channel uploads fall back to project-asset links too, and t
 ## 10. Moving Slack onto the port (phase 0)
 
 Phase 0 is a refactor with no visible change for Slack users. It ships and runs in production before any
-Teams code merges, so business-critical Slack behavior is verified on its own. The existing Slack tests,
-renamed, are the regression net.
+Teams code merges, so business-critical Slack behavior is verified on its own. The existing Slack tests
+are the regression net. As built in PR #365:
 
 | Change | Compatibility |
 |---|---|
-| `Chat::` namespace, `Chat::Slack::Provider` wrapping the `Slack::` classes; `TargetResolver`, `HelpResponder`, `RunStatusReporter` and `ChatContext` replace the Slack-named copies | — |
-| `normalize_slack` emits the §7.3 contract and keeps `user`, `team`, `ts`, `thread_ts` | Filters stored on those keys keep matching |
-| `text` loses the bot mention; `raw_text` keeps it | Data migration: filters whose pattern contains `<@` move to `raw_text`. Other `contains`/`regex` patterns are unaffected; `eq`/`starts_with` start working as users meant |
-| `event_type` `slack.message` → `chat.message`; `{"provider": "slack"}` merged into `filter_predicate` | Reversible data migration. The provider filter keeps a migrated trigger from also firing on Teams once Teams is connected |
-| Trigger kind `chat` in all five kind lists; `slack` accepted as an input alias | `Templates::Installer` maps `slack` to `chat` with the provider filter, so published templates in `AixleHQ/flow-templates` keep installing. `template.v1.json` accepts both |
-| `shared_context["chat"]` written; `["slack"]` still written for Slack runs for one release | Readers prefer `chat` and fall back to `slack`, for in-flight and retried runs |
-| `chat_*` tools; `slack_*` kept as hidden, deprecated aliases for one release, then removed | Step and workflow `tool_ids` naming a `slack_*` shadow row are remapped by data migration (a code-first tool rename needs one) |
-| `status_reporting` column; `notify_on_failure: true` → `failures`, `false` → `none` | Expand/contract: `notify_on_failure` is still read and written for a release, then dropped. During a rolling deploy new JS can meet old pods, so the API accepts both before the UI switches. The backfill is kind-blind, so tracker bindings created before it keep `failures`; new bindings get the per-kind default from `WorkflowTriggers::Creator` |
-| `announce_failure` → `announce_transition` enqueueing `Triggers::ReportRunTransitionJob` (§8.2) | Same message for `failures` |
-| Frontend: kind "Chat message" with provider, workspace, channel, text match, status reporting | Existing Slack triggers render under it |
-| Docs: the drift in §3.3 | — |
+| `Chat` registry (`app/services/chat.rb`) and `Chat::SlackProvider`, which wraps the existing `Slack::` services: normalization, help, file ingestion, run context, failure notice | The `Slack::` classes stay; only the dispatch in front of them is new |
+| A Slack mention is published as `chat.message` with the §7.3 fields, and keeps `channel`, `user`, `text`, `raw_text`, `team`, `ts`, `thread_ts` | Filters stored on the old keys keep matching |
+| Triggers stay saved as `slack.message`. `TriggerBinding.for_event` matches a Slack `chat.message` against both `chat.message` triggers and `slack.message` ones | No data migration and no rolling-deploy window in which a migrated trigger misses messages from pods still running old code. The legacy type stays an alias until a contract step migrates it |
+| A chat event counts only when its provider's own receiver produced it (`Chat.provider_for` checks the event source) | A generic webhook cannot pose as a chat message, the same rule the tracker events already follow |
+| `shared_context["chat"]` is written next to `["slack"]` | Readers go through `Chat.origin`, which falls back to the Slack block for runs started before the deploy, and for retried runs |
+| A card created by a Slack trigger is still titled and labeled with the trigger's own event type | `slack.message — <date>` stays as it was, although the event now says `chat.message` |
+| `status_reporting` column, backfilled from `notify_on_failure`; the two follow whichever was set | Expand/contract: the API, MCP and templates still write `notify_on_failure` |
+| The failure notice moved onto the run-transition seam as `Chat::RunStatusReporter`; `Slack::NotifyRunFailureJob` stays one release as a no-op for jobs a previous deploy enqueued | Same message, same opt-out |
+| The tracker reporter reads `status_reporting == "failures"` | Same behavior; `notify_on_failure: false` still silences it |
+
+Already on `develop` before phase 0 started, so not part of it: the Slack text that trigger conditions
+see has the bot's mention removed and compares without regard to case (#389). `Entra::ClientAssertion`
+exists, and Microsoft sign-in runs on the certificate (#383).
+
+**Moved to phase 1, with Teams, because nothing uses them before a second provider exists:**
+- the trigger kind `chat` in the five kind lists, the API, the personal MCP and templates, with `slack`
+  kept as an alias;
+- the "Chat message" trigger form with a provider choice;
+- the `chat_*` agent tools, with the `slack_*` tools kept as deprecated aliases for one release;
+- the `lifecycle` status card;
+- the docs drift in §3.3.
 
 ## 11. Security
 
@@ -1027,14 +1035,15 @@ Per `docs/testing.md`:
 ## 15. Phasing
 
 **Phase 0 — messaging port, Slack only.** Everything in §10. Exit criterion: Slack triggers, tools, help
-and failure notices behave in production exactly as before, and the migrations are verified on production
-data counts.
+and failure notices behave in production exactly as before.
 
 **Phase 1 — Teams core.**
 - Prerequisites (§6.1):
-  - "Aixle Flow" holds certificates only, and sign-in moves off its client secret;
+  - the unused client secret on "Aixle Flow" is deleted. Sign-in already runs on the certificate (#383);
   - the Azure Bot is created in a subscription in the app's home tenant;
   - the registration moves into the shared `entra` configuration (§13).
+- The parts of the port moved out of phase 0 (§10): the `chat` trigger kind and form, the `chat_*`
+  tools, the docs drift.
 - `Settings.teams`, the token service, the authenticator, and the Connector and Graph clients.
 - Tenant binding (§6.2), the app package, the connection UI, and the operator runbook.
 - The activities endpoint, routing and normalization; the conversation registry, welcome message and
@@ -1075,7 +1084,16 @@ data counts.
 | 5 | Are slash commands and targeted messages live in a fresh tenant today? **[C]** in F15 | The `/help` UX and private link prompts | Mention plus `help`; public link prompts in 1:1 chats only |
 | 6 | Job-queue latency from activity to first `typing` in production-like load | Store 2 s rule; perceived responsiveness | The controller sends `typing` inline |
 | 7 | Can `Files.ReadWrite.All` on "Aixle Flow" be admin-consented after, and separately from, a binding sign-in that requested only `openid profile` (v2 `adminconsent`)? Does the Graph token's `roles` then show it? | Decision 5 with a working connection when an admin says no | The connection page links the admin to Entra admin center → Enterprise applications → "Aixle Flow" → Grant admin consent, then re-checks |
-| 8 | Does `omniauth-entra-id`'s certificate flow (`certificate_path` + `tenant_id`) complete a multi-tenant sign-in against the `common` / `organizations` authority? | Removing the sign-in client secret from the shared app (§6.1) | Sign-in exchanges the code itself, with `Entra::ClientAssertion` against the signed-in tenant's token endpoint |
+
+**Results so far** (2026-10-02, staging app and Azure Bot, Web Chat only):
+- The bot's Connector token comes from the home tenant through `private_key_jwt` with the certificate.
+- The §7.1 checks pass on real traffic.
+- The Connector rejects a reply without `from`, with `400 MissingProperty`. Every outgoing activity has
+  to carry the reversed reference: from = the bot, recipient = the user, the same conversation.
+- Activity ids contain `|` in Web Chat (`<conversation>|0000002`), so both the conversation id and the
+  activity id are URL-encoded in every path.
+- For several minutes after the messaging endpoint was saved, the channel log still said "Activity dropped
+  because the bot's endpoint is missing", although the resource's JSON already held the endpoint.
 
 ## 17. Coordination with the task-tracker design
 
@@ -1118,9 +1136,8 @@ far:
   - trackers' `external_resources` and the `includes` filter operator (usable here, not needed);
   - this design's `chat_conversations` and `chat_identities`.
 - **Actor shape.** Both use `actor: {id, name, aixle_user_id}`. Trackers add `login` and `is_me`.
-- **Entra.** Trackers' Azure Boards provider reuses `AzureDevops::CredentialProvider` as-is. This design
-  moves `AzureDevops::ClientAssertion` to `Entra::ClientAssertion`, and the Azure DevOps classes reference
-  it from there.
+- **Entra.** Trackers' Azure Boards provider reuses `AzureDevops::CredentialProvider` as-is. The bot's
+  tokens use `Entra::ClientAssertion`, which #383 already moved out of `AzureDevops::`.
 
 ## 18. Decisions
 
