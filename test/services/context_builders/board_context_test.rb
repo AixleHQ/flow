@@ -74,7 +74,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
 
     assert_includes content, "Sprint Board"
     assert_includes content, "Fix login flow"
-    assert_includes content, task.id.to_s
+    assert_includes content, "##{task.number} Fix login flow (id: #{task.id})"
     assert_includes content, "In Progress"
   end
 

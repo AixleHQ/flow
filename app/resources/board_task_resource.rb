@@ -37,7 +37,7 @@ class BoardTaskResource < ApplicationResource
     }
   end
 
-  attributes :id, :title, :description, :task_type, :priority,
+  attributes :id, :number, :title, :description, :task_type, :priority,
              :assignee_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 

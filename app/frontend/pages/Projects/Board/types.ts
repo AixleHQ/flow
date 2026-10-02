@@ -8,7 +8,8 @@ export type Gate = BoardTask['pendingGates'][number];
 
 // The board list payload plus the two fields only the drawer's detail payload carries: with one page
 // per column loaded, the board cannot find an archived parent epic or an epic's children itself.
-export type Task = BoardTask & Partial<Pick<TaskDetail, 'parentTaskTitle' | 'childTasks' | 'trackerIssues'>>;
+export type Task = BoardTask &
+  Partial<Pick<TaskDetail, 'parentTaskTitle' | 'parentTaskNumber' | 'childTasks' | 'trackerIssues'>>;
 
 export interface BoardFilters {
   assigneeId: string | null;

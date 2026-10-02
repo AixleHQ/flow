@@ -35,6 +35,38 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert task.errors[:board_column].present?
   end
 
+  # == Board-local number ==
+
+  test "numbers restart on every board and count up independently" do
+    other_board = Board.create!(name: "Other", project: create(:project, company: @company, owner: @owner))
+    other_col = BoardColumn.create!(name: "X", board: other_board, position: 1)
+
+    first = BoardTask.create!(title: "A", board: @board, board_column: @col1)
+    elsewhere = BoardTask.create!(title: "B", board: other_board, board_column: other_col)
+    second = BoardTask.create!(title: "C", board: @board, board_column: @col2)
+
+    assert_equal [ 1, 2 ], [ first.number, second.number ]
+    assert_equal 1, elsewhere.number
+  end
+
+  test "a deleted task's number is not handed to the next task" do
+    BoardTask.create!(title: "A", board: @board, board_column: @col1)
+    last = BoardTask.create!(title: "B", board: @board, board_column: @col1)
+    last.destroy!
+
+    assert_equal 3, BoardTask.create!(title: "C", board: @board, board_column: @col1).number
+  end
+
+  test "a rolled-back create does not burn its number" do
+    BoardTask.transaction(requires_new: true) do
+      BoardTask.create!(title: "Abandoned", board: @board, board_column: @col1)
+      raise ActiveRecord::Rollback
+    end
+
+    assert_equal 1, BoardTask.create!(title: "Kept", board: @board, board_column: @col1).number
+    assert_equal 1, @board.reload.last_task_number
+  end
+
   # == Auto-position ==
 
   test "auto-assigns position on create" do

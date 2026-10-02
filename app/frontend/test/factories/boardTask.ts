@@ -2,6 +2,7 @@ import type BoardTask from '@/types/generated/BoardTask';
 
 export const buildBoardTask = (overrides: Partial<BoardTask> = {}): BoardTask => ({
   id: 1,
+  number: 1,
   title: 'Task',
   description: null,
   taskType: 'feature',

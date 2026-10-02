@@ -9,7 +9,9 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   def show
     board = current_project.board
 
-    if board
+    if board && (legacy_task = legacy_linked_task(board))
+      redirect_to company_project_board_path(current_project, n: legacy_task.number)
+    elsif board
       render_board_page(board)
     else
       render_empty_board_page
@@ -27,7 +29,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   end
 
   def render_board_page(board)
-    task = params[:task].present? ? find_task(board) : nil
+    task = params[:n].present? ? find_task(board) : nil
 
     render inertia: "Projects/Board/BoardPage", props: {
       board: -> { BoardResource.new(board).to_h },
@@ -57,7 +59,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       board_tags: -> { board.board_tasks.active.distinct.pluck(Arel.sql("unnest(tags)")).compact.sort },
       epics: -> {
         board.board_tasks.active.where(task_type: "epic").order(:title).limit(EPIC_OPTIONS_LIMIT)
-             .pluck(:id, :title).map { |id, title| { id: id, title: title } }
+             .pluck(:id, :number, :title).map { |id, number, title| { id: id, number: number, title: title } }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
       workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
@@ -128,8 +130,16 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   def find_task(board)
     board.board_tasks
          .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
-         .find_by(id: params[:task])
+         .find_by(number: params[:n])
     # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
     # parent_task so TaskDetailResource.parent_task_title does not fire an extra query
+  end
+
+  # `?task=` carried the global task id before tasks were numbered per board, and
+  # links with it are still around, so it keeps meaning the id.
+  def legacy_linked_task(board)
+    return if params[:task].blank? || params[:n].present?
+
+    board.board_tasks.find_by(id: params[:task])
   end
 end

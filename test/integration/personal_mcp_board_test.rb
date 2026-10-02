@@ -101,6 +101,24 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_empty task.keys.grep(/[A-Z]/)
   end
 
+  test "get_board_task finds a task by its board number, which is not its id" do
+    foreign_task
+    second = create(:board_task, board: @board, board_column: @todo, title: "Second task")
+    assert_not_equal second.id, second.number
+
+    task = payload(call_tool("get_board_task", { project_id: @project.id, task_number: second.number }))
+
+    assert_equal [ second.id, "Second task" ], task.values_at("id", "title")
+  end
+
+  test "get_board_task needs exactly one of task_id and task_number" do
+    both = call_tool("get_board_task", { project_id: @project.id, task_id: @task.id, task_number: @task.number })
+    neither = call_tool("get_board_task", { project_id: @project.id })
+
+    assert tool_error?(both)
+    assert tool_error?(neither)
+  end
+
   test "create_board_task creates a task in the target column" do
     body = call_tool("create_board_task",
                      { project_id: @project.id, column_id: @todo.id, title: "New", description: "d" })

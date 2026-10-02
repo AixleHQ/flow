@@ -78,8 +78,8 @@ describe('boardFilterParams', () => {
 
     expect(params.get('q[g][0][title_cont]')).toBe('auth');
     expect(params.get('q[g][0][m]')).toBe('or');
-    // A non-numeric term emits no id_eq predicate.
-    expect(params.get('q[g][0][id_eq]')).toBeNull();
+    // A non-numeric term emits no number_eq predicate.
+    expect(params.get('q[g][0][number_eq]')).toBeNull();
     // The OR combinator lives inside the group, not at the top level, so sibling filters keep AND.
     expect(params.get('q[m]')).toBeNull();
     expect(params.get('q[assignee_id_eq]')).toBe('3');

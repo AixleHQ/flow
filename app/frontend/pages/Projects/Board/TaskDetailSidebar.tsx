@@ -162,13 +162,13 @@ function deleteTaskGate(projectId: number, taskId: number, gateId: number): Prom
 
 export function TaskDetailSidebar({
   task,
-  pendingTaskId,
+  pendingTaskNumber,
   allTasks,
   epics,
   knownTags,
   onClose,
   onDelete,
-  onOpenTaskId,
+  onOpenTaskNumber,
   projectId,
   columns,
   members,
@@ -180,18 +180,18 @@ export function TaskDetailSidebar({
   canExecute,
 }: {
   task: Task | null;
-  /** A task id whose props are still in flight — draws the skeleton until it resolves. */
-  pendingTaskId: number | null;
+  /** A task number whose props are still in flight — draws the skeleton until it resolves. */
+  pendingTaskNumber: number | null;
   /** The pages the board holds — a fallback source, not the whole board. */
   allTasks: Task[];
   /** Every epic on the board, for the Parent Epic picker. */
-  epics: Array<{ id: number; title: string }>;
+  epics: Array<{ id: number; number: number; title: string }>;
   /** Every tag on the board, offered as autocomplete when tagging this task. */
   knownTags: string[];
   onClose: () => void;
   onDelete: (taskId: number) => void;
-  /** Opens a task by id — the board may hold no card for it (an unloaded child or parent). */
-  onOpenTaskId: (taskId: number) => void;
+  /** Opens a task by its board number — the board may hold no card for it (an unloaded child or parent). */
+  onOpenTaskNumber: (taskNumber: number) => void;
   projectId: number;
   columns: Column[];
   members: BoardMember[];
@@ -247,11 +247,11 @@ export function TaskDetailSidebar({
   // has not received the detail payload yet (a card opened straight from a partial reload).
   const childTasks = useMemo(() => {
     if (task?.childTasks) {
-      return task.childTasks.map((c) => ({ id: c.id, title: c.title, taskType: c.taskType }));
+      return task.childTasks.map((c) => ({ id: c.id, number: c.number, title: c.title, taskType: c.taskType }));
     }
     return allTasks
       .filter((t) => t.parentTaskId === task?.id)
-      .map((t) => ({ id: t.id, title: t.title, taskType: t.taskType }));
+      .map((t) => ({ id: t.id, number: t.number, title: t.title, taskType: t.taskType }));
   }, [task?.childTasks, allTasks, task?.id]);
 
   // The drawer lists the task's whole CI history, not only what is still blocking it: a failed or a
@@ -278,7 +278,7 @@ export function TaskDetailSidebar({
     () => (task?.parentTaskId ? epics.find((e) => e.id === task.parentTaskId) : undefined) ?? null,
     [epics, task?.parentTaskId],
   );
-  const parentLinkId = parentTask?.id ?? parentEpic?.id ?? null;
+  const parentLinkNumber = parentTask?.number ?? parentEpic?.number ?? null;
 
   const parentTaskTitle = parentTask?.title ?? parentEpic?.title ?? task?.parentTaskTitle ?? null;
 
@@ -287,10 +287,10 @@ export function TaskDetailSidebar({
   const parentEpicOptions = useMemo(() => {
     const options = epicTasks.map((e) => ({ value: String(e.id), label: e.title }));
     if (task?.parentTaskId && !options.some((o) => o.value === String(task.parentTaskId))) {
-      options.unshift({ value: String(task.parentTaskId), label: parentTaskTitle ?? `#${task.parentTaskId}` });
+      options.unshift({ value: String(task.parentTaskId), label: parentTaskTitle ?? `#${task.parentTaskNumber}` });
     }
     return options;
-  }, [epicTasks, task?.parentTaskId, parentTaskTitle]);
+  }, [epicTasks, task?.parentTaskId, task?.parentTaskNumber, parentTaskTitle]);
 
   useEffect(() => {
     if (task) {
@@ -428,13 +428,13 @@ export function TaskDetailSidebar({
   );
 
   // Nothing open and nothing requested — stay unmounted, same as before.
-  if (!task && pendingTaskId === null) return null;
+  if (!task && pendingTaskNumber === null) return null;
 
   // A click landed and the request for it hasn't resolved yet (opening fresh, or switching from
   // whatever task — if any — was already showing). Keep the drawer's own chrome (size, padding,
   // header/tabs shape) so the real content that replaces this doesn't shift anything when it
   // lands, and skip straight to skeleton content instead of a stale or empty panel.
-  if (!task || (pendingTaskId !== null && pendingTaskId !== task.id)) {
+  if (!task || (pendingTaskNumber !== null && pendingTaskNumber !== task.number)) {
     return (
       <Drawer
         opened
@@ -605,15 +605,15 @@ export function TaskDetailSidebar({
                 >
                   {pendingTitle ?? task.title}
                 </div>
-                <CopyButton value={String(task.id)}>
+                <CopyButton value={String(task.number)}>
                   {({ copied, copy }) => (
-                    <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+                    <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
                       <Text
                         c="dimmed"
                         style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }}
                         onClick={copy}
                       >
-                        #{task.id}
+                        #{task.number}
                       </Text>
                     </Tooltip>
                   )}
@@ -909,7 +909,7 @@ export function TaskDetailSidebar({
                   {childTasks.map((child) => (
                     <UnstyledButton
                       key={child.id}
-                      onClick={() => onOpenTaskId(child.id)}
+                      onClick={() => onOpenTaskNumber(child.number)}
                       px={6}
                       py={4}
                       style={{
@@ -950,8 +950,8 @@ export function TaskDetailSidebar({
               <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
                 Parent Epic
               </Text>
-              {parentLinkId ? (
-                <UnstyledButton onClick={() => onOpenTaskId(parentLinkId)}>
+              {parentLinkNumber ? (
+                <UnstyledButton onClick={() => onOpenTaskNumber(parentLinkNumber)}>
                   <Text
                     size="sm"
                     c="brand"
@@ -969,7 +969,7 @@ export function TaskDetailSidebar({
               ) : (
                 // Archived (or otherwise not-loaded) epic: still name it, but there is no
                 // board card to open, so it is plain text rather than a dead link.
-                <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskId}`}</Text>
+                <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskNumber}`}</Text>
               )}
             </Box>
           )}
