@@ -146,6 +146,25 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal @task.id, data["id"]
   end
 
+  test "board_get_task finds a task by the number shown on the board, not by an id equal to it" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    create_list(:board_task, 2, board: other_board, board_column: other_column)
+    second = create(:board_task, board: @board, board_column: @col1, title: "Second")
+
+    result = InternalTools::BoardGetTask.new(params: { task_number: 2 }, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal [ second.id, 2 ], JSON.parse(result[:stdout]).values_at("id", "number")
+  end
+
+  test "board_get_task refuses task_id and task_number together" do
+    result = InternalTools::BoardGetTask.new(params: { task_id: @task.id, task_number: 1 }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not both"
+  end
+
   test "board_get_task returns error for unknown task" do
     result = InternalTools::BoardGetTask.new(params: { task_id: 99999 }, session: @session).execute
     assert_equal 1, result[:exit_code]

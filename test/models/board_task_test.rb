@@ -57,6 +57,16 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert_equal 3, BoardTask.create!(title: "C", board: @board, board_column: @col1).number
   end
 
+  test "a rolled-back create does not burn its number" do
+    BoardTask.transaction(requires_new: true) do
+      BoardTask.create!(title: "Abandoned", board: @board, board_column: @col1)
+      raise ActiveRecord::Rollback
+    end
+
+    assert_equal 1, BoardTask.create!(title: "Kept", board: @board, board_column: @col1).number
+    assert_equal 1, @board.reload.last_task_number
+  end
+
   # == Auto-position ==
 
   test "auto-assigns position on create" do

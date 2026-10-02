@@ -41,4 +41,20 @@ class AddNumberToBoardTasksTest < ActiveSupport::TestCase
 
     assert_equal 0, @board.reload.last_task_number
   end
+
+  # What a pod still on the previous release does mid-deploy: insert with no number at all.
+  test "the deploy-window trigger numbers a task inserted without one from the board counter" do
+    create(:board_task, board: @board, board_column: @column)
+    migration = AddNumberToBoardTasks.new
+    migration.suppress_messages { migration.create_number_trigger }
+
+    inserted = BoardTask.insert_all(
+      [ { board_id: @board.id, board_column_id: @column.id, title: "From an old pod", position: 99 } ],
+      returning: %w[number]
+    )
+
+    assert_equal [ 2 ], inserted.rows.flatten
+    assert_equal 2, @board.reload.last_task_number
+    assert_equal 3, create(:board_task, board: @board, board_column: @column).number
+  end
 end
