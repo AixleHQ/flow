@@ -145,6 +145,30 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_empty TriggerBinding.for_event(event)
   end
 
+  test "status_reporting and notify_on_failure follow whichever of the two was set" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user)
+    assert_equal "failures", binding.status_reporting
+
+    binding.update!(notify_on_failure: false)
+    assert_equal "none", binding.status_reporting
+
+    binding.update!(status_reporting: "failures")
+    assert binding.notify_on_failure
+
+    lifecycle = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                         status_reporting: "lifecycle")
+    lifecycle.update!(notify_on_failure: true)
+    assert_equal "lifecycle", lifecycle.status_reporting
+  end
+
+  test "only a chat trigger can follow its run with a status card" do
+    webhook = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                      event_type: "webhook.received", status_reporting: "lifecycle")
+
+    assert_not webhook.valid?
+    assert_includes webhook.errors[:status_reporting], "lifecycle is for chat triggers"
+  end
+
   test "accepts an empty predicate and a scalar or known operator condition" do
     empty = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, filter_predicate: {})
     scalar = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,

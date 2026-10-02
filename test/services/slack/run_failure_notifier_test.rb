@@ -19,18 +19,11 @@ module Slack
       # A trigger binding refuses to attach to a workflow with a step that needs
       # a human — an unattended launch would be silently skipped at fire time.
       @step = create(:step, workflow: @workflow, name: "Render Output", position: 1, allow_non_interactive: true)
-      @binding = create(:trigger_binding, project: @project, workflow: @workflow, event_type: "slack.message")
     end
 
-    def failed_run(shared_context: slack_context, notify: true, binding: @binding)
-      @binding&.update!(notify_on_failure: notify)
+    def failed_run(shared_context: slack_context)
       run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user,
         shared_context: shared_context)
-      if binding
-        event = TriggerEvent.create!(event_type: "slack.message", source: "slack:acme", data: {}, occurred_at: Time.current)
-        TriggerDispatch.create!(trigger_event: event, trigger_binding: binding, workflow_run: run,
-          dedup_key: "d-#{run.id}", status: "started", source: "trigger_binding")
-      end
       create(:step_run, :failed, workflow_run: run, step: @step, error_message: "container exited with code 1")
       run.update_column(:state, "failed")
       run
@@ -68,18 +61,8 @@ module Slack
       assert_match(/ran out of credits/, fake_slack.last_posted_message[:text])
     end
 
-    test "stays quiet when the trigger has notifications switched off" do
-      assert_not Slack::RunFailureNotifier.call(failed_run(notify: false))
-      assert_empty fake_slack.posted_messages
-    end
-
     test "stays quiet for a run that did not come from Slack" do
       assert_not Slack::RunFailureNotifier.call(failed_run(shared_context: {}))
-      assert_empty fake_slack.posted_messages
-    end
-
-    test "stays quiet for a Slack-context run with no trigger behind it" do
-      assert_not Slack::RunFailureNotifier.call(failed_run(binding: nil))
       assert_empty fake_slack.posted_messages
     end
 

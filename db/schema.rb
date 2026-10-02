@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_02_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1506,6 +1506,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
     t.bigint "project_id", null: false
     t.bigint "project_tracker_id"
     t.jsonb "schedule_config", default: {}, null: false
+    t.string "status_reporting", default: "failures", null: false
     t.bigint "subject_column_id"
     t.string "subject_policy", default: "none", null: false
     t.string "subject_title_template"
