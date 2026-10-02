@@ -129,7 +129,9 @@ module Github
 
     # The organization's GitHub projects, for the picker on the connection.
     def available_projects(integration)
-      projects_api!(integration).projects(integration.github_account_login).reject { |p| p[:closed] }
+      api = projects_api!(integration)
+      project_permissions!(integration)
+      api.projects(integration.github_account_login).reject { |p| p[:closed] }
     end
 
     # The projects the connection covers: each becomes a tracker of this
@@ -138,6 +140,7 @@ module Github
     def configure_projects(integration, project_ids:)
       ids = Array(project_ids).map(&:to_s).compact_blank.uniq
       api = projects_api!(integration)
+      project_permissions!(integration) if ids.any?
       previous = Array(integration.settings.to_h["github_projects"]).index_by { |p| p["id"] }
       chosen = ids.map do |id|
         field = previous.dig(id, "status_field").presence || Trackers::Github::Provider::DEFAULT_STATUS_FIELD
@@ -155,7 +158,24 @@ module Github
       integration
     end
 
+    PROJECT_PERMISSIONS = { "organization_projects" => %w[write admin], "issues" => %w[write] }.freeze
+
     private
+
+    # Asked of GitHub, not read from what was recorded: an installation without
+    # the Projects permission lists no projects at all rather than refusing, so
+    # an empty picker would not say why. Recorded as it stands.
+    def project_permissions!(integration)
+      permissions = Github::TokenService.new(integration).verify_installation[:permissions].to_h.transform_keys(&:to_s)
+      integration.update_columns(settings: integration.settings.to_h.merge("app_permissions" => permissions), updated_at: Time.current)
+      return if PROJECT_PERMISSIONS.all? { |name, levels| levels.include?(permissions[name].to_s) }
+
+      raise ConfigurationError, "The GitHub App has not been granted the Projects and Issues permissions on " \
+                                "#{integration.github_account_login} yet. An organization owner approves them in the " \
+                                "installation's settings on GitHub."
+    rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
+      raise ConfigurationError, e.message
+    end
 
     def projects_api!(integration)
       unless integration.github_app? && integration.settings.to_h["account_type"] == "Organization"

@@ -331,6 +331,17 @@ module Github
       assert_equal 3, github.calls_to(:project).size
     end
 
+    test "the picker asks GitHub for the installation's permissions and says when Projects is missing" do
+      stub_github_projects!
+      stub_token_service(installation: FakeGithub::TokenService::DEFAULT_INSTALLATION.merge(permissions: { contents: "read" }))
+      integration = create(:integration, :github_projects, :active, company: @company, project: @project, connected_by: @user)
+
+      error = assert_raises(Github::IntegrationService::ConfigurationError) { service.available_projects(integration) }
+
+      assert_match(/not been granted the Projects and Issues permissions on acme-corp/, error.message)
+      assert_equal({ "contents" => "read" }, integration.reload.settings["app_permissions"])
+    end
+
     test "a project without its status field, or a user installation, cannot be chosen" do
       stub_github_projects!
       integration = create(:integration, :github_projects, :active, company: @company, project: @project, connected_by: @user)

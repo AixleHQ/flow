@@ -212,7 +212,7 @@ class IntegrationResource < ApplicationResource
     permissions = integration.github? ? integration.settings&.dig("app_permissions") : nil
     next nil unless permissions.is_a?(Hash)
 
-    %w[read write admin].include?(permissions["organization_projects"].to_s) && permissions["issues"].to_s == "write"
+    Github::IntegrationService::PROJECT_PERMISSIONS.all? { |name, levels| levels.include?(permissions[name].to_s) }
   end
 
   typelize "Array<{ id: string; number: number; title: string; url: string }>"

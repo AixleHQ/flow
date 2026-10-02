@@ -173,9 +173,15 @@ module FakeGithub
 end
 
 module GithubProjectsTestHelper
+  # The installation is granted the Projects and Issues permissions, which the
+  # picker asks GitHub for.
   def stub_github_projects!(app_slug: "aixle-flow")
     fake = FakeGithub::ProjectsApi.new
     Github::ProjectsApi.stubs(:for).returns(fake)
+    granted = FakeGithub::TokenService::DEFAULT_INSTALLATION.merge(
+      permissions: { organization_projects: "write", issues: "write", contents: "write" }
+    )
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(installation: granted))
     Settings.github.stubs(:app_slug).returns(app_slug)
     fake
   end
