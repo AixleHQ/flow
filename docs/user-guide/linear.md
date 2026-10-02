@@ -15,7 +15,7 @@ There are two ways to connect, and they differ in **who Flow acts as** in Linear
 | --- | --- | --- |
 | Who connects | A Linear workspace admin installs the app | Anyone with a Linear API key |
 | Flow acts as | The app itself, shown as the app in Linear | The key's owner |
-| Webhooks for triggers | The app's own webhook; nothing to set up | One per team, registered by Flow — only with a workspace admin's key |
+| Webhooks for triggers | The app's own webhook; nothing to set up | One per team, registered by Flow — only with a workspace admin's key that has the Admin permission |
 | Needs | The deployment's Linear app (always there on Aixle SaaS) | Nothing on the deployment |
 
 If people's own edits should never look like Flow's, install the app, or use
@@ -64,12 +64,14 @@ trackers and their triggers stay.
 
 When the project gets its first tracker trigger, Flow registers one webhook
 per connected team, pointed at its own URL and signed with a secret Flow
-generates. Linear lets only a **workspace admin's** key manage webhooks:
+generates. Linear lets only a **workspace admin's** key that was created with
+the **Admin** permission manage webhooks:
 
-- with an admin's key, triggers work without anything else to do;
-- with any other key, the tools work, but triggers do not fire. The
-  connection's row says *"Only a Linear workspace admin's API key can register
-  webhooks"*. Connect with an admin's key, or install the app.
+- with such a key, triggers work without anything else to do;
+- with any other key (a member's, or an admin's key limited to Read and
+  Write), the tools work, but triggers do not fire. The connection's row says
+  *"Linear did not let this API key register webhooks"*. Connect with an admin's
+  key that has the Admin permission, or install the app.
 
 **Test connection** tries a webhook that could not be registered again and
 says what is still not delivering. Linear has to reach the deployment's

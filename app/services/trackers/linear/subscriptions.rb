@@ -9,7 +9,7 @@ module Trackers
     #
     # An API-key connection registers one webhook per team, with a secret of
     # ours, delivered to that subscription's own URL. Linear lets only a
-    # workspace admin's key manage webhooks; a refused registration leaves the
+    # workspace admin's key with the Admin permission manage webhooks; a refused registration leaves the
     # row failing with the reason, and the next ensure! tries again.
     class Subscriptions
       LABEL = "Aixle"
@@ -85,7 +85,8 @@ module Trackers
       def failure_message(error)
         return error.message.to_s.truncate(250) unless error.code == "permission_denied"
 
-        "Only a Linear workspace admin's API key can register webhooks. Connect with an admin's key, or install Aixle's Linear app."
+        "Linear did not let this API key register webhooks: it takes a workspace admin's key created with the Admin " \
+          "permission. Connect with such a key, or install Aixle's Linear app."
       end
 
       def team_ids

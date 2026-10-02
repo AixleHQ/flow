@@ -149,7 +149,7 @@ module Linear
       comment(raw)
     end
 
-    # Only a workspace admin's key may manage webhooks. Answers the webhook id.
+    # Only a workspace admin's key with the Admin permission may manage webhooks. Answers the webhook id.
     def create_webhook(url:, team_id:, secret:, label:)
       data = @client.mutate(<<~GRAPHQL, input: { url: url, teamId: team_id, secret: secret, label: label, resourceTypes: WEBHOOK_RESOURCES })
         mutation($input: WebhookCreateInput!) { webhookCreate(input: $input) { success webhook { id enabled } } }

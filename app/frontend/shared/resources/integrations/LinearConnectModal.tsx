@@ -139,8 +139,8 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
             <Text size="sm" c="dimmed">
               Create a personal API key in Linear under Settings → Security &amp; access, best of an account kept for
               Aixle: Aixle acts as the key&apos;s owner. Tracker triggers need Linear to send events, and only a
-              workspace admin&apos;s key can register the webhooks — with another key the tools work but triggers do not
-              fire. See the <Anchor href={DOCS_URL}>Linear guide</Anchor>.
+              workspace admin&apos;s key created with the Admin permission can register the webhooks — with another key
+              the tools work but triggers do not fire. See the <Anchor href={DOCS_URL}>Linear guide</Anchor>.
             </Text>
             <PasswordInput label="API key" value={apiKey} onChange={(e) => setApiKey(e.currentTarget.value)} />
             {error && (

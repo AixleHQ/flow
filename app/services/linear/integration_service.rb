@@ -8,7 +8,7 @@ module Linear
   #   The callback stores the grant; picking the teams finishes the connection.
   # - A personal API key, pasted with the teams to cover. It acts as the key's
   #   owner, so the account is best kept for Aixle; its events need a webhook
-  #   per team, which only a workspace admin's key can register.
+  #   per team, which only a workspace admin's key with the Admin permission can register.
   #
   # Either way each team becomes a tracker (Trackers::Provisioning).
   # Reconnecting a workspace the project already has updates that connection in

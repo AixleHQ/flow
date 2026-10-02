@@ -29,7 +29,7 @@ class Trackers::Linear::SubscriptionsTest < ActiveSupport::TestCase
     subscription = Trackers::Linear::Subscriptions.new(integration).ensure!.sole
 
     assert_equal "failing", subscription.status
-    assert_match(/workspace admin's API key/, subscription.last_error)
+    assert_match(/workspace admin's key created with the Admin permission/, subscription.last_error)
   end
 
   test "a team dropped from the connection has its webhook removed" do
