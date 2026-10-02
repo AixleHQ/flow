@@ -2,9 +2,8 @@
 
 module Chat
   # Microsoft Teams behind the messaging port: a Bot Framework activity in, the
-  # `chat.message` contract out (docs/design/teams-integration.md §7.3–7.4).
-  # Saying things back (help, status cards, the agent's tools) comes with the
-  # Teams connection.
+  # `chat.message` contract out (docs/design/teams-integration.md §7.3–7.4), and
+  # Teams::Notifier for what the platform says back.
   module TeamsProvider
     KEY = "teams"
     LABEL = "Microsoft Teams"
@@ -55,9 +54,9 @@ module Chat
       event.data.to_h["text"].to_s.match?(HELP_COMMAND)
     end
 
-    def answer_help(_event) = false
+    def answer_help(event) = Teams::HelpResponder.call(event)
 
-    def report_failure(_run) = false
+    def report_failure(run) = Teams::RunFailureNotifier.call(run)
 
     def ingest_files(_event, _project) = nil
 

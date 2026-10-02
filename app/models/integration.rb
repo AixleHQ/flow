@@ -31,6 +31,7 @@ class Integration < ApplicationRecord
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
   has_many :tracker_subscriptions, dependent: :destroy
+  has_many :chat_conversations, dependent: :delete_all
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?
