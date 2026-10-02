@@ -407,6 +407,11 @@ export function apiV1ProjectEntityVersionPath(project_id: ScalarType, id: Scalar
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "entity_versions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /api/v1/projects/:project_id/triggers(.:format) */
+export function apiV1ProjectTriggersPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "triggers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /api/v1/projects/:project_id/workflows/:workflow_id/steps/reorder(.:format) */
 export function reorderApiV1ProjectWorkflowStepsPath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "steps" + "/" + "reorder" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
@@ -1530,6 +1535,11 @@ export function companyProjectRepositoryPath(project_id: ScalarType, id: ScalarT
 /** /company/projects/:project_id/trackers/:id/statuses(.:format) */
 export function statusesCompanyProjectTrackerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "trackers" + "/" + id + "/" + "statuses" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/triggers(.:format) */
+export function companyProjectTriggersPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "triggers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/trackers(.:format) */

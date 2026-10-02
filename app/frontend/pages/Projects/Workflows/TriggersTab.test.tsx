@@ -12,20 +12,17 @@ type TabProps = ComponentProps<typeof TriggersTab>;
 // wrapper over the global fetch() the test setup stubs. Each test that asserts a request (or needs
 // seeded triggers) spies on fetch() and dispatches by HTTP method.
 
-// ColumnOption / StepOption / Trigger are the component's own local interfaces (no Typelizer type, so
-// no factory exists); these literals match those interfaces exactly.
+// TriggerColumnOption / Trigger are local interfaces (no Typelizer type, so no factory exists); these
+// literals match those interfaces exactly.
 const columns: TabProps['columns'] = [
   { id: 1, name: 'Backlog' },
   { id: 2, name: 'In Progress', boundWorkflowName: 'Other Flow' },
 ];
 
-const sessions: TabProps['sessions'] = [{ id: 10, name: 'Draft PR' }];
-
 const baseProps = (overrides: Partial<TabProps> = {}): TabProps => ({
   projectId: 7,
   workflowId: 3,
   columns,
-  sessions,
   readOnly: false,
   ...overrides,
 });
@@ -483,20 +480,15 @@ describe('Projects/Workflows/TriggersTab', () => {
     await waitFor(() => expect(screen.getByRole('switch')).not.toBeChecked());
   });
 
-  it('PATCHes a column toggle with the column kind param', async () => {
-    const fetchSpy = installFetch({ triggers: [columnTrigger({ id: 1, enabled: true })] });
+  // A board-column binding has no enabled flag; a switch on it would flip back on reload.
+  it('offers no on/off switch for a column trigger', async () => {
+    installFetch({ triggers: [columnTrigger({ id: 1, enabled: true })] });
 
     renderPage(<TriggersTab {...baseProps()} />);
     await screen.findByText('Task enters "Backlog"');
 
-    await userEvent.click(screen.getByRole('switch'));
-
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/triggers/1?kind=column',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Task enters "Backlog"' })).toBeInTheDocument();
   });
 
   it('reverts the switch and logs an error when a toggle request fails', async () => {

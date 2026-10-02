@@ -1,157 +1,25 @@
-import { Loader, Switch } from '@mantine/core';
-import {
-  IconBolt,
-  IconBrandSlack,
-  IconClock,
-  IconColumns,
-  IconPencil,
-  IconPlus,
-  IconTicket,
-  IconTrash,
-  IconUser,
-  IconWebhook,
-} from '@tabler/icons-react';
-import cronstrue from 'cronstrue';
+import { Loader } from '@mantine/core';
+import { IconBolt, IconBrandSlack, IconClock, IconColumns, IconTicket, IconWebhook } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { isAttached, type TrackerOption } from 'shared/resources/triggers/trackerTrigger';
+import { TriggerCards } from 'shared/resources/triggers/TriggerCards';
+import { TriggerFormPanel } from 'shared/resources/triggers/TriggerFormPanel';
+import type { Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
-import { isAttached, TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
-import { TriggerFormPanel } from './TriggerFormPanel';
-import type { Trigger } from './types';
-
-export type { Trigger } from './types';
-
-interface ColumnOption {
-  id: number;
-  name: string;
-  boundWorkflowName?: string | null;
-}
-
-interface StepOption {
-  id: number;
-  name: string;
-}
+export type { Trigger } from 'shared/resources/triggers/types';
 
 interface TriggersTabProps {
   projectId: number;
   workflowId: number;
-  columns: ColumnOption[];
-  sessions: StepOption[];
+  columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
   readOnly: boolean;
 }
 
-const TG_ICONS: Record<string, typeof IconBolt> = {
-  column: IconColumns,
-  schedule: IconClock,
-  slack: IconBrandSlack,
-  webhook: IconWebhook,
-  tracker: IconTicket,
-};
-
-const TG_EVENTS: Record<string, string> = {
-  column: 'BOARD.COLUMN_CHANGED',
-  schedule: 'SCHEDULE.CRON',
-  slack: 'SLACK.MESSAGE',
-  webhook: 'WEBHOOK.RECEIVED',
-};
-
-function describeCronShort(expr: string): string {
-  if (!expr?.trim()) return '';
-  try {
-    return cronstrue.toString(expr.trim(), { throwExceptionOnParseError: true, verbose: false });
-  } catch {
-    return `Cron ${expr}`;
-  }
-}
-
-function triggerTitle(t: Trigger): string {
-  if (t.kind !== 'slack' && t.name?.trim()) return t.name.trim();
-  if (t.kind === 'column') return `Task enters "${t.column_name ?? 'column'}"`;
-  if (t.kind === 'schedule') {
-    const cron = t.schedule_config?.cron ?? '';
-    return describeCronShort(cron) || `Cron ${cron}`;
-  }
-  if (t.kind === 'slack') {
-    const pred = t.filter_predicate ?? {};
-    const text = pred.text;
-    if (text && typeof text === 'object') {
-      const t2 = text as { op?: string; value?: string };
-      if (t2.value) return `Slack message ${t2.op ?? 'contains'} "${t2.value}"`;
-    }
-    return 'Any Slack message';
-  }
-  if (t.kind === 'tracker') {
-    const label = TRACKER_EVENT_OPTIONS.find((o) => o.value === t.event_type)?.label ?? t.event_type;
-    const moves = (t.filter_predicate?.['change.to.name'] as { value?: unknown } | undefined)?.value;
-    if (Array.isArray(moves) && moves.length > 0) return `Issue moves to ${moves.join(', ')}`;
-    if (t.filter_predicate?.['comment.mentions_me'] === true) return 'Aixle is mentioned in a comment';
-    return label;
-  }
-  return 'Incoming webhook';
-}
-
-// Off-board triggers fire unattended, so the run belongs to — and uses the
-// credentials of — whoever added the trigger. A column trigger's run belongs to
-// the person the card puts on it, so its creator is shown as provenance only.
-const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event', 'tracker']);
-
-function creatorLabel(t: Trigger): string {
-  const name = t.created_by?.name;
-  const runsAsCreator = OFF_BOARD_KINDS.has(t.kind);
-  if (!name) return runsAsCreator ? 'No creator — this trigger cannot start a run' : 'Created by Unknown';
-  return runsAsCreator ? `Runs as ${name}` : `Created by ${name}`;
-}
-
-// A missing creator only breaks the off-board kinds — a column trigger still runs
-// under the person the card is on, so an unknown creator there is just a blank.
-function creatorTone(t: Trigger): string {
-  if (t.created_by) return 'var(--text-2)';
-  return OFF_BOARD_KINDS.has(t.kind) ? 'var(--err)' : 'var(--text-3)';
-}
-
-const AIXLE_CHANGE_LABELS: Record<string, string> = {
-  ignore: 'ignores Aixle changes',
-  other_workflows: 'chains from other workflows',
-  always: 'follows Aixle changes',
-};
-
-function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
-  if (t.kind === 'tracker') {
-    const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
-    let scope = 'any tracker';
-    if (t.project_tracker_id) scope = tracker ? tracker.handle : 'detached tracker';
-    if (tracker && !isAttached(tracker)) scope = `${tracker.handle} (detached, not firing)`;
-    return `${scope} · ${AIXLE_CHANGE_LABELS[t.aixle_changes ?? 'ignore'] ?? t.aixle_changes}`;
-  }
-  if (t.kind === 'column') return `${t.trigger_mode ?? 'auto'} · cooldown ${t.cooldown_seconds ?? 0}s`;
-  if (t.kind === 'schedule') {
-    const cfg = t.schedule_config ?? {};
-    return `${cfg.cron ?? '—'} · ${cfg.timezone ?? 'UTC'}`;
-  }
-  if (t.kind === 'slack') {
-    const pred = t.filter_predicate ?? {};
-    const channel = pred.channel;
-    return typeof channel === 'string' && channel ? `channel ${channel}` : 'any channel';
-  }
-  const pred = t.filter_predicate ?? {};
-  const keys = Object.keys(pred);
-  const base = `verification: ${(t as unknown as Record<string, unknown>).verification_strategy ?? 'none'}`;
-  if (keys.length > 0) {
-    const key = keys[0];
-    const val = pred[key];
-    if (val && typeof val === 'object') {
-      const v = val as { op?: string; value?: unknown };
-      return `${base} · when ${key} ${v.op ?? 'eq'} ${v.value}`;
-    }
-    return `${base} · when ${key} eq ${val}`;
-  }
-  return base;
-}
-
-export function TriggersTab({ projectId, workflowId, columns, sessions, trackers = [], readOnly }: TriggersTabProps) {
+export function TriggersTab({ projectId, workflowId, columns, trackers = [], readOnly }: TriggersTabProps) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -387,227 +255,15 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, trackers
             )}
           </div>
         ) : (
-          /* Card grid */
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: 10,
-            }}
-          >
-            {triggers.map((t) => {
-              const Icon = TG_ICONS[t.kind] ?? IconBolt;
-              const isDisabled = t.enabled === false;
-              return (
-                <div
-                  key={`${t.kind}-${t.id}`}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                    padding: '14px 16px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    opacity: isDisabled ? 0.55 : 1,
-                    transition: 'opacity 0.15s, border-color 0.15s',
-                  }}
-                >
-                  {/* Head row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--text-2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon size={16} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: 'var(--text-1)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {triggerTitle(t)}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--text-2)',
-                          marginTop: 2,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {triggerMeta(t, trackers)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Creator row */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontSize: 12,
-                      color: creatorTone(t),
-                      minWidth: 0,
-                    }}
-                  >
-                    <IconUser size={13} style={{ flexShrink: 0 }} />
-                    {/* The card is narrow enough to clip the longer labels — keep the full text reachable. */}
-                    <span
-                      title={creatorLabel(t)}
-                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
-                      {creatorLabel(t)}
-                    </span>
-                  </div>
-
-                  {/* Foot row */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                      marginTop: 'auto',
-                    }}
-                  >
-                    {/* Event badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          letterSpacing: '0.04em',
-                          color: 'var(--text-3)',
-                          background: 'var(--bg-raised)',
-                          border: '1px solid var(--border)',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          textTransform: 'uppercase',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {TG_EVENTS[t.kind] ?? t.event_type}
-                      </span>
-                    </div>
-
-                    {/* Actions */}
-                    {!readOnly && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                        <Switch
-                          size="xs"
-                          checked={t.enabled !== false}
-                          onChange={(e) => toggleEnabled(t, e.currentTarget.checked)}
-                        />
-                        <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
-                        <button
-                          onClick={() => openEdit(t)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-3)',
-                            padding: 6,
-                            borderRadius: 4,
-                            display: 'flex',
-                            transition: 'all 0.12s',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
-                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
-                            (e.currentTarget as HTMLElement).style.background = 'none';
-                          }}
-                        >
-                          <IconPencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => remove(t)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-3)',
-                            padding: 6,
-                            borderRadius: 4,
-                            display: 'flex',
-                            transition: 'all 0.12s',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.color = 'var(--err)';
-                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
-                            (e.currentTarget as HTMLElement).style.background = 'none';
-                          }}
-                        >
-                          <IconTrash size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Add a trigger tile */}
-            {!readOnly && (
-              <button
-                onClick={() => openAdd()}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  minHeight: 96,
-                  border: '1px dashed var(--border)',
-                  borderRadius: 8,
-                  color: 'var(--text-2)',
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                  background: 'none',
-                  fontFamily: 'inherit',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--accent-text)';
-                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-muted)';
-                  (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--text-2)';
-                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
-                  (e.currentTarget as HTMLElement).style.background = 'none';
-                }}
-              >
-                <IconPlus size={16} />
-                Add a trigger
-              </button>
-            )}
-          </div>
+          <TriggerCards
+            triggers={triggers}
+            trackers={trackers}
+            readOnly={readOnly}
+            onEdit={openEdit}
+            onDelete={remove}
+            onToggle={toggleEnabled}
+            onAdd={() => openAdd()}
+          />
         )}
       </div>
 
@@ -617,7 +273,6 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, trackers
           projectId={projectId}
           workflowId={workflowId}
           columns={columns}
-          sessions={sessions}
           trackers={trackers}
           editing={editingTrigger}
           defaultKind={defaultKind}

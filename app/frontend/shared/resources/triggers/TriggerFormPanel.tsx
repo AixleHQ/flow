@@ -17,24 +17,15 @@ import {
   type TrackerTriggerValue,
 } from './trackerTrigger';
 import { TrackerTriggerFields } from './TrackerTriggerFields';
-import type { Trigger } from './types';
-
-interface ColumnOption {
-  id: number;
-  name: string;
-  boundWorkflowName?: string | null;
-}
-
-interface StepOption {
-  id: number;
-  name: string;
-}
+import type { Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
 interface TriggerFormPanelProps {
   projectId: number;
-  workflowId: number;
-  columns: ColumnOption[];
-  sessions: StepOption[];
+  // The workflow the trigger belongs to. Without one (the project's Triggers
+  // page), a new trigger's workflow is picked in the form.
+  workflowId?: number;
+  workflows?: TriggerWorkflowOption[];
+  columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
   editing: Trigger | null;
   defaultKind: string;
@@ -110,7 +101,8 @@ function webhookFilterFromPredicate(pred: Record<string, unknown>): { field: str
 
 export function TriggerFormPanel({
   projectId,
-  workflowId,
+  workflowId: fixedWorkflowId,
+  workflows = [],
   columns,
   trackers = [],
   editing,
@@ -125,6 +117,10 @@ export function TriggerFormPanel({
   const editWebhook = editing?.kind === 'webhook' ? webhookFilterFromPredicate(editPred) : null;
 
   const [kind, setKind] = useState<Kind>((editing?.kind as Kind) ?? (defaultKind as Kind));
+  const [pickedWorkflowId, setPickedWorkflowId] = useState<string | null>(
+    editing?.workflow_id?.toString() ?? (workflows.length === 1 ? workflows[0].id.toString() : null),
+  );
+  const workflowId = fixedWorkflowId ?? editing?.workflow_id ?? (pickedWorkflowId ? Number(pickedWorkflowId) : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set after a webhook is created: keeps the panel open on a success view showing
@@ -179,6 +175,10 @@ export function TriggerFormPanel({
   const cronDesc = describeCron(cron);
 
   const submit = useCallback(async () => {
+    if (!workflowId) {
+      setError('Choose the workflow this trigger starts');
+      return;
+    }
     setSaving(true);
     setError(null);
     const trigger: Record<string, unknown> = isEdit ? {} : { kind };
@@ -390,6 +390,42 @@ export function TriggerFormPanel({
           <>
             {/* Body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+              {fixedWorkflowId === undefined && (
+                <div style={{ marginBottom: 16 }}>
+                  {isEdit ? (
+                    <>
+                      <label
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: 'var(--text-1)',
+                          display: 'block',
+                          marginBottom: 5,
+                        }}
+                      >
+                        Workflow
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 13, color: 'var(--text-1)' }}>
+                          {editing?.workflow_name ?? 'Unknown workflow'}
+                        </span>
+                        <IconLock size={12} style={{ color: 'var(--text-3)' }} />
+                      </div>
+                    </>
+                  ) : (
+                    <Select
+                      label="Workflow"
+                      placeholder="The workflow this trigger starts"
+                      data={workflows.map((w) => ({ value: w.id.toString(), label: w.name }))}
+                      value={pickedWorkflowId}
+                      onChange={setPickedWorkflowId}
+                      searchable
+                      allowDeselect={false}
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Trigger type */}
               <div style={{ marginBottom: 16 }}>
                 <label
@@ -1200,7 +1236,7 @@ export function TriggerFormPanel({
               </button>
               <button
                 onClick={submit}
-                disabled={saving || (kind === 'schedule' && !cronDesc.ok)}
+                disabled={saving || !workflowId || (kind === 'schedule' && !cronDesc.ok)}
                 style={{
                   background: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-dim)' : 'var(--accent)',
                   border: 'none',

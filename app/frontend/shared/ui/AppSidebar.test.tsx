@@ -103,6 +103,7 @@ describe('AppSidebar', () => {
     // Project nav items appear and link under the project id.
     expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/company/projects/7/overview');
     expect(screen.getByRole('link', { name: 'Tasks' })).toHaveAttribute('href', '/company/projects/7/board');
+    expect(screen.getByRole('link', { name: 'Triggers' })).toHaveAttribute('href', '/company/projects/7/triggers');
     // Sessions and runs are one entry, pointing at the unified list.
     expect(screen.getByRole('link', { name: 'Sessions & Runs' })).toHaveAttribute(
       'href',

@@ -213,6 +213,9 @@ Rails.application.routes.draw do
             end
           end
 
+          # Every trigger of the project's workflows; writes go through the workflow's own.
+          resources :triggers, only: %i[index]
+
           resources :workflows, only: %i[show update destroy] do
             scope module: :workflows do
               resources :steps, only: %i[index show create update destroy] do
@@ -512,6 +515,7 @@ Rails.application.routes.draw do
           resources :assets, only: %i[index]
           resources :analytics, only: :index
           resources :repositories, only: %i[index create update destroy]
+          resources :triggers, only: %i[index]
           resources :trackers, only: %i[index create update destroy] do
             member do
               get :statuses
