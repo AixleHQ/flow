@@ -205,6 +205,10 @@ gem "aws-sdk-bedrockruntime", "~> 1.85"
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
 gem "aws-sdk-bedrock", "~> 1.94"
+
+# AWS Marketplace metering. Only an installation bought through Marketplace ever
+# calls it, and only from the pod whose service account carries the role.
+gem "aws-sdk-marketplacemetering", "~> 1.77"
 gem "image_processing", "~> 2.1"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 

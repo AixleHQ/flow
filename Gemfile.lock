@@ -119,6 +119,9 @@ GEM
     aws-sdk-kms (1.132.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sigv4 (~> 1.5)
+    aws-sdk-marketplacemetering (1.105.0)
+      aws-sdk-core (~> 3, >= 3.256.0)
+      aws-sigv4 (~> 1.5)
     aws-sdk-s3 (1.233.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sdk-kms (~> 1)
@@ -834,6 +837,7 @@ DEPENDENCIES
   alba
   aws-sdk-bedrock (~> 1.94)
   aws-sdk-bedrockruntime (~> 1.85)
+  aws-sdk-marketplacemetering (~> 1.77)
   aws-sdk-s3 (~> 1.232)
   bcrypt (~> 3.1.22)
   bootsnap

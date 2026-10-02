@@ -717,15 +717,7 @@ class SessionContextService
     end
 
     def container_accessible_url(url)
-      host = Settings.container_asset_host
-      return url if host.blank?
-
-      override = URI.parse(host.start_with?("http") ? host : "http://#{host}")
-      uri = URI.parse(url)
-      uri.scheme = override.scheme
-      uri.host = override.host
-      uri.port = override.port
-      uri.to_s
+      ContainerAssetUrl.call(url, host: Settings.container_asset_host)
     end
 
     def read_file(container_id, path)
