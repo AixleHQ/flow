@@ -90,6 +90,7 @@ module Skills
     # undescribed rows than time. Audits are what warn a user before they install
     # something flagged; a slightly slower description sweep is the cheaper sacrifice.
     AUDIT_RESERVE = 4.minutes
+    BACKFILL_ERROR_SOURCE = "skills.catalog_backfill"
 
     Result = Struct.new(:fetched, :upserted, :failed, :backfilled, :audited, keyword_init: true) do
       def to_s
@@ -376,7 +377,23 @@ module Skills
         next unresolved(row, answered: answered, refused: refused) if content.blank?
 
         record_metadata(row, content, bundle)
+      # pg raises on a NUL in a bind parameter with a bare ArgumentError, not an
+      # ActiveRecordError.
+      rescue ActiveRecord::ActiveRecordError, ArgumentError => e
+        skip_unwritable(row, e)
       end
+    end
+
+    # A row we cannot write was never stamped, so it stayed first in the queue and every
+    # later run died on it before anything behind it got a turn — one upstream SKILL.md
+    # stopped the backfill and the audit pass for four days (PALAD-AI-TEMPORAL-1M).
+    # Stamping it is what lets the queue move. If the stamp fails too, the database
+    # itself is the problem and the run should fail.
+    def skip_unwritable(row, error)
+      @result.failed += 1
+      Rails.error.report(error, handled: true, severity: :error, source: BACKFILL_ERROR_SOURCE,
+                                context: { registry_id: row.registry_id, error_class: error.class.name })
+      stamp_attempt(row)
     end
 
     # Free sources only, in order of what they cost us:

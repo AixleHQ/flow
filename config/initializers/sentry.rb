@@ -102,7 +102,9 @@ forwarded_error_sources = {
   "agent_credential.refresh" => ->(context) {
     [ "agent_credential.refresh", context[:agent_type], context[:refresh_source],
       context[:permanent] ? "permanent" : "transient" ]
-  }
+  },
+  # One issue per failure mode, not one per catalog row.
+  "skills.catalog_backfill" => ->(context) { [ "skills.catalog_backfill", context[:error_class] ] }
 }.freeze
 
 Rails.error.subscribe(Class.new do
