@@ -161,6 +161,15 @@ class Project < ApplicationRecord
         .order(Arel.sql("CASE WHEN id = #{owner_id} THEN 0 ELSE 1 END"))
   end
 
+  # The members #accessible_by? admits, in one query instead of one per member. Every
+  # member is the owner or a collaborator by construction, so of that predicate only
+  # the active company membership is left to check — keep the two in step. It is what
+  # BoardTask validates an assignee against: a collaborator whose membership was
+  # revoked keeps a project_collaborators row but can no longer be assigned.
+  def assignable_users
+    member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
+  end
+
   private
 
   def generate_slug
