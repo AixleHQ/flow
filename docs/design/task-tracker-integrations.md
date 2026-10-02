@@ -798,9 +798,13 @@ revision guards and the project-scope re-check:
   before acknowledging, as today. `ResolveAzureDevopsEventJob` gets one more branch: it builds a
   `Trackers::Notification` from a `workitem.*` delivery and hands it to the tracker pipeline.
   `tracker_subscriptions` and `/webhooks/trackers` are not used for Azure.
-- **Identity.** Azure offers no reliable "who am I" call for a service principal, so the provider
-  learns the connection's identity from its own first write (`System.ChangedBy`) and keeps it in the
-  integration's settings. Until then, a mention of it is not recognised.
+- **Identity.** Connecting and Test connection read it from `_apis/connectionData`
+  (`authenticatedUser`, `7.1-preview.1`), which answers for a service principal as for a PAT's
+  owner — verified on staging 2026-10-02, where it matched the identity the first write showed. The
+  connection's own writes (`System.ChangedBy`) remain the fallback. Identity strings in Service Hook
+  payloads ("Display Name <unique name>", a GUID for a service principal) are reduced to the
+  display name. (Phase 1 shipped believing no such call existed and learned it from the first write
+  only, so a new connection could not recognise a mention until it had written.)
 - **Ledger.** Work-item writes go through `tracker_operations` like every other provider's, so
   they get the same causality tracking (§6.6). `azure_devops_operations` stays for pull-request
   operations.

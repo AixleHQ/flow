@@ -26,7 +26,9 @@ module AzureDevops
       # than falling back: asking for plain 7.1 gets a 400
       # VssInvalidPreviewVersionException, which is how PR-policy gates spent
       # every probe reporting `validation_failed` instead of a verdict.
-      policy: "7.1-preview.1"
+      policy: "7.1-preview.1",
+      # connectionData likewise: plain 7.1 is refused as "under preview".
+      connection_data: "7.1-preview.1"
     }.freeze
 
     MAX_RETRIES = 2

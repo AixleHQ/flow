@@ -225,6 +225,7 @@ module AzureDevops
       integration.settings = integration.settings.to_h.merge(
         "azure_project_names" => info[:names],
         "identity_display_name" => info[:identity_display_name],
+        "tracker_identity" => info[:identity] || integration.settings.to_h["tracker_identity"],
         "last_verified_at" => Time.current.iso8601
       ).compact.except("error", "error_message")
       integration.status = :active
@@ -292,7 +293,7 @@ module AzureDevops
       raise ConfigurationError, "No Azure project selected" if project_ids.empty?
 
       names = {}
-      resolved = nil
+      client = resolved = nil
       project_ids.each do |project_id|
         client, resolved = CredentialProvider.client_for(integration, allow_inactive: true,
                                                          project_id: project_id)
@@ -310,7 +311,19 @@ module AzureDevops
       # EVERY selected project has to be readable, not just one: a connection
       # that half works is a connection whose failures arrive later, on a tool
       # call, with nothing pointing at the cause.
-      { names: names, identity_display_name: identity_name(resolved) }
+      { names: names, identity_display_name: identity_name(resolved), identity: connection_identity(client) }
+    end
+
+    # Who the connection acts as in Azure DevOps, which tracker mentions and
+    # Aixle's own changes are recognised by. connectionData answers it for a
+    # service principal and a PAT's owner alike. Best effort: without it the
+    # tracker still learns the identity from its first write.
+    def connection_identity(client)
+      user = client.get("_apis", "connectionData", family: :connection_data)["authenticatedUser"].to_h
+      { "id" => user["id"], "name" => user["providerDisplayName"].presence }.compact if user["id"].present?
+    rescue Error => e
+      Rails.logger.info("[AzureDevops::IntegrationService] connection identity not read: #{e.code}")
+      nil
     end
 
     # Best-effort: who Azure thinks we are, for the connection card. A failure

@@ -45,7 +45,7 @@ module Trackers
       def self.actor(resource, fields)
         by = resource["revisedBy"].presence || value(fields["System.ChangedBy"])
         return {} if by.blank?
-        return { name: by.to_s } unless by.is_a?(Hash)
+        return { name: identity_name(by) } unless by.is_a?(Hash)
 
         { id: by["id"], name: by["displayName"] || by["uniqueName"] }.compact
       end
@@ -55,11 +55,14 @@ module Trackers
         field.is_a?(Hash) && field.key?("newValue") ? field["newValue"] : field
       end
 
-      # Identity fields arrive as "Name <email>" strings or as identity objects.
+      # Identity fields arrive as identity objects or as "Display Name <unique
+      # name>" strings, whose unique name is an email or, for a service
+      # principal, a GUID. The display name is what users and filters compare.
       def self.identity_name(value)
         return value["displayName"] || value["uniqueName"] if value.is_a?(Hash)
+        return value unless value.is_a?(String)
 
-        value
+        value.sub(/\s*<[^<>]*>\z/, "").presence || value
       end
     end
   end

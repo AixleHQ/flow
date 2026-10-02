@@ -15,6 +15,7 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
     # No webhook base URL, so activation does not try to provision Service Hooks:
     # that path has its own test in subscription_service_test.
     with_azure_devops_enabled
+    stub_azure_connection_data
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
@@ -265,6 +266,32 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
 
     assert_equal "Connection verified. Azure cannot reach this deployment, so it has no Service Hooks", flash[:notice]
     assert integration.reload.active?
+  end
+
+  # Mentions and Aixle's own changes are recognised by it before the
+  # connection has written anything.
+  test "test_connection records who the connection acts as in Azure DevOps" do
+    integration = create_connected_integration
+    stub_azure_token(tenant_id: @installation.tenant_id)
+    stub_project_get
+    stub_azure_connection_data(id: "3a33b887", name: "Aixle Flow (staging)")
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_equal({ "id" => "3a33b887", "name" => "Aixle Flow (staging)" }, integration.reload.settings["tracker_identity"])
+  end
+
+  test "a connection identity Azure will not tell keeps the one already learned" do
+    integration = create_connected_integration
+    integration.update!(settings: integration.settings.merge("tracker_identity" => { "id" => "learned", "name" => "Aixle" }))
+    stub_azure_token(tenant_id: @installation.tenant_id)
+    stub_project_get
+    stub_request(:get, %r{/_apis/connectionData}).to_return(status: 403, body: "")
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert integration.reload.active?
+    assert_equal({ "id" => "learned", "name" => "Aixle" }, integration.settings["tracker_identity"])
   end
 
   test "a verified connection whose Service Hooks Azure refuses says so in red" do

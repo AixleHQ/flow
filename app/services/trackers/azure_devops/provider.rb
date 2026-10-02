@@ -171,9 +171,9 @@ module Trackers
         @work_items ||= ::AzureDevops::WorkItemService.new(integration)
       end
 
-      # Azure offers no reliable "who am I" call for a service principal, so the
-      # identity is learned from the connection's own writes: System.ChangedBy on
-      # what it just changed. Until the first write, mentions of it go unnoticed.
+      # Connecting and Test connection read the identity from connectionData;
+      # the connection's own writes (System.ChangedBy on what it just changed)
+      # keep it current where that could not be asked.
       def remember_identity(item)
         by = item[:changed_by]
         return if by.blank? || by[:id].blank? || identity&.dig("id") == by[:id]

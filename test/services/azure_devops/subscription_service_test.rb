@@ -6,6 +6,7 @@ module AzureDevops
   class SubscriptionServiceTest < ActiveSupport::TestCase
     setup do
       with_azure_devops_enabled
+      stub_azure_connection_data
       @integration = create(:integration, :azure_devops, :active)
       stub_azure_token(tenant_id: @integration.azure_devops_installation.tenant_id)
       @service = SubscriptionService.new(@integration)

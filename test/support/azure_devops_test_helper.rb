@@ -92,6 +92,14 @@ module AzureDevopsTestHelper
     fakes
   end
 
+  # Who connectionData says the connection is — read on every verify.
+  def stub_azure_connection_data(id: "aixle-sp-vsid", name: "Aixle Flow")
+    stub_request(:get, %r{/_apis/connectionData}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { authenticatedUser: { id: id, providerDisplayName: name } }.to_json
+    )
+  end
+
   def azure_url(organization, *segments, **query)
     path = segments.map { |s| ERB::Util.url_encode(s.to_s) }.join("/")
     url = "#{AZURE_API_HOST}/#{ERB::Util.url_encode(organization)}/#{path}"

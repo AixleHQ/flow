@@ -28,7 +28,7 @@ module Trackers
                      [ notification.kind, notification.issue_id, notification.scope_id, notification.revision ]
         assert_equal [ { field: "board_column", from: "New", to: "Ready for AI" },
                        { field: "state", from: "New", to: "Approved" },
-                       { field: "assignee", from: nil, to: "Ada Lovelace <ada@example.com>" } ], notification.changes
+                       { field: "assignee", from: nil, to: "Ada Lovelace" } ], notification.changes
         assert_equal({ id: "11bb", name: "Chuck Reinhart" }, notification.actor)
       end
 
@@ -46,6 +46,14 @@ module Trackers
 
         assert_equal [ :issue_created, "308", [] ], [ notification.kind, notification.issue_id, notification.changes ]
         assert_equal({ id: "22cc", name: "Grace Hopper" }, notification.actor)
+      end
+
+      test "an identity string is reduced to its display name, a service principal's GUID and all" do
+        resource = { "id" => 308, "rev" => 4, "fields" => {
+          "System.ChangedBy" => "Aixle Flow (staging) <ae457994-b194-4d12-aa99-6aa9b043091f>"
+        } }
+
+        assert_equal({ name: "Aixle Flow (staging)" }, Notifications.parse("workitem.created", resource, scope_id: SCOPE).actor)
       end
 
       test "a comment's text is System.History, wherever the resource puts it" do

@@ -173,8 +173,8 @@ starts, "Review" when it is done — and the agent moves it with
 
 A mention is recognised only once Flow knows its own account in the tracker:
 
-- **Azure Boards** — after the connection has created, updated, moved or
-  assigned a work item at least once;
+- **Azure Boards** — once the connection has been made or tested (Flow asks
+  Azure who the connection is), or after its first change to a work item;
 - **Jira** — a service-account connection, or an Atlassian account marked
   **This Atlassian account is kept for Aixle**;
 - **GitHub Projects** — always: the connection writes as the app, and people
