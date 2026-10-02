@@ -74,8 +74,13 @@ class ProjectTracker < ApplicationRecord
     update!(status: :detached, primary: false)
   end
 
+  # Detaching gave up primary; attaching again takes it back unless another
+  # tracker of the project has taken it meanwhile.
   def reattach!
-    update!(status: :active)
+    transaction do
+      update!(status: :active)
+      make_primary! unless ProjectTracker.for_project(project).where.not(id: id).exists?(primary: true)
+    end
   end
 
   private

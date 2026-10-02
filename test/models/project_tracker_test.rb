@@ -54,6 +54,25 @@ class ProjectTrackerTest < ActiveSupport::TestCase
     refute_includes ProjectTracker.usable, second
   end
 
+  # Production, 2026-10-02: a project's only tracker was detached and attached
+  # again, and stayed without a primary.
+  test "attaching a tracker again makes it primary, unless another tracker took that meanwhile" do
+    only = create(:project_tracker, :primary, integration: @integration, handle: "only")
+
+    only.detach!
+    only.reattach!
+    assert_equal [ true, "active" ], [ only.reload.primary, only.status ]
+
+    extra = SecureRandom.uuid
+    @integration.azure_devops_installation.update!(allowed_project_ids: @integration.azure_project_ids + [ extra ])
+    @integration.update!(settings: @integration.settings.merge("azure_project_ids" => @integration.azure_project_ids + [ extra ]))
+    other = create(:project_tracker, integration: @integration, external_scope_id: extra, handle: "other")
+    only.detach!
+    other.make_primary!
+    only.reattach!
+    assert_equal [ false, true ], [ only.reload.primary, other.reload.primary ]
+  end
+
   test "mentions are recognised once the connection knows its own account in the tracker" do
     azure = create(:project_tracker, integration: @integration)
     refute_predicate azure, :recognizes_mentions?
