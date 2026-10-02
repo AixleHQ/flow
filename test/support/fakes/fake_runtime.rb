@@ -80,9 +80,10 @@ module ContainerRuntime
 
     # Command failure injection: register a substring of the command line and
     # the failure to answer it with. Everything else keeps succeeding, so the
-    # default behavior is unchanged for callers that never call this.
-    def fail_exec(substring, stderr: "", exit_code: 1)
-      @exec_failures << { substring: substring, stderr: stderr, exit_code: exit_code }
+    # default behavior is unchanged for callers that never call this. `times:`
+    # limits it to the first N matching commands, for a failure that clears.
+    def fail_exec(substring, stderr: "", exit_code: 1, times: nil)
+      @exec_failures << { substring: substring, stderr: stderr, exit_code: exit_code, remaining: times }
     end
 
     # Make #exec! answer as a vanished container for commands matching
@@ -171,8 +172,13 @@ module ContainerRuntime
       raising = @raising_execs.find { |r| command_string(cmd).include?(r[:substring]) }
       raise raising[:error] if raising
 
-      failure = @exec_failures.find { |f| command_string(cmd).include?(f[:substring]) }
-      return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ] if failure
+      failure = @exec_failures.find do |f|
+        command_string(cmd).include?(f[:substring]) && (f[:remaining].nil? || f[:remaining].positive?)
+      end
+      if failure
+        failure[:remaining] -= 1 if failure[:remaining]
+        return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ]
+      end
 
       # Sessions::LogCollector asks for its declared logs and their sizes in one exec,
       # letting the container's shell expand the globs. Answer from the virtual FS in the
