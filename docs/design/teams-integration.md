@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16) under way: the bot gets its token by certificate and Web Chat replies work; Teams install pending
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): everything in the bot's home tenant passes; the second-tenant run (spike 1) is next
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1085,15 +1085,34 @@ and failure notices behave in production exactly as before.
 | 6 | Job-queue latency from activity to first `typing` in production-like load | Store 2 s rule; perceived responsiveness | The controller sends `typing` inline |
 | 7 | Can `Files.ReadWrite.All` on "Aixle Flow" be admin-consented after, and separately from, a binding sign-in that requested only `openid profile` (v2 `adminconsent`)? Does the Graph token's `roles` then show it? | Decision 5 with a working connection when an admin says no | The connection page links the admin to Entra admin center → Enterprise applications → "Aixle Flow" → Grant admin consent, then re-checks |
 
-**Results so far** (2026-10-02, staging app and Azure Bot, Web Chat only):
-- The bot's Connector token comes from the home tenant through `private_key_jwt` with the certificate.
-- The §7.1 checks pass on real traffic.
+**Results so far** (2026-10-02/03, staging app and Azure Bot; Web Chat, then Teams in the bot's home tenant):
+
+| Check | Result |
+|---|---|
+| Connector token from the home tenant by `private_key_jwt` | ✅ |
+| §7.1 inbound JWT checks on real Teams traffic | ✅ |
+| Reply in a channel thread; edit the bot's own message | ✅ `201`, then `PUT` `200` |
+| Proactive post into the same thread; new channel thread through `POST /v3/conversations` | ✅ both `201` |
+| Spike 2: Graph thread replies with the tenant's client-credentials token under RSC | ✅ `200`, 7 replies. The token carries `roles: ["Group.Selected"]`, which is how RSC shows up in it. `GET /v3/teams/{id}` gives the `aadGroupId` Graph needs |
+| Spike 4, 1:1: an attached file | ✅ `application/vnd.microsoft.teams.file.download.info`; the `downloadUrl` answers `200` with no token |
+| Spike 4, channel: an attached file and a pasted image | Both arrive at the bot as `text/html` only. Graph shows them as `reference` attachments (SharePoint), and `/shares/{id}/driveItem` answers `403 accessDenied` without `Files.ReadWrite.All`, which confirms decision 5 |
+| Spike 1 (a second tenant), 3, 5, 7 | Not run yet |
+
+What the live runs taught that the docs do not say plainly:
 - The Connector rejects a reply without `from`, with `400 MissingProperty`. Every outgoing activity has
   to carry the reversed reference: from = the bot, recipient = the user, the same conversation.
 - Activity ids contain `|` in Web Chat (`<conversation>|0000002`), so both the conversation id and the
   activity id are URL-encoded in every path.
 - For several minutes after the messaging endpoint was saved, the channel log still said "Activity dropped
   because the bot's endpoint is missing", although the resource's JSON already held the endpoint.
+- **With RSC, an `@Name` typed by hand is not a mention.** It arrives as plain text, without `<at>` and
+  without a mention entity. The bot receives it anyway, because RSC delivers every channel message. Only
+  the `entities` check of §7.2 tells the two apart. Microsoft's own guidance is to strip the mention
+  entity's `text` from the message, never to parse the text for the name
+  ([channel and group conversations](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/channel-and-group-conversations),
+  [receive all messages](https://learn.microsoft.com/en-us/microsoftteams/platform/agents-in-teams/enable-receive-all-chat-messages)).
+- **Private channels are out.** The 2026-09-28 Microsoft page settles the earlier conflict: "agents can't
+  post messages or Adaptive Cards in private channel conversations."
 
 ## 17. Coordination with the task-tracker design
 
