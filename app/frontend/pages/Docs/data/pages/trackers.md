@@ -1,8 +1,8 @@
 # Trackers
 
 A **tracker** is a Flow project's link to one external project in a task
-tracker — an Azure Boards project, a Jira project, a GitHub project or a Linear
-team — through a connection made on the project's **Integrations** page. The connection holds the credentials;
+tracker — an Azure Boards project, a Jira project, a GitHub project, a Linear
+team or a YouTrack project — through a connection made on the project's **Integrations** page. The connection holds the credentials;
 the tracker is what agents and triggers address. Through it:
 
 - tracker triggers start workflows when an issue is created, moves to a column,
@@ -11,7 +11,8 @@ the tracker is what agents and triggers address. Through it:
 
 Both work the same way for every provider. Connecting is per provider: see
 [Azure DevOps](/docs/azure-devops), [Jira](/docs/jira),
-[GitHub](/docs/github#github-projects-as-a-tracker) and [Linear](/docs/linear).
+[GitHub](/docs/github#github-projects-as-a-tracker), [Linear](/docs/linear) and
+[YouTrack](/docs/youtrack).
 
 ---
 
@@ -22,7 +23,7 @@ Open **Trackers** in the project's sidebar, under **Resources**. Each row shows:
 | Column | Shows |
 | --- | --- |
 | **Tracker** | The external project's name, a **Primary** and a **Read-only** badge where they apply, and the handle underneath |
-| **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects** or **Linear** |
+| **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects**, **Linear** or **YouTrack** |
 | **Triggers** | The tracker triggers that listen to it — those set to any tracker appear on every row — each with its workflow, what it waits for and whether it is off. The workflow name opens its **Triggers** tab |
 | **Status** | **Active**, **Connection inactive** or **Detached** |
 
@@ -30,11 +31,11 @@ Viewers see the list but no actions.
 
 ### Where trackers come from
 
-You normally do not add trackers by hand. Connecting Azure DevOps, Jira or
-Linear — or picking projects with **GitHub Projects** on a GitHub connection —
-creates one tracker for each external project the connection covers, and the
-project's first tracker becomes its primary. A Jira, Linear or GitHub
-connection whose projects (Linear: teams) change gets trackers for the new
+You normally do not add trackers by hand. Connecting Azure DevOps, Jira,
+Linear or YouTrack — or picking projects with **GitHub Projects** on a GitHub
+connection — creates one tracker for each external project the connection
+covers, and the project's first tracker becomes its primary. A Jira, Linear,
+YouTrack or GitHub connection whose projects (Linear: teams) change gets trackers for the new
 ones, and the trackers of those it no longer covers are detached.
 
 To get a tracker for another external project, add the project to its
@@ -82,7 +83,7 @@ A tracker is **usable** when it is not detached and its connection is active.
   **Integrations** page (Test connection, or connect again). Until then agents
   cannot reach the tracker, its events start nothing, and
   **Connect a board column** is not offered.
-- **Detached** — detached by hand, or by a Jira, Linear or GitHub connection
+- **Detached** — detached by hand, or by a Jira, Linear, YouTrack or GitHub connection
   that no longer covers the project.
 
 ### Detach and attach again
@@ -183,6 +184,8 @@ A mention is recognised only once Flow knows its own account in the tracker:
   **This Linear account is kept for Aixle**, or Aixle's Linear app. Linear's
   mention picker does not offer the app, but a comment that types its username
   (`@<app username>`, as its profile in Linear shows it) counts.
+- **YouTrack** — a connection marked **This YouTrack account is kept for
+  Aixle**; people mention it as `@<login>`.
 
 A mention inside code — in backticks, a code block, or Jira's `{code}` and
 `{{…}}` — does not count, as it notifies nobody in the tracker either. That is
@@ -208,7 +211,7 @@ in [Triggers and gates](/docs/triggers-and-gates).
 | --- | --- | --- |
 | **Issue moves to a status (column)** | `tracker.issue.status_changed` | The issue moves to another column of the tracker's board |
 | **Issue is created** | `tracker.issue.created` | An issue is created in the tracker's project |
-| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects and Linear only when someone is assigned |
+| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects, Linear and YouTrack only when someone is assigned |
 | **Comment is added** | `tracker.comment.created` | A comment is added to the issue |
 
 A status is a column of the tracker's board where there is one, not the
@@ -323,6 +326,11 @@ delivery works:
 - **Linear** — the webhook of Aixle's Linear app, or for an API-key connection
   one webhook per team, which only a workspace admin's key can register. See
   [The webhooks](/docs/linear#the-webhooks).
+- **YouTrack** — JetBrains' Webhook Triggers app, which a project admin sets
+  up in each YouTrack project with the URL, header and token Flow shows. Its
+  token is shared by everything the app posts to, so Flow re-reads the change,
+  the comment and who made them from YouTrack before anything fires. See
+  [The Webhook Triggers app](/docs/youtrack#the-webhook-triggers-app).
 
 Either way the tracker has to reach the deployment's domain. With a loopback
 or private host, Flow creates no Service Hooks and registers no Jira or Linear
@@ -375,8 +383,10 @@ What a status or an assignee is differs by provider. On Azure Boards,
 state maps to, and assignees are emails or display names. On Jira it takes a
 column, a workflow status or a transition name. On GitHub Projects it takes a
 Status option and assignees are GitHub logins; on Linear it takes a workflow
-state, and assignees are names, usernames or emails of the team's members. The
-provider pages have the rest.
+state, and assignees are names, usernames or emails of the team's members; on
+YouTrack it takes a value of the project's State field, and assignees are
+logins, names or emails of the people its Assignee field offers. The provider
+pages have the rest.
 
 ### Which tracker a call acts on
 
@@ -386,7 +396,7 @@ Every tool takes an optional `tracker`. The tracker is chosen in this order:
 2. The tracker that started the run. If it is no longer usable, the call fails
    rather than going to another tracker.
 3. For tools that take an issue, the one tracker the issue's reference belongs
-   to: a Jira or Linear key such as `APP-12`, a GitHub `owner/repo#12`, or the
+   to: a Jira, Linear or YouTrack key such as `APP-12`, a GitHub `owner/repo#12`, or the
    issue's URL. A GitHub reference names only the organization, so it decides
    only when the project has one tracker on that organization.
 4. The primary tracker; when no usable tracker is primary, the only usable one.
@@ -400,7 +410,7 @@ and the error names the primary tracker when that is a different one.
 In the tracker, a change is made by whoever the connection acts as — see
 [What the connection runs as](/docs/azure-devops#what-the-connection-runs-as)
 for Azure DevOps, and the tables at the top of [Jira](/docs/jira) and
-[Linear](/docs/linear). On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
+[Linear](/docs/linear); on [YouTrack](/docs/youtrack) the permanent token's owner. On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
 write is recorded before it is sent, with the session, run and workflow that
 made it. That record is how "Changes made by Aixle" knows which run caused an
 event, and it makes retries safe:
@@ -425,3 +435,6 @@ event, and it makes retries safe:
   field as the board's columns.
 - [Linear](/docs/linear) — Aixle's Linear app or an API key, the per-team
   webhooks, and workflow states as statuses.
+- [YouTrack](/docs/youtrack) — a permanent token on YouTrack Cloud or a
+  self-hosted server, the Webhook Triggers app in each project, and the State
+  field as statuses.

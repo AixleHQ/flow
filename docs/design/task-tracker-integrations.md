@@ -1,7 +1,7 @@
 # Task tracker integrations — technical design
 
 Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366;
-phase 3 (GitHub Projects) and phase 4 (Linear) implemented on `artempartos/feat-github-projects-linear` (PR TBD)**
+phase 3 (GitHub Projects) and phase 4 (Linear) in #399; phase 5 (YouTrack) on `artempartos/marlin` (PR TBD)**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -249,8 +249,8 @@ module Trackers
     "azure_devops" => "Trackers::AzureDevops::Provider",
     "github" => "Trackers::Github::Provider",
     "jira" => "Trackers::Jira::Provider",
-    "linear" => "Trackers::Linear::Provider"
-    # "youtrack" => "Trackers::Youtrack::Provider", in phase 5
+    "linear" => "Trackers::Linear::Provider",
+    "youtrack" => "Trackers::Youtrack::Provider"
   }.freeze
 
   # One instance per Integration; owns that connection's client. Every method
@@ -388,8 +388,9 @@ per-subscription basic-auth password), so phase 1 trusts its hints. Jira qualifi
 webhook signs its body with its subscription's secret, and an app webhook carries a JWT signed with
 the app's client secret, which only Atlassian holds. GitHub and Linear qualify as well: GitHub
 signs every delivery with the App's webhook secret, and Linear signs with the subscription's
-secret (API key) or the app's (OAuth app). The history check arrives with the first shared-token
-provider, YouTrack.
+secret (API key) or the app's (OAuth app). The history check arrived with the first shared-token
+provider, YouTrack, as `Provider#confirm(notification, issue)`: every provider but YouTrack returns
+the notification as it is.
 
 ### 6.3 Event vocabulary and data
 
@@ -1002,6 +1003,40 @@ for.
    - the SSRF-hardened transport copied from PR #271. YouTrack is the only provider on this list
      with customer-chosen, possibly self-hosted base URLs; the others call fixed vendor hosts.
    - PR #271's fate is decided when this phase starts.
+
+   Where it settled:
+   - **Connection.** A permanent token, pasted with the instance URL and the projects to cover
+     (`Youtrack::IntegrationService`, like Linear's API key): it acts as its owner, so the account
+     counts as Aixle's own only when marked as kept for Aixle. Connecting again to the same URL in
+     the same project replaces the token in place, and says when the token now belongs to another
+     account. The instance identity is the normalized base URL (https, no trailing `/` or `/api`,
+     a self-hosted path kept).
+   - **Transport.** Not PR #271's client but the tree's own `SafeHttp`, which does the same DNS
+     pinning: `Youtrack::Client` adds https only, no redirects, a 4 MB bound and
+     retried reads. A private host is reachable only when the operator lists it in
+     `YOUTRACK_TRUSTED_HOSTS`.
+   - **Delivery.** One `manual` subscription per YouTrack project, since the Webhook Triggers app
+     keeps one token per project: its own URL, a header name (`X-YouTrack-Token`) and a token Aixle
+     generates — or the one the project's app already sends, entered instead, because the app shares
+     it with every other consumer. The scope is the subscription's project, as PR #271 routed by
+     endpoint: the app (stock 1.0.5) names the project only by its short name, which a rename
+     changes, and people without their id. An issue outside that project is refused when it is
+     re-read; a renamed project's new short name is picked up from the first issue read in it.
+     Comment text is not kept in the delivery, since it is read back anyway.
+   - **Nothing in a delivery is believed** (§6.2). `confirm` re-reads a comment's text and author
+     through the API, accepts a state or assignee change only when the issue's field history
+     (`/activities`) or its current value shows it — the history's author becoming the actor and its
+     activity id the revision — and refuses an "issue created" or a comment older than a day, so a
+     forged delivery can at most replay real, recent changes.
+   - **Statuses** are the project's state field (`State` unless renamed), found at connect and kept
+     per project with its assignee field. YouTrack says only whether a state is resolved; the
+     category comes from that and the name (canceled-like names among resolved ones,
+     in-progress-like among unresolved).
+   - **Fields.** Agents set any enum, state, user, version, build, owned, simple or text field by its
+     name, checked against the bundle's values; tags are labels and are never created.
+     `native_query` is YouTrack's query language, ANDed after `project: {KEY}`, its `sort by:` kept.
+   - **PR #271** can be closed as superseded: its client, connect verification and operator
+     documentation were the starting point; nothing of it is merged.
 
 Later and additive:
 
