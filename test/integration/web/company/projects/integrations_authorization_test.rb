@@ -115,6 +115,37 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     end
   end
 
+  # A missing URL is refused in the body, after authorization passed.
+  test "youtrack_inspect is a project write" do
+    assert_project_write(allowed: :unprocessable_content) do
+      post youtrack_inspect_company_project_integrations_path(@project), params: {}, as: :json
+    end
+  end
+
+  test "youtrack_projects is a project write" do
+    stub_youtrack!
+    youtrack = create(:integration, :youtrack, :active, project: @project, company: @company, connected_by: @owner)
+    assert_project_write(allowed: :success) do
+      get youtrack_projects_company_project_integration_path(@project, youtrack), as: :json
+    end
+  end
+
+  test "youtrack_webhook is a project write" do
+    youtrack = create(:integration, :youtrack, :active, project: @project, company: @company, connected_by: @owner)
+    assert_project_write(allowed: :success) do
+      get youtrack_webhook_company_project_integration_path(@project, youtrack), as: :json
+    end
+  end
+
+  # A short token is refused in the body, after authorization passed.
+  test "youtrack_webhook_token is a project write" do
+    youtrack = create(:integration, :youtrack, :active, project: @project, company: @company, connected_by: @owner)
+    assert_project_write(allowed: :unprocessable_content) do
+      patch youtrack_webhook_token_company_project_integration_path(@project, youtrack),
+            params: { scope_id: FakeYoutrack::Api::APP, token: "short" }, as: :json
+    end
+  end
+
   test "github_projects is a project write" do
     stub_github_projects!
     github = create(:integration, :github_projects, :active, project: @project, company: @company, connected_by: @owner)

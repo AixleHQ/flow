@@ -97,6 +97,7 @@ class ActiveSupport::TestCase
   include AzureDevopsTestHelper
   include JiraTestHelper
   include LinearTestHelper
+  include YoutrackTestHelper
   include GithubProjectsTestHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper

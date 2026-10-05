@@ -385,6 +385,14 @@ linear:
   # tunnel in development). A loopback or private host registers no webhooks.
   webhook_base_url: "<%= ENV['LINEAR_WEBHOOK_BASE_URL'] %>"
 
+youtrack:
+  # Where YouTrack's Webhook Triggers app posts, when DOMAIN is not reachable
+  # from the YouTrack instance (a tunnel in development).
+  webhook_base_url: "<%= ENV['YOUTRACK_WEBHOOK_BASE_URL'] %>"
+  # Self-hosted YouTrack hosts this deployment may reach although they resolve
+  # to a private address, comma-separated. Every other host must be public.
+  trusted_hosts: "<%= ENV['YOUTRACK_TRUSTED_HOSTS'] %>"
+
 coder:
   # Operator-configurable knobs for the Coder MCP services (workspace
   # allocation, health gating, ssh runner).

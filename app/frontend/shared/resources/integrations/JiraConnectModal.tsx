@@ -1,12 +1,10 @@
 import { router } from '@inertiajs/react';
 import {
-  ActionIcon,
   Alert,
   Anchor,
   Button,
   Checkbox,
   Code,
-  CopyButton,
   Group,
   Loader,
   Modal,
@@ -17,16 +15,16 @@ import {
   Stack,
   Text,
   TextInput,
-  Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle, IconCheck, IconCopy } from '@tabler/icons-react';
+import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 
+import { CopyValue } from './CopyValue';
 import { requestJson as requestTrackerJson } from './requestJson';
 
 export interface JiraProps {
@@ -348,18 +346,6 @@ interface WebhookProps {
   onClose: () => void;
   basePath: string;
 }
-
-const CopyValue = ({ label, value }: { label: string; value: string }) => (
-  <CopyButton value={value}>
-    {({ copied, copy }) => (
-      <Tooltip label={copied ? 'Copied' : `Copy ${label.toLowerCase()}`}>
-        <ActionIcon aria-label={`Copy ${label.toLowerCase()}`} variant="subtle" size="sm" color="gray" onClick={copy}>
-          {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-        </ActionIcon>
-      </Tooltip>
-    )}
-  </CopyButton>
-);
 
 // A service account cannot register webhooks, so a Jira admin adds one by hand.
 export const JiraWebhookModal = ({ integration, onClose, basePath }: WebhookProps) => {

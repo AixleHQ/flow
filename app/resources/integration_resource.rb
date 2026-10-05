@@ -260,4 +260,38 @@ class IntegrationResource < ApplicationResource
 
     integration.tracker_subscriptions.find { |s| s.status == "failing" }&.last_error
   end
+
+  # ----- YouTrack -----
+
+  typelize "string | null"
+  attribute :youtrack_base_url do |integration|
+    integration.youtrack? ? integration.settings&.dig("base_url") : nil
+  end
+
+  typelize "Array<{ id: string; key: string; name: string }>"
+  attribute :youtrack_projects do |integration|
+    next [] unless integration.youtrack?
+
+    Array(integration.settings&.dig("youtrack_projects")).map { |p| p.to_h.slice("id", "key", "name") }
+  end
+
+  typelize "string | null"
+  attribute :youtrack_identity do |integration|
+    integration.youtrack? ? integration.settings&.dig("identity_login") : nil
+  end
+
+  typelize "boolean"
+  attribute :youtrack_dedicated_identity do |integration|
+    integration.youtrack? && integration.settings&.dig("dedicated_identity") == true
+  end
+
+  # Projects whose Webhook Triggers app has delivered nothing yet, by key.
+  typelize "string[]"
+  attribute :youtrack_webhooks_pending do |integration|
+    next [] unless integration.youtrack?
+
+    keys = Array(integration.settings&.dig("youtrack_projects")).to_h { |p| [ p["id"].to_s, p["key"] ] }
+    integration.tracker_subscriptions.select { |s| s.status == "pending" && keys.key?(s.external_scope_id.to_s) }
+               .map { |s| keys[s.external_scope_id.to_s] }.compact.sort
+  end
 end

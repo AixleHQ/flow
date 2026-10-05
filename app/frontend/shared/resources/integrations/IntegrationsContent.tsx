@@ -38,6 +38,7 @@ import {
   IconRefresh,
   IconSearch,
   IconSettings,
+  IconTicket,
   IconTrash,
   IconWebhook,
 } from '@tabler/icons-react';
@@ -59,11 +60,18 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
+import {
+  YoutrackConnectModal,
+  YoutrackProjectsModal,
+  type YoutrackProps,
+  YoutrackWebhookModal,
+} from './YoutrackConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
 export type { JiraProps } from './JiraConnectModal';
 export type { LinearProps } from './LinearConnectModal';
+export type { YoutrackProps } from './YoutrackConnectModal';
 
 export interface SlackProps {
   /** False on a deployment with no Slack app (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET unset). */
@@ -84,6 +92,8 @@ interface IntegrationsContentProps {
   jira?: JiraProps;
   // Absent on the company page: Linear connects to a project.
   linear?: LinearProps;
+  // Absent on the company page: YouTrack connects to a project.
+  youtrack?: YoutrackProps;
   // Absent on the company page.
   slack?: SlackProps;
 }
@@ -101,6 +111,7 @@ const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number
   if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
   if (provider === 'jira') return <IconBrandJira size={size} />;
   if (provider === 'linear') return <IconLayoutKanban size={size} />;
+  if (provider === 'youtrack') return <IconTicket size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -112,6 +123,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   azure_devops: 'Azure DevOps',
   jira: 'Jira',
   linear: 'Linear',
+  youtrack: 'YouTrack',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -135,6 +147,7 @@ export const IntegrationsContent = ({
   github,
   jira,
   linear,
+  youtrack,
   slack,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
@@ -174,6 +187,11 @@ export const IntegrationsContent = ({
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
   const linearAvailable = isProjectContext && !!linear;
+
+  const [youtrackOpen, setYoutrackOpen] = useState(false);
+  const [youtrackProjectsTarget, setYoutrackProjectsTarget] = useState<Integration | null>(null);
+  const [youtrackWebhookTarget, setYoutrackWebhookTarget] = useState<Integration | null>(null);
+  const youtrackAvailable = isProjectContext && !!youtrack?.enabled;
 
   // The Atlassian and Linear apps' callbacks land here with the connection still to finish.
   useEffect(() => {
@@ -494,6 +512,11 @@ export const IntegrationsContent = ({
                     Linear
                   </Menu.Item>
                 )}
+                {youtrackAvailable && (
+                  <Menu.Item leftSection={<IconTicket size={16} />} onClick={() => setYoutrackOpen(true)}>
+                    YouTrack
+                  </Menu.Item>
+                )}
                 {slackAvailable && (
                   <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                     Slack
@@ -589,6 +612,15 @@ export const IntegrationsContent = ({
                         onClick={() => setLinearOpen(true)}
                       >
                         Linear
+                      </Button>
+                    )}
+                    {youtrackAvailable && (
+                      <Button
+                        variant="outline"
+                        leftSection={<IconTicket size={16} />}
+                        onClick={() => setYoutrackOpen(true)}
+                      >
+                        YouTrack
                       </Button>
                     )}
                     {slackAvailable && (
@@ -724,6 +756,18 @@ export const IntegrationsContent = ({
                                 : `${integration.linearTeams.map((t) => t.key).join(', ') || 'no teams'} · as ${
                                     integration.linearIdentity ?? integration.connectedBy.name
                                   } (${integration.linearAuthMode === 'oauth' ? 'Linear app' : 'API key'})`}
+                            </Text>
+                          )}
+                          {integration.provider === 'youtrack' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {`${integration.youtrackProjects.map((p) => p.key).join(', ') || 'no projects'} · as @${
+                                integration.youtrackIdentity ?? integration.connectedBy.name
+                              } (permanent token)`}
+                            </Text>
+                          )}
+                          {integration.youtrackWebhooksPending.length > 0 && (
+                            <Text fz={11} c="yellow.7" truncate maw={260}>
+                              {`No webhook event yet from ${integration.youtrackWebhooksPending.join(', ')}`}
                             </Text>
                           )}
                           {integration.linearWebhookError && (
@@ -941,6 +985,56 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
+                        {integration.provider === 'youtrack' && canExecute && !readOnly && (
+                          <>
+                            {integration.status !== 'inactive' && (
+                              <Tooltip label="Test connection">
+                                <ActionIcon
+                                  aria-label={`Test connection for ${integration.name}`}
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => handleTestConnection(integration)}
+                                >
+                                  <IconRefresh size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            <Tooltip label="YouTrack projects">
+                              <ActionIcon
+                                aria-label={`YouTrack projects for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setYoutrackProjectsTarget(integration)}
+                              >
+                                <IconPencil size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="Webhook setup">
+                              <ActionIcon
+                                aria-label={`Webhook setup for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setYoutrackWebhookTarget(integration)}
+                              >
+                                <IconWebhook size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </>
+                        )}
+                        {integration.provider === 'youtrack' && integration.youtrackBaseUrl && !readOnly && (
+                          <Tooltip label="Open in YouTrack">
+                            <ActionIcon
+                              aria-label={`Open ${integration.name} in YouTrack`}
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={integration.youtrackBaseUrl}
+                              target="_blank"
+                            >
+                              <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {TOKEN_PROVIDERS.has(integration.provider) && canExecute && !readOnly && (
                           <>
                             <Tooltip label="Test connection">
@@ -1027,6 +1121,22 @@ export const IntegrationsContent = ({
           <LinearTeamsModal
             integration={linearTeamsTarget}
             onClose={() => setLinearTeamsTarget(null)}
+            basePath={basePath}
+          />
+        </>
+      )}
+
+      {youtrack && (
+        <>
+          <YoutrackConnectModal opened={youtrackOpen} onClose={() => setYoutrackOpen(false)} basePath={basePath} />
+          <YoutrackProjectsModal
+            integration={youtrackProjectsTarget}
+            onClose={() => setYoutrackProjectsTarget(null)}
+            basePath={basePath}
+          />
+          <YoutrackWebhookModal
+            integration={youtrackWebhookTarget}
+            onClose={() => setYoutrackWebhookTarget(null)}
             basePath={basePath}
           />
         </>

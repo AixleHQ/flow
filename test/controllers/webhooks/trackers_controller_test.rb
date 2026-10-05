@@ -116,4 +116,26 @@ class Webhooks::TrackersControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal subscription, TrackerDelivery.sole.tracker_subscription
   end
+
+  test "a YouTrack project's webhook is authenticated by its token in the configured header" do
+    youtrack = create(:integration, :youtrack, :active)
+    subscription = Trackers::Youtrack::Subscriptions.new(youtrack).use_token!(FakeYoutrack::Api::APP, token: "t" * 40, header: "X-Hook")
+    created = youtrack_payload("issueCreated").to_json
+    headers = ->(token) { { "CONTENT_TYPE" => "application/json", "X-Hook" => token } }
+
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call("u" * 40)
+    assert_response :unauthorized
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :unauthorized
+    assert_enqueued_with(job: Trackers::ProcessDeliveryJob) do
+      post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call("t" * 40)
+    end
+    resent = JSON.parse(created).merge("timestamp" => 1.minute.from_now.iso8601(3)).to_json
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: resent, headers: headers.call("t" * 40)
+    assert_response :ok
+
+    assert_equal [ "issue_created", "APP-1", FakeYoutrack::Api::APP ],
+                 TrackerDelivery.sole.notifications.sole.values_at("kind", "issue_id", "scope_id")
+    assert_equal "active", subscription.reload.status
+  end
 end

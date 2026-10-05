@@ -35,7 +35,7 @@ class Web::DocsController < Web::ApplicationController
              agent-capabilities repositories ai-builder
              people-and-access signing-in secrets templates analytics company-workspace examples
              user-guide prompt-guide quick-start agents runtimes tools mcp board workflows
-             triggers-and-gates integrations github gitlab azure-devops jira linear trackers slack coder
+             triggers-and-gates integrations github gitlab azure-devops jira linear youtrack trackers slack coder
              configuration configuring-sso reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze
 

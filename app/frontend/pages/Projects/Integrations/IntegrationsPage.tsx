@@ -7,6 +7,7 @@ import type { GithubProps } from 'shared/resources/integrations/GithubConnectMod
 import { IntegrationsContent, type SlackProps } from 'shared/resources/integrations/IntegrationsContent';
 import type { JiraProps } from 'shared/resources/integrations/JiraConnectModal';
 import type { LinearProps } from 'shared/resources/integrations/LinearConnectModal';
+import type { YoutrackProps } from 'shared/resources/integrations/YoutrackConnectModal';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -17,11 +18,12 @@ interface Props {
   github?: GithubProps;
   jira?: JiraProps;
   linear?: LinearProps;
+  youtrack?: YoutrackProps;
   slack?: SlackProps;
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, jira, linear, slack } = usePage<{ props: Props }>()
+  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack } = usePage<{ props: Props }>()
     .props as unknown as Props;
 
   return (
@@ -35,6 +37,7 @@ const IntegrationsPage = () => {
         github={github}
         jira={jira}
         linear={linear}
+        youtrack={youtrack}
         slack={slack}
       />
     </>

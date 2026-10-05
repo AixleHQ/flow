@@ -56,6 +56,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub Projects',
   jira: 'Jira',
   linear: 'Linear',
+  youtrack: 'YouTrack',
 };
 
 const triggerLabel = (trigger: TrackerTriggerSummary) => {
@@ -201,7 +202,7 @@ export const TrackersContent = ({
           <EmptyState
             icon={<IconTicket size={22} />}
             title="No trackers"
-            description="Connect Azure DevOps, Jira or Linear on the Integrations page, or pick GitHub Projects on a GitHub connection; each project or team a connection covers becomes a tracker here."
+            description="Connect Azure DevOps, Jira, Linear or YouTrack on the Integrations page, or pick GitHub Projects on a GitHub connection; each project or team a connection covers becomes a tracker here."
             action={addButton}
           />
         </Box>

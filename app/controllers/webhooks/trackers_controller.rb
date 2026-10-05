@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Tracker webhook receiver for providers whose events do not arrive through an
-# existing receiver (Azure and GitHub have their own): Jira and Linear. The provider
+# existing receiver (Azure and GitHub have their own): Jira, Linear and YouTrack. The provider
 # authenticates the request and reduces it to Trackers::Notification — IDs and
 # change hints only; the pipeline re-reads the issue itself.
 class Webhooks::TrackersController < ActionController::API

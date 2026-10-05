@@ -543,6 +543,8 @@ Rails.application.routes.draw do
               # lists the teams a key can see before it is saved.
               get :linear_oauth_start
               post :linear_inspect
+              # YouTrack: what a permanent token can see before it is saved.
+              post :youtrack_inspect
             end
             member do
               post :test_connection
@@ -550,6 +552,9 @@ Rails.application.routes.draw do
               get :github_projects
               get :linear_teams
               get :jira_webhook
+              get :youtrack_projects
+              get :youtrack_webhook
+              patch :youtrack_webhook_token
             end
           end
           resources :agents, only: %i[index create update destroy]

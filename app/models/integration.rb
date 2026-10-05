@@ -7,9 +7,9 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear].freeze
+  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack].freeze
 
-  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops jira], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops jira youtrack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
