@@ -3,6 +3,7 @@ import { Switch } from '@mantine/core';
 import {
   IconBolt,
   IconBrandSlack,
+  IconBrandTeams,
   IconClock,
   IconColumns,
   IconMessage,
@@ -16,10 +17,11 @@ import {
 
 import { creatorLabel, creatorTone, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
-import type { Trigger } from './types';
+import type { ChatProviderOption, Trigger } from './types';
 
 const CHAT_ICONS: Record<string, typeof IconBolt> = {
   slack: IconBrandSlack,
+  teams: IconBrandTeams,
 };
 
 const SOURCE_ICONS: Record<string, typeof IconBolt> = {
@@ -50,6 +52,7 @@ const iconButton = {
 interface TriggerCardsProps {
   triggers: Trigger[];
   trackers?: TrackerOption[];
+  chatProviders?: ChatProviderOption[];
   readOnly: boolean;
   onEdit: (t: Trigger) => void;
   onDelete: (t: Trigger) => void;
@@ -62,6 +65,7 @@ interface TriggerCardsProps {
 export function TriggerCards({
   triggers,
   trackers = [],
+  chatProviders = [],
   readOnly,
   onEdit,
   onDelete,
@@ -134,7 +138,7 @@ export function TriggerCards({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {triggerMeta(t, trackers)}
+                  {triggerMeta(t, trackers, chatProviders)}
                 </div>
               </div>
             </div>

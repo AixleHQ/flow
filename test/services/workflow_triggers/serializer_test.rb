@@ -30,7 +30,7 @@ class WorkflowTriggers::SerializerTest < ActiveSupport::TestCase
 
     payload = WorkflowTriggers::Serializer.new.binding(binding)
 
-    assert_equal [ "slack", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
+    assert_equal [ "chat", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
     assert_nil payload[:webhook_url]
   end
 

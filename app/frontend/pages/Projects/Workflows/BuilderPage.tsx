@@ -14,6 +14,7 @@ import { ApiError, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { useUnsavedChangesGuard } from 'shared/lib/hooks/useUnsavedChangesGuard';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
+import type { ChatProviderOption } from 'shared/resources/triggers/types';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -56,6 +57,7 @@ interface Props {
   defaultAgentRuntime?: string | null;
   boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
   trackers?: TrackerOption[];
+  chatProviders?: ChatProviderOption[];
 }
 
 interface AggregateResponse {
@@ -84,6 +86,7 @@ const BuilderPage = () => {
     defaultAgentRuntime,
     boardColumns,
     trackers,
+    chatProviders,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   const agents = rawAgents ?? [];
@@ -535,6 +538,7 @@ const BuilderPage = () => {
               workflowId={workflow.id}
               columns={boardColumns ?? []}
               trackers={trackers ?? []}
+              chatProviders={chatProviders ?? []}
               readOnly={readOnly}
             />
           )}

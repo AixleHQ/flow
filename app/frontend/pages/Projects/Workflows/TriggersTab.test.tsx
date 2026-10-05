@@ -134,7 +134,7 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(await screen.findByText('Add your first trigger')).toBeInTheDocument();
     expect(screen.getByText('Task enters column')).toBeInTheDocument();
     expect(screen.getByText('On schedule')).toBeInTheDocument();
-    expect(screen.getByText('Slack message')).toBeInTheDocument();
+    expect(screen.getByText('Chat message')).toBeInTheDocument();
     expect(screen.getByText('Incoming webhook')).toBeInTheDocument();
   });
 
@@ -146,7 +146,7 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(await screen.findByText('Add your first trigger')).toBeInTheDocument();
     // The choice cards live inside a `!readOnly` block.
     expect(screen.queryByText('On schedule')).not.toBeInTheDocument();
-    expect(screen.queryByText('Slack message')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chat message')).not.toBeInTheDocument();
   });
 
   it('renders a column trigger card with title, meta, and event badge', async () => {
@@ -240,7 +240,7 @@ describe('Projects/Workflows/TriggersTab', () => {
     renderPage(<TriggersTab {...baseProps()} />);
 
     expect(await screen.findByText('Slack message eq "deploy"')).toBeInTheDocument();
-    expect(screen.getByText('any channel')).toBeInTheDocument();
+    expect(screen.getByText('anywhere the bot is addressed')).toBeInTheDocument();
   });
 
   it('ignores a stored name and shows the derived slack title', async () => {
@@ -274,7 +274,7 @@ describe('Projects/Workflows/TriggersTab', () => {
     renderPage(<TriggersTab {...baseProps()} />);
 
     expect(await screen.findByText('Any Slack message')).toBeInTheDocument();
-    expect(screen.getByText('any channel')).toBeInTheDocument();
+    expect(screen.getByText('anywhere the bot is addressed')).toBeInTheDocument();
   });
 
   it('renders a webhook trigger with verification strategy and object condition meta', async () => {
@@ -558,7 +558,7 @@ describe('Projects/Workflows/TriggersTab', () => {
 
     expect(await screen.findByText('Edit trigger')).toBeInTheDocument();
     expect(screen.getByText('Type is locked when editing')).toBeInTheDocument();
-    expect(screen.getByText('Slack message')).toBeInTheDocument();
+    expect(screen.getByText('Chat message')).toBeInTheDocument();
   });
 
   it('closes the panel via Cancel', async () => {

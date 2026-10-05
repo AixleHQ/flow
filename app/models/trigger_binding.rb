@@ -34,8 +34,6 @@ class TriggerBinding < ApplicationRecord
   WEBHOOK_EVENT_PREFIX = "webhook."
   SCHEDULE_EVENT_TYPE = "schedule.fired"
   SLACK_EVENT_TYPE = "slack.message"
-  SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
-                        "Integrations page first — until then no mention can reach this trigger."
   # notify_on_failure is the boolean status_reporting replaces; the two are kept
   # in step until nothing reads it any more.
 
@@ -48,9 +46,11 @@ class TriggerBinding < ApplicationRecord
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
   validate :chat_command_not_reserved
+  validate :chat_provider_named, if: -> { event_type == Chat::EVENT_TYPE }
   validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
                                unless: :chat?
   before_validation :keep_failure_reporting_in_step
+  before_validation :keep_chat_provider, if: -> { persisted? && event_type == Chat::EVENT_TYPE }
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -101,22 +101,38 @@ class TriggerBinding < ApplicationRecord
     event_type == SCHEDULE_EVENT_TYPE
   end
 
-  def slack?
-    event_type == SLACK_EVENT_TYPE
+  def self.chat_not_connected(label)
+    "#{label} is not connected for this company. Connect it on the Integrations page first — " \
+      "until then no message can reach this trigger."
   end
 
   def chat?
     Chat.event_types.include?(event_type)
   end
 
+  # The messenger a chat trigger listens to: named by a legacy event type, or
+  # by the `provider` condition every `chat.message` trigger carries.
+  def chat_provider
+    return nil unless chat?
+
+    Chat::LEGACY_EVENT_TYPES[event_type] || filter_predicate.to_h["provider"].presence
+  end
+
+  # Points a `chat.message` trigger at another messenger, keeping its other conditions.
+  def assign_chat_provider(key)
+    return if key.blank? || event_type != Chat::EVENT_TYPE
+
+    self.filter_predicate = filter_predicate.to_h.merge("provider" => key.to_s)
+  end
+
   # save! for a person creating or editing a trigger: refuses to create or switch
-  # on a Slack trigger while the company has no active Slack install. Not a
+  # on a chat trigger while the company has not connected its messenger. Not a
   # validation, so a workspace disconnected later does not make every other save
   # of the triggers it served fail.
-  def save_checking_slack!
-    if slack? && enabled? && (new_record? || enabled_changed?) && !slack_connected?
+  def save_checking_chat!
+    if chat? && enabled? && (new_record? || enabled_changed?) && !chat_connected?
       valid? # report the binding's other problems alongside this one
-      errors.add(:base, SLACK_NOT_CONNECTED)
+      errors.add(:base, self.class.chat_not_connected(Chat.provider(chat_provider)&.label || "The messenger"))
       raise ActiveRecord::RecordInvalid, self
     end
 
@@ -157,8 +173,8 @@ class TriggerBinding < ApplicationRecord
                    .update_all(enabled: false, updated_at: Time.current)
   end
 
-  def slack_connected?
-    Integration.active.exists?(provider: :slack, company_id: project&.company_id)
+  def chat_connected?
+    chat_provider.present? && Integration.active.exists?(provider: chat_provider, company_id: project&.company_id)
   end
 
   def tracker_scope_matches?(data)
@@ -243,6 +259,23 @@ class TriggerBinding < ApplicationRecord
     return unless value.to_s.strip.match?(Chat::RESERVED_COMMAND)
 
     errors.add(:filter_predicate, "can't use help — that word lists available commands")
+  end
+
+  # Replacing a chat trigger's conditions keeps the messenger it listens to;
+  # moving it to another one is assign_chat_provider.
+  def keep_chat_provider
+    previous = filter_predicate_was.to_h["provider"]
+    return if previous.blank? || filter_predicate.to_h.key?("provider")
+
+    self.filter_predicate = filter_predicate.to_h.merge("provider" => previous)
+  end
+
+  # A `chat.message` trigger matches whichever messenger it names, so it must name one.
+  def chat_provider_named
+    provider = filter_predicate.to_h["provider"]
+    return if provider.is_a?(String) && Chat::PROVIDERS.key?(provider)
+
+    errors.add(:filter_predicate, "must name the messenger: provider is one of #{Chat::PROVIDERS.keys.join(', ')}")
   end
 
   # Whichever of the two the caller set wins and the other follows: the API, the

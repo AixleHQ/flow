@@ -1,12 +1,12 @@
 import { Loader } from '@mantine/core';
-import { IconBolt, IconBrandSlack, IconClock, IconColumns, IconTicket, IconWebhook } from '@tabler/icons-react';
+import { IconBolt, IconClock, IconColumns, IconMessage, IconTicket, IconWebhook } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { isAttached, type TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import { TriggerCards } from 'shared/resources/triggers/TriggerCards';
 import { TriggerFormPanel } from 'shared/resources/triggers/TriggerFormPanel';
-import type { Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
+import type { ChatProviderOption, Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
 export type { Trigger } from 'shared/resources/triggers/types';
@@ -16,10 +16,18 @@ interface TriggersTabProps {
   workflowId: number;
   columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
+  chatProviders?: ChatProviderOption[];
   readOnly: boolean;
 }
 
-export function TriggersTab({ projectId, workflowId, columns, trackers = [], readOnly }: TriggersTabProps) {
+export function TriggersTab({
+  projectId,
+  workflowId,
+  columns,
+  trackers = [],
+  chatProviders = [],
+  readOnly,
+}: TriggersTabProps) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -181,10 +189,10 @@ export function TriggersTab({ projectId, workflowId, columns, trackers = [], rea
                   },
                   { kind: 'schedule', icon: IconClock, name: 'On schedule', desc: 'On a recurring cron timer' },
                   {
-                    kind: 'slack',
-                    icon: IconBrandSlack,
-                    name: 'Slack message',
-                    desc: 'When a matching message is posted',
+                    kind: 'chat',
+                    icon: IconMessage,
+                    name: 'Chat message',
+                    desc: 'When someone mentions the bot in Slack or Teams',
                   },
                   {
                     kind: 'webhook',
@@ -258,6 +266,7 @@ export function TriggersTab({ projectId, workflowId, columns, trackers = [], rea
           <TriggerCards
             triggers={triggers}
             trackers={trackers}
+            chatProviders={chatProviders}
             readOnly={readOnly}
             onEdit={openEdit}
             onDelete={remove}
@@ -274,6 +283,7 @@ export function TriggersTab({ projectId, workflowId, columns, trackers = [], rea
           workflowId={workflowId}
           columns={columns}
           trackers={trackers}
+          chatProviders={chatProviders}
           editing={editingTrigger}
           defaultKind={defaultKind}
           onClose={closePanel}

@@ -7,7 +7,7 @@ module Api
         # CRUD for a workflow's triggers — the single home for "how this workflow
         # launches". Manages two record kinds behind one unified API:
         #   • column  → ColumnWorkflowBinding (a card entering a board column)
-        #   • event   → TriggerBinding (slack / webhook / schedule / custom event)
+        #   • event   → TriggerBinding (chat / webhook / schedule / tracker / custom event)
         # A webhook trigger additionally provisions a generic WebhookEndpoint and
         # returns its URL + secret.
         class TriggersController < Workflows::ApplicationController
@@ -47,7 +47,8 @@ module Api
             else
               binding = current_workflow.trigger_bindings.find(params[:id])
               binding.assign_attributes(trigger_binding_params)
-              binding.save_checking_slack!
+              binding.assign_chat_provider(params.dig(:trigger, :chat_provider))
+              binding.save_checking_chat!
               render json: serialize_binding(binding)
             end
           rescue ActiveRecord::RecordInvalid => e
@@ -78,7 +79,7 @@ module Api
             trigger = params.require(:trigger)
             return trigger.permit(:board_column_id, :trigger_mode, :cooldown_seconds).to_h if kind == "column"
 
-            trigger_binding_params.to_h.merge(trigger.permit(:event_type, :verification_strategy, :secret).to_h)
+            trigger_binding_params.to_h.merge(trigger.permit(:event_type, :chat_provider, :verification_strategy, :secret).to_h)
           end
 
           def serialize_result(result)
@@ -94,7 +95,7 @@ module Api
 
           def trigger_binding_params
             params.require(:trigger).permit(
-              :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure,
+              :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure, :status_reporting,
               :subject_policy, :subject_column_id, :subject_title_template, :project_tracker_id, :aixle_changes,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )

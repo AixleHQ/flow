@@ -9,6 +9,7 @@ import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import type { SharedProps } from 'shared/ui';
 
+import { CHAT_PROVIDER_LABELS } from './describeTrigger';
 import {
   isAttached,
   trackerTriggerPayload,
@@ -17,7 +18,7 @@ import {
   type TrackerTriggerValue,
 } from './trackerTrigger';
 import { TrackerTriggerFields } from './TrackerTriggerFields';
-import type { Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
+import type { ChatProviderOption, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
 interface TriggerFormPanelProps {
   projectId: number;
@@ -27,18 +28,25 @@ interface TriggerFormPanelProps {
   workflows?: TriggerWorkflowOption[];
   columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
+  // Messengers the company has connected, with the conversations each bot knows.
+  chatProviders?: ChatProviderOption[];
   editing: Trigger | null;
   defaultKind: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type Kind = 'column' | 'slack' | 'webhook' | 'schedule' | 'tracker';
+type Kind = 'column' | 'chat' | 'webhook' | 'schedule' | 'tracker';
+
+// A Slack trigger saved before Teams reads as a chat trigger for Slack.
+function formKind(kind: string): Kind {
+  return (kind === 'slack' ? 'chat' : kind) as Kind;
+}
 
 // Off-board triggers fire unattended: the run belongs to whoever added the
 // trigger and uses their credentials. A column trigger's run belongs to the
 // person the card puts on it, so its creator is provenance, not identity.
-const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule', 'tracker'];
+const OFF_BOARD_KINDS: Kind[] = ['chat', 'webhook', 'schedule', 'tracker'];
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();
@@ -50,15 +58,20 @@ function describeCron(expr: string): { ok: boolean; text: string } {
   }
 }
 
-function slackFilterFromPredicate(pred: Record<string, unknown>): { channel: string; op: string; value: string } {
-  const channel = typeof pred.channel === 'string' ? pred.channel : '';
+const ANYWHERE = '__anywhere__';
+const DIRECT_MESSAGES = '__direct__';
+
+// `where` is a conversation id, DIRECT_MESSAGES, or '' for anywhere the bot is addressed.
+function chatFilterFromPredicate(pred: Record<string, unknown>): { where: string; op: string; value: string } {
+  const where =
+    typeof pred.channel === 'string' ? pred.channel : pred['conversation.type'] === 'direct' ? DIRECT_MESSAGES : '';
   const text = pred.text;
   if (text && typeof text === 'object') {
     const t = text as { op?: string; value?: string };
-    return { channel, op: t.op ?? 'contains', value: t.value ?? '' };
+    return { where, op: t.op ?? 'contains', value: t.value ?? '' };
   }
-  if (typeof text === 'string') return { channel, op: 'contains', value: text };
-  return { channel, op: 'contains', value: '' };
+  if (typeof text === 'string') return { where, op: 'contains', value: text };
+  return { where, op: 'contains', value: '' };
 }
 
 // Builds a ready-to-run curl command for the created webhook, adapting the auth
@@ -105,6 +118,7 @@ export function TriggerFormPanel({
   workflows = [],
   columns,
   trackers = [],
+  chatProviders = [],
   editing,
   defaultKind,
   onClose,
@@ -113,10 +127,10 @@ export function TriggerFormPanel({
   const { currentUser } = usePage<SharedProps>().props;
   const isEdit = Boolean(editing);
   const editPred = editing?.filter_predicate ?? {};
-  const editSlack = editing?.kind === 'slack' ? slackFilterFromPredicate(editPred) : null;
+  const editChat = editing && formKind(editing.kind) === 'chat' ? chatFilterFromPredicate(editPred) : null;
   const editWebhook = editing?.kind === 'webhook' ? webhookFilterFromPredicate(editPred) : null;
 
-  const [kind, setKind] = useState<Kind>((editing?.kind as Kind) ?? (defaultKind as Kind));
+  const [kind, setKind] = useState<Kind>(formKind(editing?.kind ?? defaultKind));
   const [pickedWorkflowId, setPickedWorkflowId] = useState<string | null>(
     editing?.workflow_id?.toString() ?? (workflows.length === 1 ? workflows[0].id.toString() : null),
   );
@@ -136,13 +150,14 @@ export function TriggerFormPanel({
   const [cooldown, setCooldown] = useState<number | string>(editing?.cooldown_seconds ?? 5);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
 
-  const [channel, setChannel] = useState(editSlack?.channel ?? '');
-  const [notifyOnFailure, setNotifyOnFailure] = useState(editing?.notify_on_failure ?? true);
-  const [textContains, setTextContains] = useState(editSlack?.value ?? '');
-  const [textOp, setTextOp] = useState(editSlack?.op ?? 'contains');
-  const [slackCooldown, setSlackCooldown] = useState<number | string>(
-    editing?.kind === 'slack' ? (editing.cooldown_seconds ?? 0) : 0,
+  const [chatProvider, setChatProvider] = useState(
+    editing?.chat_provider ?? (editing?.kind === 'slack' ? 'slack' : (chatProviders[0]?.key ?? 'slack')),
   );
+  const [where, setWhere] = useState(editChat?.where ?? '');
+  const [statusReporting, setStatusReporting] = useState(editing?.status_reporting ?? 'lifecycle');
+  const [textContains, setTextContains] = useState(editChat?.value ?? '');
+  const [textOp, setTextOp] = useState(editChat?.op ?? 'contains');
+  const [chatCooldown, setChatCooldown] = useState<number | string>(editChat ? (editing?.cooldown_seconds ?? 0) : 0);
 
   const [verification, setVerification] = useState('shared_token');
   const [secret, setSecret] = useState('');
@@ -192,11 +207,14 @@ export function TriggerFormPanel({
       if (isEdit) trigger.enabled = enabled;
     } else {
       const filter: Record<string, unknown> = {};
-      if (kind === 'slack') {
-        if (channel.trim()) filter.channel = channel.trim();
+      if (kind === 'chat') {
+        filter.provider = chatProvider;
+        if (where === DIRECT_MESSAGES) filter['conversation.type'] = 'direct';
+        else if (where.trim()) filter.channel = where.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
-        trigger.notify_on_failure = notifyOnFailure;
-        trigger.cooldown_seconds = slackCooldown === '' ? 0 : slackCooldown;
+        if (!isEdit) trigger.chat_provider = chatProvider;
+        trigger.status_reporting = statusReporting;
+        trigger.cooldown_seconds = chatCooldown === '' ? 0 : chatCooldown;
       } else if (kind === 'webhook') {
         if (!isEdit) {
           trigger.verification_strategy = verification;
@@ -266,11 +284,12 @@ export function TriggerFormPanel({
     mode,
     cooldown,
     enabled,
-    channel,
-    notifyOnFailure,
+    chatProvider,
+    where,
+    statusReporting,
     textContains,
     textOp,
-    slackCooldown,
+    chatCooldown,
     verification,
     secret,
     condField,
@@ -309,7 +328,7 @@ export function TriggerFormPanel({
   const kindOptions = [
     { value: 'column', label: 'Task enters column' },
     { value: 'schedule', label: 'On schedule' },
-    { value: 'slack', label: 'Slack message' },
+    { value: 'chat', label: 'Chat message' },
     { value: 'webhook', label: 'Incoming webhook' },
     ...(trackers.some(isAttached) || kind === 'tracker' ? [{ value: 'tracker', label: 'Task tracker event' }] : []),
   ];
@@ -763,35 +782,20 @@ export function TriggerFormPanel({
                 />
               )}
 
-              {/* Slack fields */}
-              {kind === 'slack' && (
+              {/* Chat fields */}
+              {kind === 'chat' && (
                 <>
-                  <div style={{ marginBottom: 12 }}>
-                    <label
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: 'var(--app-text-primary)',
-                        display: 'block',
-                        marginBottom: 5,
-                      }}
-                    >
-                      Channel id
-                    </label>
-                    <TextInput
-                      placeholder="C0123ABC (blank = any)"
-                      value={channel}
-                      onChange={(e) => setChannel(e.currentTarget.value)}
-                      styles={{
-                        input: {
-                          background: 'var(--app-bg-paper)',
-                          border: '1px solid var(--app-border-default)',
-                          borderRadius: 5,
-                          fontSize: 13,
-                        },
-                      }}
-                    />
-                  </div>
+                  <ChatWhereFields
+                    providers={chatProviders}
+                    provider={chatProvider}
+                    onProviderChange={(key) => {
+                      setChatProvider(key);
+                      setWhere('');
+                    }}
+                    where={where}
+                    onWhereChange={setWhere}
+                    isEdit={isEdit}
+                  />
                   <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12 }}>
                     <div>
                       <label
@@ -853,15 +857,15 @@ export function TriggerFormPanel({
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4, marginBottom: 12 }}>
-                    Matched against the message after the @mention, ignoring case. @mention /help lists this
-                    channel&apos;s commands. The word help can&apos;t be used as a pattern.
+                    Matched against the message after the @mention, ignoring case. @mention help lists the commands of a
+                    conversation. The word help can&apos;t be used as a pattern.
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <NumberInput
                       label="Cooldown (s)"
                       description="After a run starts, matching mentions start nothing for this long. 0 starts a run for every matching mention."
-                      value={slackCooldown}
-                      onChange={setSlackCooldown}
+                      value={chatCooldown}
+                      onChange={setChatCooldown}
                       min={0}
                       styles={{
                         label: { fontSize: 13, fontWeight: 500, color: 'var(--app-text-primary)', marginBottom: 5 },
@@ -875,11 +879,16 @@ export function TriggerFormPanel({
                     />
                   </div>
                   <div style={{ marginBottom: 12 }}>
-                    <Switch
-                      label="Report failures back to Slack"
-                      description="When a run from this trigger fails, reply in the same thread with the error."
-                      checked={notifyOnFailure}
-                      onChange={(e) => setNotifyOnFailure(e.currentTarget.checked)}
+                    <Select
+                      label="Report back in the thread"
+                      data={[
+                        { value: 'lifecycle', label: 'A status card that follows the run' },
+                        { value: 'failures', label: 'Only when a run fails' },
+                        { value: 'none', label: 'Nothing' },
+                      ]}
+                      value={statusReporting}
+                      onChange={(v) => setStatusReporting(v ?? 'lifecycle')}
+                      allowDeselect={false}
                     />
                   </div>
                   <div style={{ marginBottom: 12 }}>
@@ -950,7 +959,7 @@ export function TriggerFormPanel({
                           Task title template
                         </label>
                         <TextInput
-                          placeholder="slack.message — {{date}}"
+                          placeholder="chat.message — {{date}}"
                           value={subjectTitleTemplate}
                           onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
                           styles={{
@@ -1404,6 +1413,92 @@ function WebhookCreatedView({
         >
           Done
         </button>
+      </div>
+    </>
+  );
+}
+
+interface ChatWhereFieldsProps {
+  providers: ChatProviderOption[];
+  provider: string;
+  onProviderChange: (key: string) => void;
+  where: string;
+  onWhereChange: (where: string) => void;
+  isEdit: boolean;
+}
+
+// Which messenger, and where in it. Teams channel ids cannot be typed, so Teams
+// offers the conversations its bot has been added to; Slack keeps the channel
+// id field until it has such a list.
+function ChatWhereFields({
+  providers,
+  provider,
+  onProviderChange,
+  where,
+  onWhereChange,
+  isEdit,
+}: ChatWhereFieldsProps) {
+  const current = providers.find((p) => p.key === provider);
+  const providerData = providers.map((p) => ({ value: p.key, label: p.label }));
+  if (!current)
+    providerData.push({ value: provider, label: `${CHAT_PROVIDER_LABELS[provider] ?? provider} (not connected)` });
+
+  const conversations = current?.conversations ?? [];
+  const groups = new Map<string, { value: string; label: string }[]>();
+  for (const c of conversations) {
+    const group = c.kind === 'channel' ? (c.teamName ?? 'Channels') : 'Group chats';
+    const label = c.name ?? (c.kind === 'channel' ? 'Unnamed channel' : 'Unnamed group chat');
+    groups.set(group, [...(groups.get(group) ?? []), { value: c.id, label }]);
+  }
+  const known = where === '' || where === DIRECT_MESSAGES || conversations.some((c) => c.id === where);
+  const whereData = [
+    {
+      group: 'Anywhere',
+      items: [
+        { value: ANYWHERE, label: 'Anywhere the bot is addressed' },
+        { value: DIRECT_MESSAGES, label: 'Direct messages' },
+      ],
+    },
+    ...[...groups.entries()].map(([group, items]) => ({ group, items })),
+    ...(known ? [] : [{ group: 'Other', items: [{ value: where, label: 'A conversation the bot no longer lists' }] }]),
+  ];
+
+  return (
+    <>
+      <div style={{ marginBottom: 12 }}>
+        <Select
+          label="Messenger"
+          data={providerData}
+          value={provider}
+          onChange={(v) => v && onProviderChange(v)}
+          allowDeselect={false}
+          disabled={isEdit && providerData.length < 2}
+        />
+        {providers.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4 }}>
+            Connect Slack or Microsoft Teams on the Integrations page first.
+          </div>
+        )}
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        {provider === 'teams' ? (
+          <Select
+            label="Where"
+            description="Channels and group chats appear here once the app is added to them."
+            data={whereData}
+            value={where === '' ? ANYWHERE : where}
+            onChange={(v) => onWhereChange(!v || v === ANYWHERE ? '' : v)}
+            allowDeselect={false}
+            searchable
+          />
+        ) : (
+          <TextInput
+            label="Channel id"
+            placeholder="C0123ABC (blank = any)"
+            value={where === DIRECT_MESSAGES ? '' : where}
+            onChange={(e) => onWhereChange(e.currentTarget.value)}
+          />
+        )}
       </div>
     </>
   );

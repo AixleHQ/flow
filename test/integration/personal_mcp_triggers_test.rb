@@ -46,11 +46,11 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     triggers = payload(call_tool("list_workflow_triggers",
                                  { project_id: @project.id, workflow_id: @workflow.id }))["triggers"]
 
-    assert_equal %w[column slack], triggers.map { |t| t["kind"] }.sort
+    assert_equal %w[chat column], triggers.map { |t| t["kind"] }.sort
     column = triggers.find { |t| t["kind"] == "column" }
     assert_equal @column.id, column["board_column_id"]
     assert_equal @column.name, column["column_name"]
-    assert_equal "standup", triggers.find { |t| t["kind"] == "slack" }["name"]
+    assert_equal "standup", triggers.find { |t| t["kind"] == "chat" }["name"]
   end
 
   test "create_workflow_trigger binds a board column" do
@@ -85,7 +85,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
     assert_nil triggers.find { |t| t["kind"] == "column" }["created_by"]
     assert_equal({ "id" => @user.id, "name" => @user.name },
-                 triggers.find { |t| t["kind"] == "slack" }["created_by"])
+                 triggers.find { |t| t["kind"] == "chat" }["created_by"])
   end
 
   test "create_workflow_trigger creates a slack trigger with a filter predicate" do
@@ -97,9 +97,9 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
     assert_not error?(body)
     trigger = payload(body)
-    assert_equal "slack", trigger["kind"]
-    assert_equal "slack.message", trigger["event_type"]
-    assert_equal({ "channel" => "C123" }, trigger["filter_predicate"])
+    assert_equal [ "chat", "slack" ], trigger.values_at("kind", "chat_provider")
+    assert_equal "chat.message", trigger["event_type"]
+    assert_equal({ "channel" => "C123", "provider" => "slack" }, trigger["filter_predicate"])
     assert_equal "create_task", trigger["subject_policy"]
     assert_equal @user.id, TriggerBinding.find(trigger["id"]).created_by_id
   end
@@ -196,7 +196,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
                        trigger_id: event.id, enabled: true })
 
     assert error?(body)
-    assert_includes text(body), TriggerBinding::SLACK_NOT_CONNECTED
+    assert_includes text(body), TriggerBinding.chat_not_connected("Slack")
     assert_not event.reload.enabled
   end
 

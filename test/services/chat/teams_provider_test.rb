@@ -67,8 +67,11 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     assert_nil other[:data].dig("actor", "aixle_user_id")
   end
 
-  test "a Teams message starts a chat trigger and leaves Slack's saved triggers alone" do
-    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+  test "a Teams message starts a Teams chat trigger and leaves Slack's triggers alone" do
+    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                                    filter_predicate: { "provider" => "teams" })
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             filter_predicate: { "provider" => "slack" })
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     received = ReceivedWebhook.create!(webhook_endpoint: @endpoint, idempotency_key: "k1", event_type: "teams",
                                        raw_payload: teams_activity)

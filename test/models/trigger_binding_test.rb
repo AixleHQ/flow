@@ -128,7 +128,8 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
   test "a chat message matches chat triggers and the Slack triggers saved before them" do
     legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
-    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                                    filter_predicate: { "provider" => "slack" })
 
     event = create(:trigger_event, event_type: "chat.message", source: "slack:slack-team-T1",
                                    data: { "provider" => "slack" }, project: @project)
@@ -137,12 +138,43 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "a chat message from anything but its provider's receiver matches no trigger" do
-    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             filter_predicate: { "provider" => "slack" })
 
     event = create(:trigger_event, event_type: "chat.message", source: "generic:wh-1",
                                    data: { "provider" => "slack" }, project: @project)
 
     assert_empty TriggerBinding.for_event(event)
+  end
+
+  test "a chat trigger matches only the messenger it names" do
+    teams = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                     event_type: "chat.message", filter_predicate: { "provider" => "teams" })
+
+    assert teams.matches?({ "provider" => "teams", "text" => "deploy" })
+    assert_not teams.matches?({ "provider" => "slack", "text" => "deploy" })
+  end
+
+  test "a chat trigger must name a messenger it knows" do
+    binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+
+    assert_not binding.valid?
+    binding.filter_predicate = { "provider" => "irc" }
+    assert_not binding.valid?
+    binding.filter_predicate = { "provider" => "teams" }
+    assert binding.valid?
+  end
+
+  test "replacing a chat trigger's conditions keeps its messenger" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                       event_type: "chat.message", filter_predicate: { "provider" => "teams" })
+
+    binding.update!(filter_predicate: { "channel" => "19:a@thread.tacv2" })
+    assert_equal({ "channel" => "19:a@thread.tacv2", "provider" => "teams" }, binding.reload.filter_predicate)
+
+    binding.assign_chat_provider("slack")
+    binding.save!
+    assert_equal "slack", binding.reload.chat_provider
   end
 
   test "status_reporting and notify_on_failure follow whichever of the two was set" do
@@ -219,43 +251,43 @@ class TriggerBindingTest < ActiveSupport::TestCase
     build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message", **attrs)
   end
 
-  test "save_checking_slack! refuses to create or switch on a slack trigger until the company connects Slack" do
-    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_slack! }
-    assert_includes error.record.errors.full_messages, TriggerBinding::SLACK_NOT_CONNECTED
+  test "save_checking_chat! refuses to create or switch on a slack trigger until the company connects Slack" do
+    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_chat! }
+    assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Slack")
     assert_equal 0, TriggerBinding.count
 
     off = slack_binding(enabled: false)
-    off.save_checking_slack!
+    off.save_checking_chat!
     assert off.persisted?, "a disabled slack trigger hears nothing, so it can wait for Slack"
 
     off.enabled = true
-    assert_raises(ActiveRecord::RecordInvalid) { off.save_checking_slack! }
+    assert_raises(ActiveRecord::RecordInvalid) { off.save_checking_chat! }
     assert_equal false, off.reload.enabled # rubocop:disable Minitest/RefuteFalse
 
     create(:integration, provider: :slack, status: :active, company: @company, project: nil)
     off.enabled = true
-    off.save_checking_slack!
+    off.save_checking_chat!
     assert off.reload.enabled
   end
 
-  test "save_checking_slack! still saves other edits of a slack trigger whose workspace went away" do
+  test "save_checking_chat! still saves other edits of a slack trigger whose workspace went away" do
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "slack.message", name: "before")
 
     binding.name = "after"
-    binding.save_checking_slack!
+    binding.save_checking_chat!
 
     assert_equal "after", binding.reload.name
   end
 
-  test "save_checking_slack! reports the binding's other errors alongside the missing connection" do
+  test "save_checking_chat! reports the binding's other errors alongside the missing connection" do
     create(:step, workflow: @workflow, name: "Review copy", allow_non_interactive: false)
 
-    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_slack! }
+    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_chat! }
 
     messages = error.record.errors.full_messages.join(" ")
     assert_match(/can't run unattended/, messages)
-    assert_includes messages, TriggerBinding::SLACK_NOT_CONNECTED
+    assert_includes messages, TriggerBinding.chat_not_connected("Slack")
   end
 
   def schedule_binding(enabled:)

@@ -39,21 +39,44 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
     assert_raises(ActiveRecord::RecordNotFound) { create_trigger("column", board_column_id: foreign_column.id) }
   end
 
-  test "slack and schedule triggers get their fixed event types" do
+  test "chat and schedule triggers get their fixed event types" do
     create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
     slack = create_trigger("slack", name: "standup")
     schedule = create_trigger("schedule", enabled: false, schedule_config: { "cron" => "0 9 * * 1-5", "timezone" => "UTC" })
 
-    assert_equal "slack.message", slack.trigger.event_type
+    assert_equal [ "chat", "chat.message", "slack" ], [ slack.kind, slack.trigger.event_type, slack.trigger.chat_provider ]
     assert_equal "standup", slack.trigger.name
     assert_equal "schedule.fired", schedule.trigger.event_type
     assert_equal false, schedule.trigger.enabled # rubocop:disable Minitest/RefuteFalse
     assert_equal @project, schedule.trigger.project
   end
 
+  test "a chat trigger listens to the messenger it names, and follows its runs with a status card" do
+    create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
+
+    trigger = create_trigger("chat", chat_provider: "teams", filter_predicate: { "channel" => "19:a@thread.tacv2" }).trigger
+
+    assert_equal({ "channel" => "19:a@thread.tacv2", "provider" => "teams" }, trigger.filter_predicate)
+    assert_equal "lifecycle", trigger.status_reporting
+    assert trigger.notify_on_failure
+  end
+
+  test "a chat trigger asked to stay silent reports nothing" do
+    create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
+
+    assert_equal "none", create_trigger("chat", chat_provider: "teams", notify_on_failure: false).trigger.status_reporting
+    assert_equal "failures", create_trigger("chat", chat_provider: "teams", status_reporting: "failures").trigger.status_reporting
+  end
+
+  test "a chat trigger needs a messenger, and that messenger connected" do
+    assert_raises(ActiveRecord::RecordInvalid) { create_trigger("chat", enabled: false) }
+    error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("chat", chat_provider: "teams") }
+    assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Microsoft Teams")
+  end
+
   test "a slack trigger needs a connected workspace, unless it is created switched off" do
     error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("slack") }
-    assert_includes error.record.errors.full_messages, TriggerBinding::SLACK_NOT_CONNECTED
+    assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Slack")
 
     assert create_trigger("slack", enabled: false).trigger.persisted?
   end

@@ -139,6 +139,7 @@ module Templates
         unknown_refs(Array(trigger["column"]), columns, "#{label} column")
         unknown_refs(Array(trigger["subject_column"]), columns, "#{label} subject_column")
         @errors << "#{label}: a schedule trigger needs cron" if trigger["kind"] == "schedule" && trigger["cron"].blank?
+        @errors << "#{label}: a chat trigger needs chat_provider" if trigger["kind"] == "chat" && trigger["chat_provider"].blank?
       end
     end
 

@@ -4,28 +4,17 @@ module WorkflowTriggers
   # How a trigger reads wherever one is listed: the triggers API, the personal
   # MCP and the project's Triggers page all describe the same trigger the same
   # way. Two record kinds behind one shape:
-  #   column                                       → ColumnWorkflowBinding
-  #   slack / schedule / webhook / event / tracker → TriggerBinding
+  #   column                                      → ColumnWorkflowBinding
+  #   chat / schedule / webhook / event / tracker → TriggerBinding
   class Serializer
-    # The chat a message trigger listens to, by event type. A new messenger is
-    # one more entry; `kind` stays the provider's form name for compatibility.
-    CHAT_PROVIDERS = { TriggerBinding::SLACK_EVENT_TYPE => "slack" }.freeze
-
     def self.kind(event_type)
       case event_type
-      when TriggerBinding::SLACK_EVENT_TYPE then "slack"
+      when *Chat.event_types then "chat"
       when TriggerBinding::SCHEDULE_EVENT_TYPE then "schedule"
       when /\Awebhook\./ then "webhook"
       when /\Atracker\./ then "tracker"
       else "event"
       end
-    end
-
-    # What starts the run, for grouping: board, chat, schedule, webhook, tracker or event.
-    def self.source(event_type)
-      return "chat" if CHAT_PROVIDERS.key?(event_type.to_s)
-
-      kind(event_type)
     end
 
     def self.webhook_url(slug)
@@ -70,8 +59,9 @@ module WorkflowTriggers
       {
         id: binding.id,
         kind: self.class.kind(binding.event_type),
-        source: self.class.source(binding.event_type),
-        chat_provider: CHAT_PROVIDERS[binding.event_type],
+        # What starts the run, for grouping: board, chat, schedule, webhook, tracker or event.
+        source: self.class.kind(binding.event_type),
+        chat_provider: binding.chat_provider,
         event_type: binding.event_type,
         name: binding.name,
         filter_predicate: binding.filter_predicate,
@@ -82,6 +72,7 @@ module WorkflowTriggers
         schedule_config: binding.schedule_config,
         cooldown_seconds: binding.cooldown_seconds,
         notify_on_failure: binding.notify_on_failure,
+        status_reporting: binding.status_reporting.to_s,
         project_tracker_id: binding.project_tracker_id,
         aixle_changes: binding.aixle_changes,
         verification_strategy: endpoint&.verification_strategy&.to_s,

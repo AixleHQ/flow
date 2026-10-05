@@ -121,6 +121,7 @@
               "github",
               "gitlab",
               "slack",
+              "teams",
               "azure_devops",
               "coder",
               "jira",
@@ -666,6 +667,7 @@
                   "github",
                   "gitlab",
                   "slack",
+                  "teams",
                   "azure_devops",
                   "coder",
                   "jira",
@@ -1043,6 +1045,7 @@
             "properties": {
               "kind": {
                 "enum": [
+                  "chat",
                   "slack",
                   "schedule",
                   "webhook",
@@ -1103,6 +1106,19 @@
               },
               "notify_on_failure": {
                 "type": "boolean"
+              },
+              "status_reporting": {
+                "enum": [
+                  "none",
+                  "failures",
+                  "lifecycle"
+                ]
+              },
+              "chat_provider": {
+                "enum": [
+                  "slack",
+                  "teams"
+                ]
               },
               "verification_strategy": {
                 "enum": [

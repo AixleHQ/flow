@@ -56,6 +56,21 @@ module Chat
     provider_for(event)&.run_context(event) || {}
   end
 
+  # What the trigger form offers: the messengers the project's company has
+  # connected, and the conversations each one's bot knows by name. Direct chats
+  # are one person's each, so the form offers them as a kind, not one by one.
+  def trigger_options(project)
+    integrations = Integration.active.visible_for_project(project).where(provider: PROVIDERS.keys).to_a
+    known = ChatConversation.where(integration: integrations).where.not(kind: "direct")
+                            .order(:team_name, :name).group_by(&:provider)
+    integrations.map { |integration| integration.provider.to_s }.uniq.sort.map do |key|
+      { key: key, label: provider(key).label,
+        conversations: Array(known[key]).map do |row|
+          { id: row.external_id, name: row.name, kind: row.kind.to_s, team_name: row.team_name }
+        end }
+    end
+  end
+
   # Where a run came from, for a run started before the provider-neutral block
   # existed too: those carry only Slack's own block.
   def origin(run)
