@@ -68,6 +68,8 @@ class Teams::RepliesTest < ActiveSupport::TestCase
   test "the welcome goes out once, and not into a large team" do
     stub_request(:get, "#{TEAMS_SERVICE_URL}v3/teams/19%3Ateam%40thread.tacv2")
       .to_return(status: 200, body: { aadGroupId: "1b22f251-0000-4000-8000-000000000001", name: "Sales", memberCount: 12 }.to_json)
+    stub_request(:get, "#{TEAMS_SERVICE_URL}v3/teams/19%3Ateam%40thread.tacv2/conversations")
+      .to_return(status: 200, body: { conversations: [ { id: "19:abc@thread.tacv2" }, { id: "19:ops@thread.tacv2", name: "Ops" } ] }.to_json)
     welcome = stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2/activities")
       .with(body: hash_including("text" => /Mention me with a request/))
       .to_return(status: 201, body: { id: "1" }.to_json)
@@ -76,12 +78,17 @@ class Teams::RepliesTest < ActiveSupport::TestCase
 
     assert_requested welcome, times: 1
     assert_equal "1b22f251-0000-4000-8000-000000000001", @conversation.reload.team_aad_group_id
+    # The team's channels are known before anyone has addressed the bot in them.
+    assert_equal [ [ "19:abc@thread.tacv2", "Onboarding" ], [ "19:ops@thread.tacv2", "Ops" ] ],
+                 @integration.chat_conversations.where(team_name: "Sales").order(:external_id).pluck(:external_id, :name)
 
     big = ChatConversation.record_teams!(integration: @integration, activity: teams_activity.deep_merge(
       "conversation" => { "id" => "19:big@thread.tacv2" }, "channelData" => { "team" => { "id" => "19:big-team@thread.tacv2" } }
     ))
     stub_request(:get, "#{TEAMS_SERVICE_URL}v3/teams/19%3Abig-team%40thread.tacv2")
       .to_return(status: 200, body: { aadGroupId: "x", memberCount: 208 }.to_json)
+    stub_request(:get, "#{TEAMS_SERVICE_URL}v3/teams/19%3Abig-team%40thread.tacv2/conversations")
+      .to_return(status: 200, body: { conversations: [] }.to_json)
 
     Teams::WelcomeJob.perform_now(big.id)
 

@@ -18,6 +18,9 @@ module Teams
       if conversation.channel? && conversation.team_external_id.present?
         team = Teams::ConnectorClient.team(conversation.teams_reference, conversation.team_external_id)
         conversation.update!(team_aad_group_id: team["aadGroupId"], team_name: team["name"].presence || conversation.team_name)
+        ChatConversation.record_team_channels!(
+          conversation, Teams::ConnectorClient.channels(conversation.teams_reference, conversation.team_external_id)
+        )
         return conversation.update!(welcomed_at: Time.current) if team["memberCount"].to_i > LARGE_TEAM
       end
 

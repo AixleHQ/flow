@@ -58,13 +58,24 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, ReceivedWebhook.count
   end
 
-  test "a tenant no company has connected is acknowledged and ignored" do
+  test "a tenant no company has connected is told so at most daily, and nothing is stored" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
     @endpoint.update!(enabled: false)
 
-    deliver(teams_activity)
+    assert_enqueued_jobs(1, only: Teams::UnboundTenantHintJob) do
+      deliver(teams_activity)
+      deliver(teams_activity(text: "again"))
+      deliver(teams_activity(mention: false, text: "chatter"))
+    end
 
     assert_response :ok
-    assert_equal 0, ReceivedWebhook.count
+    assert_equal 0, ReceivedWebhook.count + ChatConversation.count
+    hint = stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2%3Bmessageid%3D1700000000001/activities/1700000000002")
+           .with(body: hash_including("text" => /hasn't connected Aixle Flow yet/))
+           .to_return(status: 201, body: { id: "1" }.to_json)
+    stub_teams_token!
+    perform_enqueued_jobs(only: Teams::UnboundTenantHintJob)
+    assert_requested hint
   end
 
   test "being added to a team records the conversation and queues one welcome; removal is remembered" do
@@ -78,6 +89,19 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
 
     deliver(added.merge("action" => "remove"))
     assert_not conversation.reload.installed?
+  end
+
+  test "a channel event records the channel it names, not the General channel it arrives on" do
+    created = teams_activity(mention: false, type: "conversationUpdate").except("text", "entities").deep_merge(
+      "conversation" => { "id" => "19:general@thread.tacv2" },
+      "channelData" => { "eventType" => "channelCreated", "channel" => { "id" => "19:new@thread.tacv2", "name" => "Launch" } }
+    )
+
+    deliver(created)
+    deliver(created.deep_merge("channelData" => { "eventType" => "channelDeleted" }))
+
+    channel = ChatConversation.sole
+    assert_equal [ "19:new@thread.tacv2", "Launch", false ], channel.values_at(:external_id, :name, :installed)
   end
 
   test "an addressed message records the conversation it came from" do

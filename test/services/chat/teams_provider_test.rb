@@ -34,6 +34,24 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     assert_equal 42, data["integration_id"]
   end
 
+  test "a message links back to itself the way Teams documents deep links" do
+    integration = Integration.create!(provider: :teams, company: @company, connected_by: @user, name: "Contoso", status: :active)
+    @endpoint.update!(config: { "integration_id" => integration.id })
+    integration.chat_conversations.create!(provider: "teams", external_id: "19:abc@thread.tacv2", kind: "channel",
+                                           team_aad_group_id: "1b22f251-0000-4000-8000-000000000001")
+
+    channel = URI.parse(normalized(teams_activity)[:data]["url"])
+    chat = normalized(teams_activity(conversation_type: "groupChat").deep_merge("conversation" => { "id" => "19:chat@thread.v2" }))
+
+    assert_equal "/l/message/19:abc@thread.tacv2/1700000000002", channel.path
+    assert_equal({ "tenantId" => TEAMS_CUSTOMER_TENANT, "groupId" => "1b22f251-0000-4000-8000-000000000001",
+                   "parentMessageId" => "1700000000001", "teamName" => "Sales", "channelName" => "Onboarding" },
+                 Rack::Utils.parse_query(channel.query))
+    assert_equal "https://teams.microsoft.com/l/message/19:chat@thread.v2/1700000000002?context=%7B%22contextType%22:%22chat%22%7D",
+                 chat[:data]["url"]
+    assert_nil normalized(teams_activity(conversation_type: "personal"))[:data]["url"]
+  end
+
   test "a name typed by hand is not a mention and stays in the request" do
     activity = teams_activity(text: "deploy").merge("text" => "@Aixle Flow deploy", "entities" => [])
 

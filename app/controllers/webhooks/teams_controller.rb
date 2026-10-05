@@ -16,14 +16,18 @@ class Webhooks::TeamsController < ActionController::API
       return head :unauthorized
     end
 
-    # A tenant no company has connected is acknowledged and otherwise ignored.
+    # A tenant no company has connected is acknowledged; someone asking the bot
+    # for something there is told so, at most daily, and nothing is stored.
     endpoint = endpoint_for(activity.dig("channelData", "tenant", "id") || activity.dig("conversation", "tenantId"))
     integration = Integration.active.find_by(id: endpoint&.config.to_h["integration_id"], provider: :teams)
-    return head :ok if integration.nil?
+    if integration.nil?
+      Teams::UnboundTenantHintJob.hint_once(activity) if addressed?(activity)
+      return head :ok
+    end
 
     case activity["type"]
     when "installationUpdate" then installation_changed(integration, activity)
-    when "conversationUpdate" then ChatConversation.record_teams!(integration: integration, activity: activity)
+    when "conversationUpdate" then conversation_changed(integration, activity)
     end
     return head :ok unless addressed?(activity)
 
@@ -67,6 +71,11 @@ class Webhooks::TeamsController < ActionController::API
       conversation.update!(installed: true)
       Teams::WelcomeJob.perform_later(conversation.id) if conversation.welcomed_at.nil?
     end
+  end
+
+  def conversation_changed(integration, activity)
+    conversation = ChatConversation.record_teams!(integration: integration, activity: activity)
+    conversation&.update!(installed: false) if activity.dig("channelData", "eventType") == "channelDeleted"
   end
 
   def endpoint_for(tenant_id)

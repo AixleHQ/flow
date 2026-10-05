@@ -13,13 +13,17 @@ class ChatConversation < ApplicationRecord
 
   validates :provider, :external_id, presence: true
 
-  # Upserts the conversation an authenticated Teams activity came from.
+  # Upserts the conversation an authenticated Teams activity came from. A
+  # channel event (created, renamed, deleted) arrives on the team's General
+  # channel and names the channel it is about in channelData.
   def self.record_teams!(integration:, activity:)
     conversation = activity["conversation"].to_h
+    channel_data = activity["channelData"].to_h
     external_id = conversation["id"].to_s.split(";messageid=", 2).first
+    external_id = channel_data.dig("channel", "id") if conversation["conversationType"] == "channel" &&
+                                                       channel_data.dig("channel", "id").present?
     return nil if external_id.blank?
 
-    channel_data = activity["channelData"].to_h
     row = find_or_initialize_by(integration: integration, external_id: external_id)
     row.assign_attributes(
       provider: "teams",
@@ -35,6 +39,23 @@ class ChatConversation < ApplicationRecord
     row
   rescue ActiveRecord::RecordNotUnique
     retry
+  end
+
+  # A team's channels as the Connector lists them, recorded beside the
+  # conversation the app was installed in, so the trigger form can offer them
+  # before anyone has addressed the bot there.
+  def self.record_team_channels!(team_conversation, channels)
+    channels.each do |channel|
+      next if channel["id"].blank?
+
+      row = find_or_initialize_by(integration_id: team_conversation.integration_id, external_id: channel["id"])
+      row.update!(provider: "teams", kind: "channel", name: channel["name"].presence || row.name || "General",
+                  tenant_id: team_conversation.tenant_id, team_external_id: team_conversation.team_external_id,
+                  team_aad_group_id: team_conversation.team_aad_group_id, team_name: team_conversation.team_name,
+                  service_url: team_conversation.service_url, installed: true)
+    rescue ActiveRecord::RecordNotUnique
+      retry
+    end
   end
 
   # What Teams::ConnectorClient needs to post here: in a channel, into the given

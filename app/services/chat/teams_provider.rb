@@ -45,9 +45,27 @@ module Chat
           # Where replies go. Recorded from the authenticated activity; never part
           # of a run's context, so nothing an agent passes can redirect a reply.
           "service_url" => activity["serviceUrl"],
-          "files" => files(activity["attachments"])
+          "files" => files(activity["attachments"]),
+          "url" => message_url(endpoint, activity, kind)
         }.compact
       }
+    end
+
+    # Teams' documented deep links to a message: a channel thread's names its
+    # team's group, which the registry learns when the app is installed.
+    def message_url(endpoint, activity, kind)
+      conversation_id, root_id = activity.dig("conversation", "id").to_s.split(";messageid=", 2)
+      return nil unless conversation_id.start_with?("19:") && activity["id"].present?
+
+      base = "https://teams.microsoft.com/l/message/#{conversation_id}/#{activity['id']}"
+      return "#{base}?context=%7B%22contextType%22:%22chat%22%7D" unless kind == "channel"
+
+      channel_data = activity["channelData"].to_h
+      group = ChatConversation.where(integration_id: endpoint.config.to_h["integration_id"], external_id: conversation_id)
+                              .pick(:team_aad_group_id)
+      query = { tenantId: channel_data.dig("tenant", "id"), groupId: group, parentMessageId: root_id || activity["id"],
+                teamName: channel_data.dig("team", "name"), channelName: channel_data.dig("channel", "name") }.compact
+      "#{base}?#{URI.encode_www_form(query)}"
     end
 
     def help_request?(event)
