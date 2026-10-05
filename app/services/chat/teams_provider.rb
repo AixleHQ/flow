@@ -111,7 +111,7 @@ module Chat
 
     def run_context(event)
       data = event.data.to_h
-      { "chat" => data.slice("provider", "integration_id", "conversation", "thread_id", "message_id", "actor")
+      { "chat" => data.slice("provider", "integration_id", "conversation", "thread_id", "message_id", "actor", "url")
                       .merge("workspace_id" => data.dig("workspace", "id"), "text" => data["raw_text"] || data["text"])
                       .compact_blank }
     end

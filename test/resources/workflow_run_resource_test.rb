@@ -41,4 +41,17 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
 
     assert_nil step["websocketUrl"]
   end
+
+  test "a chat-started run names where its request came from; any other run, nothing" do
+    @run.update!(shared_context: { "chat" => {
+      "provider" => "teams", "conversation" => { "id" => "19:a", "name" => "Onboarding", "team" => { "name" => "Sales" } },
+      "actor" => { "name" => "Olo Brockhouse" }, "url" => "https://teams.microsoft.com/l/message/19:a/1"
+    } })
+
+    assert_equal({ "provider" => "Microsoft Teams", "conversation" => "Sales / Onboarding", "sender" => "Olo Brockhouse",
+                   "url" => "https://teams.microsoft.com/l/message/19:a/1" }, WorkflowRunResource.new(@run).to_h["chatOrigin"])
+
+    @run.update!(shared_context: {})
+    assert_nil WorkflowRunResource.new(@run).to_h["chatOrigin"]
+  end
 end

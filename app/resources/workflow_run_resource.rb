@@ -46,6 +46,18 @@ class WorkflowRunResource < ApplicationResource
     run.step_runs_count
   end
 
+  # Where a chat-started run's request came from, for the run header.
+  typelize "{ provider: string; conversation: string | null; sender: string | null; url: string | null } | null"
+  attribute :chat_origin do |run|
+    origin = Chat.origin(run).to_h
+    provider = Chat.provider(origin["provider"])
+    next nil if provider.nil?
+
+    conversation = origin["conversation"].to_h
+    { provider: provider.label, conversation: [ conversation.dig("team", "name"), conversation["name"] ].compact.join(" / ").presence,
+      sender: origin.dig("actor", "name"), url: origin["url"] }
+  end
+
   typelize :string?
   attribute :user_name do |run|
     run.user&.name || User::DELETED_DISPLAY_NAME

@@ -355,6 +355,7 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={run.userName}
           mode={run.mode}
+          extraMeta={chatOriginMeta(run.chatOrigin)}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
@@ -579,3 +580,22 @@ const WorkflowRunShowPage = () => {
 setPageLayout(WorkflowRunShowPage, persistentProjectLayoutNoPadding);
 
 export default WorkflowRunShowPage;
+
+// Where a chat-started run's request came from: the messenger, the conversation,
+// who asked, and a link back to their message when the messenger has one.
+function chatOriginMeta(origin: WorkflowRun['chatOrigin']) {
+  if (!origin) return [];
+  const where = [origin.provider, origin.conversation, origin.sender].filter(Boolean).join(' · ');
+  return [
+    {
+      label: 'From',
+      value: origin.url ? (
+        <Anchor href={origin.url} target="_blank" rel="noreferrer" size="xs">
+          {where}
+        </Anchor>
+      ) : (
+        where
+      ),
+    },
+  ];
+}
