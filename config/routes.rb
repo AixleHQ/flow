@@ -565,6 +565,7 @@ Rails.application.routes.draw do
             member do
               post :test_connection
               get :teams_package
+              post :teams_link
               get :jira_projects
               get :github_projects
               get :linear_teams

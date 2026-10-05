@@ -177,6 +177,12 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     send_data Teams::AppPackage.zip, filename: Teams::AppPackage.filename, type: "application/zip"
   end
 
+  def teams_link
+    integration = Integration.visible_for_project(current_project).where(provider: "teams").find(params[:id])
+    flash[:teams_approval_url] = Teams::Connection.approval_url(Teams::Connection.renew_link!(integration))
+    redirect_to company_project_integrations_path(current_project), notice: "A new approval link is ready"
+  end
+
   # Kick off the Slack OAuth install for this project: redirect to Slack's consent
   # screen with a signed `state` that carries the project. Slack redirects back to
   # the deployment-wide callback (Web::Integrations::SlackOauthController#callback).

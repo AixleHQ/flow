@@ -49,6 +49,17 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal @company.integrations.find_by!(provider: :teams), Teams::Connection.find_by_token(token)
   end
 
+  test "teams_link hands out a fresh approval link for an existing connection" do
+    with_teams_enabled
+    teams, old = Teams::Connection.start!(company: @company, user: @user)
+
+    post teams_link_company_project_integration_path(@project, teams)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal teams, Teams::Connection.find_by_token(flash[:teams_approval_url].split("/").last)
+    assert_nil Teams::Connection.find_by_token(old)
+  end
+
   test "teams_connect refuses on a deployment with no Teams bot" do
     post teams_connect_company_project_integrations_path(@project)
 

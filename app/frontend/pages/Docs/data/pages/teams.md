@@ -23,7 +23,8 @@ organization, who does not need a Flow account.
    Any member who can change the project can do this.
 2. Flow shows an **approval link**. Copy it and send it to your Microsoft 365
    administrator. The link works for 7 days and is shown only once. If it is
-   lost, choose **New approval link** on the waiting row.
+   lost, or later, choose **New approval link** on the row; the old link stops
+   working.
 3. The administrator opens the link and selects **Sign in with Microsoft to
    approve**. They must hold one of these directory roles: Global
    Administrator, Privileged Role Administrator, Cloud Application
@@ -41,7 +42,7 @@ After approving, the administrator can choose **Grant file access**. That is a
 separate Microsoft consent for the permission `Files.ReadWrite.All`. Flow needs
 it to read files people attach in channels and group chats, and to save files
 into channels. The administrator may decline: everything else works without it,
-and the row shows **files off**. They can grant it later from the same approval
+and the row shows **files off**. They can grant it later from a new approval
 link.
 
 Flow uses the permission only for:

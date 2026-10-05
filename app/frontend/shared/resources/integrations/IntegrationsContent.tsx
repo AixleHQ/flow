@@ -923,13 +923,15 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {integration.provider === 'teams' && canExecute && integration.status !== 'active' && (
+                        {integration.provider === 'teams' && canExecute && (
                           <Tooltip label="New approval link">
                             <ActionIcon
                               aria-label={`New approval link for ${integration.name}`}
                               variant="subtle"
                               size="sm"
-                              onClick={handleConnectTeams}
+                              onClick={() =>
+                                router.post(`${basePath}/${integration.id}/teams_link`, {}, { preserveScroll: true })
+                              }
                             >
                               <IconLink size={16} />
                             </ActionIcon>

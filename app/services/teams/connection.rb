@@ -32,12 +32,18 @@ module Teams
       integration = Integration.where(provider: PROVIDER, company: company, status: "inactive")
                                .find { |candidate| candidate.settings.to_h["tenant_id"].blank? } ||
                     Integration.new(provider: PROVIDER, company: company, project: nil, name: "Microsoft Teams")
+      integration.assign_attributes(connected_by: user, status: "inactive")
+      [ integration, renew_link!(integration) ]
+    end
+
+    # A fresh approval link for a connection, waiting or connected — the way back
+    # to its approval page, to grant file access later. The old link stops working.
+    def renew_link!(integration)
       token = SecureRandom.urlsafe_base64(32)
-      integration.assign_attributes(connected_by: user, status: "inactive", settings: integration.settings.to_h.merge(
+      integration.update!(settings: integration.settings.to_h.merge(
         "approval_digest" => digest(token), "approval_expires_at" => APPROVAL_TTL.from_now.iso8601
       ))
-      integration.save!
-      [ integration, token ]
+      token
     end
 
     def approval_url(token)
@@ -85,6 +91,10 @@ module Teams
     def bind!(integration, claims, roles)
       tenant_id = claims["tid"].to_s
       raise Refused, "Microsoft did not say which organization this is" unless tenant_id.match?(Config::GUID)
+      bound = integration.settings.to_h["tenant_id"]
+      if bound.present? && bound != tenant_id
+        raise Refused, "This connection already serves another Microsoft 365 organization. Sign in with an account of that one."
+      end
       if Config.allowed_tenant_ids.any? && Config.allowed_tenant_ids.exclude?(tenant_id)
         raise Refused, "This Aixle installation does not serve that Microsoft 365 organization"
       end

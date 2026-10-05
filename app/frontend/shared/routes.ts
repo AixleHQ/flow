@@ -1657,6 +1657,11 @@ export function teamsPackageCompanyProjectIntegrationPath(project_id: ScalarType
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "teams_package" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/:id/teams_link(.:format) */
+export function teamsLinkCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "teams_link" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
 /** /company/projects/:project_id/integrations/:id/jira_projects(.:format) */
 export function jiraProjectsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "jira_projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);

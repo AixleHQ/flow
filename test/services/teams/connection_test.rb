@@ -96,6 +96,28 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
     assert_equal "inactive", integration.reload.status
   end
 
+  test "a connection's approval link can be renewed, and the old one stops working" do
+    integration, old = Teams::Connection.start!(company: @company, user: @user)
+    approve(integration)
+
+    renewed = Teams::Connection.renew_link!(integration)
+
+    assert_nil Teams::Connection.find_by_token(old)
+    assert_equal integration, Teams::Connection.find_by_token(renewed)
+    assert integration.reload.active?
+  end
+
+  test "a connected organization cannot be swapped for another through its link" do
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+    approve(integration)
+
+    error = assert_raises(Teams::Connection::Refused) { approve(integration, tid: "22222222-0000-4000-8000-0000000000dd") }
+
+    assert_match(/already serves another/, error.message)
+    assert_equal TEAMS_CUSTOMER_TENANT, integration.reload.settings["tenant_id"]
+    assert_not WebhookEndpoint.exists?(slug: "teams-tenant-22222222-0000-4000-8000-0000000000dd")
+  end
+
   test "an organization belongs to one workspace" do
     approve(Teams::Connection.start!(company: @company, user: @user).first)
     other_company = create(:company)

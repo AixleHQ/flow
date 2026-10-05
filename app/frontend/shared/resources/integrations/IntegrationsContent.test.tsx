@@ -1451,7 +1451,7 @@ describe('IntegrationsContent', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('says which organization a Teams connection serves, or that it waits for approval', () => {
+  it('says which organization a Teams connection serves, or that it waits for approval', async () => {
     renderPage(
       <IntegrationsContent
         title="Integrations"
@@ -1477,6 +1477,11 @@ describe('IntegrationsContent', () => {
       screen.getByRole('link', { name: 'Download the Teams app for Microsoft Teams (contoso.com)' }),
     ).toHaveAttribute('href', '/company/projects/1/integrations/5/teams_package');
     expect(screen.getByText('Waiting for a Microsoft 365 administrator to approve')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New approval link for Microsoft Teams' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'New approval link for Microsoft Teams' }));
+    expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/6/teams_link', {}, expect.anything());
+    // A connected organization gets one too: the way back to its approval page.
+    expect(
+      screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
+    ).toBeInTheDocument();
   });
 });

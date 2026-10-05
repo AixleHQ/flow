@@ -177,4 +177,12 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
       get teams_package_company_project_integration_path(@project, teams)
     end
   end
+
+  test "teams_link is a project write" do
+    with_teams_enabled
+    teams = create(:integration, provider: :teams, company: @company, project: nil, connected_by: @owner)
+    assert_project_write do
+      post teams_link_company_project_integration_path(@project, teams)
+    end
+  end
 end
