@@ -3,7 +3,7 @@
 # Task numbers shown on the board (#1, #2, …) restart on every board instead of
 # being the global board_tasks.id. `boards.last_task_number` is the counter new
 # tasks draw from; it only ever grows, so a deleted task's number is never
-# handed to another task and old links to `?task=N` cannot start pointing
+# handed to another task and old links to `?n=N` cannot start pointing
 # elsewhere.
 class AddNumberToBoardTasks < ActiveRecord::Migration[8.1]
   def up

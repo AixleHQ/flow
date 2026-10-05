@@ -327,7 +327,7 @@ const BoardPage = () => {
   // for an already-superseded click can't clear a newer one's pending state.
   const [pendingTaskNumber, setPendingTaskNumber] = useState<number | null>(null);
 
-  // Opening by the board-local task number (the `?task=` param), for a task the board may not hold
+  // Opening by the board-local task number (the `?n=` param), for a task the board may not hold
   // a card for — an epic's child or parent that lives on a page no column has loaded.
   //
   // Scoped to just the selected task's own props: the board list, columns, tags, epics,
@@ -338,7 +338,7 @@ const BoardPage = () => {
       setPendingTaskNumber(taskNumber);
       router.get(
         boardUrl,
-        { task: taskNumber },
+        { n: taskNumber },
         {
           preserveState: true,
           preserveScroll: true,
@@ -354,7 +354,7 @@ const BoardPage = () => {
 
   // URL each task card links to. Kept in sync with openTask so a plain click and
   // "open in new tab" land on the same task detail view.
-  const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.number}`, [boardUrl]);
+  const taskHref = useCallback((task: Task) => `${boardUrl}?n=${task.number}`, [boardUrl]);
 
   const closeTask = useCallback(() => {
     setPendingTaskNumber(null);

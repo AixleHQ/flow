@@ -12,6 +12,7 @@ require:
   - ./.rubocop/cops/testing/no_vendor_stubbing.rb
   - ./.rubocop/cops/configuration/no_env_in_app.rb
   - ./.rubocop/cops/tenant/scoped_tool_lookup.rb
+  - ./.rubocop/cops/database/board_task_number_bypass.rb
 
 AllCops:
   NewCops: enable
@@ -61,6 +62,13 @@ Tenant/ScopedToolLookup:
   Include:
     - "app/services/internal_tools/**/*"
     - "app/services/personal_tools/**/*"
+
+# Board task numbers come from the board's counter; bulk and raw writes skip it and
+# break the next ordinary create. Migrations are exempt: a backfill writes numbers itself.
+Database/BoardTaskNumberBypass:
+  Include:
+    - "app/**/*"
+    - "lib/**/*"
 
 # Doctrine R6: no `any_instance` in new tests. The Exclude list below is the
 # pre-doctrine offender set, frozen on 2026-07-02 — it only ever shrinks.

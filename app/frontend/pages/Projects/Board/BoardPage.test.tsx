@@ -301,7 +301,7 @@ describe('Projects/Board/BoardPage', () => {
 
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 11 },
+      { n: 11 },
       expect.objectContaining({ preserveState: true }),
     );
   });
@@ -332,7 +332,7 @@ describe('Projects/Board/BoardPage', () => {
     const card = screen.getByText('Wire up authentication').closest('a') as HTMLAnchorElement;
     expect(card).not.toBeNull();
     // The whole card is the anchor, and it points at the task detail URL.
-    expect(card).toHaveAttribute('href', '/company/projects/7/board?task=11');
+    expect(card).toHaveAttribute('href', '/company/projects/7/board?n=11');
     // Native drag is disabled so dnd-kit's pointer drag keeps working.
     expect(card).toHaveAttribute('draggable', 'false');
   });
@@ -1192,7 +1192,7 @@ describe('Projects/Board/BoardPage', () => {
     // Same navigation a full card click performs — the task detail sidebar opens for that ticket.
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 11 },
+      { n: 11 },
       expect.objectContaining({ preserveState: true }),
     );
     // The chip click must not bubble to the column strip and unfold the column. Asserted via the
@@ -1742,7 +1742,7 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(within(drawer).getByRole('button', { name: 'Checkout revamp' }));
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 5 },
+      { n: 5 },
       expect.objectContaining({ preserveState: true }),
     );
     // …and the select carries the current parent, addressable by its own label.
@@ -1774,7 +1774,7 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(within(drawer).getByRole('button', { name: /Unloaded child/ }));
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 7 },
+      { n: 7 },
       expect.objectContaining({ preserveState: true }),
     );
   });

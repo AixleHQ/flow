@@ -72,7 +72,7 @@ class Web::Company::Projects::BoardsRenderTest < ActionDispatch::IntegrationTest
     column = create(:board_column, board: board)
     task = create(:board_task, board: board, board_column: column)
 
-    get company_project_board_path(@project, task: task.number)
+    get company_project_board_path(@project, n: task.number)
     assert_response :success
     assert_inertia_page "Projects/Board/BoardPage"
   end
@@ -87,7 +87,7 @@ class Web::Company::Projects::BoardsRenderTest < ActionDispatch::IntegrationTest
     create(:step_run, workflow_run: run, step: create(:step, workflow: workflow), terminal_session: session)
     UsageStatistic.create!(terminal_session: session, cost_cents: 250)
 
-    get company_project_board_path(@project, task: task.number)
+    get company_project_board_path(@project, n: task.number)
 
     assert_response :success
     assert_equal [ 250 ], inertia.props[:taskWorkflowRuns].map { |r| r[:totalCostCents] }
