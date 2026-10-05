@@ -1416,6 +1416,22 @@ describe('IntegrationsContent', () => {
     expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/teams_connect', {}, expect.anything());
   });
 
+  it('offers Microsoft Teams on an empty page too', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        teams={{ enabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Microsoft Teams' }));
+
+    expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/teams_connect', {}, expect.anything());
+  });
+
   it('shows the approval link once, right after it was made', async () => {
     renderPage(
       <IntegrationsContent

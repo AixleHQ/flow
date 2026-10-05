@@ -489,7 +489,7 @@ export const IntegrationsContent = ({
         title={title}
         subtitle={
           isProjectContext
-            ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
+            ? 'Connect GitHub, GitLab, Coder, Slack or Microsoft Teams for this project, or use company-wide integrations'
             : 'Connect external services to your company'
         }
         actions={
@@ -603,7 +603,7 @@ export const IntegrationsContent = ({
             <EmptyState
               icon={<IconLink size={22} />}
               title="No integrations connected"
-              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from messages."
+              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack or Microsoft Teams to trigger workflows from messages."
               action={
                 canExecute && (
                   <Group gap="sm" justify="center" wrap="wrap">
@@ -655,6 +655,11 @@ export const IntegrationsContent = ({
                     {slackAvailable && (
                       <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                         Slack
+                      </Button>
+                    )}
+                    {teamsAvailable && (
+                      <Button variant="outline" leftSection={<IconBrandTeams size={16} />} onClick={handleConnectTeams}>
+                        Microsoft Teams
                       </Button>
                     )}
                   </Group>
