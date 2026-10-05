@@ -35,6 +35,7 @@ class Integration < ApplicationRecord
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?
+  after_destroy :release_teams_tenant, if: :teams?
 
   validates :name, presence: true
   validates :provider, presence: true
@@ -322,6 +323,13 @@ class Integration < ApplicationRecord
 
   def remove_linear_webhooks
     Trackers::Linear::Subscriptions.release(api_key: @linear_api_key, webhook_ids: @linear_webhook_ids)
+  end
+
+  # Deleted rather than disabled: the endpoint is what ties the tenant to this
+  # company, and a disconnected organization may connect to another one.
+  def release_teams_tenant
+    WebhookEndpoint.where(provider: "teams", company_id: company_id)
+                   .where("config->>'integration_id' = ?", id.to_s).delete_all
   end
 
   def release_slack_workspace

@@ -157,6 +157,29 @@ class IntegrationResource < ApplicationResource
     "#{Settings.protocol}://#{Settings.domain}#{Rails.application.routes.url_helpers.slack_events_webhook_path}"
   end
 
+  # ----- Microsoft Teams -----
+
+  # The organization the connection is bound to, by its domain when the
+  # approving administrator's account gave one.
+  typelize "string | null"
+  attribute :teams_organization do |integration|
+    next nil unless integration.teams?
+
+    integration.settings.to_h["tenant_domain"].presence || integration.settings.to_h["tenant_id"].presence
+  end
+
+  typelize "string | null"
+  attribute :teams_approved_by do |integration|
+    integration.teams? ? integration.settings.to_h.dig("approved_by", "name") : nil
+  end
+
+  # Whether the organization granted the tenant-wide file permission; null until
+  # anyone asked.
+  typelize "boolean | null"
+  attribute :teams_file_access do |integration|
+    integration.teams? ? integration.settings.to_h["file_access"] : nil
+  end
+
   # ----- Jira -----
 
   # "oauth" (Aixle's Atlassian app) or "service_account".

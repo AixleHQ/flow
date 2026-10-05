@@ -1292,6 +1292,36 @@ export function azureDevopsOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "azure_devops" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/teams/approve/:token(.:format) */
+export function teamsApprovalPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "approve" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/approve/:token/sign_in(.:format) */
+export function teamsApprovalSignInPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "approve" + "/" + token + "/" + "sign_in" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/approve/:token/file_access(.:format) */
+export function teamsApprovalFileAccessPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "approve" + "/" + token + "/" + "file_access" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/approve/:token/package(.:format) */
+export function teamsApprovalPackagePath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "approve" + "/" + token + "/" + "package" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/callback(.:format) */
+export function teamsSignInCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/teams/file_access/callback(.:format) */
+export function teamsFileAccessCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "file_access" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /oauth/client-metadata.json(.:format) */
 export function oauthClientMetadataPath(options?: object): string {
   return "/" + "oauth" + "/" + "client-metadata" + "." + "json" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1612,9 +1642,19 @@ export function linearInspectCompanyProjectIntegrationsPath(project_id: ScalarTy
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "linear_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/teams_connect(.:format) */
+export function teamsConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "teams_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/integrations/:id/test_connection(.:format) */
 export function testConnectionCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "test_connection" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/teams_package(.:format) */
+export function teamsPackageCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "teams_package" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/integrations/:id/jira_projects(.:format) */

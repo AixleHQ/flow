@@ -162,4 +162,19 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
       get azure_devops_sign_in_company_project_integrations_path(@project, organization: "contoso")
     end
   end
+
+  test "teams_connect is a project write (redirects back with the approval link)" do
+    with_teams_enabled
+    assert_project_write do
+      post teams_connect_company_project_integrations_path(@project)
+    end
+  end
+
+  test "teams_package is a project write" do
+    with_teams_enabled
+    teams = create(:integration, provider: :teams, company: @company, project: nil, connected_by: @owner)
+    assert_project_write(allowed: :success) do
+      get teams_package_company_project_integration_path(@project, teams)
+    end
+  end
 end

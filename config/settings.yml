@@ -363,6 +363,9 @@ teams:
   client_secret: <%= ENV['TEAMS_CLIENT_SECRET'] %>
   home_tenant_id: <%= ENV['TEAMS_HOME_TENANT_ID'] %>
   cloud: <%= ENV['TEAMS_CLOUD'] || 'public' %>
+  # Optional, comma-separated: the only Microsoft 365 organizations this
+  # installation will connect. A self-hoster sets their own.
+  allowed_tenant_ids: <%= ENV['TEAMS_ALLOWED_TENANT_IDS'] %>
 
 slack:
   # One Slack app per Aixle deployment (multi-workspace via OAuth). Companies

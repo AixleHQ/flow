@@ -26,6 +26,18 @@ module Teams
         token(tenant_id, "#{Config.cloud[:graph]}/.default")
       end
 
+      # How the bot proves it is itself to a token endpoint: the certificate, or a
+      # client secret in development.
+      def client_authentication(url)
+        return { client_secret: Config.client_secret } unless Config.certificate?
+
+        assertion = Entra::ClientAssertion.new(
+          client_id: Config.app_id, private_key: Config.private_key,
+          certificate_thumbprint: Config.certificate_thumbprint, token_url: url
+        )
+        { client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer", client_assertion: assertion.to_jwt }
+      end
+
       # For a 401 from Microsoft: the cached token is dead even though it looks fresh.
       def forget!(tenant_id = nil)
         @lock.synchronize { tenant_id ? @tokens.delete_if { |(tenant, _), _| tenant == tenant_id } : @tokens.clear }
@@ -61,15 +73,7 @@ module Teams
       end
 
       def form(url, scope)
-        base = { grant_type: "client_credentials", client_id: Config.app_id, scope: scope }
-        return base.merge(client_secret: Config.client_secret) unless Config.certificate?
-
-        assertion = Entra::ClientAssertion.new(
-          client_id: Config.app_id, private_key: Config.private_key,
-          certificate_thumbprint: Config.certificate_thumbprint, token_url: url
-        )
-        base.merge(client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-                   client_assertion: assertion.to_jwt)
+        { grant_type: "client_credentials", client_id: Config.app_id, scope: scope }.merge(client_authentication(url))
       end
     end
   end

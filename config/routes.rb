@@ -421,6 +421,19 @@ Rails.application.routes.draw do
     # Redirect URI on Aixle's Entra application for an administrator's sign-in.
     get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
                                                     as: :azure_devops_oauth_callback
+    # Microsoft Teams: the approval link a Microsoft 365 administrator opens
+    # (no Aixle account needed — the link is the credential), and the two
+    # redirect URIs registered on the bot's Entra application.
+    get "integrations/teams/approve/:token", to: "integrations/teams_approvals#show", as: :teams_approval
+    get "integrations/teams/approve/:token/sign_in", to: "integrations/teams_approvals#sign_in",
+                                                     as: :teams_approval_sign_in
+    get "integrations/teams/approve/:token/file_access", to: "integrations/teams_approvals#file_access",
+                                                         as: :teams_approval_file_access
+    get "integrations/teams/approve/:token/package", to: "integrations/teams_approvals#package",
+                                                     as: :teams_approval_package
+    get "integrations/teams/callback", to: "integrations/teams_approvals#callback", as: :teams_sign_in_callback
+    get "integrations/teams/file_access/callback", to: "integrations/teams_approvals#file_access_callback",
+                                                   as: :teams_file_access_callback
 
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,
@@ -546,9 +559,12 @@ Rails.application.routes.draw do
               post :linear_inspect
               # YouTrack: what a permanent token can see before it is saved.
               post :youtrack_inspect
+              # Microsoft Teams: a pending connection and its approval link.
+              post :teams_connect
             end
             member do
               post :test_connection
+              get :teams_package
               get :jira_projects
               get :github_projects
               get :linear_teams

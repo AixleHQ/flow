@@ -27,6 +27,9 @@ module Teams
     def client_secret = teams(:client_secret)
     def home_tenant_id = teams(:home_tenant_id)
 
+    # A self-hosted installation can pin the organizations it serves.
+    def allowed_tenant_ids = teams(:allowed_tenant_ids).to_s.split(/[\s,]+/).compact_blank
+
     def certificate?
       private_key.present? && certificate_thumbprint.present?
     end

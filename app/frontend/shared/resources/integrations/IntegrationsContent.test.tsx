@@ -1393,4 +1393,74 @@ describe('IntegrationsContent', () => {
       expect(screen.queryByRole('button', { name: /Test connection/i })).not.toBeInTheDocument();
     });
   });
+  // == Microsoft Teams ==
+
+  it('offers Microsoft Teams in a project when the deployment has a bot, and asks the server for a link', async () => {
+    const { rerender } = renderPage(
+      <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,
+      { props: settingsProps },
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Connect/ }));
+    expect(screen.queryByRole('menuitem', { name: 'Microsoft Teams' })).not.toBeInTheDocument();
+
+    rerender(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        teams={{ enabled: true }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Microsoft Teams' }));
+
+    expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/teams_connect', {}, expect.anything());
+  });
+
+  it('shows the approval link once, right after it was made', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        teams={{ enabled: true }}
+      />,
+      { props: { ...settingsProps, flash: { teamsApprovalUrl: 'https://flow.test/integrations/teams/approve/abc' } } },
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Microsoft Teams' });
+    expect(within(dialog).getByRole('textbox', { name: 'Approval link' })).toHaveValue(
+      'https://flow.test/integrations/teams/approve/abc',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('says which organization a Teams connection serves, or that it waits for approval', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        teams={{ enabled: true }}
+        integrations={[
+          makeIntegration({
+            id: 5,
+            name: 'Microsoft Teams (contoso.com)',
+            provider: 'teams',
+            teamsOrganization: 'contoso.com',
+            teamsApprovedBy: 'Megan Bowen',
+            teamsFileAccess: true,
+          }),
+          makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' }),
+        ]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('contoso.com · approved by Megan Bowen · files on')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Download the Teams app for Microsoft Teams (contoso.com)' }),
+    ).toHaveAttribute('href', '/company/projects/1/integrations/5/teams_package');
+    expect(screen.getByText('Waiting for a Microsoft 365 administrator to approve')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New approval link for Microsoft Teams' })).toBeInTheDocument();
+  });
 });

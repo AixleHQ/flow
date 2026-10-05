@@ -14,7 +14,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       youtrack: { enabled: true },
-      slack: { enabled: Slack::Oauth.enabled? }
+      slack: { enabled: Slack::Oauth.enabled? },
+      teams: { enabled: Teams::Config.enabled? }
     }
   end
 
@@ -155,6 +156,25 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                    projects: installation.allowed_project_ids }
   rescue AzureDevops::Error => e
     render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
+  # A pending Teams connection and the link a Microsoft 365 administrator opens
+  # to approve it. The link is shown once, here.
+  def teams_connect
+    unless Teams::Config.enabled?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "Microsoft Teams is not configured on this Aixle installation"
+    end
+
+    _integration, token = Teams::Connection.start!(company: current_project.company, user: current_user)
+    flash[:teams_approval_url] = Teams::Connection.approval_url(token)
+    redirect_to company_project_integrations_path(current_project),
+                notice: "Send the approval link to your Microsoft 365 administrator"
+  end
+
+  def teams_package
+    Integration.visible_for_project(current_project).where(provider: "teams").find(params[:id])
+    send_data Teams::AppPackage.zip, filename: Teams::AppPackage.filename, type: "application/zip"
   end
 
   # Kick off the Slack OAuth install for this project: redirect to Slack's consent
