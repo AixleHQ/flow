@@ -18,14 +18,20 @@ module Teams
       if conversation.channel? && conversation.team_external_id.present?
         team = Teams::ConnectorClient.team(conversation.teams_reference, conversation.team_external_id)
         conversation.update!(team_aad_group_id: team["aadGroupId"], team_name: team["name"].presence || conversation.team_name)
-        ChatConversation.record_team_channels!(
-          conversation, Teams::ConnectorClient.channels(conversation.teams_reference, conversation.team_external_id)
-        )
+        record_channels(conversation)
         return conversation.update!(welcomed_at: Time.current) if team["memberCount"].to_i > LARGE_TEAM
       end
 
       Teams::Notifier.post(conversation, text: text(conversation))
       conversation.update!(welcomed_at: Time.current)
+    end
+
+    # The trigger form's channel list; a refusal here must not cost the welcome.
+    def record_channels(conversation)
+      channels = Teams::ConnectorClient.channels(conversation.teams_reference, conversation.team_external_id)
+      ChatConversation.record_team_channels!(conversation, channels)
+    rescue Teams::Error => e
+      Rails.logger.warn("[Teams::WelcomeJob] could not list the channels of #{conversation.team_external_id}: #{e.message}")
     end
 
     def text(conversation)
