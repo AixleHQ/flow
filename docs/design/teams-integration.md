@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): everything in the bot's home tenant passes; the second-tenant run (spike 1) is next
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): spikes 1, 2 and 4 pass, in the bot's home tenant and a second one, so one bot serves every customer
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1085,7 +1085,7 @@ and failure notices behave in production exactly as before.
 | 6 | Job-queue latency from activity to first `typing` in production-like load | Store 2 s rule; perceived responsiveness | The controller sends `typing` inline |
 | 7 | Can `Files.ReadWrite.All` on "Aixle Flow" be admin-consented after, and separately from, a binding sign-in that requested only `openid profile` (v2 `adminconsent`)? Does the Graph token's `roles` then show it? | Decision 5 with a working connection when an admin says no | The connection page links the admin to Entra admin center → Enterprise applications → "Aixle Flow" → Grant admin consent, then re-checks |
 
-**Results so far** (2026-10-02/03, staging app and Azure Bot; Web Chat, then Teams in the bot's home tenant):
+**Results so far** (2026-10-02/05, staging app and Azure Bot; Web Chat, Teams in the bot's home tenant, then in a second tenant):
 
 | Check | Result |
 |---|---|
@@ -1096,7 +1096,8 @@ and failure notices behave in production exactly as before.
 | Spike 2: Graph thread replies with the tenant's client-credentials token under RSC | ✅ `200`, 7 replies. The token carries `roles: ["Group.Selected"]`, which is how RSC shows up in it. `GET /v3/teams/{id}` gives the `aadGroupId` Graph needs |
 | Spike 4, 1:1: an attached file | ✅ `application/vnd.microsoft.teams.file.download.info`; the `downloadUrl` answers `200` with no token |
 | Spike 4, channel: an attached file and a pasted image | Both arrive at the bot as `text/html` only. Graph shows them as `reference` attachments (SharePoint), and `/shares/{id}/driveItem` answers `403 accessDenied` without `Files.ReadWrite.All`, which confirms decision 5 |
-| Spike 1 (a second tenant), 3, 5, 7 | Not run yet |
+| **Spike 1: a second tenant** (2026-10-05) | ✅ In another organization's Teams the bot received installs and mentions, and its replies, proactive thread posts and a new channel thread were all accepted (`201`) with the Connector token from its **home** tenant. A Graph token for the **customer's** tenant was issued with `roles: ["Group.Selected"]` without any admin consent there (installing the app with RSC was enough), and read the thread (`200`). One bot serves every customer |
+| Spikes 3, 5, 7 | Not run yet |
 
 What the live runs taught that the docs do not say plainly:
 - The Connector rejects a reply without `from`, with `400 MissingProperty`. Every outgoing activity has
