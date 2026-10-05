@@ -69,6 +69,10 @@ module Chat
       Slack::RunFailureNotifier.call(run)
     end
 
+    def post_status_card(event, status) = Slack::StatusCard.post(event, status)
+
+    def update_status_card(event, message_id, status) = Slack::StatusCard.update(event, message_id, status)
+
     def run_context(event)
       data = event.data.to_h
       legacy = {

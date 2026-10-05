@@ -31,7 +31,9 @@ class Teams::RepliesTest < ActiveSupport::TestCase
 
   test "help lists, in the thread, what this conversation can start" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
-                             filter_predicate: { "text" => { "op" => "starts_with", "value" => "digest" } })
+                             filter_predicate: { "provider" => "teams", "text" => { "op" => "starts_with", "value" => "digest" } })
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             filter_predicate: { "provider" => "slack", "text" => "slack only" })
     stub = stub_request(:post, @thread).with { |request|
       body = JSON.parse(request.body)
       body["textFormat"] == "markdown" && body["from"] == { "id" => "28:#{TEAMS_APP_ID}" } &&

@@ -93,4 +93,11 @@ class Trackers::RunStatusReporterTest < ActiveSupport::TestCase
       Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "failed")
     end
   end
+
+  test "a run starting or completing gives the tracker reporter nothing to do" do
+    assert_no_enqueued_jobs(only: Triggers::ReportToOriginJob) do
+      Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "running")
+      Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "completed")
+    end
+  end
 end

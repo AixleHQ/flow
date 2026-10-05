@@ -11,7 +11,9 @@ module Trackers
 
     module_function
 
-    def applies?(dispatch)
+    def applies?(dispatch, transition = nil)
+      return false if transition && TRANSITIONS.exclude?(transition.to_s)
+
       binding = dispatch.trigger_binding
       binding&.tracker_event? && binding.status_reporting.to_s == "failures" && TriggerSupport.event?(dispatch.trigger_event)
     end

@@ -11,7 +11,7 @@ module Teams
       conversation = Notifier.conversation_for(data["integration_id"], data.dig("conversation", "id"))
       return false if conversation.nil?
 
-      Notifier.post(conversation, text: catalog(Chat::HelpCatalog.bindings(event, data["channel"])),
+      Notifier.post(conversation, text: catalog(Chat::HelpCatalog.bindings(event)),
                                   thread_id: data["thread_id"])
       true
     rescue StandardError => e

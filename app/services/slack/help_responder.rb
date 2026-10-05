@@ -18,7 +18,7 @@ module Slack
         integration = integration_for(event)
         return false if integration.nil?
 
-        bindings = channel_bindings(event, channel)
+        bindings = Chat::HelpCatalog.bindings(event)
         text, blocks = format_catalog(bindings)
 
         Slack::Notifier.post(
@@ -40,10 +40,6 @@ module Slack
           company_id: event.company_id || event.project&.company_id, project_id: event.project_id,
           integration_id: event.data.to_h["integration_id"], team_id: event.data.to_h["team"]
         )
-      end
-
-      def channel_bindings(event, channel)
-        Chat::HelpCatalog.bindings(event, channel)
       end
 
       def format_catalog(bindings)

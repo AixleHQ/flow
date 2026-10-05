@@ -3,6 +3,8 @@
 require "test_helper"
 
 class TriggerEngineTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @user = create(:user, :with_company)
     @company = @user.companies.first
@@ -128,6 +130,20 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     assert_equal %w[skipped started], TriggerDispatch.order(:status).pluck(:status)
     assert_equal({ "reason" => "cooldown" }, TriggerDispatch.find_by(status: "skipped").detail)
+    announced = enqueued_jobs.select { |job| job["job_class"] == "Triggers::ReportRunTransitionJob" }.map { |job| job["arguments"] }
+    assert_equal [ [ TriggerDispatch.find_by(status: "started").id, "dispatched" ],
+                   [ TriggerDispatch.find_by(status: "skipped").id, "skipped" ] ], announced
+  end
+
+  test "a replayed event decides nothing new and announces nothing" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+    event = TriggerEngine.publish(event_type: "slack.message", source: "slack:test", data: {}, project: @project, dedup_key: "e1")
+    clear_enqueued_jobs
+
+    TriggerEngine.dispatch(event)
+
+    assert_no_enqueued_jobs(only: Triggers::ReportRunTransitionJob)
   end
 
   test "a binding starts again once its cooldown has passed" do

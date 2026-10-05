@@ -58,6 +58,10 @@ module Chat
 
     def report_failure(run) = Teams::RunFailureNotifier.call(run)
 
+    def post_status_card(event, status) = Teams::StatusCard.post(event, status)
+
+    def update_status_card(event, message_id, status) = Teams::StatusCard.update(event, message_id, status)
+
     def ingest_files(_event, _project) = nil
 
     def run_context(event)

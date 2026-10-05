@@ -7,18 +7,14 @@ module Chat
   module HelpCatalog
     module_function
 
-    def bindings(event, channel)
+    # Every condition but the text is about where the message came from — the
+    # messenger, the channel, direct or not — so those decide what is listed here.
+    def bindings(event)
+      data = event.data.to_h
       TriggerBinding.for_event(event)
         .includes(:workflow, :project)
-        .select { |binding| applies_to_channel?(binding, channel) }
+        .select { |binding| TriggerFilter.match?(binding.filter_predicate.to_h.except("text"), data) }
         .sort_by { |binding| [ binding.project&.name.to_s, label(binding) ] }
-    end
-
-    def applies_to_channel?(binding, channel)
-      predicate = binding.filter_predicate.to_h
-      return true unless predicate.key?("channel")
-
-      predicate["channel"].to_s == channel.to_s
     end
 
     def label(binding)

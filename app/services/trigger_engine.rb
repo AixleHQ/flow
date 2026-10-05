@@ -203,6 +203,7 @@ class TriggerEngine
       )
 
       result = nil
+      decided = nil
       dispatch.with_lock do
         if dispatch.workflow_run_id.present?
           result = dispatch.workflow_run            # already started → idempotent no-op
@@ -210,6 +211,7 @@ class TriggerEngine
           result = nil                              # a prior attempt decided not to start
         elsif cooling_down?(trigger_binding, dispatch)
           dispatch.update!(status: "skipped", detail: { "reason" => "cooldown" })
+          decided = "skipped"
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
@@ -224,9 +226,12 @@ class TriggerEngine
             status: started ? "started" : "skipped",
             detail: started ? {} : { "reason" => skip_reason(result) }
           )
+          decided = started ? "dispatched" : "skipped"
           WorkflowService.dispatch_or_leave_to_relay(result) if started
         end
       end
+      # Said once, by the attempt that decided; a replay of the event decides nothing.
+      Triggers.announce(dispatch.id, decided) if decided && trigger_binding
       result
     end
 

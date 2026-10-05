@@ -10,4 +10,11 @@ module Triggers
   def self.origin_reporters
     ORIGIN_REPORTERS.map(&:constantize)
   end
+
+  # `transition` is the state a run entered (running, completed, failed,
+  # cancelled), or what became of the dispatch that had no run to enter one:
+  # dispatched or skipped.
+  def self.announce(dispatch_id, transition)
+    ReportRunTransitionJob.perform_later(dispatch_id, transition.to_s)
+  end
 end
