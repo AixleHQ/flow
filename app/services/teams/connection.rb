@@ -11,7 +11,10 @@ module Teams
 
     PROVIDER = "teams"
     APPROVAL_TTL = 7.days
-    # Directory roles that can decide which apps an organization uses.
+    # Directory roles that can decide which apps an organization uses, by
+    # Microsoft's built-in role template id: the same in every tenant, and what a
+    # sign-in's `wids` claim lists. Not secrets. Source:
+    # https://learn.microsoft.com/entra/identity/role-based-access-control/permissions-reference#all-roles
     ADMIN_ROLES = {
       "62e90394-69f5-4237-9190-012177145e10" => "Global Administrator",
       "e8611ab8-c189-46e8-94e1-60213ab1f814" => "Privileged Role Administrator",

@@ -4,6 +4,7 @@ require "test_helper"
 
 class Teams::ConnectionTest < ActiveSupport::TestCase
   GLOBAL_ADMIN = "62e90394-69f5-4237-9190-012177145e10"
+  NOT_AN_ADMIN_ROLE = "b79fbf4d-3ef9-4689-8143-76b194e85509"
   SIGN_IN_TOKEN_URL = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
 
   setup do
@@ -81,7 +82,7 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
   test "a sign-in without a directory administrator role binds nothing" do
     integration, = Teams::Connection.start!(company: @company, user: @user)
 
-    error = assert_raises(Teams::Connection::Refused) { approve(integration, wids: [ "b79fbf4d-3ef9-4689-8143-76b194e85509" ]) }
+    error = assert_raises(Teams::Connection::Refused) { approve(integration, wids: [ NOT_AN_ADMIN_ROLE ]) }
 
     assert_match(/Megan Bowen is not an administrator/, error.message)
     assert_equal "inactive", integration.reload.status
