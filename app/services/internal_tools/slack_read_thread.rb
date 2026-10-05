@@ -19,7 +19,7 @@ module InternalTools
 
     tool do
       display_name "Slack Read Thread"
-      description "Read a Slack thread: the parent message and its replies, oldest first. In a run triggered from Slack, call it with no arguments to read the thread behind the request — the usual case; anywhere else, name `channel` and `thread_ts`. Returns JSON: {messages: [{ts, user, bot_id, text, files}], has_more, next_cursor}. Public and private channels only (not DMs). Read a thread once rather than polling it."
+      description "Deprecated — use chat_read_thread, which works in Slack and Microsoft Teams alike. Read a Slack thread: the parent message and its replies, oldest first. In a run triggered from Slack, call it with no arguments to read the thread behind the request — the usual case; anywhere else, name `channel` and `thread_ts`. Returns JSON: {messages: [{ts, user, bot_id, text, files}], has_more, next_cursor}. Public and private channels only (not DMs). Read a thread once rather than polling it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack

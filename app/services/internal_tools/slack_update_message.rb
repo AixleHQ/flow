@@ -14,7 +14,7 @@ module InternalTools
 
     tool do
       display_name "Slack Update Message"
-      description "Edit a Slack message the bot posted, by its `ts` (returned by slack_post_message). Use it for a status message that fills in as the step progresses. The message is REPLACED, not merged: send everything it should end up with — a text-only update of a message that had blocks clears those blocks. Only the bot's own messages can be edited, and already-uploaded files cannot. Omit `channel` only when this session was started from Slack; otherwise name it."
+      description "Deprecated — use chat_update_message, which works in Slack and Microsoft Teams alike. Edit a Slack message the bot posted, by its `ts` (returned by slack_post_message). Use it for a status message that fills in as the step progresses. The message is REPLACED, not merged: send everything it should end up with — a text-only update of a message that had blocks clears those blocks. Only the bot's own messages can be edited, and already-uploaded files cannot. Omit `channel` only when this session was started from Slack; otherwise name it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack

@@ -82,7 +82,7 @@ module Teams
         return request(reference, method, path, body, retried: true)
       end
       raise Error.new("Bot Connector #{method.upcase} #{path}: HTTP #{response.status} #{response.body.to_s.truncate(300)}",
-                      status: response.status) unless response.success?
+                      status: response.status, retry_after: response.headers["Retry-After"]&.to_i) unless response.success?
 
       response.body.to_s.empty? ? {} : JSON.parse(response.body)
     end

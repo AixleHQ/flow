@@ -39,7 +39,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "grouping axes cover every definition" do
     defs = Tools::Registry.definitions.values
 
-    assert_equal 22, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
+    assert_equal 26, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
 
     # Azure is injected rather than picked, so every one of its tools must
@@ -54,7 +54,9 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board tracker slack coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[board tracker chat slack coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[chat_delete_message chat_post_message chat_read_thread chat_update_message],
+                 groups.find { |g| g[:tag] == "chat" }[:tool_names]
     assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
     assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
                  groups.find { |g| g[:tag] == "slack" }[:tool_names]

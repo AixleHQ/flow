@@ -24,6 +24,6 @@ class Tools::TagCatalogTest < ActiveSupport::TestCase
   end
 
   test "ui_entries lists only visible tags, in picker order" do
-    assert_equal %i[board tracker slack coder assets session_supervision], Tools::TagCatalog.ui_entries.map(&:tag)
+    assert_equal %i[board tracker chat slack coder assets session_supervision], Tools::TagCatalog.ui_entries.map(&:tag)
   end
 end

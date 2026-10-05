@@ -11,7 +11,7 @@ module InternalTools
 
     tool do
       display_name "Slack Delete Message"
-      description "Delete a Slack message the bot posted, by its `ts` (returned by slack_post_message). Only the bot's own messages can be deleted, and the deletion is permanent. Prefer slack_update_message when the message should stay and only its content is wrong. Omit `channel` only when this session was started from Slack; otherwise name it."
+      description "Deprecated — use chat_delete_message, which works in Slack and Microsoft Teams alike. Delete a Slack message the bot posted, by its `ts` (returned by slack_post_message). Only the bot's own messages can be deleted, and the deletion is permanent. Prefer slack_update_message when the message should stay and only its content is wrong. Omit `channel` only when this session was started from Slack; otherwise name it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack

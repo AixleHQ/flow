@@ -95,6 +95,8 @@ module Templates
       when "integration"
         if detail["provider"] == Trackers::CAPABILITY
           "Connect a task tracker (Jira or Azure DevOps)"
+        elsif detail["provider"] == Chat::CAPABILITY
+          "Connect Slack or Microsoft Teams"
         else
           "Connect #{Chat.provider(detail['provider'])&.label || detail['provider'].to_s.titleize}"
         end

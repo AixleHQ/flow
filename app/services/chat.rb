@@ -13,11 +13,15 @@ module Chat
 
   PROVIDERS = { "slack" => "Chat::SlackProvider", "teams" => "Chat::TeamsProvider" }.freeze
 
+  # A tool that works through whichever messenger is connected requires this,
+  # as tracker tools require Trackers::CAPABILITY.
+  CAPABILITY = "chat"
+
   # Answered before any trigger runs, so no trigger may claim it as its command.
   RESERVED_COMMAND = %r{\A/?help\z}i
 
   # Event data that routes a message rather than describing it.
-  TRANSPORT_KEYS = %w[provider workspace conversation thread_id message_id actor].freeze
+  TRANSPORT_KEYS = %w[provider workspace conversation thread_id message_id actor file_refs url].freeze
 
   module_function
 

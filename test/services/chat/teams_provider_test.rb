@@ -58,17 +58,20 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     assert_equal "@Aixle Flow deploy", normalized(activity)[:data]["text"]
   end
 
-  test "chats have no threads; a 1:1 file arrives as metadata only" do
+  test "chats have no threads; a 1:1 file's link travels apart from what describes it" do
     activity = teams_activity(conversation_type: "personal", mention: false, attachments: [
       { "contentType" => "application/vnd.microsoft.teams.file.download.info", "name" => "brief.pdf",
-        "content" => { "uniqueId" => "u1", "fileType" => "pdf" } },
+        "content" => { "uniqueId" => "u1", "fileType" => "pdf", "downloadUrl" => "https://contoso-my.sharepoint.com/d" } },
       { "contentType" => "text/html", "content" => "<p>hi</p>" }
     ])
     data = normalized(activity)[:data]
 
     assert_equal "direct", data.dig("conversation", "type")
     assert_nil data["thread_id"]
-    assert_equal [ { "name" => "brief.pdf", "file_type" => "pdf", "unique_id" => "u1" } ], data["files"]
+    assert_equal [ { "name" => "brief.pdf", "file_type" => "pdf", "unique_id" => "u1", "mimetype" => "application/pdf" } ],
+                 data["files"]
+    assert_equal [ { "kind" => "download", "url" => "https://contoso-my.sharepoint.com/d" } ], data["file_refs"]
+    assert_nil Chat::TeamsProvider.scrub(data)["file_refs"]
   end
 
   test "the sender is recognised by the Entra object id a Microsoft sign-in stored, never by email" do

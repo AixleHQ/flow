@@ -16,10 +16,11 @@ module InternalTools
   # channel itself.
   class SlackPostMessage < Base
     include Concerns::SlackContext
+    include Concerns::ToolFiles
 
     tool do
       display_name "Slack Post Message"
-      description "Send a Slack message. `text`, `blocks` and `files` are all optional but at least one is required. `text` is plain/mrkdwn; `blocks` is Block Kit for rich layout; files can be attached in any number, each entry setting EXACTLY ONE source: `content` (inline text, needs `filename`), `file_path` (a path in the running container — any type incl. binary), or `asset_id` (a project asset's bytes). text + files arrive as one message; blocks + files send the message first and hang the files in its thread. Omit channel/thread to reply in the channel/thread that triggered the run; when nothing Slack-side started this session there is no default, so pass `channel` yourself. Returns the message `ts`, which slack_update_message and slack_delete_message address it by. Requires a Slack integration on the project."
+      description "Deprecated — use chat_post_message, which works in Slack and Microsoft Teams alike. Send a Slack message. `text`, `blocks` and `files` are all optional but at least one is required. `text` is plain/mrkdwn; `blocks` is Block Kit for rich layout; files can be attached in any number, each entry setting EXACTLY ONE source: `content` (inline text, needs `filename`), `file_path` (a path in the running container — any type incl. binary), or `asset_id` (a project asset's bytes). text + files arrive as one message; blocks + files send the message first and hang the files in its thread. Omit channel/thread to reply in the channel/thread that triggered the run; when nothing Slack-side started this session there is no default, so pass `channel` yourself. Returns the message `ts`, which slack_update_message and slack_delete_message address it by. Requires a Slack integration on the project."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack
@@ -120,67 +121,6 @@ module InternalTools
 
     def ts_suffix(result)
       result.ts.present? ? " (ts #{result.ts})" : ""
-    end
-
-    # Resolve every files[] entry into the { filename, content, title } shape
-    # Slack::Client.upload_files expects. Returns [resolved_array, error]: on the
-    # first unresolvable entry, resolved_array is nil and error is a tool error.
-    def build_files
-      resolved = []
-      Array(params[:files]).each_with_index do |raw, index|
-        f = raw.respond_to?(:to_h) ? raw.to_h.with_indifferent_access : {}
-        entry, err = resolve_file_entry(f, index)
-        return [ nil, err ] if err
-
-        resolved << entry
-      end
-      [ resolved, nil ]
-    end
-
-    def resolve_file_entry(f, index)
-      sources = %i[content file_path asset_id].select { |k| f[k].present? }
-      return [ nil, error("files[#{index}] needs one of: content, file_path, asset_id") ] if sources.empty?
-      return [ nil, error("files[#{index}] must set only one of content/file_path/asset_id") ] if sources.size > 1
-
-      title = f[:title].presence
-      case sources.first
-      when :content    then resolve_inline_file(f, index, title)
-      when :file_path  then resolve_container_file(f, index, title)
-      when :asset_id   then resolve_asset_file(f, index, title)
-      end
-    end
-
-    def resolve_inline_file(f, index, title)
-      filename = f[:filename].presence
-      return [ nil, error("files[#{index}] with content requires filename") ] if filename.blank?
-
-      [ { filename: filename, content: f[:content].to_s, title: title }, nil ]
-    end
-
-    def resolve_container_file(f, index, title)
-      container_id = session.try(:container_id)
-      return [ nil, error("No container available to read file from") ] if container_id.blank?
-
-      path = f[:file_path].to_s
-      bytes = ContainerRuntime.build.read_file(container_id, path)
-      return [ nil, error("files[#{index}] file not found in container: #{path}") ] if bytes.nil?
-
-      filename = f[:filename].presence || File.basename(path)
-      [ { filename: filename, content: bytes, title: title }, nil ]
-    end
-
-    def resolve_asset_file(f, index, title)
-      return [ nil, error("No project in the current context") ] if project.nil?
-
-      asset = Asset.accessible_from_project(project).find_by(id: f[:asset_id])
-      return [ nil, error("files[#{index}] asset not found in this project: #{f[:asset_id]}") ] if asset.nil?
-
-      version = asset.latest_version
-      return [ nil, error("files[#{index}] asset ##{asset.id} has no file content") ] if version&.file.nil?
-
-      bytes = version.file.download { |file| file.read }
-      filename = f[:filename].presence || asset.name
-      [ { filename: filename, content: bytes, title: title }, nil ]
     end
   end
 end

@@ -28,6 +28,7 @@ class Webhooks::TeamsController < ActionController::API
     case activity["type"]
     when "installationUpdate" then installation_changed(integration, activity)
     when "conversationUpdate" then conversation_changed(integration, activity)
+    when "invoke" then return file_consent(integration, activity) if activity["name"] == "fileConsent/invoke"
     end
     return head :ok unless addressed?(activity)
 
@@ -37,7 +38,7 @@ class Webhooks::TeamsController < ActionController::API
       idempotency_key: "#{activity.dig('conversation', 'id')}:#{activity['id']}",
       event_type: "teams",
       status: "received",
-      raw_payload: without_download_urls(activity)
+      raw_payload: activity
     )
     Webhooks::ProcessEventJob.perform_later(received.id)
     head :ok
@@ -73,6 +74,21 @@ class Webhooks::TeamsController < ActionController::API
     end
   end
 
+  # Accepting a card Teams::FileSender sent: its signed context names the file
+  # and the conversation, which must be the one the answer came from. The upload
+  # happens off the request; Teams wants this answer at once.
+  def file_consent(integration, activity)
+    value = activity["value"].to_h
+    context = Teams::FileSender.consent_verifier.verified(value.dig("context", "token")).to_h
+    conversation = ChatConversation.find_by(id: context["conversation_id"], integration: integration)
+    from_there = conversation && conversation.external_id == activity.dig("conversation", "id").to_s.split(";messageid=", 2).first
+    if from_there && value["action"] == "accept"
+      upload = value["uploadInfo"].to_h.slice("uploadUrl", "contentUrl", "name", "uniqueId", "fileType")
+      Teams::FileConsentJob.perform_later(conversation.id, context["asset_id"], upload, activity["replyToId"])
+    end
+    head :ok
+  end
+
   def conversation_changed(integration, activity)
     conversation = ChatConversation.record_teams!(integration: integration, activity: activity)
     conversation&.update!(installed: false) if activity.dig("channelData", "eventType") == "channelDeleted"
@@ -82,17 +98,6 @@ class Webhooks::TeamsController < ActionController::API
     return nil unless tenant_id.to_s.match?(Teams::Config::GUID)
 
     WebhookEndpoint.active.find_by(slug: "teams-tenant-#{tenant_id}")
-  end
-
-  # A 1:1 attachment's downloadUrl works without a token, so it is a credential
-  # for as long as it lives; nothing reads it until file ingestion exists.
-  def without_download_urls(activity)
-    attachments = Array(activity["attachments"]).map do |attachment|
-      next attachment unless attachment.is_a?(Hash) && attachment["content"].is_a?(Hash)
-
-      attachment.merge("content" => attachment["content"].except("downloadUrl"))
-    end
-    activity.merge("attachments" => attachments)
   end
 
   def safe_json(raw)

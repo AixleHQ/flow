@@ -106,8 +106,7 @@ module InternalTools
       # entry that is not a typed block object, or an interactive block nothing in
       # this deployment could respond to. Returns [blocks, error]; blocks is [] when
       # none were given, and nil when the entry was rejected.
-      def build_blocks
-        raw = params[:blocks]
+      def build_blocks(raw = params[:blocks])
         return [ [], nil ] if raw.blank?
         return [ nil, error("`blocks` must be an array of Block Kit block objects") ] unless raw.is_a?(Array)
         return [ nil, error("`blocks` is capped at #{MAX_BLOCKS} blocks per message") ] if raw.size > MAX_BLOCKS

@@ -89,7 +89,9 @@ class TriggerEngine
 
       event.reload
       runs = route_pending(event)
-      event.update!(relay_state: "dispatched", dispatched_at: Time.current)
+      # A chat provider's file links are needed until every run has its files.
+      data = Chat.provider_for(event)&.scrub(event.data) || event.data
+      event.update!(relay_state: "dispatched", dispatched_at: Time.current, data: data)
       Array(runs).compact
     rescue StandardError => e
       attempts = event.relay_attempts.to_i + 1

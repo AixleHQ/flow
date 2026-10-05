@@ -110,13 +110,36 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "19:abc@thread.tacv2", ChatConversation.sole.external_id
   end
 
-  test "a 1:1 file's download link is not stored" do
+  test "accepting a file consent card queues the upload; a card from elsewhere does not" do
+    direct = ChatConversation.record_teams!(integration: @integration, activity: teams_activity(conversation_type: "personal"))
+    token = Teams::FileSender.consent_verifier.generate({ "asset_id" => 7, "conversation_id" => direct.id })
+    invoke = teams_activity(conversation_type: "personal", mention: false, type: "invoke", name: "fileConsent/invoke",
+                            replyToId: "card-1", value: { "action" => "accept", "context" => { "token" => token },
+                                                          "uploadInfo" => { "uploadUrl" => "https://contoso-my.sharepoint.com/u" } })
+
+    assert_enqueued_with(job: Teams::FileConsentJob,
+                         args: [ direct.id, 7, { "uploadUrl" => "https://contoso-my.sharepoint.com/u" }, "card-1" ]) { deliver(invoke) }
+    assert_response :ok
+
+    elsewhere = invoke.deep_merge("conversation" => { "id" => "a:1other" })
+    forged = invoke.deep_merge("value" => { "context" => { "token" => "forged" } })
+    declined = invoke.deep_merge("value" => { "action" => "decline" })
+    assert_no_enqueued_jobs(only: Teams::FileConsentJob) { [ elsewhere, forged, declined ].each { |a| deliver(a) } }
+  end
+
+  test "a 1:1 file's download link is kept only until the message is handled" do
     activity = teams_activity(conversation_type: "personal", mention: false, attachments: [
       { "contentType" => "application/vnd.microsoft.teams.file.download.info", "name" => "brief.pdf",
         "content" => { "downloadUrl" => "https://contoso.sharepoint.com/secret-link", "uniqueId" => "u1", "fileType" => "pdf" } }
     ])
 
+    stub_teams_token!
+    stub_request(:post, %r{\A#{Regexp.escape(TEAMS_SERVICE_URL)}v3/conversations/}).to_return(status: 201, body: { id: "1" }.to_json)
     deliver(activity)
+    assert_equal "https://contoso.sharepoint.com/secret-link",
+                 ReceivedWebhook.sole.raw_payload.dig("attachments", 0, "content", "downloadUrl")
+
+    perform_enqueued_jobs(only: Webhooks::ProcessEventJob)
 
     content = ReceivedWebhook.sole.raw_payload.dig("attachments", 0, "content")
     assert_equal({ "uniqueId" => "u1", "fileType" => "pdf" }, content)

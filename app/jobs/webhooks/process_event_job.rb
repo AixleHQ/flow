@@ -15,7 +15,7 @@ module Webhooks
       normalized = normalize(endpoint, received.raw_payload)
 
       if normalized.nil?
-        received.update!(status: "skipped")
+        received.update!(status: "skipped", raw_payload: scrubbed_payload(endpoint, received.raw_payload))
         return
       end
 
@@ -32,10 +32,17 @@ module Webhooks
         dedup_key: "#{endpoint.provider}:#{received.idempotency_key}"
       )
 
-      received.update!(status: "processed")
+      received.update!(status: "processed", raw_payload: scrubbed_payload(endpoint, received.raw_payload))
     end
 
     private
+
+    # A delivery keeps no file link once handled; the event keeps its own
+    # until it has been dispatched (TriggerEngine.dispatch_pending).
+    def scrubbed_payload(endpoint, payload)
+      provider = Chat.provider(endpoint.provider)
+      provider ? provider.scrub_payload(payload) : payload
+    end
 
     # Provider-specific payload → normalized event. Returns nil to skip.
     def normalize(endpoint, payload)

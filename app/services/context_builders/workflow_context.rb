@@ -55,7 +55,16 @@ module ContextBuilders
         This run was started by a #{chat_provider&.label || 'chat'} message#{trigger_user_suffix}. Treat it as the user's request and respond to it:
 
         > #{trigger_message.to_s.gsub("\n", "\n> ")}
+
+        #{reply_hint}
       MD
+    end
+
+    # What the tool descriptions cannot say: which rich format this thread takes.
+    def reply_hint
+      rich = chat_origin["provider"] == "teams" ? "`adaptive_card`" : "`slack_blocks`"
+      "Answer in that thread with `chat_post_message` (Markdown `text`; #{rich} for rich layout). " \
+        "`chat_read_thread` reads the rest of the conversation."
     end
 
     def trigger_user_suffix

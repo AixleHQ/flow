@@ -117,6 +117,10 @@ module Chat
     # Each project a company-wide message fans out to gets its own copy of the
     # files, through an install of that project's company. Nil when there is no
     # such install, so the caller falls back to whatever the event already names.
+    def scrub(data) = data
+
+    def scrub_payload(payload) = payload
+
     def ingest_files(event, project)
       data = event.data.to_h
       integration = TenantScope.owned(Integration, project: project).find_by(id: data["integration_id"])

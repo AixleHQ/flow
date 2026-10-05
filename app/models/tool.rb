@@ -79,6 +79,7 @@ class Tool < ApplicationRecord
                                   pid: project.id, cid: project.company_id)
                            .distinct.pluck(:provider)
     providers << Trackers::CAPABILITY if ProjectTracker.usable.for_project(project).exists?
+    providers << Chat::CAPABILITY if providers.intersect?(Chat::PROVIDERS.keys)
     providers
   end
   # Projectless sessions can still attach platform (code) tools; custom tools
