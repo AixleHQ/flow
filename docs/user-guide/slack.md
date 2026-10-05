@@ -3,11 +3,11 @@
 Slack connects per **company**. When you connect a Slack workspace, the install
 belongs to the company and serves every project in it. From then on:
 
-- an @mention of the app in a channel can start a workflow (a **Slack message**
-  trigger);
+- an @mention of the app in a channel can start a workflow (a **Chat message**
+  trigger for Slack);
+- the thread a request came from gets a status card that follows the run;
 - agents in workflow steps post, edit, delete and read messages with the
-  `slack_*` tools;
-- if a run started from Slack fails, Flow says so in the Slack thread it came from.
+  `chat_*` tools.
 
 Flow has no slash commands and no buttons in Slack, so approvals and gates are
 answered in Flow, not in Slack.
@@ -42,10 +42,10 @@ agents will post.
 | Scope | What Flow uses it for |
 | --- | --- |
 | `app_mentions:read` | Receiving the @mentions that start workflows |
-| `chat:write` | Replies, the `/help` list, failure notices, and posting, editing and deleting messages |
-| `channels:history`, `groups:history` | `slack_read_thread` in public and private channels |
+| `chat:write` | Replies, the `/help` list, status cards, and posting, editing and deleting messages |
+| `channels:history`, `groups:history` | `chat_read_thread` in public and private channels |
 | `files:read` | Downloading files attached to a mention, so the run gets them |
-| `files:write` | Attaching files with `slack_post_message` |
+| `files:write` | Attaching files with `chat_post_message` |
 
 The app asks for no direct-message history, so threads in DMs cannot be read.
 
@@ -63,7 +63,7 @@ existing row. Your triggers stay as they are.
 ## Start a workflow from a Slack message
 
 On the workflow, open **Triggers → Add a trigger**. Under **Trigger type**,
-choose **Slack message** and fill in:
+choose **Chat message**, set **Messenger** to **Slack**, and fill in:
 
 - **Channel id** limits the trigger to one channel. Enter the channel's ID
   (for example `C0123ABC`), not its name. You can find it in the channel's
@@ -74,8 +74,8 @@ choose **Slack message** and fill in:
 - **Cooldown (s)** is the shortest gap between two runs of this trigger. A
   mention that matches during the cooldown starts nothing. It is `0` by
   default: every matching mention starts a run.
-- **Report failures back to Slack** is on by default. See
-  [Failure notices](#failure-notices).
+- **Report back in the thread** is **A status card that follows the run** by
+  default. See [The status card](#the-status-card).
 - **Subject (what the run is about)** decides whether the run gets a card:
   **None — project-level run**, or **Create a task**. With **Create a task**,
   you also pick a **Task column** and can set a **Task title template**.
@@ -132,7 +132,7 @@ often people can start one, set the trigger's **Cooldown (s)**.
   Slack sent it, mention included, with its author's Slack ID, and tells the
   agent to treat it as the request.
 - **Where to reply.** Flow records the channel and thread for the whole run.
-  The `slack_*` tools reply there by default. A top-level mention gets its
+  The `chat_*` tools reply there by default. A top-level mention gets its
   replies in a new thread under it.
 - **Attached files.** Files on the mentioning message are saved into the
   project's assets, in a `slack` folder, and passed to the run as input. Flow
@@ -140,6 +140,7 @@ often people can start one, set the trigger's **Cooldown (s)**.
 - **A card**, if the trigger creates one. The title template accepts
   `{{date}}` and the event's fields, such as `{{text}}` (the message without
   the mention), `{{user}}` and `{{channel}}`. The default is
+  `chat.message — {{date}}`; triggers added before Microsoft Teams support keep
   `slack.message — {{date}}`.
 
 ### Asking what is available: /help
@@ -154,17 +155,27 @@ channel."*
 
 `help` is reserved, so a trigger cannot use it as a pattern.
 
-### Failure notices
+### The status card
 
-When a run started by a trigger with **Report failures back to Slack** fails,
-the app replies in the thread that started it:
+With **Report back in the thread** set to **A status card that follows the
+run**, the app posts one message in the thread that started the run and edits it
+as the run moves: accepted, running since when, then completed (and how long it
+took), failed (with the failed step and its error, or that the agent ran out of
+credits), or cancelled. A request that started nothing, for example during the
+cooldown, gets a card saying why. Each card for a run links to it.
+
+**Only when a run fails** posts a single message when the run fails:
 
 > :x: **&lt;Workflow&gt;** run #&lt;id&gt; failed.
 > &gt; &lt;the failed step and its error, or that the agent ran out of credits&gt;
 > &lt;link to the run&gt;
 
-A run started again by hand from a Slack-started run sends no notice, because
-no trigger asked for one.
+**Nothing** keeps the thread quiet. Triggers that reported failures before the
+status card existed were switched to it; choose **Only when a run fails** to go
+back to the single message.
+
+A run started again by hand from a Slack-started run reports nothing, because
+no trigger asked for it.
 
 ---
 
@@ -172,21 +183,28 @@ no trigger asked for one.
 
 | Tool | What it does |
 | --- | --- |
-| `slack_post_message` | Sends a message with text, Block Kit `blocks`, files, or any mix of them. Each file comes from inline `content`, a `file_path` in the agent's container, or a project `asset_id`. Returns the message's `ts`. `reply_broadcast` also shows a thread reply in the channel. |
-| `slack_read_thread` | Reads a thread's parent message and its replies, oldest first: 50 by default, 200 at most, with a cursor for more. Called with no arguments in a Slack-started run, it reads the thread behind the request. |
-| `slack_update_message` | Replaces a message the app posted, found by its `ts`. The whole message is replaced, so a text-only update clears its blocks. Files already posted cannot be edited. |
-| `slack_delete_message` | Deletes a message the app posted, found by its `ts`. The deletion is permanent. |
+| `chat_post_message` | Sends Markdown `text`, Block Kit `slack_blocks`, files, or any mix of them. Each file comes from inline `content`, a `file_path` in the agent's container, or a project `asset_id`. Returns the message id (its `ts`). `new_thread: true` posts at the top of the channel instead of in the thread. |
+| `chat_read_thread` | Reads a thread's parent message and its replies, oldest first: 30 by default, 50 at most. Called with no arguments in a Slack-started run, it reads the thread behind the request. |
+| `chat_update_message` | Replaces a message the app posted, found by its id. The whole message is replaced. Files already posted cannot be edited. |
+| `chat_delete_message` | Deletes a message the app posted, found by its id. The deletion is permanent. |
+
+The same tools work in Microsoft Teams; in a run that started from Slack they
+answer in Slack. The older `slack_post_message`, `slack_read_thread`,
+`slack_update_message` and `slack_delete_message` still work for this release
+and are deprecated.
 
 Every workflow step session gets these tools automatically when its company has
 an active Slack install. For other sessions, attach them from the tool picker's
-**Slack** section. Until Slack is connected, the tools are hidden.
+**Chat** section. Until Slack or Teams is connected, the tools are hidden.
 
 In a run that started from Slack, the channel and thread default to the
 triggering message. Anywhere else nothing is filled in, so the agent passes
-`channel` (an ID) itself.
+`provider: "slack"` and `conversation` (a channel ID) itself.
 
 Some details:
 
+- **Markdown.** `text` is Markdown and is sent as a Slack `markdown` block, with
+  the text as the notification line.
 - **Blocks with files.** Slack cannot attach files to a Block Kit message, so
   blocks and files go out in two parts: the message first, then the files in
   its thread.
@@ -255,7 +273,7 @@ and accepts commas or spaces. If you drop a scope, the feature that needs it
 stops working.
 
 Slack has to reach the Request URL, and nothing in Flow overrides that host.
-The link in failure notices is built from `PROTOCOL` and `DOMAIN`.
+The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 
 ---
 

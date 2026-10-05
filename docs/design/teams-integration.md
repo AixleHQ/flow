@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): 1, 2, 4 and 7 pass in the bot's home tenant and a second one — one bot serves every customer, and file access works by its own admin consent
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19), awaiting an end-to-end run on staging. Spikes (§16): 1, 2, 4 and 7 pass in the bot's home tenant and a second one — one bot serves every customer, and file access works by its own admin consent; 3 and 5 are still open
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1177,6 +1177,26 @@ Taken by the product owner on 2026-09-30.
 | 8 | RSC, which also delivers unaddressed channel messages | **Accepted.** Unaddressed messages are dropped in the controller, unpersisted (§7.2) |
 | 9 | Which Entra app the bot and the file permission use | **One app per environment for everything.** Production: "Aixle Flow" (sign-in, Azure DevOps, bot, `Files.ReadWrite.All`); staging: its own sign-in app. No separate file-only app. Certificates only on the shared app (§6.1) |
 | 10 | Rename anything because the app now also serves Teams? | **Not the Entra app:** "Aixle Flow" is already neutral, so only its description and branding change, plus publisher verification. **Not the integrations:** Azure DevOps and Microsoft Teams stay separate cards under one "Microsoft" heading. **Yes in configuration:** the app moves from `azure_devops.apps` to a shared `entra.apps` block (§13) |
+
+## 19. Phase 1 as built
+
+Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
+
+| Area | As built | Why |
+|---|---|---|
+| Configuration (§13) | Teams reads its own `TEAMS_*` variables and falls back to Microsoft sign-in's `MICROSOFT_*` app id, key and thumbprint. The shared `entra.apps` block is not built | Moving sign-in and Azure DevOps onto a new block needs the infrastructure to rename variables in step; the fallback gives one app without that |
+| Disconnect (§6.5) | **Remove** deletes the connection and its conversation rows, as Slack's does. Triggers stay; reconnecting runs the approval again, and the registry refills as the app is used or reinstalled | The integrations page has one Remove for every provider; a soft disconnect needs its own state and UI for little gain before customers ask for it |
+| Typing indicator (§7.2) | Not sent | The status card's "Accepted" answers within the same job, which is what the indicator was for |
+| Help (§8.4) | Markdown text in Teams, not an Adaptive Card | Same content, fewer moving parts; the card can come with phase 2's interactive cards |
+| Files out to a channel (§8.5) | Uploaded into `Aixle/` and linked in the thread as Markdown links | A link opens the file in Teams; a file card needs a second Graph call for the item's ids |
+| Files skipped without file access (§7.4) | Left out silently; the status card does not mention it | The connection row shows "files off"; noted for a follow-up |
+| Connection UI (§12) | The integrations row shows the organization, who approved and whether files are on; the approval page offers file access and the package. The teams and chats the app is in are listed only in the trigger form's picker. No "Test connection" | Enough to connect and use; the rest is display |
+| Seam (§8.2) | Reporters take the transition: `applies?(dispatch, transition)`, so the tracker reporter is not woken for `running` or `completed` | Four extra jobs per tracker-started run otherwise |
+| Slack status cards | Existing Slack triggers on `failures` moved to `lifecycle` by migration `20261006090000` | Decision 3 |
+
+Still to verify live (staging, a real customer-like tenant): spike 3 (`wids` in the sign-in's ID token, which
+needs **Token configuration → Directory roles** on the app), the approval and file-access flows end to end, the
+1:1 file consent card, and Graph thread reads from a tool.
 
 ## Sources
 

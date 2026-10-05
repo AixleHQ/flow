@@ -250,7 +250,13 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'slack',
     title: 'Slack',
     section: 'User guide',
-    desc: 'Install the Slack app for a company: start workflows by mentioning it, replies and failure notices in the thread, the slack tools, and the self-hosted Slack app.',
+    desc: 'Install the Slack app for a company: start workflows by mentioning it, status cards in the thread, the chat tools, and the self-hosted Slack app.',
+  },
+  {
+    slug: 'teams',
+    title: 'Microsoft Teams',
+    section: 'User guide',
+    desc: 'Connect a Microsoft 365 organization through its administrator: start workflows from channels, group chats and 1:1 chats, status cards, files both ways, the chat tools, and the self-hosted bot.',
   },
   {
     slug: 'coder',

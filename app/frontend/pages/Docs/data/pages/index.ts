@@ -37,6 +37,7 @@ import sessionQueues from './session-queues.md?raw';
 import sessionsAndRuns from './sessions-and-runs.md?raw';
 import signingIn from './signing-in.md?raw';
 import slack from './slack.md?raw';
+import teams from './teams.md?raw';
 import startingWork from './starting-work.md?raw';
 import tasks from './tasks.md?raw';
 import templates from './templates.md?raw';
@@ -332,6 +333,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: slack,
     toc: extractToc(slack),
+  },
+  teams: {
+    title: 'Microsoft Teams',
+    section: 'User guide',
+    content: teams,
+    toc: extractToc(teams),
   },
   coder: {
     title: 'Coder',
