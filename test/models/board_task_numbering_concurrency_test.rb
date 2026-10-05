@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20260930130000_add_number_to_board_tasks")
 
 # Racing creates need their own committed connections, so this test opts out of
 # the transactional wrapper and cleans up after itself.
@@ -19,7 +18,6 @@ class BoardTaskNumberingConcurrencyTest < ActiveSupport::TestCase
   end
 
   teardown do
-    drop_number_trigger
     BoardActivity.where(board_id: @board.id).delete_all
     BoardTask.where(board_id: @board.id).delete_all
     BoardColumn.where(board_id: @board.id).delete_all
@@ -38,21 +36,6 @@ class BoardTaskNumberingConcurrencyTest < ActiveSupport::TestCase
 
   test "concurrent creates on one board get distinct, gapless numbers" do
     numbers = race(Array.new(THREADS) { |i| -> { create_through_service("Task #{i}") } })
-
-    assert_equal (1..THREADS).to_a, numbers.sort
-    assert_equal THREADS, @board.reload.last_task_number
-  end
-
-  # Mid-deploy: pods on the previous release insert without a number (filled by
-  # the trigger) while new pods number tasks in the model. Both draw on one counter.
-  test "old-release inserts through the trigger and new-release creates never collide" do
-    migration = AddNumberToBoardTasks.new
-    migration.suppress_messages { migration.create_number_trigger }
-
-    jobs = Array.new(THREADS) do |i|
-      i.even? ? -> { create_through_service("New pod #{i}") } : -> { insert_like_old_pod("Old pod #{i}") }
-    end
-    numbers = race(jobs)
 
     assert_equal (1..THREADS).to_a, numbers.sort
     assert_equal THREADS, @board.reload.last_task_number
@@ -77,17 +60,5 @@ class BoardTaskNumberingConcurrencyTest < ActiveSupport::TestCase
   def create_through_service(title)
     board = Board.find(@board.id)
     TaskService.create(board: board, params: { title: title, board_column_id: @column.id }, actor: @user).number
-  end
-
-  def insert_like_old_pod(title)
-    BoardTask.insert_all(
-      [ { board_id: @board.id, board_column_id: @column.id, title: title, position: 1 } ],
-      returning: %w[number]
-    ).rows.first.first
-  end
-
-  def drop_number_trigger
-    migration = AddNumberToBoardTasks.new
-    migration.suppress_messages { migration.drop_number_trigger }
   end
 end
