@@ -1,7 +1,7 @@
 # Task tracker integrations — technical design
 
 Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366;
-phase 3 (GitHub Projects) and phase 4 (Linear) in #399; phase 5 (YouTrack) on `artempartos/marlin` (PR TBD)**
+phase 3 (GitHub Projects) and phase 4 (Linear) in #399; phase 5 (YouTrack) in #410**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
