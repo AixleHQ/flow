@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): spikes 1, 2 and 4 pass, in the bot's home tenant and a second one, so one bot serves every customer
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365. Spikes (§16): 1, 2, 4 and 7 pass in the bot's home tenant and a second one — one bot serves every customer, and file access works by its own admin consent
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1097,7 +1097,8 @@ and failure notices behave in production exactly as before.
 | Spike 4, 1:1: an attached file | ✅ `application/vnd.microsoft.teams.file.download.info`; the `downloadUrl` answers `200` with no token |
 | Spike 4, channel: an attached file and a pasted image | Both arrive at the bot as `text/html` only. Graph shows them as `reference` attachments (SharePoint), and `/shares/{id}/driveItem` answers `403 accessDenied` without `Files.ReadWrite.All`, which confirms decision 5 |
 | **Spike 1: a second tenant** (2026-10-05) | ✅ In another organization's Teams the bot received installs and mentions, and its replies, proactive thread posts and a new channel thread were all accepted (`201`) with the Connector token from its **home** tenant. A Graph token for the **customer's** tenant was issued with `roles: ["Group.Selected"]` without any admin consent there (installing the app with RSC was enough), and read the thread (`200`). One bot serves every customer |
-| Spikes 3, 5, 7 | Not run yet |
+| **Spike 7: file access by its own admin consent** (2026-10-05) | ✅ In the second tenant, the v1 `…/{tenant}/adminconsent?client_id=…` link alone granted `Files.ReadWrite.All`; no sign-in to Aixle was involved. A **fresh** Graph token then carried `["Files.ReadWrite.All", "Group.Selected"]`. The channel file read through `/shares/u!{base64url(contentUrl)}/driveItem` (`200`, 11 240 bytes), and the channel's `filesFolder` gave the same item, whose `/content` answers `302` to a pre-authenticated SharePoint URL |
+| Spikes 3, 5 | Not run yet |
 
 What the live runs taught that the docs do not say plainly:
 - The Connector rejects a reply without `from`, with `400 MissingProperty`. Every outgoing activity has
@@ -1112,6 +1113,7 @@ What the live runs taught that the docs do not say plainly:
   entity's `text` from the message, never to parse the text for the name
   ([channel and group conversations](https://learn.microsoft.com/en-us/microsoftteams/platform/bots/how-to/conversations/channel-and-group-conversations),
   [receive all messages](https://learn.microsoft.com/en-us/microsoftteams/platform/agents-in-teams/enable-receive-all-chat-messages)).
+- **A token's roles are fixed when Entra issues it.** A Graph token cached from before an admin consent still lacks the new permission and keeps answering `403 accessDenied` ("The sharing link no longer exists, or you do not have permission") until it expires. Granting or revoking file access therefore drops that tenant's cached Graph token (`Teams::TokenService.forget!`) before the grant is checked.
 - **Private channels are out.** The 2026-09-28 Microsoft page settles the earlier conflict: "agents can't
   post messages or Adaptive Cards in private channel conversations."
 
