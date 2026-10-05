@@ -2,6 +2,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Badge, Button, Center, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconBrandTeams, IconDownload, IconFolders } from '@tabler/icons-react';
 
+import { postNavigate } from 'shared/lib/postNavigate';
 import { Logo, PageShell } from 'shared/ui';
 
 type State = 'expired' | 'pending' | 'connected';
@@ -51,7 +52,7 @@ const Pending = ({ workspace, requestedBy, signInUrl }: Props) => (
       Approve only if you know this workspace: messages addressed to Aixle Flow in your organization will go to it. You
       need to be a Global, Privileged Role, Cloud Application, Application or Teams Administrator.
     </Alert>
-    <Button component="a" href={signInUrl} leftSection={<IconBrandTeams size={18} />} fullWidth>
+    <Button onClick={() => signInUrl && postNavigate(signInUrl)} leftSection={<IconBrandTeams size={18} />} fullWidth>
       Sign in with Microsoft to approve
     </Button>
   </Stack>
@@ -84,7 +85,11 @@ const Connected = ({ workspace, organization, approvedBy, fileAccess, fileAccess
             addressed to it.
           </Text>
           {!fileAccess && (
-            <Button component="a" href={fileAccessUrl} variant="default" leftSection={<IconFolders size={16} />}>
+            <Button
+              onClick={() => fileAccessUrl && postNavigate(fileAccessUrl)}
+              variant="default"
+              leftSection={<IconFolders size={16} />}
+            >
               Grant file access
             </Button>
           )}

@@ -49,18 +49,21 @@ module Teams
         raise Error, "Teams is not configured" unless Config.enabled?
         raise Error, "not a tenant id: #{tenant_id.inspect}" unless tenant_id.to_s.match?(Config::GUID)
 
-        @lock.synchronize do
-          cached = @tokens[[ tenant_id, scope ]]
-          return cached.value if cached && cached.expires_at > SKEW.from_now
+        key = [ tenant_id, scope ]
+        cached = @lock.synchronize { @tokens[key] }
+        return cached.value if cached && cached.expires_at > SKEW.from_now
 
-          @tokens[[ tenant_id, scope ]] = request(tenant_id, scope)
-        end.value
+        # Outside the lock: a slow answer for one tenant must not hold every other
+        # tenant's calls. Two threads may both ask; the later answer wins.
+        fresh = request(tenant_id, scope)
+        @lock.synchronize { @tokens[key] = fresh }
+        fresh.value
       end
 
       def request(tenant_id, scope)
         url = "#{Config.cloud[:login]}/#{tenant_id}/oauth2/v2.0/token"
-        response = Faraday.post(url, URI.encode_www_form(form(url, scope)),
-                                "Content-Type" => "application/x-www-form-urlencoded")
+        response = connection.post(url, URI.encode_www_form(form(url, scope)),
+                                   "Content-Type" => "application/x-www-form-urlencoded")
         body = JSON.parse(response.body.to_s)
         unless response.success? && body["access_token"].present?
           raise Error.new("Entra refused a token for #{scope}: #{body['error_description'] || body['error']}",
@@ -70,6 +73,15 @@ module Teams
         Token.new(value: body["access_token"], expires_at: body.fetch("expires_in", 3600).to_i.seconds.from_now)
       rescue JSON::ParserError
         raise Error.new("Entra answered the token request with something other than JSON", status: response&.status)
+      rescue Faraday::Error => e
+        raise Error.new("Entra could not be reached: #{e.message}", status: 503)
+      end
+
+      def connection
+        Faraday.new do |f|
+          f.options.open_timeout = 5
+          f.options.timeout = 10
+        end
       end
 
       def form(url, scope)

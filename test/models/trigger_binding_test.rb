@@ -177,6 +177,27 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_equal "slack", binding.reload.chat_provider
   end
 
+  test "a Slack trigger saved before Teams moves to Teams as a chat trigger, without its Slack channel" do
+    create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
+    legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message",
+                                      filter_predicate: { "channel" => "C1", "text" => "deploy" })
+
+    legacy.assign_chat_provider("teams")
+    legacy.save_checking_chat!
+
+    assert_equal [ "chat.message", "teams" ], [ legacy.reload.event_type, legacy.chat_provider ]
+    assert_equal({ "text" => "deploy", "provider" => "teams" }, legacy.filter_predicate)
+  end
+
+  test "moving an enabled chat trigger to a messenger the company has not connected is refused" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+
+    binding.filter_predicate = { "provider" => "teams" }
+
+    assert_raises(ActiveRecord::RecordInvalid) { binding.save_checking_chat! }
+    assert_equal "slack.message", binding.reload.event_type
+  end
+
   test "status_reporting and notify_on_failure follow whichever of the two was set" do
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user)
     assert_equal "failures", binding.status_reporting

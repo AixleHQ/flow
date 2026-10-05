@@ -1,9 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen } from 'test/renderPage';
+import { renderPage, screen, userEvent } from 'test/renderPage';
+
+import { postNavigate } from 'shared/lib/postNavigate';
 
 import TeamsApproval from './TeamsApproval';
+
+vi.mock('shared/lib/postNavigate', () => ({ postNavigate: vi.fn() }));
 
 const pending = {
   state: 'pending' as const,
@@ -13,18 +17,16 @@ const pending = {
 };
 
 describe('TeamsApproval', () => {
-  it('names the workspace and who asked, and signs the administrator in with Microsoft', () => {
+  it('names the workspace and who asked, and signs the administrator in with Microsoft by a form post', async () => {
     renderPage(<TeamsApproval {...pending} />, { props: { flash: {} } });
 
     expect(screen.getByRole('heading', { name: 'Connect Microsoft Teams to Acme' })).toBeInTheDocument();
     expect(screen.getByText(/Ada Lovelace \(ada@acme\.test\) asked to connect/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Sign in with Microsoft to approve' })).toHaveAttribute(
-      'href',
-      '/integrations/teams/approve/abc/sign_in',
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in with Microsoft to approve' }));
+    expect(postNavigate).toHaveBeenCalledWith('/integrations/teams/approve/abc/sign_in');
   });
 
-  it('after approval, offers file access and the app package', () => {
+  it('after approval, offers file access and the app package', async () => {
     renderPage(
       <TeamsApproval
         state="connected"
@@ -41,10 +43,8 @@ describe('TeamsApproval', () => {
     expect(screen.getByRole('heading', { name: 'contoso.com is connected to Acme' })).toBeInTheDocument();
     expect(screen.getByText('Connected.')).toBeInTheDocument();
     expect(screen.getByText('Not granted')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Grant file access' })).toHaveAttribute(
-      'href',
-      '/integrations/teams/approve/abc/file_access',
-    );
+    await userEvent.click(screen.getByRole('button', { name: 'Grant file access' }));
+    expect(postNavigate).toHaveBeenCalledWith('/integrations/teams/approve/abc/file_access');
     expect(screen.getByRole('link', { name: 'Download the Teams app' })).toHaveAttribute(
       'href',
       '/integrations/teams/approve/abc/package',

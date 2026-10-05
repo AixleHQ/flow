@@ -33,7 +33,7 @@ module Api
 
             assert_response :success
             kinds = json["triggers"].map { |t| t["kind"] }.sort
-            assert_equal %w[chat column], kinds
+            assert_equal %w[column slack], kinds
           end
 
           test "create tracker trigger stores its tracker and how it treats Aixle's own changes" do
@@ -236,7 +236,7 @@ module Api
             assert_response :success
             by_kind = json["triggers"].index_by { |t| t["kind"] }
             assert_equal({ "id" => @user.id, "name" => @user.name }, by_kind["column"]["created_by"])
-            assert_nil by_kind["chat"]["created_by"]
+            assert_nil by_kind["slack"]["created_by"]
           end
 
           test "editing a trigger leaves its creator alone" do

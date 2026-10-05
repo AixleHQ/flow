@@ -29,7 +29,7 @@ class Api::V1::Projects::TriggersControllerTest < ActionController::TestCase
     get :index, params: { project_id: @project.id }
 
     assert_response :success
-    assert_equal [ [ "column", "board", "Intake" ], [ "chat", "chat", "Release" ] ],
+    assert_equal [ [ "column", "board", "Intake" ], [ "slack", "chat", "Release" ] ],
                  json["triggers"].map { |t| t.values_at("kind", "source", "workflow_name") }
   end
 

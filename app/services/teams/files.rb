@@ -30,19 +30,45 @@ module Teams
       buffer
     rescue URI::InvalidURIError, SafeHttp::UnsafeUrl => e
       raise Error, e.message
+    rescue Faraday::Error => e
+      raise Error.new("download failed: #{e.message}", status: 503)
     end
 
-    # A channel or group-chat file, by the link its message's attachment named.
+    # A channel or group-chat file, by the link its message's attachment named,
+    # read only from the conversation's own drive: the permission behind it
+    # reaches every file of the organization, and a message can name any link.
     # Graph answers with a redirect to a short-lived download link.
-    def download_shared(tenant_id, content_url, max_bytes: MAX_BYTES)
+    def download_shared(tenant_id, content_url, allowed_drive:, max_bytes: MAX_BYTES)
       share = "u!#{Base64.urlsafe_encode64(content_url.to_s, padding: false)}"
+      item = GraphClient.get(tenant_id, "shares/#{share}/driveItem", "$select" => "id,parentReference")
+      drive = item.dig("parentReference", "driveId")
+      raise Error, "the file is not in the conversation's own files" if allowed_drive.blank? || drive != allowed_drive
+
+      Rails.logger.info("[Teams::Files] read tenant=#{tenant_id} drive=#{drive} item=#{item['id']}")
       location = redirect_location(tenant_id, "shares/#{share}/driveItem/content")
       download_link(location, max_bytes: max_bytes)
     end
 
+    # Where a team keeps its channels' files.
+    def channel_drive(conversation)
+      channel_folder(conversation).dig("parentReference", "driveId")
+    end
+
+    # Where a group chat's files live: the OneDrive of the person who sent them.
+    def user_drive(tenant_id, object_id)
+      return nil unless object_id.to_s.match?(Config::GUID)
+
+      GraphClient.get(tenant_id, "users/#{object_id}/drive", "$select" => "id")["id"]
+    end
+
+    def channel_folder(conversation)
+      GraphClient.get(conversation.tenant_id, "teams/#{Messages.escape(Messages.group_id(conversation))}/channels/" \
+                                              "#{Messages.escape(conversation.external_id)}/filesFolder")
+    end
+
     # An image pasted into a message, stored with the message itself.
     def download_hosted(tenant_id, graph_path, max_bytes: MAX_BYTES)
-      response = graph_connection.get("#{Config.cloud[:graph]}/v1.0/#{graph_path}", nil, auth(tenant_id))
+      response = graph_get(tenant_id, graph_path)
       raise Error.new("hosted content: HTTP #{response.status}", status: response.status) unless response.success?
       raise Error, "file exceeds #{max_bytes / 1024 / 1024} MB" if response.body.bytesize > max_bytes
 
@@ -54,12 +80,13 @@ module Teams
       raise Error, "#{filename} is larger than #{MAX_UPLOAD_BYTES / 1024 / 1024} MB" if bytes.bytesize > MAX_UPLOAD_BYTES
 
       tenant = conversation.tenant_id
-      group = Messages.group_id(conversation)
-      folder = GraphClient.get(tenant, "teams/#{Messages.escape(group)}/channels/#{Messages.escape(conversation.external_id)}/filesFolder")
+      folder = channel_folder(conversation)
       drive = folder.dig("parentReference", "driveId")
       path = "drives/#{Messages.escape(drive)}/items/#{Messages.escape(folder['id'])}:/Aixle/#{ERB::Util.url_encode(filename)}:/content"
-      GraphClient.request(tenant, :put, path, query: { "@microsoft.graph.conflictBehavior" => "rename" }, body: bytes,
-                                              headers: { "Content-Type" => "application/octet-stream" })
+      item = GraphClient.request(tenant, :put, path, query: { "@microsoft.graph.conflictBehavior" => "rename" }, body: bytes,
+                                                     headers: { "Content-Type" => "application/octet-stream" })
+      Rails.logger.info("[Teams::Files] wrote tenant=#{tenant} drive=#{drive} item=#{item['id']}")
+      item
     end
 
     # Where the bytes go after a person accepted a file consent card.
@@ -75,16 +102,24 @@ module Teams
       raise Error.new("upload failed: HTTP #{response.status}", status: response.status) unless response.success?
     rescue URI::InvalidURIError, SafeHttp::UnsafeUrl => e
       raise Error, e.message
+    rescue Faraday::Error => e
+      raise Error.new("upload failed: #{e.message}", status: 503)
     end
 
     def redirect_location(tenant_id, graph_path)
-      response = graph_connection.get("#{Config.cloud[:graph]}/v1.0/#{graph_path}", nil, auth(tenant_id))
+      response = graph_get(tenant_id, graph_path)
       return response.headers["Location"] if response.status.between?(300, 399) && response.headers["Location"].present?
 
       raise Error.new("file not reachable: HTTP #{response.status}", status: response.status)
     end
 
     def auth(tenant_id) = { "Authorization" => "Bearer #{TokenService.graph_token(tenant_id)}" }
+
+    def graph_get(tenant_id, graph_path)
+      graph_connection.get("#{Config.cloud[:graph]}/v1.0/#{graph_path}", nil, auth(tenant_id))
+    rescue Faraday::Error => e
+      raise Error.new("Graph GET #{graph_path}: #{e.message}", status: 503)
+    end
 
     def graph_connection
       Faraday.new do |f|

@@ -51,9 +51,18 @@ module Teams
       tenant = @integration.settings.to_h["tenant_id"]
       case ref["kind"]
       when "download" then Files.download_link(ref["url"])
-      when "share" then Files.download_shared(tenant, ref["url"]) if @integration.settings.to_h["file_access"]
+      when "share" then Files.download_shared(tenant, ref["url"], allowed_drive: allowed_drive(ref)) if file_access?
       when "hosted" then Files.download_hosted(tenant, ref["path"])
       end
+    end
+
+    def file_access? = @integration.settings.to_h["file_access"].present?
+
+    def allowed_drive(ref)
+      conversation = @integration.chat_conversations.find_by(external_id: ref["conversation"])
+      return nil if conversation.nil?
+
+      conversation.channel? ? Files.channel_drive(conversation) : Files.user_drive(conversation.tenant_id, ref["sender"])
     end
 
     def create_asset(file, bytes)

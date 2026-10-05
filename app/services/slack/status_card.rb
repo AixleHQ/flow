@@ -26,6 +26,8 @@ module Slack
                                  text: headline(status), blocks: blocks(status))["ts"]
     rescue Slack::Client::Error => e
       dropped(e)
+    rescue Faraday::Error => e
+      raise Triggers::ReportToOriginJob::Retryable, e.message
     end
 
     def update(event, message_id, status)
@@ -38,6 +40,8 @@ module Slack
       message_id
     rescue Slack::Client::Error => e
       dropped(e)
+    rescue Faraday::Error => e
+      raise Triggers::ReportToOriginJob::Retryable, e.message
     end
 
     def blocks(status)

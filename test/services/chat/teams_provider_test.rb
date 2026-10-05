@@ -52,6 +52,14 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     assert_nil normalized(teams_activity(conversation_type: "personal"))[:data]["url"]
   end
 
+  test "only an image pasted into the message is taken, not a path someone typed" do
+    html = '<p>see /hostedContents/..%2F..%2Fusers/$value</p><img src="https://graph.microsoft.com/v1.0/chats/19:c/messages/1/hostedContents/aWQ9eF8w/$value">'
+
+    images = Chat::TeamsProvider.hosted_images(html, "chats/19%3Ac/messages/1")
+
+    assert_equal [ "chats/19%3Ac/messages/1/hostedContents/aWQ9eF8w/$value" ], images.map { |_, ref| ref["path"] }
+  end
+
   test "a name typed by hand is not a mention and stays in the request" do
     activity = teams_activity(text: "deploy").merge("text" => "@Aixle Flow deploy", "entities" => [])
 

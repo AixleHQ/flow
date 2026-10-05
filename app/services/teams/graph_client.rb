@@ -17,7 +17,11 @@ module Teams
     def request(tenant_id, method, path, query: {}, body: nil, headers: {}, retried: false)
       url = "#{Config.cloud[:graph]}/v1.0/#{path.delete_prefix('/')}"
       url = "#{url}?#{URI.encode_www_form(query)}" if query.present?
-      response = connection.run_request(method, url, body, default_headers(tenant_id).merge(headers))
+      response = begin
+        connection.run_request(method, url, body, default_headers(tenant_id).merge(headers))
+      rescue Faraday::Error => e
+        raise Error.new("Graph #{method.upcase} #{path}: #{e.message}", status: 503)
+      end
       if (response.status == 429 || response.status >= 500) && !retried
         wait = response.headers["Retry-After"].to_i.clamp(0, MAX_RETRY_AFTER)
         sleep(wait) if wait.positive?

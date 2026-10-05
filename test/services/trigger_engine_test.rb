@@ -135,6 +135,19 @@ class TriggerEngineTest < ActiveSupport::TestCase
                    [ TriggerDispatch.find_by(status: "skipped").id, "skipped" ] ], announced
   end
 
+  test "a webhook's own url, provider and actor fields stay in the card it creates" do
+    column = create(:board_column, board: create(:board, project: @project))
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "webhook.ci",
+                                       subject_policy: "create_task", subject_column: column)
+    event = TriggerEvent.new(event_type: "webhook.ci", source: "generic:wh-1",
+                             data: { "url" => "https://ci.test/42", "provider" => "jenkins", "actor" => "bot" })
+
+    body = TriggerEngine.send(:render_subject_body, event, binding.event_type)
+
+    assert_includes body, "https://ci.test/42"
+    assert_includes body, "jenkins"
+  end
+
   test "a replayed event decides nothing new and announces nothing" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))

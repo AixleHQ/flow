@@ -50,7 +50,7 @@ class TriggerBinding < ApplicationRecord
   validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
                                unless: :chat?
   before_validation :keep_failure_reporting_in_step
-  before_validation :keep_chat_provider, if: -> { persisted? && event_type == Chat::EVENT_TYPE }
+  before_validation :normalize_chat_trigger
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -119,10 +119,13 @@ class TriggerBinding < ApplicationRecord
   end
 
   # Points a `chat.message` trigger at another messenger, keeping its other conditions.
+  # A channel id means nothing to another messenger, so it is dropped.
   def assign_chat_provider(key)
-    return if key.blank? || event_type != Chat::EVENT_TYPE
+    return if key.blank? || !chat?
 
-    self.filter_predicate = filter_predicate.to_h.merge("provider" => key.to_s)
+    filter = filter_predicate.to_h
+    filter = filter.except("channel") if chat_provider.present? && chat_provider != key.to_s
+    self.filter_predicate = filter.merge("provider" => key.to_s)
   end
 
   # save! for a person creating or editing a trigger: refuses to create or switch
@@ -130,7 +133,8 @@ class TriggerBinding < ApplicationRecord
   # validation, so a workspace disconnected later does not make every other save
   # of the triggers it served fail.
   def save_checking_chat!
-    if chat? && enabled? && (new_record? || enabled_changed?) && !chat_connected?
+    normalize_chat_trigger
+    if chat? && enabled? && (new_record? || enabled_changed? || chat_provider_changed?) && !chat_connected?
       valid? # report the binding's other problems alongside this one
       errors.add(:base, self.class.chat_not_connected(Chat.provider(chat_provider)&.label || "The messenger"))
       raise ActiveRecord::RecordInvalid, self
@@ -171,6 +175,26 @@ class TriggerBinding < ApplicationRecord
 
     WebhookEndpoint.where(project_id: project_id).where("config ->> 'event_type' = ?", event_type)
                    .update_all(enabled: false, updated_at: Time.current)
+  end
+
+  def normalize_chat_trigger
+    move_legacy_chat_trigger
+    keep_chat_provider if persisted? && event_type == Chat::EVENT_TYPE
+  end
+
+  # A trigger saved as `slack.message` that is pointed at another messenger
+  # becomes a `chat.message` one, the only type that messenger's messages reach.
+  def move_legacy_chat_trigger
+    legacy = Chat::LEGACY_EVENT_TYPES[event_type]
+    named = filter_predicate.to_h["provider"]
+    self.event_type = Chat::EVENT_TYPE if legacy && named.present? && named != legacy
+  end
+
+  def chat_provider_changed?
+    return false if new_record?
+
+    was = Chat::LEGACY_EVENT_TYPES[event_type_was] || filter_predicate_was.to_h["provider"]
+    was.to_s != chat_provider.to_s
   end
 
   def chat_connected?

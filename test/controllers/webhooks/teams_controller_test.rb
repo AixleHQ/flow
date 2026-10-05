@@ -91,6 +91,28 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     assert_not conversation.reload.installed?
   end
 
+  test "removing the app from a team takes it out of every channel of that team" do
+    ChatConversation.record_teams!(integration: @integration, activity: teams_activity)
+    ChatConversation.record_teams!(integration: @integration, activity: teams_activity.deep_merge(
+      "conversation" => { "id" => "19:ops@thread.tacv2" }, "channelData" => { "channel" => { "id" => "19:ops@thread.tacv2" } }
+    ))
+    removed = teams_activity(mention: false, type: "installationUpdate", action: "remove").except("text", "entities")
+
+    deliver(removed)
+
+    assert_equal [ false ], ChatConversation.distinct.pluck(:installed)
+  end
+
+  test "only Teams activities are taken, and only from organizations the installation serves" do
+    deliver(teams_activity.merge("channelId" => "webchat"))
+    assert_response :unauthorized
+
+    Settings.teams.allowed_tenant_ids = TEAMS_HOME_TENANT
+    assert_no_difference -> { ReceivedWebhook.count } do
+      deliver(teams_activity)
+    end
+  end
+
   test "a channel event records the channel it names, not the General channel it arrives on" do
     created = teams_activity(mention: false, type: "conversationUpdate").except("text", "entities").deep_merge(
       "conversation" => { "id" => "19:general@thread.tacv2" },

@@ -425,10 +425,12 @@ Rails.application.routes.draw do
     # (no Aixle account needed — the link is the credential), and the two
     # redirect URIs registered on the bot's Entra application.
     get "integrations/teams/approve/:token", to: "integrations/teams_approvals#show", as: :teams_approval
-    get "integrations/teams/approve/:token/sign_in", to: "integrations/teams_approvals#sign_in",
-                                                     as: :teams_approval_sign_in
-    get "integrations/teams/approve/:token/file_access", to: "integrations/teams_approvals#file_access",
-                                                         as: :teams_approval_file_access
+    # POSTs with the page's CSRF token: another site must not be able to walk an
+    # administrator's browser from the approval page into the Microsoft sign-in.
+    post "integrations/teams/approve/:token/sign_in", to: "integrations/teams_approvals#sign_in",
+                                                      as: :teams_approval_sign_in
+    post "integrations/teams/approve/:token/file_access", to: "integrations/teams_approvals#file_access",
+                                                          as: :teams_approval_file_access
     get "integrations/teams/approve/:token/package", to: "integrations/teams_approvals#package",
                                                      as: :teams_approval_package
     get "integrations/teams/callback", to: "integrations/teams_approvals#callback", as: :teams_sign_in_callback

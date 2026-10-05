@@ -1192,7 +1192,14 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 | Files skipped without file access (§7.4) | Left out silently; the status card does not mention it | The connection row shows "files off"; noted for a follow-up |
 | Connection UI (§12) | The integrations row shows the organization, who approved and whether files are on; the approval page offers file access and the package. The teams and chats the app is in are listed only in the trigger form's picker. No "Test connection" | Enough to connect and use; the rest is display |
 | Seam (§8.2) | Reporters take the transition: `applies?(dispatch, transition)`, so the tracker reporter is not woken for `running` or `completed` | Four extra jobs per tracker-started run otherwise |
-| Slack status cards | Existing Slack triggers on `failures` moved to `lifecycle` by migration `20261006090000` | Decision 3 |
+| Slack status cards | Existing Slack triggers on `failures` moved to `lifecycle` by migration `20261006090000`, which also names Slack on `chat.message` triggers saved without a provider | Decision 3 |
+| Who starts a connection (§6.2) | Any member who can change a project, as for Slack; only a company admin can remove it | Slack parity; the Microsoft 365 administrator's approval is what binds the organization |
+| Approval sign-in (§6.2) | `prompt=select_account`, reached only by a POST from the approval page | The administrator picks the right account; the POST keeps another site from walking a browser into the sign-in |
+| File access consent (§6.2) | The v1 `/{tenant}/adminconsent` link. It consents to every application permission configured on the app, not only `Files.ReadWrite.All` | Microsoft has no per-permission admin consent for application permissions; verify on staging what else the shared app lists |
+| File reads (§8.5) | A channel file is read only from the team's own drive, a group-chat file only from the sender's OneDrive; anything else a message links is skipped | The permission reaches every file of the organization |
+| File writes (§8.5) | Only into the channel the run was started from; any other target gets project-asset links | Same |
+| Audit of file calls (§8.5, §11) | Each Graph file read and write is logged with tenant, drive and item ids; there is no audit table | No audit facility exists in the app yet |
+| App manifest (§6.3) | Schema 1.24, with the `help` command list; no `slash` trigger and no targeted messages | Spike 5 has not run; 1.24 is what the spikes verified |
 
 Still to verify live (staging, a real customer-like tenant): spike 3 (`wids` in the sign-in's ID token, which
 needs **Token configuration → Directory roles** on the app), the approval and file-access flows end to end, the

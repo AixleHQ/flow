@@ -25,7 +25,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
   end
 
   def sign_in_state
-    get teams_approval_sign_in_path(@token)
+    post teams_approval_sign_in_path(@token)
     Rack::Utils.parse_query(URI.parse(response.location).query)["state"]
   end
 
@@ -48,7 +48,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
 
   test "signing in as a directory administrator connects the organization and offers the app" do
     get teams_approval_path(@token)
-    get teams_approval_sign_in_path(@token)
+    post teams_approval_sign_in_path(@token)
     authorize = URI.parse(response.location)
     query = Rack::Utils.parse_query(authorize.query)
     assert_equal [ "login.microsoftonline.com", "/organizations/oauth2/v2.0/authorize" ], [ authorize.host, authorize.path ]
@@ -111,7 +111,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
     stub_sign_in
     Teams::Connection.complete!(integration: @integration, code: "c1", code_verifier: "v1")
     get teams_approval_path(@token)
-    get teams_approval_file_access_path(@token)
+    post teams_approval_file_access_path(@token)
     consent = URI.parse(response.location)
     assert_equal "/#{TEAMS_CUSTOMER_TENANT}/adminconsent", consent.path
     stub_request(:post, "https://login.microsoftonline.com/#{TEAMS_CUSTOMER_TENANT}/oauth2/v2.0/token")
@@ -130,7 +130,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
     stub_sign_in
     Teams::Connection.complete!(integration: @integration, code: "c1", code_verifier: "v1")
     get teams_approval_path(@token)
-    get teams_approval_file_access_path(@token)
+    post teams_approval_file_access_path(@token)
     state = Rack::Utils.parse_query(URI.parse(response.location).query)["state"]
 
     get teams_file_access_callback_path, params: { error: "access_denied", state: state }

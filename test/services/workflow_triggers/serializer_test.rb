@@ -30,7 +30,8 @@ class WorkflowTriggers::SerializerTest < ActiveSupport::TestCase
 
     payload = WorkflowTriggers::Serializer.new.binding(binding)
 
-    assert_equal [ "chat", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
+    # Kind `slack` for one more release, so a page loaded before the chat kind still edits it.
+    assert_equal [ "slack", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
     assert_nil payload[:webhook_url]
   end
 

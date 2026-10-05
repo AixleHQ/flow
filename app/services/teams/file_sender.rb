@@ -11,8 +11,11 @@ module Teams
     module_function
 
     # One entry per file: its name, how it went out, and its link when it has one.
-    def deliver(conversation, thread_id:, files:, project:, user:)
-      if conversation.channel? && conversation.integration.settings.to_h["file_access"]
+    # Files are written only into the channel the run was started from — the
+    # permission behind the write reaches every channel of the organization.
+    def deliver(conversation, thread_id:, files:, project:, user:, origin_conversation: nil)
+      if conversation.channel? && conversation.integration.settings.to_h["file_access"] &&
+         conversation.external_id == origin_conversation
         to_channel(conversation, thread_id, files)
       elsif conversation.direct?
         files.map { |file| ask_consent(conversation, file, project, user) }

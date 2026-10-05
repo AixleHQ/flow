@@ -112,8 +112,10 @@ module InternalTools
         posted = Teams::Messages.post(conversation, thread_id: thread, new_thread: params[:new_thread],
                                                     text: params[:text], card: card)
       end
-      sent = Teams::FileSender.deliver(conversation, thread_id: posted&.thread_id || thread, files: files, project: project,
-                                                     user: session&.user) if files.any?
+      if files.any?
+        sent = Teams::FileSender.deliver(conversation, thread_id: posted&.thread_id || thread, files: files, project: project,
+                                                       user: session&.user, origin_conversation: chat_origin.dig("conversation", "id"))
+      end
       success({ provider: "teams", conversation: conversation.external_id, thread: posted&.thread_id || thread,
                 message_id: posted&.message_id, files: sent }.compact.to_json)
     rescue Teams::Error => e

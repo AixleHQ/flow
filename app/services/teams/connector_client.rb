@@ -74,7 +74,11 @@ module Teams
       base = reference.fetch("service_url").to_s
       raise Error, "serviceUrl #{base.inspect} is not a Bot Framework host" unless Config.service_url_allowed?(base)
 
-      response = connection(base).run_request(method, path, body&.to_json, headers)
+      response = begin
+        connection(base).run_request(method, path, body&.to_json, headers)
+      rescue Faraday::Error => e
+        raise Error.new("Bot Connector #{method.upcase} #{path}: #{e.message}", status: 503)
+      end
       if retryable?(response) && !retried
         sleep_for = response.headers["Retry-After"].to_i.clamp(0, MAX_RETRY_AFTER)
         sleep(sleep_for) if sleep_for.positive?

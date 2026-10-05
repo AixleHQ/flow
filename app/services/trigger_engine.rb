@@ -96,8 +96,10 @@ class TriggerEngine
     rescue StandardError => e
       attempts = event.relay_attempts.to_i + 1
       next_state = attempts >= TriggerEvent::RELAY_MAX_ATTEMPTS ? "failed" : "pending"
+      # Given up on: the file links it carried are dropped all the same.
+      data = next_state == "failed" ? (Chat.provider_for(event)&.scrub(event.data) || event.data) : event.data
       event.update_columns(
-        relay_state: next_state, relay_attempts: attempts,
+        relay_state: next_state, relay_attempts: attempts, data: data,
         relay_error: e.message.to_s.truncate(250), updated_at: Time.current
       )
       Rails.logger.error("[TriggerEngine] dispatch_pending failed for event ##{event.id} (attempt #{attempts}): #{e.message}")
@@ -363,8 +365,7 @@ class TriggerEngine
     # Routing/transport keys (and Slack's raw markup of a text the card already
     # shows) that aren't part of the user-facing payload and shouldn't leak into
     # the created card's body.
-    INTERNAL_DATA_KEYS = (%w[channel ts thread_ts team integration_id input_asset_ids files raw_text service_url] +
-                          Chat::TRANSPORT_KEYS).freeze
+    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files raw_text service_url].freeze
 
     # Renders the triggering payload into the created card's description so the
     # run's input is visible on the board. Returns nil when there's nothing useful
@@ -373,7 +374,10 @@ class TriggerEngine
     # trigger saved as `slack.message` keeps titling its cards that way although
     # the message now arrives as `chat.message`.
     def render_subject_body(event, label)
-      payload = (event.data || {}).except(*INTERNAL_DATA_KEYS)
+      # A generic webhook's payload is the sender's own, so only a chat
+      # message loses the keys the messaging port routes by.
+      internal = Chat.event?(event) ? INTERNAL_DATA_KEYS + Chat::TRANSPORT_KEYS : INTERNAL_DATA_KEYS
+      payload = (event.data || {}).except(*internal)
       return nil if payload.blank?
 
       "Triggered by `#{label}`\n\n```json\n#{JSON.pretty_generate(payload)}\n```"

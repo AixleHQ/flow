@@ -18,6 +18,7 @@ module Teams
     def authenticate!(authorization, activity)
       token = authorization.to_s[/\ABearer (.+)\z/, 1]
       raise Unauthorized, "no bearer token" if token.blank?
+      raise Unauthorized, "not a Teams activity" unless activity["channelId"] == "msteams"
 
       kid = JWT.decode(token, nil, false).last["kid"]
       key = signing_key(kid) || signing_key(kid, refresh: true)

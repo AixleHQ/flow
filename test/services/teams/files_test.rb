@@ -77,6 +77,10 @@ class Teams::FilesTest < ActiveSupport::TestCase
       attachments: [ { contentType: "reference", contentUrl: shared, name: "plan.docx" } ], body: { content: "" }
     }.to_json)
     share = "u!#{Base64.urlsafe_encode64(shared, padding: false)}"
+    stub_request(:get, "#{GRAPH}/teams/#{GROUP}/channels/19%3Aabc%40thread.tacv2/filesFolder")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { id: "F1", parentReference: { driveId: "b!sales" } }.to_json)
+    stub_request(:get, "#{GRAPH}/shares/#{share}/driveItem?%24select=id,parentReference")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { id: "I1", parentReference: { driveId: "b!sales" } }.to_json)
     stub_request(:get, "#{GRAPH}/shares/#{share}/driveItem/content")
       .to_return(status: 302, headers: { "Location" => "https://contoso.sharepoint.com/_layouts/15/download.aspx?t=1" })
     stub_request(:get, "https://contoso.sharepoint.com/_layouts/15/download.aspx?t=1").to_return(status: 200, body: "DOCX")
@@ -87,6 +91,13 @@ class Teams::FilesTest < ActiveSupport::TestCase
     assert_equal [ "plan.docx" ], data["files"].pluck("name")
     assert_equal 1, Chat::TeamsProvider.ingest_files(event, @project).size
     assert_equal "DOCX", Asset.last.latest_version.file.read
+
+    # A message can link any file; one outside the team's own files is not read.
+    stub_request(:get, "#{GRAPH}/shares/#{share}/driveItem?%24select=id,parentReference")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { id: "I2", parentReference: { driveId: "b!hr" } }.to_json)
+    assert_no_difference -> { Asset.count } do
+      assert_empty Chat::TeamsProvider.ingest_files(event, @project)
+    end
 
     @integration.update!(settings: @integration.settings.merge("file_access" => false))
     assert_empty Chat::TeamsProvider.ingest_files(event, @project)
@@ -104,11 +115,22 @@ class Teams::FilesTest < ActiveSupport::TestCase
              .to_return(status: 201, body: { id: "5" }.to_json)
 
     sent = Teams::FileSender.deliver(@channel, thread_id: "1700000000001", files: [ { filename: "report.csv", content: "a,b\n" } ],
-                                               project: @project, user: @user)
+                                               project: @project, user: @user, origin_conversation: @channel.external_id)
 
     assert_requested upload
     assert_requested linked
     assert_equal [ { name: "report.csv", delivered: "uploaded", url: "https://contoso.sharepoint.com/report.csv" } ], sent
+  end
+
+  test "files for a channel the run did not come from are linked, not written there" do
+    stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2%3Bmessageid%3D1700000000001/activities")
+      .to_return(status: 201, body: { id: "5" }.to_json)
+
+    sent = Teams::FileSender.deliver(@channel, thread_id: "1700000000001", files: [ { filename: "report.csv", content: "x" } ],
+                                               project: @project, user: @user, origin_conversation: "19:elsewhere@thread.tacv2")
+
+    assert_equal "linked", sent.sole[:delivered]
+    assert_not_requested :put, %r{graph.microsoft.com}
   end
 
   test "a 1:1 file waits for the person's consent, then lands in their OneDrive" do

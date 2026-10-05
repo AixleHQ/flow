@@ -154,7 +154,11 @@ export function TriggerFormPanel({
     editing?.chat_provider ?? (editing?.kind === 'slack' ? 'slack' : (chatProviders[0]?.key ?? 'slack')),
   );
   const [where, setWhere] = useState(editChat?.where ?? '');
-  const [statusReporting, setStatusReporting] = useState(editing?.status_reporting ?? 'lifecycle');
+  // A server from before status_reporting answers without it: keep what the
+  // trigger did then rather than turning a quiet one into status cards.
+  const [statusReporting, setStatusReporting] = useState(
+    editing?.status_reporting ?? (editing ? (editing.notify_on_failure === false ? 'none' : 'failures') : 'lifecycle'),
+  );
   const [textContains, setTextContains] = useState(editChat?.value ?? '');
   const [textOp, setTextOp] = useState(editChat?.op ?? 'contains');
   const [chatCooldown, setChatCooldown] = useState<number | string>(editChat ? (editing?.cooldown_seconds ?? 0) : 0);

@@ -100,6 +100,10 @@ module Teams
       end
 
       ActiveRecord::Base.transaction do
+        integration.lock!
+        bound = integration.settings.to_h["tenant_id"]
+        raise Refused, "This connection already serves another Microsoft 365 organization" if bound.present? && bound != tenant_id
+
         endpoint = WebhookEndpoint.find_by(slug: endpoint_slug(tenant_id))
         if endpoint && endpoint.config.to_h["integration_id"] != integration.id
           raise Refused, "That Microsoft 365 organization is already connected to an Aixle workspace"
@@ -119,7 +123,7 @@ module Teams
                             ))
       end
       integration
-    rescue ActiveRecord::RecordNotUnique
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
       raise Refused, "That Microsoft 365 organization is already connected to an Aixle workspace"
     end
 
@@ -159,7 +163,11 @@ module Teams
       url = "#{Config.cloud[:login]}/organizations/oauth2/v2.0/token"
       form = { grant_type: "authorization_code", client_id: Config.app_id, code: code.to_s, redirect_uri: redirect_uri,
                scope: "openid profile", code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
-      response = Faraday.post(url, URI.encode_www_form(form), "Content-Type" => "application/x-www-form-urlencoded")
+      response = begin
+        Faraday.post(url, URI.encode_www_form(form), "Content-Type" => "application/x-www-form-urlencoded")
+      rescue Faraday::Error
+        raise Refused, "Microsoft could not be reached to finish the sign-in. Try again in a minute."
+      end
       body = JSON.parse(response.body.to_s)
       raise Refused, "Microsoft did not complete the sign-in: #{body['error_description'].to_s.lines.first}" unless body["id_token"]
 

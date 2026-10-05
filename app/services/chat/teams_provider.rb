@@ -185,7 +185,8 @@ module Chat
         next unless attachment["contentType"] == "reference" && attachment["contentUrl"].present?
 
         [ { "name" => attachment["name"], "mimetype" => Marcel::MimeType.for(name: attachment["name"].to_s) }.compact,
-          { "kind" => "share", "url" => attachment["contentUrl"] } ]
+          { "kind" => "share", "url" => attachment["contentUrl"], "conversation" => conversation.external_id,
+            "sender" => activity.dig("from", "aadObjectId") } ]
       end
       pairs += hosted_images(message.dig("body", "content"), path)
       pairs.empty? ? [ nil, nil ] : pairs.transpose
@@ -203,9 +204,12 @@ module Chat
       root.present? && root != activity["id"] ? "#{base}/#{esc[root]}/replies/#{esc[activity['id']]}" : "#{base}/#{esc[activity['id']]}"
     end
 
-    # Pasted images live with the message; only this message's own are taken.
+    # Pasted images live with the message: only an <img> of this message's own
+    # hosted content is taken, never a path someone typed into the text.
     def hosted_images(html, message_path)
-      html.to_s.scan(%r{/hostedContents/([^/"'\s]+)/\$value}).flatten.uniq.each_with_index.map do |id, index|
+      sources = html.to_s.scan(/<img\b[^>]*\bsrc="([^"]+)"/i).flatten
+      ids = sources.filter_map { |src| src[%r{/hostedContents/([A-Za-z0-9_=-]+)/\$value\z}, 1] }.uniq
+      ids.each_with_index.map do |id, index|
         [ { "name" => "image-#{index + 1}.png", "mimetype" => "image/png" },
           { "kind" => "hosted", "path" => "#{message_path}/hostedContents/#{id}/$value" } ]
       end

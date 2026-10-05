@@ -67,7 +67,13 @@ class Webhooks::TeamsController < ActionController::API
     return if conversation.nil?
 
     if activity["action"].to_s.start_with?("remove")
-      conversation.update!(installed: false)
+      # Removed from a team, the app is gone from every channel of it.
+      rows = if conversation.team_external_id.present?
+        ChatConversation.where(integration: integration, team_external_id: conversation.team_external_id)
+      else
+        ChatConversation.where(id: conversation.id)
+      end
+      rows.update_all(installed: false, updated_at: Time.current)
     else
       conversation.update!(installed: true)
       Teams::WelcomeJob.perform_later(conversation.id) if conversation.welcomed_at.nil?
@@ -96,6 +102,7 @@ class Webhooks::TeamsController < ActionController::API
 
   def endpoint_for(tenant_id)
     return nil unless tenant_id.to_s.match?(Teams::Config::GUID)
+    return nil if Teams::Config.allowed_tenant_ids.any? && Teams::Config.allowed_tenant_ids.exclude?(tenant_id)
 
     WebhookEndpoint.active.find_by(slug: "teams-tenant-#{tenant_id}")
   end
