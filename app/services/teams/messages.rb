@@ -71,7 +71,8 @@ module Teams
     def text(content, type)
       return content.to_s.strip unless type.to_s == "html"
 
-      CGI.unescapeHTML(Rails::HTML5::FullSanitizer.new.sanitize(content.to_s.gsub(%r{<br\s*/?>|</p>}i, "\n"))).strip
+      html = content.to_s.gsub(%r{<br\s*/?>|</p>}i, "\n")
+      Nokogiri::HTML5.fragment(html).text.tr("\u00A0", " ").gsub(/[ \t]+/, " ").gsub(/ *\n */, "\n").strip
     end
 
     # Graph names a team by its Microsoft 365 group, which the Connector reports.

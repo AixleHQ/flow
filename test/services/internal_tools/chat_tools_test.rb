@@ -111,7 +111,7 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
         { id: "3", createdDateTime: "2026-10-06T10:02:00Z", from: { application: { displayName: "Aixle Flow" } },
           body: { contentType: "text", content: "On it" } },
         { id: "2", createdDateTime: "2026-10-06T10:01:00Z", from: { user: { displayName: "Ana" } },
-          body: { contentType: "html", content: "<at>Aixle Flow</at> deploy" }, attachments: [ { name: "notes.pdf" } ] }
+          body: { contentType: "html", content: "<at>Aixle Flow</at>&nbsp;deploy" }, attachments: [ { name: "notes.pdf" } ] }
       ]
     }.to_json)
 
