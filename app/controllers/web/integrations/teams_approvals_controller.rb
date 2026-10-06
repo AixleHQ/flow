@@ -41,7 +41,7 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
     return redirect_to(teams_approval_path(params[:token])) if integration.nil?
 
     # allow_other_host: Microsoft's authorize URL, built from configuration only.
-    redirect_to Teams::Connection.authorize_url(integration), allow_other_host: true
+    redirect_to Teams::Connection.authorize_url(integration, with_files: params[:files] != "0"), allow_other_host: true
   end
 
   def callback
@@ -55,7 +55,8 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
     integration = linked_integration(state)
     return redirect_to(back, alert: "Open the approval link again and sign in from there") if integration.nil?
 
-    Teams::Connection.complete!(integration: integration, code: params[:code], code_verifier: side["code_verifier"])
+    Teams::Connection.complete!(integration: integration, code: params[:code], code_verifier: side["code_verifier"],
+                                with_files: state.dig("context", "files") == true)
     redirect_to back, notice: "Connected. Your organization's Teams can now start #{integration.company.name} workflows."
   rescue Teams::Connection::Refused, Teams::Error => e
     redirect_to back, alert: e.message

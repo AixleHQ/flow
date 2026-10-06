@@ -26,6 +26,10 @@ module Teams
     # Publishing to an organization's Teams app catalog has no application
     # permission: it is done as the administrator, in their approval sign-in.
     SIGN_IN_SCOPE = "openid profile https://graph.microsoft.com/AppCatalog.ReadWrite.All"
+    # Everything the app registration lists, file access included, on one consent
+    # screen; Microsoft's consent is all or nothing, so files are the
+    # administrator's choice before signing in, not on that screen.
+    WITH_FILES_SCOPE = "openid profile https://graph.microsoft.com/.default"
 
     module_function
 
@@ -63,18 +67,20 @@ module Teams
       integration
     end
 
-    def authorize_url(integration)
+    def authorize_url(integration, with_files: false)
       verifier = SecureRandom.urlsafe_base64(48)
       state = ::Oauth::State.encode(owner_type: "Integration", owner_id: integration.id, user_id: nil, return_to: nil,
-                                    code_verifier: verifier, provider: PROVIDER)
+                                    code_verifier: verifier, provider: PROVIDER, context: { "files" => with_files })
       query = URI.encode_www_form(
         client_id: Config.app_id, response_type: "code", redirect_uri: redirect_uri, response_mode: "query",
-        scope: SIGN_IN_SCOPE, state: state, prompt: "select_account",
+        scope: sign_in_scope(with_files), state: state, prompt: with_files ? "consent" : "select_account",
         code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
         code_challenge_method: "S256"
       )
       "#{Config.cloud[:login]}/organizations/oauth2/v2.0/authorize?#{query}"
     end
+
+    def sign_in_scope(with_files) = with_files ? WITH_FILES_SCOPE : SIGN_IN_SCOPE
 
     def redirect_uri = "#{Settings.protocol}://#{Settings.domain}/integrations/teams/callback"
     def file_access_redirect_uri = "#{Settings.protocol}://#{Settings.domain}/integrations/teams/file_access/callback"
@@ -82,8 +88,8 @@ module Teams
     # Exchanges the sign-in for its ID token and binds the organization it names.
     # The administrator's Graph token, if Microsoft gave one, publishes the Teams
     # app to the organization's catalog; it is used here and not kept.
-    def complete!(integration:, code:, code_verifier:)
-      claims, graph_token = sign_in_claims(code, code_verifier)
+    def complete!(integration:, code:, code_verifier:, with_files: false)
+      claims, graph_token = sign_in_claims(code, code_verifier, sign_in_scope(with_files))
       roles = Array(claims["wids"]) & ADMIN_ROLES.keys
       if roles.empty?
         raise Refused, "#{claims['name'] || 'This account'} is not an administrator of its Microsoft 365 organization. " \
@@ -92,7 +98,16 @@ module Teams
 
       bind!(integration, claims, roles)
       Catalog.publish!(integration, graph_token) if graph_token.present?
+      confirm_file_access_after_sign_in(integration) if with_files
       integration
+    end
+
+    # The grant just made is read back like any other; when Entra has not
+    # applied it yet, the approval page still offers the separate consent.
+    def confirm_file_access_after_sign_in(integration)
+      confirm_file_access!(integration)
+    rescue Error => e
+      Rails.logger.warn("[Teams::Connection] file access after sign-in for ##{integration.id}: #{e.message}")
     end
 
     def bind!(integration, claims, roles)
@@ -166,10 +181,10 @@ module Teams
     # are Entra's (OpenID Connect Core §3.1.3.7) and are read without a signature
     # check; what is still checked is that it was issued to this app, for a
     # directory, and is current.
-    def sign_in_claims(code, code_verifier)
+    def sign_in_claims(code, code_verifier, scope = SIGN_IN_SCOPE)
       url = "#{Config.cloud[:login]}/organizations/oauth2/v2.0/token"
       form = { grant_type: "authorization_code", client_id: Config.app_id, code: code.to_s, redirect_uri: redirect_uri,
-               scope: SIGN_IN_SCOPE, code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
+               scope: scope, code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
       response = begin
         Faraday.post(url, URI.encode_www_form(form), "Content-Type" => "application/x-www-form-urlencoded")
       rescue Faraday::Error

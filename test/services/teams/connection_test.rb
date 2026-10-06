@@ -101,6 +101,30 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
                  integration.reload.settings.values_at("catalog_app_id", "catalog_version", "catalog_error")
   end
 
+  test "with files chosen, one consent covers everything and the grant is read back at once" do
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+    url = URI.parse(Teams::Connection.authorize_url(integration, with_files: true))
+    query = Rack::Utils.parse_query(url.query)
+    assert_equal [ "openid profile https://graph.microsoft.com/.default", "consent" ], query.values_at("scope", "prompt")
+    stub_request(:post, "https://login.microsoftonline.com/#{TEAMS_CUSTOMER_TENANT}/oauth2/v2.0/token")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { access_token: JWT.encode({ roles: [ "Files.ReadWrite.All" ] }, "k", "HS256"), expires_in: 3600 }.to_json)
+    stub_sign_in
+
+    Teams::Connection.complete!(integration: integration, code: "c1", code_verifier: "v1", with_files: true)
+
+    assert_requested(:post, SIGN_IN_TOKEN_URL) { |request| Rack::Utils.parse_query(request.body)["scope"].end_with?("/.default") }
+    assert integration.reload.settings["file_access"]
+  end
+
+  test "without files, the sign-in asks only for itself and the catalog" do
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+
+    query = Rack::Utils.parse_query(URI.parse(Teams::Connection.authorize_url(integration)).query)
+
+    assert_equal [ Teams::Connection::SIGN_IN_SCOPE, "select_account" ], query.values_at("scope", "prompt")
+  end
+
   test "an app already in the catalog is updated to a newer package, and left alone at the same version" do
     integration, = Teams::Connection.start!(company: @company, user: @user)
     stub_catalog(existing: { id: "app-9", appDefinitions: [ { version: "0.9.0" } ] })

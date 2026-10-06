@@ -25,8 +25,9 @@ organization, who does not need a Flow account.
    administrator. The link works for 7 days and is shown only once. If it is
    lost, or later, choose **New approval link** on the row; the old link stops
    working.
-3. The administrator opens the link and selects **Sign in with Microsoft to
-   approve**. They must hold one of these directory roles: Global
+3. The administrator opens the link, leaves **Also give access to files shared
+   in Teams** checked or clears it, and selects **Sign in with Microsoft to
+   approve**. Microsoft shows one consent screen for everything Flow asks for. They must hold one of these directory roles: Global
    Administrator, Privileged Role Administrator, Cloud Application
    Administrator, Application Administrator, or Teams Administrator. A sign-in
    without one of them binds nothing.
@@ -38,12 +39,12 @@ the approval is refused.
 
 ### File access
 
-After approving, the administrator can choose **Grant file access**. That is a
-separate Microsoft consent for the permission `Files.ReadWrite.All`. Flow needs
-it to read files people attach in channels and group chats, and to save files
-into channels. The administrator may decline: everything else works without it,
-and the row shows **files off**. They can grant it later from a new approval
-link.
+File access is the Microsoft permission `Files.ReadWrite.All`. Flow needs it to
+read files people attach in channels and group chats, and to save files into
+channels. With the box checked it is part of the one consent screen. The
+administrator may leave it out: everything else works without it, and the row
+shows **files off**. They can grant it later with **Grant file access** on the
+approval page, from a new approval link.
 
 Flow uses the permission only for:
 

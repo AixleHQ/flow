@@ -1,6 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
-import { Alert, Anchor, Badge, Button, Center, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
+import { Alert, Anchor, Badge, Button, Center, Checkbox, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconBrandTeams, IconDownload, IconFolders } from '@tabler/icons-react';
+import { useState } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
 import { Logo, PageShell } from 'shared/ui';
@@ -39,26 +40,39 @@ const Flash = () => {
   );
 };
 
-const Pending = ({ workspace, requestedBy, signInUrl }: Props) => (
-  <Stack gap="md">
-    <Title order={3} ta="center">
-      Connect Microsoft Teams to {workspace}
-    </Title>
-    <Text size="sm">
-      {requestedBy?.name ?? 'Someone'}
-      {requestedBy?.email ? ` (${requestedBy.email})` : ''} asked to connect your Microsoft 365 organization to the
-      Aixle workspace <strong>{workspace}</strong>. Once it is connected, people in your organization can start that
-      workspace&apos;s workflows by mentioning Aixle Flow in Teams.
-    </Text>
-    <Alert color="yellow" variant="light">
-      Approve only if you know this workspace: messages addressed to Aixle Flow in your organization will go to it. You
-      need to be a Global, Privileged Role, Cloud Application, Application or Teams Administrator.
-    </Alert>
-    <Button onClick={() => signInUrl && postNavigate(signInUrl)} leftSection={<IconBrandTeams size={18} />} fullWidth>
-      Sign in with Microsoft to approve
-    </Button>
-  </Stack>
-);
+const Pending = ({ workspace, requestedBy, signInUrl }: Props) => {
+  const [withFiles, setWithFiles] = useState(true);
+  return (
+    <Stack gap="md">
+      <Title order={3} ta="center">
+        Connect Microsoft Teams to {workspace}
+      </Title>
+      <Text size="sm">
+        {requestedBy?.name ?? 'Someone'}
+        {requestedBy?.email ? ` (${requestedBy.email})` : ''} asked to connect your Microsoft 365 organization to the
+        Aixle workspace <strong>{workspace}</strong>. Once it is connected, people in your organization can start that
+        workspace&apos;s workflows by mentioning Aixle Flow in Teams.
+      </Text>
+      <Alert color="yellow" variant="light">
+        Approve only if you know this workspace: messages addressed to Aixle Flow in your organization will go to it.
+        You need to be a Global, Privileged Role, Cloud Application, Application or Teams Administrator.
+      </Alert>
+      <Checkbox
+        checked={withFiles}
+        onChange={(e) => setWithFiles(e.currentTarget.checked)}
+        label="Also give access to files shared in Teams"
+        description="Lets workflows read the files people attach in channels and save files there. Microsoft offers this only as a permission over all of your organization's files; Aixle opens only the files of messages addressed to it."
+      />
+      <Button
+        onClick={() => signInUrl && postNavigate(signInUrl, { files: withFiles ? '1' : '0' })}
+        leftSection={<IconBrandTeams size={18} />}
+        fullWidth
+      >
+        Sign in with Microsoft to approve
+      </Button>
+    </Stack>
+  );
+};
 
 const Connected = ({
   workspace,

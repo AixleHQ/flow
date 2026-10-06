@@ -25,7 +25,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
   end
 
   def sign_in_state
-    post teams_approval_sign_in_path(@token)
+    post teams_approval_sign_in_path(@token), params: { files: "0" }
     Rack::Utils.parse_query(URI.parse(response.location).query)["state"]
   end
 
@@ -48,7 +48,7 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
 
   test "signing in as a directory administrator connects the organization and offers the app" do
     get teams_approval_path(@token)
-    post teams_approval_sign_in_path(@token)
+    post teams_approval_sign_in_path(@token), params: { files: "0" }
     authorize = URI.parse(response.location)
     query = Rack::Utils.parse_query(authorize.query)
     assert_equal [ "login.microsoftonline.com", "/organizations/oauth2/v2.0/authorize" ], [ authorize.host, authorize.path ]

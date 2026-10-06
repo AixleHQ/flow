@@ -23,7 +23,16 @@ describe('TeamsApproval', () => {
     expect(screen.getByRole('heading', { name: 'Connect Microsoft Teams to Acme' })).toBeInTheDocument();
     expect(screen.getByText(/Ada Lovelace \(ada@acme\.test\) asked to connect/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Sign in with Microsoft to approve' }));
-    expect(postNavigate).toHaveBeenCalledWith('/integrations/teams/approve/abc/sign_in');
+    expect(postNavigate).toHaveBeenCalledWith('/integrations/teams/approve/abc/sign_in', { files: '1' });
+  });
+
+  it('lets the administrator leave file access out of the one sign-in', async () => {
+    renderPage(<TeamsApproval {...pending} />, { props: { flash: {} } });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Also give access to files/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in with Microsoft to approve' }));
+
+    expect(postNavigate).toHaveBeenLastCalledWith('/integrations/teams/approve/abc/sign_in', { files: '0' });
   });
 
   it('after approval, offers file access and the app package', async () => {
