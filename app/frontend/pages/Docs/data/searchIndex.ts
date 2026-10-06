@@ -235,10 +235,16 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Connect Linear with the Aixle Linear app or an API key, the per-team webhooks an API key needs a workspace admin for, and how workflow states become statuses.',
   },
   {
+    slug: 'youtrack',
+    title: 'YouTrack',
+    section: 'User guide',
+    desc: 'Connect YouTrack Cloud or a self-hosted instance with a permanent token, set up the Webhook Triggers app in each project, and how the state field becomes statuses.',
+  },
+  {
     slug: 'trackers',
     title: 'Trackers',
     section: 'User guide',
-    desc: 'Azure Boards, Jira, GitHub Projects and Linear as trackers: the Trackers page, primary and read-only, connecting a board column, tracker triggers, the tracker tools and who a write is attributed to.',
+    desc: 'Azure Boards, Jira, GitHub Projects, Linear and YouTrack as trackers: the Trackers page, primary and read-only, connecting a board column, tracker triggers, the tracker tools and who a write is attributed to.',
   },
   {
     slug: 'slack',

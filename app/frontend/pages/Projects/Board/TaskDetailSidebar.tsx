@@ -98,7 +98,13 @@ import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { jsonHeaders, TASK_TYPE_COLORS, type Column, type Gate, type Task } from './types';
 
-const TRACKER_LABELS: Record<string, string> = { azure_devops: 'Azure Boards', jira: 'Jira' };
+const TRACKER_LABELS: Record<string, string> = {
+  azure_devops: 'Azure Boards',
+  jira: 'Jira',
+  github: 'GitHub',
+  linear: 'Linear',
+  youtrack: 'YouTrack',
+};
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [

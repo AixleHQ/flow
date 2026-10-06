@@ -47,6 +47,7 @@ import userGuideOutline from './user-guide-outline.md?raw';
 import userGuide from './user-guide.md?raw';
 import usingFlow from './using-flow.md?raw';
 import workflows from './workflows.md?raw';
+import youtrack from './youtrack.md?raw';
 
 export interface TocItem {
   id: string;
@@ -313,6 +314,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: linear,
     toc: extractToc(linear),
+  },
+  youtrack: {
+    title: 'YouTrack',
+    section: 'User guide',
+    content: youtrack,
+    toc: extractToc(youtrack),
   },
   trackers: {
     title: 'Trackers',

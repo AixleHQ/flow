@@ -125,6 +125,7 @@
               "coder",
               "jira",
               "linear",
+              "youtrack",
               "tracker"
             ]
           },
@@ -669,6 +670,7 @@
                   "coder",
                   "jira",
                   "linear",
+                  "youtrack",
                   "tracker"
                 ]
               },

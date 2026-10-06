@@ -282,6 +282,16 @@ connects with a personal API key only, which needs nothing here.
 | `LINEAR_WEBHOOK_SECRET`      | no       | unset                   | The signing secret of the app's webhook (`/webhooks/trackers/app/linear`). Without it every delivery to that URL is refused. |
 | `LINEAR_WEBHOOK_BASE_URL`    | no       | `<protocol>://<domain>` | Where API-key connections' webhooks point. Set it only when the deployment's domain is not reachable from Linear (a tunnel in development); a loopback or private host registers no webhooks. |
 
+### YouTrack
+
+YouTrack connects with a customer's permanent token and needs nothing on the
+deployment (see `docs/user-guide/youtrack.md`).
+
+| Variable                    | Required | Default                 | Purpose |
+| --------------------------- | -------- | ----------------------- | ------- |
+| `YOUTRACK_WEBHOOK_BASE_URL` | no       | `<protocol>://<domain>` | The base of the webhook URLs the setup dialog shows. Set it only when the deployment's domain is not reachable from the YouTrack server (a tunnel in development). |
+| `YOUTRACK_TRUSTED_HOSTS`    | no       | unset                   | Self-hosted YouTrack hosts that resolve to a private address and may still be called, comma-separated. Every other host must resolve to a public address. |
+
 ## Auth & OAuth providers
 
 | Variable                     | Required | Default            | Purpose                                                      |

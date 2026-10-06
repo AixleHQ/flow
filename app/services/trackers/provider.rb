@@ -96,6 +96,11 @@ module Trackers
       nil
     end
 
+    # The notification as the tracker itself confirms it, against the re-read
+    # issue; nil when it cannot be confirmed (§6.2). A provider whose deliveries
+    # are authenticated per subscription or signed trusts its hints as they are.
+    def confirm(notification, _issue) = notification
+
     # The tracker account ids a notification carries, for TrackerAccount.
     def account_ids(_notification) = []
 

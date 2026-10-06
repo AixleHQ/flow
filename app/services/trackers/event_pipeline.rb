@@ -51,6 +51,9 @@ module Trackers
       return [] if trackers.empty? || !awaited?(trackers)
 
       issue = @provider.get_issue(notification.scope_id, notification.issue_id)
+      notification = confirmed(notification, issue)
+      return [] unless notification
+
       events = derive(notification, issue)
       return [] if events.empty?
 
@@ -67,6 +70,15 @@ module Trackers
 
     def awaited?(trackers)
       TriggerBinding.active.where(project_id: trackers.map(&:project_id), event_type: EVENT_TYPES).exists?
+    end
+
+    def confirmed(notification, issue)
+      @provider.confirm(notification, issue).tap do |result|
+        unless result
+          Rails.logger.info("[Trackers::EventPipeline] unconfirmed_change: integration #{@integration.id} " \
+                            "issue #{issue.id} #{notification.kind} — not published")
+        end
+      end
     end
 
     # [[event_type, extra data]]; an update can mean a status change and an

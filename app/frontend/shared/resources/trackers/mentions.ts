@@ -6,6 +6,8 @@ const REASONS: Record<string, string> = {
   jira: 'This Jira connection acts as a person, so Aixle cannot recognise a mention of it. Tick “This Atlassian account is kept for Aixle” on the Integrations page if the account is kept for Aixle, or connect a service account.',
   linear:
     'This Linear connection acts as the person whose API key it uses, so Aixle cannot recognise a mention of it. Tick “This Linear account is kept for Aixle” on the Integrations page if the account is kept for Aixle, or install Aixle’s Linear app.',
+  youtrack:
+    'This YouTrack connection acts as the person whose permanent token it uses, so Aixle cannot recognise a mention of it. Tick “This YouTrack account is kept for Aixle” on the Integrations page if the account is kept for Aixle, or connect with an automation account’s token.',
 };
 
 // Why a comment mentioning Aixle cannot start anything in this tracker yet; null when it can.

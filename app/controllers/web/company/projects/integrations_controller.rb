@@ -13,6 +13,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       github: github_props,
       jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
+      youtrack: { enabled: true },
       slack: { enabled: Slack::Oauth.enabled? }
     }
   end
@@ -27,6 +28,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when "azure_devops" then create_azure_devops
     when "jira" then create_jira
     when "linear" then create_linear
+    when "youtrack" then create_youtrack
     else
       redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{params[:provider]}"
     end
@@ -44,6 +46,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     return update_azure_devops(integration) if integration.azure_devops?
     return update_jira(integration) if integration.jira?
     return update_linear(integration) if integration.linear?
+    return update_youtrack(integration) if integration.youtrack?
     return update_github_projects(integration) if integration.github? && params.key?(:github_project_ids)
     return replace_gitlab_token(integration) if integration.gitlab?
     return replace_coder_token(integration) if params.key?(:session_token)
@@ -80,7 +83,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     integration = Integration.for_project(current_project).find(params[:id])
     service_class = {
       "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
-      "linear" => Linear::IntegrationService,
+      "linear" => Linear::IntegrationService, "youtrack" => Youtrack::IntegrationService,
       "github" => Github::IntegrationService, "gitlab" => Gitlab::IntegrationService,
       "coder" => Coder::IntegrationService
     }[integration.provider.to_s]
@@ -241,6 +244,43 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     render json: { teams: linear_service.available_teams(integration) }
   rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
     render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # Who a permanent token acts as and the projects it can see, before anything is saved.
+  def youtrack_inspect
+    inspection = youtrack_service.inspect_token(base_url: params[:base_url].to_s, token: params[:permanent_token].to_s)
+    render json: { base_url: inspection.base_url, identity: inspection.identity.slice(:id, :login, :name),
+                   projects: inspection.projects }
+  rescue Trackers::Error, Youtrack::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  def youtrack_projects
+    integration = Integration.for_project(current_project).where(provider: :youtrack).find(params[:id])
+    render json: { projects: youtrack_service.available_projects(integration) }
+  rescue Trackers::Error, Youtrack::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # What a YouTrack project admin enters in each project's Webhook Triggers
+  # app. The tokens are shown to the people who manage integrations and never
+  # go into settings, which every viewer of the page receives.
+  def youtrack_webhook
+    integration = Integration.for_project(current_project).where(provider: :youtrack).find(params[:id])
+    subscriptions = Trackers::Youtrack::Subscriptions.new(integration).ensure!
+    render json: { projects: subscriptions.map { |subscription| youtrack_webhook_json(integration, subscription) },
+                   events: Trackers::Youtrack::Webhooks::EVENTS }
+  end
+
+  # The token a YouTrack project's Webhook Triggers app already sends, when
+  # it serves other consumers too and keeps it.
+  def youtrack_webhook_token
+    integration = Integration.for_project(current_project).where(provider: :youtrack).find(params[:id])
+    subscription = Trackers::Youtrack::Subscriptions.new(integration)
+                                                   .use_token!(params[:scope_id].to_s, token: params[:token], header: params[:header])
+    render json: youtrack_webhook_json(integration, subscription)
+  rescue Trackers::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
   end
 
   # The organization projects a GitHub App connection can put on the Trackers
@@ -435,6 +475,44 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} saved"
   rescue Trackers::Error, Linear::IntegrationService::ConfigurationError => e
     redirect_to company_project_integrations_path(current_project), alert: "Linear: #{e.message}"
+  end
+
+  def youtrack_service
+    @youtrack_service ||= Youtrack::IntegrationService.new(company: current_company, connected_by: current_user,
+                                                           project: current_project)
+  end
+
+  def create_youtrack
+    integration = youtrack_service.connect(
+      base_url: params[:base_url].to_s, token: params[:permanent_token].to_s, project_ids: Array(params[:project_ids]),
+      dedicated_identity: params[:dedicated_identity]
+    )
+    previous = youtrack_service.previous_login
+    notice = "#{integration.name} connected#{" — it now acts as @#{integration.settings['identity_login']}, not @#{previous}" if previous}"
+    redirect_to company_project_integrations_path(current_project), (previous ? :alert : :notice) => notice
+  rescue Trackers::Error, Youtrack::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "YouTrack connection failed: #{e.message}"
+  end
+
+  # The projects, and whether the token's account is kept for Aixle. The token
+  # itself is replaced by connecting again, which verifies it.
+  def update_youtrack(integration)
+    integration = youtrack_service.configure(
+      integration, project_ids: Array(params[:project_ids]),
+                   dedicated_identity: params.key?(:dedicated_identity) ? params[:dedicated_identity] : nil
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} saved"
+  rescue Trackers::Error, Youtrack::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "YouTrack: #{e.message}"
+  end
+
+  def youtrack_webhook_json(integration, subscription)
+    project = Array(integration.settings.to_h["youtrack_projects"]).find { |p| p["id"].to_s == subscription.external_scope_id }
+    {
+      scopeId: subscription.external_scope_id, key: project&.dig("key"), name: project&.dig("name"),
+      url: Trackers::Youtrack::Webhooks.url(subscription), header: Trackers::Youtrack::Webhooks.header(subscription),
+      token: subscription.secret, status: subscription.status, lastEventAt: subscription.last_event_at
+    }
   end
 
   def jira_service

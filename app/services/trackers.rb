@@ -8,7 +8,8 @@ module Trackers
     "azure_devops" => "Trackers::AzureDevops::Provider",
     "github" => "Trackers::Github::Provider",
     "jira" => "Trackers::Jira::Provider",
-    "linear" => "Trackers::Linear::Provider"
+    "linear" => "Trackers::Linear::Provider",
+    "youtrack" => "Trackers::Youtrack::Provider"
   }.freeze
 
   # What tracker tools declare as `requires_integration`: not an Integration

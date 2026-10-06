@@ -185,9 +185,10 @@ Azure DevOps through an integration, or a public URL cloned read-only. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `jira`, `coder`, `linear`.
-Users connect them in the browser (`get_integration_setup_url`). Azure DevOps and
-`jira` connections map their projects in as task trackers.
+**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
+Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
+`jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
+projects (Linear: teams) in as task trackers.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.

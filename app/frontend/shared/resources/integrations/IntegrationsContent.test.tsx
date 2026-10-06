@@ -274,6 +274,55 @@ describe('IntegrationsContent', () => {
     vi.mocked(globalThis.fetch).mockReset();
   });
 
+  // == YouTrack ==
+
+  it('offers YouTrack in a project, and says which projects a connection covers, as whom and which have sent nothing', async () => {
+    const user = userEvent.setup();
+    vi.mocked(globalThis.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ projects: [], events: [] }),
+    } as Response);
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[
+          makeIntegration({
+            id: 7,
+            name: 'YouTrack · acme.youtrack.cloud',
+            provider: 'youtrack',
+            scopeIndicator: 'project',
+            youtrackBaseUrl: 'https://acme.youtrack.cloud',
+            youtrackProjects: [
+              { id: '0-1', key: 'APP', name: 'Application' },
+              { id: '0-2', key: 'OPS', name: 'Operations' },
+            ],
+            youtrackIdentity: 'aixle',
+            youtrackWebhooksPending: ['OPS'],
+          }),
+        ]}
+        youtrack={{ enabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('APP, OPS · as @aixle (permanent token)')).toBeInTheDocument();
+    expect(screen.getByText('No webhook event yet from OPS')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open YouTrack · acme.youtrack.cloud in YouTrack/ })).toHaveAttribute(
+      'href',
+      'https://acme.youtrack.cloud',
+    );
+
+    await user.click(screen.getByRole('button', { name: /Webhook setup for YouTrack/ }));
+    expect(await screen.findByRole('dialog', { name: 'YouTrack webhooks' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+
+    await user.click(screen.getByRole('button', { name: /Connect/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'YouTrack' }));
+    expect(await screen.findByRole('dialog', { name: 'Connect YouTrack' })).toBeInTheDocument();
+    vi.mocked(globalThis.fetch).mockReset();
+  });
+
   // == GitHub Projects ==
 
   it('lists the GitHub projects a connection covers and opens their picker from the row', async () => {
