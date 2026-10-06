@@ -23,9 +23,20 @@ module Agents
       sqlite_blob("kirocli:odic:device{\"clientId\":\"x\",\"clientSecret\":\"y\"}")
     end
 
-    # Finished: the token row's OAuth field names appear verbatim in the file's bytes.
+    # Finished: the token row's OAuth field names and the selected profile's state key
+    # appear verbatim in the file's bytes.
     def authenticated_sqlite_blob(key: "kirocli:odic:token")
-      sqlite_blob("#{key}{\"access_token\":\"aoa...\",\"refresh_token\":\"aor...\"}")
+      sqlite_blob("#{token_row(key)}#{KiroCliAdapter::PROFILE_STATE_KEY}{\"arn\":\"arn:aws:codewhisperer:us-east-1:1:profile/A\"}")
+    end
+
+    # An organisation login stopped at the profile prompt: the token is written, the
+    # profile is not yet.
+    def tokens_without_profile_sqlite_blob
+      sqlite_blob(token_row("kirocli:odic:token"))
+    end
+
+    def token_row(key)
+      "#{key}{\"access_token\":\"aoa...\",\"refresh_token\":\"aor...\"}"
     end
 
     # A real SQLite database in the CLI's own layout, for the paths that actually read
@@ -103,9 +114,11 @@ module Agents
     # has entered a device code — so the auth terminal would close mid-login; the
     # JSON-key mode cannot parse a binary file at all. The byte marker is what the
     # watcher watches instead, and it must be the token payload's field names rather
-    # than the row key, which is named after the login method the user picked.
-    test "auth completion is detected by the token marker in the database bytes" do
-      assert_equal %w[__contains__:access_token __contains__:refresh_token], @adapter.auth_required_keys
+    # than the row key, which is named after the login method the user picked — plus
+    # the selected profile, which an organisation login writes after the token.
+    test "auth completion is detected by the token and profile markers in the database bytes" do
+      assert_equal %w[__contains__:access_token __contains__:refresh_token __contains__:api.codewhisperer.profile],
+                   @adapter.auth_required_keys
     end
 
     test "context lands in the steering directory so /workspace stays clean" do
@@ -132,6 +145,12 @@ module Agents
       refute @adapter.auth_complete?("   ")
       refute @adapter.auth_complete?("not json at all")
       refute @adapter.auth_complete?("{}")
+    end
+
+    # Saved at this point, every later `--no-interactive` session fails with "No
+    # profile selected", so the login is not complete until the profile is stored.
+    test "auth_complete? is false for a login stopped at the profile prompt" do
+      refute @adapter.auth_complete?(tokens_without_profile_sqlite_blob)
     end
 
     # The row key is named after the login method, so nothing may depend on it.

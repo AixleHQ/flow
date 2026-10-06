@@ -583,14 +583,17 @@ module ContainerRuntime
       # Kiro CLI keeps its login in a SQLite database rather than a config document,
       # and the adapter stores it as an opaque blob. Two things make this fixture what
       # it is: the file-format header, which is how the adapter recognises the
-      # credential, and the token payload's OAuth field names, which are how both the
-      # watcher and #auth_complete? tell a finished login from a database the CLI merely
-      # created (see Agents::KiroCliAdapter::AUTH_MARKERS). A fixture without them would
-      # be a database from an abandoned login, which correctly saves no credential.
+      # credential, and the token payload's OAuth field names plus the selected profile's
+      # state key, which are how both the watcher and #auth_complete? tell a finished
+      # login from a database the CLI merely created (see
+      # Agents::KiroCliAdapter::AUTH_MARKERS). A fixture without them would be a
+      # database from an abandoned login, which correctly saves no credential.
       "kiro_cli" => {
         path: "/home/kiro/.local/share/kiro-cli/data.sqlite3",
         content: "#{Agents::KiroCliAdapter::SQLITE_MAGIC}\x10auth_kv kirocli:odic:token " \
-                 '{"access_token":"placeholder","refresh_token":"placeholder"}'
+                 '{"access_token":"placeholder","refresh_token":"placeholder"} ' \
+                 "state #{Agents::KiroCliAdapter::PROFILE_STATE_KEY} " \
+                 '{"arn":"arn:aws:codewhisperer:us-east-1:1:profile/A"}'
       }
     }.freeze
 

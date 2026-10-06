@@ -961,6 +961,37 @@ Also settled in this pass:
 
 _Source: implementation and live-account runs on `feat/kiro-cli-runtime`, 2026-09-11._ (Confidence: High — measured)
 
+#### Correction: an organisation login is not finished at the token (2026-10-05)
+
+The three-state table above misses a state. An IAM Identity Center login writes the
+token first, then asks the user to pick a CodeWhisperer profile, and only then writes
+the `state` row `api.codewhisperer.profile`:
+
+| state | `access_token` / `refresh_token` | `api.codewhisperer.profile` |
+| --- | --- | --- |
+| fresh container, no login | absent | absent |
+| device code on screen, not yet approved | absent | absent |
+| token written, profile prompt on screen | **present** | absent |
+| login finished | present | **present** |
+
+The watcher ORed its `__contains__:` markers, so it closed the auth terminal at the
+profile prompt. The captured credential then failed every `--no-interactive` session with
+`Auth refresh callback failed: … No profile selected`. Launch-time repair
+(`KiroCliAdapter#repair_credential!`) covers this only when `ListAvailableProfiles`
+returns exactly one profile; an account with several has to pick, and the platform does
+not guess.
+
+`AUTH_MARKERS` now also holds `__contains__:api.codewhisperer.profile`, and both the
+watcher (`checkAuthComplete`, `every`) and `#auth_complete?` (`all?`) require every
+marker. Credentials captured before this change have to be disconnected and logged in
+again.
+
+Not yet measured: whether social (Google/GitHub) and Builder ID logins write the profile
+row as well. If either does not, this gate never completes for it, so the measurement has
+to precede release.
+
+_Source: production report and the adapter's own profile-repair history (#340, #343)._ (Confidence: Medium — the org case is consistent with the code; the social and Builder ID cases are unmeasured)
+
 ### Appendix B — Open Verification Items
 
 _Status as of 2026-09-11. Items closed by the implementation are marked **RESOLVED** and
