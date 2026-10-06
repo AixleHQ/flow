@@ -50,6 +50,10 @@ const bodyOf = (spy: ReturnType<typeof installFetch>, method: string) => {
   return JSON.parse((call[1] as RequestInit).body as string);
 };
 
+function getScrim(): HTMLElement {
+  return screen.getByTestId('trigger-form-scrim');
+}
+
 // Opens a Mantine Select by its current display value, then clicks the option whose name matches.
 async function pickOption(currentDisplay: RegExp | string, optionName: RegExp | string) {
   await userEvent.click(screen.getByDisplayValue(currentDisplay));
@@ -448,7 +452,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByText(/openssl dgst -sha256 -hmac 'topsecret'/)).toBeInTheDocument();
   });
 
-  it('refreshes the list (onSaved, not onClose) when the webhook success view is dismissed via the ✕', async () => {
+  it('ignores the scrim and refreshes the list via ✕ on the webhook success view', async () => {
     installFetch(() => json({ webhook_url: 'https://example.test/hooks/abc', webhook_secret: '' }));
     const onSaved = vi.fn();
     const onClose = vi.fn();
@@ -456,6 +460,11 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook', onSaved, onClose })} />);
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
     expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+
+    await userEvent.click(getScrim());
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Webhook trigger created')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onSaved).toHaveBeenCalledTimes(1);
@@ -735,6 +744,45 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     expect(await screen.findByText('Failed to save trigger')).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('keeps the form open with its values intact when the scrim is clicked', async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onClose, onSaved })} />);
+
+    const channel = screen.getByPlaceholderText('C0123ABC (blank = any)');
+    await userEvent.type(channel, 'C-PRESERVE-ME');
+    await userEvent.click(getScrim());
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(channel).toHaveValue('C-PRESERVE-ME');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('keeps an edited form open with its changed values when the scrim is clicked', async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    const editing: Trigger = {
+      id: 2,
+      kind: 'slack',
+      event_type: 'slack.message',
+      filter_predicate: { channel: 'C-EXISTING' },
+      subject_policy: 'none',
+      enabled: true,
+    };
+    renderPage(<TriggerFormPanel {...baseProps({ editing, onClose, onSaved })} />);
+
+    const channel = screen.getByPlaceholderText('C0123ABC (blank = any)');
+    await userEvent.clear(channel);
+    await userEvent.type(channel, 'C-EDITED');
+    await userEvent.click(getScrim());
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(channel).toHaveValue('C-EDITED');
+    expect(screen.getByRole('button', { name: 'Update trigger' })).toBeInTheDocument();
   });
 
   it('calls onClose from the Cancel button', async () => {

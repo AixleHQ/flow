@@ -288,7 +288,7 @@ export function TriggerFormPanel({
   ]);
 
   // Once a webhook has been created the trigger already exists on the server, so
-  // dismissing the panel any which way (scrim, ✕, Done) must still refresh the list.
+  // explicitly dismissing the panel via ✕ or Done must still refresh the list.
   const dismiss = created ? onSaved : onClose;
 
   const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
@@ -318,13 +318,13 @@ export function TriggerFormPanel({
     <>
       {/* Scrim */}
       <div
+        data-testid="trigger-form-scrim"
         style={{
           position: 'fixed',
           inset: 0,
           background: 'rgba(0,0,0,0.45)',
           zIndex: 90,
         }}
-        onClick={dismiss}
       />
 
       {/* Panel */}
