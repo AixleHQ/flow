@@ -24,13 +24,18 @@ class TaskDetailResource < BoardTaskResource
     task.parent_task&.title
   end
 
+  typelize "number | null"
+  attribute :parent_task_number do |task|
+    task.parent_task&.number
+  end
+
   # An epic's children used to be found by filtering the board's task list, which only worked
   # while the board held every task. Columns now load a page at a time, so the children come with
   # the task itself. (Nested keys are camelized — see the note on ApplicationResource#to_h.)
-  typelize "Array<{ id: number; title: string; taskType: string }>"
+  typelize "Array<{ id: number; number: number; title: string; taskType: string }>"
   attribute :child_tasks do |task|
     task.child_tasks.sort_by(&:position).map do |child|
-      { id: child.id, title: child.title, task_type: child.task_type.to_s }
+      { id: child.id, number: child.number, title: child.title, task_type: child.task_type.to_s }
     end
   end
 

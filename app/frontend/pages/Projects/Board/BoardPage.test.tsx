@@ -57,9 +57,10 @@ const populatedProps = {
   project,
   board,
   columns,
+  // Board numbers deliberately differ from ids: what a person sees and links to is the number.
   tasks: [
-    makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 }),
-    makeTask({ id: 2, title: 'Render dashboard charts', boardColumnId: 200, position: 0 }),
+    makeTask({ id: 1, number: 11, title: 'Wire up authentication', boardColumnId: 100, position: 0 }),
+    makeTask({ id: 2, number: 12, title: 'Render dashboard charts', boardColumnId: 200, position: 0 }),
   ],
   members: [{ id: 1, name: 'Dana Scout' }],
   workflows: [],
@@ -179,18 +180,18 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
-  it('adds an id_eq predicate when the search term is a numeric task ID', async () => {
-    const match = makeTask({ id: 42, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
+  it('adds a number_eq predicate when the search term is a numeric task number', async () => {
+    const match = makeTask({ id: 420, number: 42, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
     const fetchSpy = stubColumnTasks([match]);
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
-    // A leading `#` (matching the displayed `#id` format) is stripped before the numeric check.
+    // A leading `#` (matching the displayed `#N` format) is stripped before the numeric check.
     await userEvent.type(screen.getByPlaceholderText('Search tasks'), '#42');
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('q%5Bg%5D%5B0%5D%5Bid_eq%5D=42'),
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Bnumber_eq%5D=42'),
         expect.anything(),
       ),
     );
@@ -205,11 +206,11 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
-  it('renders the task ID after the title on each card', () => {
+  it('renders the board task number after the title on each card', () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
-    expect(screen.getByText('#1')).toBeInTheDocument();
-    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.getByText('#11')).toBeInTheDocument();
+    expect(screen.getByText('#12')).toBeInTheDocument();
   });
 
   it('toggling the Archived filter fetches and reveals archived tasks without crashing', async () => {
@@ -300,7 +301,7 @@ describe('Projects/Board/BoardPage', () => {
 
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 1 },
+      { n: 11 },
       expect.objectContaining({ preserveState: true }),
     );
   });
@@ -331,7 +332,7 @@ describe('Projects/Board/BoardPage', () => {
     const card = screen.getByText('Wire up authentication').closest('a') as HTMLAnchorElement;
     expect(card).not.toBeNull();
     // The whole card is the anchor, and it points at the task detail URL.
-    expect(card).toHaveAttribute('href', '/company/projects/7/board?task=1');
+    expect(card).toHaveAttribute('href', '/company/projects/7/board?n=11');
     // Native drag is disabled so dnd-kit's pointer drag keeps working.
     expect(card).toHaveAttribute('draggable', 'false');
   });
@@ -1287,7 +1288,7 @@ describe('Projects/Board/BoardPage', () => {
     // Same navigation a full card click performs — the task detail sidebar opens for that ticket.
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 1 },
+      { n: 11 },
       expect.objectContaining({ preserveState: true }),
     );
     // The chip click must not bubble to the column strip and unfold the column. Asserted via the
@@ -1762,11 +1763,29 @@ describe('Projects/Board/BoardPage', () => {
 
   // --- epic linking (create form, task view, epic view) ---
 
-  const epic = makeTask({ id: 50, title: 'Checkout revamp', taskType: 'epic', boardColumnId: 100, position: 0 });
-  const story = makeTask({ id: 51, title: 'Add card form', boardColumnId: 100, position: 1, parentTaskId: 50 });
+  const epic = makeTask({
+    id: 50,
+    number: 5,
+    title: 'Checkout revamp',
+    taskType: 'epic',
+    boardColumnId: 100,
+    position: 0,
+  });
+  const story = makeTask({
+    id: 51,
+    number: 6,
+    title: 'Add card form',
+    boardColumnId: 100,
+    position: 1,
+    parentTaskId: 50,
+  });
   // The parent-epic picker reads the board's epics from their own prop, since a paginated column
   // can no longer be relied on to hold every epic.
-  const epicProps = { ...populatedProps, tasks: [epic, story], epics: [{ id: 50, title: 'Checkout revamp' }] };
+  const epicProps = {
+    ...populatedProps,
+    tasks: [epic, story],
+    epics: [{ id: 50, number: 5, title: 'Checkout revamp' }],
+  };
 
   it('attaches the new task to an epic chosen in the create-task form', async () => {
     const created = makeTask({ id: 99, title: 'Child of epic', boardColumnId: 100, parentTaskId: 50 });
@@ -1819,7 +1838,7 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(within(drawer).getByRole('button', { name: 'Checkout revamp' }));
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 50 },
+      { n: 5 },
       expect.objectContaining({ preserveState: true }),
     );
     // …and the select carries the current parent, addressable by its own label.
@@ -1832,8 +1851,8 @@ describe('Projects/Board/BoardPage', () => {
     const selectedEpic = {
       ...epic,
       childTasks: [
-        { id: 51, title: 'Add card form', taskType: 'story' },
-        { id: 77, title: 'Unloaded child', taskType: 'bug' },
+        { id: 51, number: 6, title: 'Add card form', taskType: 'story' },
+        { id: 77, number: 7, title: 'Unloaded child', taskType: 'bug' },
       ],
     };
 
@@ -1851,7 +1870,7 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(within(drawer).getByRole('button', { name: /Unloaded child/ }));
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
-      { task: 77 },
+      { n: 7 },
       expect.objectContaining({ preserveState: true }),
     );
   });

@@ -65,6 +65,7 @@ module InternalTools
 
       success({
         id: task.id,
+        number: task.number,
         title: task.title,
         column: column.name,
         assignee_id: task.assignee_id,

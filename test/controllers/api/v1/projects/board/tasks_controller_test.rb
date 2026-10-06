@@ -67,36 +67,48 @@ module Api
           assert_equal "1", response.headers["X-Total-Count"]
         end
 
-        test "index search groups title and id under OR so a task ID returns the matching task" do
-          by_id = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes")
-          # A task whose title contains the same digits as the searched ID must still surface — the
-          # grouping is an OR, not an AND.
-          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_id.id} regression")
+        test "index search groups title and number under OR so a task number returns the matching task" do
+          by_number = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes")
+          # A task whose title contains the same digits as the searched number must still surface —
+          # the grouping is an OR, not an AND.
+          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_number.number} regression")
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: by_id.id.to_s, id_eq: by_id.id } } }
+            q: { g: { "0" => { m: "or", title_cont: by_number.number.to_s, number_eq: by_number.number } } }
           }
 
           assert_response :success
           ids = JSON.parse(response.body).map { |t| t["id"] }
-          assert_includes ids, by_id.id
+          assert_includes ids, by_number.id
           assert_includes ids, by_title.id
         end
 
-        test "index exact id match is returned first when title also contains the same digits" do
-          by_id = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes", position: 2)
-          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_id.id} regression", position: 1)
+        test "index exact number match is returned first when title also contains the same digits" do
+          by_number = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes", position: 2)
+          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_number.number} regression", position: 1)
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: by_id.id.to_s, id_eq: by_id.id } } }
+            q: { g: { "0" => { m: "or", title_cont: by_number.number.to_s, number_eq: by_number.number } } }
           }
 
           assert_response :success
           ids = JSON.parse(response.body).map { |t| t["id"] }
-          assert_equal by_id.id, ids.first, "exact id match must rank first regardless of board position"
+          assert_equal by_number.id, ids.first, "exact number match must rank first regardless of board position"
           assert_includes ids, by_title.id
+        end
+
+        test "index number search matches the board-local number, not the global id" do
+          other_board = create(:board, project: create(:project, company: @company, owner: @user))
+          other_column = create(:board_column, board: other_board)
+          create_list(:board_task, 3, board: other_board, board_column: other_column)
+          second = create(:board_task, board: @board, board_column: @col1, title: "Second on this board")
+
+          get :index, params: { project_id: @project.id, q: { g: { "0" => { m: "or", number_eq: 2 } } } }
+
+          assert_response :success
+          assert_equal [ second.id ], JSON.parse(response.body).map { |t| t["id"] }
         end
 
         # The OR combinator lives inside the search group, so it must not widen the sibling

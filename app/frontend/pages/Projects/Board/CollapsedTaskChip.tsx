@@ -34,7 +34,7 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     hasActiveRun = false;
   }
 
-  const tooltipParts: string[] = [`#${task.id} · ${task.title}`];
+  const tooltipParts: string[] = [`#${task.number} · ${task.title}`];
   if (latestRun) {
     if (latestRun.state === 'running' && latestRun.createdAt) {
       tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
@@ -108,7 +108,7 @@ export function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t:
             pointerEvents: 'none',
           }}
         >
-          #{task.id}
+          #{task.number}
         </span>
       </Box>
     </Tooltip>

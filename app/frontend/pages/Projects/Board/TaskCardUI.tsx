@@ -173,9 +173,9 @@ export function TaskCardUI({
         <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
           {task.title}
         </Text>
-        <CopyButton value={String(task.id)}>
+        <CopyButton value={String(task.number)}>
           {({ copied, copy }) => (
-            <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+            <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
               <Text
                 size="sm"
                 c="dimmed"
@@ -186,7 +186,7 @@ export function TaskCardUI({
                   copy();
                 }}
               >
-                #{task.id}
+                #{task.number}
               </Text>
             </Tooltip>
           )}

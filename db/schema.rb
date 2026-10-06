@@ -242,6 +242,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
     t.bigint "board_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
+    t.integer "number", null: false
     t.bigint "parent_task_id"
     t.integer "position", null: false
     t.string "priority"
@@ -252,8 +253,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
     t.index ["assignee_id"], name: "index_board_tasks_on_assignee_id"
     t.index ["board_column_id"], name: "index_board_tasks_on_board_column_id"
     t.index ["board_id", "archived_at"], name: "index_board_tasks_on_board_id_and_archived_at"
+    t.index ["board_id", "number"], name: "index_board_tasks_on_board_id_and_number", unique: true
     t.index ["board_id"], name: "index_board_tasks_on_board_id"
     t.index ["parent_task_id"], name: "index_board_tasks_on_parent_task_id"
+    t.check_constraint "number > 0", name: "board_tasks_number_positive"
   end
 
   create_table "board_view_presets", force: :cascade do |t|
@@ -272,6 +275,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
 
   create_table "boards", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.integer "last_task_number", default: 0, null: false
     t.string "name", null: false
     t.string "preset_origin"
     t.bigint "project_id", null: false

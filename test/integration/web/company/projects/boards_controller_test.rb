@@ -29,10 +29,57 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     task = create(:board_task, board: board, board_column: col)
 
     Bullet.enable = false
-    get company_project_board_path(@project, task: task.id)
+    get company_project_board_path(@project, n: task.number)
     assert_inertia_page "Projects/Board/BoardPage"
   ensure
     Bullet.enable = true
+  end
+
+  # The `?n=` param is the number the card shows, which restarts on every board —
+  # so it must not be read as the global id of some other task.
+  test "show opens the task by its board number, not by id" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    create_list(:board_task, 3, board: other_board, board_column: other_column)
+    board = create(:board, project: @project)
+    col = create(:board_column, board: board)
+    create(:board_task, board: board, board_column: col)
+    second = create(:board_task, board: board, board_column: col, title: "Second on this board")
+
+    Bullet.enable = false
+    get company_project_board_path(@project, n: 2)
+
+    assert_inertia_props do |props|
+      props[:selectedTask][:id] == second.id && props[:selectedTask][:number] == 2
+    end
+  ensure
+    Bullet.enable = true
+  end
+
+  test "a link from before board numbering, ?task=<id>, redirects to that task's ?n=<number>" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    create_list(:board_task, 3, board: other_board, board_column: other_column)
+    board = create(:board, project: @project)
+    col = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: col)
+    assert_not_equal task.id, task.number
+
+    get company_project_board_path(@project, task: task.id)
+
+    assert_redirected_to company_project_board_path(@project, n: task.number)
+  end
+
+  test "?task=<id> of a task on another board opens nothing and does not redirect" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    foreign = create(:board_task, board: other_board, board_column: create(:board_column, board: other_board))
+    board = create(:board, project: @project)
+    create(:board_task, board: board, board_column: create(:board_column, board: board))
+
+    get company_project_board_path(@project, task: foreign.id)
+
+    assert_response :success
+    assert_inertia_props { |props| props[:selectedTask].nil? }
   end
 
   test "show excludes archived tasks from the default board load" do
@@ -58,7 +105,7 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     task = create(:board_task, board: board, board_column: col, parent_task: epic)
 
     Bullet.enable = false
-    get company_project_board_path(@project, task: task.id)
+    get company_project_board_path(@project, n: task.number)
     assert_inertia_page "Projects/Board/BoardPage"
 
     # The archived epic is absent from the board's task list, so the detail payload has to
