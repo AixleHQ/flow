@@ -28,7 +28,7 @@ module ContainerStrategies
       # file the container watcher waited on, because Kiro's credential is a SQLite
       # database the CLI creates on its FIRST RUN — before the user has entered
       # anything — so mere existence says nothing. The watcher now reads the database
-      # itself for the token payload's field names instead
+      # itself for the token payload's field names and the selected profile instead
       # (Agents::KiroCliAdapter::AUTH_MARKERS), which appear only once the login has
       # actually completed, so no marker file is needed.
       "kiro_cli" => "kiro-cli login --use-device-flow"

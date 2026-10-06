@@ -32,8 +32,9 @@ module Agents
   #   * The watcher cannot decide completion by a key lookup, and cannot use the file's
   #     existence either: the database is created the moment the CLI first runs, and a
   #     device-registration row lands as soon as the code is displayed. What appears
-  #     only on success is the token payload, so completion is a byte-marker test on
-  #     the file (AUTH_MARKERS, and `__contains__:` in the watcher).
+  #     only on success is the token payload and the selected profile, so completion
+  #     is a byte-marker test on the file (AUTH_MARKERS, and `__contains__:` in the
+  #     watcher).
   #   * The credential is an opaque base64 blob of the database, written back byte for
   #     byte. It is read only to lift the bearer and profile ARN out (#auth_record) —
   #     never rewritten. Nothing is keyed on the token ROW's name: that name is derived
@@ -179,7 +180,8 @@ module Agents
     # to, which is NOT the identity-centre region also stored there (`auth.idc.region`
     # was us-west-2 on an account whose profile lives in us-east-1).
     #
-    # An IAM Identity Center login does not write it: two production IdC credentials
+    # An IAM Identity Center login writes it only after the user picks a profile, which
+    # comes after the token. Two production IdC credentials captured before that step
     # carried no such row while their tokens were live (2026-09-27), so every call was
     # skipped and the usage card read "unavailable". Those fall back to asking the
     # control plane (#discovered_profile_arn).
@@ -297,8 +299,15 @@ module Agents
     # is named after the login method (`kirocli:odic:token` for Builder ID,
     # `kirocli:social:token` for a social login), which is what made an earlier
     # key-name gate discard real credentials. The OAuth field names inside the value
-    # do not vary. Both are listed because the watcher ORs them.
-    AUTH_MARKERS = %w[__contains__:access_token __contains__:refresh_token].freeze
+    # do not vary.
+    #
+    # An organisation (IAM Identity Center) login has a fourth state: the token is
+    # written, then the CLI asks the user to pick a profile and only then writes the
+    # PROFILE_STATE_KEY row. Completing on the token alone closed the terminal at that
+    # prompt and saved a login every later `--no-interactive` session rejects with
+    # "No profile selected". So every marker must be present, here and in the watcher.
+    AUTH_MARKERS = [ "__contains__:access_token", "__contains__:refresh_token",
+                     "__contains__:#{PROFILE_STATE_KEY}" ].freeze
 
     def auth_required_keys
       AUTH_MARKERS
@@ -311,7 +320,7 @@ module Agents
     # it would leave the runtime looking configured while every session starts signed
     # out, which is exactly the failure this runtime shipped with once.
     def auth_complete?(config_content)
-      sqlite_blob?(config_content) && contains_token_marker?(config_content)
+      sqlite_blob?(config_content) && contains_auth_markers?(config_content)
     end
 
     # The state database as an opaque base64 blob, plus the whoami payload as a label.
@@ -586,9 +595,8 @@ module Agents
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
 
-    # An IAM Identity Center login can be captured before the CLI has written the
-    # profile it selects at the very end of the login (the watcher closes the auth
-    # terminal on the token alone). V3 then refuses to hand its agent a token at all —
+    # An IAM Identity Center login captured before AUTH_MARKERS required the profile
+    # has a token but no profile row. V3 then refuses to hand its agent a token at all —
     # "Auth refresh callback failed: … Failed to verify authentication. Please log in
     # again" on every prompt, with a perfectly valid token — until that `state` row
     # exists. Measured on CLI 2.24.0: writing the row into a running container fixes
@@ -1319,12 +1327,12 @@ module Agents
              .start_with?(SQLITE_MAGIC.dup.force_encoding(Encoding::BINARY))
     end
 
-    # Same test the watcher runs in the container, on the same bytes: the token
-    # payload's OAuth field names, read out of AUTH_MARKERS so the two cannot drift.
-    def contains_token_marker?(content)
+    # Same test the watcher runs in the container, on the same bytes, read out of
+    # AUTH_MARKERS so the two cannot drift.
+    def contains_auth_markers?(content)
       binary = content.to_s.dup.force_encoding(Encoding::BINARY)
 
-      AUTH_MARKERS.any? do |key|
+      AUTH_MARKERS.all? do |key|
         binary.include?(key.delete_prefix("__contains__:").dup.force_encoding(Encoding::BINARY))
       end
     end

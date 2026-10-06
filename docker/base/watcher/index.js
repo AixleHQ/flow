@@ -602,10 +602,11 @@ function handleRequest(req, res) {
 
 /**
  * Auth detection logic
- * Returns true if any of AUTH_REQUIRED_KEYS exist in config
+ * Returns true if any of the JSON keys exist in config, or if ALL of the
+ * `__contains__:` markers appear in it
  */
-function checkAuthComplete(configContent) {
-  if (AUTH_REQUIRED_KEYS.length === 0) {
+function checkAuthComplete(configContent, requiredKeys = AUTH_REQUIRED_KEYS) {
+  if (requiredKeys.length === 0) {
     log.warn('AUTH_REQUIRED_KEYS not set, cannot detect auth completion');
     return false;
   }
@@ -615,7 +616,7 @@ function checkAuthComplete(configContent) {
   // encrypted blob (e.g. Gemini's gemini-credentials.json), and to avoid matching a
   // config file written at auth-METHOD selection (before the credential is entered),
   // which would otherwise report success prematurely and close the auth container.
-  if (AUTH_REQUIRED_KEYS.includes('__present__')) {
+  if (requiredKeys.includes('__present__')) {
     return typeof configContent === 'string' && configContent.trim().length > 0;
   }
 
@@ -628,17 +629,21 @@ function checkAuthComplete(configContent) {
   // login method the user picked — unlike the row's key, which is named after it
   // (`kirocli:odic:token` for Builder ID, `kirocli:social:token` for a social login).
   // Measured on CLI 2.21.3: absent before and DURING the flow, present after.
-  const containsKeys = AUTH_REQUIRED_KEYS.filter((k) => k.startsWith('__contains__:'));
+  // Every marker must be present: an organisation login writes the token first and the
+  // selected profile (`api.codewhisperer.profile`) only after a further prompt, and a
+  // login closed between the two fails every later session with "No profile selected".
+  // Agents::KiroCliAdapter#auth_complete? runs the same check server-side.
+  const containsKeys = requiredKeys.filter((k) => k.startsWith('__contains__:'));
   if (containsKeys.length > 0) {
     if (typeof configContent !== 'string') return false;
-    return containsKeys.some((k) => configContent.includes(k.slice('__contains__:'.length)));
+    return containsKeys.every((k) => configContent.includes(k.slice('__contains__:'.length)));
   }
 
   try {
     const config = JSON.parse(configContent);
 
     // Check if ANY of the required keys exist and have a truthy value
-    const foundKey = AUTH_REQUIRED_KEYS.find((key) => {
+    const foundKey = requiredKeys.find((key) => {
       // Support nested keys like "oauthAccount.accountUuid"
       const value = key.split('.').reduce((obj, k) => obj?.[k], config);
       return value !== undefined && value !== null && value !== '';
@@ -1007,4 +1012,4 @@ if (require.main === module) {
   startCredentialSync();
 }
 
-module.exports = { resolveInside, safePreloadTarget, uploadFileName, vscodeUserSettings };
+module.exports = { checkAuthComplete, resolveInside, safePreloadTarget, uploadFileName, vscodeUserSettings };
