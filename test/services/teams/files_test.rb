@@ -69,7 +69,8 @@ class Teams::FilesTest < ActiveSupport::TestCase
 
   test "a channel message's files are read from Graph and fetched through the share link" do
     activity = teams_activity.deep_merge("id" => "1700000000003", "attachments" => [
-      { "contentType" => "text/html", "content" => "<div><attachment id=\"a1\"></attachment> deploy</div>" }
+      # What Teams really sends the bot: no trace of the file in the HTML.
+      { "contentType" => "text/html", "content" => "<p><span itemtype=\"http://schema.skype.com/Mention\">Aixle Flow</span>&nbsp;deploy</p>" }
     ])
     reply = "#{GRAPH}/teams/#{GROUP}/channels/19%3Aabc%40thread.tacv2/messages/1700000000001/replies/1700000000003"
     shared = "https://contoso.sharepoint.com/sites/Sales/Shared%20Documents/Onboarding/plan.docx"

@@ -9,29 +9,40 @@ module Teams
     MAX_BYTES = 50 * 1024 * 1024
     MAX_UPLOAD_BYTES = 250 * 1024 * 1024
     HOSTS = %w[.sharepoint.com .sharepoint-df.com .1drv.com .onedrive.com].freeze
+    NETWORK_ERRORS = [ SocketError, Timeout::Error, SystemCallError, OpenSSL::SSL::SSLError, Net::HTTPBadResponse ].freeze
 
     module_function
 
-    # A file a 1:1 message carried: its downloadUrl needs no token.
+    # A link SharePoint signed (a 1:1 file's downloadUrl, Graph's download
+    # redirect): it needs no token. Sent byte for byte through Net::HTTP — a
+    # client that re-encodes the query breaks the signature, and SharePoint
+    # answers 401 (seen on staging, 2026-10-06).
     def download_link(url, max_bytes: MAX_BYTES)
+      uri = microsoft_365_uri(url)
+      buffer = +"".b
+      SafeHttp.http_for(uri, open_timeout: 5, read_timeout: 60).start do |http|
+        http.request(Net::HTTP::Get.new(uri.request_uri)) do |response|
+          raise Error.new("download failed: HTTP #{response.code}", status: response.code.to_i) unless response.is_a?(Net::HTTPSuccess)
+
+          response.read_body do |chunk|
+            buffer << chunk
+            raise Error, "file exceeds #{max_bytes / 1024 / 1024} MB" if buffer.bytesize > max_bytes
+          end
+        end
+      end
+      buffer
+    rescue *NETWORK_ERRORS => e
+      raise Error.new("download failed: #{e.message}", status: 503)
+    end
+
+    def microsoft_365_uri(url)
       uri = URI.parse(url.to_s)
       raise Error, "not a Microsoft 365 file link" unless uri.scheme == "https" && HOSTS.any? { |h| uri.host.to_s.downcase.end_with?(h) }
 
-      buffer = +"".b
-      response = Faraday.new(url: "#{uri.scheme}://#{uri.host}") { |f| SafeHttp.pin_faraday!(f, uri) }.get(uri.request_uri) do |req|
-        req.options.timeout = 60
-        req.options.on_data = proc do |chunk, _|
-          buffer << chunk
-          raise Error, "file exceeds #{max_bytes / 1024 / 1024} MB" if buffer.bytesize > max_bytes
-        end
-      end
-      raise Error.new("download failed: HTTP #{response.status}", status: response.status) unless response.success?
-
-      buffer
+      SafeHttp.vetted_address(uri)
+      uri
     rescue URI::InvalidURIError, SafeHttp::UnsafeUrl => e
       raise Error, e.message
-    rescue Faraday::Error => e
-      raise Error.new("download failed: #{e.message}", status: 503)
     end
 
     # A channel or group-chat file, by the link its message's attachment named,
@@ -90,19 +101,16 @@ module Teams
     end
 
     # Where the bytes go after a person accepted a file consent card.
+    # Also a signed link, so also sent byte for byte.
     def upload_consented(upload_url, bytes)
-      uri = URI.parse(upload_url.to_s)
-      raise Error, "not a Microsoft 365 upload link" unless uri.scheme == "https" && HOSTS.any? { |h| uri.host.to_s.downcase.end_with?(h) }
-
-      response = Faraday.new(url: "#{uri.scheme}://#{uri.host}") { |f| SafeHttp.pin_faraday!(f, uri) }.put(uri.request_uri, bytes) do |req|
-        req.headers["Content-Length"] = bytes.bytesize.to_s
-        req.headers["Content-Range"] = "bytes 0-#{bytes.bytesize - 1}/#{bytes.bytesize}"
-        req.options.timeout = 120
-      end
-      raise Error.new("upload failed: HTTP #{response.status}", status: response.status) unless response.success?
-    rescue URI::InvalidURIError, SafeHttp::UnsafeUrl => e
-      raise Error, e.message
-    rescue Faraday::Error => e
+      uri = microsoft_365_uri(upload_url)
+      request = Net::HTTP::Put.new(uri.request_uri)
+      request["Content-Length"] = bytes.bytesize.to_s
+      request["Content-Range"] = "bytes 0-#{bytes.bytesize - 1}/#{bytes.bytesize}"
+      request.body = bytes
+      response = SafeHttp.http_for(uri, open_timeout: 5, read_timeout: 120).start { |http| http.request(request) }
+      raise Error.new("upload failed: HTTP #{response.code}", status: response.code.to_i) unless response.is_a?(Net::HTTPSuccess)
+    rescue *NETWORK_ERRORS => e
       raise Error.new("upload failed: #{e.message}", status: 503)
     end
 

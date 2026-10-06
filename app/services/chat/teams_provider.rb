@@ -150,14 +150,16 @@ module Chat
                   .where(subject: object_id).pick(:user_id)
     end
 
-    # [metadata, refs], index for index. Only a 1:1 message carries its files;
-    # in a channel or group chat the bot gets an HTML mirror that marks
-    # attachments and pasted images, and the message itself is read from Graph.
+    # [metadata, refs], index for index. Only a 1:1 message carries its files.
+    # In a channel or group chat the bot gets an HTML mirror without them — not
+    # even the <attachment> marker Graph's copy has (seen on staging) — so the
+    # message itself is read from Graph whenever its files could be fetched.
     def attached_files(endpoint, activity, kind)
       return direct_files(activity["attachments"]) if kind == "direct"
 
       html = Array(activity["attachments"]).find { |a| a.is_a?(Hash) && a["contentType"] == "text/html" }.to_h["content"].to_s
-      return [ nil, nil ] unless html.include?("<attachment") || html.include?("hostedContents")
+      file_access = Integration.find_by(id: endpoint.config.to_h["integration_id"])&.settings.to_h["file_access"]
+      return [ nil, nil ] unless file_access || html.include?("hostedContents")
 
       graph_files(endpoint, activity, kind)
     end
