@@ -51,6 +51,15 @@ describe('TeamsApproval', () => {
     );
   });
 
+  it('says the app is already in the organization when the approval published it', () => {
+    renderPage(<TeamsApproval state="connected" workspace="Acme" organization="contoso.com" fileAccess published />, {
+      props: { flash: {} },
+    });
+
+    expect(screen.getByText('Published')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Download the Teams app' })).not.toBeInTheDocument();
+  });
+
   it('a stale link says so', () => {
     renderPage(<TeamsApproval state="expired" />, {
       props: { flash: { alert: 'This Microsoft sign-in link was already used' } },

@@ -52,10 +52,14 @@ Flow uses the permission only for:
 
 ### Add the app in Teams
 
-The administrator downloads the app package with **Download the Teams app**,
-on the approval page or on the row in Flow, and uploads it to the
-organization's app catalog in the Teams admin center (**Teams apps → Manage
-apps → Upload new app**).
+Approving also publishes the Aixle Flow app to the organization's Teams apps:
+Flow does it as the administrator who signed in, so nobody downloads or uploads
+anything. Microsoft allows this only for a role that may manage Teams apps,
+such as Global Administrator or Teams Administrator. When the approver's role
+cannot, the approval page offers **Download the Teams app** instead, for a
+Teams administrator to upload in the Teams admin center (**Teams apps → Manage
+apps → Upload new app**). Signing in to approve again, with a new approval link,
+publishes a newer version of the app the same way.
 
 Then people add the app to the teams and group chats where it should listen, or
 open it for a 1:1 chat. When the app joins a team, it learns the team's channels
@@ -205,7 +209,9 @@ organization uses that same bot.
      administrator's sign-in carries their roles (`wids`). Without it, every
      approval is refused.
    - **API permissions**: add the Microsoft Graph application permission
-     `Files.ReadWrite.All`. Do not grant admin consent for your own tenant
+     `Files.ReadWrite.All` and the delegated permission
+     `AppCatalog.ReadWrite.All` (publishing the app as the approving
+     administrator). Do not grant admin consent for your own tenant
      unless your own organization will connect too. Each customer's
      administrator grants it for their organization.
 2. **Azure Bot** resource, in a subscription of the same tenant:

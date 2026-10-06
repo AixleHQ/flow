@@ -1199,6 +1199,7 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 | File reads (§8.5) | A channel file is read only from the team's own drive, a group-chat file only from the sender's OneDrive; anything else a message links is skipped | The permission reaches every file of the organization |
 | File writes (§8.5) | Only into the channel the run was started from; any other target gets project-asset links | Same |
 | Audit of file calls (§8.5, §11) | Each Graph file read and write is logged with tenant, drive and item ids; there is no audit table | No audit facility exists in the app yet |
+| Distribution (decision 6, §6.3) | The approval sign-in also asks for delegated `AppCatalog.ReadWrite.All` and publishes the package to the organization's catalog as the approving administrator (`POST /appCatalogs/teamsApps`, or a new app definition for a newer version). A role that cannot publish falls back to the downloadable package | Product owner, 2026-10-06: no manual upload. Microsoft has no application permission for catalog publishing |
 | App manifest (§6.3) | Schema 1.24, with the `help` command list; no `slash` trigger and no targeted messages | Spike 5 has not run; 1.24 is what the spikes verified |
 
 Still to verify live (staging, a real customer-like tenant): spike 3 (`wids` in the sign-in's ID token, which

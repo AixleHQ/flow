@@ -23,6 +23,9 @@ module Teams
       "69091246-20e8-4a56-aa4d-066075b2a7a8" => "Teams Administrator"
     }.freeze
     FILES_ROLE = "Files.ReadWrite.All"
+    # Publishing to an organization's Teams app catalog has no application
+    # permission: it is done as the administrator, in their approval sign-in.
+    SIGN_IN_SCOPE = "openid profile https://graph.microsoft.com/AppCatalog.ReadWrite.All"
 
     module_function
 
@@ -66,7 +69,7 @@ module Teams
                                     code_verifier: verifier, provider: PROVIDER)
       query = URI.encode_www_form(
         client_id: Config.app_id, response_type: "code", redirect_uri: redirect_uri, response_mode: "query",
-        scope: "openid profile", state: state, prompt: "select_account",
+        scope: SIGN_IN_SCOPE, state: state, prompt: "select_account",
         code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
         code_challenge_method: "S256"
       )
@@ -77,8 +80,10 @@ module Teams
     def file_access_redirect_uri = "#{Settings.protocol}://#{Settings.domain}/integrations/teams/file_access/callback"
 
     # Exchanges the sign-in for its ID token and binds the organization it names.
+    # The administrator's Graph token, if Microsoft gave one, publishes the Teams
+    # app to the organization's catalog; it is used here and not kept.
     def complete!(integration:, code:, code_verifier:)
-      claims = sign_in_claims(code, code_verifier)
+      claims, graph_token = sign_in_claims(code, code_verifier)
       roles = Array(claims["wids"]) & ADMIN_ROLES.keys
       if roles.empty?
         raise Refused, "#{claims['name'] || 'This account'} is not an administrator of its Microsoft 365 organization. " \
@@ -86,6 +91,8 @@ module Teams
       end
 
       bind!(integration, claims, roles)
+      Catalog.publish!(integration, graph_token) if graph_token.present?
+      integration
     end
 
     def bind!(integration, claims, roles)
@@ -162,7 +169,7 @@ module Teams
     def sign_in_claims(code, code_verifier)
       url = "#{Config.cloud[:login]}/organizations/oauth2/v2.0/token"
       form = { grant_type: "authorization_code", client_id: Config.app_id, code: code.to_s, redirect_uri: redirect_uri,
-               scope: "openid profile", code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
+               scope: SIGN_IN_SCOPE, code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
       response = begin
         Faraday.post(url, URI.encode_www_form(form), "Content-Type" => "application/x-www-form-urlencoded")
       rescue Faraday::Error
@@ -175,7 +182,7 @@ module Teams
       raise Refused, "The sign-in was issued to another application" unless claims["aud"] == Config.app_id
       raise Refused, "The sign-in has expired" if claims["exp"].to_i < Time.current.to_i
 
-      claims
+      [ claims, body["access_token"] ]
     rescue JSON::ParserError
       raise Refused, "Microsoft answered the sign-in with something other than JSON"
     end

@@ -27,6 +27,9 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
       organization: settings["tenant_domain"].presence || settings["tenant_id"],
       approved_by: settings.dig("approved_by", "name"),
       file_access: settings["file_access"],
+      # Published to the organization's Teams apps during the approval, or why not.
+      published: settings["catalog_published_at"].present?,
+      publish_error: settings["catalog_error"],
       sign_in_url: teams_approval_sign_in_path(params[:token]),
       file_access_url: teams_approval_file_access_path(params[:token]),
       package_url: teams_approval_package_path(params[:token])

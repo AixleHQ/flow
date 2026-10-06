@@ -17,6 +17,8 @@ interface Props {
   signInUrl?: string;
   fileAccessUrl?: string;
   packageUrl?: string;
+  published?: boolean;
+  publishError?: string | null;
 }
 
 const Flash = () => {
@@ -58,7 +60,16 @@ const Pending = ({ workspace, requestedBy, signInUrl }: Props) => (
   </Stack>
 );
 
-const Connected = ({ workspace, organization, approvedBy, fileAccess, fileAccessUrl, packageUrl }: Props) => (
+const Connected = ({
+  workspace,
+  organization,
+  approvedBy,
+  fileAccess,
+  fileAccessUrl,
+  packageUrl,
+  published,
+  publishError,
+}: Props) => (
   <Stack gap="md">
     <Title order={3} ta="center">
       {organization} is connected to {workspace}
@@ -97,15 +108,26 @@ const Connected = ({ workspace, organization, approvedBy, fileAccess, fileAccess
       </List.Item>
       <List.Item>
         <Stack gap={6}>
-          <Text size="sm" fw={500}>
-            Publish the Teams app to your organization
-          </Text>
+          <Group gap="xs">
+            <Text size="sm" fw={500}>
+              Aixle Flow in your organization&apos;s Teams apps
+            </Text>
+            <Badge color={published ? 'green' : 'gray'} variant="light" size="sm">
+              {published ? 'Published' : 'Not published'}
+            </Badge>
+          </Group>
           <Text size="sm" c="dimmed">
-            In the Teams admin center, open Teams apps → Manage apps → Upload new app, and choose this file.
+            {published
+              ? 'Published when you approved: people in your organization can add it from Teams apps.'
+              : publishError === 'forbidden'
+                ? 'Your role cannot publish Teams apps. A Teams administrator can upload this file in the Teams admin center: Teams apps → Manage apps → Upload new app.'
+                : 'Upload this file in the Teams admin center: Teams apps → Manage apps → Upload new app. Signing in to approve again also publishes it.'}
           </Text>
-          <Button component="a" href={packageUrl} variant="default" leftSection={<IconDownload size={16} />}>
-            Download the Teams app
-          </Button>
+          {!published && (
+            <Button component="a" href={packageUrl} variant="default" leftSection={<IconDownload size={16} />}>
+              Download the Teams app
+            </Button>
+          )}
         </Stack>
       </List.Item>
       <List.Item>

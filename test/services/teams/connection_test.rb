@@ -6,6 +6,7 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
   GLOBAL_ADMIN = "62e90394-69f5-4237-9190-012177145e10"
   NOT_AN_ADMIN_ROLE = "b79fbf4d-3ef9-4689-8143-76b194e85509"
   SIGN_IN_TOKEN_URL = "https://login.microsoftonline.com/organizations/oauth2/v2.0/token"
+  CATALOG = "https://graph.microsoft.com/v1.0/appCatalogs/teamsApps"
 
   setup do
     with_teams_enabled
@@ -22,8 +23,15 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
   def stub_sign_in(**claims)
     stub_request(:post, SIGN_IN_TOKEN_URL)
       .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-                 body: { id_token: id_token(**claims), access_token: "unused" }.to_json)
+                 body: { id_token: id_token(**claims), access_token: "admin-graph-token" }.to_json)
   end
+
+  def stub_catalog(existing: nil)
+    stub_request(:get, %r{\A#{Regexp.escape(CATALOG)}\?})
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [ existing ].compact }.to_json)
+  end
+
+  setup { stub_catalog && stub_request(:post, CATALOG).to_return(status: 201, body: { id: "app-1" }.to_json) }
 
   def approve(integration, **claims)
     stub_sign_in(**claims)
@@ -77,6 +85,44 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
       form = Rack::Utils.parse_query(request.body)
       form["code_verifier"] == "verifier-1" && form["client_assertion"].present? && form["client_secret"].nil?
     end
+  end
+
+  test "approving publishes the Teams app to the organization's catalog as the administrator" do
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+
+    approve(integration)
+
+    assert_requested(:post, SIGN_IN_TOKEN_URL) { |request| Rack::Utils.parse_query(request.body)["scope"].include?("AppCatalog.ReadWrite.All") }
+    assert_requested(:post, CATALOG) do |request|
+      request.headers["Authorization"] == "Bearer admin-graph-token" && request.headers["Content-Type"] == "application/zip" &&
+        request.body.start_with?("PK")
+    end
+    assert_equal [ "app-1", Teams::AppPackage::VERSION, nil ],
+                 integration.reload.settings.values_at("catalog_app_id", "catalog_version", "catalog_error")
+  end
+
+  test "an app already in the catalog is updated to a newer package, and left alone at the same version" do
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+    stub_catalog(existing: { id: "app-9", appDefinitions: [ { version: "0.9.0" } ] })
+    update = stub_request(:post, "#{CATALOG}/app-9/appDefinitions").to_return(status: 201, body: { teamsAppId: "app-9" }.to_json)
+
+    approve(integration)
+    assert_requested update, times: 1
+    assert_equal "app-9", integration.reload.settings["catalog_app_id"]
+
+    stub_catalog(existing: { id: "app-9", appDefinitions: [ { version: Teams::AppPackage::VERSION } ] })
+    approve(integration)
+    assert_requested update, times: 1
+  end
+
+  test "a role that cannot publish leaves the connection working and the package to upload" do
+    stub_request(:post, CATALOG).to_return(status: 403, body: { error: { code: "Forbidden" } }.to_json)
+    integration, = Teams::Connection.start!(company: @company, user: @user)
+
+    approve(integration)
+
+    assert integration.reload.active?
+    assert_equal "forbidden", integration.settings["catalog_error"]
   end
 
   test "a sign-in without a directory administrator role binds nothing" do
