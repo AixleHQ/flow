@@ -79,7 +79,9 @@ governance, community health — carry none.
   build-agents`, the app's runtime list and image names, and the frontend all
   read it. Agent Dockerfiles take the pin as a required `CLI_VERSION` build
   arg instead of an `ARG` default, so a hand-run `docker build` of one needs
-  `--build-arg CLI_VERSION=<version from the registry>`.
+  `--build-arg CLI_VERSION=<version from the registry>`. The weekly canary
+  keeps an `agent-cli-updates` issue comparing each pin with the vendor's
+  newest release, with the vendor's release notes in between.
 
 ### Removed
 - Configuration nothing read: `AUTHOR_NAME`, `AUTHOR_EMAIL`, `RAILS_PORT`,

@@ -23,6 +23,7 @@ repository's matrix still lacked it after that.
 | `dockerfile` | Dockerfile path, built with `docker/` as the context. |
 | `cli_version` | The CLI release the image installs, passed as the `CLI_VERSION` build arg. `null` means the vendor's installer only installs its newest release (Cursor, Kiro); the image tag, not the registry, then fixes what a deployment runs. |
 | `cli_latest` | Where the weekly canary finds the vendor's newest release: `{ "npm": "<package>" }` or `{ "url": "<text endpoint>" }`. `null` means the canary builds the pin. |
+| `cli_releases` | The vendor's GitHub releases, `{ "github": "<owner/repo>", "tag_prefix": "<prefix before the version>" }`: the release notes the canary report quotes, and the newest version when `cli_latest` is `null`. Pre-releases and tags that are not `X.Y.Z` are ignored. |
 
 ## Who reads it
 
@@ -30,7 +31,7 @@ repository's matrix still lacked it after that.
 | --- | --- |
 | `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. |
 | `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`. Badge colors stay in the frontend. |
-| `.github/workflows/images.yml` | The `agent-images` build matrix, the `CLI_VERSION` build arg, and the canary's newest-release lookup. |
+| `.github/workflows/images.yml` | The `agent-images` build matrix, the `CLI_VERSION` build arg, the canary's newest-release lookup, and its update report (`bin/agent-cli-report`). |
 | `bin/build-agent-images` (`make build-agents`) | Local builds, with the same build args. |
 | The deployment repository | Its agent image build matrix, read from the release tag it deploys. |
 
@@ -47,8 +48,13 @@ Antigravity is the exception that needs a second edit: its download is checksum-
 so `docker/antigravity-cli/Dockerfile` keeps a checksum pair per release, and a raised pin
 without one fails the build at that check.
 
-A green Monday canary (`canary-YYYYMMDD` tags) is the signal a pin can be raised: it built
-the newest releases and its run summary lists the version each image shipped.
+The Monday canary (`canary-YYYYMMDD` tags) builds the newest releases and keeps one issue
+labelled `agent-cli-updates` up to date: each pin against the vendor's newest release,
+the version the canary actually built and whether that build passed, and the vendor's
+release notes for every release in between. It closes the issue once every pin is
+current. `bin/agent-cli-report` prints the same report locally (needs `jq`, `curl` and an
+authenticated `gh`). A green canary build for a runtime is the signal its pin can be
+raised.
 
 ## Adding a runtime
 

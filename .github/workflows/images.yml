@@ -213,6 +213,9 @@ jobs:
     timeout-minutes: 30
     needs: [agent-base, runtimes]
     strategy:
+      # Each image stands alone: one vendor's broken release must not cancel the others'
+      # builds, or the canary reports every runtime as failed.
+      fail-fast: false
       matrix: ${{ fromJSON(needs.runtimes.outputs.matrix) }}
 
     steps:
@@ -291,3 +294,70 @@ jobs:
           image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}:${{ steps.meta.outputs.version }}"
           version="$(docker run --rm --entrypoint cat "$image" /etc/aixle-cli-version)"
           echo "**${{ matrix.label }}** ships CLI version \`${version}\`" >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p shipped && printf '%s\n' "$version" > "shipped/${{ matrix.image }}"
+
+      - name: Hand The Version To The Report
+        if: github.event_name == 'schedule'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: shipped-${{ matrix.image }}
+          path: shipped/${{ matrix.image }}
+          retention-days: 7
+
+  # What the canary found, as one issue kept up to date: every pin against the vendor's
+  # newest release, what the canary built and whether it built, and the vendor's release
+  # notes in between (bin/agent-cli-report; run it locally for the same view). Closed
+  # once every pin is current.
+  cli-report:
+    name: Report CLI Updates
+    if: ${{ always() && github.event_name == 'schedule' }}
+    needs: agent-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            config/agent_runtimes.json
+            bin/agent-cli-report
+          sparse-checkout-cone-mode: false
+
+      - name: Collect Shipped Versions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: shipped-*
+          path: shipped
+          merge-multiple: true
+
+      - name: Write Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+          SHIPPED_DIR: shipped
+        run: |
+          TITLE_TAG="canary-$(date -u +%Y%m%d)" bin/agent-cli-report > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: agent-cli-updates
+        run: |
+          set -euo pipefail
+          gh label create "$LABEL" --color 0e8a16 --description "Weekly canary: agent CLI pins behind the vendors" --force >/dev/null
+          number="$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')"
+          outdated="$(sed -n 's/^<!-- outdated: \([0-9]*\) -->$/\1/p' "$RUNNER_TEMP/report.md")"
+          if [ "${outdated:-0}" -eq 0 ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "Every pinned CLI is on the vendor's newest release."
+            fi
+          elif [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create --title "Agent CLI updates available" --label "$LABEL" --body-file "$RUNNER_TEMP/report.md"
+          fi

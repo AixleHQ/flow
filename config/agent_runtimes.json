@@ -10,7 +10,8 @@
       "image": "claude-code",
       "dockerfile": "docker/claude-code/Dockerfile",
       "cli_version": "2.1.281",
-      "cli_latest": { "url": "https://downloads.claude.ai/claude-code-releases/latest" }
+      "cli_latest": { "url": "https://downloads.claude.ai/claude-code-releases/latest" },
+      "cli_releases": { "github": "anthropics/claude-code", "tag_prefix": "v" }
     },
     {
       "id": "cursor_cli",
@@ -21,7 +22,8 @@
       "image": "cursor-cli",
       "dockerfile": "docker/cursor-cli/Dockerfile",
       "cli_version": null,
-      "cli_latest": null
+      "cli_latest": null,
+      "cli_releases": null
     },
     {
       "id": "codex",
@@ -32,7 +34,8 @@
       "image": "codex",
       "dockerfile": "docker/codex/Dockerfile",
       "cli_version": "0.156.1",
-      "cli_latest": { "npm": "@openai/codex" }
+      "cli_latest": { "npm": "@openai/codex" },
+      "cli_releases": { "github": "openai/codex", "tag_prefix": "rust-v" }
     },
     {
       "id": "gemini_cli",
@@ -43,7 +46,8 @@
       "image": "gemini-cli",
       "dockerfile": "docker/gemini-cli/Dockerfile",
       "cli_version": "0.57.0",
-      "cli_latest": { "npm": "@google/gemini-cli" }
+      "cli_latest": { "npm": "@google/gemini-cli" },
+      "cli_releases": { "github": "google-gemini/gemini-cli", "tag_prefix": "v" }
     },
     {
       "id": "antigravity_cli",
@@ -54,7 +58,8 @@
       "image": "antigravity-cli",
       "dockerfile": "docker/antigravity-cli/Dockerfile",
       "cli_version": "1.1.27",
-      "cli_latest": null
+      "cli_latest": null,
+      "cli_releases": { "github": "google-antigravity/antigravity-cli", "tag_prefix": "" }
     },
     {
       "id": "grok",
@@ -65,7 +70,8 @@
       "image": "grok",
       "dockerfile": "docker/grok/Dockerfile",
       "cli_version": "1.0.41",
-      "cli_latest": { "npm": "@xai-official/grok" }
+      "cli_latest": { "npm": "@xai-official/grok" },
+      "cli_releases": null
     },
     {
       "id": "kiro_cli",
@@ -76,7 +82,8 @@
       "image": "kiro-cli",
       "dockerfile": "docker/kiro-cli/Dockerfile",
       "cli_version": null,
-      "cli_latest": null
+      "cli_latest": null,
+      "cli_releases": null
     }
   ]
 }
