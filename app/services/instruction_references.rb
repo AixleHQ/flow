@@ -7,17 +7,23 @@
 #   {{output:45:summary.md}}    output spec "summary.md" of step 45
 #   {{step:45}}                 step 45 of the same workflow
 #   {{mcp:7}}                   an MCPServer
+#   {{tool:9}}                  a Tool
+#   {{skill:4}}                 a Skill
+#   {{config_item:3}}           a ConfigItem (by name only; its value never enters the text)
 #
 # A step is named by id, or by the builder's `new-<n>` key while it is unsaved
 # (WorkflowStepSync rewrites those on save). Template packages carry package
 # keys in the same positions; Templates::Exporter and Installer translate them.
 module InstructionReferences
-  SCANNER = /\{\{(asset|output|step|mcp):([^{}\n]+?)\}\}/
+  SCANNER = /\{\{(asset|output|step|mcp|tool|skill|config_item):([^{}\n]+?)\}\}/
   BRACES = /\{\{[^{}\n]*\}\}/
   STEP_KEY = /\A(?:[1-9]\d*|new-[1-9]\d*)\z/
   ID = /\A[1-9]\d*\z/
 
-  # `id` is an Integer for assets and servers, a step key String for steps and
+  # Types whose body is a row id.
+  ID_TYPES = %w[asset mcp tool skill config_item].freeze
+
+  # `id` is an Integer for the ID_TYPES, a step key String for steps and
   # outputs, and nil when the body does not parse.
   Ref = Data.define(:type, :id, :name, :text) do
     def valid? = !id.nil?
@@ -60,7 +66,7 @@ module InstructionReferences
 
   def parse(type, body, token)
     id, name = case type
-    when "asset", "mcp" then [ (body.to_i if body.match?(ID)), nil ]
+    when *ID_TYPES then [ (body.to_i if body.match?(ID)), nil ]
     when "step" then [ (body if body.match?(STEP_KEY)), nil ]
     when "output"
       key, file = body.split(":", 2)

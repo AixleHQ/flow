@@ -294,6 +294,29 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
                  "use {{asset:#{@company_asset.id}}} and #{@project_asset.name}.", second.instructions
   end
 
+  test "tool, skill and config item references follow the copied rows; config items by name" do
+    item = create(:config_item, scope: @source_project, name: "API_URL")
+    target_item = create(:config_item, scope: @project, name: "API_URL")
+    @step2.update!(instructions: "Run {{tool:#{@tool.id}}} with {{skill:#{@skill.id}}} against {{config_item:#{item.id}}}.")
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
+
+    second = copy.steps.not_deleted.find_by!(name: "Second")
+    copied_tool = @project.tools.find_by!(name: "my_tool")
+    copied_skill = Skill.for_project(@project).find_by!(name: @skill.name)
+    assert_equal "Run {{tool:#{copied_tool.id}}} with {{skill:#{copied_skill.id}}} against {{config_item:#{target_item.id}}}.",
+                 second.instructions
+  end
+
+  test "a config item the target project lacks becomes its name" do
+    item = create(:config_item, scope: @source_project, name: "ONLY_HERE")
+    @step2.update!(instructions: "Read {{config_item:#{item.id}}}.")
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
+
+    assert_equal "Read ONLY_HERE.", copy.steps.not_deleted.find_by!(name: "Second").instructions
+  end
+
   test "a copy inside the same project keeps its asset references" do
     @step2.update!(instructions: "Use {{asset:#{@project_asset.id}}}.")
 

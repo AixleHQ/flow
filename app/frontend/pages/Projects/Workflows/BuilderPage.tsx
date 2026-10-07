@@ -5,7 +5,16 @@ import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import type { ConfigItemPicker, MCPServerPicker, Picker, Project, Step, Workflow } from '@/types/generated';
+import type {
+  ConfigItemPicker,
+  MCPServerPicker,
+  Picker,
+  Project,
+  SkillPicker,
+  Step,
+  ToolPicker,
+  Workflow,
+} from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import type { ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
@@ -50,9 +59,9 @@ interface Props {
   workflow: Workflow;
   steps: Step[];
   agents?: Picker[];
-  tools?: Picker[];
+  tools?: ToolPicker[];
   toolGroups?: ToolGroup[];
-  skills?: Picker[];
+  skills?: SkillPicker[];
   mcpServers?: MCPServerPicker[];
   assets?: AssetPickerItem[];
   repositories?: Picker[];
@@ -102,16 +111,16 @@ const BuilderPage = () => {
   const { canExecute } = useProjectPermissions();
 
   const agents = rawAgents ?? [];
-  const tools = rawTools ?? [];
   const toolGroups = rawToolGroups ?? [];
-  const skills = rawSkills ?? [];
   // Memoized: the reference catalog is rebuilt from these, and deferred props start out undefined.
+  const tools = useMemo(() => rawTools ?? [], [rawTools]);
+  const skills = useMemo(() => rawSkills ?? [], [rawSkills]);
   const mcpServers = useMemo(() => rawMcpServers ?? [], [rawMcpServers]);
   const assets = useMemo(() => rawAssets ?? [], [rawAssets]);
+  const configItems = useMemo(() => rawConfigItems ?? [], [rawConfigItems]);
   const repositories = rawRepositories ?? [];
-  const configItems = rawConfigItems ?? [];
   const agentModels = rawAgentModels ?? [];
-  const catalogLoading = rawAssets === undefined || rawMcpServers === undefined;
+  const catalogLoading = [rawAssets, rawMcpServers, rawTools, rawSkills, rawConfigItems].some((p) => p === undefined);
 
   const projectId = project?.id ?? null;
   const backPath = projectId ? `/company/projects/${projectId}/workflows` : '/company/projects';
@@ -257,6 +266,14 @@ const BuilderPage = () => {
       } else if (fix.kind === 'attach_mcp_server') {
         if (!session.mcpServerIds.includes(fix.mcpServerId))
           updateStepField(stepId, 'mcpServerIds', [...session.mcpServerIds, fix.mcpServerId]);
+      } else if (fix.kind === 'attach_tool') {
+        if (!session.toolIds.includes(fix.toolId)) updateStepField(stepId, 'toolIds', [...session.toolIds, fix.toolId]);
+      } else if (fix.kind === 'attach_skill') {
+        if (!session.skillIds.includes(fix.skillId))
+          updateStepField(stepId, 'skillIds', [...session.skillIds, fix.skillId]);
+      } else if (fix.kind === 'attach_config_item') {
+        if (!session.configItemIds.includes(fix.configItemId))
+          updateStepField(stepId, 'configItemIds', [...session.configItemIds, fix.configItemId]);
       } else {
         const dependency = stepByKey(fix.stepKey);
         if (!dependency || dependency.id === stepId || session.dependsOnStepIds.includes(dependency.id)) return;
@@ -281,10 +298,22 @@ const BuilderPage = () => {
         const server = mcpServers.find((m) => m.id === fix.mcpServerId);
         return server ? `Attach ${server.name}` : null;
       }
+      if (fix.kind === 'attach_tool') {
+        const tool = tools.find((t) => t.id === fix.toolId);
+        return tool ? `Attach ${tool.name}` : null;
+      }
+      if (fix.kind === 'attach_skill') {
+        const skill = skills.find((sk) => sk.id === fix.skillId);
+        return skill ? `Attach ${skill.name}` : null;
+      }
+      if (fix.kind === 'attach_config_item') {
+        const configItem = configItems.find((c) => c.id === fix.configItemId);
+        return configItem ? `Attach ${configItem.name}` : null;
+      }
       const dependency = stepByKey(fix.stepKey);
       return dependency ? `Run after ${sessionLabel(sortedSteps, dependency.id)}` : null;
     },
-    [assets, mcpServers, sortedSteps, stepByKey],
+    [assets, mcpServers, tools, skills, configItems, sortedSteps, stepByKey],
   );
 
   const problemCounts = useMemo(() => {
@@ -349,9 +378,18 @@ const BuilderPage = () => {
   const referenceCatalog = useMemo(
     () =>
       selectedSession
-        ? buildReferenceCatalog({ sessionId: selectedSession.id, steps: sortedSteps, workflow, assets, mcpServers })
+        ? buildReferenceCatalog({
+            sessionId: selectedSession.id,
+            steps: sortedSteps,
+            workflow,
+            assets,
+            mcpServers,
+            tools,
+            skills,
+            configItems,
+          })
         : { items: [] as ReferenceItem[], bindings: new Map<string, IssueFix>() },
-    [selectedSession, sortedSteps, workflow, assets, mcpServers],
+    [selectedSession, sortedSteps, workflow, assets, mcpServers, tools, skills, configItems],
   );
   const references = useMemo(
     () => ({ items: referenceCatalog.items, loading: catalogLoading }),

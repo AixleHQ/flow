@@ -1,4 +1,12 @@
-import type { AssetPicker, MCPServerPicker, Step, Workflow } from '@/types/generated';
+import type {
+  AssetPicker,
+  ConfigItemPicker,
+  MCPServerPicker,
+  SkillPicker,
+  Step,
+  ToolPicker,
+  Workflow,
+} from '@/types/generated';
 
 import type { ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { referenceToken } from 'shared/lib/references';
@@ -6,13 +14,20 @@ import { referenceToken } from 'shared/lib/references';
 import { stepKey } from './builderDraft';
 import { downstreamIds, type IssueFix, isPlainSpecName, sessionLabel, upstreamIds } from './dataFlow';
 
-export const REFERENCE_GROUPS = ['Assets', 'Sessions', 'Connections'] as const;
+export const REFERENCE_GROUPS = ['Assets', 'Sessions', 'Connections', 'Tools', 'Skills', 'Config items'] as const;
 
-type CatalogStep = Pick<Step, 'id' | 'name' | 'dependsOnStepIds' | 'assetIds' | 'mcpServerIds' | 'outputAssetSpecs'>;
-type CatalogWorkflow = Pick<Workflow, 'baseAssetIds' | 'baseMCPServerIds' | 'inheritAllProjectResources'>;
+type CatalogStep = Pick<Step, 'id' | 'name' | 'dependsOnStepIds' | 'assetIds' | 'mcpServerIds' | 'outputAssetSpecs'> &
+  Partial<Pick<Step, 'toolIds' | 'skillIds' | 'configItemIds'>>;
+type CatalogWorkflow = Pick<Workflow, 'baseAssetIds' | 'baseMCPServerIds' | 'inheritAllProjectResources'> &
+  Partial<Pick<Workflow, 'baseToolIds' | 'baseSkillIds' | 'baseConfigItemIds'>>;
 // Older servers send `{ id, name }` only; the extra fields only refine hints.
 type CatalogAsset = Pick<AssetPicker, 'id' | 'name'> & Partial<Pick<AssetPicker, 'fileName' | 'folder' | 'scope'>>;
 type CatalogServer = Pick<MCPServerPicker, 'id' | 'name'> & Partial<Pick<MCPServerPicker, 'transport' | 'scope'>>;
+type CatalogTool = Pick<ToolPicker, 'id' | 'name'> & Partial<Pick<ToolPicker, 'toolName' | 'scope'>>;
+type CatalogSkill = Pick<SkillPicker, 'id' | 'name'> & Partial<Pick<SkillPicker, 'skillName'>>;
+// The server sends a missing description as null, which the generated optional type does not admit.
+type CatalogConfigItem = Pick<ConfigItemPicker, 'id' | 'name'> &
+  Partial<Pick<ConfigItemPicker, 'itemType'>> & { description?: string | null };
 
 export interface ReferenceCatalogInput {
   sessionId: number;
@@ -21,6 +36,9 @@ export interface ReferenceCatalogInput {
   workflow: CatalogWorkflow;
   assets: CatalogAsset[];
   mcpServers: CatalogServer[];
+  tools?: CatalogTool[];
+  skills?: CatalogSkill[];
+  configItems?: CatalogConfigItem[];
 }
 
 export interface ReferenceCatalogResult {
@@ -31,6 +49,11 @@ export interface ReferenceCatalogResult {
 
 const join = (...parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(' · ');
 
+const NOT_ATTACHED = 'Not attached — attaches on insert';
+
+const truncate = (text: string | null | undefined, max = 60) =>
+  text && text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+
 /** The `@` picker for one session: what it can name, how each row reads, and what picking it binds. */
 export function buildReferenceCatalog({
   sessionId,
@@ -38,6 +61,9 @@ export function buildReferenceCatalog({
   workflow,
   assets,
   mcpServers,
+  tools = [],
+  skills = [],
+  configItems = [],
 }: ReferenceCatalogInput): ReferenceCatalogResult {
   const session = steps.find((s) => s.id === sessionId);
   const items: ReferenceItem[] = [];
@@ -117,26 +143,79 @@ export function buildReferenceCatalog({
     });
   }
 
-  const sessionServers = new Set(session.mcpServerIds);
-  const baseServers = new Set(workflow.baseMCPServerIds);
-  const source = (server: CatalogServer) => {
-    if (sessionServers.has(server.id)) return 'Session';
-    if (baseServers.has(server.id)) return 'Workflow base';
-    if (workflow.inheritAllProjectResources && server.scope === 'project') return 'Project';
-    return null;
+  // Where a session gets a resource from — its own list, the workflow base, or (when the workflow
+  // inherits) everything the project offers, which is what each picker prop already lists.
+  const sourceOf = (sessionIds: number[] | undefined, baseIds: number[] | undefined) => {
+    const own = new Set(sessionIds ?? []);
+    const base = new Set(baseIds ?? []);
+    return (id: number) => {
+      if (own.has(id)) return 'Session';
+      if (base.has(id)) return 'Workflow base';
+      if (workflow.inheritAllProjectResources) return 'Project';
+      return null;
+    };
   };
-  const serverRank = (server: CatalogServer) => (source(server) ? 0 : 1);
-  for (const server of [...mcpServers].sort((a, b) => serverRank(a) - serverRank(b))) {
+  const attachedFirst = <T extends { id: number }>(list: T[], source: (id: number) => string | null) =>
+    [...list].sort((a, b) => (source(a.id) ? 0 : 1) - (source(b.id) ? 0 : 1));
+
+  const serverSource = sourceOf(session.mcpServerIds, workflow.baseMCPServerIds);
+  for (const server of attachedFirst(mcpServers, serverSource)) {
     const token = referenceToken.mcp(server.id);
-    const from = source(server);
+    const from = serverSource(server.id);
     items.push({
       token,
       kind: 'mcp',
       label: server.name,
-      hint: join(from ?? 'Not attached — attaches on insert', server.transport),
+      hint: join(from ?? NOT_ATTACHED, server.transport),
       group: 'Connections',
     });
     if (!from) bindings.set(token, { kind: 'attach_mcp_server', mcpServerId: server.id });
+  }
+
+  const toolSource = sourceOf(session.toolIds, workflow.baseToolIds);
+  for (const tool of attachedFirst(tools, toolSource)) {
+    const token = referenceToken.tool(tool.id);
+    const from = toolSource(tool.id);
+    items.push({
+      token,
+      kind: 'tool',
+      label: tool.name,
+      hint: join(tool.toolName !== tool.name && tool.toolName, from ?? NOT_ATTACHED),
+      group: 'Tools',
+    });
+    if (!from) bindings.set(token, { kind: 'attach_tool', toolId: tool.id });
+  }
+
+  const skillSource = sourceOf(session.skillIds, workflow.baseSkillIds);
+  for (const skill of attachedFirst(skills, skillSource)) {
+    const token = referenceToken.skill(skill.id);
+    const from = skillSource(skill.id);
+    items.push({
+      token,
+      kind: 'skill',
+      label: skill.name,
+      hint: join(skill.skillName !== skill.name && skill.skillName, from ?? NOT_ATTACHED),
+      group: 'Skills',
+    });
+    if (!from) bindings.set(token, { kind: 'attach_skill', skillId: skill.id });
+  }
+
+  const configSource = sourceOf(session.configItemIds, workflow.baseConfigItemIds);
+  for (const configItem of attachedFirst(configItems, configSource)) {
+    const token = referenceToken.configItem(configItem.id);
+    const from = configSource(configItem.id);
+    items.push({
+      token,
+      kind: 'config_item',
+      label: configItem.name,
+      hint: join(
+        configItem.itemType && (configItem.itemType === 'secret' ? 'Secret' : 'Variable'),
+        from ?? NOT_ATTACHED,
+        truncate(configItem.description),
+      ),
+      group: 'Config items',
+    });
+    if (!from) bindings.set(token, { kind: 'attach_config_item', configItemId: configItem.id });
   }
 
   return { items, bindings };
@@ -153,7 +232,7 @@ export function availableInputs({
   steps,
   workflow,
   assets,
-}: Omit<ReferenceCatalogInput, 'mcpServers'>): AvailableInput[] {
+}: Pick<ReferenceCatalogInput, 'sessionId' | 'steps' | 'workflow' | 'assets'>): AvailableInput[] {
   const session = steps.find((s) => s.id === sessionId);
   if (!session) return [];
   const upstream = upstreamIds(steps, sessionId);

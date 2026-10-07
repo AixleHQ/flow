@@ -228,6 +228,20 @@ class StepTest < ActiveSupport::TestCase
     assert_includes step.errors[:instructions], "reference mcp servers outside this project: #{foreign_server.id}"
   end
 
+  test "tool, skill and config item references the instructions add must belong to the project too" do
+    other = create(:project, :standalone)
+    tool = create(:tool, scope: other)
+    skill = create(:skill, scope: other)
+    item = create(:config_item, scope: other)
+    step = create(:step, workflow: @workflow)
+
+    step.instructions = "{{tool:#{tool.id}}} {{skill:#{skill.id}}} {{config_item:#{item.id}}}"
+
+    assert_not step.valid?
+    assert_equal [ "reference tools outside this project: #{tool.id}", "reference skills outside this project: #{skill.id}",
+                   "reference config items outside this project: #{item.id}" ], step.errors[:instructions]
+  end
+
   test "a reference already saved does not block an unrelated edit" do
     foreign_asset = create(:asset, scope: create(:project, :standalone), created_by: create(:user))
     step = create(:step, workflow: @workflow)

@@ -172,6 +172,10 @@ module Templates
         when "output" then (key = step_keys[ref.id.to_i]) ? "{{output:#{key}:#{ref.name}}}" : ref.name
         when "asset" then (key = asset_key(ref.id, where)) ? "{{asset:#{key}}}" : Asset.find_by(id: ref.id)&.name.to_s
         when "mcp" then (key = server_key(ref.id, where)) ? "{{mcp:#{key}}}" : MCPServer.find_by(id: ref.id)&.name.to_s
+        when "tool" then (key = tool_key(ref.id, where)) ? "{{tool:#{key}}}" : Tool.find_by(id: ref.id)&.name.to_s
+        when "skill" then (key = skill_key(ref.id, where)) ? "{{skill:#{key}}}" : Skill.find_by(id: ref.id)&.name.to_s
+        # Config items travel by name, as the package lists them.
+        when "config_item" then (name = config_item_name(ref.id, where)) ? "{{config_item:#{name}}}" : ""
         end
       end
     end

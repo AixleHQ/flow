@@ -49,8 +49,11 @@ Instructions remain plain text. A reference is a token:
 | `{{output:45:summary.md}}` | output spec `summary.md` of step 45 | `` `/workspace/outputs/summary.md` `` in step 45 itself, `` `/workspace/assets/summary.md` `` in any later step |
 | `{{step:45}}` | step 45 of the same workflow | `session "Collect sources"` |
 | `{{mcp:7}}` | an `MCPServer` by id | `the "GitHub" MCP server` |
+| `{{tool:9}}` | a `Tool` by id | `` the `post_summary` tool `` (the name it is called by) |
+| `{{skill:4}}` | a `Skill` by id | `` the "House style" skill (`house-style`) `` |
+| `{{config_item:3}}` | a `ConfigItem` by id | `` the `SLACK_TOKEN` config item (read it with `get_config_item`) `` — the name only; a value never enters the text |
 
-- One scanner finds tokens: `/\{\{(asset|output|step|mcp):([^{}\n]+?)\}\}/`. The body is
+- One scanner finds tokens: `/\{\{(asset|output|step|mcp|tool|skill|config_item):([^{}\n]+?)\}\}/`. The body is
   parsed per type. An id is a positive integer. A body that does not parse is a broken reference,
   not plain text.
 - Any other `{{…}}` (`{{artifact_name}}`, `{{Sub-step name}}`) is left alone and reported as a
@@ -68,7 +71,8 @@ Instructions remain plain text. A reference is a token:
 
 Out of scope: references in agent persona (an agent is not bound to a workflow and its persona
 is already in context), references to sub-steps (they have no artifacts and no id the agent
-could act on), tools, skills, config items and board objects.
+could act on), agents and board objects. Tools, skills and config items were added after the first
+release, on the same rules as MCP servers.
 
 ## 3. Inserting a reference binds it
 
@@ -79,11 +83,15 @@ Typing `@` opens a grouped picker for the session being edited:
 | Assets | assets attached to the session, workflow base assets, other project and company assets; this session's declared outputs; other sessions' declared outputs |
 | Sessions | every other session of the workflow |
 | Connections | MCP servers attached to the session, to the workflow base, inherited from the project, and the project's other servers |
+| Tools | tools the project can attach (platform and project tools), attached ones first |
+| Skills | the project's skills, attached ones first |
+| Config items | the project's secrets and variables, by name and type |
 
 Choosing a row inserts the token and makes it work:
 
 - an asset not yet available to the session is added to the session's assets;
-- an MCP server not yet available is added to the session's MCP servers;
+- an MCP server, tool, skill or config item not yet available is added to the session's own list
+  (`mcp_server_ids`, `tool_ids`, `skill_ids`, `config_item_ids`);
 - another session's output, when that session is not upstream, adds it to **Run after**. A row
   that would create a cycle is disabled ("runs after this session");
 - a session reference binds nothing. If that session is not upstream the check warns.
@@ -145,7 +153,7 @@ unsaved payload. It returns issues:
 | Code | Severity | Rule | Fix |
 |---|---|---|---|
 | `ref_missing` | error | a token names nothing in scope (deleted, archived, disabled, other project, malformed) | — |
-| `ref_not_attached` | error | an asset or MCP token names a resource the session will not receive | `attach_asset` / `attach_mcp_server` |
+| `ref_not_attached` | error | a token names a resource the session will not receive | `attach_asset` / `attach_mcp_server` / `attach_tool` / `attach_skill` / `attach_config_item` |
 | `output_not_upstream` | error | an output token names a session that does not run before this one | `add_dependency` |
 | `output_undeclared` | error | an output token names a spec the session no longer declares | — |
 | `spec_name_invalid` | error | blank, absolute, or contains `..` | — |
@@ -168,16 +176,18 @@ Where it runs:
 
 Instructions used to be copied verbatim. Now:
 
-- `WorkflowDuplicator` rewrites step and output tokens through its step id map, MCP tokens
-  through `DependencyCopier`, and asset tokens through the same carry rule as asset ids.
+- `WorkflowDuplicator` rewrites step and output tokens through its step id map; MCP server, tool,
+  skill and config item tokens through `DependencyCopier` (config items by name, as their ids are);
+  asset tokens through the same carry rule as asset ids.
 - `Templates::Exporter` rewrites ids to package keys (`{{asset:brand_guide}}`,
-  `{{step:collect}}`); `Templates::Installer` maps keys back to the new ids after the steps exist.
+  `{{step:collect}}`, `{{skill:house_style}}`; config items by name, `{{config_item:SENTRY_ORG}}`);
+  `Templates::Installer` maps keys back to the new ids after the steps exist.
 - A token that cannot be carried becomes its name as plain text, so the copy reads sensibly and
   the author can re-insert it. It never keeps an id that points into the source project.
 - Version revert needs nothing: steps are soft-deleted, so ids in a snapshot stay valid.
 
-On save, an asset or MCP token must name a resource owned by the workflow's project (the same
-rule as `asset_ids` / `mcp_server_ids`), so an id cannot be planted from outside.
+On save, a token must name a resource owned by the workflow's project (the same rule as the id
+columns), so an id cannot be planted from outside.
 
 ## 8. Editor
 

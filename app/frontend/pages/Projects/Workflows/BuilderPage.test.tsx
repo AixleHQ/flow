@@ -1141,6 +1141,46 @@ describe('Projects/Workflows/BuilderPage @ references and data-flow issues', () 
     expect(aggregate.steps[1]).toMatchObject({ instructions: '{{output:1:summary.md}} ', dependsOnStepIds: ['1'] });
   });
 
+  it('picking a tool, a skill and a config item the session lacks attaches each of them', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        tools: [{ id: 41, name: 'Post to Slack', toolName: 'slack_post', scope: 'project' }],
+        skills: [{ id: 51, name: 'House style', skillName: 'house-style' }],
+        configItems: [{ id: 61, name: 'STAGING_URL', itemType: 'variable', description: null }],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Use ' })],
+      }),
+    });
+
+    await pickReference('Post to Slack', 'slack');
+    await pickReference('House style', 'house');
+    await pickReference('STAGING_URL', 'STAGING');
+
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[0]).toMatchObject({
+      instructions: 'Use {{tool:41}} {{skill:51}} {{config_item:61}} ',
+      toolIds: [41],
+      skillIds: [51],
+      configItemIds: [61],
+    });
+  });
+
+  it('treats an internal MCP server as attached when the workflow inherits every project resource', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        workflow: makeWorkflow({ inheritAllProjectResources: true }),
+        mcpServers: [{ id: 9, name: 'aixle-tools', transport: 'http', scope: 'internal' }],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Ask ' })],
+      }),
+    });
+
+    await pickReference('aixle-tools', 'aixle');
+
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[0]).toMatchObject({ instructions: 'Ask {{mcp:9}} ', mcpServerIds: [] });
+  });
+
   it('sends the unsaved draft to the check after a data-flow edit and shows what it finds', async () => {
     const warning = {
       severity: 'warning',

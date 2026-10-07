@@ -66,7 +66,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         Agent.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       tools: InertiaRails.defer(group: "resources") {
-        Tool.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
+        Tool.visible_for_project(current_project).map { |r| ToolPickerResource.new(r).to_h }
       },
       # Tag groups the picker offers as collapsible sections (e.g. "Board
       # management" attaches every board tool from its header, or one tool at a
@@ -75,7 +75,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         Tools::PickerGroups.for_project(current_project)
       },
       skills: InertiaRails.defer(group: "resources") {
-        Skill.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
+        Skill.visible_for_project(current_project).map { |r| SkillPickerResource.new(r).to_h }
       },
       mcp_servers: InertiaRails.defer(group: "resources") {
         MCPServer.visible_for_project(current_project).map { |r| MCPServerPickerResource.new(r).to_h }

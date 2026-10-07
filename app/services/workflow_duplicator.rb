@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 class WorkflowDuplicator
-  SOURCE_OWNERS = { Asset => :assets, MCPServer => :mcp_servers }.freeze
+  SOURCE_OWNERS = { Asset => :assets, MCPServer => :mcp_servers, Tool => :tools, Skill => :skills,
+                    ConfigItem => :config_items }.freeze
 
   # #duplicate! returns the new Workflow (backwards-compatible). A summary of the
   # resources that were NOT copied / need manual setup is exposed afterwards via
@@ -62,9 +63,9 @@ class WorkflowDuplicator
   end
 
   # References follow the copy the way the id columns do: steps through the new
-  # ids, MCP servers through DependencyCopier, assets by the carry rule. One that
-  # cannot follow becomes its name in plain text — never an id that still points
-  # into the source project.
+  # ids, servers, tools, skills and config items through DependencyCopier (config
+  # items by name), assets by the carry rule. One that cannot follow becomes its
+  # name in plain text — never an id that still points into the source project.
   def carried_instructions(text, step_id_map)
     InstructionReferences.rewrite(text) do |ref|
       next nil unless ref.valid?
@@ -78,6 +79,12 @@ class WorkflowDuplicator
         (id = @dep_copier.map_mcp_server_ids([ ref.id ]).first) ? "{{mcp:#{id}}}" : source_name(MCPServer, ref.id)
       when "asset"
         carried_asset_ids([ ref.id ]).any? ? nil : source_name(Asset, ref.id)
+      when "tool"
+        (id = @dep_copier.map_tool_ids([ ref.id ]).first) ? "{{tool:#{id}}}" : source_name(Tool, ref.id)
+      when "skill"
+        (id = @dep_copier.map_skill_ids([ ref.id ]).first) ? "{{skill:#{id}}}" : source_name(Skill, ref.id)
+      when "config_item"
+        (id = @dep_copier.map_config_item_ids([ ref.id ]).first) ? "{{config_item:#{id}}}" : source_name(ConfigItem, ref.id)
       end
     end
   end
