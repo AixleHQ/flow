@@ -21,7 +21,7 @@ const CARDS: ConceptCard[] = [
   {
     icon: IconRobot,
     name: 'Agents',
-    desc: 'Autonomous workers that receive a goal and execute the steps needed to reach it.',
+    desc: 'Autonomous AI that takes a goal and executes the steps needed to reach it.',
     href: '/docs/agents',
   },
   {

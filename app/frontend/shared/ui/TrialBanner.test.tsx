@@ -29,7 +29,7 @@ describe('TrialBanner', () => {
   it('says what has been spent and what is left', () => {
     renderPage(<TrialBanner />, { props: { trial } });
 
-    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 queue-hours used');
+    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 worker-hours used');
   });
 
   // The allowance is a quantity and the workspace sets the rate: forty hours is
@@ -38,7 +38,7 @@ describe('TrialBanner', () => {
   it('turns what is left into hours at the rate they are running', () => {
     renderPage(<TrialBanner />, { props: { trial } });
 
-    expect(screen.getByRole('status')).toHaveTextContent('At 10 sessions at once that is about 4 hours left');
+    expect(screen.getByRole('status')).toHaveTextContent('At 10 workers that is about 4 hours left');
   });
 
   it('says one session without the plural', () => {
@@ -46,7 +46,7 @@ describe('TrialBanner', () => {
       props: { trial: { ...trial, maxSessions: 1, hoursLeftAtCurrentRate: 40 } },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('At 1 session at once that is about 40 hours left');
+    expect(screen.getByRole('status')).toHaveTextContent('At 1 worker that is about 40 hours left');
   });
 
   // A workspace with no limit has no rate to divide by, and inventing one would
@@ -56,7 +56,7 @@ describe('TrialBanner', () => {
       props: { trial: { ...trial, maxSessions: null, hoursLeftAtCurrentRate: null } },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 queue-hours used');
+    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 worker-hours used');
     expect(screen.queryByText(/hours left/)).not.toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe('TrialBanner', () => {
     renderPage(<TrialBanner />, { props: { trial: { ...trial, canPay: false }, permissions: admin } });
 
     expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 queue-hours used');
+    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 worker-hours used');
   });
 
   it('says plainly when the allowance is gone', () => {
@@ -91,7 +91,7 @@ describe('TrialBanner', () => {
     });
 
     const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent('used all 100 of your free queue-hours');
+    expect(banner).toHaveTextContent('used all 100 of your free worker-hours');
     expect(banner).toHaveTextContent('Anything already running finishes');
   });
 

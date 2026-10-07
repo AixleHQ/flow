@@ -52,13 +52,13 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'plans-and-limits',
     title: 'Plans & limits',
     section: 'Using Flow',
-    desc: 'Hosted Flow: what a queue costs, why capacity is charged for whether or not it is busy, the first 100 queue-hours free and the rate you spend them at, and what happens when they run out.',
+    desc: 'Hosted Flow: what a worker costs, why capacity is charged for whether or not it is busy, the first 100 worker-hours free and the rate you spend them at, and what happens when they run out.',
   },
   {
     slug: 'aws-marketplace-billing',
     title: 'AWS Marketplace billing',
     section: 'Using Flow',
-    desc: 'Flow bought through AWS Marketplace: capacity metered to your own AWS bill in queue-minutes, no free allowance and no card, why every company needs a limit, and how a disputed bill is settled.',
+    desc: 'Flow bought through AWS Marketplace: capacity metered to your own AWS bill in worker-minutes, no free allowance and no card, why every company needs a limit, and how a disputed bill is settled.',
   },
   {
     slug: 'sessions-and-runs',

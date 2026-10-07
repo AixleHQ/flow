@@ -285,8 +285,8 @@ const SettingsPage = () => {
               <Box>
                 {concurrency.canManage ? (
                   <NumberInput
-                    label="Concurrent Sessions"
-                    description={`A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`}
+                    label="Reserved workers"
+                    description={`A reservation: this project can always run this many sessions at once, one per worker, and nothing else may occupy them. Leave empty to share the company's unreserved workers instead, up to ${concurrency.default} at a time.`}
                     min={1}
                     allowDecimal={false}
                     allowNegative={false}
@@ -301,7 +301,7 @@ const SettingsPage = () => {
                 ) : (
                   <>
                     <Text size="sm" fw={500} mb={4}>
-                      Concurrent Sessions
+                      Reserved workers
                     </Text>
                     <Text size="sm">
                       {concurrency.maxSessions ?? concurrency.default}

@@ -92,7 +92,7 @@
   border-top: 1px dashed var(--app-border-strong);
 }
 
-.queueCount {
+.workerCount {
   font-family: 'Hanken Grotesk', sans-serif;
   font-weight: 700;
   font-size: 28px;

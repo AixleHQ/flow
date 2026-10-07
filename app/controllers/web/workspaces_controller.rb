@@ -114,7 +114,7 @@ class Web::WorkspacesController < Web::ApplicationController
     }
   end
 
-  # The /how-it-works calculator works out how many queues a workload needs and
+  # The /how-it-works calculator works out how many workers a workload needs and
   # sends the visitor here with that number, so the form opens on the figure they
   # were just shown rather than on the installation default.
   # Echoed back into the form only when it actually looks like an address, so the

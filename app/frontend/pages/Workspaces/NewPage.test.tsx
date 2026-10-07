@@ -81,7 +81,7 @@ describe('New workspace page', () => {
     it('starts the session limit at the installation default', () => {
       renderPage(<NewWorkspacePage />, { props: signedIn });
 
-      expect(screen.getByLabelText(/Concurrent sessions/)).toHaveValue('4');
+      expect(screen.getByLabelText(/Workers/)).toHaveValue('4');
     });
 
     // They have no address field, so a refusal about their address used to be
@@ -192,7 +192,7 @@ describe('New workspace page', () => {
   it('says what the workspace gets before anyone asks for a card', () => {
     renderPage(<NewWorkspacePage />, { props: stranger });
 
-    expect(screen.getByText(/queue-hours are free/)).toHaveTextContent('The first 100 queue-hours are free');
+    expect(screen.getByText(/worker-hours are free/)).toHaveTextContent('The first 100 worker-hours are free');
   });
 
   it('shows what the server refused', () => {

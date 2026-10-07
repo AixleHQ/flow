@@ -56,7 +56,7 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
 
     assert_nil limit_for(@project)
     error = Array(session["inertia_errors"][:concurrency]).to_sentence
-    assert_match(/company limit of 10/, error)
+    assert_match(/company's 10 workers/, error)
     assert_match(/7 of 10/, error)
     assert_match(/at most 3/, error)
   end

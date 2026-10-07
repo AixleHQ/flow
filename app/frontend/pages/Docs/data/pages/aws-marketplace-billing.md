@@ -20,12 +20,12 @@ have is the arrangement.
 ## What is metered
 
 The same thing that is billed in the hosted product: **capacity, measured in
-queue-minutes**.
+worker-minutes**.
 
-A **queue** is one session at a time. Each company in the installation has its own
-limit, and the installation meters **the total across all of them**, hour by hour,
-time-weighted. Half an hour at one queue and half an hour at three is two
-queue-hours, not three.
+A **worker** runs one session at a time. Each company in the installation has its
+own number of workers, and the installation meters **the total across all of
+them**, hour by hour, time-weighted. Half an hour at one worker and half an hour
+at three is two worker-hours, not three.
 
 One record is sent per hour, carrying:
 

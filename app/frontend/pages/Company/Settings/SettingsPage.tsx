@@ -207,13 +207,13 @@ const SettingsPage = () => {
             <Card withBorder padding="lg">
               <Group gap="xs" mb="md">
                 <IconAdjustments size={18} />
-                <Text fw={600}>Session capacity</Text>
+                <Text fw={600}>Workers</Text>
               </Group>
               <Stack gap="md">
                 {capacity.canManage ? (
                   <NumberInput
-                    label="Concurrent sessions"
-                    description={`How many sessions this company may run at once. Projects reserve out of it; those without a reservation share what is left, up to ${capacity.projectDefault} each. Leave empty for no limit.`}
+                    label="Workers"
+                    description={`How many sessions this company may run at once — each worker runs one. Projects reserve workers out of it; those without a reservation share what is left, up to ${capacity.projectDefault} each. Leave empty for no limit.`}
                     placeholder="No limit"
                     min={1}
                     allowDecimal={false}
@@ -227,7 +227,7 @@ const SettingsPage = () => {
                 ) : (
                   <Box>
                     <Text fz="sm" fw={500}>
-                      Concurrent sessions
+                      Workers
                     </Text>
                     <Group gap={6} mt={4}>
                       <Text fz="xl" fw={600}>

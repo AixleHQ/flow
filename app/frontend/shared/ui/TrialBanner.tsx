@@ -11,7 +11,7 @@ import type { SharedProps } from './types';
  * What a workspace on free capacity has spent, on every screen.
  *
  * The allowance is a quantity and the workspace sets the rate it burns at, so
- * "40 hours left" means four days at one session and four hours at ten. Both
+ * "40 hours left" means four days at one worker and four hours at ten. Both
  * numbers are shown, because only the second one answers "when do I need to do
  * something about this".
  *
@@ -31,18 +31,18 @@ export const TrialBanner = () => {
       <p className={classes.text}>
         {blocked ? (
           <>
-            You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free queue-hours,
+            You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free worker-hours,
             so no new sessions start. Anything already running finishes.{' '}
             {trial.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'}
           </>
         ) : (
           <>
             You are on free capacity: <span className={classes.figure}>{trial.usedHours}</span> of{' '}
-            <span className={classes.figure}>{trial.allowanceHours}</span> queue-hours used.
+            <span className={classes.figure}>{trial.allowanceHours}</span> worker-hours used.
             {trial.hoursLeftAtCurrentRate != null && (
               <>
                 {' '}
-                At {trial.maxSessions} session{trial.maxSessions === 1 ? '' : 's'} at once that is about{' '}
+                At {trial.maxSessions} worker{trial.maxSessions === 1 ? '' : 's'} that is about{' '}
                 <span className={classes.figure}>{trial.hoursLeftAtCurrentRate}</span> hours left.
               </>
             )}

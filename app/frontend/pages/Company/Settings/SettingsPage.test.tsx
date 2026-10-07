@@ -37,8 +37,8 @@ describe('Company settings page', () => {
     const patch = vi.spyOn(router, 'patch').mockImplementation(() => undefined);
     renderAuthedPage(<SettingsPage />, { props: { company, capacity, canManage: true } });
 
-    await userEvent.clear(screen.getByLabelText(/Concurrent sessions/));
-    await userEvent.type(screen.getByLabelText(/Concurrent sessions/), '30');
+    await userEvent.clear(screen.getByLabelText(/Workers/));
+    await userEvent.type(screen.getByLabelText(/Workers/), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
@@ -51,7 +51,7 @@ describe('Company settings page', () => {
       props: { company, capacity: { ...capacity, canManage: false }, canManage: true },
     });
 
-    expect(screen.queryByLabelText(/Concurrent sessions/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Workers/)).not.toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
     expect(screen.getByText(/contact us to change this/)).toBeInTheDocument();
   });
