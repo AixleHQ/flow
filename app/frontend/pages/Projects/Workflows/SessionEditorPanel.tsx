@@ -302,8 +302,8 @@ export function SessionEditorPanel({
             </span>
           </label>
           <p className={classes.fieldHelp}>
-            Type <code>@</code> to reference an asset, another session, an output or an MCP server. The agent gets the
-            real path or name.{' '}
+            Type <code>@</code> to reference an asset, another session, an output, an MCP server, a tool, a skill or a
+            config item. The agent gets the real path or name.{' '}
             <a href="/docs/prompt-guide" target="_blank" rel="noopener noreferrer">
               Prompt guide <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
             </a>
@@ -316,7 +316,7 @@ export function SessionEditorPanel({
             loading={references.loading}
             readOnly={readOnly}
             onInsert={onInsertReference}
-            placeholder="Enter instructions… Type @ to reference assets, sessions, outputs or connections."
+            placeholder="Enter instructions… Type @ to reference assets, sessions, outputs, connections, tools, skills or config items."
             ariaLabel="Session instructions"
             minHeight={instructionsExpanded ? 400 : 180}
             maxHeight={instructionsExpanded ? null : 620}

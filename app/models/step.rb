@@ -141,11 +141,13 @@ class Step < ApplicationRecord
     end
   end
 
-  REFERENCE_OWNERS = { "asset" => :assets, "mcp" => :mcp_servers }.freeze
+  REFERENCE_OWNERS = {
+    "asset" => :assets, "mcp" => :mcp_servers, "tool" => :tools, "skill" => :skills, "config_item" => :config_items
+  }.freeze
 
-  # An `{{asset:…}}` or `{{mcp:…}}` token binds a resource the same way the id
-  # columns do, so it is held to the same ownership rule — only for ids the
-  # change adds, as with the columns.
+  # A reference token binds a resource the same way the id columns do, so it is
+  # held to the same ownership rule — only for ids the change adds, as with the
+  # columns.
   def instruction_references_belong_to_project
     return unless workflow&.scope_type == "Project" && will_save_change_to_instructions?
 

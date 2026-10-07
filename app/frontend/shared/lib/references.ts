@@ -2,7 +2,7 @@
 // parsed by the server (InstructionReferences), which renders each token into a path or a name
 // when a session starts — change one side only together with the other.
 
-export type ReferenceKind = 'asset' | 'output' | 'step' | 'mcp';
+export type ReferenceKind = 'asset' | 'output' | 'step' | 'mcp' | 'skill' | 'tool' | 'config_item';
 
 export interface ParsedReference {
   kind: ReferenceKind;
@@ -11,7 +11,7 @@ export interface ParsedReference {
   to: number;
   /** False when the body does not parse: the token is shown broken, never as plain text. */
   valid: boolean;
-  /** Asset or MCP server id. */
+  /** Asset, MCP server, skill, tool or config item id. */
   id?: number;
   /** A step id, or `new-<n>` for a step that is not saved yet. */
   stepRef?: string;
@@ -19,7 +19,7 @@ export interface ParsedReference {
   name?: string;
 }
 
-const TOKEN_SOURCE = String.raw`\{\{(asset|output|step|mcp):([^{}\n]+?)\}\}`;
+const TOKEN_SOURCE = String.raw`\{\{(asset|output|step|mcp|skill|tool|config_item):([^{}\n]+?)\}\}`;
 const ID = /^[1-9]\d*$/;
 const STEP_REF = /^(?:[1-9]\d*|new-[1-9]\d*)$/;
 
@@ -27,6 +27,9 @@ function parseBody(kind: ReferenceKind, body: string): Omit<ParsedReference, 'ki
   switch (kind) {
     case 'asset':
     case 'mcp':
+    case 'skill':
+    case 'tool':
+    case 'config_item':
       return ID.test(body) ? { valid: true, id: Number(body) } : { valid: false };
     case 'step':
       return STEP_REF.test(body) ? { valid: true, stepRef: body } : { valid: false };
@@ -53,6 +56,9 @@ export function scanReferences(text: string): ParsedReference[] {
 export const referenceToken = {
   asset: (id: number) => `{{asset:${id}}}`,
   mcp: (id: number) => `{{mcp:${id}}}`,
+  skill: (id: number) => `{{skill:${id}}}`,
+  tool: (id: number) => `{{tool:${id}}}`,
+  configItem: (id: number) => `{{config_item:${id}}}`,
   step: (stepRef: string) => `{{step:${stepRef}}}`,
   output: (stepRef: string, name: string) => `{{output:${stepRef}:${name}}}`,
 };
@@ -65,6 +71,12 @@ export function brokenReferenceLabel(ref: ParsedReference): string {
       return `Missing asset #${ref.id}`;
     case 'mcp':
       return `Missing MCP server #${ref.id}`;
+    case 'skill':
+      return `Missing skill #${ref.id}`;
+    case 'tool':
+      return `Missing tool #${ref.id}`;
+    case 'config_item':
+      return `Missing config item #${ref.id}`;
     case 'step':
       return 'Missing session';
     case 'output':

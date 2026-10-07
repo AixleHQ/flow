@@ -18,7 +18,8 @@ module ProjectOwnedReferences
       Asset.where(scope_type: "Project", scope_id: project.id)
            .or(Asset.where(scope_type: "Company", scope_id: project.company_id))
     },
-    repositories: ->(project) { Repository.for_project(project) }
+    repositories: ->(project) { Repository.for_project(project) },
+    config_items: ->(project) { ConfigItem.for_project(project) }
   }.freeze
 
   def self.foreign_ids(project, kind, ids)

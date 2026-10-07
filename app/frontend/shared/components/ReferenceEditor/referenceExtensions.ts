@@ -71,6 +71,9 @@ const KIND_NAMES: Record<ReferenceKind, string> = {
   output: 'Output',
   step: 'Session',
   mcp: 'MCP server',
+  skill: 'Skill',
+  tool: 'Tool',
+  config_item: 'Config item',
 };
 
 type PillState = 'ok' | 'broken' | 'loading';

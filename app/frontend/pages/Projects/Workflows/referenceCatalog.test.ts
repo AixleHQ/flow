@@ -6,7 +6,18 @@ import { buildAssetPicker } from 'test/factories/assetPicker';
 import { downstreamIds, normalizeSpecName, upstreamIds } from './dataFlow';
 import { availableInputs, buildReferenceCatalog } from './referenceCatalog';
 
-type CatalogStep = Pick<Step, 'id' | 'name' | 'dependsOnStepIds' | 'assetIds' | 'mcpServerIds' | 'outputAssetSpecs'>;
+type CatalogStep = Pick<
+  Step,
+  | 'id'
+  | 'name'
+  | 'dependsOnStepIds'
+  | 'assetIds'
+  | 'mcpServerIds'
+  | 'outputAssetSpecs'
+  | 'toolIds'
+  | 'skillIds'
+  | 'configItemIds'
+>;
 
 const output = (name: string, namePattern: string | null = null) => ({
   name,
@@ -20,6 +31,9 @@ const step = (overrides: Partial<CatalogStep> & Pick<CatalogStep, 'id' | 'name'>
   assetIds: [],
   mcpServerIds: [],
   outputAssetSpecs: [],
+  toolIds: [],
+  skillIds: [],
+  configItemIds: [],
   ...overrides,
 });
 
@@ -31,11 +45,27 @@ const STEPS: CatalogStep[] = [
     outputAssetSpecs: [output('raw.csv'), output('logs/*.txt'), output('x', 'report-.*')],
   }),
   step({ id: 2, name: 'Analyze', dependsOnStepIds: [1], outputAssetSpecs: [output('summary.md')] }),
-  step({ id: 3, name: 'Report', dependsOnStepIds: [2], assetIds: [31], mcpServerIds: [7] }),
+  step({
+    id: 3,
+    name: 'Report',
+    dependsOnStepIds: [2],
+    assetIds: [31],
+    mcpServerIds: [7],
+    toolIds: [41],
+    skillIds: [51],
+    configItemIds: [61],
+  }),
   step({ id: -4, name: 'Notes', outputAssetSpecs: [output('notes.md')] }),
 ];
 
-const WORKFLOW = { baseAssetIds: [32], baseMCPServerIds: [8], inheritAllProjectResources: false };
+const WORKFLOW = {
+  baseAssetIds: [32],
+  baseMCPServerIds: [8],
+  baseToolIds: [42],
+  baseSkillIds: [],
+  baseConfigItemIds: [],
+  inheritAllProjectResources: false,
+};
 
 const ASSETS = [
   buildAssetPicker({ id: 33, fileName: 'roadmap.docx', name: 'roadmap.docx', scope: 'company' }),
@@ -49,6 +79,27 @@ const SERVERS = [
   { id: 8, name: 'Notion', transport: 'http' as const, scope: 'project' as const },
 ];
 
+const TOOLS = [
+  { id: 43, name: 'Post to Slack', toolName: 'slack_post', scope: 'project' as const },
+  { id: 41, name: 'board_get_task', toolName: 'board_get_task', scope: 'system' as const },
+  { id: 42, name: 'Linter', toolName: 'run_linter', scope: 'project' as const },
+];
+
+const SKILLS = [
+  { id: 52, name: 'House style', skillName: 'house-style' },
+  { id: 51, name: 'code-review', skillName: 'code-review' },
+];
+
+const CONFIG_ITEMS = [
+  { id: 62, name: 'API_TOKEN', itemType: 'secret' as const, description: null },
+  {
+    id: 61,
+    name: 'STAGING_URL',
+    itemType: 'variable' as const,
+    description: 'Base URL of the staging environment the smoke tests run against every night',
+  },
+];
+
 const catalogFor = (sessionId: number, overrides: Partial<Parameters<typeof buildReferenceCatalog>[0]> = {}) =>
   buildReferenceCatalog({
     sessionId,
@@ -56,6 +107,9 @@ const catalogFor = (sessionId: number, overrides: Partial<Parameters<typeof buil
     workflow: WORKFLOW,
     assets: ASSETS,
     mcpServers: SERVERS,
+    tools: TOOLS,
+    skills: SKILLS,
+    configItems: CONFIG_ITEMS,
     ...overrides,
   });
 
@@ -136,11 +190,60 @@ describe('buildReferenceCatalog', () => {
     expect(bindings.get('{{mcp:9}}')).toEqual({ kind: 'attach_mcp_server', mcpServerId: 9 });
   });
 
-  it('counts project servers as attached when the workflow inherits project resources', () => {
-    const { items, bindings } = catalogFor(3, { workflow: { ...WORKFLOW, inheritAllProjectResources: true } });
+  it('counts every server as attached when the workflow inherits project resources, internal ones included', () => {
+    const internal = { id: 10, name: 'aixle-tools', transport: 'http' as const, scope: 'internal' as const };
+    const { items, bindings } = catalogFor(3, {
+      workflow: { ...WORKFLOW, inheritAllProjectResources: true },
+      mcpServers: [...SERVERS, internal],
+    });
 
     expect(items.find((item) => item.token === '{{mcp:9}}')?.hint).toBe('Project · sse');
+    expect(items.find((item) => item.token === '{{mcp:10}}')?.hint).toBe('Project · http');
     expect(bindings.has('{{mcp:9}}')).toBe(false);
+    expect(bindings.has('{{mcp:10}}')).toBe(false);
+  });
+
+  it('lists tools, skills and config items in their own groups, after the connections', () => {
+    const { items } = catalogFor(3);
+    const groups = items.map((item) => item.group).filter((group, i, all) => all.indexOf(group) === i);
+
+    expect(groups).toEqual(['Assets', 'Sessions', 'Connections', 'Tools', 'Skills', 'Config items']);
+  });
+
+  it('shows where each tool and skill comes from, the name the agent calls it by, and binds the unattached', () => {
+    const { items, bindings } = catalogFor(3);
+
+    expect(items.filter((item) => item.kind === 'tool').map((t) => [t.label, t.hint])).toEqual([
+      ['board_get_task', 'Session'],
+      ['Linter', 'run_linter · Workflow base'],
+      ['Post to Slack', 'slack_post · Not attached — attaches on insert'],
+    ]);
+    expect(items.filter((item) => item.kind === 'skill').map((sk) => [sk.label, sk.hint])).toEqual([
+      ['code-review', 'Session'],
+      ['House style', 'house-style · Not attached — attaches on insert'],
+    ]);
+    expect(bindings.get('{{tool:43}}')).toEqual({ kind: 'attach_tool', toolId: 43 });
+    expect(bindings.get('{{skill:52}}')).toEqual({ kind: 'attach_skill', skillId: 52 });
+    expect(bindings.has('{{tool:41}}')).toBe(false);
+    expect(bindings.has('{{tool:42}}')).toBe(false);
+  });
+
+  it('labels a config item a secret or a variable, never shows a value, and binds the unattached', () => {
+    const { items, bindings } = catalogFor(3);
+
+    expect(items.filter((item) => item.kind === 'config_item').map((c) => [c.label, c.hint])).toEqual([
+      ['STAGING_URL', 'Variable · Session · Base URL of the staging environment the smoke tests run aga…'],
+      ['API_TOKEN', 'Secret · Not attached — attaches on insert'],
+    ]);
+    expect(bindings.get('{{config_item:62}}')).toEqual({ kind: 'attach_config_item', configItemId: 62 });
+  });
+
+  it('counts every tool, skill and config item as attached when the workflow inherits project resources', () => {
+    const { bindings } = catalogFor(3, { workflow: { ...WORKFLOW, inheritAllProjectResources: true } });
+
+    expect(
+      [...bindings.values()].filter((fix) => fix.kind !== 'attach_asset' && fix.kind !== 'add_dependency'),
+    ).toEqual([]);
   });
 });
 

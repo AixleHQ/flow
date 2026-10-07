@@ -4,13 +4,29 @@ module DataFlow
   # What would go wrong with a workflow's files and references at run time, found
   # while it is still being edited (docs/design/at-references.md §6). It reads a
   # saved workflow, or the builder's unsaved payload, as one graph: the sessions,
-  # their "Run after" edges, their declared inputs and outputs, their attached
-  # assets and MCP servers, and the `@` references in their instructions.
+  # their "Run after" edges, their declared inputs and outputs, what is attached
+  # to them, and the `@` references in their instructions.
   #
   # Errors are what fails a run for certain; warnings are what probably will.
   # Neither blocks a save. WorkflowService.enqueue refuses a run with errors.
   class Check
-    Node = Data.define(:key, :name, :instructions, :depends_on, :asset_ids, :mcp_server_ids, :inputs, :outputs)
+    Node = Data.define(:key, :name, :instructions, :depends_on, :asset_ids, :attached, :inputs, :outputs)
+
+    # A reference to a resource a session is entitled to the way
+    # SessionConfigResolver decides it: attached to the step, in the workflow's
+    # base list, or — when the workflow inherits — anything the project can see.
+    Resource = Data.define(:model, :column, :base_key, :label, :fix_kind, :fix_key) do
+      def visible(project) = model.constantize.visible_for_project(project)
+    end
+
+    RESOURCES = {
+      "mcp" => Resource.new("MCPServer", "mcp_server_ids", "base_mcp_server_ids", "MCP server",
+                            "attach_mcp_server", :mcpServerId),
+      "tool" => Resource.new("Tool", "tool_ids", "base_tool_ids", "tool", "attach_tool", :toolId),
+      "skill" => Resource.new("Skill", "skill_ids", "base_skill_ids", "skill", "attach_skill", :skillId),
+      "config_item" => Resource.new("ConfigItem", "config_item_ids", "base_config_item_ids", "config item",
+                                    "attach_config_item", :configItemId)
+    }.freeze
 
     Issue = Data.define(:severity, :code, :step_key, :field, :message, :token, :fix) do
       def error? = severity == "error"
@@ -31,7 +47,8 @@ module DataFlow
       nodes = workflow.steps.not_deleted.order(:position).map do |step|
         Node.new(key: step.id.to_s, name: step.name, instructions: step.instructions.to_s,
                  depends_on: Array(step.depends_on_step_ids).map(&:to_s),
-                 asset_ids: integers(step.asset_ids), mcp_server_ids: integers(step.mcp_server_ids),
+                 asset_ids: integers(step.asset_ids),
+                 attached: RESOURCES.transform_values { |r| integers(step.public_send(r.column)) },
                  inputs: step.input_specs, outputs: step.output_specs)
       end
       new(project: project, nodes: nodes, config: workflow.config.to_h, run_input_asset_ids: run_input_asset_ids)
@@ -44,7 +61,8 @@ module DataFlow
         Node.new(key: (step["key"].presence || step["id"]).to_s, name: step["name"].to_s,
                  instructions: step["instructions"].to_s,
                  depends_on: Array(step["depends_on_step_ids"]).map(&:to_s),
-                 asset_ids: integers(step["asset_ids"]), mcp_server_ids: integers(step["mcp_server_ids"]),
+                 asset_ids: integers(step["asset_ids"]),
+                 attached: RESOURCES.transform_values { |r| integers(step[r.column]) },
                  inputs: AssetSpec.list(step["input_asset_specs"]), outputs: AssetSpec.list(step["output_asset_specs"]))
       end
       new(project: project, nodes: nodes, config: workflow.config.to_h.merge(payload["config"].to_h))
@@ -60,7 +78,7 @@ module DataFlow
       @by_key = nodes.index_by(&:key)
       @graph = Graph.new(nodes.to_h { |node| [ node.key, node.depends_on ] })
       @base_asset_ids = self.class.integers(config["base_asset_ids"])
-      @base_mcp_server_ids = self.class.integers(config["base_mcp_server_ids"])
+      @base_ids = RESOURCES.transform_values { |r| self.class.integers(config[r.base_key]) }
       @inherit_all = ActiveModel::Type::Boolean.new.cast(config["inherit_all_project_resources"]) || false
       @run_input_asset_ids = run_input_asset_ids && self.class.integers(run_input_asset_ids)
     end
@@ -90,7 +108,7 @@ module DataFlow
 
         case ref.type
         when "asset" then asset_issue(node, ref)
-        when "mcp" then server_issue(node, ref)
+        when *RESOURCES.keys then resource_issue(node, ref, RESOURCES.fetch(ref.type))
         when "step" then step_issue(node, ref, upstream)
         when "output" then output_issue(node, ref, upstream)
         end
@@ -110,17 +128,18 @@ module DataFlow
             fix: { kind: "attach_asset", assetId: asset.id })
     end
 
-    def server_issue(node, ref)
-      server = servers[ref.id]
-      unless server
+    def resource_issue(node, ref, resource)
+      row = rows(ref.type)[ref.id]
+      unless row
         return issue(node, "error", "ref_missing", "instructions",
-                     "#{quote(node)} references an MCP server that was removed, disabled or is not in this project (##{ref.id}).", ref)
+                     "#{quote(node)} references a #{resource.label} that was removed, disabled or is not " \
+                     "available to this project (##{ref.id}).", ref)
       end
-      return nil if available_server_ids(node).include?(server.id)
+      return nil if available_ids(node, ref.type).include?(row.id)
 
       issue(node, "error", "ref_not_attached", "instructions",
-            "#{quote(node)} references MCP server #{server.name}, which is not attached to it.", ref,
-            fix: { kind: "attach_mcp_server", mcpServerId: server.id })
+            "#{quote(node)} references #{resource.label} #{row.picker_name}, which is not attached to it.", ref,
+            fix: { :kind => resource.fix_kind, resource.fix_key => row.id })
     end
 
     def step_issue(node, ref, upstream)
@@ -240,9 +259,24 @@ module DataFlow
       (@base_asset_ids + node.asset_ids + @run_input_asset_ids.to_a).uniq
     end
 
-    def available_server_ids(node)
-      inherited = @inherit_all && @project ? @project.mcp_servers.pluck(:id) : []
-      (@base_mcp_server_ids + node.mcp_server_ids + inherited).uniq
+    def available_ids(node, type)
+      (@base_ids.fetch(type) + node.attached.fetch(type) + inherited_ids(type) + server_config_item_ids(node, type)).uniq
+    end
+
+    def inherited_ids(type)
+      return [] unless @inherit_all && @project
+
+      @inherited ||= {}
+      @inherited[type] ||= RESOURCES.fetch(type).visible(@project).pluck(:id)
+    end
+
+    # An attached MCP server whose headers or env name a config item
+    # (`config_item:NAME`) entitles the session to it, as the resolver does.
+    def server_config_item_ids(node, type)
+      return [] unless type == "config_item" && @project
+
+      names = RESOURCES["mcp"].visible(@project).where(id: available_ids(node, "mcp")).flat_map(&:config_item_refs)
+      names.empty? ? [] : ConfigItem.visible_for_project(@project).where(name: names.uniq).pluck(:id)
     end
 
     def assets
@@ -253,10 +287,11 @@ module DataFlow
       end
     end
 
-    def servers
-      @servers ||= begin
-        ids = @nodes.flat_map { |node| InstructionReferences.ids(node.instructions, "mcp") }
-        @project ? MCPServer.visible_for_project(@project).where(id: ids.uniq).index_by(&:id) : {}
+    def rows(type)
+      @rows ||= {}
+      @rows[type] ||= begin
+        ids = @nodes.flat_map { |node| InstructionReferences.ids(node.instructions, type) }.uniq
+        @project && ids.any? ? RESOURCES.fetch(type).visible(@project).where(id: ids).index_by(&:id) : {}
       end
     end
 

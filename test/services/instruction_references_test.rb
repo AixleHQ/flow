@@ -14,6 +14,12 @@ class InstructionReferencesTest < ActiveSupport::TestCase
     assert refs.all?(&:valid?)
   end
 
+  test "tools, skills and config items are referenced by id like assets and servers" do
+    refs = InstructionReferences.scan("Run {{tool:3}} with {{skill:4}}, reading {{config_item:5}}; not {{config_item:API_KEY}}.")
+
+    assert_equal [ [ "tool", 3 ], [ "skill", 4 ], [ "config_item", 5 ], [ "config_item", nil ] ], refs.map { |r| [ r.type, r.id ] }
+  end
+
   test "a body that does not parse is a reference that is not valid" do
     refs = InstructionReferences.scan("{{asset:brand}} {{output:45:}} {{step:-1}}")
 

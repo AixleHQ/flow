@@ -65,12 +65,47 @@ class DataFlow::CheckTest < ActiveSupport::TestCase
     assert_empty issues
   end
 
-  test "a project server counts as attached when the workflow inherits every project resource" do
+  test "everything the project can see counts as attached when the workflow inherits, internal servers included" do
     server = create(:mcp_server, scope: @project, name: "GitHub")
-    @report.update!(instructions: "Use {{mcp:#{server.id}}}.")
+    internal = create(:mcp_server, :internal)
+    tool = create(:tool, scope: @project)
+    @report.update!(instructions: "Use {{mcp:#{server.id}}}, {{mcp:#{internal.id}}} and {{tool:#{tool.id}}}.")
     @workflow.merge_config!(inherit_all_project_resources: true)
 
     assert_empty issues
+  end
+
+  test "a tool, a skill or a config item the session does not receive is not attached, with the fix to attach it" do
+    tool = create(:tool, scope: @project, display_name: "Post summary")
+    skill = create(:skill, scope: @project, title: "House style")
+    item = create(:config_item, :secret, scope: @project, name: "SLACK_TOKEN")
+    @report.update!(instructions: "{{tool:#{tool.id}}} {{skill:#{skill.id}}} {{config_item:#{item.id}}}")
+
+    found = issues
+    assert_equal %w[ref_not_attached] * 3, found.map(&:code)
+    assert_equal [ { kind: "attach_tool", toolId: tool.id }, { kind: "attach_skill", skillId: skill.id },
+                   { kind: "attach_config_item", configItemId: item.id } ], found.map(&:fix)
+    assert_includes found.last.message, "references config item SLACK_TOKEN, which is not attached"
+
+    @report.update!(tool_ids: [ tool.id ], skill_ids: [ skill.id ])
+    @workflow.merge_config!(base_config_item_ids: [ item.id ])
+    assert_empty issues
+  end
+
+  test "a config item an attached MCP server names in its headers counts as attached" do
+    item = create(:config_item, :secret, scope: @project, name: "GH_TOKEN")
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "config_item:GH_TOKEN" })
+    @report.update!(mcp_server_ids: [ server.id ], instructions: "Authenticate with {{config_item:#{item.id}}}.")
+
+    assert_empty issues
+  end
+
+  test "an archived skill or a config item of another project is missing" do
+    skill = create(:skill, scope: @project, archived_at: Time.current)
+    foreign = create(:config_item, scope: create(:project, :standalone))
+    @report.update_column(:instructions, "{{skill:#{skill.id}}} {{config_item:#{foreign.id}}}")
+
+    assert_equal %w[ref_missing ref_missing], codes
   end
 
   test "an asset of another project or a deleted one is missing, never resolved" do

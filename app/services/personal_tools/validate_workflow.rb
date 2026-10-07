@@ -8,7 +8,8 @@ module PersonalTools
                   "tools, skills, MCP servers, assets, repositories and config items exist and are " \
                   "enabled in this project, dependencies form no cycle, every step allows " \
                   "non-interactive runs when a trigger launches the workflow unattended, every " \
-                  "{{asset:…}}/{{output:…}}/{{step:…}}/{{mcp:…}} reference resolves and is attached or " \
+                  "@ reference ({{asset:…}}, {{output:…}}, {{step:…}}, {{mcp:…}}, {{tool:…}}, {{skill:…}}, " \
+                  "{{config_item:…}}) resolves and is attached or " \
                   "upstream, and declared input/output names can be met. " \
                   "Returns errors (must fix) and warnings (worth a look)."
       audience :user

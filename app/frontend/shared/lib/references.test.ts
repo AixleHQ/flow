@@ -35,7 +35,17 @@ describe('scanReferences', () => {
   });
 
   it('leaves other braces and unknown prefixes as text', () => {
-    expect(scanReferences('{{artifact_name}} {{inputs.repo}} {{tool:3}} {{asset:1\n}}')).toEqual([]);
+    expect(scanReferences('{{artifact_name}} {{inputs.repo}} {{agent:3}} {{asset:1\n}}')).toEqual([]);
+  });
+
+  it('reads skill, tool and config item tokens by id', () => {
+    expect(scanReferences('{{skill:4}} {{tool:5}} {{config_item:6}} {{config_item:STAGING}}')).toEqual([
+      { kind: 'skill', token: '{{skill:4}}', from: 0, to: 11, valid: true, id: 4 },
+      { kind: 'tool', token: '{{tool:5}}', from: 12, to: 22, valid: true, id: 5 },
+      { kind: 'config_item', token: '{{config_item:6}}', from: 23, to: 40, valid: true, id: 6 },
+      { kind: 'config_item', token: '{{config_item:STAGING}}', from: 41, to: 64, valid: false },
+    ]);
+    expect(referenceToken.configItem(6)).toBe('{{config_item:6}}');
   });
 
   it('splits an output body at the first colon, so names may contain one', () => {
@@ -54,6 +64,14 @@ describe('brokenReferenceLabel', () => {
     expect(brokenReferenceLabel(step)).toBe('Missing session');
     expect(brokenReferenceLabel(output)).toBe('Undeclared output x.md');
     expect(brokenReferenceLabel(bad)).toBe('Invalid reference');
+  });
+
+  it('names a missing skill, tool and config item by id', () => {
+    const [skill, tool, configItem] = scanReferences('{{skill:4}} {{tool:5}} {{config_item:6}}');
+
+    expect(brokenReferenceLabel(skill)).toBe('Missing skill #4');
+    expect(brokenReferenceLabel(tool)).toBe('Missing tool #5');
+    expect(brokenReferenceLabel(configItem)).toBe('Missing config item #6');
   });
 });
 

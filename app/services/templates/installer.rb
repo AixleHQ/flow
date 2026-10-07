@@ -334,6 +334,9 @@ module Templates
         case type
         when "asset" then (id = @ids["assets"][body]) ? "{{asset:#{id}}}" : package_name("assets", body)
         when "mcp" then (id = @ids["mcp_servers"][body]) ? "{{mcp:#{id}}}" : package_name("mcp_servers", body)
+        when "tool" then (id = @ids["tools"][body]) ? "{{tool:#{id}}}" : package_name("tools", body)
+        when "skill" then (id = @ids["skills"][body]) ? "{{skill:#{id}}}" : package_name("skills", body)
+        when "config_item" then (id = @ids["config_items"][body]) ? "{{config_item:#{id}}}" : body
         when "step" then (id = step_ids[body]) ? "{{step:#{id}}}" : body
         when "output"
           key, name = body.split(":", 2)

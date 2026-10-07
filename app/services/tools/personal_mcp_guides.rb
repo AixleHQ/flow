@@ -418,8 +418,8 @@ module Tools
             to every later step that runs after them, directly or through others.
           - Instructions may hold references written by the builder's `@` picker:
             `{{asset:<id>}}`, `{{output:<step id>:<file>}}`, `{{step:<id>}}`,
-            `{{mcp:<id>}}`. At run time each becomes the file's path or the name the
-            agent sees. Keep every one you did not mean to remove when you rewrite
+            `{{mcp:<id>}}`, `{{tool:<id>}}`, `{{skill:<id>}}`, `{{config_item:<id>}}`.
+            At run time each becomes the file's path or the name the agent sees. Keep every one you did not mean to remove when you rewrite
             instructions; `validate_workflow` reports any that no longer resolve.
 
           Wiring:

@@ -127,11 +127,12 @@ download from the UI or via `GET /api/v1/projects/:id/workflow_runs/:run_id/work
 ## References and the data-flow check
 
 Typing `@` in a session's instructions inserts a reference to an asset, a declared
-output, another session or an MCP server. It is stored as a token with the row's id
-(`{{asset:12}}`, `{{output:45:summary.md}}`, `{{step:45}}`, `{{mcp:7}}`), shown as a
-chip, and replaced with the path or name when the session starts. Picking an item
-attaches the asset or server, or adds Run after, when the session would not otherwise
-get it. Duplicating a workflow or exporting it as a template carries the references.
+output, another session, an MCP server, a tool, a skill or a config item. It is stored
+as a token with the row's id (`{{asset:12}}`, `{{output:45:summary.md}}`, `{{step:45}}`,
+`{{mcp:7}}`, `{{tool:9}}`, `{{skill:4}}`, `{{config_item:3}}`), shown as a chip, and
+replaced with the path or name when the session starts — a config item by its name
+only, never its value. Picking an item attaches it, or adds Run after, when the session
+would not otherwise get it. Duplicating a workflow or exporting it as a template carries the references.
 
 The builder checks the whole workflow as you edit — references that no longer resolve,
 outputs read from a session that does not run first, input and output names that cannot

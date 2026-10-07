@@ -35,9 +35,10 @@ governance, community health — carry none.
 - **Sessions & Runs**: the run page names the workflow version each session
   launched with, and says when the workflow was saved mid-run.
 - **Workflows**: `@` references in session instructions. Typing `@` lists
-  assets, declared outputs, other sessions and MCP servers; picking one inserts
-  a chip and attaches the asset or server, or adds Run after, when the session
-  would not otherwise get it. The agent receives the real path or name. The
+  assets, declared outputs, other sessions, MCP servers, tools, skills and
+  config items; picking one inserts a chip and attaches it, or adds Run after,
+  when the session would not otherwise get it. A config item is named, never
+  given a value. The agent receives the real path or name. The
   builder checks references and input/output names as you edit and lists what
   a run would trip on; a run that would fail for certain does not start.
 - Apache License 2.0, `NOTICE` attribution file, and third-party license

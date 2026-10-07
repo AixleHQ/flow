@@ -102,8 +102,8 @@ A lot of what people try to say in instructions is really a setting. When it's a
 | A specific persona | **Agent** on the step. Its persona becomes "Your role". |
 | A specific CLI or model | **Execution environment** and **Model** on the step |
 | The agent to be *able* to use a tool, skill or MCP server | Attach it on the step or on Base Resources |
-| The agent to *use* that MCP server in this step | **`@` it in the instructions** ("create the issue with @Linear MCP"). Picking it attaches it if it wasn't. Attaching alone doesn't tell the agent it's wanted here. For tools and skills, name them. |
-| The agent to read a secret or variable | Attach the **config item**, and name it in the instructions ("read `STAGING_URL` with `get_config_item`") |
+| The agent to *use* that tool, skill or server in this step | **`@` it in the instructions** ("create the issue with @Linear MCP", "follow @House style"). Picking it attaches it if it wasn't. Attaching alone doesn't tell the agent it's wanted here. |
+| The agent to read a secret or variable | **`@` the config item** ("call the API at @STAGING_URL"). Picking it attaches it, and the agent is told its name and to read it with `get_config_item`. Its value never goes into the instructions. |
 | The agent to read a file | **`@` the asset** in the instructions. Picking it attaches it and the agent gets its path. |
 | A step to wait for another | **Run after** on the step. It also puts the output files of that step, and of every step before it, in `/workspace/assets/`. |
 | A step to fail if a file it needs is missing | **`@` the file** (an asset or an earlier session's output): every reference is checked before the step starts. For a file picked when the run starts, a required **input spec** with its name. |
@@ -118,17 +118,20 @@ The mismatch to avoid is in both directions. Don't attach every server on the pr
 
 ## Referencing things in instructions
 
-Type **`@`** in a session's instructions to open the reference menu. It lists, in three groups:
+Type **`@`** in a session's instructions to open the reference menu. It lists, in groups:
 
 - **Assets**: files attached to the session, the workflow's base assets, the project's and company's other assets, this session's declared outputs, and other sessions' declared outputs;
 - **Sessions**: the other sessions of the workflow;
-- **Connections**: MCP servers.
+- **Connections**: MCP servers;
+- **Tools**: platform and project tools;
+- **Skills**: the project's skills;
+- **Config items**: the project's secrets and variables, by name.
 
 Type after the `@` to filter; arrows and Enter pick, Esc closes. What you pick becomes a chip. Backspace removes the whole chip.
 
 Picking does the wiring for you:
 
-- an asset or MCP server the session doesn't have yet is **attached** to it;
+- an asset, MCP server, tool, skill or config item the session doesn't have yet is **attached** to it;
 - another session's output **adds Run after** to that session when needed. A session that already runs after this one can't be picked: it would be a loop.
 
 When the session starts, each chip becomes what the agent can use:
@@ -140,13 +143,14 @@ When the session starts, each chip becomes what the agent can use:
 | An earlier session's output | where it was put: `` `/workspace/assets/summary.md` `` |
 | A session | `session "Collect sources"` |
 | An MCP server | `the "GitHub" MCP server` |
+| A tool | `` the `post_summary` tool `` — the name it calls the tool by |
+| A skill | `` the "House style" skill (`house-style`) `` |
+| A config item | `` the `STAGING_URL` config item (read it with `get_config_item`) `` — the name, never the value |
 
-A chip that no longer points at anything (the asset was deleted, the server detached, the session removed) turns red. The builder lists it under the instructions, a run won't start with it, and the step fails before its session starts instead of letting the agent improvise.
+A chip that no longer points at anything (the asset was deleted, the server or skill detached, the session removed) turns red. The builder lists it under the instructions, a run won't start with it, and the step fails before its session starts instead of letting the agent improvise.
 
 Still written by hand:
 
-- **Tools and skills:** use the name as it appears in the step's resources ("the `chat_post_message` tool").
-- **Config items:** use the item's name exactly, and tell the agent to read it with `get_config_item`.
 - **Board objects:** the agent's board tools take ids. If the step works on "the card that triggered this run", say that. The agent has it in its context.
 - **`{{artifact_name}}`** or any other braces you type **are not replaced by anything**. The builder warns about them.
 - **`{{inputs.<key>}}`** is different, and real, but only in **templates**. It is filled in once, when the template is installed, and a missing input becomes empty text. It is never resolved during a run.
@@ -289,7 +293,7 @@ Then re-read the card, confirm its column, and call `finish_session`.
 - **`{{summary.md}}`, `{{artifact_name}}` or any other braces you type.** They are not substituted. Use `@`, or write the path.
 - **`@someone` that didn't become a chip.** Only what you pick from the menu binds to anything.
 - **Raw ids pasted from another page**, such as a step id or asset id, "so the agent can find it". The agent can't resolve them. Give paths and names.
-- **Naming a server, tool or config item that isn't attached.** The agent can't reach it.
+- **Naming a server, tool, skill or config item in plain text without attaching it.** The agent can't reach it. `@` it instead: picking attaches it.
 - **"Ask me if anything is unclear"** in an auto-run step. The rules forbid questions. Tell it what to do instead.
 - **Instructions that contradict the form**, such as "skip this if the report exists" while the skip policy is `never`, or "retry three times" while retries are 0. The form wins.
 - **Relying on a required sub-step to stop the agent.** It won't. Say it in the instructions.

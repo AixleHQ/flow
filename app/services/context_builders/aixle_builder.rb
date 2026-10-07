@@ -119,8 +119,9 @@ module ContextBuilders
           `output_asset_specs`. A step receives the outputs of every step it runs
           after, directly or through others.
         - **References** in instructions (`{{asset:<id>}}`, `{{output:<step id>:<file>}}`,
-          `{{step:<id>}}`, `{{mcp:<id>}}`) come from the builder's `@` picker and turn
-          into paths and names at run time. Preserve them when you edit instructions.
+          `{{step:<id>}}`, `{{mcp:<id>}}`, `{{tool:<id>}}`, `{{skill:<id>}}`,
+          `{{config_item:<id>}}`) come from the builder's `@` picker and turn into paths
+          and names at run time. Preserve them when you edit instructions.
         - **Repositories** are cloned into `/workspace/repo/<name>/` with
           authenticated git access (branches, commits, PRs). They come from the run's
           pick, else the step's `repository_ids` plus the workflow's

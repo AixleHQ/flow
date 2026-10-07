@@ -47,20 +47,31 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     workflow = @source.workflows.sole
     first, second = workflow.steps.order(:position).to_a.first(2)
     sentry = @source.mcp_servers.find_by!(name: "Sentry")
+    skill = @source.skills.find_by!(name: "house-style")
+    org = @source.config_items.find_by!(name: "SENTRY_ORG")
+    board_tool = Tool.find_by!(name: "board_add_comment")
     first.update!(output_asset_specs: [ { "name" => "triage.md" } ])
     second.update!(mcp_server_ids: second.mcp_server_ids | [ sentry.id ], depends_on_step_ids: [ first.id ],
-                   instructions: "Read {{output:#{first.id}:triage.md}} from {{step:#{first.id}}}; ask {{mcp:#{sentry.id}}}.")
+                   skill_ids: second.skill_ids | [ skill.id ], config_item_ids: second.config_item_ids | [ org.id ],
+                   tool_ids: second.tool_ids | [ board_tool.id ],
+                   instructions: "Read {{output:#{first.id}:triage.md}} from {{step:#{first.id}}}; ask {{mcp:#{sentry.id}}}. " \
+                                 "Use {{skill:#{skill.id}}}, {{tool:#{board_tool.id}}} and {{config_item:#{org.id}}}.")
 
     result = export
     exported = result.package.definition["workflows"].sole["steps"].find { |step| step["name"] == second.name }
 
-    assert_match(/\ARead \{\{output:[a-z][a-z0-9_]*:triage\.md\}\} from \{\{step:[a-z][a-z0-9_]*\}\}; ask \{\{mcp:[a-z][a-z0-9_]*\}\}\.\z/,
+    assert_match(/\ARead \{\{output:[a-z][a-z0-9_]*:triage\.md\}\} from \{\{step:[a-z][a-z0-9_]*\}\}; ask \{\{mcp:[a-z][a-z0-9_]*\}\}\. /,
+                 exported["instructions"])
+    assert_match(/Use \{\{skill:house_style\}\}, \{\{tool:board_add_comment\}\} and \{\{config_item:SENTRY_ORG\}\}\.\z/,
                  exported["instructions"])
 
     copy = install(result.package).project
     copy_first, copy_second = copy.workflows.sole.steps.order(:position).to_a.first(2)
     copy_sentry = copy.mcp_servers.find_by!(name: "Sentry")
-    assert_equal "Read {{output:#{copy_first.id}:triage.md}} from {{step:#{copy_first.id}}}; ask {{mcp:#{copy_sentry.id}}}.",
+    copy_skill = copy.skills.find_by!(name: "house-style")
+    copy_org = copy.config_items.find_by!(name: "SENTRY_ORG")
+    assert_equal "Read {{output:#{copy_first.id}:triage.md}} from {{step:#{copy_first.id}}}; ask {{mcp:#{copy_sentry.id}}}. " \
+                 "Use {{skill:#{copy_skill.id}}}, {{tool:#{board_tool.id}}} and {{config_item:#{copy_org.id}}}.",
                  copy_second.instructions
   end
 

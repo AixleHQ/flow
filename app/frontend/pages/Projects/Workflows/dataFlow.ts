@@ -4,7 +4,10 @@ import type { Step } from '@/types/generated';
 export type IssueFix =
   | { kind: 'add_dependency'; stepKey: string }
   | { kind: 'attach_asset'; assetId: number }
-  | { kind: 'attach_mcp_server'; mcpServerId: number };
+  | { kind: 'attach_mcp_server'; mcpServerId: number }
+  | { kind: 'attach_skill'; skillId: number }
+  | { kind: 'attach_tool'; toolId: number }
+  | { kind: 'attach_config_item'; configItemId: number };
 
 export interface WorkflowIssue {
   severity: 'error' | 'warning';
