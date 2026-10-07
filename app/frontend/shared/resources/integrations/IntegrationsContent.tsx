@@ -22,11 +22,6 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
-  IconBrandAzure,
-  IconBrandGithub,
-  IconBrandJira,
-  IconBrandSlack,
-  IconBrandTeams,
   IconCheck,
   IconChevronDown,
   IconChevronRight,
@@ -41,7 +36,6 @@ import {
   IconRefresh,
   IconSearch,
   IconSettings,
-  IconTicket,
   IconTrash,
   IconWebhook,
 } from '@tabler/icons-react';
@@ -54,6 +48,7 @@ import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 import { EmptyState } from 'shared/ui/EmptyState';
+import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -103,24 +98,6 @@ interface IntegrationsContentProps {
   // Absent on the company page.
   teams?: TeamsProps;
 }
-
-const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
-const CoderIcon = ({ size = 20 }: { size?: number } = {}) => (
-  <img src="/images/coder.svg" alt="Coder" width={size} height={size} />
-);
-
-const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number }) => {
-  if (provider === 'github') return <IconBrandGithub size={size} />;
-  if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
-  if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
-  if (provider === 'slack') return <IconBrandSlack size={size} />;
-  if (provider === 'teams') return <IconBrandTeams size={size} />;
-  if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
-  if (provider === 'jira') return <IconBrandJira size={size} />;
-  if (provider === 'linear') return <IconLayoutKanban size={size} />;
-  if (provider === 'youtrack') return <IconTicket size={size} />;
-  return <IconLink size={size} />;
-};
 
 const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub',
@@ -511,42 +488,48 @@ export const IntegrationsContent = ({
                 </Button>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                <Menu.Item leftSection={<IntegrationLogo provider="github" />} onClick={handleConnectGithub}>
                   GitHub
                 </Menu.Item>
-                <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                <Menu.Item leftSection={<IntegrationLogo provider="gitlab" />} onClick={() => setGitlabOpen(true)}>
                   GitLab
                 </Menu.Item>
-                <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                <Menu.Item leftSection={<IntegrationLogo provider="coder" />} onClick={() => setCoderOpen(true)}>
                   Coder
                 </Menu.Item>
                 {isProjectContext && azureAvailable && (
-                  <Menu.Item leftSection={<IconBrandAzure size={16} />} onClick={() => setAzureOpen(true)}>
+                  <Menu.Item
+                    leftSection={<IntegrationLogo provider="azure_devops" />}
+                    onClick={() => setAzureOpen(true)}
+                  >
                     Azure DevOps
                   </Menu.Item>
                 )}
                 {jiraAvailable && (
-                  <Menu.Item leftSection={<IconBrandJira size={16} />} onClick={() => setJiraOpen(true)}>
+                  <Menu.Item leftSection={<IntegrationLogo provider="jira" />} onClick={() => setJiraOpen(true)}>
                     Jira
                   </Menu.Item>
                 )}
                 {linearAvailable && (
-                  <Menu.Item leftSection={<IconLayoutKanban size={16} />} onClick={() => setLinearOpen(true)}>
+                  <Menu.Item leftSection={<IntegrationLogo provider="linear" />} onClick={() => setLinearOpen(true)}>
                     Linear
                   </Menu.Item>
                 )}
                 {youtrackAvailable && (
-                  <Menu.Item leftSection={<IconTicket size={16} />} onClick={() => setYoutrackOpen(true)}>
+                  <Menu.Item
+                    leftSection={<IntegrationLogo provider="youtrack" />}
+                    onClick={() => setYoutrackOpen(true)}
+                  >
                     YouTrack
                   </Menu.Item>
                 )}
                 {slackAvailable && (
-                  <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                  <Menu.Item leftSection={<IntegrationLogo provider="slack" />} onClick={handleConnectSlack}>
                     Slack
                   </Menu.Item>
                 )}
                 {teamsAvailable && (
-                  <Menu.Item leftSection={<IconBrandTeams size={16} />} onClick={handleConnectTeams}>
+                  <Menu.Item leftSection={<IntegrationLogo provider="teams" />} onClick={handleConnectTeams}>
                     Microsoft Teams
                   </Menu.Item>
                 )}
@@ -606,19 +589,31 @@ export const IntegrationsContent = ({
               action={
                 canExecute && (
                   <Group gap="sm" justify="center" wrap="wrap">
-                    <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                    <Button
+                      variant="outline"
+                      leftSection={<IntegrationLogo provider="github" />}
+                      onClick={handleConnectGithub}
+                    >
                       GitHub
                     </Button>
-                    <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                    <Button
+                      variant="outline"
+                      leftSection={<IntegrationLogo provider="gitlab" />}
+                      onClick={() => setGitlabOpen(true)}
+                    >
                       GitLab
                     </Button>
-                    <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                    <Button
+                      variant="outline"
+                      leftSection={<IntegrationLogo provider="coder" />}
+                      onClick={() => setCoderOpen(true)}
+                    >
                       Coder
                     </Button>
                     {isProjectContext && azureAvailable && (
                       <Button
                         variant="outline"
-                        leftSection={<IconBrandAzure size={16} />}
+                        leftSection={<IntegrationLogo provider="azure_devops" />}
                         onClick={() => setAzureOpen(true)}
                       >
                         Azure DevOps
@@ -627,7 +622,7 @@ export const IntegrationsContent = ({
                     {jiraAvailable && (
                       <Button
                         variant="outline"
-                        leftSection={<IconBrandJira size={16} />}
+                        leftSection={<IntegrationLogo provider="jira" />}
                         onClick={() => setJiraOpen(true)}
                       >
                         Jira
@@ -636,7 +631,7 @@ export const IntegrationsContent = ({
                     {linearAvailable && (
                       <Button
                         variant="outline"
-                        leftSection={<IconLayoutKanban size={16} />}
+                        leftSection={<IntegrationLogo provider="linear" />}
                         onClick={() => setLinearOpen(true)}
                       >
                         Linear
@@ -645,19 +640,27 @@ export const IntegrationsContent = ({
                     {youtrackAvailable && (
                       <Button
                         variant="outline"
-                        leftSection={<IconTicket size={16} />}
+                        leftSection={<IntegrationLogo provider="youtrack" />}
                         onClick={() => setYoutrackOpen(true)}
                       >
                         YouTrack
                       </Button>
                     )}
                     {slackAvailable && (
-                      <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                      <Button
+                        variant="outline"
+                        leftSection={<IntegrationLogo provider="slack" />}
+                        onClick={handleConnectSlack}
+                      >
                         Slack
                       </Button>
                     )}
                     {teamsAvailable && (
-                      <Button variant="outline" leftSection={<IconBrandTeams size={16} />} onClick={handleConnectTeams}>
+                      <Button
+                        variant="outline"
+                        leftSection={<IntegrationLogo provider="teams" />}
+                        onClick={handleConnectTeams}
+                      >
                         Microsoft Teams
                       </Button>
                     )}
@@ -703,7 +706,11 @@ export const IntegrationsContent = ({
                             flexShrink: 0,
                           }}
                         >
-                          <ProviderIcon provider={integration.provider} />
+                          <IntegrationLogo
+                            provider={integration.provider}
+                            size={18}
+                            fallback={<IconLink size={18} />}
+                          />
                         </Box>
                         <Box style={{ minWidth: 0 }}>
                           <Text fz={14} fw={500} c="var(--app-text-primary)" truncate>

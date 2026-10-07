@@ -415,9 +415,7 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    // Open the GitLab connect modal from the empty-state action (button labeled "GitLab",
-    // whose accessible name also includes the GitLab icon's alt text).
-    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
 
     const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
     await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-secret-token');
@@ -436,7 +434,7 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
     const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
     await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-expired');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
@@ -455,7 +453,7 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
 
     const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
     expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
@@ -722,9 +720,7 @@ describe('IntegrationsContent', () => {
   describe('Coder connect modal', () => {
     const openCoderModal = async () => {
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-      // The Coder menu item's icon is an <img alt="Coder">, so its accessible name includes
-      // the alt text in addition to the label — match on a substring.
-      await userEvent.click(await screen.findByRole('menuitem', { name: /Coder/i }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Coder' }));
       return screen.findByRole('dialog', { name: /Connect Coder/i });
     };
 
@@ -910,7 +906,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
       const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
       await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
@@ -924,7 +920,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
       const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
       await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-draft');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
@@ -934,7 +930,7 @@ describe('IntegrationsContent', () => {
       await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
 
       await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect GitLab/i })).not.toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
       const reopened = await screen.findByRole('dialog', { name: /Connect GitLab/i });
       expect(within(reopened).getByPlaceholderText('glpat-...')).toHaveValue('');
     });
@@ -945,7 +941,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
       const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
       // Typing the token then Enter exercises the onKeyDown submit path (no button click).
       await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-enter-token{Enter}');
@@ -1023,7 +1019,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      expect(screen.getByRole('button', { name: /GitLab/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'GitLab' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Slack' })).not.toBeInTheDocument();
     });
 

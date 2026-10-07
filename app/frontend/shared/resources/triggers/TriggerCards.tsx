@@ -2,8 +2,6 @@ import { Link } from '@inertiajs/react';
 import { Switch } from '@mantine/core';
 import {
   IconBolt,
-  IconBrandSlack,
-  IconBrandTeams,
   IconClock,
   IconColumns,
   IconMessage,
@@ -15,14 +13,11 @@ import {
   IconWebhook,
 } from '@tabler/icons-react';
 
+import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
+
 import { creatorLabel, creatorTone, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
 import type { ChatProviderOption, Trigger } from './types';
-
-const CHAT_ICONS: Record<string, typeof IconBolt> = {
-  slack: IconBrandSlack,
-  teams: IconBrandTeams,
-};
 
 const SOURCE_ICONS: Record<string, typeof IconBolt> = {
   board: IconColumns,
@@ -30,6 +25,12 @@ const SOURCE_ICONS: Record<string, typeof IconBolt> = {
   chat: IconMessage,
   webhook: IconWebhook,
   tracker: IconTicket,
+};
+
+const integrationProvider = (t: Trigger, source: string, trackers: TrackerOption[]) => {
+  if (source === 'chat') return t.chat_provider;
+  if (source === 'tracker') return trackers.find((tr) => tr.id === t.project_tracker_id)?.provider;
+  return null;
 };
 
 const SOURCE_BADGES: Record<string, string> = {
@@ -77,7 +78,8 @@ export function TriggerCards({
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
       {triggers.map((t) => {
         const source = triggerSource(t);
-        const Icon = (source === 'chat' ? CHAT_ICONS[t.chat_provider ?? ''] : null) ?? SOURCE_ICONS[source] ?? IconBolt;
+        const SourceIcon = SOURCE_ICONS[source] ?? IconBolt;
+        const provider = integrationProvider(t, source, trackers);
         const isDisabled = t.enabled === false;
         const href = workflowHref?.(t);
         const title = triggerTitle(t);
@@ -112,7 +114,7 @@ export function TriggerCards({
                   flexShrink: 0,
                 }}
               >
-                <Icon size={16} />
+                <IntegrationLogo provider={provider} fallback={<SourceIcon size={16} />} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
