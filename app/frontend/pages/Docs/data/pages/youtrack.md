@@ -22,7 +22,8 @@ needs **YouTrack 2026.2 or later**.
 A YouTrack administrator (it takes the *Low-level Admin Write* permission):
 
 1. **Administration → Apps → Add app → Browse JetBrains Marketplace**.
-2. Find **Aixle Flow** and install it.
+2. Find **Aixle Flow** ([its Marketplace page](https://plugins.jetbrains.com/plugin/34863-aixle-flow))
+   and install it.
 
 The app talks to `https://flow.aixle.com`. A staging or self-hosted Flow sets
 its own address in the app's settings (**Administration → Apps → Aixle Flow →
