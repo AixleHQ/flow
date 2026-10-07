@@ -140,7 +140,6 @@ function CancelModal({
           value={reason}
           onChange={setReason}
           clearable
-          comboboxProps={{ withinPortal: false }}
         />
         {reason === 'other' && (
           <Textarea
