@@ -77,7 +77,7 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
 
     assert_not refused.valid?
     message = refused.errors[:max_sessions].to_sentence
-    assert_match(/company limit of 4/, message)
+    assert_match(/company's 4 workers/, message)
     assert_match(/4 of 4/, message)
   end
 
