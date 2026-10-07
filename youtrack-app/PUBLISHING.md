@@ -34,7 +34,10 @@ days, and YouTrack never updates an installed app by itself. Plan releases accor
 ## First upload
 
 1. **Upload plugin** → vendor **Dualboot Partners**.
-2. **Plugin for: YouTrack**; upload `aixle-flow-<version>.zip`.
+2. **Plugin for: YouTrack**; upload `aixle-flow-<version>.zip`. If Marketplace answers that "the
+   plugin root directory must not contain multiple files" and asks for a `.jar` in `lib`, it has
+   validated the file as an IntelliJ plugin: the product was not set to YouTrack. A YouTrack app
+   keeps its files at the root of the ZIP, as JetBrains' own apps do.
 3. **License:** Apache-2.0 (link to `LICENSE`); **Source code:** the `youtrack-app` URL above.
 4. **Tags:** integration/automation tags offered by the form.
 5. **Channel:** Stable. Do not set **Hidden**: a hidden app is left out of search, and YouTrack
