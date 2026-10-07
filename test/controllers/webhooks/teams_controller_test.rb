@@ -50,6 +50,12 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 0, ReceivedWebhook.count
   end
 
+  test "a slash command, sent only to the bot, is taken without a mention" do
+    targeted = teams_activity(text: "help", mention: false).deep_merge("recipient" => { "isTargeted" => true })
+
+    assert_enqueued_jobs(1, only: Webhooks::ProcessEventJob) { deliver(targeted) }
+  end
+
   test "a 1:1 message needs no mention; a bot's own message is never taken" do
     deliver(teams_activity(conversation_type: "personal", mention: false))
     deliver(teams_activity(conversation_type: "personal", mention: false, id: "other",

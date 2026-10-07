@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): 1, 2, 3, 4 and 7 pass; 5 (slash commands) is open
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): 1, 2, 3, 4 and 7 pass; 5 (slash commands) is built and being verified on staging
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1201,7 +1201,7 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 | File writes (§8.5) | Only into the channel the run was started from; any other target gets project-asset links | Same |
 | Audit of file calls (§8.5, §11) | Each Graph file read and write is logged with tenant, drive and item ids; there is no audit table | No audit facility exists in the app yet |
 | Distribution (decision 6, §6.3) | The approval sign-in also asks for delegated `AppCatalog.ReadWrite.All` and publishes the package to the organization's catalog as the approving administrator (`POST /appCatalogs/teamsApps`, or a new app definition for a newer version). A role that cannot publish falls back to the downloadable package | Product owner, 2026-10-06: no manual upload. Microsoft has no application permission for catalog publishing |
-| App manifest (§6.3) | Schema 1.24, with the `help` command list; no `slash` trigger and no targeted messages | Spike 5 has not run; 1.24 is what the spikes verified |
+| App manifest (§6.3) | Schema 1.30 with `supportsTargetedMessages` and `help` on the `slash` and `mention` triggers; `/help` is answered as a targeted (private) message. A targeted message other than help starts nothing and gets a private hint to mention the app | A private request must not produce a public status card |
 
 **Verified live on staging, 2026-10-06/07**, with a second Microsoft 365 tenant:
 

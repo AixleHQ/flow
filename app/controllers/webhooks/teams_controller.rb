@@ -56,6 +56,8 @@ class Webhooks::TeamsController < ActionController::API
     return false unless activity["type"] == "message"
     return false if activity.dig("from", "id").to_s.start_with?("28:")
     return true if activity.dig("conversation", "conversationType") == "personal"
+    # A slash command arrives as a message only the bot was sent, with no mention.
+    return true if activity.dig("recipient", "isTargeted") == true
 
     Array(activity["entities"]).any? do |entity|
       entity["type"] == "mention" && entity.dig("mentioned", "id") == activity.dig("recipient", "id")

@@ -118,6 +118,11 @@ class TriggerEngine
         return []
       end
 
+      if Chat.private_request?(event)
+        Chat.answer_private(event)
+        return []
+      end
+
       matched = TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }
       if matched.empty? && Chat.event?(event)
         Chat.answer_help(event)

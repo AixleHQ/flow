@@ -21,7 +21,7 @@ module Chat
   RESERVED_COMMAND = %r{\A/?help\z}i
 
   # Event data that routes a message rather than describing it.
-  TRANSPORT_KEYS = %w[provider workspace conversation thread_id message_id actor file_refs url].freeze
+  TRANSPORT_KEYS = %w[provider workspace conversation thread_id message_id actor file_refs url targeted requester].freeze
 
   module_function
 
@@ -54,6 +54,14 @@ module Chat
 
   def answer_help(event)
     provider_for(event)&.answer_help(event) || false
+  end
+
+  def private_request?(event)
+    provider_for(event)&.private_request?(event) || false
+  end
+
+  def answer_private(event)
+    provider_for(event)&.answer_private(event) || false
   end
 
   def run_context(event)

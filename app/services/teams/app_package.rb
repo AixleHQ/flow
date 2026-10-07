@@ -8,8 +8,8 @@ module Teams
   module AppPackage
     # Raised whenever the manifest changes, so an organization can tell its
     # installed package is older than the one Aixle offers.
-    VERSION = "1.0.0"
-    SCHEMA = "1.24"
+    VERSION = "1.1.0"
+    SCHEMA = "1.30"
     COLOR_ICON = Rails.root.join("public/icon-192.png")
     OUTLINE_ICON = Rails.root.join("app/assets/images/teams/outline.png")
 
@@ -54,7 +54,10 @@ module Teams
           "scopes" => %w[personal team groupChat],
           "supportsFiles" => true,
           "isNotificationOnly" => false,
-          "commandLists" => [ { "scopes" => %w[personal team groupChat],
+          # `/help` in a channel or group chat is a private message to the bot,
+          # answered privately (Teams' targeted messages).
+          "supportsTargetedMessages" => true,
+          "commandLists" => [ { "scopes" => %w[personal team groupChat], "triggers" => %w[slash mention],
                                 "commands" => [ { "title" => "help", "description" => "What this conversation can start" } ] } ]
         } ],
         "webApplicationInfo" => { "id" => app_id, "resource" => "api://#{Settings.domain}/botid-#{app_id}" },

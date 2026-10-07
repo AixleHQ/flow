@@ -50,7 +50,10 @@ module Chat
           # Where each file's bytes are, read at fire time and scrubbed after
           # (Webhooks::ProcessEventJob): a 1:1 download link needs no token.
           "file_refs" => file_refs,
-          "url" => message_url(endpoint, activity, kind)
+          "url" => message_url(endpoint, activity, kind),
+          # Sent only to the bot (a slash command): answered only to its sender.
+          "targeted" => (true if activity.dig("recipient", "isTargeted") == true),
+          "requester" => ({ "id" => activity.dig("from", "id"), "name" => activity.dig("from", "name") } if activity.dig("recipient", "isTargeted") == true)
         }.compact
       }
     end
@@ -77,6 +80,12 @@ module Chat
     end
 
     def answer_help(event) = Teams::HelpResponder.call(event)
+
+    # A private message starts nothing: a run's status card and replies would be
+    # posted where everyone sees them. It is told how to start one instead.
+    def private_request?(event) = event.data.to_h["targeted"] == true
+
+    def answer_private(event) = Teams::HelpResponder.call(event, hint: true)
 
     def report_failure(run) = Teams::RunFailureNotifier.call(run)
 

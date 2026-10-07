@@ -32,6 +32,10 @@ class Teams::AppPackageTest < ActiveSupport::TestCase
     assert_equal TEAMS_APP_ID, manifest.dig("webApplicationInfo", "id")
     assert_equal %w[ChannelMessage.Read.Group ChatMessage.Read.Chat],
                  manifest.dig("authorization", "permissions", "resourceSpecific").pluck("name")
+    assert_equal "1.30", manifest["manifestVersion"]
+    bot = manifest.dig("bots", 0)
+    assert bot["supportsTargetedMessages"]
+    assert_equal [ %w[slash mention], [ "help" ] ], [ bot.dig("commandLists", 0, "triggers"), bot.dig("commandLists", 0, "commands").pluck("title") ]
   end
 
   test "the Teams app id follows the bot, so a reinstall updates the same app" do

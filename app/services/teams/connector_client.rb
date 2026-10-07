@@ -20,6 +20,14 @@ module Teams
       post(reference, "#{conversation_path(reference)}/activities", activity)
     end
 
+    # A message only `recipient` sees, tied to the private message it answers
+    # (Teams' targeted messages, with prompt preview).
+    def send_targeted(reference, activity, recipient:, about: nil)
+      entities = about.present? ? [ { type: "targetedMessageInfo", messageId: about } ] : nil
+      request(reference, :post, "#{conversation_path(reference)}/activities?isTargetedActivity=true",
+              stamped(reference, activity).merge(recipient: recipient, entities: entities).compact)
+    end
+
     def update(reference, activity_id, activity)
       request(reference, :put, "#{conversation_path(reference)}/activities/#{escape(activity_id)}",
               stamped(reference, activity).merge(id: activity_id))

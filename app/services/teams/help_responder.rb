@@ -6,13 +6,22 @@ module Teams
   module HelpResponder
     module_function
 
-    def call(event)
+    PRIVATE_HINT = "Only you can see this. To start a workflow, mention Aixle Flow in the conversation, so " \
+                   "everyone can follow the run. `/help` lists what this conversation can start."
+
+    def call(event, hint: false)
       data = event.data.to_h
       conversation = Notifier.conversation_for(data["integration_id"], data.dig("conversation", "id"))
       return false if conversation.nil?
 
-      Notifier.post(conversation, text: catalog(Chat::HelpCatalog.bindings(event)),
-                                  thread_id: data["thread_id"])
+      text = hint ? PRIVATE_HINT : catalog(Chat::HelpCatalog.bindings(event))
+      if data["targeted"]
+        ConnectorClient.send_targeted(conversation.teams_reference(thread_id: data["thread_id"]),
+                                      { type: "message", textFormat: "markdown", text: text },
+                                      recipient: data["requester"], about: data["message_id"])
+      else
+        Notifier.post(conversation, text: text, thread_id: data["thread_id"])
+      end
       true
     rescue StandardError => e
       Rails.logger.error("[Teams::HelpResponder] event ##{event&.id}: #{e.message}")

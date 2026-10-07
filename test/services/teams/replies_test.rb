@@ -44,6 +44,40 @@ class Teams::RepliesTest < ActiveSupport::TestCase
     assert_requested stub
   end
 
+  def targeted_event(text)
+    event(text: text).tap do |e|
+      e.update!(data: e.data.merge("targeted" => true, "message_id" => "1700000000009",
+                                   "requester" => { "id" => "29:user", "name" => "Olo Brockhouse" }))
+    end
+  end
+
+  test "/help in a channel is answered only to the person who asked" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             filter_predicate: { "provider" => "teams", "text" => "digest" })
+    private_reply = stub_request(:post, "#{@thread}?isTargetedActivity=true").with { |request|
+      body = JSON.parse(request.body)
+      body["recipient"] == { "id" => "29:user", "name" => "Olo Brockhouse" } &&
+        body["entities"] == [ { "type" => "targetedMessageInfo", "messageId" => "1700000000009" } ] &&
+        body["text"].include?("**digest**")
+    }.to_return(status: 201, body: { id: "2" }.to_json)
+
+    TriggerEngine.dispatch(targeted_event("help"))
+
+    assert_requested private_reply
+  end
+
+  test "a private message to the bot starts nothing and says how to start a run" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             filter_predicate: { "provider" => "teams", "text" => "digest" })
+    hint = stub_request(:post, "#{@thread}?isTargetedActivity=true")
+           .with(body: hash_including("text" => /mention Aixle Flow/)).to_return(status: 201, body: { id: "3" }.to_json)
+    WorkflowService.expects(:enqueue).never
+
+    TriggerEngine.dispatch(targeted_event("digest"))
+
+    assert_requested hint
+  end
+
   test "a failed Teams-started run says so in its thread" do
     run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, shared_context: {
       "chat" => { "provider" => "teams", "integration_id" => @integration.id,

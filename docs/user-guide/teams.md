@@ -106,10 +106,15 @@ The pattern is matched against the message without the mention, ignoring case.
 
 ### Asking what is available: help
 
-Mention the app with `help`. It replies with the triggers that apply to that
-conversation, in every project of the company. It also replies this way when a
-message matches no trigger. `help` is reserved, so no trigger can use it as a
-pattern.
+Mention the app with `help`, or type `/` in a channel or group chat and pick
+**help** from Aixle Flow. It replies with the triggers that apply to that
+conversation, in every project of the company; asked with `/help`, the reply is
+private, visible only to you. It also replies this way when a mention matches no
+trigger. `help` is reserved, so no trigger can use it as a pattern.
+
+A message sent to the app privately (through `/`) never starts a workflow: the
+run's status card would appear where everyone sees it. The app answers that
+mentioning it is how to start one.
 
 ### The status card
 

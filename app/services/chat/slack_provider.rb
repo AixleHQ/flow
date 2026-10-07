@@ -119,6 +119,10 @@ module Chat
     # such install, so the caller falls back to whatever the event already names.
     def scrub(data) = data
 
+    def private_request?(_event) = false
+
+    def answer_private(_event) = false
+
     def scrub_payload(payload) = payload
 
     def ingest_files(event, project)
