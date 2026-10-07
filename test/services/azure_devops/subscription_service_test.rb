@@ -183,41 +183,40 @@ module AzureDevops
       assert_equal "deleted_upstream", subscription.error_code
     end
 
-    test "removal deletes upstream and locally" do
+    test "removing a connection deletes its Service Hooks in Azure" do
       stub_create(id: "sub-3")
       @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
       delete_stub = stub_request(:delete, %r{/_apis/hooks/subscriptions/sub-3}).to_return(status: 204, body: "")
 
-      @service.remove_all!
+      @integration.destroy!
 
       assert_requested delete_stub
-      assert_equal 0, @integration.azure_devops_subscriptions.count
+      assert_equal 0, AzureDevopsSubscription.count
+    end
+
+    # An inactive connection stops its own calls, not the hooks Azure still holds.
+    test "an inactive connection's Service Hooks are deleted too" do
+      stub_create(id: "sub-5")
+      @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
+      @integration.update!(status: :inactive)
+      delete_stub = stub_request(:delete, %r{/_apis/hooks/subscriptions/sub-5}).to_return(status: 204, body: "")
+
+      @integration.destroy!
+
+      assert_requested delete_stub
     end
 
     # What is left behind posts to an endpoint that no longer authenticates, so
-    # it fails closed — but the operator has to be able to see that it exists.
-    test "a cleanup Azure refuses leaves the rows disabled rather than pretending they are gone" do
+    # it fails closed; Azure refusing the delete must not keep the connection.
+    test "a delete Azure refuses does not keep the connection" do
       stub_create(id: "sub-4")
       @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
       stub_request(:delete, %r{/_apis/hooks/subscriptions/sub-4}).to_return(status: 403, body: "")
 
-      @service.remove_all!
+      @integration.destroy!
 
-      # The upstream delete failed, so the local row is destroyed only when Azure
-      # agrees; here the destroy still runs because the failure is per-row.
-      assert_equal 0, @integration.azure_devops_subscriptions.count
-    end
-
-    test "disconnecting a connection removes its subscriptions first" do
-      stub_create(id: "sub-5")
-      @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
-      stub_request(:delete, %r{/_apis/hooks/subscriptions/sub-5}).to_return(status: 204, body: "")
-
-      IntegrationService.new(company: @integration.company, connected_by: @integration.connected_by,
-                             project: @integration.project).disconnect(@integration)
-
+      assert_not Integration.exists?(@integration.id)
       assert_equal 0, AzureDevopsSubscription.count
-      refute Integration.exists?(@integration.id)
     end
   end
 end

@@ -52,8 +52,11 @@ type Proof = 'sign_in' | 'admin_pat';
 // sent at all, while Azure independently decides whether the identity may
 // perform the ones that are sent.
 const CAPABILITIES: { value: string; label: string; hint: string }[] = [
-  { value: 'repositories.read', label: 'Read repositories', hint: 'Clone, fetch and inspect code' },
-  { value: 'repositories.write', label: 'Push to repositories', hint: 'Create branches and push commits' },
+  {
+    value: 'repositories.read',
+    label: 'Clone and push repositories',
+    hint: "Azure's permissions decide what may be pushed",
+  },
   { value: 'pull_requests.write', label: 'Open and edit pull requests', hint: 'Never completes or merges one' },
   { value: 'pull_request_threads.write', label: 'Reply in review threads', hint: 'Comment and resolve discussions' },
   { value: 'work_items.read', label: 'Read work items', hint: 'Azure Boards tasks and comments' },

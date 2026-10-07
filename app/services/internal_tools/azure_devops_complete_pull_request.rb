@@ -4,9 +4,8 @@ module InternalTools
   # The one agent action that changes the default branch. Three things guard it,
   # and none of them is optional:
   #
-  # - it needs the `pull_requests.complete` capability, which a new connection
-  #   does NOT get — merging is not something to acquire by accepting a form's
-  #   defaults;
+  # - it needs the `pull_requests.complete` capability. A new connection gets it
+  #   by default, so unticking it is the way to keep agents from merging;
   # - `expected_commit` is required, so a push that lands between reading the
   #   pull request and completing it makes Azure refuse rather than merge code
   #   the agent never saw;
