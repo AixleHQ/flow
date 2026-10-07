@@ -436,6 +436,11 @@ Rails.application.routes.draw do
     get "integrations/teams/callback", to: "integrations/teams_approvals#callback", as: :teams_sign_in_callback
     get "integrations/teams/file_access/callback", to: "integrations/teams_approvals#file_access_callback",
                                                    as: :teams_file_access_callback
+    # A Teams sender linking their Teams account to their Aixle one. The Microsoft
+    # sign-in returns through the approval callback, which hands it on here.
+    get "integrations/teams/link/:token", to: "integrations/teams_links#show", as: :teams_link
+    post "integrations/teams/link/:token/sign_in", to: "integrations/teams_links#sign_in", as: :teams_link_sign_in
+    get "integrations/teams/link_callback", to: "integrations/teams_links#complete", as: :teams_link_callback
 
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,

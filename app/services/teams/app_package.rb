@@ -8,7 +8,7 @@ module Teams
   module AppPackage
     # Raised whenever the manifest changes, so an organization can tell its
     # installed package is older than the one Aixle offers.
-    VERSION = "1.1.0"
+    VERSION = "1.2.0"
     SCHEMA = "1.30"
     COLOR_ICON = Rails.root.join("public/icon-192.png")
     OUTLINE_ICON = Rails.root.join("app/assets/images/teams/outline.png")
@@ -58,11 +58,22 @@ module Teams
           "scopes" => %w[personal team groupChat],
           "supportsFiles" => true,
           "isNotificationOnly" => false,
-          # `/help` in a channel or group chat is a private message to the bot,
-          # answered privately (Teams' targeted messages).
+          # A slash command in a channel or group chat is a private message to the
+          # bot, answered privately (Teams' targeted messages).
           "supportsTargetedMessages" => true,
-          "commandLists" => [ { "scopes" => %w[personal team groupChat], "triggers" => %w[slash mention],
-                                "commands" => [ { "title" => "help", "description" => "What this conversation can start" } ] } ]
+          "commandLists" => [
+            { "scopes" => %w[personal team groupChat], "triggers" => %w[slash mention],
+              "commands" => [ { "title" => "help", "description" => "What this conversation can start" } ] },
+            { "scopes" => %w[personal team groupChat], "triggers" => %w[slash],
+              "commands" => [ { "title" => "run", "description" => "Start a workflow you can run" },
+                              { "title" => "status", "description" => "The last runs started here" } ] }
+          ]
+        } ],
+        "composeExtensions" => [ {
+          "botId" => app_id, "composeExtensionType" => "botBased", "canUpdateConfiguration" => false,
+          "commands" => [ { "id" => RunAction::COMMAND, "type" => "action", "title" => "Run workflow",
+                            "description" => "Start an Aixle Flow workflow with this message", "context" => %w[message],
+                            "fetchTask" => true } ]
         } ],
         "webApplicationInfo" => { "id" => app_id, "resource" => "api://#{Settings.domain}/botid-#{app_id}" },
         "authorization" => { "permissions" => { "resourceSpecific" => [

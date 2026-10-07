@@ -17,17 +17,17 @@ module Slack
       def call(run)
         return false if run.nil? || !run.failed?
 
-        slack = run.shared_context.to_h["slack"].to_h
-        channel = slack["channel"]
-        return false if channel.blank?
+        origin = Chat.origin(run).to_h
+        channel = origin.dig("conversation", "id")
+        return false if origin["provider"] != Chat::SlackProvider::KEY || channel.blank?
 
-        integration = integration_for(run, slack)
+        integration = integration_for(run, origin)
         return false if integration.nil?
 
         Slack::Notifier.post(
           integration: integration,
           channel: channel,
-          thread_ts: slack["thread_ts"],
+          thread_ts: origin["thread_id"],
           text: message_for(run)
         ).present?
       rescue StandardError => e
@@ -38,12 +38,12 @@ module Slack
       private
 
       # Reply through the workspace that triggered the run, named in shared_context.
-      def integration_for(run, slack)
+      def integration_for(run, origin)
         return nil if run.project.nil?
 
         Slack::InstallResolver.call(
           company_id: run.project.company_id, project_id: run.project_id,
-          integration_id: slack["integration_id"], team_id: slack["team"]
+          integration_id: origin["integration_id"], team_id: origin["workspace_id"]
         )
       end
 

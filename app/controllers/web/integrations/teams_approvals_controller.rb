@@ -46,6 +46,9 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
 
   def callback
     state = Oauth::State.decode(params[:state])
+    if state&.dig("provider") == Teams::AccountLink::STATE_PROVIDER
+      return redirect_to(teams_link_callback_path(params.permit(:code, :state, :error).to_h))
+    end
     return redirect_to(back, alert: "This Microsoft sign-in link is invalid or has expired") unless state&.dig("provider") == "teams"
     return redirect_to(back, alert: "Microsoft sign-in was cancelled") if params[:error].present?
 

@@ -5,6 +5,11 @@
 # keep only what was addressed to the bot, and hand it to the same
 # normalize → publish → dispatch pipeline Slack uses.
 class Webhooks::TeamsController < ActionController::API
+  # Invokes Teams waits on for their answer: "Run workflow" on a message, and the /run card.
+  RUN_INVOKES = {
+    "composeExtension/fetchTask" => :fetch, "composeExtension/submitAction" => :submit, "adaptiveCard/action" => :execute
+  }.freeze
+
   def activities
     activity = safe_json(request.raw_post)
     return head :bad_request unless activity.is_a?(Hash)
@@ -28,7 +33,11 @@ class Webhooks::TeamsController < ActionController::API
     case activity["type"]
     when "installationUpdate" then installation_changed(integration, activity)
     when "conversationUpdate" then conversation_changed(integration, activity)
-    when "invoke" then return file_consent(integration, activity) if activity["name"] == "fileConsent/invoke"
+    when "invoke"
+      return file_consent(integration, activity) if activity["name"] == "fileConsent/invoke"
+
+      action = RUN_INVOKES[activity["name"]]
+      return render(json: Teams::RunAction.public_send(action, integration, activity)) if action
     end
     return head :ok unless addressed?(activity)
 

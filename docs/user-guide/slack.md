@@ -140,8 +140,7 @@ often people can start one, set the trigger's **Cooldown (s)**.
 - **A card**, if the trigger creates one. The title template accepts
   `{{date}}` and the event's fields, such as `{{text}}` (the message without
   the mention), `{{user}}` and `{{channel}}`. The default is
-  `chat.message — {{date}}`; triggers added before Microsoft Teams support keep
-  `slack.message — {{date}}`.
+  `chat.message — {{date}}`.
 
 ### Asking what is available: /help
 
@@ -189,9 +188,7 @@ no trigger asked for it.
 | `chat_delete_message` | Deletes a message the app posted, found by its id. The deletion is permanent. |
 
 The same tools work in Microsoft Teams; in a run that started from Slack they
-answer in Slack. The older `slack_post_message`, `slack_read_thread`,
-`slack_update_message` and `slack_delete_message` still work for this release
-and are deprecated.
+answer in Slack.
 
 Every workflow step session gets these tools automatically when its company has
 an active Slack install. For other sessions, attach them from the tool picker's

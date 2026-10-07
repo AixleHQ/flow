@@ -181,8 +181,8 @@ module Teams
     # are Entra's (OpenID Connect Core §3.1.3.7) and are read without a signature
     # check; what is still checked is that it was issued to this app, for a
     # directory, and is current.
-    def sign_in_claims(code, code_verifier, scope = SIGN_IN_SCOPE)
-      url = "#{Config.cloud[:login]}/organizations/oauth2/v2.0/token"
+    def sign_in_claims(code, code_verifier, scope = SIGN_IN_SCOPE, authority: "organizations")
+      url = "#{Config.cloud[:login]}/#{authority}/oauth2/v2.0/token"
       form = { grant_type: "authorization_code", client_id: Config.app_id, code: code.to_s, redirect_uri: redirect_uri,
                scope: scope, code_verifier: code_verifier.to_s }.merge(TokenService.client_authentication(url))
       response = begin

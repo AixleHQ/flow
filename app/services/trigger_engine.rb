@@ -117,6 +117,7 @@ class TriggerEngine
         Chat.answer_help(event)
         return []
       end
+      return [] if Chat.answer_command(event)
 
       if Chat.private_request?(event)
         Chat.answer_private(event)
@@ -240,7 +241,7 @@ class TriggerEngine
         end
       end
       # Said once, by the attempt that decided; a replay of the event decides nothing.
-      Triggers.announce(dispatch.id, decided) if decided && trigger_binding
+      Triggers.announce(dispatch.id, decided) if decided && (trigger_binding || source == Chat::ACTION_SOURCE)
       result
     end
 
@@ -375,9 +376,6 @@ class TriggerEngine
     # Renders the triggering payload into the created card's description so the
     # run's input is visible on the board. Returns nil when there's nothing useful
     # to show (e.g. an empty schedule fire).
-    # Named after the binding's event type rather than the event's: a Slack
-    # trigger saved as `slack.message` keeps titling its cards that way although
-    # the message now arrives as `chat.message`.
     def render_subject_body(event, label)
       # A generic webhook's payload is the sender's own, so only a chat
       # message loses the keys the messaging port routes by.

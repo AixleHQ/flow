@@ -33,9 +33,6 @@ class TriggerBinding < ApplicationRecord
 
   WEBHOOK_EVENT_PREFIX = "webhook."
   SCHEDULE_EVENT_TYPE = "schedule.fired"
-  SLACK_EVENT_TYPE = "slack.message"
-  # notify_on_failure is the boolean status_reporting replaces; the two are kept
-  # in step until nothing reads it any more.
 
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
@@ -49,7 +46,6 @@ class TriggerBinding < ApplicationRecord
   validate :chat_provider_named, if: -> { event_type == Chat::EVENT_TYPE }
   validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
                                unless: :chat?
-  before_validation :keep_failure_reporting_in_step
   before_validation :normalize_chat_trigger
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
@@ -63,13 +59,12 @@ class TriggerBinding < ApplicationRecord
   # serves every project of the company) fan out to bindings across all the
   # company's projects.
   scope :for_event, ->(event) {
-    chat = Chat.provider_for(event)
     # A generic webhook names its own event type, so without this a sender could
     # present itself as a tracker or chat event.
     next none if event.event_type.to_s.start_with?(TRACKER_EVENT_PREFIX) && event.source != TRACKER_SOURCE
-    next none if Chat.event?(event) && chat.nil?
+    next none if Chat.event?(event) && Chat.provider_for(event).nil?
 
-    rel = active.where(event_type: chat ? Chat.event_types_for(chat) : event.event_type)
+    rel = active.where(event_type: event.event_type)
                 .joins(:workflow).merge(Workflow.active)
     if event.project_id
       rel.where(project_id: event.project_id)
@@ -107,15 +102,15 @@ class TriggerBinding < ApplicationRecord
   end
 
   def chat?
-    Chat.event_types.include?(event_type)
+    event_type == Chat::EVENT_TYPE
   end
 
-  # The messenger a chat trigger listens to: named by a legacy event type, or
-  # by the `provider` condition every `chat.message` trigger carries.
+  # The messenger a chat trigger listens to: the `provider` condition every
+  # `chat.message` trigger carries.
   def chat_provider
     return nil unless chat?
 
-    Chat::LEGACY_EVENT_TYPES[event_type] || filter_predicate.to_h["provider"].presence
+    filter_predicate.to_h["provider"].presence
   end
 
   # Points a `chat.message` trigger at another messenger, keeping its other conditions.
@@ -178,23 +173,13 @@ class TriggerBinding < ApplicationRecord
   end
 
   def normalize_chat_trigger
-    move_legacy_chat_trigger
-    keep_chat_provider if persisted? && event_type == Chat::EVENT_TYPE
-  end
-
-  # A trigger saved as `slack.message` that is pointed at another messenger
-  # becomes a `chat.message` one, the only type that messenger's messages reach.
-  def move_legacy_chat_trigger
-    legacy = Chat::LEGACY_EVENT_TYPES[event_type]
-    named = filter_predicate.to_h["provider"]
-    self.event_type = Chat::EVENT_TYPE if legacy && named.present? && named != legacy
+    keep_chat_provider if persisted? && chat?
   end
 
   def chat_provider_changed?
     return false if new_record?
 
-    was = Chat::LEGACY_EVENT_TYPES[event_type_was] || filter_predicate_was.to_h["provider"]
-    was.to_s != chat_provider.to_s
+    filter_predicate_was.to_h["provider"].to_s != chat_provider.to_s
   end
 
   def chat_connected?
@@ -278,11 +263,14 @@ class TriggerBinding < ApplicationRecord
     return unless chat?
     return unless filter_predicate.is_a?(Hash)
 
-    value = chat_text_command
+    value = chat_text_command.to_s.strip
     return if value.blank?
-    return unless value.to_s.strip.match?(Chat::RESERVED_COMMAND)
 
-    errors.add(:filter_predicate, "can't use help — that word lists available commands")
+    if value.match?(Chat::RESERVED_COMMAND)
+      errors.add(:filter_predicate, "can't use help — that word lists available commands")
+    elsif chat_provider == Chat::TeamsProvider::KEY && value.match?(Teams::Commands::RESERVED)
+      errors.add(:filter_predicate, "can't use #{value.delete_prefix('/').downcase} — Teams answers it as a command")
+    end
   end
 
   # Replacing a chat trigger's conditions keeps the messenger it listens to;
@@ -300,17 +288,6 @@ class TriggerBinding < ApplicationRecord
     return if provider.is_a?(String) && Chat::PROVIDERS.key?(provider)
 
     errors.add(:filter_predicate, "must name the messenger: provider is one of #{Chat::PROVIDERS.keys.join(', ')}")
-  end
-
-  # Whichever of the two the caller set wins and the other follows: the API, the
-  # personal MCP and templates still write only notify_on_failure.
-  def keep_failure_reporting_in_step
-    silent = status_reporting.to_s == "none"
-    if will_save_change_to_status_reporting? && !will_save_change_to_notify_on_failure?
-      self.notify_on_failure = !silent
-    elsif will_save_change_to_notify_on_failure? && !will_save_change_to_status_reporting?
-      self.status_reporting = notify_on_failure ? (silent ? "failures" : status_reporting) : "none"
-    end
   end
 
   def chat_text_command

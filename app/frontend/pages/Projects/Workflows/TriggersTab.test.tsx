@@ -41,8 +41,9 @@ const columnTrigger = (o: Record<string, unknown> = {}) => ({
 
 const slackTrigger = (o: Record<string, unknown> = {}) => ({
   id: 2,
-  kind: 'slack',
-  event_type: 'slack.message',
+  kind: 'chat',
+  chat_provider: 'slack',
+  event_type: 'chat.message',
   filter_predicate: { channel: 'C1', text: { op: 'contains', value: 'ship' } },
   enabled: true,
   ...o,

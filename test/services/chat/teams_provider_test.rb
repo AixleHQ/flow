@@ -101,7 +101,7 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
                                     filter_predicate: { "provider" => "teams" })
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
                              filter_predicate: { "provider" => "slack" })
-    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
     received = ReceivedWebhook.create!(webhook_endpoint: @endpoint, idempotency_key: "k1", event_type: "teams",
                                        raw_payload: teams_activity)
 

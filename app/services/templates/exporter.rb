@@ -353,7 +353,7 @@ module Templates
                 "trigger_mode" => binding.trigger_mode.to_s, "subject_policy" => binding.subject_policy.to_s,
                 "subject_title_template" => binding.subject_title_template,
                 "filter_predicate" => filter.presence, "cooldown_seconds" => binding.cooldown_seconds,
-                "notify_on_failure" => binding.notify_on_failure, "status_reporting" => binding.status_reporting.to_s }
+                "status_reporting" => binding.status_reporting.to_s }
       entry["chat_provider"] = binding.chat_provider if kind == "chat"
       entry["event_type"] = binding.event_type if %w[event tracker].include?(kind)
       # A tracker is this project's, so the exported trigger listens to any

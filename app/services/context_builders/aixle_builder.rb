@@ -148,11 +148,12 @@ module ContextBuilders
         ## Triggers
 
         `create_workflow_trigger` with a `kind`: `column` (a card enters a board
-        column — the column must exist), `slack`, `schedule`, `webhook` (returns the
+        column — the column must exist), `chat` (a message to the bot in Slack or
+        Microsoft Teams; name the messenger in `chat_provider`), `schedule`, `webhook` (returns the
         URL and a secret shown only once — pass both to the user), `tracker` (an
         issue in a connected task tracker is created, moves to a status — a column
         on its board — is assigned, or gets a comment), or `event`.
-        - Unattended kinds (slack, schedule, webhook, event, tracker, and an `auto`
+        - Unattended kinds (chat, schedule, webhook, event, tracker, and an `auto`
           column trigger) need `allow_non_interactive` on every step.
         - A tracker trigger usually wants `subject_policy: find_or_create_task`, so
           every event about one issue lands on the same board task. Moving the

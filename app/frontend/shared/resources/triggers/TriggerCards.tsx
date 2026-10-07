@@ -77,8 +77,7 @@ export function TriggerCards({
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
       {triggers.map((t) => {
         const source = triggerSource(t);
-        const Icon =
-          (source === 'chat' ? CHAT_ICONS[t.chat_provider ?? 'slack'] : null) ?? SOURCE_ICONS[source] ?? IconBolt;
+        const Icon = (source === 'chat' ? CHAT_ICONS[t.chat_provider ?? ''] : null) ?? SOURCE_ICONS[source] ?? IconBolt;
         const isDisabled = t.enabled === false;
         const href = workflowHref?.(t);
         const title = triggerTitle(t);
@@ -197,7 +196,7 @@ export function TriggerCards({
                   }}
                 >
                   {source === 'chat'
-                    ? `${(t.chat_provider ?? 'slack').toUpperCase()}.MESSAGE`
+                    ? `${(t.chat_provider ?? 'chat').toUpperCase()}.MESSAGE`
                     : (SOURCE_BADGES[source] ?? t.event_type)}
                 </span>
               </div>

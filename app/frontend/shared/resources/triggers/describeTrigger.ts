@@ -21,13 +21,12 @@ export const CHAT_PROVIDER_LABELS: Record<string, string> = {
 export function triggerSource(t: Trigger): string {
   if (t.source) return t.source;
   if (t.kind === 'column') return 'board';
-  if (t.kind === 'slack' || t.kind === 'chat') return 'chat';
+  if (t.kind === 'chat') return 'chat';
   return t.kind;
 }
 
 function chatLabel(t: Trigger): string {
-  const provider = t.chat_provider ?? (t.kind === 'slack' ? 'slack' : '');
-  return CHAT_PROVIDER_LABELS[provider] ?? 'Chat';
+  return CHAT_PROVIDER_LABELS[t.chat_provider ?? ''] ?? 'Chat';
 }
 
 function describeCronShort(expr: string): string {

@@ -87,12 +87,11 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_includes errors, "triggers[0] column: unknown key nowhere"
   end
 
-  test "a chat trigger names its messenger; the older slack kind needs none" do
+  test "a chat trigger names its messenger" do
     workflow = package.definition["workflows"].first["key"]
     errors = errors_for do |d|
       d["triggers"] = [ { "kind" => "chat", "workflow" => workflow },
-                        { "kind" => "chat", "workflow" => workflow, "chat_provider" => "teams" },
-                        { "kind" => "slack", "workflow" => workflow } ]
+                        { "kind" => "chat", "workflow" => workflow, "chat_provider" => "teams" } ]
     end
 
     assert_equal [ "triggers[0]: a chat trigger needs chat_provider" ], errors.grep(/triggers/)

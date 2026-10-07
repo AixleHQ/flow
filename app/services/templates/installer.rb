@@ -346,7 +346,7 @@ module Templates
         attributes = { board_column_id: column_id, trigger_mode: "manual", cooldown_seconds: entry["cooldown_seconds"] }
       else
         attributes = entry.slice("name", "event_type", "trigger_mode", "subject_policy", "filter_predicate",
-                                 "cooldown_seconds", "notify_on_failure", "status_reporting", "chat_provider",
+                                 "cooldown_seconds", "status_reporting", "chat_provider",
                                  "verification_strategy", "aixle_changes").symbolize_keys
         attributes[:enabled] = false
         attributes[:subject_title_template] = substitute(entry["subject_title_template"]) if entry["subject_title_template"]

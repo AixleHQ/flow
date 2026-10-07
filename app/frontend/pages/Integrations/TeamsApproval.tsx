@@ -1,10 +1,12 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { Alert, Anchor, Badge, Button, Center, Checkbox, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
 import { IconBrandTeams, IconDownload, IconFolders } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
 import { Logo, PageShell } from 'shared/ui';
+
+import { Flash } from './Flash';
 
 type State = 'expired' | 'pending' | 'connected';
 
@@ -21,24 +23,6 @@ interface Props {
   published?: boolean;
   publishError?: string | null;
 }
-
-const Flash = () => {
-  const { flash } = usePage<{ flash?: Record<string, unknown> }>().props;
-  return (
-    <>
-      {typeof flash?.alert === 'string' && (
-        <Alert color="red" variant="light">
-          {flash.alert}
-        </Alert>
-      )}
-      {typeof flash?.notice === 'string' && (
-        <Alert color="green" variant="light">
-          {flash.notice}
-        </Alert>
-      )}
-    </>
-  );
-};
 
 const Pending = ({ workspace, requestedBy, signInUrl }: Props) => {
   const [withFiles, setWithFiles] = useState(true);

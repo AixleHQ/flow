@@ -41,7 +41,7 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
 
   test "chat and schedule triggers get their fixed event types" do
     create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
-    slack = create_trigger("slack", name: "standup")
+    slack = create_trigger("chat", chat_provider: "slack", name: "standup")
     schedule = create_trigger("schedule", enabled: false, schedule_config: { "cron" => "0 9 * * 1-5", "timezone" => "UTC" })
 
     assert_equal [ "chat", "chat.message", "slack" ], [ slack.kind, slack.trigger.event_type, slack.trigger.chat_provider ]
@@ -58,13 +58,12 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
 
     assert_equal({ "channel" => "19:a@thread.tacv2", "provider" => "teams" }, trigger.filter_predicate)
     assert_equal "lifecycle", trigger.status_reporting
-    assert trigger.notify_on_failure
   end
 
   test "a chat trigger asked to stay silent reports nothing" do
     create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
 
-    assert_equal "none", create_trigger("chat", chat_provider: "teams", notify_on_failure: false).trigger.status_reporting
+    assert_equal "none", create_trigger("chat", chat_provider: "teams", status_reporting: "none").trigger.status_reporting
     assert_equal "failures", create_trigger("chat", chat_provider: "teams", status_reporting: "failures").trigger.status_reporting
   end
 
@@ -74,11 +73,11 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
     assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Microsoft Teams")
   end
 
-  test "a slack trigger needs a connected workspace, unless it is created switched off" do
-    error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("slack") }
+  test "a Slack trigger needs a connected workspace, unless it is created switched off" do
+    error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("chat", chat_provider: "slack") }
     assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Slack")
 
-    assert create_trigger("slack", enabled: false).trigger.persisted?
+    assert create_trigger("chat", chat_provider: "slack", enabled: false).trigger.persisted?
   end
 
   test "event trigger falls back to webhook.received without an event type" do

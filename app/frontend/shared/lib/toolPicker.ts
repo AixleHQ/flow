@@ -128,8 +128,8 @@ export function toolPickerPills(sections: ToolPickerSection[], selectedIds: numb
 
 /**
  * Search narrows to matching tools, but a group whose own label matches keeps
- * all of its members — typing "slack" should offer the whole Slack family, not
- * only the tools with "slack" in their name.
+ * all of its members — typing "chat" should offer the whole Chat family, not
+ * only the tools with "chat" in their name.
  */
 export function filterSections(sections: ToolPickerSection[], query: string): ToolPickerSection[] {
   const needle = query.trim().toLowerCase();

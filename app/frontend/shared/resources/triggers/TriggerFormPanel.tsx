@@ -38,11 +38,6 @@ interface TriggerFormPanelProps {
 
 type Kind = 'column' | 'chat' | 'webhook' | 'schedule' | 'tracker';
 
-// A Slack trigger saved before Teams reads as a chat trigger for Slack.
-function formKind(kind: string): Kind {
-  return (kind === 'slack' ? 'chat' : kind) as Kind;
-}
-
 // Off-board triggers fire unattended: the run belongs to whoever added the
 // trigger and uses their credentials. A column trigger's run belongs to the
 // person the card puts on it, so its creator is provenance, not identity.
@@ -127,10 +122,10 @@ export function TriggerFormPanel({
   const { currentUser } = usePage<SharedProps>().props;
   const isEdit = Boolean(editing);
   const editPred = editing?.filter_predicate ?? {};
-  const editChat = editing && formKind(editing.kind) === 'chat' ? chatFilterFromPredicate(editPred) : null;
+  const editChat = editing && editing.kind === 'chat' ? chatFilterFromPredicate(editPred) : null;
   const editWebhook = editing?.kind === 'webhook' ? webhookFilterFromPredicate(editPred) : null;
 
-  const [kind, setKind] = useState<Kind>(formKind(editing?.kind ?? defaultKind));
+  const [kind, setKind] = useState<Kind>((editing?.kind ?? defaultKind) as Kind);
   const [pickedWorkflowId, setPickedWorkflowId] = useState<string | null>(
     editing?.workflow_id?.toString() ?? (workflows.length === 1 ? workflows[0].id.toString() : null),
   );
@@ -150,15 +145,9 @@ export function TriggerFormPanel({
   const [cooldown, setCooldown] = useState<number | string>(editing?.cooldown_seconds ?? 5);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
 
-  const [chatProvider, setChatProvider] = useState(
-    editing?.chat_provider ?? (editing?.kind === 'slack' ? 'slack' : (chatProviders[0]?.key ?? 'slack')),
-  );
+  const [chatProvider, setChatProvider] = useState(editing?.chat_provider ?? chatProviders[0]?.key ?? 'slack');
   const [where, setWhere] = useState(editChat?.where ?? '');
-  // A server from before status_reporting answers without it: keep what the
-  // trigger did then rather than turning a quiet one into status cards.
-  const [statusReporting, setStatusReporting] = useState(
-    editing?.status_reporting ?? (editing ? (editing.notify_on_failure === false ? 'none' : 'failures') : 'lifecycle'),
-  );
+  const [statusReporting, setStatusReporting] = useState(editing?.status_reporting ?? 'lifecycle');
   const [textContains, setTextContains] = useState(editChat?.value ?? '');
   const [textOp, setTextOp] = useState(editChat?.op ?? 'contains');
   const [chatCooldown, setChatCooldown] = useState<number | string>(editChat ? (editing?.cooldown_seconds ?? 0) : 0);

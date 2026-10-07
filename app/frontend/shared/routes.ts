@@ -1322,6 +1322,21 @@ export function teamsFileAccessCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "teams" + "/" + "file_access" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/teams/link/:token(.:format) */
+export function teamsLinkPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "link" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/link/:token/sign_in(.:format) */
+export function teamsLinkSignInPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "link" + "/" + token + "/" + "sign_in" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/teams/link_callback(.:format) */
+export function teamsLinkCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "teams" + "/" + "link_callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /oauth/client-metadata.json(.:format) */
 export function oauthClientMetadataPath(options?: object): string {
   return "/" + "oauth" + "/" + "client-metadata" + "." + "json" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

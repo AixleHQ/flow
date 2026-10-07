@@ -352,7 +352,7 @@ comment on the issue — the only write the platform makes on its own: which
 workflow failed, the failed step and its error, and a link to the run. Nothing
 is posted to a read-only tracker. The comment counts as a change made by
 Aixle. It is on by default; turn off **Comment on the issue when a run fails**
-on the trigger form (`notify_on_failure: false` through the API) to stop it.
+on the trigger form (`status_reporting: none` through the API) to stop it.
 
 ---
 

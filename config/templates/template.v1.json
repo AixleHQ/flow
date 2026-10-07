@@ -1048,7 +1048,6 @@
               "kind": {
                 "enum": [
                   "chat",
-                  "slack",
                   "schedule",
                   "webhook",
                   "event",
@@ -1105,9 +1104,6 @@
               "cooldown_seconds": {
                 "type": "integer",
                 "minimum": 0
-              },
-              "notify_on_failure": {
-                "type": "boolean"
               },
               "status_reporting": {
                 "enum": [

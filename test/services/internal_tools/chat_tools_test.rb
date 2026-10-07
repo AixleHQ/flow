@@ -151,7 +151,8 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     stub_slack_client!
     slack = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
     slack.update!(credentials_data: { "bot_token" => "xoxb-1" })
-    session = session_for("slack" => { "channel" => "C1", "thread_ts" => "111.2", "integration_id" => slack.id })
+    session = session_for("chat" => { "provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                                      "thread_id" => "111.2", "integration_id" => slack.id })
 
     result = run_tool(InternalTools::ChatPostMessage, { text: "**Done**" }, session: session)
 

@@ -172,4 +172,16 @@ class Webhooks::TeamsControllerTest < ActionDispatch::IntegrationTest
     content = ReceivedWebhook.sole.raw_payload.dig("attachments", 0, "content")
     assert_equal({ "uniqueId" => "u1", "fileType" => "pdf" }, content)
   end
+
+  test "Run workflow on a message is answered in the same response, never queued" do
+    ChatConversation.record_teams!(integration: @integration, activity: teams_activity)
+
+    assert_no_enqueued_jobs(only: Webhooks::ProcessEventJob) do
+      deliver(teams_activity(mention: false).merge("type" => "invoke", "name" => "composeExtension/fetchTask",
+                                                   "value" => { "commandId" => "runWorkflow", "messagePayload" => {} }))
+    end
+
+    assert_response :ok
+    assert_equal "Link your Aixle account", response.parsed_body.dig("task", "value", "title")
+  end
 end

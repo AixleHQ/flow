@@ -44,7 +44,7 @@ class Trackers::RunStatusReporterTest < ActiveSupport::TestCase
   test "it applies to tracker bindings that report failures, never to other sources" do
     assert Trackers::RunStatusReporter.applies?(@dispatch)
 
-    @binding.update!(notify_on_failure: false)
+    @binding.update!(status_reporting: "none")
     refute Trackers::RunStatusReporter.applies?(@dispatch.reload)
 
     slack = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user)

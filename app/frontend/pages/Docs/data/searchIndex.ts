@@ -256,7 +256,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'teams',
     title: 'Microsoft Teams',
     section: 'User guide',
-    desc: 'Connect a Microsoft 365 organization through its administrator: start workflows from channels, group chats and 1:1 chats, status cards, files both ways, the chat tools, and the self-hosted bot.',
+    desc: 'Connect a Microsoft 365 organization through its administrator: start workflows from channels, group chats and 1:1 chats, Run workflow on a message, /run and /status, status cards, files both ways, the chat tools, and the self-hosted bot.',
   },
   {
     slug: 'coder',

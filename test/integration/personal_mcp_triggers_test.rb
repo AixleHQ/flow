@@ -36,7 +36,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
   def event_trigger!(**attrs)
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                             event_type: "slack.message", **attrs)
+                             event_type: "chat.message", **attrs)
   end
 
   test "list_workflow_triggers reports column and event triggers together" do
@@ -46,11 +46,11 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     triggers = payload(call_tool("list_workflow_triggers",
                                  { project_id: @project.id, workflow_id: @workflow.id }))["triggers"]
 
-    assert_equal %w[column slack], triggers.map { |t| t["kind"] }.sort
+    assert_equal %w[chat column], triggers.map { |t| t["kind"] }.sort
     column = triggers.find { |t| t["kind"] == "column" }
     assert_equal @column.id, column["board_column_id"]
     assert_equal @column.name, column["column_name"]
-    assert_equal "standup", triggers.find { |t| t["kind"] == "slack" }["name"]
+    assert_equal "standup", triggers.find { |t| t["kind"] == "chat" }["name"]
   end
 
   test "create_workflow_trigger binds a board column" do
@@ -85,13 +85,13 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
     assert_nil triggers.find { |t| t["kind"] == "column" }["created_by"]
     assert_equal({ "id" => @user.id, "name" => @user.name },
-                 triggers.find { |t| t["kind"] == "slack" }["created_by"])
+                 triggers.find { |t| t["kind"] == "chat" }["created_by"])
   end
 
   test "create_workflow_trigger creates a slack trigger with a filter predicate" do
     create(:integration, provider: :slack, status: :active, company: @company, project: nil)
     body = call_tool("create_workflow_trigger",
-                     { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack",
                        name: "on mention", filter_predicate: { channel: "C123" },
                        subject_policy: "create_task", subject_column_id: @column.id })
 
@@ -149,7 +149,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     create(:step, workflow: @workflow, name: "Review copy", allow_non_interactive: false)
 
     body = call_tool("create_workflow_trigger",
-                     { project_id: @project.id, workflow_id: @workflow.id, kind: "slack" })
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack" })
 
     assert error?(body)
     assert_match(/can't run unattended/i, text(body))
@@ -179,12 +179,12 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_equal 30, column.cooldown_seconds
 
     evt_body = call_tool("update_workflow_trigger",
-                         { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",
+                         { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack",
                            trigger_id: event.id, enabled: false, filter_predicate: { channel: "C9" } })
     assert_not error?(evt_body)
     event.reload
     assert_not event.enabled
-    assert_equal({ "channel" => "C9" }, event.filter_predicate)
+    assert_equal({ "channel" => "C9", "provider" => "slack" }, event.filter_predicate)
     assert_equal "standup", event.name
   end
 
@@ -192,7 +192,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     event = event_trigger!(enabled: false)
 
     body = call_tool("update_workflow_trigger",
-                     { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack",
                        trigger_id: event.id, enabled: true })
 
     assert error?(body)
@@ -212,7 +212,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
     assert_difference -> { TriggerBinding.count }, -1 do
       body = call_tool("delete_workflow_trigger",
-                       { project_id: @project.id, workflow_id: @workflow.id, kind: "slack", trigger_id: event.id })
+                       { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", trigger_id: event.id })
       assert_not error?(body)
     end
   end
@@ -222,7 +222,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     other_project = create(:project, company: outsider.companies.first, owner: outsider)
     other_workflow = create(:workflow, scope: other_project)
     other_trigger = create(:trigger_binding, project: other_project, workflow: other_workflow,
-                                             created_by: outsider, event_type: "slack.message")
+                                             created_by: outsider, event_type: "chat.message")
 
     listed = call_tool("list_workflow_triggers", { project_id: @project.id, workflow_id: other_workflow.id })
     assert error?(listed)
@@ -230,7 +230,7 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
 
     deleted = call_tool("delete_workflow_trigger",
                         { project_id: @project.id, workflow_id: @workflow.id,
-                          kind: "slack", trigger_id: other_trigger.id })
+                          kind: "chat", trigger_id: other_trigger.id })
     assert error?(deleted)
     assert TriggerBinding.exists?(other_trigger.id)
   end

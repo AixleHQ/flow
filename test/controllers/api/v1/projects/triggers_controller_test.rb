@@ -19,17 +19,17 @@ class Api::V1::Projects::TriggersControllerTest < ActionController::TestCase
 
   test "index lists the triggers of every live workflow of the project, each with its workflow" do
     ColumnWorkflowBinding.create!(board_column: @column, workflow: @intake, created_by: @user)
-    create(:trigger_binding, project: @project, workflow: @release, created_by: @user, event_type: "slack.message")
+    create(:trigger_binding, project: @project, workflow: @release, created_by: @user, event_type: "chat.message")
     archived = create(:workflow, scope: @project, name: "Old")
-    create(:trigger_binding, project: @project, workflow: archived, created_by: @user, event_type: "slack.message")
+    create(:trigger_binding, project: @project, workflow: archived, created_by: @user, event_type: "chat.message")
     archived.update_columns(deleted_at: Time.current)
     other = create(:project, company: @company, owner: @user)
-    create(:trigger_binding, project: other, workflow: create(:workflow, scope: other), created_by: @user, event_type: "slack.message")
+    create(:trigger_binding, project: other, workflow: create(:workflow, scope: other), created_by: @user, event_type: "chat.message")
 
     get :index, params: { project_id: @project.id }
 
     assert_response :success
-    assert_equal [ [ "column", "board", "Intake" ], [ "slack", "chat", "Release" ] ],
+    assert_equal [ [ "column", "board", "Intake" ], [ "chat", "chat", "Release" ] ],
                  json["triggers"].map { |t| t.values_at("kind", "source", "workflow_name") }
   end
 

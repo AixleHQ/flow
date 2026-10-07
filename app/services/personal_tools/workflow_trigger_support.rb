@@ -5,7 +5,7 @@ module PersonalTools
   # Api::V1::Projects::Workflows::TriggersController — one surface over two
   # record kinds:
   #   column                                      → ColumnWorkflowBinding (card enters a board column)
-  #   chat / schedule / webhook / event / tracker → TriggerBinding (slack: a chat trigger for Slack)
+  #   chat / schedule / webhook / event / tracker → TriggerBinding
   # Both describe a trigger through WorkflowTriggers::Serializer.
   module WorkflowTriggerSupport
     KINDS = WorkflowTriggers::Creator::KINDS
@@ -17,7 +17,7 @@ module PersonalTools
     VERIFICATION_STRATEGIES = %w[none slack_v0 hmac_sha256 shared_token].freeze
 
     # Mutable fields, mirroring the controller's permit lists.
-    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure status_reporting
+    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds status_reporting
                         subject_policy subject_column_id subject_title_template
                         project_tracker_id aixle_changes].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze

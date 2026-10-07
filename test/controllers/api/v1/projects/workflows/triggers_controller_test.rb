@@ -27,13 +27,13 @@ module Api
 
           test "index lists column and event triggers for the workflow" do
             ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
-            create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+            create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
 
             get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
 
             assert_response :success
             kinds = json["triggers"].map { |t| t["kind"] }.sort
-            assert_equal %w[column slack], kinds
+            assert_equal %w[chat column], kinds
           end
 
           test "create tracker trigger stores its tracker and how it treats Aixle's own changes" do
@@ -53,12 +53,12 @@ module Api
                          TriggerBinding.sole.filter_predicate["change.to.name"])
           end
 
-          test "create slack trigger persists a chat TriggerBinding for Slack" do
+          test "creating a Slack trigger persists a chat TriggerBinding for Slack" do
             connect_slack!
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {
                 project_id: @project.id, workflow_id: @workflow.id,
-                trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "create_task", subject_column_id: @column.id }
+                trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "create_task", subject_column_id: @column.id }
               }
             end
             assert_response :created
@@ -66,26 +66,25 @@ module Api
             assert_equal({ "channel" => "C1", "provider" => "slack" }, TriggerBinding.sole.filter_predicate)
           end
 
-          test "a slack trigger reports failures back to Slack unless it is switched off" do
+          test "a Slack trigger follows its runs with a status card unless it is silenced" do
             connect_slack!
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
-              trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+              trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
             }
 
             assert_response :created
-            assert json["notify_on_failure"], "a new slack trigger notifies on failure by default"
+            assert_equal "lifecycle", json["status_reporting"]
             binding = TriggerBinding.find(json["id"])
-            assert binding.notify_on_failure
 
             patch :update, params: {
               project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
-              trigger: { notify_on_failure: false }
+              trigger: { status_reporting: "none" }
             }
 
             assert_response :success
-            assert_not json["notify_on_failure"]
-            assert_not binding.reload.notify_on_failure
+            assert_equal "none", json["status_reporting"]
+            assert_equal "none", binding.reload.status_reporting
           end
 
           test "a Teams chat trigger says how it reports back, and keeps its messenger when its conditions change" do
@@ -108,18 +107,18 @@ module Api
             assert_equal "lifecycle", json["status_reporting"]
           end
 
-          test "a slack trigger is refused, on create and when switched on, until the company connects Slack" do
+          test "a Slack trigger is refused, on create and when switched on, until the company connects Slack" do
             assert_no_difference -> { TriggerBinding.count } do
               post :create, params: {
                 project_id: @project.id, workflow_id: @workflow.id,
-                trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+                trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
               }
             end
             assert_response :unprocessable_entity
             assert_equal [ TriggerBinding.chat_not_connected("Slack") ], json["errors"]
 
             binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                                               event_type: "slack.message", enabled: false)
+                                               event_type: "chat.message", enabled: false)
             patch :update, params: {
               project_id: @project.id, workflow_id: @workflow.id, id: binding.id, trigger: { enabled: true }
             }
@@ -217,7 +216,7 @@ module Api
 
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
-              trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+              trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
             }
             assert_response :created
             assert_equal({ "id" => @user.id, "name" => @user.name }, json["created_by"])
@@ -228,7 +227,7 @@ module Api
             ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, created_by: @user,
                                           trigger_mode: :auto, cooldown_seconds: 0)
             orphan = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                                              event_type: "slack.message")
+                                              event_type: "chat.message")
             orphan.update_column(:created_by_id, nil)
 
             get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
@@ -236,13 +235,13 @@ module Api
             assert_response :success
             by_kind = json["triggers"].index_by { |t| t["kind"] }
             assert_equal({ "id" => @user.id, "name" => @user.name }, by_kind["column"]["created_by"])
-            assert_nil by_kind["slack"]["created_by"]
+            assert_nil by_kind["chat"]["created_by"]
           end
 
           test "editing a trigger leaves its creator alone" do
             creator = create(:user, :onboarding_completed, company: @company)
             binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: creator,
-                                               event_type: "slack.message", name: "before")
+                                               event_type: "chat.message", name: "before")
             column_binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow,
                                                            created_by: creator, trigger_mode: :auto, cooldown_seconds: 0)
 
@@ -263,7 +262,7 @@ module Api
           end
 
           test "destroy removes an event trigger" do
-            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
             assert_difference -> { TriggerBinding.count }, -1 do
               delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id }
             end

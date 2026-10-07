@@ -7,11 +7,11 @@
 module Chat
   EVENT_TYPE = "chat.message"
 
-  # Triggers saved before the messaging port keep their provider-named event
-  # type and match that provider's messages only.
-  LEGACY_EVENT_TYPES = { "slack.message" => "slack" }.freeze
-
   PROVIDERS = { "slack" => "Chat::SlackProvider", "teams" => "Chat::TeamsProvider" }.freeze
+
+  # A dispatch started by a person's own action in the messenger (a message
+  # action, /run), not by a trigger. Its run is followed by a status card.
+  ACTION_SOURCE = "chat_action"
 
   # A tool that works through whichever messenger is connected requires this,
   # as tracker tools require Trackers::CAPABILITY.
@@ -25,14 +25,7 @@ module Chat
 
   module_function
 
-  def event_types = [ EVENT_TYPE, *LEGACY_EVENT_TYPES.keys ]
-
-  def event?(event) = event_types.include?(event&.event_type.to_s)
-
-  # The trigger event types a message from this provider is matched against.
-  def event_types_for(provider)
-    [ EVENT_TYPE, *LEGACY_EVENT_TYPES.select { |_, key| key == provider.key }.keys ]
-  end
+  def event?(event) = event&.event_type.to_s == EVENT_TYPE
 
   def provider(key)
     PROVIDERS[key.to_s]&.constantize
@@ -44,7 +37,7 @@ module Chat
   def provider_for(event)
     return nil unless event?(event)
 
-    key = LEGACY_EVENT_TYPES[event.event_type.to_s] || event.data.to_h["provider"].to_s
+    key = event.data.to_h["provider"].to_s
     key == event.source.to_s.split(":", 2).first ? provider(key) : nil
   end
 
@@ -62,6 +55,11 @@ module Chat
 
   def answer_private(event)
     provider_for(event)&.answer_private(event) || false
+  end
+
+  # A command the messenger answers itself (Teams' run and status): true once answered.
+  def answer_command(event)
+    provider_for(event)&.answer_command(event) || false
   end
 
   def run_context(event)
@@ -83,12 +81,7 @@ module Chat
     end
   end
 
-  # Where a run came from, for a run started before the provider-neutral block
-  # existed too: those carry only Slack's own block.
-  def origin(run)
-    context = run&.shared_context.to_h
-    context["chat"].presence || SlackProvider.origin_from_legacy(context["slack"])
-  end
+  def origin(run) = run&.shared_context.to_h["chat"].presence
 
   def origin_provider(run)
     provider(origin(run)&.dig("provider"))

@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): 1, 2, 3, 4 and 7 pass; 5 (slash commands) is built and being verified on staging
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): all pass, 5 (slash commands, answered as targeted messages) on staging on 2026-10-07. Phase 2, Teams only and without approvals, is built in the same PR (§20)
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -886,6 +886,8 @@ are the regression net. As built in PR #365:
 | The failure notice moved onto the run-transition seam as `Chat::RunStatusReporter`; `Slack::NotifyRunFailureJob` stays one release as a no-op for jobs a previous deploy enqueued | Same message, same opt-out |
 | The tracker reporter reads `status_reporting == "failures"` | Same behavior; `notify_on_failure: false` still silences it |
 
+Every compatibility entry in this table was retired in the same PR (see "Compatibility retired" in §19).
+
 Already on `develop` before phase 0 started, so not part of it: the Slack text that trigger conditions
 see has the bot's mention removed and compares without regard to case (#389). `Entra::ClientAssertion`
 exists, and Microsoft sign-in runs on the certificate (#383).
@@ -1067,6 +1069,9 @@ and failure notices behave in production exactly as before.
 - Explicit account linking, for gate approval.
 - Slack interactivity (buttons on the status card) through the same port.
 
+As built (§20): the invokes, the message action, `run`, `status` and account linking, for Teams only.
+Gate approval and Slack interactivity are out: nothing in a chat-started run waits for a person yet.
+
 **Phase 3 — reach.**
 - Teams Store listing: Partner Center, publisher verification, attestation, validation fixes.
 - GCC configuration.
@@ -1223,6 +1228,38 @@ in a tenant also drops its resource-specific permissions; the app has to be adde
 catalog upload refused the first schema 1.30 package: from manifest 1.25 on, an app with the `team` scope must
 declare `supportsChannelFeatures`, which the schema accepts only as `tier1` (§6.3 had it; the package did not).
 `tier1` also lets a team add the app to private and shared channels; that is not verified.
+
+**Compatibility retired.** Nothing of the old Slack-only shape is kept (decided 2026-10-07; migration
+`20261007090000_retire_legacy_chat_shapes`):
+- `slack.message` triggers and events became `chat.message` ones naming Slack; the `slack` trigger kind is
+  gone from the API, the personal MCP, templates and the form, and `Chat::LEGACY_EVENT_TYPES` with it;
+- `shared_context["slack"]` became the run's `chat` origin, and every reader (`Chat.origin`, the Slack side
+  of the chat tools, the Slack failure notice) reads only that;
+- the `slack_*` agent tools are removed; steps and workflows that named one now name its `chat_*`
+  successor (a row whose successor did not exist yet is renamed in place);
+- `notify_on_failure` is dropped in favor of `status_reporting`; `Slack::NotifyRunFailureJob` is deleted;
+- cards a Slack trigger creates are titled `chat.message — <date>`.
+
+## 20. Phase 2 as built
+
+Decided 2026-10-07: phase 2 is Teams only, and it leaves approvals out. A run started from chat never
+waits for a person: it runs `non_interactive`, a workflow with a step that needs one is skipped, and the
+codebase has no "awaiting approval" step state (an interactive step is a terminal session, and
+`StepRun#mark_waiting!` has no caller). Approving from a card waits for that step state to exist.
+Slack keeps mentions; it gets no message shortcut, no modal and no interactivity endpoint.
+
+What phase 2 adds to Teams:
+
+| Piece | As built |
+|---|---|
+| Account link | `chat_identities (provider, workspace_id, external_user_id, user_id, proof, linked_at)`, unique on the first three. A person links their Teams account to the Aixle account they are signed in to: the link Aixle sends them carries a signed `(tenant, oid)` and expires in an hour; the Aixle page that opens it requires a session, a membership of the company the tenant is connected to, and a Microsoft sign-in **at that tenant** (`/{tid}/oauth2/v2.0/authorize`, `openid profile`) whose `tid` and `oid` equal the signed pair. A link clicked by someone else proves nothing: the Microsoft sign-in must be the sender's own. The sign-in returns to the approval callback already registered on the app, so no portal change is needed. A guest's home-tenant sign-in carries another `oid`, so signing in at the channel's tenant is what makes guests work. The link is not a sign-in method: it never lets anyone into Aixle |
+| Who a sender is | `Teams::Sender` resolves the Aixle user from a Microsoft sign-in identity with that `oid`, else from a `chat_identities` row for `(teams, tid, oid)`, and only an account that may still sign in: a suspended or deleted one starts nothing |
+| "Run workflow" on a message | A message-extension action command (`composeExtensions`, `context: ["message"]`, `fetchTask: true`). `composeExtension/fetchTask` answers with a dialog: the workflows the linked person may start (`WorkflowRunsPolicy#create?` in every active project of the tenant's company, workflows whose every step may run unattended), and a notes field. `composeExtension/submitAction` starts the chosen workflow **as that person**, with the message's text (and the notes) as the request, and the status card in that message's thread. An unlinked person gets the link instead of the list. Both answers are synchronous (Teams allows 5 s); the run goes through the outbox |
+| `/run` | A targeted message answered with a private card holding the same list (`Action.Execute`, verb `run`). The click (`adaptiveCard/action`) starts the run as the clicker and replaces the private card with a "started" line; the status card starts a new thread in the conversation, naming who started it |
+| `/status` | A private answer listing the last runs started from this conversation (trigger or action), with their state and links, for a linked person and only from projects they can open in Aixle: a quiet trigger's runs never announced themselves there |
+| Status card without a trigger | A run started by an action or `/run` gets a `trigger_events` row (its message, as a `chat.message` from Teams) and a `trigger_dispatches` row with no binding and `detail.status_reporting = "lifecycle"`, so the run-transition seam drives the same card |
+| Commands | `help` (slash and mention), `run` and `status` (slash only). In a 1:1 chat, where every message may be a trigger's, only `/run`, `/status` or the bare word is a command. A Teams trigger may not claim `run` or `status` |
+| Manifest | `composeExtensions` with the `runWorkflow` action, `run` and `status` in `commandLists`; version 1.2.0 |
 
 ## Sources
 

@@ -95,7 +95,7 @@ module Api
 
           def trigger_binding_params
             params.require(:trigger).permit(
-              :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure, :status_reporting,
+              :name, :trigger_mode, :enabled, :cooldown_seconds, :status_reporting,
               :subject_policy, :subject_column_id, :subject_title_template, :project_tracker_id, :aixle_changes,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )

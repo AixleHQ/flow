@@ -30,7 +30,8 @@ module Slack
     end
 
     def slack_context
-      { "slack" => { "channel" => "C1", "thread_ts" => "111.222", "integration_id" => @integration.id } }
+      { "chat" => { "provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                    "thread_id" => "111.222", "integration_id" => @integration.id } }
     end
 
     test "replies in the triggering thread with the workflow, the step and its error" do

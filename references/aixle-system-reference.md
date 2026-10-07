@@ -120,7 +120,6 @@ a pending gate or an active run.
 | kind | fires on |
 |---|---|
 | `chat` | a message addressed to the bot in Slack or Microsoft Teams; `chat_provider` is `slack` or `teams` (needs that integration) |
-| `slack` | the older name for a `chat` trigger with `chat_provider: slack` |
 | `schedule` | cron — `schedule_config: {cron, timezone}` |
 | `webhook` | an inbound HTTP call; the response carries the URL and a secret shown once |
 | `event` | a custom platform event |
@@ -132,7 +131,7 @@ supports `{"op", "value"}` operators and dot-paths), `subject_policy` (`none`,
 `subject_title_template`, `trigger_mode`, `cooldown_seconds` (default 0),
 `enabled`, `status_reporting` (`none`, `failures`, `lifecycle` — chat only: a status
 card in the thread that follows the run; chat triggers default to it).
-`notify_on_failure` is the older switch for it. Chat triggers filter on `channel`,
+Chat triggers filter on `channel`,
 `conversation.type` (`direct` for 1:1 chats) and `text` (the message without the
 mention). Tracker triggers also take `aixle_changes`
 (`ignore`, `other_workflows`, `always`): what a change Aixle itself made does.

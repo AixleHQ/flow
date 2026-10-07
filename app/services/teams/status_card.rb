@@ -45,6 +45,7 @@ module Teams
       body = [
         { type: "TextBlock", text: "#{icon} #{label} — #{status.workflow}#{" · run ##{status.run_id}" if status.run_id}",
           weight: "Bolder", color: color, wrap: true },
+        ({ type: "TextBlock", text: "Started by #{status.started_by}", isSubtle: true, spacing: "None", wrap: true } if status.started_by),
         ({ type: "TextBlock", text: "Since {{TIME(#{status.since.utc.iso8601})}}", isSubtle: true, spacing: "None" } if status.since),
         ({ type: "TextBlock", text: "Took #{status.duration}", isSubtle: true, spacing: "None" } if status.duration),
         ({ type: "TextBlock", text: status.detail.to_s.truncate(400), wrap: true } if status.detail.present?)

@@ -7,12 +7,8 @@ module WorkflowTriggers
   #   column                                      → ColumnWorkflowBinding
   #   chat / schedule / webhook / event / tracker → TriggerBinding
   class Serializer
-    # A Slack trigger saved as `slack.message` still reads as kind `slack` for
-    # one release: a page loaded before the chat kind existed edits it as a
-    # Slack trigger instead of as an unknown kind that drops its conditions.
     def self.kind(event_type)
       case event_type
-      when *Chat::LEGACY_EVENT_TYPES.keys then "slack"
       when Chat::EVENT_TYPE then "chat"
       when TriggerBinding::SCHEDULE_EVENT_TYPE then "schedule"
       when /\Awebhook\./ then "webhook"
@@ -64,7 +60,7 @@ module WorkflowTriggers
         id: binding.id,
         kind: self.class.kind(binding.event_type),
         # What starts the run, for grouping: board, chat, schedule, webhook, tracker or event.
-        source: binding.chat? ? "chat" : self.class.kind(binding.event_type),
+        source: self.class.kind(binding.event_type),
         chat_provider: binding.chat_provider,
         event_type: binding.event_type,
         name: binding.name,
@@ -75,7 +71,6 @@ module WorkflowTriggers
         subject_title_template: binding.subject_title_template,
         schedule_config: binding.schedule_config,
         cooldown_seconds: binding.cooldown_seconds,
-        notify_on_failure: binding.notify_on_failure,
         status_reporting: binding.status_reporting.to_s,
         project_tracker_id: binding.project_tracker_id,
         aixle_changes: binding.aixle_changes,

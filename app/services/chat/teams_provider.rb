@@ -40,7 +40,7 @@ module Chat
           # Threads exist in channels only; a channel message with no thread is the root of its own.
           "thread_id" => (root_id || activity["id"] if kind == "channel"),
           "message_id" => activity["id"],
-          "actor" => actor(activity["from"].to_h),
+          "actor" => actor(activity["from"].to_h, tenant_id),
           "text" => request_text(activity),
           "raw_text" => activity["text"],
           # Where replies go. Recorded from the authenticated activity; never part
@@ -86,6 +86,8 @@ module Chat
     def private_request?(event) = event.data.to_h["targeted"] == true
 
     def answer_private(event) = Teams::HelpResponder.call(event, hint: true)
+
+    def answer_command(event) = Teams::Commands.call(event)
 
     def report_failure(run) = Teams::RunFailureNotifier.call(run)
 
@@ -141,22 +143,12 @@ module Chat
       CGI.unescapeHTML(text.gsub(/<[^>]+>/, " ")).tr(" ", " ").squeeze(" ").strip
     end
 
-    def actor(from)
+    def actor(from, tenant_id)
       {
         "id" => from["aadObjectId"],
         "name" => from["name"],
-        "aixle_user_id" => aixle_user_id(from["aadObjectId"])
+        "aixle_user_id" => Teams::Sender.user_id(tenant_id, from["aadObjectId"])
       }.compact.presence
-    end
-
-    # The sender's Entra object id is the subject a Microsoft sign-in stores, so
-    # a person who signs in to Aixle with Microsoft is recognised here. Never by
-    # email: Entra does not verify addresses (docs/design/teams-integration.md §9).
-    def aixle_user_id(object_id)
-      return nil if object_id.blank?
-
-      UserIdentity.joins(:identity_provider).where(identity_providers: { kind: "microsoft" })
-                  .where(subject: object_id).pick(:user_id)
     end
 
     # [metadata, refs], index for index. Only a 1:1 message carries its files.

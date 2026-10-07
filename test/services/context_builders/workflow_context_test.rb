@@ -44,16 +44,6 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_includes section.content, "> deploy staging"
   end
 
-  test "a run started from Slack before the chat block existed still shows its message" do
-    @workflow_run.update!(shared_context: { "slack" => { "channel" => "C1", "user" => "U1", "text" => "ship it" } })
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
-
-    section = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "trigger-message" }
-
-    assert_includes section.content, "started by a Slack message from <@U1>"
-    assert_includes section.content, "> ship it"
-  end
-
   # -- AC #3: workflow-context section --
 
   test "build produces workflow-context section with correct tag, priority, position" do

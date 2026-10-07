@@ -23,8 +23,6 @@ module PersonalTools
                            description: "auto starts the run immediately; manual only offers it."
       param :enabled, type: :boolean, description: "Whether the trigger fires."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings."
-      param :notify_on_failure, type: :boolean,
-            description: "Older switch for status_reporting: false is none. Prefer status_reporting."
       param :status_reporting, type: :string, enum: WorkflowTriggerSupport::STATUS_REPORTING,
                                description: "What a run tells the place it came from. none; failures (one message or tracker " \
                                             "comment when it fails); lifecycle (chat only: one status card in the thread, " \

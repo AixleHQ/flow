@@ -6,7 +6,7 @@ module Slack
   # swallowed, never raised into the workflow that triggered the reply.
   class Notifier
     # What a send produced. `ts` is the posted message's timestamp — the handle
-    # slack_update_message / slack_delete_message address it by, and the thread
+    # chat_update_message / chat_delete_message address it by, and the thread
     # parent for anything the agent wants to hang under it.
     #
     # Returned only when SOMETHING reached Slack; `post` answers nil when nothing

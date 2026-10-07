@@ -12,14 +12,14 @@ module WorkflowTriggers
   # differently. ActiveRecord::RecordInvalid and Temporalio::Error (a schedule
   # reconciles onto Temporal after commit) propagate to the caller.
   class Creator
-    KINDS = %w[column chat slack schedule webhook event tracker].freeze
+    KINDS = %w[column chat schedule webhook event tracker].freeze
 
     BoardMissingError = Class.new(StandardError)
     UnsupportedKindError = Class.new(StandardError)
 
     Result = Struct.new(:kind, :trigger, :webhook_endpoint, keyword_init: true)
 
-    BINDING_KEYS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure status_reporting subject_policy
+    BINDING_KEYS = %i[name trigger_mode enabled cooldown_seconds status_reporting subject_policy
                       subject_column_id subject_title_template filter_predicate schedule_config
                       project_tracker_id aixle_changes].freeze
 
@@ -32,9 +32,8 @@ module WorkflowTriggers
       @project = project
       @workflow = workflow
       @user = user
-      @kind = kind.to_s == "slack" ? "chat" : kind.to_s
+      @kind = kind.to_s
       @attributes = attributes.to_h.symbolize_keys
-      @attributes[:chat_provider] = "slack" if kind.to_s == "slack"
     end
 
     def call
@@ -109,8 +108,7 @@ module WorkflowTriggers
       provider = @attributes[:chat_provider].presence
       filter = attributes[:filter_predicate].to_h.stringify_keys
       attributes[:filter_predicate] = provider ? filter.merge("provider" => provider.to_s) : filter
-      silenced = ActiveModel::Type::Boolean.new.cast(attributes[:notify_on_failure]) == false
-      attributes[:status_reporting] ||= silenced ? "none" : "lifecycle"
+      attributes[:status_reporting] ||= "lifecycle"
       attributes
     end
   end

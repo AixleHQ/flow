@@ -75,37 +75,9 @@ module Chat
 
     def run_context(event)
       data = event.data.to_h
-      legacy = {
-        "channel" => data["channel"],
-        # Both, and they differ: `ts` is the message that mentioned us, `thread_ts`
-        # the thread it belongs to.
-        "ts" => data["ts"],
-        "thread_ts" => data["thread_ts"] || data["ts"],
-        "team" => data["team"],
-        "integration_id" => data["integration_id"],
-        "text" => data["raw_text"] || data["text"],
-        "user" => data["user"]
-      }.compact
-      return {} if legacy.empty?
-
-      { "chat" => origin_from_legacy(legacy), "slack" => legacy }
-    end
-
-    # The provider-neutral origin (§8.1) of a Slack-started run.
-    def origin_from_legacy(slack)
-      slack = slack.to_h
-      return nil if slack.blank?
-
-      {
-        "provider" => KEY,
-        "integration_id" => slack["integration_id"],
-        "workspace_id" => slack["team"],
-        "conversation" => { "id" => slack["channel"], "type" => "channel" }.compact,
-        "thread_id" => slack["thread_ts"] || slack["ts"],
-        "message_id" => slack["ts"],
-        "actor" => { "id" => slack["user"] }.compact,
-        "text" => slack["text"]
-      }.compact_blank
+      { "chat" => data.slice("provider", "integration_id", "conversation", "thread_id", "message_id", "actor")
+                      .merge("workspace_id" => data.dig("workspace", "id"), "text" => data["raw_text"] || data["text"])
+                      .compact_blank }
     end
 
     # How a reply names the person who sent the message.
@@ -122,6 +94,8 @@ module Chat
     def private_request?(_event) = false
 
     def answer_private(_event) = false
+
+    def answer_command(_event) = false
 
     def scrub_payload(payload) = payload
 

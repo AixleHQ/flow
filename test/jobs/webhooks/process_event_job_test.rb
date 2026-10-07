@@ -12,7 +12,7 @@ module Webhooks
       @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.companies.first)
       @binding = create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user,
-        event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+        event_type: "chat.message", filter_predicate: { "channel" => "C1" })
     end
 
     def received(payload, key: "Ev1")
@@ -44,7 +44,7 @@ module Webhooks
       project_b = create(:project, owner: @user, company: @user.companies.first)
       workflow_b = create(:workflow, scope: project_b)
       create(:trigger_binding, project: project_b, workflow: workflow_b, created_by: @user,
-        event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+        event_type: "chat.message", filter_predicate: { "channel" => "C1" })
 
       payload = {
         "type" => "event_callback", "event_id" => "EvFan", "team_id" => "T1",
@@ -108,9 +108,10 @@ module Webhooks
         has_entries(
           workflow: @workflow,
           shared_context: has_entries(
-            "slack" => has_entries("channel" => "C1", "ts" => "111.222", "thread_ts" => "111.222",
-                                   "team" => "T1", "integration_id" => integration.id,
-                                   "text" => "run report", "user" => "U1")
+            "chat" => has_entries("provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                                  "message_id" => "111.222", "thread_id" => "111.222", "workspace_id" => "T1",
+                                  "integration_id" => integration.id, "text" => "run report",
+                                  "actor" => { "id" => "U1" })
           )
         )
       ).once.returns(build(:workflow_run))
@@ -169,7 +170,7 @@ module Webhooks
       raw = "<@U0BOT>  Deploy Staging &amp; tag "
 
       WorkflowService.expects(:enqueue).with(
-        has_entries(shared_context: has_entries("slack" => has_entries("text" => raw)))
+        has_entries(shared_context: has_entries("chat" => has_entries("text" => raw)))
       ).once.returns(build(:workflow_run))
 
       Webhooks::ProcessEventJob.perform_now(mention(raw, key: "EvCmd").id)
@@ -212,7 +213,7 @@ module Webhooks
       WorkflowService.expects(:enqueue).with(
         has_entries(
           shared_context: has_entries(
-            "slack" => has_entries("ts" => "222.333", "thread_ts" => "111.222")
+            "chat" => has_entries("message_id" => "222.333", "thread_id" => "111.222")
           )
         )
       ).once.returns(build(:workflow_run))

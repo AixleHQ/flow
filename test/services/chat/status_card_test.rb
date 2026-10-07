@@ -98,7 +98,7 @@ class Chat::StatusCardTest < ActiveSupport::TestCase
     slack = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
     slack.update!(credentials_data: { "bot_token" => "xoxb-1" })
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                                       event_type: "slack.message", status_reporting: "lifecycle")
+                                       event_type: "chat.message", status_reporting: "lifecycle")
     event = create(:trigger_event, event_type: "chat.message", source: "slack:slack-team-T1", company: @company, data: {
       "provider" => "slack", "integration_id" => slack.id, "channel" => "C1", "ts" => "1.2", "thread_ts" => "1.1"
     })

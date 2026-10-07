@@ -11,7 +11,6 @@ export interface Trigger {
   name?: string | null;
   trigger_mode?: string;
   cooldown_seconds?: number;
-  notify_on_failure?: boolean;
   // What a run tells the conversation or issue it came from: none, failures or lifecycle.
   status_reporting?: string;
   enabled?: boolean;

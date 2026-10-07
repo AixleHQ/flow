@@ -112,9 +112,43 @@ conversation, in every project of the company; asked with `/help`, the reply is
 private, visible only to you. It also replies this way when a mention matches no
 trigger. `help` is reserved, so no trigger can use it as a pattern.
 
-A message sent to the app privately (through `/`) never starts a workflow: the
+A message sent to the app privately (through `/`) never starts a trigger: the
 run's status card would appear where everyone sees it. The app answers that
-mentioning it is how to start one.
+mentioning it, or `/run`, is how to start one.
+
+### Starting a workflow yourself: Run workflow and /run
+
+These start a workflow as **you**, without a trigger:
+
+- **Run workflow** on any message: open the message's **⋯** menu → **Apps** →
+  **Aixle Flow** → **Run workflow**. Pick a workflow, add notes if you like,
+  and **Run**. The message's text (and your notes) is the request, and the
+  status card follows the run in that message's thread.
+- **`/run`** in a channel or chat: the app answers privately with the same
+  list. In a channel, the run gets a thread of its own, opened by a line saying
+  who started which workflow.
+
+The list holds the workflows of the connected company you may start in Flow
+(projects where you can start runs), and only those that can run without a
+person: every step must allow running unattended. The run belongs to you and
+uses your credentials, and its status card says who started it.
+
+The first time, the app asks you to **link your Aixle account**: the link opens
+Flow, where you are signed in, and asks you to sign in with the Microsoft
+account you use in Teams. Once linked, Teams knows you as that Flow user. The
+link expires after an hour, works only for the Teams account it was sent to,
+and does not add a way to sign in to Flow. A person who already signs in to Flow
+with Microsoft is recognized without linking.
+
+### Recent runs: /status
+
+`/status` lists, privately, the last ten runs started from that conversation in
+the past 30 days, by a trigger or by someone, with their state and links. It
+needs a linked account and shows only runs of projects you can open in Flow.
+In a 1:1 chat with the app, type `/run` or `/status`: a sentence that merely
+starts with "run" or "status" goes to your triggers.
+`run` and `status` are reserved like `help`: no Teams trigger can use them as
+its pattern.
 
 ### The status card
 
@@ -140,8 +174,9 @@ A Teams-started run belongs to the person who added the trigger, and it uses
 their credentials, as with Slack. Anyone in the organization who can address
 the app in an accepted conversation can start it. Flow records who asked: it is
 shown on the run page, and an agent sees the sender's name. A sender who signs
-in to Flow with Microsoft is recognized as that Flow user. Flow never matches
-people by email address.
+in to Flow with Microsoft, or has linked their Teams account, is recognized as
+that Flow user. Flow never matches people by email address. A run someone
+starts themselves with **Run workflow** or `/run` belongs to them instead.
 
 ### What the run receives
 

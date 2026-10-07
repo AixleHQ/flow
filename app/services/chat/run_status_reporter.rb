@@ -10,10 +10,9 @@ module Chat
     module_function
 
     def applies?(dispatch, transition = nil)
-      binding = dispatch.trigger_binding
-      return false unless binding&.chat? && Chat.provider_for(dispatch.trigger_event)
+      return false unless Chat.provider_for(dispatch.trigger_event)
 
-      case binding.status_reporting.to_s
+      case reporting(dispatch)
       when "lifecycle" then true
       when "failures" then transition.nil? || transition.to_s == "failed"
       else false
@@ -23,12 +22,20 @@ module Chat
     def report(dispatch, transition)
       provider = Chat.provider_for(dispatch.trigger_event)
       return if provider.nil?
-      return StatusCard.call(dispatch, provider) if dispatch.trigger_binding&.status_reporting.to_s == "lifecycle"
+      return StatusCard.call(dispatch, provider) if reporting(dispatch) == "lifecycle"
       return unless transition.to_s == "failed"
 
       run = dispatch.workflow_run&.reload
       # A late or duplicated job acts on what the run is now.
       provider.report_failure(run) if run&.failed?
+    end
+
+    # A trigger says how it reports; a run a person started themselves is followed.
+    def reporting(dispatch)
+      binding = dispatch.trigger_binding
+      return binding.status_reporting.to_s if binding&.chat?
+
+      binding.nil? && dispatch.source == Chat::ACTION_SOURCE ? "lifecycle" : "none"
     end
   end
 end

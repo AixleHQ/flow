@@ -16,11 +16,12 @@ class Chat::RunStatusReporterTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "Weekly Digest")
     @step = create(:step, workflow: @workflow, name: "Render", position: 1, allow_non_interactive: true)
     @binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                                        event_type: "slack.message")
+                                        event_type: "chat.message")
     @event = create(:trigger_event, event_type: "chat.message", source: "slack:slack-team-T1",
                                     data: { "provider" => "slack" }, company: @project.company)
     @run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, shared_context: {
-      "slack" => { "channel" => "C1", "thread_ts" => "1.1", "integration_id" => @integration.id }
+      "chat" => { "provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                  "thread_id" => "1.1", "integration_id" => @integration.id }
     })
     @dispatch = TriggerDispatch.create!(trigger_event: @event, trigger_binding: @binding, workflow_run: @run,
                                         dedup_key: SecureRandom.hex, status: "started")

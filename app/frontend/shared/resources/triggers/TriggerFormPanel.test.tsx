@@ -337,7 +337,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('posts the cooldown set on a slack trigger, and 0 for a cleared one', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat' })} />);
 
     const cooldown = screen.getByRole('textbox', { name: 'Cooldown (s)' });
     await userEvent.clear(cooldown);
@@ -381,7 +381,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('reveals and posts the slack subject block with its own title placeholder', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat' })} />);
 
     await pickOption(/project-level run/, 'Create a task');
 
@@ -545,7 +545,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     installFetch(() => json({ webhook_url: 'https://example.test/should-be-ignored' }));
     const onSaved = vi.fn();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -589,8 +589,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a structured text predicate and patches enabled + filter', async () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C1', text: { op: 'regex', value: 'deploy' } },
       subject_policy: 'none',
       cooldown_seconds: 120,
@@ -629,8 +630,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a plain-string text predicate', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C2', text: 'shipit' },
       subject_policy: 'none',
       enabled: true,
@@ -645,8 +647,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit with a channel but no text predicate', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C3' },
       subject_policy: 'none',
       enabled: false,
@@ -663,8 +666,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a structured text predicate missing op/value', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C4', text: {} },
       subject_policy: 'none',
       enabled: true,
@@ -799,7 +803,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     const onSaved = vi.fn();
     installFetch(() => json({ errors: ['Bad channel', 'Nope'] }, 422));
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
@@ -812,7 +816,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     // Invalid JSON => res.json() rejects => caught as {} => default message.
     installFetch(() => new Response('boom', { status: 500, headers: { 'Content-Type': 'application/json' } }));
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
@@ -823,7 +827,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('keeps the form open with its values intact when the scrim is clicked', async () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onClose, onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onClose, onSaved })} />);
 
     const channel = screen.getByPlaceholderText('C0123ABC (blank = any)');
     await userEvent.type(channel, 'C-PRESERVE-ME');
@@ -840,8 +844,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     const onSaved = vi.fn();
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C-EXISTING' },
       subject_policy: 'none',
       enabled: true,
@@ -906,7 +911,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'ignore',
         filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
         subject_policy: 'find_or_create_task',
-        notify_on_failure: true,
+        status_reporting: 'failures',
         subject_column_id: '1',
       });
     });
@@ -921,7 +926,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
       await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-      expect(bodyOf(fetchSpy, 'POST').trigger.notify_on_failure).toBe(false);
+      expect(bodyOf(fetchSpy, 'POST').trigger.status_reporting).toBe('none');
     });
 
     it('edits a tracker trigger without resending its event type', async () => {
@@ -934,7 +939,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         subject_policy: 'none',
         filter_predicate: { 'comment.mentions_me': true },
-        notify_on_failure: false,
+        status_reporting: 'none',
         enabled: true,
       };
       renderPage(<TriggerFormPanel {...baseProps({ editing, trackers })} />);
@@ -949,7 +954,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         filter_predicate: { 'comment.mentions_me': true },
         subject_policy: 'none',
-        notify_on_failure: false,
+        status_reporting: 'none',
         enabled: true,
       });
     });

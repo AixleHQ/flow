@@ -70,7 +70,7 @@ class Tool < ApplicationRecord
 
   # Providers of integrations active for this project (project-scoped or
   # company-wide). Used to gate tools that require an integration to be usable —
-  # e.g. slack_post_message is hidden until Slack is connected.
+  # e.g. chat_post_message is hidden until Slack or Teams is connected.
   def self.active_integration_providers(project)
     return [] if project.nil?
 

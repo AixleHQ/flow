@@ -6,7 +6,7 @@ module Chat
   # what the run is now, so jobs arriving out of order cannot walk it back; the
   # transition that woke the job only says something may have changed.
   module StatusCard
-    Status = Struct.new(:state, :workflow, :run_id, :since, :duration, :detail, :url, keyword_init: true) do
+    Status = Struct.new(:state, :workflow, :run_id, :since, :duration, :detail, :url, :started_by, keyword_init: true) do
       def finished? = %w[completed failed cancelled skipped].include?(state)
     end
 
@@ -34,7 +34,10 @@ module Chat
       workflow = (run&.workflow || dispatch.trigger_binding&.workflow)&.name || "Workflow"
       return Status.new(state: "skipped", workflow: workflow, detail: skip_detail(dispatch)) if run.nil?
 
-      base = { workflow: workflow, run_id: run.id, url: Chat::RunFailure.url(run) }
+      # A trigger's run belongs to whoever set the trigger up, not to the person
+      # who wrote the message, so only a run someone started themselves names them.
+      started_by = run.user&.name if dispatch.source == Chat::ACTION_SOURCE
+      base = { workflow: workflow, run_id: run.id, url: Chat::RunFailure.url(run), started_by: started_by }
       case run.state.to_s
       when "pending" then Status.new(state: "accepted", **base)
       when "running", "paused" then Status.new(state: "running", since: run.started_at, **base)

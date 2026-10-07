@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -395,6 +395,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
     t.datetime "welcomed_at"
     t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
     t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
+  end
+
+  create_table "chat_identities", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_user_id", null: false
+    t.datetime "linked_at", null: false
+    t.string "proof", null: false
+    t.string "provider", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.string "workspace_id", null: false
+    t.index ["provider", "workspace_id", "external_user_id"], name: "index_chat_identities_on_sender", unique: true
+    t.index ["user_id"], name: "index_chat_identities_on_user_id"
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -1522,7 +1535,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
     t.string "event_type", null: false
     t.jsonb "filter_predicate", default: {}, null: false
     t.string "name"
-    t.boolean "notify_on_failure", default: true, null: false
     t.bigint "project_id", null: false
     t.bigint "project_tracker_id"
     t.jsonb "schedule_config", default: {}, null: false
@@ -1815,6 +1827,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_090000) do
   add_foreign_key "board_view_presets", "users"
   add_foreign_key "boards", "projects", on_delete: :cascade
   add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
+  add_foreign_key "chat_identities", "users", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade

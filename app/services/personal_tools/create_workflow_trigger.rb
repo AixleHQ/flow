@@ -8,7 +8,7 @@ module PersonalTools
       display_name "Create Workflow Trigger"
       description "Connect a trigger to a workflow so it launches on its own: a card entering a " \
                   "board column (kind=column), a message that mentions the bot in Slack or Microsoft Teams " \
-                  "(chat, with chat_provider; slack is the older name for a Slack one), a cron schedule (schedule), " \
+                  "(chat, with chat_provider), a cron schedule (schedule), " \
                   "an inbound webhook (webhook), an event in a task tracker connected to the project " \
                   "(tracker: event_type tracker.issue.created, tracker.issue.status_changed, " \
                   "tracker.issue.assigned or tracker.comment.created; project_tracker_id picks one tracker, " \
@@ -38,8 +38,6 @@ module PersonalTools
                            description: "auto starts the run immediately; manual only offers it. Defaults to auto."
       param :enabled, type: :boolean, description: "Whether the trigger fires. Defaults to true; column triggers are always on."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings. Defaults to 5 for column triggers, 0 otherwise."
-      param :notify_on_failure, type: :boolean,
-            description: "Older switch for status_reporting: false is none. Prefer status_reporting."
       param :status_reporting, type: :string, enum: WorkflowTriggerSupport::STATUS_REPORTING,
                                description: "What a run tells the place it came from. none; failures (one message or tracker " \
                                             "comment when it fails); lifecycle (chat only: one status card in the thread, " \

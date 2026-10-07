@@ -13,7 +13,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
   test "valid binding for a project-accessible workflow" do
     binding = TriggerBinding.new(
       project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message"
+      event_type: "chat.message", filter_predicate: { "provider" => "slack" }
     )
     assert binding.valid?
   end
@@ -25,7 +25,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
     binding = TriggerBinding.new(
       project: @project, workflow: foreign_workflow, created_by: @user,
-      event_type: "slack.message"
+      event_type: "chat.message"
     )
 
     assert_not binding.valid?
@@ -39,7 +39,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "matches? does JSONB-style containment of the predicate within event data" do
-    binding = build(:trigger_binding, filter_predicate: { "channel" => "C1" })
+    binding = build(:trigger_binding, event_type: "webhook.received", filter_predicate: { "channel" => "C1" })
 
     assert binding.matches?("channel" => "C1", "user" => "U9")
     assert_not binding.matches?("channel" => "C2")
@@ -47,18 +47,18 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "empty predicate matches any event of the type" do
-    binding = build(:trigger_binding, filter_predicate: {})
+    binding = build(:trigger_binding, event_type: "webhook.received", filter_predicate: {})
     assert binding.matches?("anything" => "goes")
   end
 
   test "subject_policy defaults to none" do
-    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
     assert_equal "none", binding.subject_policy
   end
 
   test "create_task subject_policy requires a subject_column" do
     binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message", subject_policy: :create_task, subject_column: nil)
+      event_type: "chat.message", subject_policy: :create_task, subject_column: nil)
 
     assert_not binding.valid?
     assert_includes binding.errors[:subject_column], "is required when subject_policy is create_task"
@@ -70,9 +70,9 @@ class TriggerBindingTest < ActiveSupport::TestCase
     own_column = create(:board_column, board: create(:board, project: @project))
 
     foreign = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message", subject_policy: :create_task, subject_column: foreign_column)
+      event_type: "chat.message", subject_policy: :create_task, subject_column: foreign_column)
     own = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message", subject_policy: :create_task, subject_column: own_column)
+      event_type: "chat.message", subject_policy: :create_task, subject_column: own_column)
 
     assert_not foreign.valid?
     assert_match(/subject_column_id must belong to this project/, foreign.errors[:subject_column].join)
@@ -91,7 +91,8 @@ class TriggerBindingTest < ActiveSupport::TestCase
     wf = create(:workflow, scope: @project)
     wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
 
-    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
+    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "chat.message",
+                                 filter_predicate: { "provider" => "slack" })
 
     assert_not binding.valid?
     assert_includes binding.errors[:workflow].join, "Manual step"
@@ -101,7 +102,8 @@ class TriggerBindingTest < ActiveSupport::TestCase
     wf = create(:workflow, scope: @project)
     wf.steps.create!(name: "Auto step", position: 1, allow_non_interactive: true)
 
-    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
+    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "chat.message",
+                                 filter_predicate: { "provider" => "slack" })
 
     assert binding.valid?
   end
@@ -111,30 +113,30 @@ class TriggerBindingTest < ActiveSupport::TestCase
     wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
 
     binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user,
-      event_type: "slack.message", enabled: false)
+      event_type: "chat.message", filter_predicate: { "provider" => "slack" }, enabled: false)
 
     assert binding.valid?
   end
 
   test "for_event scopes by project, event_type and enabled" do
-    match = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    match = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "other.type")
-    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message", enabled: false)
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message", enabled: false)
 
-    event = create(:trigger_event, event_type: "slack.message", project: @project)
+    event = create(:trigger_event, event_type: "chat.message", project: @project)
 
     assert_equal [ match.id ], TriggerBinding.for_event(event).pluck(:id)
   end
 
-  test "a chat message matches chat triggers and the Slack triggers saved before them" do
-    legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
-    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
-                                    filter_predicate: { "provider" => "slack" })
+  test "a chat message matches the chat triggers of its own messenger" do
+    slack = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                             chat_provider: "teams")
 
     event = create(:trigger_event, event_type: "chat.message", source: "slack:slack-team-T1",
                                    data: { "provider" => "slack" }, project: @project)
 
-    assert_equal [ legacy.id, chat.id ].sort, TriggerBinding.for_event(event).pluck(:id).sort
+    assert_equal [ slack.id ], TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }.map(&:id)
   end
 
   test "a chat message from anything but its provider's receiver matches no trigger" do
@@ -156,7 +158,8 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "a chat trigger must name a messenger it knows" do
-    binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+    binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                                    chat_provider: nil)
 
     assert_not binding.valid?
     binding.filter_predicate = { "provider" => "irc" }
@@ -177,9 +180,9 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_equal "slack", binding.reload.chat_provider
   end
 
-  test "a Slack trigger saved before Teams moves to Teams as a chat trigger, without its Slack channel" do
+  test "a Slack trigger moved to Teams keeps its conditions but not its Slack channel" do
     create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
-    legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message",
+    legacy = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
                                       filter_predicate: { "channel" => "C1", "text" => "deploy" })
 
     legacy.assign_chat_provider("teams")
@@ -190,28 +193,12 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "moving an enabled chat trigger to a messenger the company has not connected is refused" do
-    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
 
     binding.filter_predicate = { "provider" => "teams" }
 
     assert_raises(ActiveRecord::RecordInvalid) { binding.save_checking_chat! }
-    assert_equal "slack.message", binding.reload.event_type
-  end
-
-  test "status_reporting and notify_on_failure follow whichever of the two was set" do
-    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user)
-    assert_equal "failures", binding.status_reporting
-
-    binding.update!(notify_on_failure: false)
-    assert_equal "none", binding.status_reporting
-
-    binding.update!(status_reporting: "failures")
-    assert binding.notify_on_failure
-
-    lifecycle = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-                                         status_reporting: "lifecycle")
-    lifecycle.update!(notify_on_failure: true)
-    assert_equal "lifecycle", lifecycle.status_reporting
+    assert_equal "slack", binding.reload.chat_provider
   end
 
   test "only a chat trigger can follow its run with a status card" do
@@ -239,13 +226,13 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
   test "rejects a slack text command of help and allows a word that only contains it" do
     help = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message",
+      event_type: "chat.message",
       filter_predicate: { "text" => { "op" => "eq", "value" => "help" } })
     slashed = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message",
+      event_type: "chat.message",
       filter_predicate: { "text" => { "op" => "contains", "value" => "/HELP" } })
     helpful = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message",
+      event_type: "chat.message",
       filter_predicate: { "text" => { "op" => "contains", "value" => "helpful" } })
     webhook = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "webhook.received",
@@ -259,17 +246,17 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "a slack binding matches its text condition without regard to case; other kinds keep case" do
-    slack = build(:trigger_binding, event_type: "slack.message",
+    slack = build(:trigger_binding, event_type: "chat.message",
       filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
     webhook = build(:trigger_binding, event_type: "webhook.received",
       filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
 
-    assert slack.matches?("text" => "Deploy staging")
+    assert slack.matches?("provider" => "slack", "text" => "Deploy staging")
     assert_not webhook.matches?("text" => "Deploy staging")
   end
 
   def slack_binding(**attrs)
-    build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message", **attrs)
+    build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message", **attrs)
   end
 
   test "save_checking_chat! refuses to create or switch on a slack trigger until the company connects Slack" do
@@ -293,7 +280,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
   test "save_checking_chat! still saves other edits of a slack trigger whose workspace went away" do
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
-      event_type: "slack.message", name: "before")
+      event_type: "chat.message", name: "before")
 
     binding.name = "after"
     binding.save_checking_chat!

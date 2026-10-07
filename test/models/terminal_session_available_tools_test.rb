@@ -52,7 +52,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_includes names, "list_sub_steps"
     assert_includes names, "mark_sub_step"
     assert_includes names, "board_list_tasks"
-    assert_includes names, "slack_post_message"
+    assert_includes names, "chat_post_message"
     # DB rows cannot opt into auto-injection anymore — injection rules are
     # declared in code only.
     refute_includes names, "static_analyzer"
@@ -94,7 +94,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     refute_includes names, "list_sub_steps"
     refute_includes names, "mark_sub_step"
-    refute_includes names, "slack_post_message"
+    refute_includes names, "chat_post_message"
   end
 
   test "workflow tools are NOT included for auth_setup" do
