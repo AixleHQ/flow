@@ -55,7 +55,7 @@ class SessionConcurrencyAllocation
   def refusal_for(max_sessions)
     cap = company_limit
 
-    "#{max_sessions} exceeds the company limit of #{cap} concurrent sessions. " \
+    "#{max_sessions} exceeds the company's #{cap} workers. " \
       "#{allocated} of #{cap} is already reserved by other projects, " \
       "so this project can be set to at most #{available}."
   end

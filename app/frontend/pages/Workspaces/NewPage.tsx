@@ -20,7 +20,7 @@ interface PageProps {
   suggestedEmail: string | null;
   /** A stranger names the address they will own the workspace with; a signed-in person has proved theirs. */
   needsEmail: boolean;
-  /** Queue-hours the workspace may spend before anyone asks it for a card. */
+  /** Worker-hours the workspace may spend before anyone asks it for a card. */
   freeQueueHours: number;
   /** Set when a signed-in person's domain already has a workspace, so there is nothing here to create. */
   claimedDomain?: ClaimedDomain | null;
@@ -41,12 +41,12 @@ const POINTS = [
     body: 'Colleagues signing in with the same email domain join this workspace instead of starting their own.',
   },
   {
-    title: 'A queue is one session at a time',
+    title: 'A worker runs one session at a time',
     body: 'Pick how many run side by side. Raise or lower it in settings whenever the work changes.',
   },
   {
     title: 'Capacity is the whole bill',
-    body: 'No seats and no per-token charge — you are billed for the queues you keep open, by the hour.',
+    body: 'No seats and no per-token charge — you are billed for the workers you keep, by the hour.',
   },
 ];
 
@@ -82,7 +82,7 @@ const Pitch = () => (
     <Anchor href={howItWorksPath()} size="sm" fw={500}>
       <Group gap={6} wrap="nowrap" component="span">
         <IconCalculator size={16} />
-        How it works, and what a queue costs
+        How it works, and what a worker costs
         <IconArrowRight size={14} />
       </Group>
     </Anchor>
@@ -222,8 +222,8 @@ const NewWorkspacePage = () => {
                   />
                 )}
                 <NumberInput
-                  label="Concurrent sessions"
-                  description="How many sessions this workspace may run at once. You can change it later in settings."
+                  label="Workers"
+                  description="How many sessions this workspace may run at once — one per worker. You can change it later in settings."
                   min={1}
                   allowDecimal={false}
                   allowNegative={false}
@@ -245,8 +245,8 @@ const NewWorkspacePage = () => {
                 </Button>
                 <p className={classes.footnote}>
                   You become its first administrator and can invite the rest of the team straight away. The first{' '}
-                  {freeQueueHours} queue-hours are free, and they are spent at whatever rate you run: four sessions at
-                  once uses four queue-hours an hour.
+                  {freeQueueHours} worker-hours are free, and they are spent at whatever rate you run: four workers at
+                  once use four worker-hours an hour.
                 </p>
               </Stack>
             </form>

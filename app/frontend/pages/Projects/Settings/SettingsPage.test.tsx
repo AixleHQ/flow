@@ -359,11 +359,11 @@ describe('Projects/Settings/SettingsPage', () => {
     expect(screen.getByText('gateway-service')).toBeInTheDocument();
   });
 
-  describe('concurrent sessions', () => {
+  describe('reserved workers', () => {
     it('submits the limit alongside the rest of the settings', async () => {
       renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
-      const limit = screen.getByLabelText('Concurrent Sessions');
+      const limit = screen.getByLabelText('Reserved workers');
       await userEvent.clear(limit);
       await userEvent.type(limit, '6');
 
@@ -381,7 +381,7 @@ describe('Projects/Settings/SettingsPage', () => {
     it('sends an empty limit when the field is cleared, which drops the reservation', async () => {
       renderAuthedPage(<SettingsPage />, { props: { project, concurrency: { ...concurrency, maxSessions: 6 } } });
 
-      const limit = screen.getByLabelText('Concurrent Sessions');
+      const limit = screen.getByLabelText('Reserved workers');
       await userEvent.clear(limit);
 
       const save = screen.getByRole('button', { name: 'Save Changes' });
@@ -400,11 +400,11 @@ describe('Projects/Settings/SettingsPage', () => {
         props: {
           project,
           concurrency,
-          errors: { concurrency: '9 exceeds the company limit of 10 concurrent sessions.' },
+          errors: { concurrency: "9 exceeds the company's 10 workers." },
         },
       });
 
-      expect(screen.getByText(/exceeds the company limit of 10/)).toBeInTheDocument();
+      expect(screen.getByText(/exceeds the company's 10 workers/)).toBeInTheDocument();
     });
 
     it("reports how much of the company's limit is left, and to whom", () => {
@@ -432,7 +432,7 @@ describe('Projects/Settings/SettingsPage', () => {
         props: { project, concurrency: { ...concurrency, canManage: false, maxSessions: 6 } },
       });
 
-      expect(screen.queryByLabelText('Concurrent Sessions')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Reserved workers')).not.toBeInTheDocument();
       expect(screen.getByText(/only a company admin can change this/)).toBeInTheDocument();
     });
   });

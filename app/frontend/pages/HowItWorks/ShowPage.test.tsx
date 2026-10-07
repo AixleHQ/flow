@@ -17,7 +17,7 @@ const results = () => screen.getByRole('region', { name: 'What your numbers come
 const prices = () => screen.getByRole('region', { name: 'What it costs' });
 
 describe('How it works page', () => {
-  it('publishes the queue price the server set, by the hour and by the month', () => {
+  it('publishes the worker price the server set, by the hour and by the month', () => {
     renderPage(<ShowPage />, { props });
 
     expect(within(prices()).getByText('$5.00')).toBeInTheDocument();
@@ -28,7 +28,7 @@ describe('How it works page', () => {
     renderPage(<ShowPage />, { props });
 
     expect(within(prices()).getByText('100')).toBeInTheDocument();
-    expect(within(prices()).getByText('queue-hours free')).toBeInTheDocument();
+    expect(within(prices()).getByText('worker-hours free')).toBeInTheDocument();
   });
 
   it('follows the installation to a different list price', () => {
@@ -72,23 +72,23 @@ describe('How it works page', () => {
     expect(within(results()).getByText('Pays back in never')).toBeInTheDocument();
   });
 
-  it('carries the queue count it worked out into the signup form', () => {
+  it('carries the worker count it worked out into the signup form', () => {
     renderPage(<ShowPage />, { props });
 
-    expect(screen.getByRole('link', { name: /Start with 1 queue/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Start with 1 worker/ })).toHaveAttribute(
       'href',
       '/workspace/new?sessions=1',
     );
   });
 
-  it('sizes the reservation up for a workload that outgrows one queue', async () => {
+  it('sizes the reservation up for a workload that outgrows one worker', async () => {
     renderPage(<ShowPage />, { props });
 
     const hours = screen.getByLabelText(/Labour hours this process costs you a year/);
     await userEvent.clear(hours);
     await userEvent.type(hours, '18000');
 
-    expect(screen.getByRole('link', { name: /Start with 9 queues/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Start with 9 workers/ })).toHaveAttribute(
       'href',
       '/workspace/new?sessions=9',
     );

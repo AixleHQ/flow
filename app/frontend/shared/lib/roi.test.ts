@@ -7,8 +7,8 @@ import {
   formatMonths,
   formatPercent,
   irr,
-  monthlyCostPerQueue,
-  suggestedQueues,
+  monthlyCostPerWorker,
+  suggestedWorkers,
 } from './roi';
 
 describe('calculateRoi', () => {
@@ -57,7 +57,7 @@ describe('calculateRoi', () => {
 
   // The page has free-text inputs, so a visitor can describe a deal that never
   // pays for itself. It has to say so rather than render NaN.
-  it('never breaks even when a queue-hour costs more than an hour of labour', () => {
+  it('never breaks even when a worker-hour costs more than an hour of labour', () => {
     const roi = calculateRoi({ ...DEFAULT_ROI_INPUTS, laborCostPerHour: 2 });
 
     expect(roi.breakevenHours).toBe(Infinity);
@@ -84,17 +84,17 @@ describe('irr', () => {
   });
 });
 
-describe('queue sizing', () => {
-  it('prices a queue at the list rate for every hour of the month', () => {
-    expect(monthlyCostPerQueue(5)).toBe(3600);
+describe('worker sizing', () => {
+  it('prices a worker at the list rate for every hour of the month', () => {
+    expect(monthlyCostPerWorker(5)).toBe(3600);
   });
 
-  it('suggests one queue for a workload that fits in one', () => {
-    expect(suggestedQueues(DEFAULT_ROI_INPUTS)).toBe(1);
+  it('suggests one worker for a workload that fits in one', () => {
+    expect(suggestedWorkers(DEFAULT_ROI_INPUTS)).toBe(1);
   });
 
-  it('adds queues as the workload outgrows them', () => {
-    expect(suggestedQueues({ hoursSavedPerYear: 18_000, acceleratorMultiple: 1 })).toBe(9);
+  it('adds workers as the workload outgrows them', () => {
+    expect(suggestedWorkers({ hoursSavedPerYear: 18_000, acceleratorMultiple: 1 })).toBe(9);
   });
 });
 

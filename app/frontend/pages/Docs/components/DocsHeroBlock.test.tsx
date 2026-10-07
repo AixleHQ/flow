@@ -54,7 +54,7 @@ describe('Docs/components/DocsHeroBlock', () => {
         expect(card).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/Autonomous workers that receive a goal/)).toBeInTheDocument();
+      expect(screen.getByText(/Autonomous AI that takes a goal/)).toBeInTheDocument();
       expect(screen.getByText(/Fine-grained access control/)).toBeInTheDocument();
     });
 
