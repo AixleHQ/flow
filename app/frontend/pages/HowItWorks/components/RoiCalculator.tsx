@@ -8,19 +8,19 @@ import {
   formatMoney,
   formatMonths,
   formatPercent,
-  HOURS_PER_QUEUE_MONTH,
+  HOURS_PER_WORKER_MONTH,
   IRR_BENCHMARK,
   MAX_YEARS,
-  monthlyCostPerQueue,
+  monthlyCostPerWorker,
   type RoiInputs,
-  suggestedQueues,
+  suggestedWorkers,
 } from 'shared/lib/roi';
 import { newWorkspacePath } from 'shared/routes';
 
 import classes from './RoiCalculator.module.css';
 
 interface RoiCalculatorProps {
-  queueHourlyRate: number;
+  workerHourlyRate: number;
 }
 
 // NumberInputProps rather than ComponentProps: the component is generic over
@@ -35,8 +35,8 @@ const Row = ({ label, value, strong = false }: { label: string; value: string; s
   </div>
 );
 
-export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
-  const [inputs, setInputs] = useState<RoiInputs>({ ...DEFAULT_ROI_INPUTS, queueHourlyRate });
+export const RoiCalculator = ({ workerHourlyRate }: RoiCalculatorProps) => {
+  const [inputs, setInputs] = useState<RoiInputs>({ ...DEFAULT_ROI_INPUTS, workerHourlyRate });
 
   // Mantine hands back a string while the field is mid-edit (and for an empty
   // one). Everything downstream divides by these, so they are coerced here
@@ -45,8 +45,8 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
     setInputs((prev) => ({ ...prev, [key]: typeof value === 'number' ? value : Number(value) || 0 }));
 
   const roi = useMemo(() => calculateRoi(inputs), [inputs]);
-  const queues = useMemo(() => suggestedQueues(inputs), [inputs]);
-  const hourlyBill = queues * inputs.queueHourlyRate;
+  const workers = useMemo(() => suggestedWorkers(inputs), [inputs]);
+  const hourlyBill = workers * inputs.workerHourlyRate;
 
   const field = (label: string, key: keyof RoiInputs, props: FieldProps = {}) => (
     <NumberInput
@@ -84,7 +84,7 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
             })}
             {field('How many times faster Flow runs it', 'acceleratorMultiple', {
               description:
-                'At 1× a queue-hour simply replaces an hour of labour. Raise it if agents working in parallel, overnight, get the work done sooner.',
+                'At 1× a worker-hour simply replaces an hour of labour. Raise it if agents working in parallel, overnight, get the work done sooner.',
               suffix: '×',
               min: 1,
             })}
@@ -97,9 +97,9 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
           </Stack>
 
           <Text size="xs" c="var(--app-text-tertiary)">
-            A queue is one session running at a time, priced at {formatMoney(inputs.queueHourlyRate, 2)} an hour for
-            every hour it is open — {HOURS_PER_QUEUE_MONTH} hours a month, or{' '}
-            {formatMoney(monthlyCostPerQueue(inputs.queueHourlyRate))} a queue.
+            A worker runs one session at a time, priced at {formatMoney(inputs.workerHourlyRate, 2)} an hour for every
+            hour you keep it — {HOURS_PER_WORKER_MONTH} hours a month, or{' '}
+            {formatMoney(monthlyCostPerWorker(inputs.workerHourlyRate))} a worker.
           </Text>
         </Stack>
       </div>
@@ -137,8 +137,8 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
             What to reserve
           </Text>
           <Group justify="space-between" align="baseline" mt={6}>
-            <span className={classes.queueCount}>
-              {queues} {queues === 1 ? 'queue' : 'queues'}
+            <span className={classes.workerCount}>
+              {workers} {workers === 1 ? 'worker' : 'workers'}
             </span>
             <Text fw={600} ff="var(--app-font-mono)">
               {formatMoney(hourlyBill, 2)}/hour
@@ -149,13 +149,13 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
           </Text>
           <Button
             component="a"
-            href={newWorkspacePath({ sessions: queues })}
+            href={newWorkspacePath({ sessions: workers })}
             fullWidth
             size="md"
             mt="md"
             rightSection={<IconArrowRight size={16} />}
           >
-            Start with {queues} {queues === 1 ? 'queue' : 'queues'}
+            Start with {workers} {workers === 1 ? 'worker' : 'workers'}
           </Button>
         </Box>
       </section>

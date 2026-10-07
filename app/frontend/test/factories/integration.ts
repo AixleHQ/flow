@@ -47,7 +47,6 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   youtrackBaseUrl: null,
   youtrackProjects: [],
   youtrackIdentity: null,
-  youtrackDedicatedIdentity: false,
   youtrackWebhooksPending: [],
   // Always present, empty for every provider but Azure DevOps: the operation
   // profile and the covered projects are lists the server always serializes,

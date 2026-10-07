@@ -62,9 +62,13 @@ attributable to the integration rather than to a person.
 | Value field | `value` |
 | Customer mapping | `stripe_customer_id` |
 
-Queue-**minutes**, not hours: capacity is measured exactly to the second
+The event name is older than the product calling this capacity *workers*. Stripe
+cannot rename a meter's event name, and the application sends `queue_minutes`, so
+it stays.
+
+Worker-**minutes**, not hours: capacity is measured exactly to the second
 (`capacity_meter_reports.quantity_seconds`) and Stripe accepts a fractional value,
-so minutes are sent unrounded and nothing is lost at this edge. One queue-hour is
+so minutes are sent unrounded and nothing is lost at this edge. One worker-hour is
 60 units.
 
 ## 4. The product and its price
@@ -74,7 +78,7 @@ so minutes are sent unrounded and nothing is lost at this edge. One queue-hour i
 | Field | Value |
 | --- | --- |
 | Name | Aixle Flow capacity |
-| Unit label | `queue-minute` (Stripe allows twelve characters, and that is twelve) |
+| Unit label | `worker-min` (Stripe allows twelve characters; `worker-minute` is thirteen) |
 | Pricing model | Usage-based, metered |
 | Meter | `queue_minutes` |
 | Price | **$5.00** per package of **60** units — `PRICING_QUEUE_HOURLY_RATE` at the default |
@@ -90,15 +94,15 @@ They are two copies of one number and will drift if nobody is watching.
 Priced per unit, the metered price is `PRICING_QUEUE_HOURLY_RATE` ÷ 60 and Stripe
 Checkout prints it as it is: **$0.083333333333 per unit**, thirteen decimal places
 against a product nobody prices by the minute. Package pricing buys the minutes
-sixty at a time instead, and the same page reads **"$5.00 per 60 queue-minutes"**.
+sixty at a time instead, and the same page reads **"$5.00 per 60 worker-min"**.
 
-Nothing about the measurement changes. The meter still counts queue-minutes,
+Nothing about the measurement changes. The meter still counts worker-minutes,
 exact to the second, and the application still sends one event per company per
 hour — the package is arithmetic Stripe does at invoice time, on the total for
 the period.
 
 **It rounds down**, which is the whole of the difference it makes to money: a
-part queue-hour left over at the end of a billing period is not charged for.
+part worker-hour left over at the end of a billing period is not charged for.
 Stripe requires a direction and there is under $5 in it either way; down is the
 one that cannot start an argument, and it is what the `/docs` portal's **Plans &
 limits** page tells customers.
@@ -123,7 +127,7 @@ curl https://api.stripe.com/v1/prices -u "$STRIPE_SECRET_KEY:" \
 Stripe's Adaptive Pricing converts the checkout page into the visitor's local
 currency from their IP — a customer in Jakarta was quoted rupiah at Stripe's own
 rate. That is a second price nobody here set and nobody here can reconcile
-against the queue-minutes we metered, so the application turns it off per session
+against the worker-minutes we metered, so the application turns it off per session
 (`adaptive_pricing: { enabled: false }`). It is set in code rather than in the
 dashboard so it is version-controlled and survives somebody changing a setting.
 
@@ -208,7 +212,7 @@ and the deploy will not let you.
       carry over), the price carrying the same `transform_quantity`
 - [ ] Live webhook endpoint created and its secret deployed
 - [ ] `PRICING_QUEUE_HOURLY_RATE` and the live price checked against each other
-- [ ] A test invoice read end to end and its queue-minutes reconciled against
+- [ ] A test invoice read end to end and its worker-minutes reconciled against
       `company_capacity_usages` for the same hours
 
 ## Related

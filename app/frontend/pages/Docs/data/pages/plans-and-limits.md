@@ -10,36 +10,36 @@
 
 Capacity, and nothing else. No seats, no charge per token, no charge per run.
 
-A **queue** is one session at a time. A workspace with four queues runs four
-sessions side by side; a fifth waits. Queues are what you buy, and what you set on
-**Settings → General → Session capacity**.
+A **worker** runs one session at a time. A workspace with four workers runs four
+sessions side by side; a fifth waits. Workers are what you buy, and what you set on
+**Settings → General → Workers**.
 
-A queue is a reserved slot: it is charged for every hour it stands ready, whether
-or not a session is running in it. That is deliberate — the capacity is yours
-whenever you want it, not only when you happen to use it.
+A worker is reserved capacity: it is charged for every hour it stands ready,
+whether or not a session is running on it. That is deliberate — the capacity is
+yours whenever you want it, not only when you happen to use it.
 
 | | |
 | --- | --- |
-| One queue-hour | **$5.00** |
-| One queue, kept open for a month | 720 hours — **$3,600** |
+| One worker-hour | **$5.00** |
+| One worker, kept for a month | 720 hours — **$3,600** |
 
-Usage is measured **hourly and time-weighted**: half an hour at one queue and half
-an hour at three is two queue-hours, not three. Raising or lowering your limit
+Usage is measured **hourly and time-weighted**: half an hour at one worker and half
+an hour at three is two worker-hours, not three. Raising or lowering your limit
 takes effect immediately, not next month.
 
-Your invoice is charged in **whole queue-hours**. A part hour left over at the end
+Your invoice is charged in **whole worker-hours**. A part hour left over at the end
 of a billing period is rounded down and not charged for — we never round a
 fraction up into a chargeable hour.
 
-## Your first 100 queue-hours are free
+## Your first 100 worker-hours are free
 
-Every new workspace starts with **100 free queue-hours**, and nothing is charged
+Every new workspace starts with **100 free worker-hours**, and nothing is charged
 for them.
 
 **They are a quantity, not a trial period, and you set the rate they are spent
-at.** Running ten sessions at once uses ten queue-hours an hour; running one uses
-one. The same hundred hours last about four days at one queue and about ten hours
-at ten.
+at.** Running ten workers uses ten worker-hours an hour; running one uses one.
+The same hundred hours last about four days at one worker and about ten hours at
+ten.
 
 Your limit is yours throughout — nothing is capped while the free capacity lasts,
 so you are trying the product you would actually be buying. A bigger limit buys a
@@ -62,8 +62,8 @@ can be added from the product itself once payment is live.
 
 | | |
 | --- | --- |
-| The session limit | Any **administrator** of the workspace, on Settings → General |
-| Reserving part of it for one project | Any administrator, on that project's settings |
+| The number of workers | Any **administrator** of the workspace, on Settings → General |
+| Reserving some of them for one project | Any administrator, on that project's settings |
 | Removing the limit entirely | Nobody — a workspace without a limit is one nobody is invoiced for. Ask us |
 
 Raising your limit costs more per hour from the moment you raise it. Lowering it

@@ -101,7 +101,7 @@ module Youtrack
       case status
       when 300..399
         Trackers::Error.new("YouTrack redirected the request; enter the instance's final URL", code: "validation_failed")
-      when 401 then Trackers::Error.new("YouTrack rejected the permanent token", code: "not_authorized")
+      when 401 then Trackers::Error.new("YouTrack rejected the Aixle Flow app's token", code: "not_authorized")
       when 403 then Trackers::Error.new(message || "The token's account may not do this in YouTrack", code: "permission_denied")
       when 404 then Trackers::Error.new(message || "YouTrack has no such entity, or the token cannot see it", code: "not_found")
       when 409 then Trackers::Error::Conflict.new(message || "YouTrack refused a conflicting change")

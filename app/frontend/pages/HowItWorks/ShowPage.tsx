@@ -4,7 +4,7 @@ import { IconArrowRight } from '@tabler/icons-react';
 
 import { PublicLayout } from 'layouts/PublicLayout';
 
-import { formatMoney, HOURS_PER_QUEUE_MONTH, monthlyCostPerQueue } from 'shared/lib/roi';
+import { formatMoney, HOURS_PER_WORKER_MONTH, monthlyCostPerWorker } from 'shared/lib/roi';
 import { loginPath, newWorkspacePath, templatesPath } from 'shared/routes';
 import { BrandLockup } from 'shared/ui';
 
@@ -14,7 +14,7 @@ import classes from './ShowPage.module.css';
 interface Props {
   [key: string]: unknown;
   queueHourlyRate: number;
-  /** Queue-hours a new workspace may spend before anyone asks it for a card. */
+  /** Worker-hours a new workspace may spend before anyone asks it for a card. */
   freeQueueHours: number;
   signedIn: boolean;
 }
@@ -27,13 +27,13 @@ const STEPS = [
   },
   {
     number: 'Step 02',
-    title: 'Agents run it in a queue',
-    body: 'Every run gets its own container: the agent works, commits, opens pull requests and asks for approval where you told it to stop. A queue runs one session at a time.',
+    title: 'Workers run it',
+    body: 'Every run gets its own container: the agent works, commits, opens pull requests and asks for approval where you told it to stop. A worker runs one session at a time.',
   },
   {
     number: 'Step 03',
-    title: 'You pay for the queues you keep open',
-    body: 'Capacity is the whole price. Two queues run two sessions side by side; raise or lower the number in settings and the bill follows within the hour.',
+    title: 'You pay for the workers you keep',
+    body: 'Capacity is the whole price. Two workers run two sessions side by side; raise or lower the number in settings and the bill follows within the hour.',
   },
 ];
 
@@ -47,7 +47,7 @@ const ShowPage = () => {
       <Stack gap={64} pb={40}>
         <Box className={classes.hero}>
           <BrandLockup size="lg" />
-          <h1 className={classes.heroTitle}>Hand a process to agents, pay for the queue it runs in</h1>
+          <h1 className={classes.heroTitle}>Hand a process to agents, pay for the workers that run it</h1>
           <p className={classes.heroLead}>
             Flow runs your workflows the way a team would — with the same repositories, the same tools and the same
             approvals — and charges for capacity rather than for seats or for tokens.
@@ -84,37 +84,37 @@ const ShowPage = () => {
           <div>
             <h2 className={classes.sectionTitle}>What it costs</h2>
             <p className={classes.sectionLead}>
-              One number, published. A queue is a reserved slot: it is charged for every hour it stands ready, whether
-              or not a session is running in it.
+              One number, published. A worker is reserved capacity: it is charged for every hour it stands ready,
+              whether or not a session is running on it.
             </p>
           </div>
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg" component="section" aria-label="What it costs">
             <div className={classes.priceCard}>
               <div className={classes.price}>
                 <span className={classes.priceFigure}>{formatMoney(queueHourlyRate, 2)}</span>
-                <Text c="var(--app-text-secondary)">per queue-hour</Text>
+                <Text c="var(--app-text-secondary)">per worker-hour</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                The list price of one session slot, for one hour.
+                The list price of one worker, for one hour.
               </Text>
             </div>
             <div className={classes.priceCard}>
               <div className={classes.price}>
-                <span className={classes.priceFigure}>{formatMoney(monthlyCostPerQueue(queueHourlyRate))}</span>
-                <Text c="var(--app-text-secondary)">per queue, per month</Text>
+                <span className={classes.priceFigure}>{formatMoney(monthlyCostPerWorker(queueHourlyRate))}</span>
+                <Text c="var(--app-text-secondary)">per worker, per month</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                {HOURS_PER_QUEUE_MONTH} hours of standing capacity. No seats, no per-token bill.
+                {HOURS_PER_WORKER_MONTH} hours of standing capacity. No seats, no per-token bill.
               </Text>
             </div>
             <div className={classes.priceCard}>
               <div className={classes.price}>
                 <span className={classes.priceFigure}>{freeQueueHours}</span>
-                <Text c="var(--app-text-secondary)">queue-hours free</Text>
+                <Text c="var(--app-text-secondary)">worker-hours free</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                Every new workspace starts with them, spent at whatever rate it runs — four queues at once uses four
-                queue-hours an hour. Capacity is metered hourly, so raising or lowering your limit takes effect
+                Every new workspace starts with them, spent at whatever rate it runs — four workers at once use four
+                worker-hours an hour. Capacity is metered hourly, so raising or lowering your limit takes effect
                 immediately rather than next month.
               </Text>
             </div>
@@ -128,7 +128,7 @@ const ShowPage = () => {
               The model our team uses on a first call, with your numbers instead of theirs.
             </p>
           </div>
-          <RoiCalculator queueHourlyRate={queueHourlyRate} />
+          <RoiCalculator workerHourlyRate={queueHourlyRate} />
           <p className={classes.footnote}>
             ROI is the saving over the period divided by what Flow costs across it. IRR is the internal rate of return
             on the cash flows — the setup in year zero, then each year&apos;s saving — which is the figure a capital
@@ -139,7 +139,7 @@ const ShowPage = () => {
         <Box className={classes.cta}>
           <h2 className={classes.sectionTitle}>Start with one workflow</h2>
           <Text c="var(--app-text-secondary)" mt="sm" maw="52ch" mx="auto">
-            Claim your domain, pick how many queues to keep open, and change the number whenever the work changes.
+            Claim your domain, pick how many workers to keep, and change the number whenever the work changes.
           </Text>
           <Group justify="center" mt="xl" gap="sm">
             <Button component="a" href={newWorkspacePath()} size="md" rightSection={<IconArrowRight size={16} />}>

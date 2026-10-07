@@ -13,12 +13,6 @@ describe('mentionBlocker', () => {
     );
   });
 
-  it('explains why a YouTrack connection on a personal token cannot recognise a mention', () => {
-    expect(mentionBlocker({ provider: 'youtrack', mentionsRecognized: false })).toMatch(
-      /This YouTrack account is kept for Aixle/,
-    );
-  });
-
   it('explains why a GitHub Projects tracker cannot recognise a mention', () => {
     expect(mentionBlocker({ provider: 'github', mentionsRecognized: false })).toMatch(/no GitHub App slug configured/);
   });

@@ -712,6 +712,24 @@
   line-height: 1.5;
 }
 
+/* Inline external link inside helper text (e.g. BMAD "Learn more"). Mirrors
+   .fieldHelp a for color + hover, and adds a theme-agnostic focus-visible ring
+   so the link is reachable and clearly focused by keyboard (Tab + Enter). */
+.learnMoreLink {
+  color: var(--accent-text);
+  text-decoration: none;
+  border-radius: 3px;
+}
+
+.learnMoreLink:hover {
+  text-decoration: underline;
+}
+
+.learnMoreLink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .infoNote {
   display: flex;
   align-items: center;

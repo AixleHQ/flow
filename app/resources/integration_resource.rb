@@ -303,12 +303,7 @@ class IntegrationResource < ApplicationResource
     integration.youtrack? ? integration.settings&.dig("identity_login") : nil
   end
 
-  typelize "boolean"
-  attribute :youtrack_dedicated_identity do |integration|
-    integration.youtrack? && integration.settings&.dig("dedicated_identity") == true
-  end
-
-  # Projects whose Webhook Triggers app has delivered nothing yet, by key.
+  # Projects the Aixle Flow app has delivered no event from yet, by key.
   typelize "string[]"
   attribute :youtrack_webhooks_pending do |integration|
     next [] unless integration.youtrack?

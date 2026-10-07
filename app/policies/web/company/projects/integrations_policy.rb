@@ -29,12 +29,9 @@ module Web
         def linear_oauth_start? = manage_integrations?
         def linear_inspect? = manage_integrations?
         def linear_teams? = manage_integrations?
-        def youtrack_inspect? = manage_integrations?
-        def youtrack_projects? = manage_integrations?
+        def youtrack_connect? = manage_integrations?
         # Return and replace the webhook tokens.
         def jira_webhook? = manage_integrations?
-        def youtrack_webhook? = manage_integrations?
-        def youtrack_webhook_token? = manage_integrations?
 
         private
 

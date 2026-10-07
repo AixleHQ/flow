@@ -1,89 +1,93 @@
 # Connecting YouTrack
 
 YouTrack connects per Flow project. A connection names one YouTrack instance —
-YouTrack Cloud or a self-hosted server — and the YouTrack projects you pick in
+YouTrack Cloud or a self-hosted server — and the YouTrack projects chosen in
 it, and each of those projects becomes a **tracker** on the project's
 **Trackers** page. From then on:
 
 - tracker triggers start workflows when an issue is created, moves to another
   state, is assigned, or gets a comment;
 - agents read and change issues with the `tracker_*` tools — search, create,
-  update, move, assign, comment — and only in the projects you picked.
+  update, move, assign, comment — and only in the projects chosen.
 
-YouTrack connects with a **permanent token**, and Flow acts as the token's
-owner. Events reach Flow through JetBrains' **Webhook Triggers** app, which a
-project admin sets up once in each YouTrack project. The app needs **YouTrack
-2026.2 or later**; on an older server the tools work, but triggers do not fire.
+YouTrack connects through **Aixle Flow**, our app on JetBrains Marketplace. A
+YouTrack administrator installs it once; after that, connecting takes one
+confirmation in YouTrack, and nobody copies a token or a webhook URL. The app
+needs **YouTrack 2026.2 or later**.
 
 ---
 
+## Install the Aixle Flow app
+
+A YouTrack administrator (it takes the *Low-level Admin Write* permission):
+
+1. **Administration → Apps → Add app → Browse JetBrains Marketplace**.
+2. Find **Aixle Flow** and install it.
+
+The app talks to `https://flow.aixle.com`. A staging or self-hosted Flow sets
+its own address in the app's settings (**Administration → Apps → Aixle Flow →
+Settings → Aixle Flow URL**).
+
 ## Connect
 
-1. Sign in to YouTrack as the account Flow should act as — best an automation
-   account kept for Flow. It may take a license seat, and YouTrack sends it the
-   notifications of whatever it is assigned to or watches; turn those off in its
-   profile if nobody reads them. Under the profile → **Account Security**,
-   create a **permanent token** with the *YouTrack* scope. It does not expire;
-   it stops working when it is deleted or its account is banned.
-2. The account needs, in each project Flow should reach: read the project, its
-   issues, fields, comments and team; create issues; update issues and their
-   fields, State and Assignee included; add comments; and use the tags agents
-   should set. It needs no administration rights. Give it access only to those
-   projects: what the account can see is all a connection can reach.
-3. In Flow, on the project's **Integrations** page choose **Connect → YouTrack**,
-   enter the instance URL (`https://acme.youtrack.cloud`, or your server's URL
-   with its path, such as `https://tracker.example.com/youtrack`) and the token,
-   and select **Check**.
-4. Pick the projects to connect.
-5. Tick **This YouTrack account is kept for Aixle** only when it is: Flow then
-   treats that account's changes as its own, and a comment that mentions it as
-   `@login` matches a trigger's "mentions Aixle" condition. Leave it off for
-   your own token — otherwise your own edits would be ignored by triggers set
-   to ignore changes Aixle made.
+Start from either side; both end in the same place.
 
-Connecting again with the same URL replaces the token in place: the trackers,
-their webhooks and their triggers stay. If the new token belongs to another
-account, Flow says so — mentions and its own changes are recognised by account.
+**From Flow.** On the project's **Trackers** (or **Integrations**) page choose
+**Connect → YouTrack**, enter the instance URL (`https://acme.youtrack.cloud`,
+or your server's URL with its path, such as
+`https://tracker.example.com/youtrack`) and select **Continue in YouTrack**. In
+YouTrack the Aixle Flow page shows which Flow company and project the
+connection is for — check it — then tick the YouTrack projects and select
+**Approve**.
 
-## The Webhook Triggers app
+**From YouTrack.** **Administration → Integrations › Aixle Flow → Connect**.
+The page shows a code and opens Flow's connect page: sign in, type the code,
+choose the Flow project, and approve. Back in YouTrack, tick the projects and
+select **Approve**.
 
-Tracker triggers need YouTrack to send its events. Open **Webhook setup** (the
-webhook icon) on the connection's row: it shows, for each connected project, a
-URL, a header name and a token. Then, in YouTrack:
+After **Approve** the app does the rest by itself, as the administrator who
+approved:
 
-1. A YouTrack admin installs **Webhook Triggers** from JetBrains Marketplace
-   (**Administration → Apps**), once for the instance.
-2. A project admin (it takes the *Update Project* permission) attaches the app
-   to the project and opens the project's **Apps → Webhook Triggers** settings.
-3. Enter the **token** and the **header name** Flow shows, and add Flow's URL
-   to **All Events** — or to *Issue Created*, *Issue Updated* and
-   *Comment Added*.
-4. Repeat for each connected project: each has its own URL.
+- it creates the service user **Aixle Flow** (`aixle-flow`) — no password, so
+  nobody can sign in as it — or reuses it when it already exists;
+- it adds the service user to the chosen projects' teams and attaches the app
+  to them;
+- it creates a permanent token for the service user and hands it to Flow, which
+  checks it against your instance before saving anything;
+- it saves, for each project, where to send its events.
 
-The app keeps **one token per YouTrack project**, shared by every URL it posts
-to. If the project's app already serves another system and has a token, keep
-it: choose **This project's app already has a token** and enter it (and its
-header name) in Flow instead.
+Then it returns you to the project's Trackers page in Flow.
 
-A delivery belongs to the project whose URL it was sent to. Renaming a project
-in YouTrack (its short name) changes nothing here: Flow picks up the new short
-name the next time it reads one of the project's issues.
+The service user may take a license seat. YouTrack sends it the notifications
+of whatever it is assigned to or watches; turn those off in its profile if
+nobody reads them.
 
-The row says *"No webhook event yet from …"* until the first delivery from a
-project arrives; the setup dialog shows when the last one came. YouTrack has to
-reach the deployment's domain.
+### Changing the projects
 
-### What Flow believes from a delivery
+Connect again — from either side — and tick the whole set of projects the
+connection should cover. Projects left out are detached in Flow; their
+triggers stop. The trackers, triggers and history of the projects you keep are
+untouched.
 
-The shared token is the only thing a delivery carries, so Flow treats it as a
-notification and checks everything with YouTrack itself before anything fires:
+### What Flow believes from an event
+
+The app sends each project's events with that project's own secret, and Flow
+still treats an event as a notification and checks everything with YouTrack
+before anything fires:
 
 - the issue is re-read through the API;
-- the issue must be in the project the URL belongs to;
+- the issue must be in the project the event's address belongs to;
 - a state or assignee change counts only when the issue's history (or its
   current value) shows it;
-- a comment's text and author are read from YouTrack, not from the delivery;
+- a comment's text and author are read from YouTrack; comment text never
+  travels in an event;
 - an "issue created" or comment older than a day is not news, and fires nothing.
+
+Renaming a project in YouTrack (its short name) changes nothing here: Flow
+picks up the new short name the next time it reads one of the project's issues.
+
+The row says *"No event yet from …"* until the first event from a project
+arrives.
 
 ---
 
@@ -107,12 +111,17 @@ workflow rules forbid comes back refused with YouTrack's reason.
 
 ## Tools
 
+The tools act as the **Aixle Flow** service user, so what it may do in a
+project is what its team role allows. Its changes are Flow's own: triggers set
+to ignore changes Aixle made skip them, and a comment that mentions
+`@aixle-flow` matches a trigger's "mentions Aixle" condition.
+
 - **Issue references** — a readable id such as `APP-123`, the issue's database
   id (`2-17`), or its URL on this instance.
 - **Issue type** — a value of the project's **Type** field; `tracker_describe`
   lists them. Left out, YouTrack's default applies.
-- **Labels** — YouTrack tags, by name, among the tags the account can use. A
-  name YouTrack does not have is refused, and the error lists the tags there
+- **Labels** — YouTrack tags, by name, among the tags the service user can use.
+  A name YouTrack does not have is refused, and the error lists the tags there
   are; Flow does not create tags.
 - **People** — by login, full name or email; it must match exactly one person
   the project's **Assignee** field offers. `none` clears it.
@@ -134,28 +143,31 @@ assignee field, not when it is cleared.
 
 ## Self-hosted YouTrack
 
-Flow calls the instance URL you enter, so it guards it:
+Flow calls the instance URL, so it guards it:
 
 - only `https`, with the certificate verified;
-- no redirects — enter the instance's final URL, path included;
+- no redirects — use the instance's final URL, path included;
 - a host that resolves to a private or internal address is refused, unless the
   operator lists it in `YOUTRACK_TRUSTED_HOSTS` (comma-separated);
 - answers are bounded in size and time.
 
-Set `YOUTRACK_WEBHOOK_BASE_URL` only when the deployment's domain is not
-reachable from the YouTrack server (a tunnel in development): it is the base of
-the URLs the setup dialog shows.
+The app's events come from your YouTrack server, so it has to reach Flow's
+webhook address. Operators whose Flow domain is not reachable from YouTrack set
+`YOUTRACK_WEBHOOK_BASE_URL` to a host that is: it is the base of the event
+addresses Flow hands to the app.
 
 ## When something is wrong
 
-- **Test connection** on the row re-reads the account and the projects.
-- *"YouTrack rejected the permanent token"* — it was revoked, or its account
-  banned or deleted. Create a new token and connect again with the same URL; the
+- **Test connection** on the row re-reads the service user and the projects.
+- *"YouTrack rejected the Aixle Flow app's token"* — the token was revoked, or
+  the service user banned or deleted. Connect again from either side; the
   trackers stay.
-- *"This connection can no longer see …"* — the account lost access to a
-  project. Give it back in YouTrack, or take the project off the connection.
+- *"This connection can no longer see …"* — the service user left a project's
+  team. Connect again with that project ticked, or leave it out.
 - *"YouTrack redirected the request"* — the URL is not the instance's final one
   (http → https, or a missing `/youtrack` path).
-- Triggers never fire — check the project's Webhook Triggers settings: the URL,
-  the header name and the token must match the setup dialog exactly, and the
-  events must include the ones the trigger waits for.
+- Triggers never fire — check that the Aixle Flow app is attached to the
+  project in YouTrack (**Project settings → Apps**) and that the project was
+  ticked when you connected.
+- The YouTrack page says the pairing expired — a pairing lasts 15 minutes.
+  Start Connect again.

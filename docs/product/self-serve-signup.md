@@ -21,8 +21,8 @@ existed.
 ```
 
 **`/how-it-works`** is the public page: what the product does, the list price of a
-queue, and a calculator driven by the visitor's own numbers. It works out how many
-queues their workload needs and carries that number into the form
+worker, and a calculator driven by the visitor's own numbers. It works out how many
+workers their workload needs and carries that number into the form
 (`/workspace/new?sessions=N`).
 
 **`/workspace/new`** asks three things: a workspace name, the work email address
@@ -103,7 +103,7 @@ already strain. DNS takes minutes to publish, so "not found" means *not yet*.
 
 ## 3. What a workspace may run
 
-**A queue is one session at a time.** A workspace with a limit of four runs four
+**A worker runs one session at a time.** A workspace with four workers runs four
 sessions side by side; the fifth waits. Projects inside it can reserve part of
 that limit for themselves, and the rest share what is left.
 
@@ -112,19 +112,19 @@ raise or lower it whenever they like. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
 something a company does to itself.
 
-**Capacity is the whole price.** No seats, no per-token charge. A queue is a
-reserved slot and is charged for every hour it stands ready, whether or not a
-session is running in it:
+**Capacity is the whole price.** No seats, no per-token charge. A worker is
+reserved capacity and is charged for every hour it stands ready, whether or not a
+session is running on it:
 
 | | |
 | --- | --- |
-| List price | `PRICING_QUEUE_HOURLY_RATE`, default **$5.00 per queue-hour** |
-| One queue, one month | 720 hours — **$3,600** at the default |
+| List price | `PRICING_QUEUE_HOURLY_RATE`, default **$5.00 per worker-hour** |
+| One worker, one month | 720 hours — **$3,600** at the default |
 | Metering | hourly, time-weighted, exact to the second |
-| Invoicing | whole queue-hours; the part hour left at the end of a period rounds **down** |
+| Invoicing | whole worker-hours; the part hour left at the end of a period rounds **down** |
 
-Time-weighted means half an hour at one queue and half at three is two
-queue-hours, not three. Raising or lowering the limit takes effect immediately
+Time-weighted means half an hour at one worker and half at three is two
+worker-hours, not three. Raising or lowering the limit takes effect immediately
 rather than next month.
 
 ---
@@ -132,10 +132,10 @@ rather than next month.
 ## 4. The free allowance
 
 Every new workspace starts with **`TRIAL_QUEUE_HOURS` of free capacity** (default
-**100 queue-hours**) and is invoiced for none of it.
+**100 worker-hours**) and is invoiced for none of it.
 
 **It is a quantity, not a period, and the workspace sets the rate it burns at.**
-Ten sessions at once uses ten queue-hours an hour, so the same hundred hours that
+Ten workers use ten worker-hours an hour, so the same hundred hours that
 last one workspace about four days last that one about ten. A bigger limit buys a
 shorter trial rather than a larger gift. The limit is theirs throughout — nothing
 is capped while the allowance lasts, so they are evaluating the product they are
@@ -182,7 +182,7 @@ and the one place a decision is already being made.
 `active` is the default, and **only a company that signs itself up starts out
 `trialing`** — the signup form says so explicitly. A company an operator makes in
 the admin is somebody deciding rather than somebody trying, and one that stopped
-after a hundred queue-hours because a column defaulted that way would be a
+after a hundred worker-hours because a column defaulted that way would be a
 surprise nobody would connect to this page.
 
 ---
@@ -192,7 +192,7 @@ surprise nobody would connect to this page.
 Two ledgers, for two different questions.
 
 **`company_capacity_usages`** — what **every** company was offered, hour by hour,
-in queue-seconds. Ours to read: it is what the free allowance is counted from and
+in worker-seconds. Ours to read: it is what the free allowance is counted from and
 what answers "how much has this company used" for an invoice conversation. Written
 for trialing and blocked companies too.
 

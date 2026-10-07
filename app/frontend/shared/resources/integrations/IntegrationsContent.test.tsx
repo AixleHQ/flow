@@ -278,10 +278,6 @@ describe('IntegrationsContent', () => {
 
   it('offers YouTrack in a project, and says which projects a connection covers, as whom and which have sent nothing', async () => {
     const user = userEvent.setup();
-    vi.mocked(globalThis.fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ projects: [], events: [] }),
-    } as Response);
     renderPage(
       <IntegrationsContent
         title="Integrations"
@@ -297,30 +293,36 @@ describe('IntegrationsContent', () => {
               { id: '0-1', key: 'APP', name: 'Application' },
               { id: '0-2', key: 'OPS', name: 'Operations' },
             ],
-            youtrackIdentity: 'aixle',
-            youtrackWebhooksPending: ['OPS'],
+            youtrackIdentity: 'aixle-flow',
+            youtrackWebhooksPending: ['APP', 'OPS'],
           }),
         ]}
-        youtrack={{ enabled: true }}
+        youtrack={{ enabled: true, marketplaceUrl: 'https://plugins.jetbrains.com/plugin/aixle-flow' }}
       />,
       { props: settingsProps },
     );
 
-    expect(screen.getByText('APP, OPS · as @aixle (permanent token)')).toBeInTheDocument();
-    expect(screen.getByText('No webhook event yet from OPS')).toBeInTheDocument();
+    expect(screen.getByText('APP, OPS · as @aixle-flow')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'No event yet from APP, OPS — check that the Aixle Flow app is attached to those projects in YouTrack',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open YouTrack · acme.youtrack.cloud in YouTrack/ })).toHaveAttribute(
       'href',
       'https://acme.youtrack.cloud',
     );
-
-    await user.click(screen.getByRole('button', { name: /Webhook setup for YouTrack/ }));
-    expect(await screen.findByRole('dialog', { name: 'YouTrack webhooks' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.getByRole('link', { name: /Manage YouTrack · acme.youtrack.cloud in YouTrack/ })).toHaveAttribute(
+      'href',
+      'https://acme.youtrack.cloud/admin/app/aixle-flow/connect',
+    );
+    expect(screen.getByRole('button', { name: /Test connection for YouTrack/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Webhook setup for YouTrack/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /YouTrack projects for/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Connect/ }));
     await user.click(await screen.findByRole('menuitem', { name: 'YouTrack' }));
     expect(await screen.findByRole('dialog', { name: 'Connect YouTrack' })).toBeInTheDocument();
-    vi.mocked(globalThis.fetch).mockReset();
   });
 
   // == GitHub Projects ==

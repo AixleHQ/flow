@@ -79,7 +79,6 @@ FactoryBot.define do
       project { association(:project, company: company, owner: association(:user, company: company)) }
 
       transient do
-        dedicated_identity { true }
         youtrack_projects do
           [ { "id" => FakeYoutrack::Api::APP, "key" => "APP", "name" => "Application", "status_field" => "State",
               "assignee_field" => "Assignee" },
@@ -91,10 +90,9 @@ FactoryBot.define do
       after(:build) do |integration, evaluator|
         integration.credentials_data = { "permanent_token" => "perm:#{SecureRandom.hex(8)}" }
         integration.settings = {
-          "auth_mode" => "permanent_token", "base_url" => FakeYoutrack::Api::BASE_URL,
+          "auth_mode" => "app", "base_url" => FakeYoutrack::Api::BASE_URL,
           "youtrack_projects" => evaluator.youtrack_projects, "identity_display_name" => "Aixle Bot",
-          "identity_login" => "aixle", "dedicated_identity" => evaluator.dedicated_identity,
-          "tracker_identity" => { "id" => FakeYoutrack::Api::BOT[:id], "name" => "Aixle Bot", "login" => "aixle" }
+          "identity_login" => "aixle", "tracker_identity" => { "id" => FakeYoutrack::Api::BOT[:id], "name" => "Aixle Bot", "login" => "aixle" }
         }
       end
     end

@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Aixle Flow",
+  "description": "Connect from Administration › Integrations › Aixle Flow: it fills in the project settings.",
+  "properties": {
+    "flowUrl": {
+      "title": "Aixle Flow URL",
+      "description": "The Aixle Flow deployment this YouTrack connects to. Empty means https://flow.aixle.com.",
+      "type": "string",
+      "x-scope": "GLOBAL"
+    },
+    "eventsUrl": {
+      "title": "Events URL",
+      "description": "Where this project's issue events are sent. Set by Connect.",
+      "type": "string",
+      "x-scope": "PROJECT"
+    },
+    "secret": {
+      "title": "Events secret",
+      "description": "Sent with every event. Set by Connect.",
+      "type": "string",
+      "format": "secret",
+      "x-scope": "PROJECT"
+    },
+    "statusField": {
+      "title": "Status field",
+      "description": "The project's state field. Empty means State.",
+      "type": "string",
+      "x-scope": "PROJECT"
+    },
+    "assigneeField": {
+      "title": "Assignee field",
+      "description": "The project's assignee field. Empty means Assignee.",
+      "type": "string",
+      "x-scope": "PROJECT"
+    }
+  }
+}

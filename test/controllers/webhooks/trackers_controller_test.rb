@@ -117,21 +117,20 @@ class Webhooks::TrackersControllerTest < ActionDispatch::IntegrationTest
     assert_equal subscription, TrackerDelivery.sole.tracker_subscription
   end
 
-  test "a YouTrack project's webhook is authenticated by its token in the configured header" do
+  test "an Aixle Flow app event is authenticated by its project's secret" do
     youtrack = create(:integration, :youtrack, :active)
-    subscription = Trackers::Youtrack::Subscriptions.new(youtrack).use_token!(FakeYoutrack::Api::APP, token: "t" * 40, header: "X-Hook")
-    created = youtrack_payload("issueCreated").to_json
-    headers = ->(token) { { "CONTENT_TYPE" => "application/json", "X-Hook" => token } }
+    subscription = Trackers::Youtrack::Subscriptions.new(youtrack).ensure!.find { |s| s.external_scope_id == FakeYoutrack::Api::APP }
+    created = youtrack_event("issue_created").to_json
+    headers = ->(token) { { "CONTENT_TYPE" => "application/json", "X-Aixle-Token" => token } }
 
-    post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call("u" * 40)
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call("u" * 64)
     assert_response :unauthorized
     post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: { "CONTENT_TYPE" => "application/json" }
     assert_response :unauthorized
     assert_enqueued_with(job: Trackers::ProcessDeliveryJob) do
-      post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call("t" * 40)
+      post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call(subscription.secret)
     end
-    resent = JSON.parse(created).merge("timestamp" => 1.minute.from_now.iso8601(3)).to_json
-    post "/webhooks/trackers/#{subscription.endpoint_token}", params: resent, headers: headers.call("t" * 40)
+    post "/webhooks/trackers/#{subscription.endpoint_token}", params: created, headers: headers.call(subscription.secret)
     assert_response :ok
 
     assert_equal [ "issue_created", "APP-1", FakeYoutrack::Api::APP ],

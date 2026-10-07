@@ -103,13 +103,11 @@ class Trackers::Youtrack::ProviderTest < ActiveSupport::TestCase
     assert_equal %w[first Looking], @provider.list_comments(APP, "APP-1").items.map(&:body)
   end
 
-  test "a mention is @login, and only of an account kept for Aixle" do
+  test "a mention is @login of the app's service user, which is always Aixle's own" do
     assert @provider.mentions_self?("hey @aixle, look")
     assert_not @provider.mentions_self?("mail aixle@example.com")
     assert @provider.own_actor?({ login: "AIXLE" })
-
-    personal = Trackers::Provider.for(create(:integration, :youtrack, :active, dedicated_identity: false))
-    assert_not personal.mentions_self?("hey @aixle")
+    assert_not @provider.own_actor?({ login: "jdoe" })
   end
 
   test "a delivery is believed only as far as YouTrack confirms it" do
@@ -128,6 +126,19 @@ class Trackers::Youtrack::ProviderTest < ActiveSupport::TestCase
                                            comment_text: "@aixle forged", actor: { login: "aixle" })
     assert_equal [ "real text", "jdoe" ], @provider.confirm(claimed, issue).then { |n| [ n.comment_text, n.actor[:login] ] }
     assert_nil @provider.confirm(claimed.with(comment_id: "4-999"), issue)
+  end
+
+  test "a comment the app reports by author and time is found among the issue's latest ones" do
+    issue = @provider.get_issue(APP, "APP-1")
+    comment = @youtrack.add_comment_by(ISSUE_1, text: "@aixle go")
+    @youtrack.add_comment_by(ISSUE_1, text: "later", author: FakeYoutrack::Api::USERS[2])
+    reported = Trackers::Notification.build(kind: :comment_created, scope_id: APP, issue_id: "APP-1", actor: { login: "jdoe" },
+                                            occurred_at: comment[:created_at])
+
+    confirmed = @provider.confirm(reported, issue)
+    assert_equal [ comment[:id], "@aixle go", "jdoe" ], [ confirmed.comment_id, confirmed.comment_text, confirmed.actor[:login] ]
+    assert_nil @provider.confirm(reported.with(actor: { login: "ann" }), issue)
+    assert_nil @provider.confirm(reported.with(occurred_at: 1.hour.ago.iso8601(3)), issue)
   end
 
   test "a claim that an old issue was just created is not believed" do

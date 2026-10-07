@@ -650,8 +650,13 @@ export function SessionEditorPanel({
               <div className={classes.togLbl}>BMAD Method</div>
               <div className={classes.togDesc}>
                 Enable the BMAD methodology for this session.{' '}
-                <a href="#" style={{ color: 'var(--accent-text)' }} onClick={(e) => e.preventDefault()}>
-                  Learn more ↗
+                <a
+                  href="https://docs.bmad-method.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={classes.learnMoreLink}
+                >
+                  Learn more <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
                 </a>
               </div>
             </div>
