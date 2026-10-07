@@ -16,6 +16,7 @@ class Teams::RepliesTest < ActiveSupport::TestCase
                                        status: :active)
     @conversation = ChatConversation.record_teams!(integration: @integration, activity: teams_activity)
     @thread = "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2%3Bmessageid%3D1700000000001/activities"
+    @channel = "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2/activities"
     @workflow = create(:workflow, scope: @project, name: "Weekly Digest")
     @step = create(:step, workflow: @workflow, name: "Render", position: 1, allow_non_interactive: true)
   end
@@ -46,7 +47,7 @@ class Teams::RepliesTest < ActiveSupport::TestCase
 
   def targeted_event(text)
     event(text: text).tap do |e|
-      e.update!(data: e.data.merge("targeted" => true, "message_id" => "1700000000009",
+      e.update!(data: e.data.merge("targeted" => true, "message_id" => "1700000000009", "thread_id" => "1700000000009",
                                    "requester" => { "id" => "29:user", "name" => "Olo Brockhouse" }))
     end
   end
@@ -54,7 +55,7 @@ class Teams::RepliesTest < ActiveSupport::TestCase
   test "/help in a channel is answered only to the person who asked" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
                              filter_predicate: { "provider" => "teams", "text" => "digest" })
-    private_reply = stub_request(:post, "#{@thread}?isTargetedActivity=true").with { |request|
+    private_reply = stub_request(:post, "#{@channel}?isTargetedActivity=true").with { |request|
       body = JSON.parse(request.body)
       body["recipient"] == { "id" => "29:user", "name" => "Olo Brockhouse" } &&
         body["entities"] == [ { "type" => "targetedMessageInfo", "messageId" => "1700000000009" } ] &&
@@ -69,7 +70,7 @@ class Teams::RepliesTest < ActiveSupport::TestCase
   test "a private message to the bot starts nothing and says how to start a run" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
                              filter_predicate: { "provider" => "teams", "text" => "digest" })
-    hint = stub_request(:post, "#{@thread}?isTargetedActivity=true")
+    hint = stub_request(:post, "#{@channel}?isTargetedActivity=true")
            .with(body: hash_including("text" => /mention Aixle Flow/)).to_return(status: 201, body: { id: "3" }.to_json)
     WorkflowService.expects(:enqueue).never
 

@@ -16,7 +16,9 @@ module Teams
 
       text = hint ? PRIVATE_HINT : catalog(Chat::HelpCatalog.bindings(event))
       if data["targeted"]
-        ConnectorClient.send_targeted(conversation.teams_reference(thread_id: data["thread_id"]),
+        # Teams refuses a targeted message posted into a thread ("Replies are not
+        # allowed for Targeted Messages"); prompt preview ties it to the question.
+        ConnectorClient.send_targeted(conversation.teams_reference,
                                       { type: "message", textFormat: "markdown", text: text },
                                       recipient: data["requester"], about: data["message_id"])
       else
