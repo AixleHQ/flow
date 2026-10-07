@@ -64,7 +64,8 @@ OAuth credential was used instead of the required API-key mode.
 
 ## Upgrade and rollback
 
-To upgrade, change `GEMINI_CLI_VERSION`, build the image, run the adapter tests and
+To upgrade, raise `cli_version` for `gemini_cli` in `config/agent_runtimes.json`,
+build the image (`make build-agents`), run the adapter tests and
 the image/E2E checks above, then publish the immutable image before updating the
 deployment. Review upstream changes to settings, authentication, MCP, skills,
 hooks, invocation flags, Node requirements, and OTLP event names on every upgrade.
