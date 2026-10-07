@@ -62,13 +62,13 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
+import { TeamsApprovalModal } from './TeamsApprovalModal';
 import {
   YoutrackConnectModal,
   YoutrackProjectsModal,
   type YoutrackProps,
   YoutrackWebhookModal,
 } from './YoutrackConnectModal';
-import { TeamsApprovalModal } from './TeamsApprovalModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';

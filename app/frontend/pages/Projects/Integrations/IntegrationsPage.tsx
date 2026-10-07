@@ -28,8 +28,9 @@ interface Props {
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack, teams } = usePage<{ props: Props }>()
-    .props as unknown as Props;
+  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack, teams } = usePage<{
+    props: Props;
+  }>().props as unknown as Props;
 
   return (
     <>
