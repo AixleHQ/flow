@@ -18,16 +18,6 @@ class AgentRuntimesRegistryTest < ActiveSupport::TestCase
     end
   end
 
-  test "Dependabot watches every runtime's base image" do
-    watched = YAML.load_file(Rails.root.join(".github/dependabot.yml")).fetch("updates")
-                  .select { |update| update["package-ecosystem"] == "docker" }
-                  .flat_map { |update| update.fetch("directories") }
-
-    RUNTIMES.each do |runtime|
-      assert_includes watched, "/#{File.dirname(runtime.fetch('dockerfile'))}"
-    end
-  end
-
   test "every runtime has an image override setting and both launch commands" do
     ids = AgentRuntime.ids.sort
 

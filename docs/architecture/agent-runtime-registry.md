@@ -36,9 +36,10 @@ repository's matrix still lacked it after that.
 | The deployment repository | Its agent image build matrix, read from the release tag it deploys. |
 
 `test/config/agent_runtimes_registry_test.rb` checks what still names runtimes by hand:
-every Dockerfile exists and takes `ARG CLI_VERSION` with no default, Dependabot watches
-every runtime's directory, and `agents.images` overrides plus both launch command maps
-cover every runtime.
+every Dockerfile exists and takes `ARG CLI_VERSION` with no default, and `agents.images`
+overrides plus both launch command maps cover every runtime. The Dependabot directory
+list is not checked — the test image is built without `.github/` — so step 1 below is
+on the reviewer.
 
 ## Raising a CLI pin
 
