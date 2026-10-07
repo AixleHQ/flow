@@ -1219,7 +1219,10 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 Two defects only a live run could show were fixed: the bot's copy of a channel message carries no trace of its
 files (the message is now read from Graph when file access is granted), and SharePoint's signed links answer 401
 when a client re-encodes their query (they are now sent byte for byte). Deleting the app's enterprise application
-in a tenant also drops its resource-specific permissions; the app has to be added to each team again.
+in a tenant also drops its resource-specific permissions; the app has to be added to each team again. Graph's
+catalog upload refused the first schema 1.30 package: from manifest 1.25 on, an app with the `team` scope must
+declare `supportsChannelFeatures`, which the schema accepts only as `tier1` (§6.3 had it; the package did not).
+`tier1` also lets a team add the app to private and shared channels; that is not verified.
 
 ## Sources
 

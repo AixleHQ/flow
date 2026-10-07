@@ -33,6 +33,7 @@ class Teams::AppPackageTest < ActiveSupport::TestCase
     assert_equal %w[ChannelMessage.Read.Group ChatMessage.Read.Chat],
                  manifest.dig("authorization", "permissions", "resourceSpecific").pluck("name")
     assert_equal "1.30", manifest["manifestVersion"]
+    assert_equal "tier1", manifest["supportsChannelFeatures"]
     bot = manifest.dig("bots", 0)
     assert bot["supportsTargetedMessages"]
     assert_equal [ %w[slash mention], [ "help" ] ], [ bot.dig("commandLists", 0, "triggers"), bot.dig("commandLists", 0, "commands").pluck("title") ]

@@ -49,6 +49,10 @@ module Teams
         },
         "icons" => { "color" => "color.png", "outline" => "outline.png" },
         "accentColor" => "#0A0908",
+        # Required of a team-scope app from manifest 1.25 on (Graph rejects the
+        # upload without it); `tier1` is its only non-null value and lets the
+        # app be added to private and shared channels.
+        "supportsChannelFeatures" => "tier1",
         "bots" => [ {
           "botId" => app_id,
           "scopes" => %w[personal team groupChat],
