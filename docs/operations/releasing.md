@@ -16,7 +16,9 @@ the HTTP and MCP APIs, and the runtimes it can launch.
 | **Patch** (`1.0.1`) | Fixes, and raised CLI pins in `config/agent_runtimes.json` — a vendor's CLI update ships as a patch release. |
 
 Pre-releases (`v1.1.0-rc.1`) exist for trying a release on staging first. They publish
-their own image tags only, never `latest`.
+their own image tags only, never `latest`, and get no changelog section: their GitHub
+Release (marked pre-release) shows `[Unreleased]` as of the tagged commit. Tag them
+straight from `develop`, without a changelog PR.
 
 ## What a release publishes
 

@@ -484,7 +484,7 @@ agents:
   image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'aixle/' %>
   # Blank tag means the registry default (`:latest` implicitly), which is what
   # the deployed environments want; locally the tag is explicit.
-  image_tag: <%= ENV['AGENT_IMAGE_TAG'] || 'latest' %>
+  image_tag: "<%= ENV['AGENT_IMAGE_TAG'] || 'latest' %>"
   # Per-runtime escape hatch — pinning one runtime to a digest, or pointing it
   # at a different registry. A blank entry falls back to the derived name.
   images:

@@ -10,4 +10,4 @@ agents:
   # moving tag, so the Kubernetes runtime then pulls on every start
   # (KubernetesRuntime#image_pull_policy_for) rather than trusting a node's cache.
   image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
-  image_tag: <%= ENV['AGENT_IMAGE_TAG'] || '' %>
+  image_tag: "<%= ENV['AGENT_IMAGE_TAG'] || '' %>"

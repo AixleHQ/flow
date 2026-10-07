@@ -49,6 +49,10 @@ jobs:
       app_version: ${{ steps.version.outputs.app_version }}
       stable: ${{ steps.version.outputs.stable }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
       - name: Resolve Version
         id: version
         env:
@@ -61,6 +65,12 @@ jobs:
             tag="${GITHUB_REF_NAME#v}"
             if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
               echo "::error::${GITHUB_REF_NAME} is not a vX.Y.Z or vX.Y.Z-pre release tag."
+              exit 1
+            fi
+            # A tag off develop would still move `latest`, `X` and `X.Y`.
+            git fetch --no-tags origin +refs/heads/develop:refs/remotes/origin/develop
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/develop; then
+              echo "::error::${GITHUB_REF_NAME} is not on develop; releases are tagged from develop."
               exit 1
             fi
             app_version="$tag"

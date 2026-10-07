@@ -30,14 +30,18 @@ jobs:
             exit 1
           fi
 
-      # Plain Ruby, no bundle: the runner image ships an interpreter.
+      # Plain Ruby, no bundle: the runner image ships an interpreter. A pre-release has no
+      # section of its own — cutting one would empty [Unreleased] before the release it
+      # previews — so its notes are [Unreleased] as of the tagged commit.
       - name: Write Release Notes
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
+          section="$version"
+          if [[ "$version" == *-* ]]; then section="Unreleased"; fi
           images="$(jq -r '["web", "otlp-ingest", "agent-base-core", (.runtimes[].image)] | map("`flow-\(.)`") | join(", ")' config/agent_runtimes.json)"
           {
-            ruby bin/changelog notes "$version"
+            ruby bin/changelog notes "$section"
             echo
             echo "### Images"
             echo
