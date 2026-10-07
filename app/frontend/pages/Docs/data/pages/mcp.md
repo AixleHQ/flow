@@ -91,6 +91,13 @@ board until `setup_board` creates one from a preset (`simple_kanban`,
 `dev_team`, `full_sdlc`), and everything else on the board follows from
 there.
 
+Files go onto a task without passing through the agent's context:
+`create_task_asset_upload` returns an upload URL valid for an hour, the
+agent PUTs the file to it (for example `curl -T screenshot.png '<url>'`),
+and `attach_task_asset` attaches it, as an upload in the UI would. Short
+text — notes, a log, JSON — goes straight into `attach_task_asset`'s
+`content`.
+
 A workflow built this way can be wired up end to end: `create_workflow_trigger`
 attaches a board column, a Slack message, a cron schedule or an inbound
 webhook, so the workflow launches on its own rather than only on a button.
