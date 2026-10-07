@@ -77,6 +77,46 @@ module Activities
         assert_match(/no longer running/, session.error_message)
       end
 
+      test "says the container ran out of memory when the runtime recorded an OOM kill" do
+        session = ready_session(status: :terminated)
+        @runtime.set_container_termination({ reason: "OOMKilled", exit_code: 137, memory_limit: "4Gi" },
+                                           container_id: session.container_id)
+
+        run_activity(ScanDeadContainersActivity)
+        travel(ScanDeadContainersActivity::CONFIRMATION_DELAY + 1.minute) { run_activity(ScanDeadContainersActivity) }
+
+        session.reload
+        assert_equal "failed", session.state
+        assert_match(/ran out of memory/, session.error_message)
+        assert_includes session.error_message, "OOMKilled, memory limit 4Gi"
+        assert_no_match(/most likely/, session.error_message)
+      end
+
+      test "passes on the kubelet's explanation of an eviction" do
+        session = ready_session(status: :terminated)
+        @runtime.set_container_termination(
+          { reason: "Evicted", message: "The node was low on resource: memory." },
+          container_id: session.container_id
+        )
+
+        run_activity(ScanDeadContainersActivity)
+        travel(ScanDeadContainersActivity::CONFIRMATION_DELAY + 1.minute) { run_activity(ScanDeadContainersActivity) }
+
+        assert_equal "Agent container was evicted from its node. The node was low on resource: memory.",
+                     session.reload.error_message
+      end
+
+      test "names the exit code of a container that stopped for any other reason" do
+        session = ready_session(status: :terminated)
+        @runtime.set_container_termination({ reason: "Error", exit_code: 2 }, container_id: session.container_id)
+
+        run_activity(ScanDeadContainersActivity)
+        travel(ScanDeadContainersActivity::CONFIRMATION_DELAY + 1.minute) { run_activity(ScanDeadContainersActivity) }
+
+        assert_equal "Agent container stopped before the session finished (exit code 2, Error).",
+                     session.reload.error_message
+      end
+
       # == The signal that reclaims the container ==
 
       test "signals the session's own container workflow, not only the parent workflow run" do

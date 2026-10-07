@@ -132,6 +132,17 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #container_status"
     end
 
+    # Why a container that is no longer running stopped, as the runtime recorded it:
+    #
+    #   { reason: "OOMKilled", exit_code: 137, message: nil, memory_limit: "4Gi" }
+    #
+    # Every key is optional. Answers nil when the container is still up, when the
+    # runtime has no record of it (:missing — a dead node takes the record with it),
+    # or when the runtime could not answer.
+    def container_termination(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #container_termination"
+    end
+
     def wait_container(_id, _timeout = nil)
       raise NotImplementedError, "#{self.class.name} must implement #wait_container"
     end
