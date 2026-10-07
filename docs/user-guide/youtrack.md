@@ -53,7 +53,8 @@ approved:
 - it adds the service user to the chosen projects' teams and attaches the app
   to them;
 - it creates a permanent token for the service user and hands it to Flow, which
-  checks it against your instance before saving anything;
+  checks it against your instance before saving anything; connecting again
+  revokes the token the new one replaces;
 - it saves, for each project, where to send its events.
 
 Then it returns you to the project's Trackers page in Flow.
@@ -65,7 +66,7 @@ nobody reads them.
 ### Changing the projects
 
 Connect again — from either side — and tick the whole set of projects the
-connection should cover. Projects left out are detached in Flow; their
+connection should cover; the projects already connected start ticked. Projects left out are detached in Flow; their
 triggers stop. The trackers, triggers and history of the projects you keep are
 untouched.
 

@@ -85,10 +85,14 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sameOrigin(value, base) {
+// A page Aixle Flow points to. It may be on another host than the API the app
+// calls (a staging deployment serves the API on its public webhook host), and
+// it comes from the Aixle Flow the admin configured, so https is enough.
+function flowLink(value) {
   try {
     const url = new URL(value);
-    return (url.protocol === 'https:' || url.protocol === 'http:') && url.origin === new URL(base).origin ? url.href : null;
+    const local = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+    return url.protocol === 'https:' || local ? url.href : null;
   } catch (e) {
     return null;
   }
@@ -151,6 +155,7 @@ const STEPS = [
   { key: 'attach', title: 'Turn the app on in the projects', run: attachApp },
   { key: 'token', title: 'Create a permanent token for ' + SERVICE_LOGIN, run: mintToken },
   { key: 'complete', title: 'Hand the token to Aixle Flow', run: completePairing },
+  { key: 'retire', title: 'Revoke the token it replaces', run: retireOldTokens },
   { key: 'settings', title: 'Save the projects’ event settings', run: saveSettings }
 ];
 
@@ -270,6 +275,8 @@ async function mintToken(ctx) {
   });
   if (!token || !token.token) throw new Problem('Hub did not return the token.');
   ctx.token = { id: token.id, value: token.token };
+  ctx.tokenId = token.id;
+  ctx.tokenName = name;
   return 'Created';
 }
 
@@ -303,6 +310,19 @@ async function completePairing(ctx) {
   ctx.result = result || {};
   await clearHandover(ctx);
   return 'Done';
+}
+
+// A connection's token is named after its Aixle company and project, so an
+// earlier token of the same name belongs to this connection and Aixle has just
+// stopped using it. Tokens of other connections keep their own names.
+async function retireOldTokens(ctx) {
+  if (!ctx.result || !ctx.tokenId) return 'Nothing to revoke';
+  const page = await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens?fields=id,name&$top=500');
+  const old = (page.permanenttokens || []).filter((token) => token.name === ctx.tokenName && token.id !== ctx.tokenId);
+  for (const token of old) {
+    await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens/' + encodeURIComponent(token.id), { method: 'DELETE' });
+  }
+  return old.length ? 'Revoked ' + old.length : 'Nothing to revoke';
 }
 
 async function saveSettings(ctx) {
@@ -372,7 +392,7 @@ async function run(ctx) {
 }
 
 function renderDone(ctx, progress) {
-  const returnUrl = sameOrigin(ctx.result.return_url, ctx.flowUrl);
+  const returnUrl = flowLink(ctx.result.return_url);
   const names = ctx.projects.map((project) => project.name).join(', ');
   renderSteps(progress, {
     title: 'Connected to Aixle Flow',
