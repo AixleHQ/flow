@@ -112,6 +112,23 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_match(/any tracker of the installing project/, result.notes.join)
   end
 
+  test "a chat trigger exports its messenger as a requirement and installs listening to it" do
+    create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+    create(:trigger_binding, project: @source, workflow: @source.workflows.first, event_type: "chat.message",
+                             filter_predicate: { "provider" => "teams", "text" => { "op" => "starts_with", "value" => "deploy" } },
+                             status_reporting: "lifecycle", enabled: false)
+
+    result = export
+
+    entry = result.package.definition["triggers"].find { |t| t["kind"] == "chat" }
+    assert_equal [ "teams", "lifecycle" ], entry.values_at("chat_provider", "status_reporting")
+    assert_equal({ "text" => { "op" => "starts_with", "value" => "deploy" } }, entry["filter_predicate"])
+    assert_includes result.package.definition.dig("requires", "integrations"), "teams"
+    copy = install(result.package).project
+    installed = TriggerBinding.find_by!(project: copy, event_type: "chat.message")
+    assert_equal [ "teams", "lifecycle" ], [ installed.chat_provider, installed.status_reporting ]
+  end
+
   test "a workflow using a tracker tool exports a tracker requirement the installer can resolve" do
     tool = create(:tool, :system, name: "tracker_update_issue", requires_integration: Trackers::CAPABILITY)
     step = @source.workflows.sole.steps.order(:position).first

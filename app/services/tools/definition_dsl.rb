@@ -4,13 +4,13 @@ module Tools
   # Class-level DSL for declaring a platform tool on its handler class:
   #
   #   module InternalTools
-  #     class SlackPostMessage < Base
+  #     class ChatPostMessage < Base
   #       tool do
-  #         display_name "Slack Post Message"
-  #         description  "Send a Slack message from this workflow..."
-  #         tags         :messaging, :slack
+  #         display_name "Chat Post Message"
+  #         description  "Send a message to Slack or Microsoft Teams..."
+  #         tags         :messaging, :chat
   #         inject_when  :workflow_step_session
-  #         requires_integration :slack
+  #         requires_integration :chat
   #         param :text, type: :string, description: "Message text."
   #       end
   #     end

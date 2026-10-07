@@ -160,16 +160,16 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "tools/list hides an integration-gated tool until the integration is active" do
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
     attach_platform_tool("board_list_tasks")
 
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
-    refute_includes names, "slack_post_message"
+    refute_includes names, "chat_post_message"
 
     create(:integration, company: @company, project: @project, provider: :slack,
                          status: :active, connected_by: @user)
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
-    assert_includes names, "slack_post_message"
+    assert_includes names, "chat_post_message"
   end
 
   test "tools/list serializes from the definition even when the shadow row is stale" do
@@ -197,13 +197,13 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "tools/call on an entitled-but-disconnected tool returns an actionable in-band error" do
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
 
-    body = rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } })
+    body = rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } })
 
     assert body.dig("result", "isError")
     text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
-    assert_match(/slack integration is not connected/i, text)
+    assert_match(/chat integration is not connected/i, text)
     assert_match(/Project Settings/, text)
   end
 
@@ -213,14 +213,14 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     # handler — which is what puts the result on the gem's own path and earns
     # the `resultType` 2026-07-28 requires. Without it a modern client drops
     # the remedy instead of showing it.
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
 
-    result = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
-                        name: "slack_post_message")["result"]
+    result = modern_rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } },
+                        name: "chat_post_message")["result"]
 
     assert_equal "complete", result["resultType"]
     assert result["isError"]
-    assert_match(/slack integration is not connected/i,
+    assert_match(/chat integration is not connected/i,
                  result["content"].map { |c| c["text"] }.join("\n"))
   end
 
@@ -233,10 +233,10 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   # tool, never answered with a successful in-band result.
 
   test "a disconnected tool's call at an unserved modern version is refused with -32022" do
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
 
-    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
-                      name: "slack_post_message", version: "2099-01-01")
+    body = modern_rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } },
+                      name: "chat_post_message", version: "2099-01-01")
 
     assert_response :bad_request
     assert_nil body["result"]
@@ -246,14 +246,14 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a disconnected tool's call with a malformed modern envelope is refused with -32602" do
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
 
     # `clientCapabilities` is REQUIRED and must be an object: the loose
     # `RequestEnvelope.modern?` classifier accepts this envelope, only
     # `RequestEnvelope.parse!` rejects it.
     version = MCP::Configuration::LATEST_MODERN_PROTOCOL_VERSION
-    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
-                      name: "slack_post_message",
+    body = modern_rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } },
+                      name: "chat_post_message",
                       envelope: { "io.modelcontextprotocol/protocolVersion" => version,
                                   "io.modelcontextprotocol/clientCapabilities" => "not-an-object" })
 
@@ -263,11 +263,11 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a disconnected tool's call whose routing headers contradict the body is refused with -32020" do
-    attach_platform_tool("slack_post_message")
+    attach_platform_tool("chat_post_message")
 
     # `Mcp-Name` mirrors the called tool so intermediaries can route without
     # parsing bodies; SEP-2575 requires it on the name-bearing methods.
-    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+    body = modern_rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } },
                       name: "board_list_tasks")
 
     assert_response :bad_request
@@ -276,7 +276,7 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "tools/call outside the entitlement stays an opaque protocol error" do
-    body = rpc("tools/call", { name: "slack_post_message", arguments: {} })
+    body = rpc("tools/call", { name: "chat_post_message", arguments: {} })
 
     assert_nil body["result"]
     assert body["error"].present?

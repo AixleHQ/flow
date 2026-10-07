@@ -24,6 +24,16 @@ const columns: PanelProps['columns'] = [
   { id: 2, name: 'In Progress', boundWorkflowName: 'Other Flow' },
 ];
 
+const slack = { key: 'slack', label: 'Slack', conversations: [] };
+const teams = {
+  key: 'teams',
+  label: 'Microsoft Teams',
+  conversations: [
+    { id: '19:onboarding@thread.tacv2', name: 'Onboarding', kind: 'channel', teamName: 'Sales' },
+    { id: '19:chat@thread.v2', name: null, kind: 'group', teamName: null },
+  ],
+};
+
 const baseProps = (overrides: Partial<PanelProps> = {}): PanelProps => ({
   projectId: 7,
   workflowId: 3,
@@ -132,16 +142,16 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByText(/cannot start a run/)).toBeInTheDocument();
   });
 
-  it('switches the rendered fields when the kind Select changes to slack', async () => {
-    renderPage(<TriggerFormPanel {...baseProps()} />);
+  it('switches the rendered fields when the kind Select changes to chat', async () => {
+    renderPage(<TriggerFormPanel {...baseProps({ chatProviders: [slack] })} />);
 
     // Kind is the first combobox; changing it swaps the per-kind field block.
     const [kindSelect] = screen.getAllByRole('combobox');
     await userEvent.click(kindSelect);
-    await userEvent.click(await screen.findByRole('option', { name: 'Slack message' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Chat message' }));
 
     expect(screen.getByPlaceholderText('C0123ABC (blank = any)')).toBeInTheDocument();
-    expect(screen.getByText(/\/help lists this channel's commands/)).toBeInTheDocument();
+    expect(screen.getByText(/help lists the\s+commands of a conversation/)).toBeInTheDocument();
     expect(screen.queryByText('Mode')).not.toBeInTheDocument();
   });
 
@@ -240,12 +250,12 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Slack kind
+  // Chat kind
   // -------------------------------------------------------------------------
-  it('posts a slack trigger with the channel and a text predicate', async () => {
+  it('posts a Slack chat trigger with the channel and a text predicate', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [slack] })} />);
 
     await userEvent.type(screen.getByPlaceholderText('C0123ABC (blank = any)'), 'C42');
     await userEvent.type(screen.getByPlaceholderText('ship it (optional)'), 'deploy');
@@ -253,18 +263,81 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
-      kind: 'slack',
-      filter_predicate: { channel: 'C42', text: { op: 'contains', value: 'deploy' } },
-      notify_on_failure: true,
+      kind: 'chat',
+      chat_provider: 'slack',
+      filter_predicate: { provider: 'slack', channel: 'C42', text: { op: 'contains', value: 'deploy' } },
+      status_reporting: 'lifecycle',
       cooldown_seconds: 0,
       subject_policy: 'none',
     });
   });
 
+  it('offers the channels the Teams bot was added to, grouped by team', async () => {
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [slack, teams] })} />);
+
+    await pickOption('Slack', 'Microsoft Teams');
+    expect(screen.queryByPlaceholderText('C0123ABC (blank = any)')).not.toBeInTheDocument();
+    await pickOption('Anywhere the bot is addressed', 'Onboarding');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const trigger = bodyOf(fetchSpy, 'POST').trigger;
+    expect(trigger.chat_provider).toBe('teams');
+    expect(trigger.filter_predicate).toEqual({ provider: 'teams', channel: '19:onboarding@thread.tacv2' });
+  });
+
+  it('limits a Teams trigger to direct messages', async () => {
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [teams] })} />);
+
+    await pickOption('Anywhere the bot is addressed', 'Direct messages');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger.filter_predicate).toEqual({
+      provider: 'teams',
+      'conversation.type': 'direct',
+    });
+  });
+
+  it('keeps a Teams channel the bot no longer lists when editing', async () => {
+    const editing: Trigger = {
+      id: 9,
+      kind: 'chat',
+      chat_provider: 'teams',
+      event_type: 'chat.message',
+      filter_predicate: { provider: 'teams', channel: '19:gone@thread.tacv2' },
+      status_reporting: 'failures',
+      subject_policy: 'none',
+      enabled: true,
+    };
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ editing, chatProviders: [teams] })} />);
+
+    expect(screen.getByDisplayValue('A conversation the bot no longer lists')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Only when a run fails')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const trigger = bodyOf(fetchSpy, 'PATCH').trigger;
+    expect(trigger.filter_predicate).toEqual({ provider: 'teams', channel: '19:gone@thread.tacv2' });
+    expect(trigger.status_reporting).toBe('failures');
+  });
+
+  it('says which messengers to connect when none is', () => {
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat' })} />);
+
+    expect(screen.getByText('Connect Slack or Microsoft Teams on the Integrations page first.')).toBeInTheDocument();
+  });
+
   it('posts the cooldown set on a slack trigger, and 0 for a cleared one', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat' })} />);
 
     const cooldown = screen.getByRole('textbox', { name: 'Cooldown (s)' });
     await userEvent.clear(cooldown);
@@ -282,41 +355,38 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(bodyOf(fetchSpy, 'POST').trigger.cooldown_seconds).toBe(0);
   });
 
-  it('reports slack failures back by default and stops when the switch is turned off', async () => {
+  it('follows a run with a status card by default, and can report only failures', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [slack] })} />);
 
-    const notify = screen.getByRole('switch', { name: /report failures back to slack/i });
-    expect(notify).toBeChecked();
-
-    await userEvent.click(notify);
+    await pickOption('A status card that follows the run', 'Only when a run fails');
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    expect(bodyOf(fetchSpy, 'POST').trigger.notify_on_failure).toBe(false);
+    expect(bodyOf(fetchSpy, 'POST').trigger.status_reporting).toBe('failures');
   });
 
-  it('posts an empty slack filter when channel and pattern are left blank', async () => {
+  it('posts only the messenger when channel and pattern are left blank', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [slack] })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    expect(bodyOf(fetchSpy, 'POST').trigger.filter_predicate).toEqual({});
+    expect(bodyOf(fetchSpy, 'POST').trigger.filter_predicate).toEqual({ provider: 'slack' });
   });
 
   it('reveals and posts the slack subject block with its own title placeholder', async () => {
     const fetchSpy = installFetch();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat' })} />);
 
     await pickOption(/project-level run/, 'Create a task');
 
     expect(await screen.findByText('Task column')).toBeInTheDocument();
-    await userEvent.type(screen.getByPlaceholderText(/slack\.message/), 'from slack');
+    await userEvent.type(screen.getByPlaceholderText(/chat\.message/), 'from slack');
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
@@ -475,7 +545,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     installFetch(() => json({ webhook_url: 'https://example.test/should-be-ignored' }));
     const onSaved = vi.fn();
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
@@ -519,8 +589,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a structured text predicate and patches enabled + filter', async () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C1', text: { op: 'regex', value: 'deploy' } },
       subject_policy: 'none',
       cooldown_seconds: 120,
@@ -546,7 +617,11 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       ),
     );
     const trigger = bodyOf(fetchSpy, 'PATCH').trigger;
-    expect(trigger.filter_predicate).toEqual({ channel: 'C1', text: { op: 'regex', value: 'deploy' } });
+    expect(trigger.filter_predicate).toEqual({
+      provider: 'slack',
+      channel: 'C1',
+      text: { op: 'regex', value: 'deploy' },
+    });
     expect(trigger.cooldown_seconds).toBe(120);
     expect(trigger.enabled).toBe(false);
     expect(trigger.kind).toBeUndefined(); // edits never resend the (locked) kind
@@ -555,8 +630,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a plain-string text predicate', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C2', text: 'shipit' },
       subject_policy: 'none',
       enabled: true,
@@ -571,8 +647,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit with a channel but no text predicate', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C3' },
       subject_policy: 'none',
       enabled: false,
@@ -589,8 +666,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('seeds a slack edit from a structured text predicate missing op/value', () => {
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C4', text: {} },
       subject_policy: 'none',
       enabled: true,
@@ -725,7 +803,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     const onSaved = vi.fn();
     installFetch(() => json({ errors: ['Bad channel', 'Nope'] }, 422));
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
@@ -738,7 +816,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     // Invalid JSON => res.json() rejects => caught as {} => default message.
     installFetch(() => new Response('boom', { status: 500, headers: { 'Content-Type': 'application/json' } }));
 
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onSaved })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
@@ -749,7 +827,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   it('keeps the form open with its values intact when the scrim is clicked', async () => {
     const onClose = vi.fn();
     const onSaved = vi.fn();
-    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onClose, onSaved })} />);
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', onClose, onSaved })} />);
 
     const channel = screen.getByPlaceholderText('C0123ABC (blank = any)');
     await userEvent.type(channel, 'C-PRESERVE-ME');
@@ -766,8 +844,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     const onSaved = vi.fn();
     const editing: Trigger = {
       id: 2,
-      kind: 'slack',
-      event_type: 'slack.message',
+      kind: 'chat',
+      chat_provider: 'slack',
+      event_type: 'chat.message',
       filter_predicate: { channel: 'C-EXISTING' },
       subject_policy: 'none',
       enabled: true,
@@ -832,7 +911,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'ignore',
         filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
         subject_policy: 'find_or_create_task',
-        notify_on_failure: true,
+        status_reporting: 'failures',
         subject_column_id: '1',
       });
     });
@@ -847,7 +926,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
       await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-      expect(bodyOf(fetchSpy, 'POST').trigger.notify_on_failure).toBe(false);
+      expect(bodyOf(fetchSpy, 'POST').trigger.status_reporting).toBe('none');
     });
 
     it('edits a tracker trigger without resending its event type', async () => {
@@ -860,7 +939,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         subject_policy: 'none',
         filter_predicate: { 'comment.mentions_me': true },
-        notify_on_failure: false,
+        status_reporting: 'none',
         enabled: true,
       };
       renderPage(<TriggerFormPanel {...baseProps({ editing, trackers })} />);
@@ -875,7 +954,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         aixle_changes: 'other_workflows',
         filter_predicate: { 'comment.mentions_me': true },
         subject_policy: 'none',
-        notify_on_failure: false,
+        status_reporting: 'none',
         enabled: true,
       });
     });

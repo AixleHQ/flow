@@ -58,6 +58,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         { id: t.id, handle: t.handle, name: t.name, provider: t.provider, status: t.status,
           mentions_recognized: t.recognizes_mentions? }
       },
+      chat_providers: Chat.trigger_options(current_project),
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
       agents: InertiaRails.defer(group: "resources") {

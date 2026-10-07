@@ -3,6 +3,7 @@ import { Switch } from '@mantine/core';
 import {
   IconBolt,
   IconBrandSlack,
+  IconBrandTeams,
   IconClock,
   IconColumns,
   IconMessage,
@@ -16,10 +17,11 @@ import {
 
 import { creatorLabel, creatorTone, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
-import type { Trigger } from './types';
+import type { ChatProviderOption, Trigger } from './types';
 
 const CHAT_ICONS: Record<string, typeof IconBolt> = {
   slack: IconBrandSlack,
+  teams: IconBrandTeams,
 };
 
 const SOURCE_ICONS: Record<string, typeof IconBolt> = {
@@ -50,6 +52,7 @@ const iconButton = {
 interface TriggerCardsProps {
   triggers: Trigger[];
   trackers?: TrackerOption[];
+  chatProviders?: ChatProviderOption[];
   readOnly: boolean;
   onEdit: (t: Trigger) => void;
   onDelete: (t: Trigger) => void;
@@ -62,6 +65,7 @@ interface TriggerCardsProps {
 export function TriggerCards({
   triggers,
   trackers = [],
+  chatProviders = [],
   readOnly,
   onEdit,
   onDelete,
@@ -73,8 +77,7 @@ export function TriggerCards({
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
       {triggers.map((t) => {
         const source = triggerSource(t);
-        const Icon =
-          (source === 'chat' ? CHAT_ICONS[t.chat_provider ?? 'slack'] : null) ?? SOURCE_ICONS[source] ?? IconBolt;
+        const Icon = (source === 'chat' ? CHAT_ICONS[t.chat_provider ?? ''] : null) ?? SOURCE_ICONS[source] ?? IconBolt;
         const isDisabled = t.enabled === false;
         const href = workflowHref?.(t);
         const title = triggerTitle(t);
@@ -134,7 +137,7 @@ export function TriggerCards({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {triggerMeta(t, trackers)}
+                  {triggerMeta(t, trackers, chatProviders)}
                 </div>
               </div>
             </div>
@@ -193,7 +196,7 @@ export function TriggerCards({
                   }}
                 >
                   {source === 'chat'
-                    ? `${(t.chat_provider ?? 'slack').toUpperCase()}.MESSAGE`
+                    ? `${(t.chat_provider ?? 'chat').toUpperCase()}.MESSAGE`
                     : (SOURCE_BADGES[source] ?? t.event_type)}
                 </span>
               </div>

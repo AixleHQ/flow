@@ -62,20 +62,27 @@ class WorkflowRunTest < ActiveSupport::TestCase
     assert_not run.controllable_by?(nil)
   end
 
-  test "failing a run queues the Slack failure notice, whoever failed it" do
+  test "failing a run tells the source that started it, whoever failed it" do
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    dispatch = TriggerDispatch.create!(trigger_event: create(:trigger_event), workflow_run: run,
+                                       dedup_key: SecureRandom.hex, status: "started")
     run.start!
 
-    assert_enqueued_with(job: Slack::NotifyRunFailureJob, args: [ run.id ]) { run.fail! }
+    assert_enqueued_with(job: Triggers::ReportRunTransitionJob, args: [ dispatch.id, "failed" ]) { run.fail! }
     assert_equal "failed", run.state
     assert_not_nil run.completed_at
   end
 
-  test "completing a run queues nothing" do
+  test "starting and completing a run tell the source that started it, and a run no trigger started tells nobody" do
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
-    run.start!
+    dispatch = TriggerDispatch.create!(trigger_event: create(:trigger_event), workflow_run: run,
+                                       dedup_key: SecureRandom.hex, status: "started")
 
-    assert_no_enqueued_jobs(only: Slack::NotifyRunFailureJob) { run.complete! }
+    assert_enqueued_with(job: Triggers::ReportRunTransitionJob, args: [ dispatch.id, "running" ]) { run.start! }
+    assert_enqueued_with(job: Triggers::ReportRunTransitionJob, args: [ dispatch.id, "completed" ]) { run.complete! }
+
+    manual = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    assert_no_enqueued_jobs(only: Triggers::ReportRunTransitionJob) { manual.start! }
   end
 
   test "with_total_cost_cents adds up the sessions its step runs ran in, each once" do

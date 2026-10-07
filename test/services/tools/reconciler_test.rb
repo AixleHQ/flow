@@ -10,11 +10,11 @@ class Tools::ReconcilerTest < ActiveSupport::TestCase
 
     session_names = Tools::Registry.for_audience(:session).map(&:name)
     assert_equal session_names.sort, Tool.code_source.not_deleted.pluck(:name).sort
-    slack = Tool.code_source.find_by!(name: "slack_post_message")
-    assert_equal "app", slack.execution_mode.to_s
-    assert_equal "slack", slack.requires_integration
-    assert_equal %w[messaging slack], slack.tags
-    assert slack.enabled?
+    chat = Tool.code_source.find_by!(name: "chat_post_message")
+    assert_equal "app", chat.execution_mode.to_s
+    assert_equal "chat", chat.requires_integration
+    assert_equal %w[messaging chat], chat.tags
+    assert chat.enabled?
     lifecycle = Tool.code_source.find_by!(name: "finish_session")
     assert_not lifecycle.user_attachable
   end

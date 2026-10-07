@@ -28,10 +28,10 @@ const triggers: Trigger[] = [
   },
   {
     id: 2,
-    kind: 'slack',
+    kind: 'chat',
     source: 'chat',
     chat_provider: 'slack',
-    event_type: 'slack.message',
+    event_type: 'chat.message',
     filter_predicate: { text: { op: 'contains', value: 'ship' } },
     enabled: true,
     workflow_id: 4,

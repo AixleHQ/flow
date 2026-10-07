@@ -120,7 +120,7 @@ The mismatch to avoid is in both directions. Don't attach every server on the pr
 Until `@` references ship:
 
 - **Files:** write the path. `/workspace/assets/brand/voice.md`, `/workspace/assets/summary.md` (an earlier step's output), `/workspace/outputs/report.md`.
-- **Tools, MCP servers, skills:** use the name as it appears in the step's resources ("the GitHub MCP", "the `slack_post_message` tool").
+- **Tools, MCP servers, skills:** use the name as it appears in the step's resources ("the GitHub MCP", "the `chat_post_message` tool").
 - **Config items:** use the item's name exactly, and tell the agent to read it with `get_config_item`.
 - **Board objects:** the agent's board tools take ids. If the step works on "the card that triggered this run", say that. The agent has it in its context.
 - **`{{artifact_name}}`**, from the builder's helper text, **is not replaced by anything**. Don't use it. Write the path instead.

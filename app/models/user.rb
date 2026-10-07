@@ -150,6 +150,7 @@ class User < ApplicationRecord
   # session they hold (AD-6). "Does this user have credentials?" is
   # `user_identities.any?` — never a password_digest check.
   has_many :user_identities, dependent: :destroy
+  has_many :chat_identities, dependent: :delete_all
   # A passkey belongs to the person, not to any company (AD-18).
   has_many :webauthn_credentials, dependent: :destroy
   has_many :magic_link_tokens, dependent: :destroy

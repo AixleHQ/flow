@@ -18,13 +18,14 @@ import { CHAT_PROVIDER_LABELS, SOURCE_LABELS, triggerSource, triggerTitle } from
 import type { TrackerOption } from './trackerTrigger';
 import { TriggerCards } from './TriggerCards';
 import { TriggerFormPanel } from './TriggerFormPanel';
-import type { Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
+import type { ChatProviderOption, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
 interface Props {
   projectId: number;
   workflows: TriggerWorkflowOption[];
   columns: TriggerColumnOption[];
   trackers: TrackerOption[];
+  chatProviders?: ChatProviderOption[];
 }
 
 const ALL = 'all';
@@ -46,7 +47,7 @@ function filterLabel(value: string): string {
 const triggerUrl = (projectId: number, t: Trigger) =>
   apiV1ProjectWorkflowTriggerPath(projectId, t.workflow_id ?? 0, t.id, t.kind === 'column' ? { kind: 'column' } : {});
 
-export function TriggersContent({ projectId, workflows, columns, trackers }: Props) {
+export function TriggersContent({ projectId, workflows, columns, trackers, chatProviders = [] }: Props) {
   const { canExecute } = useProjectPermissions();
   const readOnly = !canExecute;
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -198,6 +199,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers }: Pro
             <TriggerCards
               triggers={shown}
               trackers={trackers}
+              chatProviders={chatProviders}
               readOnly={readOnly}
               onEdit={(t) => setPanel({ editing: t })}
               onDelete={remove}
@@ -216,6 +218,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers }: Pro
           workflows={workflows}
           columns={columns}
           trackers={trackers}
+          chatProviders={chatProviders}
           editing={panel.editing}
           defaultKind="column"
           onClose={() => setPanel(null)}

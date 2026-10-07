@@ -10,9 +10,9 @@ class ToolTest < ActiveSupport::TestCase
   end
 
   def gated_tool
-    Tool.create!(name: "slack_post_message", display_name: "Slack Post Message",
+    Tool.create!(name: "chat_post_message", display_name: "Chat Post Message",
       source: "code", execution_mode: "app",
-      enabled: true, requires_integration: "slack", input_schema: {})
+      enabled: true, requires_integration: "chat", input_schema: {})
   end
 
   test "visible_for_project hides an integration-gated tool when the integration is not active" do
@@ -54,7 +54,7 @@ class ToolTest < ActiveSupport::TestCase
   # ── platform-namespace protection (code-first registry) ──
 
   test "custom tool cannot claim a platform tool name" do
-    tool = build(:tool, name: "slack_post_message", scope: @project)
+    tool = build(:tool, name: "chat_post_message", scope: @project)
 
     assert_not tool.valid?
     assert_match(/collides with the platform tool/, tool.errors[:name].first)

@@ -8,7 +8,7 @@ module InternalTools
     # `requires_integration :coder`), exactly like the Slack tools. The
     # integration is resolved directly from the session's project: the
     # project-scoped Coder integration if present, otherwise the company-wide
-    # one. This mirrors SlackPostMessage#slack_integration.
+    # one. This mirrors SlackContext#slack_integration.
     module CoderResolver
       class NotConfiguredError < StandardError; end
 

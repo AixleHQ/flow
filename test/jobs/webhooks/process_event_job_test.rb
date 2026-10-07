@@ -12,7 +12,7 @@ module Webhooks
       @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.companies.first)
       @binding = create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user,
-        event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+        event_type: "chat.message", filter_predicate: { "channel" => "C1" })
     end
 
     def received(payload, key: "Ev1")
@@ -36,7 +36,7 @@ module Webhooks
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
       assert_equal "processed", rw.reload.status
-      assert TriggerEvent.exists?(event_type: "slack.message")
+      assert TriggerEvent.exists?(event_type: Chat::EVENT_TYPE)
       assert_equal 1, TriggerDispatch.count
     end
 
@@ -44,7 +44,7 @@ module Webhooks
       project_b = create(:project, owner: @user, company: @user.companies.first)
       workflow_b = create(:workflow, scope: project_b)
       create(:trigger_binding, project: project_b, workflow: workflow_b, created_by: @user,
-        event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+        event_type: "chat.message", filter_predicate: { "channel" => "C1" })
 
       payload = {
         "type" => "event_callback", "event_id" => "EvFan", "team_id" => "T1",
@@ -72,7 +72,7 @@ module Webhooks
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
       assert_equal "skipped", rw.reload.status
-      assert_not TriggerEvent.exists?(event_type: "slack.message")
+      assert_not TriggerEvent.exists?(event_type: Chat::EVENT_TYPE)
     end
 
     test "ignores the bot's own messages" do
@@ -108,20 +108,46 @@ module Webhooks
         has_entries(
           workflow: @workflow,
           shared_context: has_entries(
-            "slack" => has_entries("channel" => "C1", "ts" => "111.222", "thread_ts" => "111.222",
-                                   "team" => "T1", "integration_id" => integration.id,
-                                   "text" => "run report", "user" => "U1")
+            "chat" => has_entries("provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                                  "message_id" => "111.222", "thread_id" => "111.222", "workspace_id" => "T1",
+                                  "integration_id" => integration.id, "text" => "run report",
+                                  "actor" => { "id" => "U1" })
           )
         )
       ).once.returns(build(:workflow_run))
 
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
-      event = TriggerEvent.find_by(event_type: "slack.message")
+      event = TriggerEvent.find_by(event_type: Chat::EVENT_TYPE)
       assert_equal "111.222", event.data["ts"]
       assert_equal "F1", event.data.dig("files", 0, "id")
       assert_nil event.data.dig("files", 0, "extra") # only whitelisted file fields kept
       assert_equal integration.id, event.data["integration_id"]
+    end
+
+    test "publishes the provider-neutral chat message and hands the run its chat origin" do
+      payload = {
+        "type" => "event_callback", "event_id" => "EvChat", "team_id" => "T1",
+        "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1", "text" => "<@B> go",
+                     "ts" => "3.4", "thread_ts" => "3.1" }
+      }
+
+      WorkflowService.expects(:enqueue).with(
+        has_entries(shared_context: has_entries(
+          "chat" => has_entries("provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                                "thread_id" => "3.1", "message_id" => "3.4", "actor" => { "id" => "U1" },
+                                "workspace_id" => "T1", "text" => "<@B> go")
+        ))
+      ).once.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(received(payload, key: "EvChat").id)
+
+      data = TriggerEvent.find_by!(event_type: Chat::EVENT_TYPE).data
+      assert_equal "slack", data["provider"]
+      assert_equal({ "id" => "T1" }, data["workspace"])
+      assert_equal({ "id" => "C1", "type" => "channel" }, data["conversation"])
+      assert_equal [ "3.1", "3.4" ], data.values_at("thread_id", "message_id")
+      assert_equal({ "id" => "U1" }, data["actor"])
     end
 
     def bot_install(bot_user_id: "U0BOT")
@@ -144,12 +170,12 @@ module Webhooks
       raw = "<@U0BOT>  Deploy Staging &amp; tag "
 
       WorkflowService.expects(:enqueue).with(
-        has_entries(shared_context: has_entries("slack" => has_entries("text" => raw)))
+        has_entries(shared_context: has_entries("chat" => has_entries("text" => raw)))
       ).once.returns(build(:workflow_run))
 
       Webhooks::ProcessEventJob.perform_now(mention(raw, key: "EvCmd").id)
 
-      event = TriggerEvent.find_by!(event_type: "slack.message")
+      event = TriggerEvent.find_by!(event_type: Chat::EVENT_TYPE)
       assert_equal "Deploy Staging & tag", event.data["text"]
       assert_equal raw, event.data["raw_text"]
     end
@@ -163,7 +189,7 @@ module Webhooks
 
       Webhooks::ProcessEventJob.perform_now(mention("<@U0ALICE> <@U0BOT> deploy", key: "EvOther").id)
 
-      assert_equal "<@U0ALICE> <@U0BOT> deploy", TriggerEvent.find_by!(event_type: "slack.message").data["text"]
+      assert_equal "<@U0ALICE> <@U0BOT> deploy", TriggerEvent.find_by!(event_type: Chat::EVENT_TYPE).data["text"]
     end
 
     test "drops a leading mention, label and all, when the install cannot say who the bot is" do
@@ -187,7 +213,7 @@ module Webhooks
       WorkflowService.expects(:enqueue).with(
         has_entries(
           shared_context: has_entries(
-            "slack" => has_entries("ts" => "222.333", "thread_ts" => "111.222")
+            "chat" => has_entries("message_id" => "222.333", "thread_id" => "111.222")
           )
         )
       ).once.returns(build(:workflow_run))

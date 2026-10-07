@@ -87,6 +87,21 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('says which chat a chat-started run came from, linking back to the message', () => {
+    const chatOrigin = {
+      provider: 'Microsoft Teams',
+      conversation: 'Sales / Onboarding',
+      sender: 'Olo Brockhouse',
+      url: 'https://teams.microsoft.com/l/message/19:abc/1',
+    };
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ chatOrigin }) }) });
+
+    expect(screen.getByRole('link', { name: 'Microsoft Teams · Sales / Onboarding · Olo Brockhouse' })).toHaveAttribute(
+      'href',
+      'https://teams.microsoft.com/l/message/19:abc/1',
+    );
+  });
+
   it('renders one session card per step run', () => {
     renderAuthedPage(<ShowPage />, { props: seed() });
 

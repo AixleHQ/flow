@@ -26,11 +26,11 @@ class WorkflowTriggers::SerializerTest < ActiveSupport::TestCase
   end
 
   test "a Slack trigger is a chat trigger whose messenger is Slack" do
-    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
 
     payload = WorkflowTriggers::Serializer.new.binding(binding)
 
-    assert_equal [ "slack", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
+    assert_equal [ "chat", "chat", "slack" ], payload.values_at(:kind, :source, :chat_provider)
     assert_nil payload[:webhook_url]
   end
 

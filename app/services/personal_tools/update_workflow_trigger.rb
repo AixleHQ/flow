@@ -23,9 +23,10 @@ module PersonalTools
                            description: "auto starts the run immediately; manual only offers it."
       param :enabled, type: :boolean, description: "Whether the trigger fires."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings."
-      param :notify_on_failure, type: :boolean,
-            description: "When a run from this trigger fails, say so where it came from: in the Slack thread, with the error, " \
-                         "or as a comment on the tracker issue (also on cancel). Default true; no effect on other trigger kinds."
+      param :status_reporting, type: :string, enum: WorkflowTriggerSupport::STATUS_REPORTING,
+                               description: "What a run tells the place it came from. none; failures (one message or tracker " \
+                                            "comment when it fails); lifecycle (chat only: one status card in the thread, " \
+                                            "edited as the run starts and ends). Chat triggers default to lifecycle."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
                              description: "Which board task the run is about: none, existing_task, create_task, or " \
                                           "find_or_create_task. The last two need subject_column_id."
@@ -35,9 +36,11 @@ module PersonalTools
                                  description: "kind=tracker: the project tracker to listen to; null for any tracker."
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
                             description: "kind=tracker: ignore, other_workflows or always — what to do with changes Aixle made."
+      param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
+                            description: "kind=chat: move the trigger to another messenger."
       param :filter_predicate, type: :object,
                                description: "Replaces the whole predicate: only fire when the event data contains " \
-                                            "these key/value pairs. Pass {} to clear it."
+                                            "these key/value pairs. Pass {} to clear it; a chat trigger keeps its messenger."
       param :schedule_config, type: :object,
                               description: "Replaces the whole schedule: {\"cron\": \"0 9 * * 1-5\", \"timezone\": " \
                                            "\"Europe/Berlin\"}. ALWAYS pass timezone explicitly — an empty timezone " \
@@ -74,10 +77,11 @@ module PersonalTools
     def update_binding(workflow)
       trigger = find_event_trigger!(workflow, params[:trigger_id])
       attrs = trigger_binding_attrs
-      return error("No fields to update") if attrs.empty?
+      return error("No fields to update") if attrs.empty? && params[:chat_provider].blank?
 
       trigger.assign_attributes(attrs)
-      trigger.save_checking_slack!
+      trigger.assign_chat_provider(params[:chat_provider])
+      trigger.save_checking_chat!
       success(serialize_binding(trigger))
     end
   end

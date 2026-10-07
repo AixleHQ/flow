@@ -9,7 +9,7 @@ class Integration < ApplicationRecord
 
   CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack].freeze
 
-  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops jira youtrack], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -31,9 +31,11 @@ class Integration < ApplicationRecord
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
   has_many :tracker_subscriptions, dependent: :destroy
+  has_many :chat_conversations, dependent: :delete_all
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?
+  after_destroy :release_teams_tenant, if: :teams?
 
   validates :name, presence: true
   validates :provider, presence: true
@@ -321,6 +323,13 @@ class Integration < ApplicationRecord
 
   def remove_linear_webhooks
     Trackers::Linear::Subscriptions.release(api_key: @linear_api_key, webhook_ids: @linear_webhook_ids)
+  end
+
+  # Deleted rather than disabled: the endpoint is what ties the tenant to this
+  # company, and a disconnected organization may connect to another one.
+  def release_teams_tenant
+    WebhookEndpoint.where(provider: "teams", company_id: company_id)
+                   .where("config->>'integration_id' = ?", id.to_s).delete_all
   end
 
   def release_slack_workspace

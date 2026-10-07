@@ -15,7 +15,8 @@ Each integration has its own page:
 | **Jira** | Jira Cloud projects as trackers: tracker triggers and the `tracker_*` tools | [Jira](/docs/jira) |
 | **Linear** | Linear teams as trackers: tracker triggers and the `tracker_*` tools | [Linear](/docs/linear) |
 | **YouTrack** | YouTrack projects, Cloud or self-hosted, as trackers: tracker triggers and the `tracker_*` tools | [YouTrack](/docs/youtrack) |
-| **Slack** | Workflows started by mentioning the app, replies and failure notices in the thread, the `slack_*` tools | [Slack](/docs/slack) |
+| **Slack** | Workflows started by mentioning the app, a status card in the thread, the `chat_*` tools | [Slack](/docs/slack) |
+| **Microsoft Teams** | Workflows started from channels, group chats and 1:1 chats, a status card in the thread, files both ways, the `chat_*` tools | [Microsoft Teams](/docs/teams) |
 | **Coder** | Remote workspaces an agent can allocate, run commands on and release | [Coder](/docs/coder) |
 
 Azure Boards, Jira, GitHub Projects, Linear and YouTrack are all **trackers**. What a
@@ -45,6 +46,7 @@ each verifies the caller its own way.
 | Linear | `POST /webhooks/trackers/<endpoint token>` for an API-key connection, or `POST /webhooks/trackers/app/linear` for the Linear app | `Linear-Signature` HMAC with the subscription's secret, or with `LINEAR_WEBHOOK_SECRET`, and a timestamp within a minute |
 | YouTrack | `POST /webhooks/trackers/<endpoint token>`, one per connected YouTrack project | The secret the Aixle Flow app keeps for that project, in `X-Aixle-Token` |
 | Slack | `POST /webhooks/slack/events` | Slack's request signature with `SLACK_SIGNING_SECRET` |
+| Microsoft Teams | `POST /webhooks/teams/activities` | The Bot Framework's signed token: its keys, issuer, audience (the bot's app id) and service URL |
 | Incoming webhook trigger | `POST /webhooks/in/<slug>` | What the trigger is set to: HMAC SHA-256, a shared token header, or nothing |
 
 Azure DevOps sends no signature, so the subscription's own password is the

@@ -314,6 +314,13 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
 | `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies the Slack event payloads posted to `/webhooks/slack/events`. |
 | `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write` | Bot scopes requested at install time. |
+| `TEAMS_APP_ID`               | no       | `MICROSOFT_CLIENT_ID` | The Entra application (client) id of the deployment's Teams bot. |
+| `TEAMS_HOME_TENANT_ID`       | no       | unset              | The tenant the bot's app registration and Azure Bot live in. Without it projects are not offered Microsoft Teams. |
+| `TEAMS_PRIVATE_KEY`          | no       | `MICROSOFT_PRIVATE_KEY` | PEM private key of the bot's certificate.                    |
+| `TEAMS_CERT_THUMBPRINT`      | no       | `MICROSOFT_CERT_THUMBPRINT` | SHA-1 thumbprint (hex) of that certificate.             |
+| `TEAMS_CLIENT_SECRET`        | no       | unset              | A client secret instead of the certificate, for development only. |
+| `TEAMS_ALLOWED_TENANT_IDS`   | no       | unset              | Comma-separated Microsoft 365 organizations that may connect. Unset, any organization's administrator may. |
+| `TEAMS_CLOUD`                | no       | `public`           | The Microsoft cloud the bot talks to. Only `public` is supported. |
 | `SENTRY_OAUTH_CLIENT_ID`     | no       | unset              | Client ID of the Sentry OAuth app users connect their org with. |
 | `SENTRY_OAUTH_CLIENT_SECRET` | no       | unset              | Its client secret.                                            |
 | `RAILWAY_OAUTH_CLIENT_ID`    | no       | unset              | Client ID of the Railway OAuth app.                           |

@@ -8,7 +8,7 @@
 #   • column auto-binding   → TaskService.check_auto_trigger → record_column_trigger → dispatch_pending
 #   • task gate resolution  → TaskService.resolve_gate/remove_gate → record_column_trigger → dispatch_pending
 #   • manual launch button  → TaskService.trigger_workflow → record_event + dispatch_pending
-#   • Slack / webhook        → Webhooks::ProcessEventJob → publish (record + dispatch_pending)
+#   • chat / webhook         → Webhooks::ProcessEventJob → publish (record + dispatch_pending)
 #   • schedule              → FireScheduleTriggerActivity → record_event + fire_for_binding
 #
 # Transactional outbox: internal producers record a "pending" TriggerEvent INSIDE
@@ -29,7 +29,6 @@ class TriggerEngine
   # event_type → how dispatch_pending routes it.
   COLUMN_EVENT_TYPE = "board.column.auto_triggered"
   MANUAL_EVENT_TYPE = "workflow.manual_requested"
-  SLACK_MENTION_TOKEN = /<@[A-Z0-9]+>/i
 
   class << self
     # Persist a normalized event WITHOUT dispatching.
@@ -90,13 +89,17 @@ class TriggerEngine
 
       event.reload
       runs = route_pending(event)
-      event.update!(relay_state: "dispatched", dispatched_at: Time.current)
+      # A chat provider's file links are needed until every run has its files.
+      data = Chat.provider_for(event)&.scrub(event.data) || event.data
+      event.update!(relay_state: "dispatched", dispatched_at: Time.current, data: data)
       Array(runs).compact
     rescue StandardError => e
       attempts = event.relay_attempts.to_i + 1
       next_state = attempts >= TriggerEvent::RELAY_MAX_ATTEMPTS ? "failed" : "pending"
+      # Given up on: the file links it carried are dropped all the same.
+      data = next_state == "failed" ? (Chat.provider_for(event)&.scrub(event.data) || event.data) : event.data
       event.update_columns(
-        relay_state: next_state, relay_attempts: attempts,
+        relay_state: next_state, relay_attempts: attempts, data: data,
         relay_error: e.message.to_s.truncate(250), updated_at: Time.current
       )
       Rails.logger.error("[TriggerEngine] dispatch_pending failed for event ##{event.id} (attempt #{attempts}): #{e.message}")
@@ -105,19 +108,25 @@ class TriggerEngine
 
     # Match an event against the generalized binding registry and fire each.
     # Returns the array of created workflow runs (nils for suppressed duplicates).
-    # Slack: /help (and zero matches) reply with the channel's trigger catalog
-    # instead of staying silent — see Slack::HelpResponder.
+    # A chat message asking for help, or one no trigger matched, gets the
+    # conversation's trigger catalog instead of silence.
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
-      if slack_help_request?(event)
-        Slack::HelpResponder.call(event)
+      if Chat.help_request?(event)
+        Chat.answer_help(event)
+        return []
+      end
+      return [] if Chat.answer_command(event)
+
+      if Chat.private_request?(event)
+        Chat.answer_private(event)
         return []
       end
 
       matched = TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }
-      if matched.empty? && event.event_type.to_s.start_with?("slack.")
-        Slack::HelpResponder.call(event)
+      if matched.empty? && Chat.event?(event)
+        Chat.answer_help(event)
         return []
       end
 
@@ -204,6 +213,7 @@ class TriggerEngine
       )
 
       result = nil
+      decided = nil
       dispatch.with_lock do
         if dispatch.workflow_run_id.present?
           result = dispatch.workflow_run            # already started → idempotent no-op
@@ -211,13 +221,14 @@ class TriggerEngine
           result = nil                              # a prior attempt decided not to start
         elsif cooling_down?(trigger_binding, dispatch)
           dispatch.update!(status: "skipped", detail: { "reason" => "cooldown" })
+          decided = "skipped"
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: slack_run_context(event).merge(Trackers::TriggerSupport.run_context(event))
+            shared_context: Chat.run_context(event).merge(Trackers::TriggerSupport.run_context(event))
           )
           started = result.try(:persisted?)
           dispatch.update!(
@@ -225,9 +236,12 @@ class TriggerEngine
             status: started ? "started" : "skipped",
             detail: started ? {} : { "reason" => skip_reason(result) }
           )
+          decided = started ? "dispatched" : "skipped"
           WorkflowService.dispatch_or_leave_to_relay(result) if started
         end
       end
+      # Said once, by the attempt that decided; a replay of the event decides nothing.
+      Triggers.announce(dispatch.id, decided) if decided && (trigger_binding || source == Chat::ACTION_SOURCE)
       result
     end
 
@@ -282,24 +296,24 @@ class TriggerEngine
       TriggerDispatch.find_by!(dedup_key: dedup_key)
     end
 
-    # Input assets for the run. Slack events carry raw file metadata (not yet
-    # ingested) because a company-scoped workspace event can fan out to several
+    # Input assets for the run. Chat events carry raw file metadata (not yet
+    # ingested) because a company-scoped message can fan out to several
     # projects — so each fired run downloads the attachments into ITS OWN project
-    # here, at fire time. Non-Slack sources pass through any pre-resolved ids.
+    # here, at fire time. Other sources pass through any pre-resolved ids.
     # A generic webhook's `data` IS the sender's request body, so nothing in it is
     # trusted as a reference: asset ids are kept only when they are this
-    # project's, and Slack files are fetched only for events our own Slack
-    # gateway produced, through an integration of this project's company.
+    # project's, and chat files are fetched only for events a chat provider's
+    # own receiver produced, through an integration of this project's company.
     def input_asset_ids_for(event, project)
-      files = event.data["files"]
-      if files.present? && project && event.source.to_s.start_with?("slack:")
-        integration = TenantScope.owned(Integration, project: project).find_by(id: event.data["integration_id"])
-        return Array(Slack::FileIngestor.new(integration: integration, project: project).ingest(files)) if integration
+      provider = Chat.provider_for(event)
+      if event.data["files"].present? && project && provider
+        ingested = provider.ingest_files(event, project)
+        return Array(ingested) unless ingested.nil?
       end
 
       owned_asset_ids(event.data["input_asset_ids"], project)
     rescue StandardError => e
-      Rails.logger.error("[TriggerEngine] Slack file ingest failed for project ##{project&.id}: #{e.message}")
+      Rails.logger.error("[TriggerEngine] chat file ingest failed for project ##{project&.id}: #{e.message}")
       owned_asset_ids(event.data["input_asset_ids"], project)
     end
 
@@ -344,8 +358,8 @@ class TriggerEngine
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
       task = column.board.board_tasks.create!(
         board_column: column,
-        title: render_title(template, event),
-        description: tracker ? Trackers::TriggerSupport.task_body(event) : render_subject_body(event)
+        title: render_title(template, event, binding.event_type),
+        description: tracker ? Trackers::TriggerSupport.task_body(event) : render_subject_body(event, binding.event_type)
       )
       Trackers::TriggerSupport.link!(task, binding, event) if tracker
       task
@@ -357,27 +371,30 @@ class TriggerEngine
     # Routing/transport keys (and Slack's raw markup of a text the card already
     # shows) that aren't part of the user-facing payload and shouldn't leak into
     # the created card's body.
-    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files raw_text].freeze
+    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files raw_text service_url].freeze
 
     # Renders the triggering payload into the created card's description so the
     # run's input is visible on the board. Returns nil when there's nothing useful
     # to show (e.g. an empty schedule fire).
-    def render_subject_body(event)
-      payload = (event.data || {}).except(*INTERNAL_DATA_KEYS)
+    def render_subject_body(event, label)
+      # A generic webhook's payload is the sender's own, so only a chat
+      # message loses the keys the messaging port routes by.
+      internal = Chat.event?(event) ? INTERNAL_DATA_KEYS + Chat::TRANSPORT_KEYS : INTERNAL_DATA_KEYS
+      payload = (event.data || {}).except(*internal)
       return nil if payload.blank?
 
-      "Triggered by `#{event.event_type}`\n\n```json\n#{JSON.pretty_generate(payload)}\n```"
+      "Triggered by `#{label}`\n\n```json\n#{JSON.pretty_generate(payload)}\n```"
     end
 
     # Minimal title templating: {{date}} and {{<event.data key or dot-path>}}.
-    def render_title(template, event)
-      tpl = template.presence || "#{event.event_type} — {{date}}"
+    def render_title(template, event, label)
+      tpl = template.presence || "#{label} — {{date}}"
       tpl.gsub(/\{\{\s*([\w.]+)\s*\}\}/) do
         key = Regexp.last_match(1)
         next (event.occurred_at || Time.current).to_date.to_s if key == "date"
 
         key.split(".").reduce(event.data.to_h) { |value, part| value.is_a?(Hash) ? value[part] : nil }.to_s
-      end.strip.presence || event.event_type
+      end.strip.presence || label
     end
 
     # Internal events carry no external dedup_key → key on the event id so a
@@ -389,38 +406,6 @@ class TriggerEngine
       base = event.dedup_key.presence || "event:#{event.id}"
       target = trigger_binding ? "binding:#{trigger_binding.id}" : source
       "#{base}:#{target}"
-    end
-
-    # Slack context threaded into the run's shared_context: reply coordinates so the
-    # workflow (and the slack_post_message tool) can reply in the originating
-    # channel/thread, PLUS the triggering message text + author so the agent knows
-    # what it was asked to do. Empty for non-Slack events.
-    def slack_run_context(event)
-      return {} unless event.event_type.to_s.start_with?("slack.")
-
-      slack = {
-        "channel" => event.data["channel"],
-        # Both, and they differ: `ts` is the message that mentioned us, `thread_ts`
-        # the thread it belongs to. Replies default to the thread; `ts` is what an
-        # agent needs to point at that one message inside it.
-        "ts" => event.data["ts"],
-        "thread_ts" => event.data["thread_ts"] || event.data["ts"],
-        "team" => event.data["team"],
-        "integration_id" => event.data["integration_id"],
-        "text" => event.data["raw_text"] || event.data["text"],
-        "user" => event.data["user"]
-      }.compact
-      slack.present? ? { "slack" => slack } : {}
-    end
-
-    # Explicit /help after stripping Slack user mentions. Bare (empty) mentions
-    # are NOT special-cased here — they fall through to matching so catch-all
-    # channel bindings still fire; HelpResponder only runs when nothing matched.
-    def slack_help_request?(event)
-      return false unless event.event_type.to_s.start_with?("slack.")
-
-      stripped = event.data.to_h["text"].to_s.gsub(SLACK_MENTION_TOKEN, "").strip
-      stripped.match?(/\A\/help\z/i)
     end
   end
 end

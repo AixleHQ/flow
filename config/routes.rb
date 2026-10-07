@@ -70,6 +70,7 @@ Rails.application.routes.draw do
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
   post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
+  post "/webhooks/teams/activities", to: "webhooks/teams#activities", as: :teams_activities_webhook
 
   # Public asset share links (no session auth — reachable by anyone with the
   # token). The viewer renders the asset inside a sandboxed iframe; the token
@@ -430,6 +431,26 @@ Rails.application.routes.draw do
     # Redirect URI on Aixle's Entra application for an administrator's sign-in.
     get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
                                                     as: :azure_devops_oauth_callback
+    # Microsoft Teams: the approval link a Microsoft 365 administrator opens
+    # (no Aixle account needed — the link is the credential), and the two
+    # redirect URIs registered on the bot's Entra application.
+    get "integrations/teams/approve/:token", to: "integrations/teams_approvals#show", as: :teams_approval
+    # POSTs with the page's CSRF token: another site must not be able to walk an
+    # administrator's browser from the approval page into the Microsoft sign-in.
+    post "integrations/teams/approve/:token/sign_in", to: "integrations/teams_approvals#sign_in",
+                                                      as: :teams_approval_sign_in
+    post "integrations/teams/approve/:token/file_access", to: "integrations/teams_approvals#file_access",
+                                                          as: :teams_approval_file_access
+    get "integrations/teams/approve/:token/package", to: "integrations/teams_approvals#package",
+                                                     as: :teams_approval_package
+    get "integrations/teams/callback", to: "integrations/teams_approvals#callback", as: :teams_sign_in_callback
+    get "integrations/teams/file_access/callback", to: "integrations/teams_approvals#file_access_callback",
+                                                   as: :teams_file_access_callback
+    # A Teams sender linking their Teams account to their Aixle one. The Microsoft
+    # sign-in returns through the approval callback, which hands it on here.
+    get "integrations/teams/link/:token", to: "integrations/teams_links#show", as: :teams_link
+    post "integrations/teams/link/:token/sign_in", to: "integrations/teams_links#sign_in", as: :teams_link_sign_in
+    get "integrations/teams/link_callback", to: "integrations/teams_links#complete", as: :teams_link_callback
 
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,
@@ -555,9 +576,13 @@ Rails.application.routes.draw do
               post :linear_inspect
               # YouTrack: a pairing for the Aixle Flow app on the instance.
               post :youtrack_connect
+              # Microsoft Teams: a pending connection and its approval link.
+              post :teams_connect
             end
             member do
               post :test_connection
+              get :teams_package
+              post :teams_link
               get :jira_projects
               get :github_projects
               get :linear_teams

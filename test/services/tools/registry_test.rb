@@ -18,13 +18,13 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   end
 
   test "fetch returns a frozen definition with a resolvable handler" do
-    definition = Tools::Registry.fetch("slack_post_message")
+    definition = Tools::Registry.fetch("chat_post_message")
 
     assert definition.frozen?
-    assert_equal "Slack Post Message", definition.display_name
-    assert_equal InternalTools::SlackPostMessage, definition.handler_class
-    assert_equal %i[messaging slack], definition.tags
-    assert_equal "slack", definition.requires_integration.to_s
+    assert_equal "Chat Post Message", definition.display_name
+    assert_equal InternalTools::ChatPostMessage, definition.handler_class
+    assert_equal %i[messaging chat], definition.tags
+    assert_equal "chat", definition.requires_integration.to_s
     assert_nil Tools::Registry.fetch("nope_not_a_tool")
   end
 
@@ -54,10 +54,9 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board tracker slack coder assets session_supervision], groups.map { |g| g[:tag] }
-    assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
-    assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
-                 groups.find { |g| g[:tag] == "slack" }[:tool_names]
+    assert_equal %w[board tracker chat coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[chat_delete_message chat_post_message chat_read_thread chat_update_message],
+                 groups.find { |g| g[:tag] == "chat" }[:tool_names]
 
     defs = groups.flat_map { |g| g[:tool_names] }.map { |n| Tools::Registry.fetch(n) }
 

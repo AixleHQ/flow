@@ -377,6 +377,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
   end
 
+  create_table "chat_conversations", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.boolean "installed", default: true, null: false
+    t.bigint "integration_id", null: false
+    t.string "kind", null: false
+    t.datetime "last_activity_at"
+    t.string "name"
+    t.string "provider", null: false
+    t.string "service_url"
+    t.string "team_aad_group_id"
+    t.string "team_external_id"
+    t.string "team_name"
+    t.string "tenant_id"
+    t.datetime "updated_at", null: false
+    t.datetime "welcomed_at"
+    t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
+    t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
+  end
+
+  create_table "chat_identities", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_user_id", null: false
+    t.datetime "linked_at", null: false
+    t.string "proof", null: false
+    t.string "provider", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.string "workspace_id", null: false
+    t.index ["provider", "workspace_id", "external_user_id"], name: "index_chat_identities_on_sender", unique: true
+    t.index ["user_id"], name: "index_chat_identities_on_user_id"
+  end
+
   create_table "column_transitions", force: :cascade do |t|
     t.bigint "actor_id"
     t.string "actor_type", null: false
@@ -1502,10 +1535,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.string "event_type", null: false
     t.jsonb "filter_predicate", default: {}, null: false
     t.string "name"
-    t.boolean "notify_on_failure", default: true, null: false
     t.bigint "project_id", null: false
     t.bigint "project_tracker_id"
     t.jsonb "schedule_config", default: {}, null: false
+    t.string "status_reporting", default: "failures", null: false
     t.bigint "subject_column_id"
     t.string "subject_policy", default: "none", null: false
     t.string "subject_title_template"
@@ -1817,6 +1850,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
   add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
   add_foreign_key "boards", "projects", on_delete: :cascade
+  add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
+  add_foreign_key "chat_identities", "users", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade

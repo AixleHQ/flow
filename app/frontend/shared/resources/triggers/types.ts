@@ -11,7 +11,8 @@ export interface Trigger {
   name?: string | null;
   trigger_mode?: string;
   cooldown_seconds?: number;
-  notify_on_failure?: boolean;
+  // What a run tells the conversation or issue it came from: none, failures or lifecycle.
+  status_reporting?: string;
   enabled?: boolean;
   column_name?: string;
   board_column_id?: number;
@@ -43,4 +44,18 @@ export interface TriggerColumnOption {
 export interface TriggerWorkflowOption {
   id: number;
   name: string;
+}
+
+// The trigger form's pickers arrive as Inertia props, so these are camelCase.
+export interface ChatConversationOption {
+  id: string;
+  name: string | null;
+  kind: string;
+  teamName: string | null;
+}
+
+export interface ChatProviderOption {
+  key: string;
+  label: string;
+  conversations: ChatConversationOption[];
 }

@@ -44,7 +44,7 @@ class Trackers::RunStatusReporterTest < ActiveSupport::TestCase
   test "it applies to tracker bindings that report failures, never to other sources" do
     assert Trackers::RunStatusReporter.applies?(@dispatch)
 
-    @binding.update!(notify_on_failure: false)
+    @binding.update!(status_reporting: "none")
     refute Trackers::RunStatusReporter.applies?(@dispatch.reload)
 
     slack = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user)
@@ -91,6 +91,13 @@ class Trackers::RunStatusReporterTest < ActiveSupport::TestCase
   test "the fan-out gives each applicable reporter its own job" do
     assert_enqueued_with(job: Triggers::ReportToOriginJob, args: [ @dispatch.id, "failed", "Trackers::RunStatusReporter" ]) do
       Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "failed")
+    end
+  end
+
+  test "a run starting or completing gives the tracker reporter nothing to do" do
+    assert_no_enqueued_jobs(only: Triggers::ReportToOriginJob) do
+      Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "running")
+      Triggers::ReportRunTransitionJob.perform_now(@dispatch.id, "completed")
     end
   end
 end

@@ -2,18 +2,13 @@
 
 module InternalTools
   module Concerns
-    # SlackContext — shared plumbing for the Slack tools: which workspace install
-    # this call talks to, and the channel/thread the run was started from.
+    # SlackContext — the Slack side of the chat_* tools: which workspace install
+    # a call talks to, and the channel/thread the run was started from.
     #
-    # The tools auto-inject into workflow steps only, but nothing here needs a
-    # workflow: the install is resolved from the session's PROJECT, so a plain
-    # agent session that a user attached the tool to works the same way. What it
-    # loses is the trigger context — with no run behind it there is no channel or
-    # thread to default to, and `channel` becomes required.
-    #
-    # Every Slack tool is gated on `requires_integration :slack`, so the install
-    # exists in the common case; the guards here cover the session launched by
-    # hand, or a workspace disconnected mid-run.
+    # Nothing here needs a workflow: the install is resolved from the session's
+    # PROJECT. What a session with no run behind it loses is the trigger context,
+    # so it has to name the channel itself. The install can still be missing — a
+    # workspace disconnected mid-run — and the guards here cover that.
     module SlackContext
       # What an agent needs to know to write `blocks` without a round-trip through
       # a Slack `invalid_blocks` error: the block types that work on the message
@@ -49,12 +44,14 @@ module InternalTools
 
       private
 
-      # Reply coordinates threaded into the run by TriggerEngine#slack_run_context:
-      # channel, ts, thread_ts, team, integration_id, plus the triggering message's
-      # text and author. Empty for a run that did not start from Slack, and for a
-      # session with no workflow run behind it at all.
+      # Where a Slack-started run came from, in Slack's own terms. Empty for a run
+      # that did not start from Slack, and for a session with no run behind it.
       def slack_context
-        workflow_run&.shared_context.to_h["slack"] || {}
+        origin = Chat.origin(workflow_run).to_h
+        return {} unless origin["provider"] == Chat::SlackProvider::KEY
+
+        { "channel" => origin.dig("conversation", "id"), "thread_ts" => origin["thread_id"],
+          "team" => origin["workspace_id"], "integration_id" => origin["integration_id"] }.compact
       end
 
       # Reply through the workspace that triggered this run; a run not started
@@ -106,8 +103,7 @@ module InternalTools
       # entry that is not a typed block object, or an interactive block nothing in
       # this deployment could respond to. Returns [blocks, error]; blocks is [] when
       # none were given, and nil when the entry was rejected.
-      def build_blocks
-        raw = params[:blocks]
+      def build_blocks(raw = params[:blocks])
         return [ [], nil ] if raw.blank?
         return [ nil, error("`blocks` must be an array of Block Kit block objects") ] unless raw.is_a?(Array)
         return [ nil, error("`blocks` is capped at #{MAX_BLOCKS} blocks per message") ] if raw.size > MAX_BLOCKS

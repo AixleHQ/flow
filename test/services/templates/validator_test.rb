@@ -87,6 +87,16 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_includes errors, "triggers[0] column: unknown key nowhere"
   end
 
+  test "a chat trigger names its messenger" do
+    workflow = package.definition["workflows"].first["key"]
+    errors = errors_for do |d|
+      d["triggers"] = [ { "kind" => "chat", "workflow" => workflow },
+                        { "kind" => "chat", "workflow" => workflow, "chat_provider" => "teams" } ]
+    end
+
+    assert_equal [ "triggers[0]: a chat trigger needs chat_provider" ], errors.grep(/triggers/)
+  end
+
   test "a cycle in depends_on is refused" do
     errors = errors_for { |d| d["workflows"].first["steps"].first["depends_on"] = [ "implement" ] }
     assert_includes errors, "workflow delivery: depends_on has a cycle"

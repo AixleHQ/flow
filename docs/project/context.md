@@ -429,7 +429,7 @@ docs/                                   # Architecture & design docs (see docs/i
 |------|---------|-----------|----------|
 | **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli` |
 | **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local development), Kubernetes (production) |
-| **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `slack_post_message`, `board_*`, `coder_*` |
+| **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `chat_post_message`, `board_*`, `coder_*` |
 | **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |
 | **Builder Tool** | Personal MCP tools served inside an Aixle Builder session, pinned to its project and run as its user | `Tools::BuilderToolset` (no rows) | `create_workflow`, `create_workflow_trigger`, `validate_workflow` |
 | **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Company- or project-scoped |
@@ -439,7 +439,7 @@ docs/                                   # Architecture & design docs (see docs/i
 
 ### Tool visibility rules
 - **Auto-injected internal tools** are pulled in by code-only `inject_when` rules in `Tools::Registry` (e.g. workflow-step sessions get `list_sub_steps`/`mark_sub_step`/`finish_session`/`fail_session`)
-- **Other internal tools** (e.g. `slack_post_message`) appear only when explicitly added to `session.tools`; integration-gated ones are hidden until the integration is connected (`requires_integration`)
+- **Other internal tools** (e.g. `chat_post_message`) appear only when explicitly added to `session.tools`; integration-gated ones are hidden until the integration is connected (`requires_integration`)
 - **Custom tools** come from `session.tools`; fallback to project-level tools if none explicitly selected
 - **Picker visibility** is `Tool.visible_for_project` / `visible_for_company` — non-attachable tools (`user_attachable: false`) are excluded
 - **Builder sessions** additionally get `Tools::BuilderToolset`: the personal MCP tools that take a `project_id`, served by the session's own MCP endpoint with `project_id` filled in and every lookup pinned to the session's project

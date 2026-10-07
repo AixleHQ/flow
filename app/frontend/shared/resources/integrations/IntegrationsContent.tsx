@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
   ActionIcon,
   Anchor,
@@ -26,10 +26,12 @@ import {
   IconBrandGithub,
   IconBrandJira,
   IconBrandSlack,
+  IconBrandTeams,
   IconCheck,
   IconChevronDown,
   IconChevronRight,
   IconCopy,
+  IconDownload,
   IconExternalLink,
   IconKey,
   IconLayoutKanban,
@@ -61,6 +63,7 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
+import { TeamsApprovalModal } from './TeamsApprovalModal';
 import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
@@ -71,6 +74,11 @@ export type { YoutrackProps } from './YoutrackConnectModal';
 
 export interface SlackProps {
   /** False on a deployment with no Slack app (SLACK_CLIENT_ID / SLACK_CLIENT_SECRET unset). */
+  enabled: boolean;
+}
+
+export interface TeamsProps {
+  /** False on a deployment with no Teams bot (no bot app, credential or home tenant configured). */
   enabled: boolean;
 }
 
@@ -92,6 +100,8 @@ interface IntegrationsContentProps {
   youtrack?: YoutrackProps;
   // Absent on the company page.
   slack?: SlackProps;
+  // Absent on the company page.
+  teams?: TeamsProps;
 }
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
@@ -104,6 +114,7 @@ const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
   if (provider === 'slack') return <IconBrandSlack size={size} />;
+  if (provider === 'teams') return <IconBrandTeams size={size} />;
   if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
   if (provider === 'jira') return <IconBrandJira size={size} />;
   if (provider === 'linear') return <IconLayoutKanban size={size} />;
@@ -116,6 +127,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   gitlab: 'GitLab',
   coder: 'Coder',
   slack: 'Slack',
+  teams: 'Microsoft Teams',
   azure_devops: 'Azure DevOps',
   jira: 'Jira',
   linear: 'Linear',
@@ -150,6 +162,7 @@ export const IntegrationsContent = ({
   linear,
   youtrack,
   slack,
+  teams,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -184,6 +197,7 @@ export const IntegrationsContent = ({
   const [jiraWebhookTarget, setJiraWebhookTarget] = useState<Integration | null>(null);
   const jiraAvailable = isProjectContext && !!jira;
   const slackAvailable = isProjectContext && !!slack?.enabled;
+  const teamsAvailable = isProjectContext && !!teams?.enabled;
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
@@ -458,13 +472,23 @@ export const IntegrationsContent = ({
     window.location.href = `${basePath}/slack_oauth_start`;
   }, [basePath]);
 
+  // Teams is approved by a Microsoft 365 administrator, who may not have an
+  // Aixle account: the server creates a pending connection and hands back, once,
+  // the link that person opens.
+  const handleConnectTeams = useCallback(() => {
+    router.post(`${basePath}/teams_connect`, {}, { preserveScroll: true });
+  }, [basePath]);
+  const { flash } = usePage<{ flash?: Record<string, unknown> }>().props;
+  const teamsApprovalUrl = typeof flash?.teamsApprovalUrl === 'string' ? flash.teamsApprovalUrl : null;
+  const [dismissedApprovalUrl, setDismissedApprovalUrl] = useState<string | null>(null);
+
   return (
     <Box>
       <PageHeader
         title={title}
         subtitle={
           isProjectContext
-            ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
+            ? 'Connect GitHub, GitLab, Coder, Slack or Microsoft Teams for this project, or use company-wide integrations'
             : 'Connect external services to your company'
         }
         actions={
@@ -521,6 +545,11 @@ export const IntegrationsContent = ({
                     Slack
                   </Menu.Item>
                 )}
+                {teamsAvailable && (
+                  <Menu.Item leftSection={<IconBrandTeams size={16} />} onClick={handleConnectTeams}>
+                    Microsoft Teams
+                  </Menu.Item>
+                )}
               </Menu.Dropdown>
             </Menu>
           )
@@ -573,7 +602,7 @@ export const IntegrationsContent = ({
             <EmptyState
               icon={<IconLink size={22} />}
               title="No integrations connected"
-              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from messages."
+              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack or Microsoft Teams to trigger workflows from messages."
               action={
                 canExecute && (
                   <Group gap="sm" justify="center" wrap="wrap">
@@ -625,6 +654,11 @@ export const IntegrationsContent = ({
                     {slackAvailable && (
                       <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                         Slack
+                      </Button>
+                    )}
+                    {teamsAvailable && (
+                      <Button variant="outline" leftSection={<IconBrandTeams size={16} />} onClick={handleConnectTeams}>
+                        Microsoft Teams
                       </Button>
                     )}
                   </Group>
@@ -696,6 +730,15 @@ export const IntegrationsContent = ({
                                 )}
                               </CopyButton>
                             </Group>
+                          )}
+                          {integration.provider === 'teams' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.status === 'active'
+                                ? `${integration.teamsOrganization ?? '—'} · approved by ${
+                                    integration.teamsApprovedBy ?? 'an administrator'
+                                  } · files ${integration.teamsFileAccess ? 'on' : 'off'}`
+                                : 'Waiting for a Microsoft 365 administrator to approve'}
+                            </Text>
                           )}
                           {/* Which Azure project this connection is pinned to, and
                               WHOSE identity it acts as — a PAT connection acts as
@@ -868,6 +911,33 @@ export const IntegrationsContent = ({
                               target="_blank"
                             >
                               <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.provider === 'teams' && canExecute && integration.status === 'active' && (
+                          <Tooltip label="Download the Teams app">
+                            <ActionIcon
+                              aria-label={`Download the Teams app for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={`${basePath}/${integration.id}/teams_package`}
+                            >
+                              <IconDownload size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.provider === 'teams' && canExecute && (
+                          <Tooltip label="New approval link">
+                            <ActionIcon
+                              aria-label={`New approval link for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              onClick={() =>
+                                router.post(`${basePath}/${integration.id}/teams_link`, {}, { preserveScroll: true })
+                              }
+                            >
+                              <IconLink size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}
@@ -1344,6 +1414,11 @@ export const IntegrationsContent = ({
           </Group>
         </Stack>
       </Modal>
+
+      <TeamsApprovalModal
+        url={teamsApprovalUrl !== dismissedApprovalUrl ? teamsApprovalUrl : null}
+        onClose={() => setDismissedApprovalUrl(teamsApprovalUrl)}
+      />
     </Box>
   );
 };

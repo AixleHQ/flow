@@ -26,4 +26,21 @@ class Web::Company::Projects::TriggersControllerTest < ActionDispatch::Integrati
         props[:trackers] == []
     end
   end
+
+  test "the chat form offers the connected messengers and the conversations the Teams bot knows" do
+    create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+    teams = create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+    create(:integration, provider: :teams, status: :active, company: create(:company), project: nil)
+    teams.chat_conversations.create!(provider: "teams", external_id: "19:a@thread.tacv2", kind: "channel",
+                                     name: "Onboarding", team_name: "Sales")
+    teams.chat_conversations.create!(provider: "teams", external_id: "a:1dm", kind: "direct")
+
+    get company_project_triggers_path(@project)
+
+    assert_inertia_props do |props|
+      props[:chatProviders].map { |p| p[:key] } == %w[slack teams] &&
+        props[:chatProviders].last[:conversations] ==
+          [ { "id" => "19:a@thread.tacv2", "name" => "Onboarding", "kind" => "channel", "teamName" => "Sales" } ]
+    end
+  end
 end

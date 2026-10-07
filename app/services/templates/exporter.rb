@@ -77,7 +77,7 @@ module Templates
       definition["triggers"] = triggers if triggers.any?
       variables, secrets = export_config_items
       definition["variables"] = variables if variables.any?
-      requires = export_requires(secrets)
+      requires = export_requires(secrets, triggers)
       definition["requires"] = requires if requires.any?
       definition
     end
@@ -346,18 +346,15 @@ module Templates
     end
 
     def binding_entry(binding)
-      kind = case binding.event_type
-      when "slack.message" then "slack"
-      when "schedule.fired" then "schedule"
-      when /\Awebhook\./ then "webhook"
-      when /\Atracker\./ then "tracker"
-      else "event"
-      end
+      kind = WorkflowTriggers::Serializer.kind(binding.event_type)
+      filter = binding.filter_predicate.to_h
+      filter = filter.except("provider") if kind == "chat"
       entry = { "kind" => kind, "workflow" => @keys["workflows"][binding.workflow_id], "name" => binding.name,
                 "trigger_mode" => binding.trigger_mode.to_s, "subject_policy" => binding.subject_policy.to_s,
                 "subject_title_template" => binding.subject_title_template,
-                "filter_predicate" => binding.filter_predicate.presence, "cooldown_seconds" => binding.cooldown_seconds,
-                "notify_on_failure" => binding.notify_on_failure }
+                "filter_predicate" => filter.presence, "cooldown_seconds" => binding.cooldown_seconds,
+                "status_reporting" => binding.status_reporting.to_s }
+      entry["chat_provider"] = binding.chat_provider if kind == "chat"
       entry["event_type"] = binding.event_type if %w[event tracker].include?(kind)
       # A tracker is this project's, so the exported trigger listens to any
       # tracker of the installing project; status names differ between trackers.
@@ -395,8 +392,9 @@ module Templates
       [ variables, secrets ]
     end
 
-    def export_requires(secrets)
+    def export_requires(secrets, triggers)
       integrations = Tool.where(id: @tools.keys).filter_map(&:requires_integration)
+      integrations += triggers.filter_map { |trigger| trigger["chat_provider"] }
       integrations += Repository.where(id: @repository_ids.to_a).filter_map { |r| r.integration&.provider&.to_s }
       repositories = Repository.where(id: @repository_ids.to_a).map do |repository|
         key = @keys["repositories"][repository.id]

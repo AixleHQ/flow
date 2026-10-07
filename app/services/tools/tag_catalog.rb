@@ -25,7 +25,7 @@ module Tools
     ENTRIES = [
       Entry.new(tag: :board, label: "Board management", ui_visible: true),
       Entry.new(tag: :tracker, label: "Task trackers", ui_visible: true),
-      Entry.new(tag: :slack, label: "Slack", ui_visible: true),
+      Entry.new(tag: :chat, label: "Chat (Slack and Teams)", ui_visible: true),
       Entry.new(tag: :coder, label: "Coder", ui_visible: true),
       # Hidden because the Azure tools are not chosen — they auto-inject.
       # The repository ones arrive when an Azure repository is attached to the
@@ -39,9 +39,8 @@ module Tools
       # rather than the personal server's :sessions, so a user-audience tool can
       # never be resolved into a picker group.
       Entry.new(tag: :session_supervision, label: "Session supervision", ui_visible: true),
-      # Umbrella over every chat provider. The picker groups by provider
-      # (:slack), so this one stays hidden — otherwise the Slack tools would be
-      # offered twice, under two competing entries.
+      # Umbrella over every messaging tool. The picker groups them as :chat, so
+      # this one stays hidden — otherwise every one of them would be offered twice.
       Entry.new(tag: :messaging, label: "Messaging", ui_visible: false),
       Entry.new(tag: :workflow_control, label: "Workflow control", ui_visible: false),
       Entry.new(tag: :async_results, label: "Async results", ui_visible: false),

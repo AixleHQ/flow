@@ -23,25 +23,16 @@ class TriggerBinding < ApplicationRecord
   # What a tracker binding does with a change Aixle itself made
   # (docs/design/task-tracker-integrations.md §6.6).
   enumerize :aixle_changes, in: %i[ignore other_workflows always], default: :ignore
+  # What a run this trigger started tells the place it came from: nothing, that
+  # it failed (a comment on the issue, a message in the thread), or — chat
+  # only — a status card that follows the run (docs/design/teams-integration.md §8.2).
+  enumerize :status_reporting, in: %i[none failures lifecycle], default: :failures
 
   TRACKER_EVENT_PREFIX = "tracker."
   TRACKER_SOURCE = "tracker"
 
   WEBHOOK_EVENT_PREFIX = "webhook."
   SCHEDULE_EVENT_TYPE = "schedule.fired"
-  SLACK_EVENT_TYPE = "slack.message"
-  SLACK_NOT_CONNECTED = "Slack is not connected for this company. Connect a Slack workspace on the " \
-                        "Integrations page first — until then no mention can reach this trigger."
-  # /help is answered before any binding runs, so a trigger whose text command
-  # is that word would appear in the catalog and never fire. Compare the
-  # command itself (optional leading slash), not whether a looser operator
-  # could also match the word.
-  RESERVED_SLACK_COMMAND = /\A\/?help\z/i
-
-  # notify_on_failure (default true) — when a run this binding started fails,
-  # say so where it came from: in the Slack thread (Slack::RunFailureNotifier),
-  # or, for a tracker event, as a comment on the issue, also when the run is
-  # cancelled (Trackers::RunStatusReporter). A no-op on every other trigger kind.
 
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
@@ -51,7 +42,11 @@ class TriggerBinding < ApplicationRecord
                                 if: -> { subject_column_id.present? && project }
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
-  validate :slack_command_not_reserved
+  validate :chat_command_not_reserved
+  validate :chat_provider_named, if: -> { event_type == Chat::EVENT_TYPE }
+  validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
+                               unless: :chat?
+  before_validation :normalize_chat_trigger
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -60,14 +55,17 @@ class TriggerBinding < ApplicationRecord
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
-  # match bindings in that project; company-scoped events (Slack — one workspace
+  # match bindings in that project; company-scoped events (chat — one workspace
   # serves every project of the company) fan out to bindings across all the
   # company's projects.
   scope :for_event, ->(event) {
-    rel = active.where(event_type: event.event_type).joins(:workflow).merge(Workflow.active)
     # A generic webhook names its own event type, so without this a sender could
-    # present itself as a tracker event.
+    # present itself as a tracker or chat event.
     next none if event.event_type.to_s.start_with?(TRACKER_EVENT_PREFIX) && event.source != TRACKER_SOURCE
+    next none if Chat.event?(event) && Chat.provider_for(event).nil?
+
+    rel = active.where(event_type: event.event_type)
+                .joins(:workflow).merge(Workflow.active)
     if event.project_id
       rel.where(project_id: event.project_id)
     elsif event.company_id
@@ -98,18 +96,42 @@ class TriggerBinding < ApplicationRecord
     event_type == SCHEDULE_EVENT_TYPE
   end
 
-  def slack?
-    event_type == SLACK_EVENT_TYPE
+  def self.chat_not_connected(label)
+    "#{label} is not connected for this company. Connect it on the Integrations page first — " \
+      "until then no message can reach this trigger."
+  end
+
+  def chat?
+    event_type == Chat::EVENT_TYPE
+  end
+
+  # The messenger a chat trigger listens to: the `provider` condition every
+  # `chat.message` trigger carries.
+  def chat_provider
+    return nil unless chat?
+
+    filter_predicate.to_h["provider"].presence
+  end
+
+  # Points a `chat.message` trigger at another messenger, keeping its other conditions.
+  # A channel id means nothing to another messenger, so it is dropped.
+  def assign_chat_provider(key)
+    return if key.blank? || !chat?
+
+    filter = filter_predicate.to_h
+    filter = filter.except("channel") if chat_provider.present? && chat_provider != key.to_s
+    self.filter_predicate = filter.merge("provider" => key.to_s)
   end
 
   # save! for a person creating or editing a trigger: refuses to create or switch
-  # on a Slack trigger while the company has no active Slack install. Not a
+  # on a chat trigger while the company has not connected its messenger. Not a
   # validation, so a workspace disconnected later does not make every other save
   # of the triggers it served fail.
-  def save_checking_slack!
-    if slack? && enabled? && (new_record? || enabled_changed?) && !slack_connected?
+  def save_checking_chat!
+    normalize_chat_trigger
+    if chat? && enabled? && (new_record? || enabled_changed? || chat_provider_changed?) && !chat_connected?
       valid? # report the binding's other problems alongside this one
-      errors.add(:base, SLACK_NOT_CONNECTED)
+      errors.add(:base, self.class.chat_not_connected(Chat.provider(chat_provider)&.label || "The messenger"))
       raise ActiveRecord::RecordInvalid, self
     end
 
@@ -125,12 +147,12 @@ class TriggerBinding < ApplicationRecord
   # Does the event data satisfy every condition in the predicate? Supports
   # equality (scalar values), operator objects ({"op","value"}) and dot-path
   # fields. Empty predicate ⇒ matches any event of this type. See TriggerFilter.
-  # A Slack message's text compares without regard to case: people type
+  # A chat message's text compares without regard to case: people type
   # "Deploy" and "deploy" for the same command.
   def matches?(data)
     return false unless tracker_scope_matches?(data) && aixle_change_allowed?(data)
 
-    TriggerFilter.match?(filter_predicate, data, ignore_case: slack? ? %w[text] : [])
+    TriggerFilter.match?(filter_predicate, data, ignore_case: chat? ? %w[text] : [])
   end
 
   def webhook?
@@ -150,8 +172,18 @@ class TriggerBinding < ApplicationRecord
                    .update_all(enabled: false, updated_at: Time.current)
   end
 
-  def slack_connected?
-    Integration.active.exists?(provider: :slack, company_id: project&.company_id)
+  def normalize_chat_trigger
+    keep_chat_provider if persisted? && chat?
+  end
+
+  def chat_provider_changed?
+    return false if new_record?
+
+    filter_predicate_was.to_h["provider"].to_s != chat_provider.to_s
+  end
+
+  def chat_connected?
+    chat_provider.present? && Integration.active.exists?(provider: chat_provider, company_id: project&.company_id)
   end
 
   def tracker_scope_matches?(data)
@@ -223,18 +255,42 @@ class TriggerBinding < ApplicationRecord
     errors.add(:schedule_config, "must include a cron expression") if schedule_config["cron"].blank?
   end
 
-  def slack_command_not_reserved
-    return unless slack?
+  # Help is answered before any binding runs, so a trigger whose text command
+  # is that word would appear in the catalog and never fire. Compare the
+  # command itself (optional leading slash), not whether a looser operator
+  # could also match the word.
+  def chat_command_not_reserved
+    return unless chat?
     return unless filter_predicate.is_a?(Hash)
 
-    value = slack_text_command
+    value = chat_text_command.to_s.strip
     return if value.blank?
-    return unless value.to_s.strip.match?(RESERVED_SLACK_COMMAND)
 
-    errors.add(:filter_predicate, "can't use help — that word lists available commands")
+    if value.match?(Chat::RESERVED_COMMAND)
+      errors.add(:filter_predicate, "can't use help — that word lists available commands")
+    elsif chat_provider == Chat::TeamsProvider::KEY && value.match?(Teams::Commands::RESERVED)
+      errors.add(:filter_predicate, "can't use #{value.delete_prefix('/').downcase} — Teams answers it as a command")
+    end
   end
 
-  def slack_text_command
+  # Replacing a chat trigger's conditions keeps the messenger it listens to;
+  # moving it to another one is assign_chat_provider.
+  def keep_chat_provider
+    previous = filter_predicate_was.to_h["provider"]
+    return if previous.blank? || filter_predicate.to_h.key?("provider")
+
+    self.filter_predicate = filter_predicate.to_h.merge("provider" => previous)
+  end
+
+  # A `chat.message` trigger matches whichever messenger it names, so it must name one.
+  def chat_provider_named
+    provider = filter_predicate.to_h["provider"]
+    return if provider.is_a?(String) && Chat::PROVIDERS.key?(provider)
+
+    errors.add(:filter_predicate, "must name the messenger: provider is one of #{Chat::PROVIDERS.keys.join(', ')}")
+  end
+
+  def chat_text_command
     text = filter_predicate["text"]
     return nil if text.blank?
 

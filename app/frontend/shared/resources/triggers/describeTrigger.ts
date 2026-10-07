@@ -1,7 +1,7 @@
 import cronstrue from 'cronstrue';
 
 import { isAttached, TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
-import type { Trigger } from './types';
+import type { ChatProviderOption, Trigger } from './types';
 
 // Where a run can come from, as the Triggers page groups and filters them.
 export const SOURCE_LABELS: Record<string, string> = {
@@ -13,21 +13,20 @@ export const SOURCE_LABELS: Record<string, string> = {
   event: 'Custom event',
 };
 
-// A chat trigger's messenger. Another one is an entry here and in the serializer's map.
 export const CHAT_PROVIDER_LABELS: Record<string, string> = {
   slack: 'Slack',
+  teams: 'Microsoft Teams',
 };
 
 export function triggerSource(t: Trigger): string {
   if (t.source) return t.source;
   if (t.kind === 'column') return 'board';
-  if (t.kind === 'slack') return 'chat';
+  if (t.kind === 'chat') return 'chat';
   return t.kind;
 }
 
 function chatLabel(t: Trigger): string {
-  const provider = t.chat_provider ?? (t.kind === 'slack' ? 'slack' : '');
-  return CHAT_PROVIDER_LABELS[provider] ?? 'Chat';
+  return CHAT_PROVIDER_LABELS[t.chat_provider ?? ''] ?? 'Chat';
 }
 
 function describeCronShort(expr: string): string {
@@ -91,7 +90,11 @@ const AIXLE_CHANGE_LABELS: Record<string, string> = {
   always: 'follows Aixle changes',
 };
 
-export function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
+export function triggerMeta(
+  t: Trigger,
+  trackers: TrackerOption[] = [],
+  chatProviders: ChatProviderOption[] = [],
+): string {
   const source = triggerSource(t);
   if (source === 'tracker') {
     const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
@@ -107,7 +110,10 @@ export function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string 
   }
   if (source === 'chat') {
     const channel = t.filter_predicate?.channel;
-    return typeof channel === 'string' && channel ? `channel ${channel}` : 'any channel';
+    if (t.filter_predicate?.['conversation.type'] === 'direct') return 'direct messages';
+    if (typeof channel !== 'string' || !channel) return 'anywhere the bot is addressed';
+    const known = chatProviders.find((p) => p.key === t.chat_provider)?.conversations.find((c) => c.id === channel);
+    return known?.name ? `in ${known.name}` : `channel ${channel}`;
   }
   const pred = t.filter_predicate ?? {};
   const keys = Object.keys(pred);

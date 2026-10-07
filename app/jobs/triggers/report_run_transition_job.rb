@@ -11,7 +11,7 @@ module Triggers
       return unless dispatch
 
       Triggers.origin_reporters.each do |reporter|
-        ReportToOriginJob.perform_later(dispatch_id, transition, reporter.name) if reporter.applies?(dispatch)
+        ReportToOriginJob.perform_later(dispatch_id, transition, reporter.name) if reporter.applies?(dispatch, transition)
       end
     end
   end

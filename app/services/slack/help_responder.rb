@@ -10,7 +10,7 @@ module Slack
     class << self
       def call(event)
         return false if event.nil?
-        return false unless event.event_type.to_s.start_with?("slack.")
+        return false unless Chat.event?(event)
 
         channel = event.data.to_h["channel"]
         return false if channel.blank?
@@ -18,7 +18,7 @@ module Slack
         integration = integration_for(event)
         return false if integration.nil?
 
-        bindings = channel_bindings(event, channel)
+        bindings = Chat::HelpCatalog.bindings(event)
         text, blocks = format_catalog(bindings)
 
         Slack::Notifier.post(
@@ -42,20 +42,6 @@ module Slack
         )
       end
 
-      def channel_bindings(event, channel)
-        TriggerBinding.for_event(event)
-          .includes(:workflow, :project)
-          .select { |b| applies_to_channel?(b, channel) }
-          .sort_by { |b| [ b.project&.name.to_s, catalog_label(b) ] }
-      end
-
-      def applies_to_channel?(binding, channel)
-        pred = binding.filter_predicate.to_h
-        return true unless pred.key?("channel")
-
-        pred["channel"].to_s == channel.to_s
-      end
-
       def format_catalog(bindings)
         if bindings.empty?
           text = "No Slack triggers configured for this channel."
@@ -72,9 +58,9 @@ module Slack
       end
 
       def catalog_line(binding)
-        workflow = binding.workflow&.name.presence || "workflow"
-        pattern = text_pattern_for(binding)
-        label = catalog_label(binding)
+        workflow = Chat::HelpCatalog.workflow_name(binding)
+        pattern = Chat::HelpCatalog.pattern(binding)
+        label = Chat::HelpCatalog.label(binding)
         project = binding.project&.name
         base = if label == workflow
           "• *#{escape_mrkdwn(workflow)}* (#{escape_mrkdwn(pattern)})"
@@ -82,36 +68,6 @@ module Slack
           "• *#{escape_mrkdwn(label)}* — #{escape_mrkdwn(workflow)} (#{escape_mrkdwn(pattern)})"
         end
         project.present? ? "#{base} _[#{escape_mrkdwn(project)}]_" : base
-      end
-
-      def catalog_label(binding)
-        text_pattern_snippet(binding).presence || binding.workflow&.name.presence || "workflow"
-      end
-
-      def text_pattern_snippet(binding)
-        text = binding.filter_predicate.to_h["text"]
-        return nil if text.blank?
-
-        if text.is_a?(Hash)
-          text["value"].presence
-        else
-          text.to_s.presence
-        end
-      end
-
-      def text_pattern_for(binding)
-        text = binding.filter_predicate.to_h["text"]
-        return "any message" if text.blank?
-
-        if text.is_a?(Hash)
-          value = text["value"]
-          return "any message" if value.blank?
-
-          op = text["op"].presence || "contains"
-          "#{op} \"#{value}\""
-        else
-          "contains \"#{text}\""
-        end
       end
 
       def section_block(mrkdwn)

@@ -11,7 +11,7 @@
 
 Aixle runs business processes as **workflows**: ordered **steps**, each executed
 by an AI agent in its own container, launched by hand or by a **trigger** (a card
-entering a board column, a Slack message, a schedule, a webhook, a custom event).
+entering a board column, a Slack or Microsoft Teams message, a schedule, a webhook, a custom event).
 
 ```
 Company
@@ -119,7 +119,7 @@ a pending gate or an active run.
 
 | kind | fires on |
 |---|---|
-| `slack` | a Slack message (needs the Slack integration) |
+| `chat` | a message addressed to the bot in Slack or Microsoft Teams; `chat_provider` is `slack` or `teams` (needs that integration) |
 | `schedule` | cron — `schedule_config: {cron, timezone}` |
 | `webhook` | an inbound HTTP call; the response carries the URL and a secret shown once |
 | `event` | a custom platform event |
@@ -129,13 +129,17 @@ Fields: `name`, `event_type`, `filter_predicate` (JSON the event must contain;
 supports `{"op", "value"}` operators and dot-paths), `subject_policy` (`none`,
 `existing_task`, `create_task`, `find_or_create_task`) with `subject_column_id` and
 `subject_title_template`, `trigger_mode`, `cooldown_seconds` (default 0),
-`enabled`, `notify_on_failure`. Tracker triggers also take `aixle_changes`
+`enabled`, `status_reporting` (`none`, `failures`, `lifecycle` — chat only: a status
+card in the thread that follows the run; chat triggers default to it).
+Chat triggers filter on `channel`,
+`conversation.type` (`direct` for 1:1 chats) and `text` (the message without the
+mention). Tracker triggers also take `aixle_changes`
 (`ignore`, `other_workflows`, `always`): what a change Aixle itself made does.
 Filter tracker events on `change.to.name` (the column), `change.to.category`,
 `issue.type`, `issue.labels` (`includes`), `comment.mentions_me`, `text`.
 
 Rules enforced on save:
-- Slack, schedule, webhook, event and tracker triggers need `allow_non_interactive`
+- Chat, schedule, webhook, event and tracker triggers need `allow_non_interactive`
   on every step.
 - `schedule` needs a cron expression; give a timezone too, or it runs in UTC and
   drifts an hour across daylight saving.
@@ -159,7 +163,7 @@ their own credentials per runtime; a step can pin one with
 
 ## 6. Capabilities
 
-**Tools.** Platform tools are defined in code and grouped by tag (board, slack,
+**Tools.** Platform tools are defined in code and grouped by tag (board, chat,
 azure_devops, coder, …); some appear only when their integration is connected.
 Custom tools are project docker-image tools (`docker_image`, `command`,
 `input_schema`, `required_config_items`). Prefer an MCP server for anything
@@ -185,7 +189,7 @@ Azure DevOps through an integration, or a public URL cloned read-only. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
+**Integrations**: `github`, `gitlab`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 `jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
 projects (Linear: teams) in as task trackers.
@@ -217,7 +221,7 @@ repository. How the run started never changes this.
 **Tools, skills, MCP servers**: workflow base + step (+ every project resource
 with `inherit_all_project_resources`). The internal `aixle-tools` MCP server is
 always connected: session lifecycle, sub-steps, board tools, and integration
-tools (Slack, Azure DevOps, Coder) when connected. Task tracker tools
+tools (Slack and Microsoft Teams, Azure DevOps, Coder) when connected. Task tracker tools
 (`tracker_*`) are attached like other tools once the project has a tracker.
 
 **Secrets**: the step reads its config items with `get_config_item`; MCP
@@ -248,7 +252,9 @@ task, so tagged comments carry structured hand-offs.
 - Files: `promote_asset`, `share_asset`
 - Secrets: `get_config_item`
 - Async tools: `read_tool_result`
-- When connected: `slack_*`, `azure_devops_*`, `coder_*`, `refresh_github_token`
+- When connected: `chat_post_message`, `chat_read_thread`, `chat_update_message`,
+  `chat_delete_message` (Slack or Teams; the `slack_*` ones are deprecated),
+  `azure_devops_*`, `coder_*`, `refresh_github_token`
 - Task trackers (attached; the project needs a tracker): `tracker_list`, `tracker_describe`,
   `tracker_search_issues`, `tracker_get_issue`, `tracker_list_comments`, `tracker_create_issue`,
   `tracker_update_issue`, `tracker_transition_issue`, `tracker_assign_issue`, `tracker_add_comment`,

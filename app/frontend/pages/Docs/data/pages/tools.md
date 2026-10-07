@@ -86,7 +86,7 @@ one step.
 ### Integration gating
 
 A tool that needs an integration only appears once that integration is
-connected: `slack_post_message` is hidden until Slack is connected for the
+connected: `chat_post_message` is hidden until Slack or Microsoft Teams is connected for the
 project; the Coder tools appear only with an active Coder integration. If an
 agent calls a tool whose integration isn't connected, it gets a clear
 message telling it (and you) to connect it in **Project Settings →

@@ -32,7 +32,7 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 | **Column binding** | a card enters a bound column (`auto`) | the workflow's Triggers, or the project's Triggers page |
 | **Manual** | you press *Run* on a task or workflow | the UI / API |
 | **Schedule** | a timer fires (cron, in a time zone) | the workflow's Triggers, or the project's Triggers page |
-| **Chat message** (Slack) | someone mentions the app in a channel and the message matches | the workflow's Triggers, or the project's Triggers page |
+| **Chat message** (Slack or Microsoft Teams) | someone addresses the app and the message matches | the workflow's Triggers, or the project's Triggers page |
 | **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers, or the project's Triggers page |
 | **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, the project's Triggers page, or *Connect a board column* on the Trackers page |
 
@@ -119,7 +119,7 @@ the event data with an operator — `eq`, `ne`, `contains`, `not_contains`,
 `starts_with`, `ends_with`, `gt`, `gte`, `lt`, `lte`, `present`, `blank`, `in`,
 `includes` or `regex` — and the conditions are AND-ed.
 
-> **info** A Slack channel is matched by its ID (such as `C0123ABCD`), not its name. What a Slack text condition is compared with is on the [Slack](/docs/slack) page.
+> **info** A Slack channel is matched by its ID (such as `C0123ABCD`), not its name; a Teams trigger picks its channel from a list. What a text condition is compared with is on the [Slack](/docs/slack) and [Microsoft Teams](/docs/teams) pages.
 
 ## Gates
 

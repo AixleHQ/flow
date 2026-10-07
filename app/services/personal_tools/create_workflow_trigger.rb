@@ -7,12 +7,13 @@ module PersonalTools
     tool do
       display_name "Create Workflow Trigger"
       description "Connect a trigger to a workflow so it launches on its own: a card entering a " \
-                  "board column (kind=column), a Slack message (slack), a cron schedule (schedule), " \
+                  "board column (kind=column), a message that mentions the bot in Slack or Microsoft Teams " \
+                  "(chat, with chat_provider), a cron schedule (schedule), " \
                   "an inbound webhook (webhook), an event in a task tracker connected to the project " \
                   "(tracker: event_type tracker.issue.created, tracker.issue.status_changed, " \
                   "tracker.issue.assigned or tracker.comment.created; project_tracker_id picks one tracker, " \
                   "none means any), or a custom platform event (event). " \
-                  "IMPORTANT: the off-board kinds (slack, schedule, webhook, event, tracker) fire unattended, " \
+                  "IMPORTANT: the off-board kinds (chat, schedule, webhook, event, tracker) fire unattended, " \
                   "so EVERY step of the workflow must have auto-run (allow_non_interactive) enabled — " \
                   "otherwise this call is rejected and the error names the steps still waiting on a " \
                   "human. Column triggers are exempt: their manual mode puts a person on the button. " \
@@ -27,8 +28,8 @@ module PersonalTools
       param :board_column_id, type: :integer,
                               description: "Board column whose incoming cards fire the workflow. Required for kind=column."
       param :event_type, type: :string,
-                         description: "Event name for kind=event — one the platform emits: 'slack.message', or an " \
-                                      "inbound webhook's own 'webhook.<token>' (list_workflow_triggers shows it). " \
+                         description: "Event name for kind=event — an inbound webhook's own 'webhook.<token>' " \
+                                      "(list_workflow_triggers shows it); chat messages are kind=chat. " \
                                       "Nothing emits GitHub events; start a workflow from GitHub with kind=webhook. " \
                                       "For kind=tracker, one of the tracker.* types. Ignored for the other kinds, " \
                                       "which set their own event type."
@@ -37,9 +38,10 @@ module PersonalTools
                            description: "auto starts the run immediately; manual only offers it. Defaults to auto."
       param :enabled, type: :boolean, description: "Whether the trigger fires. Defaults to true; column triggers are always on."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings. Defaults to 5 for column triggers, 0 otherwise."
-      param :notify_on_failure, type: :boolean,
-            description: "When a run from this trigger fails, say so where it came from: in the Slack thread, with the error, " \
-                         "or as a comment on the tracker issue (also on cancel). Default true; no effect on other trigger kinds."
+      param :status_reporting, type: :string, enum: WorkflowTriggerSupport::STATUS_REPORTING,
+                               description: "What a run tells the place it came from. none; failures (one message or tracker " \
+                                            "comment when it fails); lifecycle (chat only: one status card in the thread, " \
+                                            "edited as the run starts and ends). Chat triggers default to lifecycle."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
                              description: "Which board task the run is about: none, existing_task, create_task, or " \
                                           "find_or_create_task (tracker triggers: reuse the task linked to the " \
@@ -51,9 +53,13 @@ module PersonalTools
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
                             description: "kind=tracker: what to do with changes Aixle itself made. ignore (default), " \
                                          "other_workflows (chain workflows, never re-enter one), or always."
+      param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
+                            description: "kind=chat: the messenger to listen to. Required for kind=chat."
       param :filter_predicate, type: :object,
                                description: "Only fire when the event data contains these key/value pairs, " \
-                                            "e.g. {\"channel\": \"C123\"}. Empty means every event of this type."
+                                            "e.g. {\"channel\": \"C123\"}, {\"conversation.type\": \"direct\"} or " \
+                                            "{\"text\": {\"op\": \"starts_with\", \"value\": \"deploy\"}}. A chat " \
+                                            "message's text has the bot's mention removed. Empty means every event of this type."
       param :schedule_config, type: :object,
                               description: "Required for kind=schedule: {\"cron\": \"0 9 * * 1-5\", \"timezone\": " \
                                            "\"Europe/Berlin\"}. ALWAYS pass timezone explicitly — an empty timezone " \
@@ -98,6 +104,7 @@ module PersonalTools
 
       trigger_binding_attrs.merge(
         event_type: params[:event_type],
+        chat_provider: params[:chat_provider],
         verification_strategy: params[:verification_strategy],
         secret: params[:secret]
       )

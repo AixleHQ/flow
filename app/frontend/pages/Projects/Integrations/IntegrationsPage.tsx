@@ -4,7 +4,11 @@ import type { Integration, Project } from '@/types/generated';
 
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
-import { IntegrationsContent, type SlackProps } from 'shared/resources/integrations/IntegrationsContent';
+import {
+  IntegrationsContent,
+  type SlackProps,
+  type TeamsProps,
+} from 'shared/resources/integrations/IntegrationsContent';
 import type { JiraProps } from 'shared/resources/integrations/JiraConnectModal';
 import type { LinearProps } from 'shared/resources/integrations/LinearConnectModal';
 import type { YoutrackProps } from 'shared/resources/integrations/YoutrackConnectModal';
@@ -20,11 +24,13 @@ interface Props {
   linear?: LinearProps;
   youtrack?: YoutrackProps;
   slack?: SlackProps;
+  teams?: TeamsProps;
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack } = usePage<{ props: Props }>()
-    .props as unknown as Props;
+  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack, teams } = usePage<{
+    props: Props;
+  }>().props as unknown as Props;
 
   return (
     <>
@@ -39,6 +45,7 @@ const IntegrationsPage = () => {
         linear={linear}
         youtrack={youtrack}
         slack={slack}
+        teams={teams}
       />
     </>
   );

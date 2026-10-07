@@ -4,18 +4,20 @@ module PersonalTools
   # Shared lookup for the workflow-trigger tools, mirroring
   # Api::V1::Projects::Workflows::TriggersController — one surface over two
   # record kinds:
-  #   column                                       → ColumnWorkflowBinding (card enters a board column)
-  #   slack / schedule / webhook / event / tracker → TriggerBinding
+  #   column                                      → ColumnWorkflowBinding (card enters a board column)
+  #   chat / schedule / webhook / event / tracker → TriggerBinding
   # Both describe a trigger through WorkflowTriggers::Serializer.
   module WorkflowTriggerSupport
-    KINDS = %w[column slack schedule webhook event tracker].freeze
+    KINDS = WorkflowTriggers::Creator::KINDS
+    CHAT_PROVIDERS = Chat::PROVIDERS.keys.freeze
+    STATUS_REPORTING = %w[none failures lifecycle].freeze
     TRIGGER_MODES = %w[auto manual].freeze
     SUBJECT_POLICIES = %w[none existing_task create_task find_or_create_task].freeze
     AIXLE_CHANGES = %w[ignore other_workflows always].freeze
     VERIFICATION_STRATEGIES = %w[none slack_v0 hmac_sha256 shared_token].freeze
 
     # Mutable fields, mirroring the controller's permit lists.
-    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure
+    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds status_reporting
                         subject_policy subject_column_id subject_title_template
                         project_tracker_id aixle_changes].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze

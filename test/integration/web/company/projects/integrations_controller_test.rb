@@ -35,6 +35,51 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_inertia_props { |props| props[:slack][:enabled] == true }
   end
 
+  test "teams_connect hands the admin an approval link for their Microsoft 365 administrator" do
+    with_teams_enabled
+    get company_project_integrations_path(@project)
+    assert_inertia_props { |props| props[:teams][:enabled] == true }
+
+    assert_difference -> { @company.integrations.where(provider: :teams).count }, 1 do
+      post teams_connect_company_project_integrations_path(@project)
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    token = flash[:teams_approval_url].split("/").last
+    assert_equal @company.integrations.find_by!(provider: :teams), Teams::Connection.find_by_token(token)
+  end
+
+  test "teams_link hands out a fresh approval link for an existing connection" do
+    with_teams_enabled
+    teams, old = Teams::Connection.start!(company: @company, user: @user)
+
+    post teams_link_company_project_integration_path(@project, teams)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal teams, Teams::Connection.find_by_token(flash[:teams_approval_url].split("/").last)
+    assert_nil Teams::Connection.find_by_token(old)
+  end
+
+  test "teams_connect refuses on a deployment with no Teams bot" do
+    post teams_connect_company_project_integrations_path(@project)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/not configured/, flash[:alert])
+    assert_not @company.integrations.exists?(provider: :teams)
+  end
+
+  test "teams_package hands out the app for a Teams connection the project can see" do
+    with_teams_enabled
+    teams = create(:integration, provider: :teams, company: @company, project: nil, connected_by: @user)
+    github = create(:integration, project: @project, company: @company, connected_by: @user)
+
+    get teams_package_company_project_integration_path(@project, teams)
+    assert_equal "application/zip", response.media_type
+
+    get teams_package_company_project_integration_path(@project, github)
+    assert_response :not_found
+  end
+
   # A company-wide install serves every project and has no page of its own.
   test "a company admin removes a company-wide integration from a project page" do
     slack = create(:integration, provider: :slack, company: @company, project: nil, connected_by: @user)

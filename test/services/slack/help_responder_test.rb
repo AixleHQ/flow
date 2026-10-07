@@ -21,11 +21,12 @@ module Slack
 
     def event(data: {}, company: @company, project: nil)
       TriggerEvent.create!(
-        event_type: "slack.message",
+        event_type: "chat.message",
         source: "slack:acme",
         company: company,
         project: project,
         data: {
+          "provider" => "slack",
           "channel" => "C1",
           "ts" => "111.222",
           "thread_ts" => "111.222",
@@ -39,7 +40,7 @@ module Slack
     test "posts a Block Kit catalog of channel triggers into the thread" do
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "ship",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
 
       assert Slack::HelpResponder.call(event)
@@ -60,15 +61,15 @@ module Slack
     test "lists only bindings that apply to the event channel" do
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "here",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "here" } })
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "elsewhere",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C99", "text" => { "op" => "contains", "value" => "elsewhere" } })
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "any-channel",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "text" => { "op" => "contains", "value" => "any" } })
 
       assert Slack::HelpResponder.call(event)
@@ -83,7 +84,7 @@ module Slack
     test "names a command by its text pattern and the workflow, not the binding name" do
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "Custom Label",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "deploy" } })
 
       assert Slack::HelpResponder.call(event)
@@ -95,7 +96,7 @@ module Slack
     test "uses the workflow name alone when the text pattern is blank" do
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "Custom Label",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C1" })
 
       assert Slack::HelpResponder.call(event)
@@ -108,7 +109,7 @@ module Slack
     test "says so when no triggers apply to the channel" do
       create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user, name: "other",
-        event_type: "slack.message",
+        event_type: "chat.message",
         filter_predicate: { "channel" => "C99" })
 
       assert Slack::HelpResponder.call(event)
