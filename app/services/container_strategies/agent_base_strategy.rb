@@ -148,7 +148,8 @@ module ContainerStrategies
       super + env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
 
-    # Tell the watcher where to report a token the CLI rotates, and with what key.
+    # Tell the watcher where to report a token the CLI rotates, the proxy where to hand the
+    # CLI's refreshes (Agents::RefreshBroker), and the key both use.
     #
     # Only for sessions that RUN on a stored credential: an auth_setup session is a login
     # in progress, and AgentAuthStrategy owns what it captures and how (the endpoint
@@ -165,11 +166,16 @@ module ContainerStrategies
       paths = agent_service.adapter.writeback_file_paths
       return {} if paths.empty?
 
-      {
+      env = {
         "CREDENTIAL_SYNC_URL" => Settings.agents.credential_sync_url,
         "CREDENTIAL_SYNC_KEY" => Agents::SessionKey.generate(session),
         "CREDENTIAL_SYNC_PATHS" => paths.join(",")
       }
+      endpoints = agent_service.adapter.refresh_broker_endpoints
+      return env if endpoints.empty?
+
+      env.merge("CREDENTIAL_REFRESH_URL" => Settings.agents.credential_refresh_url,
+                "CREDENTIAL_REFRESH_TARGETS" => endpoints.join(","))
     end
 
     # Send one command into the container's `agent` tmux session once its shell prompt

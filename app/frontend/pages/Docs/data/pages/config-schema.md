@@ -147,6 +147,8 @@ per-project namespaces and network policies separate them.
 | `AGENT_IMAGE_KIRO_CLI`         | no       | derived           | Per-runtime override.                                            |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS` | no       | `90000`           | How long an agent CLI waits for its MCP servers to hand shake.   |
 | `AGENT_CREDENTIAL_SYNC_URL`    | no       | derived from `INTERNAL_BASE_URL` | Where the in-container watcher reports a token the CLI rotated. Internal host only: the request carries a per-session write-back key. |
+| `AGENT_CREDENTIAL_REFRESH_URL` | no       | derived from `INTERNAL_BASE_URL` | Where the in-container proxy hands a CLI's OAuth refresh, so every container of one login refreshes under one lock instead of each spending the same single-use refresh token. Internal host only: the request carries the same per-session key as the write-back. |
+| `AGENT_AUTH_PAUSE_LIMIT_MINUTES` | no     | `720`             | How long a workflow step whose agent's login was refused stays paused, waiting for the login to be renewed, before it fails. |
 | `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
 

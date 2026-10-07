@@ -12,7 +12,7 @@ class LogrageOptionsTest < ActiveSupport::TestCase
   end
 
   test "the MCP and credential endpoints never log their params" do
-    %w[/mcp /action_mcp /agents/credentials /cloud/aws/credentials /azure/git/credentials].each do |path|
+    %w[/mcp /action_mcp /agents/credentials /agents/credentials/refresh /cloud/aws/credentials /azure/git/credentials].each do |path|
       assert_nil options_for(path), "#{path} logged its params"
     end
   end

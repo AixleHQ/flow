@@ -50,8 +50,41 @@ class AgentCredential < ApplicationRecord
   # recompute when the encrypted blob actually changes — a bare touch(:last_used_at)
   # or metadata-only save leaves the token untouched. See #sync_expires_at.
   before_save :sync_expires_at, if: :will_save_change_to_encrypted_config_data?
+  before_save :retire_replaced_refresh_tokens, if: :will_save_change_to_encrypted_config_data?
+  after_commit :fan_out_rotation, on: %i[create update], if: :rotation_to_fan_out?
 
   broadcasts_to :user
+
+  # How long a refresh token we replaced still buys the current one through the refresh
+  # broker. A container lives at most a day (TerminalSession::WORKFLOW_TIMEOUT), so it
+  # cannot hold a token older than that.
+  RETIRED_REFRESH_TOKEN_TTL = TerminalSession::WORKFLOW_TIMEOUT.seconds + 1.hour
+  MAX_RETIRED_REFRESH_TOKENS = 50
+
+  def self.refresh_token_digest(token)
+    OpenSSL::Digest::SHA256.hexdigest(token.to_s)
+  end
+
+  # Every write that replaces a refresh token hands the new grant to the live containers
+  # still holding the old one (Agents::CredentialFanOutJob). The writer says which session
+  # it is acting for, so that session is not handed what it already has.
+  def self.rotating_for_session(session_id, &)
+    with_fan_out(session_id ? { origin_session_id: session_id } : nil, &)
+  end
+
+  # For a writer that delivers to the holders itself (the refresh sweep).
+  def self.delivering_inline(&)
+    with_fan_out(:inline, &)
+  end
+
+  def self.with_fan_out(mode)
+    previous = ActiveSupport::IsolatedExecutionState[:agent_credential_fan_out]
+    ActiveSupport::IsolatedExecutionState[:agent_credential_fan_out] = mode
+    yield
+  ensure
+    ActiveSupport::IsolatedExecutionState[:agent_credential_fan_out] = previous
+  end
+  private_class_method :with_fan_out
 
   # Agent types this platform can renew server-side, derived from each adapter's declared
   # lifecycle (BaseAdapter#credential_lifecycle) rather than maintained by hand — a list
@@ -346,10 +379,11 @@ class AgentCredential < ApplicationRecord
   #
   # `source` names the caller in the report (:sweep, :launch, :unauthorized).
   # Returns the adapter's result Hash; never raises.
-  def renew!(source:, margin_ms: nil)
+  def renew!(source:, margin_ms: nil, blocks: nil)
     result = begin
       # Omitted rather than passed as nil: an adapter's own default margin must survive.
-      margin_ms ? adapter.refresh!(self, margin_ms: margin_ms) : adapter.refresh!(self)
+      options = { margin_ms: margin_ms, blocks: blocks }.compact
+      adapter.refresh!(self, **options)
     rescue StandardError => e
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
@@ -409,7 +443,71 @@ class AgentCredential < ApplicationRecord
     save!
   end
 
+  # The block a refresh token we have since replaced belonged to, or nil when the token
+  # was never ours or was replaced too long ago to vouch for.
+  def retired_refresh_token_block(token)
+    entry = retired_refresh_tokens[self.class.refresh_token_digest(token)]
+    retired_recently?(entry) ? entry["block"] : nil
+  end
+
   private
+
+  def retired_refresh_tokens
+    metadata&.dig("retired_refresh_tokens") || {}
+  end
+
+  def retired_recently?(entry)
+    return false unless entry.is_a?(Hash)
+
+    retired_at = Time.zone.parse(entry["at"].to_s)
+    retired_at.present? && retired_at > RETIRED_REFRESH_TOKEN_TTL.ago
+  rescue ArgumentError
+    false
+  end
+
+  # Remembers the refresh tokens this write replaces, by digest. A container still holding
+  # one of them is a holder we have not yet handed the new grant to, not an impostor: the
+  # broker answers it with the current tokens instead of letting it spend a dead one and be
+  # logged out.
+  def retire_replaced_refresh_tokens
+    previous = stored_config_data
+    return if previous.blank?
+
+    kept = adapter.refresh_tokens(config_data)
+    replaced = adapter.refresh_tokens(previous).reject { |block, token| kept[block] == token }
+    return if replaced.empty?
+
+    now = Time.current.utc.iso8601(6)
+    retired = retired_refresh_tokens.select { |_digest, entry| retired_recently?(entry) }
+    replaced.each { |block, token| retired[self.class.refresh_token_digest(token)] = { "block" => block, "at" => now } }
+    self.metadata = (metadata || {}).merge(
+      "retired_refresh_tokens" => retired.sort_by { |_digest, entry| entry["at"] }.last(MAX_RETIRED_REFRESH_TOKENS).to_h
+    )
+    @rotation_fan_out = ActiveSupport::IsolatedExecutionState[:agent_credential_fan_out] || :all_holders
+  rescue Encryptable::DecryptionError
+    nil
+  end
+
+  def stored_config_data
+    stored = attribute_in_database(:encrypted_config_data)
+    return nil if stored.blank?
+
+    JSON.parse(decrypt_secret(stored, column: "encrypted_config_data"))
+  rescue JSON::ParserError
+    nil
+  end
+
+  def rotation_to_fan_out?
+    !@rotation_fan_out.nil?
+  end
+
+  def fan_out_rotation
+    mode = @rotation_fan_out
+    @rotation_fan_out = nil
+    return if mode == :inline || !active?
+
+    Agents::CredentialFanOutJob.perform_later(id, mode.is_a?(Hash) ? mode[:origin_session_id] : nil)
+  end
 
   def record_refresh_outcome(result, source:)
     case result[:status]

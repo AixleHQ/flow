@@ -212,7 +212,9 @@ module ContainerStrategies
     def refresh_expiring_credential!(credential, session)
       return if credential.nil?
 
-      result = credential.refresh_if_expiring!(excluding_session_id: session.id)
+      result = AgentCredential.rotating_for_session(session.id) do
+        credential.refresh_if_expiring!(excluding_session_id: session.id)
+      end
 
       # Deferring to the container that holds these tokens means this session starts
       # on whatever is stored, which may be little. Say so: the alternative is finding

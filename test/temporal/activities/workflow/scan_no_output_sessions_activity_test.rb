@@ -39,6 +39,15 @@ module Activities
 
         run_activity(ScanNoOutputSessionsActivity, nil)
       end
+
+      # Sessions::AuthPause bounds that wait itself; the watchdog would end it at 30 minutes.
+      test "a step waiting for its agent's login to be renewed is left alone" do
+        session = ready_step_session(mode: "non_interactive")
+        session.merge_jsonb!(:metadata, "auth_paused_at" => 2.hours.ago.iso8601)
+        SessionService.expects(:fail_session).never
+
+        run_activity(ScanNoOutputSessionsActivity, nil)
+      end
     end
   end
 end

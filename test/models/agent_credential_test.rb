@@ -753,4 +753,60 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_nil updated.refresh_error
     assert_equal 0, updated.refresh_failure_count
   end
+  # --- Replaced refresh tokens and handing the new grant to the holders ---
+
+  def claude_login(access_token, refresh_token, expires_in: 8.hours)
+    { "claudeAiOauth" => { "accessToken" => access_token, "refreshToken" => refresh_token,
+                           "expiresAt" => (expires_in.from_now.to_f * 1000).to_i } }
+  end
+
+  test "remembers a refresh token it replaced, and the block it came from" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
+
+    cred.reload
+    assert_equal "claudeAiOauth", cred.retired_refresh_token_block("rt-1")
+    assert_nil cred.retired_refresh_token_block("rt-2"), "the current token is not a replaced one"
+    assert_nil cred.retired_refresh_token_block("never-ours")
+    refute_includes cred.metadata.to_json, "rt-1", "only a digest is kept"
+  end
+
+  test "forgets a replaced refresh token once no container can still hold it" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
+
+    travel(AgentCredential::RETIRED_REFRESH_TOKEN_TTL + 1.minute) do
+      assert_nil cred.reload.retired_refresh_token_block("rt-1")
+    end
+  end
+
+  test "hands a replaced grant to the other holders, not to the session it was written for" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+
+    cred = AgentCredential.find_by!(user: @user, agent_type: "claude_code")
+    assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ cred.id, 77 ]) do
+      AgentCredential.rotating_for_session(77) do
+        AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
+      end
+    end
+  end
+
+  test "a write that keeps the refresh token hands nothing out" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+
+    assert_no_enqueued_jobs(only: Agents::CredentialFanOutJob) do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1b", "rt-1"))
+    end
+  end
+
+  test "a writer that delivers to the holders itself is not doubled by the fan-out" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+
+    assert_no_enqueued_jobs(only: Agents::CredentialFanOutJob) do
+      AgentCredential.delivering_inline do
+        AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
+      end
+    end
+  end
 end

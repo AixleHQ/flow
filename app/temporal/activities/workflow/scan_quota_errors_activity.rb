@@ -13,7 +13,10 @@
 # session's own container workflow reach its cleanup phase instead of waiting out its
 # 23-hour signal timeout.
 #
-# Both checks share this sweep's single `capture-pane` per session on purpose: the
+# A third condition is not fatal: an agent whose login was refused is paused until it
+# is renewed (Sessions::AuthPause), not failed.
+#
+# All checks share this sweep's single `capture-pane` per session on purpose: the
 # pod-exec handshake is the expensive part of the scan, and a second per-minute
 # sweep over the same containers is what previously pinned worker-ruby to its HPA
 # ceiling.
@@ -27,10 +30,15 @@ module Activities
       def run(_input = nil)
         cleaned = 0
         unreachable = 0
+        auth_paused = 0
 
         candidate_sessions.find_each do |session|
-          message = blocker_message_for(session)
-          next if message.blank?
+          terminal = live_terminal_output(session)
+          message = blocker_message_for(session, terminal)
+          if message.blank?
+            auth_paused += 1 if Sessions::AuthPause.new(session, runtime: runtime).observe(terminal) == :paused
+            next
+          end
 
           # Through SessionService, not `fail!` directly: failing the row alone
           # leaves this session's own container workflow parked on its
@@ -51,7 +59,7 @@ module Activities
           log(:warn, "Failed to process session #{session.id}: #{e.message}")
         end
 
-        { cleaned: cleaned, unreachable: unreachable }
+        { cleaned: cleaned, unreachable: unreachable, auth_paused: auth_paused }
       end
 
       private
@@ -63,9 +71,8 @@ module Activities
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
       end
 
-      # nil when the session looks healthy. One pane read serves both detectors.
-      def blocker_message_for(session)
-        terminal = live_terminal_output(session)
+      # nil when the session looks healthy.
+      def blocker_message_for(session, terminal)
         quota = QuotaErrorDetector.detect([ session.error_message, terminal ].compact_blank.join("\n"))
         return quota.message if quota.quota_error?
 

@@ -250,6 +250,29 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('says a paused run is waiting for a login and links to signing in again', () => {
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({
+          state: 'paused',
+          authPause: { agentType: 'claude_code', since: '2026-10-08T10:00:00Z' },
+        }),
+      }),
+    });
+
+    expect(screen.getByRole('alert', { name: /Paused: the Claude Code login needs renewing/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in again' })).toHaveAttribute(
+      'href',
+      '/profile?authenticate=claude_code',
+    );
+  });
+
+  it('shows no login banner on a run that is not waiting for one', () => {
+    renderAuthedPage(<ShowPage />, { props: seed() });
+
+    expect(screen.queryByText(/login needs renewing/)).not.toBeInTheDocument();
+  });
+
   it('names where a failed run stopped instead of when it started', () => {
     renderAuthedPage(<ShowPage />, {
       props: seed({

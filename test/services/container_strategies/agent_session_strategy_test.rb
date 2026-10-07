@@ -87,6 +87,15 @@ module ContainerStrategies
       assert_includes paths.to_s, "/home/claude/.claude/.credentials.json"
     end
 
+    # The proxy hands the CLI's OAuth refresh to the platform (Agents::RefreshBroker), with
+    # the same key the watcher uses.
+    test "builds env vars telling the proxy where to hand the CLI's refreshes" do
+      env_vars = build_strategy.build_env_vars
+
+      assert_includes env_vars, "CREDENTIAL_REFRESH_URL=#{Settings.agents.credential_refresh_url}"
+      assert_includes env_vars, "CREDENTIAL_REFRESH_TARGETS=platform.claude.com/v1/oauth/token,api.anthropic.com/v1/oauth/token"
+    end
+
     # The ingest refuses unkeyed batches only for sessions whose launch handed a key
     # out; the marker is how it knows, and the key must be what the ingest recomputes.
     test "hands the container its usage key and marks the session as keyed" do

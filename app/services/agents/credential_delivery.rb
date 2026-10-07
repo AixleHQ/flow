@@ -14,13 +14,12 @@ module Agents
   # and the holders are handed the result. Only the token is written — never the
   # rendered configuration, which a delivery has no workflow_config to reproduce.
   #
-  # What this cannot promise: that a CLI already running re-reads the file. Claude Code is
-  # documented to reload settings live, its credential store is not, and the probe that
-  # would settle it has not been run. So callers deliver to sessions that are parked, not
-  # mid-turn — for those the old token is dead either way, and the file is what the CLI
-  # reads when it wakes up.
+  # Whether a CLI already running takes the new file: Claude Code 2.1.281 re-reads its
+  # credentials file on every 401 and again inside its refresh lock before spending a refresh
+  # token (read from the binary, not yet observed on a live container), so a holder adopts a
+  # delivered token the next time its own one is refused or due.
   class CredentialDelivery
-    Result = Struct.new(:delivered, :failed, keyword_init: true)
+    Result = Struct.new(:delivered, :failed, :sessions, keyword_init: true)
 
     def initialize(runtime: nil)
       @runtime = runtime
@@ -28,26 +27,27 @@ module Agents
 
     # @param credential [AgentCredential] carrying the tokens to hand out
     # @param sessions [Enumerable<TerminalSession>] the holders to write to
-    # @return [Result] how many containers took it, and how many could not be written
+    # @return [Result] how many containers took it, how many could not be written, and which took it
     def deliver(credential, sessions:)
       adapter = credential.adapter
       credentials = credential.config_data
-      return Result.new(delivered: 0, failed: 0) unless adapter.credential_deliverable?(credentials)
+      return Result.new(delivered: 0, failed: 0, sessions: []) unless adapter.credential_deliverable?(credentials)
 
-      delivered = 0
+      took = []
       failed = 0
 
       sessions.each do |session|
         next if session.container_id.blank?
 
         if write(session, adapter, credentials)
-          delivered += 1
+          took << session
+          Sessions::AuthPause.new(session, runtime: container_runtime).resume!
         else
           failed += 1
         end
       end
 
-      Result.new(delivered: delivered, failed: failed)
+      Result.new(delivered: took.size, failed: failed, sessions: took)
     end
 
     private

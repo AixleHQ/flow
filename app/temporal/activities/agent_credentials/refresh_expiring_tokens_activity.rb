@@ -56,7 +56,7 @@ module Activities
           return
         end
 
-        deliver_to(credential, holders) if refresh(credential) == :refreshed
+        deliver_to(credential, holders) if AgentCredential.delivering_inline { refresh(credential) } == :refreshed
       end
 
       def refresh(credential)

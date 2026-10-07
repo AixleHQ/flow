@@ -55,6 +55,20 @@ module Agents
       end
     end
 
+    # The refresh broker answers a CLI with the tokens of the block its refresh token belongs
+    # to. A runtime that routes its refreshes there without saying where its refresh tokens
+    # live, or what its vendor answers, would have every refresh passed through or refused.
+    test "a runtime whose refreshes are brokered can name its refresh tokens and answer for its vendor" do
+      adapters.each do |agent_type, adapter|
+        next if adapter.refresh_broker_endpoints.empty?
+
+        assert_equal :server, adapter.credential_lifecycle[:refresh],
+                     "#{agent_type} brokers refreshes it cannot perform itself"
+        assert_not_equal BaseAdapter, adapter.method(:refresh_tokens).owner, "#{agent_type} refresh_tokens"
+        assert_not_equal BaseAdapter, adapter.method(:token_response).owner, "#{agent_type} token_response"
+      end
+    end
+
     test "a declared expiry is actually implemented, and an undeclared one is not published" do
       adapters.each do |agent_type, adapter|
         implemented = adapter.method(:token_expires_at).owner != BaseAdapter

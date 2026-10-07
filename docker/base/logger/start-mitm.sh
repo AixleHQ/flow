@@ -92,10 +92,11 @@ if command -v certutil >/dev/null 2>&1 && [ -r /opt/mitm/nss-trust-mitm-ca.sh ];
   bash /opt/mitm/nss-trust-mitm-ca.sh "$MITM_CA_PEM" || echo -e "${YELLOW:-}⚠️  NSS mitm CA import failed (HTTPS via proxy may fail)${NC:-}"
 fi
 
-# Start mitmdump in background with logging addon
+# Start mitmdump in background with the logging addon, and the addon that hands OAuth
+# refreshes to the platform (refresh_broker.py; inert without CREDENTIAL_REFRESH_URL)
 mitmdump --listen-host 0.0.0.0 --listen-port "${MITM_PROXY_PORT}" \
     --set block_global=false \
-    -q -s /opt/mitm/mitm_logger.py &
+    -q -s /opt/mitm/refresh_broker.py -s /opt/mitm/mitm_logger.py &
 MITM_PID=$!
 
 # Wait until mitmdump is accepting connections (up to 5 s)

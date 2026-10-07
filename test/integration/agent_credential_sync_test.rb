@@ -90,6 +90,13 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_equal "rt-new", stored["refreshToken"]
   end
 
+  # The other containers still hold the refresh token this one just spent.
+  test "hands a token one container rotated to the others, not back to that container" do
+    assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ @credential.id, @session.id ]) do
+      post PATH, params: rotated_body, headers: headers
+    end
+  end
+
   test "an unchanged file is accepted and changes nothing" do
     post PATH, params: rotated_body(access_token: "at-old", refresh_token: "rt-old",
                                     expires_at: Time.zone.at(@credential.expires_at)),

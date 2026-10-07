@@ -289,6 +289,39 @@ module Agents
 
     def writeback_file_paths = [ "#{home_dir}/.claude/.credentials.json", platform_credentials_path ]
 
+    # The claude.ai and design logins refresh on platform.claude.com, a Claude Platform login
+    # on the API host (PLATFORM_OAUTH_TOKEN_URL).
+    def refresh_broker_endpoints = [ URI(OAUTH_TOKEN_URL), URI(PLATFORM_OAUTH_TOKEN_URL) ].map { |uri| "#{uri.host}#{uri.path}" }
+
+    def refresh_tokens(credentials)
+      OAUTH_BLOCKS.each_with_object({}) do |block, tokens|
+        token = credentials.dig(block, "refreshToken")
+        tokens[block] = token if token.present?
+      end
+    end
+
+    def token_response(block)
+      return nil unless block.is_a?(Hash) && block["accessToken"].present? && block["refreshToken"].present?
+
+      expires_in = ((block["expiresAt"].to_i - (Time.current.to_f * 1000)) / 1000).floor
+      {
+        "token_type" => "Bearer",
+        "access_token" => block["accessToken"],
+        "refresh_token" => block["refreshToken"],
+        "expires_in" => expires_in,
+        "scope" => Array(block["scopes"]).join(" ").presence
+      }.compact
+    end
+
+    # The banners Claude Code 2.1.281 prints once its own 401 recovery has failed, read from
+    # the binary: "Login expired · Please run /login", "OAuth token revoked · Please run /login",
+    # "Not logged in · Please run /login" and "Please run /login · API Error: 401 …".
+    AUTH_BANNER = %r{(?:Login expired|OAuth token revoked|Not logged in) · Please run /login|Please run /login · API Error}
+
+    def auth_banner_pattern = AUTH_BANNER
+
+    def base_refresh_blocks = BASE_OAUTH_BLOCKS
+
     def merge_refreshed_credentials(current, incoming)
       merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
       OAUTH_BLOCKS.each do |block|
@@ -328,7 +361,7 @@ module Agents
     # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
     #   uses the default; a session launch passes its own, larger, threshold so the
     #   container starts with a token that outlives the session.
-    def perform_refresh!(credential, margin_ms: nil)
+    def perform_refresh!(credential, margin_ms: nil, blocks: OAUTH_BLOCKS)
       margin_ms ||= REFRESH_MARGIN_MS
       current = credential.config_data
       now_ms  = (Time.current.to_f * 1000).to_i
@@ -336,7 +369,7 @@ module Agents
       rejected = {}
       error = nil
 
-      OAUTH_BLOCKS.each do |block_name|
+      (OAUTH_BLOCKS & blocks).each do |block_name|
         block = current[block_name]
         next unless block.is_a?(Hash) && block["refreshToken"].present?
 
