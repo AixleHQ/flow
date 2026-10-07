@@ -15,6 +15,6 @@ mkdir -p dist
 zip_path="dist/aixle-flow-${version}.zip"
 rm -f "$zip_path"
 
-zip -q -r -X "$zip_path" . -x 'README.md' 'bin/*' 'dist/*' '.gitignore' '*.DS_Store'
+zip -q -r -X -D "$zip_path" . -x '*.md' 'bin/*' 'dist/*' '.gitignore' '*.DS_Store'
 
 echo "$app_dir/$zip_path"
