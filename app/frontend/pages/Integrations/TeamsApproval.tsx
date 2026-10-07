@@ -1,10 +1,11 @@
 import { Head } from '@inertiajs/react';
 import { Alert, Anchor, Badge, Button, Center, Checkbox, Group, List, Paper, Stack, Text, Title } from '@mantine/core';
-import { IconBrandTeams, IconDownload, IconFolders } from '@tabler/icons-react';
+import { IconDownload, IconFolders } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
 import { Logo, PageShell } from 'shared/ui';
+import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
 import { Flash } from './Flash';
 
@@ -48,8 +49,9 @@ const Pending = ({ workspace, requestedBy, signInUrl }: Props) => {
         description="Lets workflows read the files people attach in channels and save files there. Microsoft offers this only as a permission over all of your organization's files; Aixle opens only the files of messages addressed to it."
       />
       <Button
+        variant="default"
         onClick={() => signInUrl && postNavigate(signInUrl, { files: withFiles ? '1' : '0' })}
-        leftSection={<IconBrandTeams size={18} />}
+        leftSection={<IntegrationLogo provider="teams" size={18} />}
         fullWidth
       >
         Sign in with Microsoft to approve

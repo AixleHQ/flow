@@ -30,8 +30,7 @@ describe('Projects/Integrations/IntegrationsPage', () => {
     expect(screen.getByRole('heading', { name: 'Integrations' })).toBeInTheDocument();
     expect(screen.getByText('No integrations connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
-    // The GitLab button carries an <img alt="GitLab"> icon, so its accessible name doubles the label.
-    expect(screen.getByRole('button', { name: /GitLab/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitLab' })).toBeInTheDocument();
   });
 
   it('lists project and company integrations in the unified table with a Scope badge', () => {
@@ -55,8 +54,7 @@ describe('Projects/Integrations/IntegrationsPage', () => {
     renderAuthedPage(<IntegrationsPage />, { props: { project, integrations: [] } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    // The GitLab menu item carries an <img alt="GitLab"> icon, so its accessible name is doubled.
-    await userEvent.click(screen.getByRole('menuitem', { name: /GitLab/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'GitLab' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Connect GitLab' });
     expect(within(dialog).getByLabelText('Personal Access Token')).toBeInTheDocument();

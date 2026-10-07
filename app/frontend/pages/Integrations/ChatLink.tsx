@@ -1,10 +1,10 @@
 import { Head } from '@inertiajs/react';
 import { Anchor, Button, Center, Paper, Stack, Text, Title } from '@mantine/core';
-import { IconBrandSlack, IconBrandTeams } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
 import { Logo, PageShell } from 'shared/ui';
+import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
 import { Flash } from './Flash';
 
@@ -34,7 +34,6 @@ const Message = ({ title, children }: { title: string; children: ReactNode }) =>
 );
 
 function ChatLink({ state, provider, messenger, signInLabel, account, workspace, signInUrl, loginUrl }: Props) {
-  const Icon = provider === 'slack' ? IconBrandSlack : IconBrandTeams;
   return (
     <PageShell variant="centered">
       <Head title={`Link your ${messenger} account`} />
@@ -75,7 +74,12 @@ function ChatLink({ state, provider, messenger, signInLabel, account, workspace,
                 {account?.email ? ` (${account.email})` : ''}, with what this account may run. Sign in with the account
                 you use in {messenger} to prove it is yours. This does not add a way to sign in to Aixle.
               </Text>
-              <Button onClick={() => signInUrl && postNavigate(signInUrl)} leftSection={<Icon size={18} />} fullWidth>
+              <Button
+                variant="default"
+                onClick={() => signInUrl && postNavigate(signInUrl)}
+                leftSection={<IntegrationLogo provider={provider} size={18} />}
+                fullWidth
+              >
                 {signInLabel}
               </Button>
             </>
