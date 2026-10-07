@@ -145,7 +145,7 @@ module Trackers
         custom.concat(extra_fields(scope_id, fields, attributes[:fields]))
         body = { project: { id: scope_id.to_s }, summary: attributes[:title].to_s, description: attributes[:description].presence,
                  customFields: custom.presence, tags: attributes[:labels].present? ? tag_refs!(attributes[:labels]) : nil }.compact
-        issue_from(scoped!(api.create_issue(body), scope_id), scope_id)
+        issue_from(scoped!(tagging(attributes[:labels]) { api.create_issue(body) }, scope_id), scope_id)
       end
 
       def update_issue(scope_id, ref, attributes)
@@ -161,7 +161,7 @@ module Trackers
         raise Error.new("No fields to update", code: "validation_failed") if body.empty? && add.empty? && remove.empty?
 
         api.update_issue(current[:id], body) if body.any?
-        add.each { |tag| api.add_tag(current[:id], tag[:id]) }
+        add.each { |tag| tagging([ tag[:name] ]) { api.add_tag(current[:id], tag[:id]) } }
         remove.each { |tag| api.remove_tag(current[:id], tag[:id]) }
         issue_from(fetch(current[:id], fresh: true), scope_id)
       end
@@ -392,7 +392,8 @@ module Trackers
         clauses << "#Unresolved" if filter[:open_only]
         clauses << "(#{filter[:native_query].to_s.sub(/\bsort\s+by:.*\z/im, '').strip})" if filter[:native_query].present?
         order = filter[:native_query].to_s[/\bsort\s+by:.*\z/im].presence || "sort by: updated desc"
-        "#{clauses.join(' and ')} #{order}"
+        # Leading: YouTrack cannot parse a bracketed group followed by `sort by:`.
+        "#{order} #{clauses.join(' and ')}"
       end
 
       def braced(value)
@@ -508,6 +509,18 @@ module Trackers
         add = tags_named!(attributes[:labels_add]).reject { |t| held.any? { |h| h[:id] == t[:id] } }
         remove = Array(attributes[:labels_remove]).filter_map { |name| held.find { |h| h[:name].casecmp?(name.to_s) } }
         [ add, remove ]
+      end
+
+      # YouTrack lets an account add a tag to issues only when the tag's own
+      # sharing settings name it, whatever its project role, and says no more
+      # than "Can't tag issue".
+      def tagging(names)
+        yield
+      rescue Error => e
+        raise unless e.code == "permission_denied" && Array(names).any? && e.message.match?(/tag/i)
+
+        raise Error.new("YouTrack would not let Aixle Flow add #{Array(names).join(', ')}: a tag's settings in YouTrack must " \
+                        "allow Aixle Flow (or everyone) to add it to issues. Nothing was changed.", code: "permission_denied")
       end
 
       def actor(user)

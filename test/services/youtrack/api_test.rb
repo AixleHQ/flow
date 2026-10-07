@@ -77,6 +77,29 @@ class Youtrack::ApiTest < ActiveSupport::TestCase
     assert_requested stub
   end
 
+  test "a team member's empty view of the project's fields falls back to a new-issue draft, deleted afterwards" do
+    stub_get("/api/admin/projects/0-1/customFields", [])
+    draft = stub_request(:post, %r{#{BASE}/api/users/me/drafts}).with(body: { project: { id: "0-1" } }.to_json)
+                                                              .to_return(status: 200, body: {
+                                                                id: "3-23", customFields: [
+                                                                  { projectCustomField: { field: { name: "State", fieldType: { id: "state[1]" } },
+                                                                                          bundle: { values: [ { id: "s1", name: "Open", ordinal: 1 },
+                                                                                                              { id: "s2", name: "Fixed", isResolved: true, ordinal: 2 } ] } } },
+                                                                  { projectCustomField: { field: { name: "Assignee", fieldType: { id: "user[1]" } },
+                                                                                          bundle: { aggregatedUsers: [ { id: "1-2", login: "jdoe" } ] } } }
+                                                                ]
+                                                              }.to_json)
+    deleted = stub_request(:delete, "#{BASE}/api/users/me/drafts/3-23").to_return(status: 200, body: "")
+
+    state, assignee = @api.project_fields("0-1")
+
+    assert_equal [ "State", "state[1]", %w[Open Fixed], [ false, true ] ],
+                 [ state[:name], state[:field_type], state[:values].pluck(:name), state[:values].pluck(:resolved) ]
+    assert_equal [ "Assignee", [ "jdoe" ] ], [ assignee[:name], assignee[:users].pluck(:login) ]
+    assert_requested draft
+    assert_requested deleted
+  end
+
   test "the latest comments come newest first from the issue's history, without deleted ones" do
     stub = stub_request(:get, %r{#{BASE}/api/issues/2-1/activities\?.*categories=CommentsCategory.*reverse=true})
            .to_return(status: 200, body: [ { id: "4-2.0-0", added: [ { id: "4-2", text: "second", created: 1_790_000_060_000,
