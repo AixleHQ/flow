@@ -10,4 +10,14 @@ class AssetPickerResource < PickerResource
   attribute :folder do |asset|
     asset.folder
   end
+
+  typelize "string"
+  attribute :file_name do |asset|
+    asset.name
+  end
+
+  typelize %w[project company]
+  attribute :scope do |asset|
+    asset.scope_type == "Company" ? "company" : "project"
+  end
 end

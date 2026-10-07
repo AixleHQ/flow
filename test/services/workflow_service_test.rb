@@ -76,6 +76,37 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_not run.persisted?
   end
 
+  test "start refuses a run that would fail on a reference, and names it" do
+    asset = create(:asset, scope: @project, created_by: @user, name: "brief.md")
+    @step2.update!(instructions: "Read {{asset:#{asset.id}}}.")
+
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+
+    assert_not run.persisted?
+    assert_match(/This workflow would fail: "Step 2" references brief\.md, which is not attached to it\./,
+                 run.errors.full_messages.to_sentence)
+  end
+
+  test "start counts the files picked for the run when a first step needs one" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    @step1.update!(input_asset_specs: [ { "name" => "brief.md" } ])
+    brief = create(:asset, scope: @project, created_by: @user, name: "brief.md")
+
+    refused = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    started = WorkflowService.start(workflow: @workflow, project: @project, user: @user, input_asset_ids: [ brief.id ])
+
+    assert_not refused.persisted?
+    assert_includes refused.errors.full_messages.to_sentence, "requires brief.md"
+    assert started.persisted?
+  end
+
+  test "a data-flow check that crashes does not stop a run" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    DataFlow::Check.stubs(:for_workflow).raises(StandardError, "boom")
+
+    assert WorkflowService.start(workflow: @workflow, project: @project, user: @user).persisted?
+  end
+
   # == cancel ==
 
   test "cancel sends signal and cancels active step runs" do

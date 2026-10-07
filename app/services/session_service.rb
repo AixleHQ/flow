@@ -156,7 +156,8 @@ class SessionService
       workflow_run = step_run.workflow_run
       step = step_run.step
 
-      prompt = step.instructions.presence || "Execute step: #{step.name}"
+      instructions = InstructionReferences::Renderer.new(step: step, project: workflow_run.project).render(step.instructions)
+      prompt = instructions.presence || "Execute step: #{step.name}"
       runtime = step.required_agent_runtime.presence ||
                 workflow_run.agent_runtime.presence ||
                 run_membership(workflow_run)&.default_agent_runtime.presence ||

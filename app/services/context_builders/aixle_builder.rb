@@ -116,7 +116,11 @@ module ContextBuilders
           the step's `asset_ids`, and the files picked when a run starts. Files
           attached to a board task are NOT mounted — the step agent reads them with
           its board tools. Declare expectations with `input_asset_specs` /
-          `output_asset_specs`.
+          `output_asset_specs`. A step receives the outputs of every step it runs
+          after, directly or through others.
+        - **References** in instructions (`{{asset:<id>}}`, `{{output:<step id>:<file>}}`,
+          `{{step:<id>}}`, `{{mcp:<id>}}`) come from the builder's `@` picker and turn
+          into paths and names at run time. Preserve them when you edit instructions.
         - **Repositories** are cloned into `/workspace/repo/<name>/` with
           authenticated git access (branches, commits, PRs). They come from the run's
           pick, else the step's `repository_ids` plus the workflow's

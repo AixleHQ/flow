@@ -11,16 +11,20 @@ import {
   IconMinimize,
   IconShield,
 } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 
 import classes from './BuilderPage.module.css';
+import { type IssueFix, normalizeSpecName, type WorkflowIssue } from './dataFlow';
+import { IssueList } from './IssueList';
+import { type AvailableInput, REFERENCE_GROUPS } from './referenceCatalog';
 
 interface NamedItem {
   id: number;
@@ -85,13 +89,25 @@ interface AssetRowsProps {
   showNamePattern: boolean;
   disabled: boolean;
   kind: 'input' | 'output';
+  placeholder: string;
+  /** A name that was edited and left, already normalized: `before` is what it was on focus. */
+  onNameCommitted?: (before: string, after: string) => void;
 }
 
-function AssetRows({ specs, onChange, showNamePattern, disabled, kind }: AssetRowsProps) {
+function AssetRows({ specs, onChange, showNamePattern, disabled, kind, placeholder, onNameCommitted }: AssetRowsProps) {
+  const namesOnFocus = useRef<Record<number, string>>({});
   const addSpec = () => onChange([...specs, { name: '', assetType: 'file', required: true, namePattern: null }]);
   const removeSpec = (i: number) => onChange(specs.filter((_, idx) => idx !== i));
   const updateSpec = (i: number, field: string, value: unknown) =>
     onChange(specs.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+  const commitName = (i: number) => {
+    const current = specs[i]?.name ?? '';
+    const normalized = normalizeSpecName(current);
+    if (normalized !== current) updateSpec(i, 'name', normalized);
+    const before = namesOnFocus.current[i] ?? current;
+    delete namesOnFocus.current[i];
+    if (before !== normalized) onNameCommitted?.(before, normalized);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -101,9 +117,14 @@ function AssetRows({ specs, onChange, showNamePattern, disabled, kind }: AssetRo
           <input
             className={classes.descTa}
             style={{ flex: 1, height: 28, padding: '0 8px', lineHeight: '28px' }}
-            placeholder="e.g. tasks/report.md"
+            placeholder={placeholder}
+            aria-label={`${kind === 'input' ? 'Input' : 'Output'} ${idx + 1} name`}
             value={spec.name}
+            onFocus={() => {
+              namesOnFocus.current[idx] = spec.name;
+            }}
             onChange={(e) => updateSpec(idx, 'name', e.currentTarget.value)}
+            onBlur={() => commitName(idx)}
             disabled={disabled}
           />
           {showNamePattern && (
@@ -176,6 +197,16 @@ interface SessionEditorPanelProps {
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown) => void;
   onAssetSpecsChange: (field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => void;
+  /** What `@` offers in the instructions, and whether the deferred catalog is still loading. */
+  references: { items: ReferenceItem[]; loading: boolean };
+  onInsertReference: (item: ReferenceItem) => void;
+  /** This session's data-flow issues. */
+  issues: WorkflowIssue[];
+  fixLabel: (fix: IssueFix) => string | null;
+  onFix: (fix: IssueFix) => void;
+  /** Files this session can count on when it starts. */
+  available: AvailableInput[];
+  onOutputRenamed: (before: string, after: string) => void;
 }
 
 export function SessionEditorPanel({
@@ -193,7 +224,16 @@ export function SessionEditorPanel({
   readOnly,
   onFieldChange,
   onAssetSpecsChange,
+  references,
+  onInsertReference,
+  issues,
+  fixLabel,
+  onFix,
+  available,
+  onOutputRenamed,
 }: SessionEditorPanelProps) {
+  const issuesFor = (field: WorkflowIssue['field']) => issues.filter((issue) => issue.field === field);
+  const issueFix = readOnly ? () => null : fixLabel;
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const charCount = (step.instructions ?? '').length;
 
@@ -254,25 +294,38 @@ export function SessionEditorPanel({
           <label className={classes.fieldLabel}>
             Instructions
             <span className={classes.instrDot} title="Required" />
-            <span className={classes.instrInfoIcon} title="The prompt the AI agent receives, exactly as written.">
+            <span
+              className={classes.instrInfoIcon}
+              title="The prompt the AI agent receives. Each @ reference becomes the real path or name."
+            >
               <IconInfoCircle size={12} />
             </span>
           </label>
           <p className={classes.fieldHelp}>
-            The agent receives these instructions exactly as written. Point it at files by path, e.g.{' '}
-            <code>/workspace/assets/…</code>.{' '}
+            Type <code>@</code> to reference an asset, another session, an output or an MCP server. The agent gets the
+            real path or name.{' '}
             <a href="/docs/prompt-guide" target="_blank" rel="noopener noreferrer">
               Prompt guide <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
             </a>
           </p>
-          <textarea
-            className={classes.instrTa}
-            style={instructionsExpanded ? { minHeight: 400 } : undefined}
-            placeholder="Enter instructions… What should the agent do, and when is it done?"
-            aria-label="Session instructions"
+          <ReferenceEditor
             value={step.instructions ?? ''}
-            onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
-            disabled={readOnly}
+            onChange={(value) => onFieldChange('instructions', value)}
+            items={references.items}
+            groups={REFERENCE_GROUPS}
+            loading={references.loading}
+            readOnly={readOnly}
+            onInsert={onInsertReference}
+            placeholder="Enter instructions… Type @ to reference assets, sessions, outputs or connections."
+            ariaLabel="Session instructions"
+            minHeight={instructionsExpanded ? 400 : 180}
+            maxHeight={instructionsExpanded ? null : 620}
+          />
+          <IssueList
+            issues={issuesFor('instructions')}
+            fixLabel={issueFix}
+            onFix={onFix}
+            label="Problems in the instructions"
           />
           <div className={classes.instrFoot}>
             <span className={classes.charCt}>{charCount} characters</span>
@@ -526,6 +579,12 @@ export function SessionEditorPanel({
             input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
           }}
         />
+        <IssueList
+          issues={issuesFor('dependsOnStepIds')}
+          fixLabel={issueFix}
+          onFix={onFix}
+          label="Problems with dependencies"
+        />
       </div>
 
       {/* ── DATA FLOW ──────────────────────────────────────────────────────── */}
@@ -534,14 +593,41 @@ export function SessionEditorPanel({
 
         <div className={classes.dfGroup}>
           <div className={classes.dfSub}>
-            Inputs <span className={classes.dfSubMuted}>— files this session reads</span>
+            Available when this session starts <span className={classes.dfSubMuted}>— in /workspace/assets</span>
           </div>
+          {available.length === 0 ? (
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Nothing yet</span>
+          ) : (
+            <ul className={classes.availableList} aria-label="Available when this session starts">
+              {available.map((input, index) => (
+                <li key={`${input.source}-${input.name}-${index}`}>
+                  <code>{input.name}</code> <span className={classes.availableSource}>← {input.source}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className={classes.dfGroup}>
+          <div className={classes.dfSub}>
+            Inputs <span className={classes.dfSubMuted}>— files this session needs</span>
+          </div>
+          <p className={classes.dfHelp}>
+            Needed only for files picked when a run starts. Files referenced with @ are checked automatically.
+          </p>
           <AssetRows
             specs={step.inputAssetSpecs ?? []}
             onChange={(specs) => onAssetSpecsChange('inputAssetSpecs', specs)}
             showNamePattern={false}
             disabled={readOnly}
             kind="input"
+            placeholder="e.g. report.md"
+          />
+          <IssueList
+            issues={issuesFor('inputAssetSpecs')}
+            fixLabel={issueFix}
+            onFix={onFix}
+            label="Problems with inputs"
           />
         </div>
 
@@ -555,6 +641,14 @@ export function SessionEditorPanel({
             showNamePattern
             disabled={readOnly}
             kind="output"
+            placeholder="e.g. report.md or reports/*.md"
+            onNameCommitted={onOutputRenamed}
+          />
+          <IssueList
+            issues={issuesFor('outputAssetSpecs')}
+            fixLabel={issueFix}
+            onFix={onFix}
+            label="Problems with outputs"
           />
         </div>
       </div>

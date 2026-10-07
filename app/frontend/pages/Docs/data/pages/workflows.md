@@ -37,8 +37,8 @@ One Step = one agent session = one container = one major deliverable.
 | `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
-| `input_asset_specs`    | Expected inputs. A required one is checked before the step starts; a missing one fails the step ("Required input missing"). |
-| `output_asset_specs`   | Expected outputs. A required one is checked when the step ends; a missing one fails the step ("Output validation failed"). |
+| `input_asset_specs`    | Expected inputs. A required one is checked before the step starts; a missing one fails the step ("Required input missing"). Needed only for files picked when a run starts: an `@` reference is checked without one. |
+| `output_asset_specs`   | Expected outputs. A required one is checked when the step ends; a missing one fails the step ("Output validation failed"). A name is the file's path under `/workspace/outputs/` (a `/workspace/…` prefix is dropped), or a glob such as `reports/*.md`; `dir/**` takes everything under `dir`. |
 
 ## DAG and parallelism
 
@@ -113,13 +113,28 @@ Three sources of input assets, all merged additively:
 1. **Workflow base assets** (`workflow.config.base_asset_ids`) — always.
 2. **Run-time assets** (`workflow_run.input_asset_ids`) — chosen when
    the run starts.
-3. **Outputs of the steps in Run after** (`depends_on_step_ids`), placed at `/workspace/assets/<name>`.
+3. **Outputs of every step it runs after** (`depends_on_step_ids`, followed through: a step after B, which runs after A, gets both), placed at `/workspace/assets/<name>`. When two of them wrote the same name, the nearest one's copy wins. The agent's context lists them.
 
 Files attached to a board card are **not** mounted; the agent fetches them with `board_get_task_assets`.
 
 Everything lands under `/workspace/assets/`. Agents write outputs to
 `/workspace/outputs/` — those files become `WorkflowRunAssets` you can
 download from the UI or via `GET /api/v1/projects/:id/workflow_runs/:run_id/workflow_run_assets`.
+
+## References and the data-flow check
+
+Typing `@` in a session's instructions inserts a reference to an asset, a declared
+output, another session or an MCP server. It is stored as a token with the row's id
+(`{{asset:12}}`, `{{output:45:summary.md}}`, `{{step:45}}`, `{{mcp:7}}`), shown as a
+chip, and replaced with the path or name when the session starts. Picking an item
+attaches the asset or server, or adds Run after, when the session would not otherwise
+get it. Duplicating a workflow or exporting it as a template carries the references.
+
+The builder checks the whole workflow as you edit — references that no longer resolve,
+outputs read from a session that does not run first, input and output names that cannot
+match, braces nothing replaces — and lists what it finds under each session. Saving is
+never blocked. A run that would fail for certain does not start, and `validate_workflow`
+reports the same list.
 
 ## Saving, versions and the archive
 

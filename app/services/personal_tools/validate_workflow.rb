@@ -6,8 +6,10 @@ module PersonalTools
       display_name "Validate Workflow"
       description "Check a workflow before it runs: every step has instructions, linked agents, " \
                   "tools, skills, MCP servers, assets, repositories and config items exist and are " \
-                  "enabled in this project, dependencies form no cycle, and every step allows " \
-                  "non-interactive runs when a trigger launches the workflow unattended. " \
+                  "enabled in this project, dependencies form no cycle, every step allows " \
+                  "non-interactive runs when a trigger launches the workflow unattended, every " \
+                  "{{asset:…}}/{{output:…}}/{{step:…}}/{{mcp:…}} reference resolves and is attached or " \
+                  "upstream, and declared input/output names can be met. " \
                   "Returns errors (must fix) and warnings (worth a look)."
       audience :user
       tags :workflows
@@ -48,6 +50,9 @@ module PersonalTools
         missing_deps.each { |id| errors << "Step '#{step.name}' depends on step #{id}, which is not in this workflow" }
       end
       errors << "Step dependencies form a cycle" if cycle?(steps)
+      data_flow = DataFlow::Check.for_workflow(workflow, project: project)
+      errors.concat(data_flow.errors.map(&:message))
+      warnings.concat(data_flow.warnings.map(&:message))
 
       success(workflow_id: workflow.id, name: workflow.name, valid: errors.empty?,
               steps_count: steps.size, errors: errors, warnings: warnings)

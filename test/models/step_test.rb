@@ -192,4 +192,47 @@ class StepTest < ActiveSupport::TestCase
 
     assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
   end
+
+  test "upstream_step_ids is every live step it runs after, nearest first" do
+    collect = create(:step, workflow: @workflow, name: "Collect")
+    gone = create(:step, workflow: @workflow, name: "Gone")
+    analyze = create(:step, workflow: @workflow, name: "Analyze", depends_on_step_ids: [ collect.id, gone.id ])
+    report = create(:step, workflow: @workflow, name: "Report", depends_on_step_ids: [ analyze.id ])
+    gone.update_column(:deleted_at, Time.current)
+
+    assert_equal [ analyze.id, collect.id ], report.upstream_step_ids
+    assert_empty collect.upstream_step_ids
+  end
+
+  test "asset specs are stored as arrays with the container prefix dropped, legacy strings included" do
+    step = create(:step, workflow: @workflow, input_asset_specs: [ { "name" => "/workspace/assets/brief.md", "required" => true } ])
+    step.update_column(:output_asset_specs, '[{"name":"/workspace/outputs/plan/prd.md","description":"x"}]')
+
+    step.reload.update!(name: "Renamed")
+
+    assert_equal [ { "name" => "brief.md", "required" => true } ], step.reload.input_asset_specs
+    assert_equal [ { "name" => "plan/prd.md", "description" => "x" } ], step.output_asset_specs
+  end
+
+  test "an asset or MCP reference the instructions add must belong to the project" do
+    other = create(:project, :standalone)
+    foreign_asset = create(:asset, scope: other, created_by: create(:user))
+    foreign_server = create(:mcp_server, scope: other)
+    own_asset = create(:asset, scope: @project, created_by: create(:user))
+    step = create(:step, workflow: @workflow)
+
+    step.instructions = "Read {{asset:#{foreign_asset.id}}} and {{mcp:#{foreign_server.id}}}, then {{asset:#{own_asset.id}}}."
+
+    assert_not step.valid?
+    assert_includes step.errors[:instructions], "reference assets outside this project: #{foreign_asset.id}"
+    assert_includes step.errors[:instructions], "reference mcp servers outside this project: #{foreign_server.id}"
+  end
+
+  test "a reference already saved does not block an unrelated edit" do
+    foreign_asset = create(:asset, scope: create(:project, :standalone), created_by: create(:user))
+    step = create(:step, workflow: @workflow)
+    step.update_column(:instructions, "Read {{asset:#{foreign_asset.id}}}.")
+
+    assert step.reload.update(instructions: "#{step.instructions} Then summarise."), step.errors.full_messages.to_sentence
+  end
 end

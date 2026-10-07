@@ -410,7 +410,12 @@ module Tools
             layout, sub-step tracking, or which tools are available. The platform
             injects those automatically — repeating them wastes context.
           - Keep it focused on this step alone; earlier steps' outputs are available
-            to later steps that depend on them.
+            to every later step that runs after them, directly or through others.
+          - Instructions may hold references written by the builder's `@` picker:
+            `{{asset:<id>}}`, `{{output:<step id>:<file>}}`, `{{step:<id>}}`,
+            `{{mcp:<id>}}`. At run time each becomes the file's path or the name the
+            agent sees. Keep every one you did not mean to remove when you rewrite
+            instructions; `validate_workflow` reports any that no longer resolve.
 
           Wiring:
           - `agent_id` (from `list_agents`) picks who runs the step. `get_agent`

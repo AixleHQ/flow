@@ -69,7 +69,8 @@ const CONFIG_KEYS = {
   base_config_item_ids: 'baseConfigItemIds',
 } as const satisfies Record<string, keyof Workflow>;
 
-const stepKey = (id: number) => (isDraftId(id) ? `new${id}` : String(id));
+/** How the Save payload, Run after and `@` references name a step: its id, or `new-<n>` until it is saved. */
+export const stepKey = (id: number) => (isDraftId(id) ? `new${id}` : String(id));
 
 const bySubPosition = (a: SubStep, b: SubStep) => a.position - b.position;
 

@@ -175,10 +175,13 @@ class Step < ApplicationRecord
   # input_asset_specs: jsonb
   #   [{ name: "prd", asset_type: "document", required: true },
   #    { name: "repo", asset_type: "repository", required: false }]
-  #   NOTE: actual resolution = user-selected Assets + all WorkflowRunAssets from previous steps
+  #   Checked before the step starts against attached assets and the outputs of every
+  #   step it runs after (transitively). Names and matching: DataFlow::AssetSpec
+  #   (docs/design/at-references.md §5).
   #
   # output_asset_specs: jsonb
-  #   [{ name: "architecture", asset_type: "document", required: true, name_pattern: "*.md" }]
+  #   [{ name: "architecture.md", asset_type: "document", required: true },
+  #    { name: "reports/*.md", required: false }]   # a glob in `name`; `name_pattern` is a legacy regex
   #   Used for validation on step completion and for skip_policy: if_outputs_exist
   #
   # depends_on_step_ids: jsonb (DAG — ids of sibling steps this step depends on)
@@ -533,9 +536,10 @@ Auto-create SubStepRuns from Step.sub_steps (all state: pending)
     │
     ▼
 Prepare workspace:
-    - Mount user-selected project Assets to /workspace/input/
-    - Mount ALL WorkflowRunAssets from previous steps to /workspace/input/
-    - Generate /workspace/input/_index.md
+    - Check the step's @ references and required inputs (DataFlow::Check)
+    - Mount attached and run-picked Assets to /workspace/assets/<folder>/<name>
+    - Copy WorkflowRunAssets of every step it runs after (transitively, nearest wins)
+      to /workspace/assets/<name>
     │
     ▼
 Inject workflow context into CLI context file (AGENTS.md / CLAUDE.md / .cursorrules)
@@ -553,7 +557,7 @@ StepRun state → running
 Agent completes work / User stops session
     │
     ▼
-Collect files from /workspace/output/
+Collect files from /workspace/outputs/
 Create WorkflowRunAsset records
     │
     ▼

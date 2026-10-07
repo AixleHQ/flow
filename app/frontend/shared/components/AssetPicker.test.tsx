@@ -1,17 +1,18 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildAssetPicker } from 'test/factories/assetPicker';
 import { renderPage, screen, userEvent } from 'test/renderPage';
 
 import type { AssetPickerItem } from './AssetPicker';
 import { AssetPicker } from './AssetPicker';
 
 const assets: AssetPickerItem[] = [
-  { id: 1, name: 'google-credentials.json', folder: null },
-  { id: 2, name: 'dashboard-metrics.json', folder: 'dashboard' },
-  { id: 3, name: 'dashboard-config.yaml', folder: 'dashboard' },
-  { id: 4, name: 'api-spec.md', folder: 'dashboard/specs' },
-  { id: 5, name: 'kickoff-notes.docx', folder: 'initiate' },
+  buildAssetPicker({ id: 1, name: 'google-credentials.json', folder: null }),
+  buildAssetPicker({ id: 2, name: 'dashboard-metrics.json', folder: 'dashboard' }),
+  buildAssetPicker({ id: 3, name: 'dashboard-config.yaml', folder: 'dashboard' }),
+  buildAssetPicker({ id: 4, name: 'api-spec.md', folder: 'dashboard/specs' }),
+  buildAssetPicker({ id: 5, name: 'kickoff-notes.docx', folder: 'initiate' }),
 ];
 
 function setup(over: Partial<React.ComponentProps<typeof AssetPicker>> = {}) {

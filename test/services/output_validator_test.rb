@@ -120,4 +120,23 @@ class OutputValidatorTest < ActiveSupport::TestCase
     assert result.valid?, result.errors.to_sentence
     assert_equal [], result.errors
   end
+
+  test "a glob name matches every file it covers; a directory glob takes the whole tree" do
+    step = create(:step, workflow: @workflow, output_asset_specs: [ { "name" => "reports/**", "required" => true } ])
+    assets = [ build(:workflow_run_asset, name: "reports/2026/q3.md") ]
+
+    covered = OutputValidator.new(step, assets).validate!
+    missing = OutputValidator.new(step, [ build(:workflow_run_asset, name: "other.md") ]).validate!
+
+    assert covered.valid?, covered.errors.to_sentence
+    assert_equal [ "Required output missing: reports/**" ], missing.errors
+  end
+
+  test "a regex that does not compile is reported, not taken as a missing file" do
+    step = create(:step, workflow: @workflow, output_asset_specs: [ { "name_pattern" => "*.md" } ])
+
+    result = OutputValidator.new(step, [ build(:workflow_run_asset, name: "a.md") ]).validate!
+
+    assert_equal [ "Output pattern *.md is not a valid regular expression" ], result.errors
+  end
 end

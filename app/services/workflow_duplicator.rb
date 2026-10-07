@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class WorkflowDuplicator
+  SOURCE_OWNERS = { Asset => :assets, MCPServer => :mcp_servers }.freeze
+
   # #duplicate! returns the new Workflow (backwards-compatible). A summary of the
   # resources that were NOT copied / need manual setup is exposed afterwards via
   # #summary so the controller can surface a "needs setup" notice (see #302).
@@ -50,11 +52,43 @@ class WorkflowDuplicator
     end
 
     step_pairs.each do |source_step, new_step|
-      next if source_step.depends_on_step_ids.blank?
-
-      remapped = source_step.depends_on_step_ids.filter_map { |old_id| step_id_map[old_id] }
-      new_step.update!(depends_on_step_ids: remapped)
+      attrs = {}
+      if source_step.depends_on_step_ids.present?
+        attrs[:depends_on_step_ids] = source_step.depends_on_step_ids.filter_map { |old_id| step_id_map[old_id] }
+      end
+      attrs[:instructions] = carried_instructions(source_step.instructions, step_id_map) if source_step.instructions
+      new_step.update!(attrs) if attrs.any?
     end
+  end
+
+  # References follow the copy the way the id columns do: steps through the new
+  # ids, MCP servers through DependencyCopier, assets by the carry rule. One that
+  # cannot follow becomes its name in plain text — never an id that still points
+  # into the source project.
+  def carried_instructions(text, step_id_map)
+    InstructionReferences.rewrite(text) do |ref|
+      next nil unless ref.valid?
+
+      case ref.type
+      when "step"
+        (id = step_id_map[ref.id.to_i]) ? "{{step:#{id}}}" : source_name(Step, ref.id)
+      when "output"
+        (id = step_id_map[ref.id.to_i]) ? "{{output:#{id}:#{ref.name}}}" : ref.name
+      when "mcp"
+        (id = @dep_copier.map_mcp_server_ids([ ref.id ]).first) ? "{{mcp:#{id}}}" : source_name(MCPServer, ref.id)
+      when "asset"
+        carried_asset_ids([ ref.id ]).any? ? nil : source_name(Asset, ref.id)
+      end
+    end
+  end
+
+  def source_name(model, id)
+    scope = if model == Step
+              @source.steps
+    elsif @source.scope_type == "Project"
+              ProjectOwnedReferences::OWNERS.fetch(SOURCE_OWNERS.fetch(model)).call(@source.scope)
+    end
+    scope&.find_by(id: id)&.name || model.model_name.human.downcase
   end
 
   # nil unless we're copying into a Project (in-company duplicate / catalog copy).
@@ -116,7 +150,10 @@ class WorkflowDuplicator
   def duplicate_step(step, workflow)
     new_step = workflow.steps.create!(
       name: step.name,
-      instructions: step.instructions,
+      # Written once every step has its new id (#copy_steps): a reference may name
+      # a step later in the list, and an id from the source project would not pass
+      # the copy's ownership check.
+      instructions: nil,
       position: step.position,
       agent_id: @dep_copier.map_agent_id(step.agent_id),
       allow_non_interactive: step.allow_non_interactive,

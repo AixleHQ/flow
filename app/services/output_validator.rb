@@ -10,11 +10,8 @@ class OutputValidator
   end
 
   def validate!
-    specs = @step.output_asset_specs
-    return Result.new(valid?: true, errors: []) if specs.blank?
-
-    specs.each do |spec|
-      validate_spec(spec)
+    @step.output_specs.each do |spec|
+      validate_spec(spec) unless spec.blank?
     end
 
     Result.new(valid?: @errors.empty?, errors: @errors)
@@ -23,37 +20,24 @@ class OutputValidator
   private
 
   def validate_spec(spec)
-    required = spec["required"] != false
-    name_pattern = spec["name_pattern"]
-    min_size = spec["min_size"]
-    required_sections = spec["required_sections"]
-
-    matching = find_matching_assets(name_pattern, spec["name"])
-
-    if matching.empty? && required
-      @errors << "Required output missing: #{spec['name'] || name_pattern}"
+    if spec.name_pattern_invalid? && spec.required?
+      @errors << "Output pattern #{spec.name_pattern} is not a valid regular expression"
       return
     end
 
+    matching = @collected_assets.select { |asset| spec.matches?(asset.name) }
+
+    if matching.empty? && spec.required?
+      @errors << "Required output missing: #{spec.label}"
+      return
+    end
+
+    min_size = spec.attributes["min_size"]
+    required_sections = spec.attributes["required_sections"]
     matching.each do |asset|
       validate_size(asset, min_size) if min_size
       validate_sections(asset, required_sections) if required_sections.present?
     end
-  end
-
-  def find_matching_assets(pattern, name)
-    @collected_assets.select do |asset|
-      if pattern.present?
-        Regexp.new(pattern).match?(asset.name)
-      elsif name.present?
-        asset.name == name
-      else
-        false
-      end
-    end
-  rescue RegexpError => e
-    Rails.logger.warn("[OutputValidator] Invalid regexp '#{pattern}': #{e.message}")
-    []
   end
 
   def validate_size(asset, min_size)

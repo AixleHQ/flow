@@ -34,6 +34,12 @@ governance, community health — carry none.
   the page it named had no way to do it.
 - **Sessions & Runs**: the run page names the workflow version each session
   launched with, and says when the workflow was saved mid-run.
+- **Workflows**: `@` references in session instructions. Typing `@` lists
+  assets, declared outputs, other sessions and MCP servers; picking one inserts
+  a chip and attaches the asset or server, or adds Run after, when the session
+  would not otherwise get it. The agent receives the real path or name. The
+  builder checks references and input/output names as you edit and lists what
+  a run would trip on; a run that would fail for certain does not start.
 - Apache License 2.0, `NOTICE` attribution file, and third-party license
   inventory (`THIRD-PARTY-LICENSES.md`, `NOTICES.md`).
 - Contributor model: Contributor License Agreement (`CLA.md`) and Developer
@@ -45,6 +51,13 @@ governance, community health — carry none.
   and pull-request templates, CODEOWNERS, and this changelog.
 
 ### Changed
+- **Workflows**: a session receives the output files of every session it runs
+  after, not only the ones listed in its own Run after; the agent's context
+  lists them. Input and output names may be globs (`reports/*.md`,
+  `analysis/**`), and a `/workspace/assets/` or `/workspace/outputs/` prefix in
+  a name is dropped instead of failing the run. An output spec without a
+  `required` flag counts as required for *Skip if outputs exist* too, as it
+  already did for validation.
 - **Workflows**, **Agents**, **Skills**, **Wrappers**, **Connectors**: delete
   is now archive. Archived entities keep their history, leave pickers and new
   sessions, and can be restored from each screen's *Archived* view; archiving

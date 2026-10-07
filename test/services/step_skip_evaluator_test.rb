@@ -97,4 +97,22 @@ class StepSkipEvaluatorTest < ActiveSupport::TestCase
     assert_not evaluator.should_skip?
     assert_nil evaluator.skip_reason
   end
+
+  test "if_outputs_exist reads a spec without a required key as required, the same as the validators" do
+    step = create(:step, workflow: @workflow, skip_policy: :if_outputs_exist,
+      output_asset_specs: [ { "name" => "report.md" } ])
+
+    assert_not StepSkipEvaluator.new(step, @workflow_run).should_skip?
+
+    create(:workflow_run_asset, workflow_run: @workflow_run, name: "report.md")
+    assert StepSkipEvaluator.new(step, @workflow_run).should_skip?
+  end
+
+  test "if_outputs_exist runs a step whose outputs are all optional" do
+    step = create(:step, workflow: @workflow, skip_policy: :if_outputs_exist,
+      output_asset_specs: [ { "name" => "report.md", "required" => false } ])
+    create(:workflow_run_asset, workflow_run: @workflow_run, name: "report.md")
+
+    assert_not StepSkipEvaluator.new(step, @workflow_run).should_skip?
+  end
 end

@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest';
+import { acceptCompletion, currentCompletions, setSelectedCompletion, startCompletion } from '@codemirror/autocomplete';
+import { EditorView } from '@codemirror/view';
 import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildAssetPicker } from 'test/factories/assetPicker';
 import { answerFetch } from 'test/fetchStub';
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { aggregatePayload } from './builderDraft';
 import BuilderPage from './BuilderPage';
@@ -75,12 +78,15 @@ const projectProps = (overrides: Record<string, unknown> = {}) => ({
   agentModels: [],
   readOnly: false,
   configuredAgents: [] as string[],
+  // The saved workflow's data-flow issues; with them the page does not ask for a check on load.
+  issues: [] as unknown[],
   ...overrides,
 });
 
 // --- Save: PUT …/aggregate, answered with the saved state the way the server echoes it ---
 
 const SAVE_ROUTE = 'PUT /api/v1/projects/7/workflows/3/aggregate';
+const CHECK_ROUTE = 'POST /api/v1/projects/7/workflows/3/aggregate/check';
 
 type Aggregate = ReturnType<typeof aggregatePayload>;
 interface SaveBody {
@@ -123,20 +129,29 @@ function savedState({ aggregate }: SaveBody, workflow: ReturnType<typeof makeWor
     steps,
     currentVersionNumber: 2,
     versionCreated: true,
+    issues: [],
   };
 }
 
-/** Answers the Save request, recording each body it was sent. */
-function answerSave(workflow = makeWorkflow()) {
+/**
+ * Answers the Save request, recording each body it was sent, and the data-flow check an edit to
+ * instructions, dependencies, assets or specs sends a moment later.
+ */
+function answerSave(workflow = makeWorkflow(), issues: unknown[] = []) {
   const bodies: SaveBody[] = [];
+  const checks: { aggregate: Aggregate }[] = [];
   const fetchSpy = answerFetch({
     [SAVE_ROUTE]: (init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as SaveBody;
       bodies.push(body);
       return savedState(body, workflow);
     },
+    [CHECK_ROUTE]: (init?: RequestInit) => {
+      checks.push(JSON.parse(String(init?.body)) as { aggregate: Aggregate });
+      return { issues };
+    },
   });
-  return { fetchSpy, bodies };
+  return { fetchSpy, bodies, checks };
 }
 
 /** Clicks Save and returns the aggregate it sent. */
@@ -145,6 +160,12 @@ async function save(bodies: SaveBody[]): Promise<Aggregate> {
   await waitFor(() => expect(bodies).toHaveLength(1));
   return bodies[0].aggregate;
 }
+
+// An edit to the data flow asks for a check a moment later; tests that answer other requests
+// replace this with answerSave() or their own answerFetch().
+beforeEach(() => {
+  answerFetch({ [CHECK_ROUTE]: { issues: [] } });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -189,13 +210,13 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('a session added from the ghost row is sent on Save as a new step and shows under its saved name', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
 
     // The "Add a session…" ghost row is a div, not a button — click it to start.
     await userEvent.click(screen.getByText('Add a session…'));
     await userEvent.type(screen.getByPlaceholderText('Session name…'), 'My session{Enter}');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -322,7 +343,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('removing a session through the modal drops it, and the dependencies on it, from the Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -338,7 +359,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remove Session' })).not.toBeInTheDocument());
     expect(screen.queryByText('Draft spec')).not.toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -365,7 +386,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('a config item attached to a step is sent in its configItemIds on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
@@ -378,7 +399,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     await userEvent.click(screen.getByRole('combobox', { name: /secrets and variables/i }));
     await userEvent.click(await screen.findByText('STRIPE_KEY (secret)'));
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -423,13 +444,13 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('an edited session name is sent on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
     await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -492,7 +513,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('the chosen agent is sent in the step agentId on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         agents: [{ id: 42, name: 'Builder Bot' }],
@@ -502,7 +523,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Agent' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Builder Bot' }));
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -541,7 +562,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(screen.getByRole('button', { name: '+ Add input' }));
 
     // A new editable path input (with the placeholder) appears.
-    expect(await screen.findByPlaceholderText('e.g. tasks/report.md')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('e.g. report.md')).toBeInTheDocument();
   });
 
   it('renders sub-steps nested under a session in the tree nav', () => {
@@ -628,11 +649,11 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('an edited workflow name is sent on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
     await userEvent.type(screen.getByRole('textbox', { name: 'Workflow name' }), '!');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -641,11 +662,11 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('an edited workflow description is sent on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
     await userEvent.type(screen.getByPlaceholderText('Add a description…'), 'Ship');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -654,7 +675,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
   it('toggling "Inherit all project resources" shows the helper text and is sent in the config on Save', async () => {
     const workflow = makeWorkflow({ inheritAllProjectResources: false });
-    const { fetchSpy, bodies } = answerSave(workflow);
+    const { bodies } = answerSave(workflow);
     renderAuthedPage(<BuilderPage />, { props: projectProps({ workflow }) });
 
     // Navigate to the Base Resources tab, then flip the inherit switch.
@@ -664,7 +685,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(
       await screen.findByText(/Tools, skills, MCP servers, and assets from the project level are included/),
     ).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -790,7 +811,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('toggling "Auto-run available" surfaces the "AUTO" badge and is sent on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, allowNonInteractive: false })],
@@ -801,7 +822,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(screen.getAllByRole('switch')[0]);
 
     expect(await screen.findByText('AUTO')).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -889,7 +910,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -905,7 +926,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // The sidebar card for session 1 now records the dependency.
     expect(await screen.findByText(/↳ AFTER\s*Implement/)).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -913,14 +934,14 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('a sub-step added via the tree nav ghost row is sent as a new sub-step on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
     });
 
     await userEvent.click(screen.getByText('Add a step…'));
     await userEvent.type(screen.getByPlaceholderText('Step name…'), 'New step{Enter}');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -966,7 +987,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('adding an output asset spec reveals the Match pattern input and is sent in outputAssetSpecs on Save', async () => {
-    const { fetchSpy, bodies } = answerSave();
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
@@ -976,8 +997,8 @@ describe('Projects/Workflows/BuilderPage', () => {
     // Output specs support a name pattern; the pattern input only renders there.
     expect(screen.getByPlaceholderText('e.g. report')).toBeInTheDocument();
 
-    await userEvent.type(screen.getByPlaceholderText('e.g. tasks/report.md'), 'out.md');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByPlaceholderText('e.g. report.md or reports/*.md'), 'out.md');
+    expect(bodies).toHaveLength(0);
 
     const aggregate = await save(bodies);
 
@@ -1042,5 +1063,186 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
 
     await waitFor(() => expect(router.visit).toHaveBeenCalledWith(window.location.pathname, { preserveState: false }));
+  });
+});
+
+const instructionsEditor = () => {
+  const view = EditorView.findFromDOM(screen.getByRole('textbox', { name: 'Session instructions' }));
+  if (!view) throw new Error('the session instructions editor is not mounted');
+  return view;
+};
+
+/** Types "@<query>" at the end of the instructions and picks the row labelled `label`. */
+async function pickReference(label: string, query = '') {
+  const view = instructionsEditor();
+  const at = view.state.doc.length;
+  const text = `@${query}`;
+  act(() => {
+    view.dispatch({
+      changes: { from: at, insert: text },
+      selection: { anchor: at + text.length },
+      userEvent: 'input.type',
+    });
+    startCompletion(view);
+  });
+  await waitFor(() => expect(currentCompletions(view.state).map((c) => c.label)).toContain(label));
+  const index = currentCompletions(view.state).findIndex((c) => c.label === label);
+  act(() => view.dispatch({ effects: setSelectedCompletion(index) }));
+  // The list ignores Enter for a moment after it opens, so fast typing does not pick a row.
+  await waitFor(() => {
+    let accepted = false;
+    act(() => {
+      accepted = acceptCompletion(view);
+    });
+    expect(accepted).toBe(true);
+  });
+}
+
+describe('Projects/Workflows/BuilderPage @ references and data-flow issues', () => {
+  it('picking a project asset writes its token and attaches the asset to the session', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        assets: [buildAssetPicker({ id: 31, fileName: 'brand-guide.pdf', name: 'brand-guide.pdf' })],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Read ' })],
+      }),
+    });
+
+    await pickReference('brand-guide.pdf', 'brand');
+
+    expect(
+      within(screen.getByRole('textbox', { name: 'Session instructions' })).getByText('brand-guide.pdf'),
+    ).toBeInTheDocument();
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[0]).toMatchObject({ instructions: 'Read {{asset:31}} ', assetIds: [31] });
+  });
+
+  it("picking another session's output makes this session run after it", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Collect',
+            position: 1,
+            outputAssetSpecs: [{ name: 'summary.md', assetType: 'file', required: true, namePattern: null }],
+          }),
+          makeStep({ id: 2, name: 'Report', position: 2 }),
+        ],
+      }),
+    });
+    await userEvent.click(screen.getByText('Report'));
+
+    await pickReference('summary.md', 'sum');
+
+    expect(await screen.findByText('Report now runs after Collect')).toBeInTheDocument();
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[1]).toMatchObject({ instructions: '{{output:1:summary.md}} ', dependsOnStepIds: ['1'] });
+  });
+
+  it('sends the unsaved draft to the check after a data-flow edit and shows what it finds', async () => {
+    const warning = {
+      severity: 'warning',
+      code: 'step_not_upstream',
+      stepKey: '1',
+      field: 'instructions',
+      message: 'Draft spec mentions Implement, which does not run before it.',
+      fix: { kind: 'add_dependency', stepKey: '2' },
+    };
+    const { checks } = answerSave(makeWorkflow(), [warning]);
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    await pickReference('Implement');
+
+    // A slow run can send a check for the bare `@` too; the one that counts carries the pick.
+    await waitFor(() => expect(checks.map((check) => check.aggregate.steps[0].instructions)).toContain('{{step:2}} '), {
+      timeout: 3000,
+    });
+    const problems = await screen.findByRole('list', { name: 'Problems in the instructions' });
+    expect(within(problems).getByText(warning.message)).toBeInTheDocument();
+  });
+
+  it("shows the saved workflow's issues with their fix, and counts errors in the tree", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        mcpServers: [{ id: 7, name: 'GitHub', transport: 'http', scope: 'project' }],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Open issues in {{mcp:7}}' })],
+        issues: [
+          {
+            severity: 'error',
+            code: 'ref_not_attached',
+            stepKey: '1',
+            field: 'instructions',
+            message: 'Draft spec names GitHub, which this session does not receive.',
+            fix: { kind: 'attach_mcp_server', mcpServerId: 7 },
+          },
+        ],
+      }),
+    });
+
+    const problems = screen.getByRole('list', { name: 'Problems in the instructions' });
+    expect(
+      within(problems).getByText('Draft spec names GitHub, which this session does not receive.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('1 problem')).toBeInTheDocument();
+
+    await userEvent.click(within(problems).getByRole('button', { name: 'Attach GitHub' }));
+
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[0].mcpServerIds).toEqual([7]);
+  });
+
+  it('a renamed output keeps the references to it, and loses a pasted container prefix', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Collect',
+            position: 1,
+            outputAssetSpecs: [{ name: 'summary.md', assetType: 'file', required: true, namePattern: null }],
+          }),
+          makeStep({
+            id: 2,
+            name: 'Report',
+            position: 2,
+            dependsOnStepIds: [1],
+            instructions: 'Read {{output:1:summary.md}}',
+          }),
+        ],
+      }),
+    });
+
+    const name = screen.getByRole('textbox', { name: 'Output 1 name' });
+    await userEvent.clear(name);
+    await userEvent.type(name, '/workspace/outputs/final.md');
+    await userEvent.tab();
+
+    expect(name).toHaveValue('final.md');
+    const aggregate = await save(bodies);
+    expect(aggregate.steps[0].outputAssetSpecs[0].name).toBe('final.md');
+    expect(aggregate.steps[1].instructions).toBe('Read {{output:1:final.md}}');
+  });
+
+  it('shows a viewer the instructions with their pills, read-only and without the picker', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        readOnly: true,
+        projectPermissions: { canExecute: false, canManage: false, canManageCompany: false },
+        assets: [buildAssetPicker({ id: 31, fileName: 'brand-guide.pdf', name: 'brand-guide.pdf' })],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Read {{asset:31}}' })],
+      }),
+    });
+
+    expect(
+      screen.getByText('You have view access to this project, so its workflows are read-only.'),
+    ).toBeInTheDocument();
+    const editor = screen.getByRole('textbox', { name: 'Session instructions' });
+    expect(editor).toHaveAttribute('contenteditable', 'false');
+    expect(within(editor).getByText('brand-guide.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   });
 });

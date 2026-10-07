@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Policy (Api::V1::Projects::Workflows::AggregatesPolicy): update? => project_writable?
+# Policy (Api::V1::Projects::Workflows::AggregatesPolicy): update?, check? => project_writable?
 class Api::V1::Projects::Workflows::AggregatesAuthorizationTest < ActionDispatch::IntegrationTest
   include AuthorizationMatrix
 
@@ -18,6 +18,13 @@ class Api::V1::Projects::Workflows::AggregatesAuthorizationTest < ActionDispatch
       put api_v1_project_workflow_aggregate_path(@project, @workflow),
           params: { base_version: @workflow.reload.current_version_number, aggregate: { name: @workflow.name, steps: [] } },
           as: :json
+    end
+  end
+
+  test "check is a project write" do
+    assert_project_write(transport: :api) do
+      post check_api_v1_project_workflow_aggregate_path(@project, @workflow),
+           params: { aggregate: { name: @workflow.name, steps: [] } }, as: :json
     end
   end
 end

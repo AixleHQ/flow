@@ -136,13 +136,17 @@ module ContainerStrategies
 
       injected_names = []
 
-      dep_ids = step.depends_on_step_ids
-      if dep_ids.present?
+      upstream_ids = step.upstream_step_ids
+      if upstream_ids.present?
+        nearness = upstream_ids.each_with_index.to_h
         prior_assets = workflow_run.workflow_run_assets
           .joins("JOIN step_runs ON step_runs.id = workflow_run_assets.produced_by_step_run_id")
-          .where(step_runs: { step_id: dep_ids })
+          .where(step_runs: { step_id: upstream_ids })
+          .select("workflow_run_assets.*, step_runs.step_id AS producer_step_id")
 
-        prior_assets.each do |wra|
+        # Farthest first: when two earlier steps wrote the same name, the copy
+        # from the nearest one lands last and is the one the step reads.
+        prior_assets.sort_by { |wra| [ -nearness.fetch(wra.producer_step_id), wra.id ] }.each do |wra|
           next unless wra.file
           next unless download_to_container(container, wra.file.url, wra.name)
 
@@ -196,9 +200,11 @@ module ContainerStrategies
     end
 
     # Context from step_run (board task, run params) is injected by SessionContextConstructor,
-    # not here. This method only returns static step instructions.
-    def build_workflow_prompt(step, _step_run)
-      step&.instructions
+    # not here. This method only returns the step's instructions, references rendered.
+    def build_workflow_prompt(step, step_run)
+      return nil unless step
+
+      InstructionReferences::Renderer.new(step: step, project: step_run&.workflow_run&.project).render(step.instructions)
     end
 
     # The step's own instructions, not the session's initial prompt.

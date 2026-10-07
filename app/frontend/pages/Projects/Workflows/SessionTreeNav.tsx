@@ -176,6 +176,7 @@ interface SortableSessionRowProps {
   onAddStep: (sessionId: number, stepName: string) => void;
   onReorderSteps: (sessionId: number, oldIndex: number, newIndex: number) => void;
   readOnly: boolean;
+  problems: number;
 }
 
 function SortableSessionRow({
@@ -190,6 +191,7 @@ function SortableSessionRow({
   onAddStep,
   onReorderSteps,
   readOnly,
+  problems,
 }: SortableSessionRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: step.id,
@@ -259,6 +261,13 @@ function SortableSessionRow({
           </div>
           <SessionTags step={step} allSteps={allSteps} />
         </div>
+        {problems > 0 && (
+          <Tooltip label="Data-flow errors — open the session to see them" withArrow position="right">
+            <span className={classes.issueBadge} aria-label={`${problems} ${problems === 1 ? 'problem' : 'problems'}`}>
+              {problems}
+            </span>
+          </Tooltip>
+        )}
         {!readOnly && (
           <button
             className={classes.rowTrash}
@@ -435,6 +444,8 @@ interface SessionTreeNavProps {
   onAddStep: (sessionId: number, stepName: string) => void;
   onReorderSessions: (oldIndex: number, newIndex: number) => void;
   onReorderSteps: (sessionId: number, oldIndex: number, newIndex: number) => void;
+  /** Data-flow errors per session id. */
+  problemCounts?: Record<number, number>;
 }
 
 export function SessionTreeNav({
@@ -449,6 +460,7 @@ export function SessionTreeNav({
   onAddStep,
   onReorderSessions,
   onReorderSteps,
+  problemCounts = {},
 }: SessionTreeNavProps) {
   const sortedSteps = [...steps].sort((a, b) => a.position - b.position);
 
@@ -485,6 +497,7 @@ export function SessionTreeNav({
               onAddStep={onAddStep}
               onReorderSteps={onReorderSteps}
               readOnly={readOnly}
+              problems={problemCounts[step.id] ?? 0}
             />
           ))}
         </SortableContext>

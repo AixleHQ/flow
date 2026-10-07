@@ -138,7 +138,8 @@ module Templates
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
       steps.map do |step|
         where = "workflow #{workflow.name} step #{step.name}"
-        entry = { "key" => step_keys[step.id], "name" => step.name, "instructions" => step.instructions }
+        entry = { "key" => step_keys[step.id], "name" => step.name,
+                  "instructions" => export_instructions(step.instructions, step_keys, where) }
         entry["agent"] = agent_key(step.agent_id, where) if step.agent_id
         entry["tools"] = step.tool_ids.filter_map { |id| tool_key(id, where) }
         entry["skills"] = step.skill_ids.filter_map { |id| skill_key(id, where) }
@@ -156,6 +157,22 @@ module Templates
           { "name" => sub.name, "instructions" => sub.instructions, "required" => sub.required }.compact
         end
         entry.reject { |_, v| v.nil? || v == [] || v == "" }
+      end
+    end
+
+    # References name rows by id; a package names them by key, which the
+    # installer maps to the ids it creates. A reference with no key (a company
+    # asset, which is not exported) becomes its name in plain text.
+    def export_instructions(text, step_keys, where)
+      InstructionReferences.rewrite(text) do |ref|
+        next nil unless ref.valid?
+
+        case ref.type
+        when "step" then (key = step_keys[ref.id.to_i]) ? "{{step:#{key}}}" : "a step outside this workflow"
+        when "output" then (key = step_keys[ref.id.to_i]) ? "{{output:#{key}:#{ref.name}}}" : ref.name
+        when "asset" then (key = asset_key(ref.id, where)) ? "{{asset:#{key}}}" : Asset.find_by(id: ref.id)&.name.to_s
+        when "mcp" then (key = server_key(ref.id, where)) ? "{{mcp:#{key}}}" : MCPServer.find_by(id: ref.id)&.name.to_s
+        end
       end
     end
 
