@@ -241,6 +241,28 @@ module ContainerRuntime
       :unknown
     end
 
+    def container_termination(id)
+      container = resolve_container(id)
+      return nil if container.nil?
+
+      info = container.json
+      state = info["State"] || {}
+      return nil unless %w[exited dead].include?(state["Status"].to_s)
+
+      memory = info.dig("HostConfig", "Memory").to_i
+      {
+        reason: ("OOMKilled" if state["OOMKilled"]),
+        exit_code: state["ExitCode"]&.to_i,
+        message: state["Error"].presence,
+        memory_limit: (ActiveSupport::NumberHelper.number_to_human_size(memory) if memory.positive?)
+      }.compact
+    rescue Docker::Error::NotFoundError
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] container_termination failed for #{id}: #{e.message}")
+      nil
+    end
+
     # -- Garbage collection ---------------------------------------------------
 
     # Docker has no Service/IngressRoute equivalent — Traefik reads its routes

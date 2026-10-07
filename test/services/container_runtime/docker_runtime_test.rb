@@ -143,6 +143,23 @@ module ContainerRuntime
       assert_equal :unknown, @runtime.container_status("cid")
     end
 
+    test "container_termination reports an OOM kill with the container's memory limit" do
+      container_mock = mock("container")
+      container_mock.stubs(:json).returns(
+        "State" => { "Running" => false, "Status" => "exited", "OOMKilled" => true, "ExitCode" => 137, "Error" => "" },
+        "HostConfig" => { "Memory" => 4.gigabytes }
+      )
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal({ reason: "OOMKilled", exit_code: 137, memory_limit: "4 GB" }, @runtime.container_termination("cid"))
+    end
+
+    test "container_termination has nothing to say about a container that is still running" do
+      stub_container_state("Running" => true, "Status" => "running")
+
+      assert_nil @runtime.container_termination("cid")
+    end
+
     test "container_identifier returns nil for blank" do
       assert_nil @runtime.container_identifier(nil)
       assert_nil @runtime.container_identifier("")

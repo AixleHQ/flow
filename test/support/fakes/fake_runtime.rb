@@ -51,6 +51,8 @@ module ContainerRuntime
       @terminal_log_mtime = nil
       @default_container_status = :running
       @container_statuses = {}
+      @container_terminations = {}
+      @container_stdout = ""
       @session_resources = []
       @deleted_session_resources = []
       @undeletable_resource_names = []
@@ -67,6 +69,19 @@ module ContainerRuntime
       else
         @container_statuses[container_id.to_s] = status
       end
+      self
+    end
+
+    # What #container_termination answers for one container id, or for every
+    # container when `container_id:` is omitted. Defaults to nil — no record.
+    def set_container_termination(details, container_id: nil)
+      @container_terminations[container_id&.to_s] = details
+      self
+    end
+
+    # What the container wrote to its own stdout, which #container_logs hands back.
+    def set_container_stdout(text)
+      @container_stdout = text
       self
     end
 
@@ -296,12 +311,17 @@ module ContainerRuntime
       status
     end
 
+    def container_termination(id)
+      key = id.respond_to?(:id) ? id.id.to_s : id.to_s
+      @container_terminations.fetch(key) { @container_terminations[nil] }
+    end
+
     def wait_container(_id, _timeout = nil)
       { "StatusCode" => 0 }
     end
 
     def container_logs(_id, stdout: true, stderr: true)
-      { stdout: "", stderr: "" }
+      { stdout: stdout ? @container_stdout : "", stderr: "" }
     end
 
     # -- Garbage collection ---------------------------------------------------

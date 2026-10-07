@@ -327,6 +327,28 @@ module ContainerRuntime
       :unknown
     end
 
+    def container_termination(id)
+      handle = resolve_handle(id)
+      pod = core_client.get_pod(handle.pod_name, handle.namespace)
+      return nil if %w[Running Pending].include?(pod&.status&.phase.to_s)
+
+      status = main_container_status(pod, handle)
+      terminated = status&.state&.terminated || status&.lastState&.terminated
+      {
+        # An eviction is decided for the pod: its container only reports that it was
+        # stopped, and the reason and the kubelet's explanation sit on the pod.
+        reason: pod.status.reason.presence || terminated&.reason.presence,
+        exit_code: terminated&.exitCode&.to_i,
+        message: pod.status.message.presence || terminated&.message.presence,
+        memory_limit: main_container_spec(pod, handle)&.resources&.limits&.memory
+      }.compact
+    rescue Kubeclient::ResourceNotFoundError
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] container_termination failed for #{id}: #{e.message}")
+      nil
+    end
+
     # -- Garbage collection ---------------------------------------------------
 
     # Every session-scoped object in the cluster, in deletion order.
@@ -1202,6 +1224,12 @@ module ContainerRuntime
       statuses = Array(pod&.status&.containerStatuses)
       name = handle.container_name || DEFAULT_CONTAINER_NAME
       statuses.find { |status| status.name == name } || statuses.first
+    end
+
+    def main_container_spec(pod, handle)
+      containers = Array(pod&.spec&.containers)
+      name = handle.container_name || DEFAULT_CONTAINER_NAME
+      containers.find { |container| container.name == name } || containers.first
     end
 
     def terminated_exit_code(pod, handle)

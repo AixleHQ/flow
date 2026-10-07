@@ -571,6 +571,47 @@ module ContainerRuntime
       assert_equal :unknown, @runtime.container_status(pod_handle)
     end
 
+    # -- container_termination: why did it stop? --
+
+    test "container_termination reports an OOM kill with the container's memory limit" do
+      stub_pod(Kubeclient::Resource.new(
+        spec: { containers: [ { name: "main", resources: { limits: { memory: "4Gi", cpu: "1" } } } ] },
+        status: { phase: "Failed", containerStatuses: [
+          { name: "main", state: { terminated: { reason: "OOMKilled", exitCode: 137 } } }
+        ] }
+      ))
+
+      assert_equal({ reason: "OOMKilled", exit_code: 137, memory_limit: "4Gi" },
+                   @runtime.container_termination(pod_handle))
+    end
+
+    test "container_termination takes an eviction's reason and explanation from the pod" do
+      stub_pod(Kubeclient::Resource.new(
+        status: { phase: "Failed", reason: "Evicted",
+                  message: "The node was low on resource: memory.",
+                  containerStatuses: [
+                    { name: "main", state: { terminated: { reason: "ContainerStatusUnknown", exitCode: 137 } } }
+                  ] }
+      ))
+
+      assert_equal({ reason: "Evicted", exit_code: 137, message: "The node was low on resource: memory." },
+                   @runtime.container_termination(pod_handle))
+    end
+
+    test "container_termination has nothing to say about a pod that is still running" do
+      stub_pod_phase("Running")
+
+      assert_nil @runtime.container_termination(pod_handle)
+    end
+
+    test "container_termination has nothing to say about a pod the API no longer knows" do
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(Kubeclient::ResourceNotFoundError.new(404, "pods 'my-pod' not found", nil))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_nil @runtime.container_termination(pod_handle)
+    end
+
     test "stop_container deletes pod" do
       handle = OpenStruct.new(pod_name: "my-pod", namespace: "default")
       core_mock = mock("core_client")

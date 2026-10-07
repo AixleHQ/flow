@@ -304,6 +304,7 @@ module ContainerStrategies
       # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
       # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
       content = read_file_from_container(container, "/tmp/terminal_output.log")
+      content = container_stdout(container) if content.nil?
       return 0 if content.blank?
 
       # Anything the agent echoed — a value it read through get_config_item, most
@@ -325,6 +326,17 @@ module ContainerStrategies
     rescue StandardError => e
       Rails.logger.warn("[AgentSession] Failed to collect terminal output: #{e.message}")
       0
+    end
+
+    # A container that was killed (out of memory, evicted) cannot be exec'd into, so
+    # its file is out of reach — but the same tee writes the pane to the container's
+    # stdout, which the runtime keeps until the pod or container is removed, and
+    # cleanup only removes it after this collection.
+    def container_stdout(container)
+      runtime.container_logs(container)[:stdout].presence
+    rescue StandardError => e
+      Rails.logger.warn("[AgentSession] Failed to read container stdout: #{e.message}")
+      nil
     end
 
     def collect_logs(container, session, agent_service)

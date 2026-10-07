@@ -813,6 +813,46 @@ module ContainerStrategies
       end
     end
 
+    # A killed container (out of memory, evicted) cannot be exec'd into, so the file read
+    # fails — but the pane was also tee'd to the container's stdout, which outlives it.
+    test "collect_terminal_output keeps a killed container's terminal from its stdout" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/tmp/terminal_output.log" => "unreachable"
+      })
+      fake.fail_read("/tmp/terminal_output.log")
+      fake.set_container_stdout("\e[32mPASS\e[0m src/app.spec.ts\n")
+      ContainerRuntime.stubs(:build).returns(fake)
+      strategy = build_strategy
+
+      assert_difference "SessionLog.count", 1 do
+        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session)
+      end
+
+      log = @session.session_logs.find_by(name: "terminal_output.log")
+      assert_equal "\e[32mPASS\e[0m src/app.spec.ts\n", log.file.read
+    end
+
+    test "collect_terminal_output prefers the file over the container's stdout" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/tmp/terminal_output.log" => "pane"
+      })
+      fake.set_container_stdout("entrypoint banner\npane")
+      ContainerRuntime.stubs(:build).returns(fake)
+
+      build_strategy.send(:collect_terminal_output, "abc123", @session)
+
+      assert_equal "pane", @session.session_logs.find_by(name: "terminal_output.log").file.read
+    end
+
+    test "collect_terminal_output stores nothing when neither the file nor stdout has output" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
+      ContainerRuntime.stubs(:build).returns(fake)
+
+      assert_no_difference "SessionLog.count" do
+        assert_equal 0, build_strategy.send(:collect_terminal_output, "abc123", @session)
+      end
+    end
+
     # == persist_refreshed_credentials (#2: capture tokens refreshed mid-session) ==
 
     test "persist_refreshed_credentials updates existing credential when token changed" do

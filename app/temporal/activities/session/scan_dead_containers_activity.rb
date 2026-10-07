@@ -101,9 +101,33 @@ module Activities
         return false if first_seen > CONFIRMATION_DELAY.ago
         return false unless ACTIVE_STATES.include?(session.reload.state)
 
-        SessionService.fail_session(session: session, error_message: MESSAGES.fetch(status))
+        SessionService.fail_session(session: session, error_message: failure_message(session, status))
         log(:info, "Failed session #{session.id}: container #{status}")
         true
+      end
+
+      def failure_message(session, status)
+        return MESSAGES.fetch(status) unless status == :terminated
+
+        describe_termination(runtime.container_termination(session.container_id)) || MESSAGES.fetch(status)
+      end
+
+      def describe_termination(termination)
+        return nil if termination.blank?
+
+        reason, exit_code, message, limit = termination.values_at(:reason, :exit_code, :message, :memory_limit)
+        case reason
+        when "OOMKilled"
+          "Agent container ran out of memory and was killed (OOMKilled#{", memory limit #{limit}" if limit}). " \
+            "Something it ran (a test suite, a build, a database) needed more memory than the container is allowed."
+        when "Evicted"
+          [ "Agent container was evicted from its node.", message ].compact.join(" ")
+        else
+          return nil if exit_code.nil? && reason.nil?
+
+          detail = [ ("exit code #{exit_code}" unless exit_code.nil?), reason ].compact.join(", ")
+          [ "Agent container stopped before the session finished (#{detail}).", message ].compact.join(" ")
+        end
       end
 
       def marker_at(session)
