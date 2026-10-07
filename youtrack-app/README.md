@@ -12,7 +12,9 @@ Requires YouTrack 2026.2 or later.
 
 - **Connect.** Creates (or reuses) the password-less service user `aixle-flow` ("Aixle Flow")
   through Hub, adds it to the chosen projects' teams, attaches the app to them, mints the user's
-  permanent token, and hands the token to Aixle. Aixle never sees an admin credential.
+  permanent token, and hands the token to Aixle. Aixle never sees an admin credential. Connecting
+  again revokes the token it replaces: a connection's token is named after its Aixle company and
+  project, so an earlier token of that name is the one Aixle has just stopped using.
 - **Events.** An on-change rule posts issue created, State, Assignee and comment events to the
   project's events URL with the project's secret.
 

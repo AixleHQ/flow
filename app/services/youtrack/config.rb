@@ -6,7 +6,7 @@ module Youtrack
     # admin page that approves a pairing Aixle started.
     APP_NAME = "aixle-flow"
     CONNECT_PAGE = "connect"
-    MARKETPLACE_URL = "https://plugins.jetbrains.com/search?search=Aixle%20Flow"
+    MARKETPLACE_URL = "https://plugins.jetbrains.com/plugin/34863-aixle-flow"
 
     module_function
 

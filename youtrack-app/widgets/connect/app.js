@@ -178,10 +178,14 @@ function readPairing(ref) {
   return aixle('GET', '/integrations/youtrack/pairings/' + encodeURIComponent(ref.id), ref.secret);
 }
 
+// A page Aixle Flow points to. It may be on another host than the API the app
+// calls (a staging deployment serves the API on its public webhook host), and
+// it comes from the Aixle Flow the admin configured, so https is enough.
 function flowLink(value) {
   try {
     const url = new URL(value);
-    return url.origin === new URL(state.flowUrl).origin ? url.href : null;
+    const local = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+    return url.protocol === 'https:' || local ? url.href : null;
   } catch (e) {
     return null;
   }
@@ -327,8 +331,9 @@ async function startPairing() {
   state.expiresAt = pairing.expires_at ? new Date(pairing.expires_at) : null;
   const approveUrl = flowLink(pairing.approve_url);
   if (popup && approveUrl) {
+    // Only `location` may be set on a window of another origin; the popup was
+    // opened from this sandboxed frame, so touching `opener` would throw.
     try {
-      popup.opener = null;
       popup.location.href = approveUrl;
     } catch (e) {
       popup.close();
@@ -341,10 +346,7 @@ async function startPairing() {
 }
 
 function renderCode(code, approveUrl) {
-  const open = () => {
-    const popup = window.open(approveUrl, 'aixle-flow-connect', 'popup,width=560,height=760');
-    if (popup) popup.opener = null;
-  };
+  const open = () => window.open(approveUrl, 'aixle-flow-connect', 'popup,width=560,height=760,noopener');
   show(
     ...header(),
     h('section', { class: 'card' },
@@ -416,15 +418,23 @@ function handlePairing(pairing) {
 function renderConsent(pairing, message) {
   stopPolling();
   const ref = state.ref;
-  const boxes = state.projects.map((project) => h('input', { type: 'checkbox', value: project.id }));
+  // The chosen projects are the whole set the connection covers, so the ones
+  // already connected start ticked: unticking one disconnects it.
+  const boxes = state.projects.map((project) => h('input', { type: 'checkbox', value: project.id, checked: state.connected.has(project.id) }));
   const approve = h('button', { class: 'primary', type: 'button', disabled: true }, 'Approve');
   const selected = () => boxes.filter((box) => box.checked).map((box) => box.value);
-  const sync = () => { approve.disabled = selected().length === 0; };
-  boxes.forEach((box) => box.addEventListener('change', sync));
   const all = h('input', {
     type: 'checkbox',
     onchange: (event) => { boxes.forEach((box) => { box.checked = event.target.checked; }); sync(); }
   });
+  const sync = () => {
+    const count = selected().length;
+    approve.disabled = count === 0;
+    all.checked = count > 0 && count === boxes.length;
+    all.indeterminate = count > 0 && count < boxes.length;
+  };
+  boxes.forEach((box) => box.addEventListener('change', sync));
+  sync();
   approve.addEventListener('click', () => stageSetup(pairing, ref, selected()));
 
   show(
