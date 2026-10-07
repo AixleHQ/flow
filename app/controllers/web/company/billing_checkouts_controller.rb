@@ -4,6 +4,8 @@
 # comes back as a webhook — this controller only decides who may begin and makes
 # the customer the session hangs off.
 class Web::Company::BillingCheckoutsController < Web::Company::ApplicationController
+  include HostedBillingOnly
+
   def create
     return refuse("Payment is not set up on this installation") unless client.configured?
 

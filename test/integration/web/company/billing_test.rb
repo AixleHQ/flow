@@ -85,6 +85,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     get company_settings_billing_path
 
     assert_redirected_to company_settings_path
+    assert_match(/not available/, flash[:alert])
   end
 
   private

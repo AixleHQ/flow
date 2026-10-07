@@ -117,4 +117,17 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     assert_nil @company.reload.stripe_customer_id
     assert_match(/could not reach/i, flash[:alert])
   end
+
+  # A self-hosted operator pays nobody: even with Stripe keys present, no
+  # checkout is opened outside the hosted product.
+  test "outside the hosted product no checkout starts" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
+
+    post company_billing_checkout_path
+
+    assert_redirected_to company_settings_path
+    assert_match(/not available/, flash[:alert])
+    assert_empty @client.checkout_sessions
+    assert_empty @client.customers
+  end
 end

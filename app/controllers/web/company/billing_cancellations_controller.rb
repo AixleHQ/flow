@@ -7,6 +7,8 @@
 # reports the subscription deleted, and that webhook is what stops it — so the
 # minutes up to the end date are metered and invoiced like any others.
 class Web::Company::BillingCancellationsController < Web::Company::ApplicationController
+  include HostedBillingOnly
+
   UNREACHABLE = "We could not reach our payment provider. Nothing has changed — try again in a moment."
 
   def create
