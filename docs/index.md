@@ -23,6 +23,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[architecture/container-runtime.md](./architecture/container-runtime.md)** — Pluggable Docker/K8s runtime + ContainerService refactoring (historical)
 - **[architecture/temporal-error-handling.md](./architecture/temporal-error-handling.md)** — Temporal error classification and retry strategy
 - **[architecture/temporal-versioning.md](./architecture/temporal-versioning.md)** — Changing workflow code safely: what needs `patched`, the patches in use, the recorded-history replay test, workflow task failure reporting
+- **[architecture/agent-runtime-registry.md](./architecture/agent-runtime-registry.md)** — `config/agent_runtimes.json`: the one list of agent runtimes and their CLI pins, read by CI's image matrix and canary, the local build, the app's runtime list and image resolution, the frontend, and the deployment repository; how to raise a pin and add a runtime
 
 ## System Design
 

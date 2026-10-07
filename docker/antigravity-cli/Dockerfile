@@ -5,22 +5,25 @@ FROM ${BASE_IMAGE}
 RUN useradd -m -d /home/antigravity -s /bin/bash -G ${AGENT_BROWSERS_GROUP} antigravity
 
 ARG TARGETARCH
-ARG ANTIGRAVITY_CLI_VERSION=1.1.27
+# The checksums are per release: raising the pin in config/agent_runtimes.json without
+# adding the new release's pair here fails the build at the case below.
+ARG CLI_VERSION
 RUN set -eux; \
+    : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}"; \
     arch="${TARGETARCH:-amd64}"; [ "$arch" = "amd64" ] && arch=x64; \
-    case "$arch" in \
-      x64) sha256="f874d4f6b8a73c2df660f580f25fb656fcb6e64adbfd746e6692e837fd9a20be" ;; \
-      arm64) sha256="97fc9fe5a6067406cd02cbe4ae6e362c9623a24d33bec486911246c17ceb6a94" ;; \
-      *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
+    case "${CLI_VERSION}/$arch" in \
+      1.1.27/x64) sha256="f874d4f6b8a73c2df660f580f25fb656fcb6e64adbfd746e6692e837fd9a20be" ;; \
+      1.1.27/arm64) sha256="97fc9fe5a6067406cd02cbe4ae6e362c9623a24d33bec486911246c17ceb6a94" ;; \
+      *) echo "No checksum for agy ${CLI_VERSION} on $arch: add it to docker/antigravity-cli/Dockerfile" >&2; exit 1 ;; \
     esac; \
     archive=/tmp/agy.tar.gz; \
-    curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/download/${ANTIGRAVITY_CLI_VERSION}/agy_cli_linux_${arch}.tar.gz" -o "$archive"; \
+    curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/download/${CLI_VERSION}/agy_cli_linux_${arch}.tar.gz" -o "$archive"; \
     echo "$sha256  $archive" | sha256sum -c -; \
     tar -xzf "$archive" -C /usr/local/bin; \
     rm "$archive"; \
     mv /usr/local/bin/antigravity /usr/local/bin/agy; \
     chmod +x /usr/local/bin/agy; \
-    test "$(su antigravity -c 'agy --version')" = "$ANTIGRAVITY_CLI_VERSION"
+    test "$(su antigravity -c 'agy --version')" = "$CLI_VERSION"
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
 # `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor

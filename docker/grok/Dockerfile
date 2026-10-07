@@ -34,12 +34,13 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 #
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
-# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
-# install kept shipping whichever release first filled the cache. The weekly canary
-# builds the newest release instead.
-ARG GROK_VERSION=1.0.41
+# Pinned (config/agent_runtimes.json): the registry build cache keys this layer on its
+# instruction and build args, so an unpinned install kept shipping whichever release
+# first filled the cache. The weekly canary builds the newest release instead.
+ARG CLI_VERSION
 RUN set -eux; \
-    npm install -g "@xai-official/grok@${GROK_VERSION}"; \
+    : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}"; \
+    npm install -g "@xai-official/grok@${CLI_VERSION}"; \
     ls /root/.grok/bin/grok-* >/dev/null; \
     su - grok -c "grok --version"; \
     npm cache clean --force

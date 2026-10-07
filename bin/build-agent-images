@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Builds the agent base image, then every runtime in config/agent_runtimes.json in
+# parallel, passing the registry's CLI pin. Runs on the host: needs docker and jq.
+# Tags the images AGENT_IMAGE_TAG (default `latest`), the tag the app launches.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+command -v jq >/dev/null || { echo "ERROR: jq is required (brew install jq / apt-get install jq)" >&2; exit 1; }
+
+tag="${AGENT_IMAGE_TAG:-latest}"
+docker build -t "aixle/agent-base-core:${tag}" -f docker/base/Dockerfile docker/base
+
+pids=()
+while IFS=$'\t' read -r image dockerfile version; do
+  args=(-t "aixle/${image}:${tag}" -f "$dockerfile" --build-arg "BASE_IMAGE=aixle/agent-base-core:${tag}")
+  [ -n "$version" ] && args+=(--build-arg "CLI_VERSION=${version}")
+  docker build "${args[@]}" docker/ &
+  pids+=("$!")
+done < <(jq -r '.runtimes[] | [.image, .dockerfile, (.cli_version // "")] | @tsv' config/agent_runtimes.json)
+
+# A bare `wait` returns 0 even when a child build failed, which silently shipped a broken
+# image (2026-08-05: a network blip killed one agent build and the target stayed green).
+fail=0
+for pid in "${pids[@]}"; do wait "$pid" || fail=1; done
+if [ "$fail" -ne 0 ]; then echo "ERROR: at least one agent image failed to build" >&2; exit 1; fi

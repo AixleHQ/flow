@@ -23,15 +23,17 @@ WORKDIR /home/claude
 # Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
 # curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
 # image with no Claude CLI at all and the build reported success (seen 2026-08-05).
-# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
-# install kept shipping whichever release first filled the cache. The installer takes
-# the release as its argument; the weekly canary builds the newest one instead.
-ARG CLAUDE_CODE_VERSION=2.1.281
-RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
-    && bash /tmp/claude-install.sh "${CLAUDE_CODE_VERSION}" \
+# Pinned (config/agent_runtimes.json): the registry build cache keys this layer on its
+# instruction and build args, so an unpinned install kept shipping whichever release
+# first filled the cache. The installer takes the release as its argument; the weekly
+# canary builds the newest one instead.
+ARG CLI_VERSION
+RUN : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}" \
+    && curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh "${CLI_VERSION}" \
     && rm -f /tmp/claude-install.sh \
     && test -x /home/claude/.local/bin/claude \
-    && /home/claude/.local/bin/claude --version | grep -q "^${CLAUDE_CODE_VERSION} "
+    && /home/claude/.local/bin/claude --version | grep -q "^${CLI_VERSION} "
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 

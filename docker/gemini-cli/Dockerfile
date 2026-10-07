@@ -16,8 +16,9 @@ RUN useradd -m -d /home/gemini -s /bin/bash -G ${AGENT_BROWSERS_GROUP} gemini
 
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
-ARG GEMINI_CLI_VERSION=0.57.0
-RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
+ARG CLI_VERSION
+RUN : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}" \
+    && npm install -g "@google/gemini-cli@${CLI_VERSION}" && npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
 # `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor

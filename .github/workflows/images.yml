@@ -181,37 +181,39 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # The build matrix is config/agent_runtimes.json, the same list the app launches
+  # runtimes from, so an image can be neither forgotten nor published for a runtime
+  # the app does not know.
+  runtimes:
+    name: Read Runtime Registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.registry.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: config/agent_runtimes.json
+          sparse-checkout-cone-mode: false
+
+      - name: Build Matrix
+        id: registry
+        run: |
+          matrix="$(jq -c '{include: [.runtimes[] | {
+            label, image, dockerfile,
+            cli_version: (.cli_version // ""),
+            latest_npm: (.cli_latest.npm // ""),
+            latest_url: (.cli_latest.url // "")
+          }]}' config/agent_runtimes.json)"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
   agent-images:
-    name: Build ${{ matrix.image_name }}
+    name: Build ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: agent-base
+    needs: [agent-base, runtimes]
     strategy:
-      matrix:
-        include:
-          - image_name: Claude Code
-            image_suffix: claude-code
-            dockerfile: ./docker/claude-code/Dockerfile
-          - image_name: Cursor CLI
-            image_suffix: cursor-cli
-            dockerfile: ./docker/cursor-cli/Dockerfile
-          - image_name: Codex
-            image_suffix: codex
-            dockerfile: ./docker/codex/Dockerfile
-          - image_name: Gemini CLI
-            image_suffix: gemini-cli
-            dockerfile: ./docker/gemini-cli/Dockerfile
-          - image_name: Grok CLI
-            image_suffix: grok
-            dockerfile: ./docker/grok/Dockerfile
-          - image_name: Kiro CLI
-            image_suffix: kiro-cli
-            dockerfile: ./docker/kiro-cli/Dockerfile
-          # Was missing entirely until 2026-09-17: the Makefile built it locally and CI
-          # never published it, so `AGENT_IMAGE_ANTIGRAVITY_CLI` had no image to point at.
-          - image_name: Antigravity CLI
-            image_suffix: antigravity-cli
-            dockerfile: ./docker/antigravity-cli/Dockerfile
+      matrix: ${{ fromJSON(needs.runtimes.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -234,7 +236,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}
+          images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
             type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
@@ -242,39 +244,42 @@ jobs:
             type=semver,pattern={{version}}
             type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
 
-      # The canary replaces a pinned CLI's version with the newest release; a release
-      # build installs exactly the pin.
-      - name: Resolve Newest CLI Release
-        id: newest
-        if: github.event_name == 'schedule'
+      # A release build installs the registry's pin; the canary swaps in the vendor's
+      # newest release where the registry names a source for it. Runtimes without a pin
+      # (Cursor, Kiro) install the vendor's newest either way.
+      - name: Resolve CLI Version
+        id: cli
+        env:
+          PINNED: ${{ matrix.cli_version }}
+          LATEST_NPM: ${{ matrix.latest_npm }}
+          LATEST_URL: ${{ matrix.latest_url }}
+          CANARY: ${{ github.event_name == 'schedule' }}
         run: |
           set -euo pipefail
-          npm_latest() { curl -fsSL "https://registry.npmjs.org/$1/latest" | jq -r .version; }
-          case "${{ matrix.image_suffix }}" in
-            claude-code) arg="CLAUDE_CODE_VERSION=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)" ;;
-            codex)       arg="CODEX_VERSION=$(npm_latest @openai/codex)" ;;
-            grok)        arg="GROK_VERSION=$(npm_latest @xai-official/grok)" ;;
-            gemini-cli)  arg="GEMINI_CLI_VERSION=$(npm_latest @google/gemini-cli)" ;;
-            *)           arg="" ;;
-          esac
-          echo "arg=${arg}" >> "$GITHUB_OUTPUT"
+          version="$PINNED"
+          if [ "$CANARY" = "true" ] && [ -n "$LATEST_NPM" ]; then
+            version="$(curl -fsSL "https://registry.npmjs.org/${LATEST_NPM}/latest" | jq -r .version)"
+          elif [ "$CANARY" = "true" ] && [ -n "$LATEST_URL" ]; then
+            version="$(curl -fsSL "$LATEST_URL")"
+          fi
+          if [ -n "$version" ]; then echo "build_arg=CLI_VERSION=${version}" >> "$GITHUB_OUTPUT"; fi
 
       - name: Build And Push Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./docker
-          file: ${{ matrix.dockerfile }}
+          file: ./${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core:${{ needs.agent-base.outputs.short_sha }}
-            ${{ steps.newest.outputs.arg }}
+            ${{ steps.cli.outputs.build_arg }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       # What this build actually shipped. The canary installs the newest releases, so this
-      # line — not the Dockerfile — says which one a published canary tag contains, and
+      # line — not the registry — says which one a published canary tag contains, and
       # comparing it with the pin is how a vendor bump gets noticed.
       #
       # Only on the canary: reading the file means pulling the image back (buildx pushes
@@ -283,6 +288,6 @@ jobs:
       - name: Report Shipped CLI Version
         if: github.event_name == 'schedule'
         run: |
-          image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}:${{ steps.meta.outputs.version }}"
+          image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}:${{ steps.meta.outputs.version }}"
           version="$(docker run --rm --entrypoint cat "$image" /etc/aixle-cli-version)"
-          echo "**${{ matrix.image_name }}** ships CLI version \`${version}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**${{ matrix.label }}** ships CLI version \`${version}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -12,11 +12,12 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
-# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
-# install kept shipping whichever release first filled the cache. The weekly canary
-# builds the newest release instead.
-ARG CODEX_VERSION=0.156.1
-RUN npm install -g "@openai/codex@${CODEX_VERSION}" && npm cache clean --force
+# Pinned (config/agent_runtimes.json): the registry build cache keys this layer on its
+# instruction and build args, so an unpinned install kept shipping whichever release
+# first filled the cache. The weekly canary builds the newest release instead.
+ARG CLI_VERSION
+RUN : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}" \
+    && npm install -g "@openai/codex@${CLI_VERSION}" && npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
 # `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor

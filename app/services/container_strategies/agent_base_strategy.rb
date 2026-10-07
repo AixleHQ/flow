@@ -88,17 +88,17 @@ module ContainerStrategies
 
     # == Template methods ==
 
-    # A runtime's image is derived from the registry prefix and the runtime's
-    # own name (`agents.image_prefix` + `claude_code` -> `claude-code` + tag),
-    # so adding a runtime needs no settings entry and an environment that
-    # publishes the set to one registry overrides one value, not seven.
+    # A runtime's image is derived from the registry prefix and the image name
+    # config/agent_runtimes.json gives it (`agents.image_prefix` + `claude-code`
+    # + tag), the name CI publishes it under, so an environment that publishes
+    # the set to one registry overrides one value, not seven.
     # `agents.images.<runtime>` remains a per-runtime escape hatch.
     def resolve_image
       agent_type = input[:agent_type].to_s
       override = Settings.agents&.images.to_h.transform_keys(&:to_s)[agent_type]
       return override.to_s if override.present?
 
-      name = "#{Settings.agents&.image_prefix}#{agent_type.tr('_', '-')}"
+      name = "#{Settings.agents&.image_prefix}#{AgentRuntime.fetch(agent_type).image}"
       tag = Settings.agents&.image_tag.to_s.strip
       tag.present? ? "#{name}:#{tag}" : name
     end
