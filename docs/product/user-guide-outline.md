@@ -219,8 +219,10 @@ sessions can also run on their own). They share a single list.
 ## 14. Repositories & Integrations
 
 - **What it is.** **Repositories** are the Git repos agents work in and push
-  to. **Integrations** are the accounts Flow connects to on the team's behalf:
-  GitHub, GitLab, Linear, Slack, and Coder.
+  to. **Trackers** are the task trackers the project works with (GitHub
+  Projects, Azure Boards, Jira, Linear, YouTrack). **Integrations** are the
+  accounts Flow connects to on the team's behalf: GitHub, GitLab, Azure DevOps,
+  Jira, Linear, YouTrack, Slack, Microsoft Teams, and Coder.
 - **When to use it.** Any workflow that should read code, open pull requests,
   or touch tickets.
 - **What you do.** Connect the integration, link the repositories the project
@@ -289,11 +291,15 @@ sessions can also run on their own). They share a single list.
 Round off with the shared layer above projects.
 
 - **Projects** — create and switch between them.
+- **Templates** — the public catalog of projects, workflows, boards and
+  resources to install.
 - **Workflow Catalog** — reusable workflows the team can copy into any
   project.
 - **Company Assets** and **Company Members** — workspace-level files and
   people. Company Assets, like company Analytics and Sessions, is visible to
   admins only.
+- **Company Settings** — name, branding and workers; sign-in access, SSO,
+  domain verification and directory sync; billing. Admins only.
 - Switching companies when you belong to more than one workspace.
 
 ---

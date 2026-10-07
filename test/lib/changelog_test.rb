@@ -74,6 +74,13 @@ class ChangelogTest < ActiveSupport::TestCase
     assert_match(/no ## \[2.0.0\]/, assert_raises(Changelog::Error) { released.notes("2.0.0") }.message)
   end
 
+  test "every product area an entry names is one the changelog taxonomy defines" do
+    areas = Rails.root.join("docs/product/changelog-product-areas.md").read.scan(/^\| \*\*([^*]+)\*\* \|/).flatten
+    named = Rails.root.join("CHANGELOG.md").read.scan(/^- \*\*([^*]+)\*\*:/).flatten.uniq
+
+    assert_empty named - areas, "add the area to docs/product/changelog-product-areas.md, or use one it defines"
+  end
+
   test "the repository's changelog parses" do
     changelog = Changelog.new(Rails.root.join("CHANGELOG.md").read)
 
