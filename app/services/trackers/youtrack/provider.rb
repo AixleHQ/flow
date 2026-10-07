@@ -8,9 +8,9 @@ module Trackers
     # is the project's state field (State unless the project renamed it) — what
     # YouTrack's agile boards are usually built on.
     #
-    # Deliveries carry only a token shared by everything the project's Webhook
-    # Triggers app posts to, so nothing in one is believed: #confirm reads the
-    # change, the comment and who made it back from YouTrack (§6.2).
+    # Events come from the Aixle Flow app with the subscription's own secret,
+    # and still nothing in one is believed: #confirm reads the change, the
+    # comment and who made it back from YouTrack (§6.2).
     class Provider < Trackers::Provider
       CANCELED = /cancel|won'?t|duplicate|obsolete|incomplete|can'?t reproduce|reject|invalid|not a bug/i
       IN_PROGRESS = /progress|review|develop|test|\bqa\b|verif|doing|\bwip\b|started|active|blocked/i
@@ -32,6 +32,9 @@ module Trackers
       # A webhook may claim an issue was created or commented on; one older than
       # this is a replay, not news.
       FRESH = 1.day
+      # The app stamps a comment with its own creation time, so it matches the
+      # stored one; the slack only absorbs rounding.
+      COMMENT_SKEW = 2.seconds
 
       def serves_project?(project)
         integration.project_id == project.id
@@ -47,12 +50,6 @@ module Trackers
 
       def instance
         settings["base_url"].to_s
-      end
-
-      # A permanent token acts as its owner, whose own edits must not pass for
-      # Aixle's unless the account is kept for Aixle.
-      def identity
-        super if settings["dedicated_identity"] == true
       end
 
       def own_actor?(actor)
@@ -95,10 +92,10 @@ module Trackers
         Notifications.parse(payload, project: project(subscription.external_scope_id))
       end
 
-      # The app sends no delivery id and stamps each send with the time it was
-      # sent, so a resend is the same delivery once the stamp is left out.
+      # The app sends no delivery id; `at` is when the change happened, so a
+      # resend digests the same.
       def delivery_id(_request, payload)
-        Digest::SHA256.hexdigest(payload.except("timestamp").to_json)
+        Digest::SHA256.hexdigest(payload.to_json)
       end
 
       def confirm(notification, issue)
@@ -531,14 +528,23 @@ module Trackers
       end
 
       def confirm_comment(notification, issue)
-        return if notification.comment_id.blank?
-
-        comment = api.comment(issue.id, notification.comment_id)
+        comment = notification.comment_id.present? ? api.comment(issue.id, notification.comment_id) : comment_hinted(notification, issue)
         return if comment.nil? || !fresh?(comment[:created_at])
 
-        notification.with(comment_text: comment[:text], actor: actor(comment[:author]))
+        notification.with(comment_id: comment[:id], comment_text: comment[:text], actor: actor(comment[:author]))
       rescue Error => e
         raise unless e.code == "not_found"
+      end
+
+      # When the app could not read the comment's id: who wrote it and when.
+      def comment_hinted(notification, issue)
+        login = notification.actor[:login].to_s
+        at = notification.occurred_at && Time.zone.parse(notification.occurred_at)
+        return if login.blank? || at.nil?
+
+        api.recent_comments(issue.id).find do |c|
+          c.dig(:author, :login).to_s.casecmp?(login) && c[:created_at] && (Time.zone.parse(c[:created_at]) - at).abs <= COMMENT_SKEW
+        end
       end
 
       # A change counts when YouTrack's own history has it; the issue's current

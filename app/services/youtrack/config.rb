@@ -2,7 +2,11 @@
 
 module Youtrack
   module Config
-    DEFAULT_WEBHOOK_HEADER = "X-YouTrack-Token"
+    # The Aixle Flow app on JetBrains Marketplace (youtrack-app/), and its
+    # admin page that approves a pairing Aixle started.
+    APP_NAME = "aixle-flow"
+    CONNECT_PAGE = "connect"
+    MARKETPLACE_URL = "https://plugins.jetbrains.com/search?search=Aixle%20Flow"
 
     module_function
 
@@ -17,6 +21,12 @@ module Youtrack
 
     def webhook_base_url
       Settings.youtrack&.webhook_base_url.presence || "#{Settings.protocol}://#{Settings.domain}"
+    end
+
+    # The fragment never reaches a server, so the secret stays out of logs.
+    # YouTrack hands an app only the parameters prefixed `app_`.
+    def connect_url(base_url, pairing_id, secret)
+      "#{base_url}/admin/app/#{APP_NAME}/#{CONNECT_PAGE}#app_pairing=#{pairing_id}.#{secret}"
     end
 
     # The instance URL as Aixle keeps it: https, no trailing slash, no /api, no

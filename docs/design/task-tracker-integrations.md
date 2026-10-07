@@ -1,7 +1,8 @@
 # Task tracker integrations — technical design
 
 Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366;
-phase 3 (GitHub Projects) and phase 4 (Linear) in #399; phase 5 (YouTrack) in #410**
+phase 3 (GitHub Projects) and phase 4 (Linear) in #399; phase 5 (YouTrack) in #410, its connection and
+delivery revised 2026-10-07 to go through the Aixle Flow YouTrack app (§12, phase 5)**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -47,6 +48,7 @@ tools; attachments, issue links and deletions. §12 says where each would attach
 | Issue ↔ task identity | Generic `external_resources` links keyed by the external system's identity, not by connection. They survive reconnects and second connections. |
 | Platform integrations | Azure DevOps and GitHub are platforms, not trackers: one connection serves code hosting, pull requests, CI *and* boards. The tracker port is one capability they implement over their existing connection, client and event receiver; their repository/PR/CI tools stay provider-specific (§9). |
 | Provider order | Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack (§12). PR #271 stays open; its hardened client and connect verification are copied over in the YouTrack phase rather than merged. |
+| YouTrack connection | Only through **Aixle Flow**, our app on the public JetBrains Marketplace. A YouTrack admin installs it and presses Connect; the app provisions a password-less service user, mints its permanent token through Hub, and sends its own events. Nobody copies a token or a webhook URL (§12, phase 5). |
 
 ## 3. What already exists
 
@@ -135,7 +137,7 @@ tracker_subscriptions
   id
   integration_id            FK integrations, NOT NULL
   external_scope_id         varchar                  -- NULL = connection-wide (Jira, Linear)
-  strategy                  varchar NOT NULL         -- manual | api
+  strategy                  varchar NOT NULL         -- manual | api | app
   endpoint_token            varchar NOT NULL UNIQUE  -- routes POST /webhooks/trackers/:token
   secret                    encrypted                -- shared token, HMAC secret or basic-auth password
   provider_subscription_id  varchar                  -- api strategy
@@ -210,8 +212,9 @@ Notes:
 
 A **project tracker** is created from a visible connection: pick the connection (or create one),
 choose external projects from `list_scopes`, and set the handle, primary flag and access. For
-`api` strategies the subscription is ensured at the same time. For `manual` ones, the UI shows the
-URL, header and token to paste into the tracker (YouTrack's Webhook Triggers app).
+`api` strategies the subscription is ensured at the same time. For `manual` ones (a Jira service
+account), the UI shows the URL and secret to paste into the tracker. YouTrack's subscriptions are
+`app`: the Aixle Flow app writes the URL and secret into its own settings (§12, phase 5).
 
 ### 4.4 Ownership and permissions: the GitHub model
 
@@ -310,10 +313,10 @@ Status        id, name, category (todo | in_progress | done | canceled | nil)
 |---|---|---|---|---|---|
 | Scope unit | project | project | team (id; the team key is the identifier prefix) | organization project (v2), by node id; user-owned projects are unreachable for an App | project |
 | Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | `github.com` — node ids are unique across GitHub | organization id |
-| Auth | permanent token of an automation account | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | Two ways (§12, phase 4): the deployment's OAuth app installed with `actor=app` (acts as the app; 24-hour access tokens renewed under a row lock, since refresh tokens rotate), or a personal API key | GitHub App installation (existing); needs Organization *Projects* and Repository *Issues* read & write | existing Azure connection |
-| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | OAuth app: the app's own webhook, one URL for every workspace (`/webhooks/trackers/app/linear`), routed by `organizationId`. API key: one webhook per team via `webhookCreate` (workspace admin only), to the subscription's own URL. Both signed with `Linear-Signature` HMAC-SHA256, `webhookTimestamp` within 60 s | `projects_v2_item`, `issues`, `issue_comment` through the existing `/webhooks/github` receiver, signed with the App's webhook secret | Service Hooks through the existing Azure receiver |
-| Subscription strategy | manual | api + refresh sweep (3LO); manual (service account) | app (OAuth); api (API key) | app | api (existing `SubscriptionService`) |
-| Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous `stateId`, `assigneeId`) | `changes.field_value` with `from`/`to` options | `fields.{name}.oldValue/newValue` |
+| Auth | permanent token of the password-less `aixle-flow` service user, minted by the Aixle Flow app through Hub during Connect (§12, phase 5) | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | Two ways (§12, phase 4): the deployment's OAuth app installed with `actor=app` (acts as the app; 24-hour access tokens renewed under a row lock, since refresh tokens rotate), or a personal API key | GitHub App installation (existing); needs Organization *Projects* and Repository *Issues* read & write | existing Azure connection |
+| Delivery | the Aixle Flow app's on-change rules post to the subscription's URL with its own secret in `X-Aixle-Token`; one subscription per YouTrack project, written into that project's app settings | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | OAuth app: the app's own webhook, one URL for every workspace (`/webhooks/trackers/app/linear`), routed by `organizationId`. API key: one webhook per team via `webhookCreate` (workspace admin only), to the subscription's own URL. Both signed with `Linear-Signature` HMAC-SHA256, `webhookTimestamp` within 60 s | `projects_v2_item`, `issues`, `issue_comment` through the existing `/webhooks/github` receiver, signed with the App's webhook secret | Service Hooks through the existing Azure receiver |
+| Subscription strategy | app (one row per YouTrack project) | api + refresh sweep (3LO); manual (service account) | app (OAuth); api (API key) | app | api (existing `SubscriptionService`) |
+| Change hints in payload | ours: State and Assignee old/new, added comments (the app builds the payload) | `changelog.items` from/to | `updatedFrom` (previous `stateId`, `assigneeId`) | `changes.field_value` with `from`/`to` options | `fields.{name}.oldValue/newValue` |
 | Status category source | `isResolved` only (todo/done); in-progress set by mapping | `statusCategory` | state `type` | none — inferred from the option name | state category |
 
 For GitHub and Azure, `parse` is fed by their existing controllers. Each hands the tracker pipeline
@@ -868,10 +871,18 @@ Repository and PR behaviour is untouched.
 ## 10. Security
 
 - **Authentication per provider**: HMAC where the provider signs (Linear, Jira), basic auth per
-  subscription (Azure), a shared header token where that is all the provider offers (YouTrack).
-  The YouTrack token is shared by every consumer of that YouTrack project, so it is weak. Re-reading
-  through the API (§6.1) is what makes a forged notification harmless: the most it can do is make
-  us read a real issue that is really in the claimed state.
+  subscription (Azure), a per-subscription header token for YouTrack. The YouTrack app's rule
+  runtime has no HMAC, so the token is sent as is; it is Aixle's own and lives in a secret app
+  setting that nobody can read back in YouTrack. Re-reading through the API (§6.1) still makes a
+  forged notification harmless: the most it can do is make us read a real issue that is really in
+  the claimed state.
+- **YouTrack Connect**: a pairing expires after 15 minutes and is completed once. Each entry has
+  its own consent screen against a planted link. Started in Aixle, the app's page shows the Aixle
+  company and project before the YouTrack admin approves, so a stranger's pairing cannot quietly
+  route that YouTrack's data to the stranger's project. Started in YouTrack, Aixle's approval page
+  shows the instance URL and a short code the app shows too, so a stranger's YouTrack cannot be
+  attached to your project. The app sends tokens only to the Aixle in its own `flowUrl` setting,
+  and the token is verified against the instance it claims to come from before anything is stored.
 - **Transport**:
   - Azure, Jira Cloud, GitHub and Linear call fixed vendor hosts through their clients.
   - A customer-chosen base URL (YouTrack, possibly self-hosted) goes through the PR #271 transport:
@@ -888,8 +899,10 @@ Repository and PR behaviour is untouched.
 
 - **Project → Trackers**: a list of project trackers with provider, external project, primary,
   access, status, subscription health (`last_event_at`), and manual setup instructions (copy URL
-  and token). "Add tracker" picks an existing visible connection or creates one. The credentials
-  form is the only per-provider UI, rendered from provider-declared connection fields.
+  and token) where a provider still needs them. "Add tracker" picks an existing visible connection
+  or creates one. The credentials form is the only per-provider UI, rendered from provider-declared
+  connection fields. YouTrack has no credentials form: "Connect YouTrack" explains how to install
+  the Aixle Flow app, and the connection arrives through the app's pairing (§12, phase 5).
 - **Project → Integrations**: the connections this project uses, with Test connection and Unlink,
   plus Reconnect and Disconnect for those allowed (§4.4). This follows GitHub; there is no
   company-wide integrations screen.
@@ -1004,25 +1017,19 @@ for.
      with customer-chosen, possibly self-hosted base URLs; the others call fixed vendor hosts.
    - PR #271's fate is decided when this phase starts.
 
-   Where it settled:
-   - **Connection.** A permanent token, pasted with the instance URL and the projects to cover
-     (`Youtrack::IntegrationService`, like Linear's API key): it acts as its owner, so the account
-     counts as Aixle's own only when marked as kept for Aixle. Connecting again to the same URL in
-     the same project replaces the token in place, and says when the token now belongs to another
-     account. The instance identity is the normalized base URL (https, no trailing `/` or `/api`,
-     a self-hosted path kept).
+   Where it settled in #410 (connection and delivery since replaced, see "Revised" below):
+   - **Connection (#410, replaced).** A permanent token, pasted with the instance URL and the
+     projects to cover (`Youtrack::IntegrationService`, like Linear's API key). The instance
+     identity is the normalized base URL (https, no trailing `/` or `/api`, a self-hosted path
+     kept); that part stays.
    - **Transport.** Not PR #271's client but the tree's own `SafeHttp`, which does the same DNS
      pinning: `Youtrack::Client` adds https only, no redirects, a 4 MB bound and
      retried reads. A private host is reachable only when the operator lists it in
      `YOUTRACK_TRUSTED_HOSTS`.
-   - **Delivery.** One `manual` subscription per YouTrack project, since the Webhook Triggers app
-     keeps one token per project: its own URL, a header name (`X-YouTrack-Token`) and a token Aixle
-     generates — or the one the project's app already sends, entered instead, because the app shares
-     it with every other consumer. The scope is the subscription's project, as PR #271 routed by
-     endpoint: the app (stock 1.0.5) names the project only by its short name, which a rename
-     changes, and people without their id. An issue outside that project is refused when it is
-     re-read; a renamed project's new short name is picked up from the first issue read in it.
-     Comment text is not kept in the delivery, since it is read back anyway.
+   - **Delivery (#410, replaced).** JetBrains' Webhook Triggers app, configured by hand in each
+     YouTrack project with a shared token. What stays: the scope is the subscription's project, an
+     issue outside it is refused when re-read, a renamed project's new short name is picked up from
+     the first issue read in it, and comment text is never kept in the delivery.
    - **Nothing in a delivery is believed** (§6.2). `confirm` re-reads a comment's text and author
      through the API, accepts a state or assignee change only when the issue's field history
      (`/activities`) or its current value shows it — the history's author becoming the actor and its
@@ -1037,6 +1044,108 @@ for.
      `native_query` is YouTrack's query language, ANDed after `project: {KEY}`, its `sort by:` kept.
    - **PR #271** can be closed as superseded: its client, connect verification and operator
      documentation were the starting point; nothing of it is merged.
+
+   **Revised 2026-10-07: the Aixle Flow app.** Pasting a permanent token and configuring Webhook
+   Triggers in every YouTrack project was judged too much setup. YouTrack connects only through
+   **Aixle Flow**, our app on the public JetBrains Marketplace. What the app platform allows was
+   checked on a live 2026.2 Cloud instance (build 19197) before this was written:
+
+   | Question | Finding |
+   |---|---|
+   | Can a Hub OAuth client act as a service? | Client credentials on an ordinary client: the token's subject is the client, and YouTrack's API answers "Invalid token". On a *trusted* client the token acts as the built-in `general_external_service_user`, which may change fields but is refused comments and issue creation ("Service users are not permitted…"), and a trusted client is far too powerful to ask a customer for. Dead end. |
+   | Can an app hold its own identity? | No. Rules, HTTP handlers and widgets act as the user who triggered or opened them; HTTP handlers refuse the guest. |
+   | Can an admin mint a token for another user? | Yes, through Hub only: `POST /hub/api/rest/users/{id}/permanenttokens`. A user created through Hub needs no password. |
+   | Where does an app reach Hub? | `host.fetchHub` exists only in dashboard (and Markdown) widgets. The admin page (Administration → Integrations ›, `admin/app/<app>/<key>`) and the main-menu page get `fetchYouTrack` (`/api` only), `fetchApp`, `navigation` and `storage`. |
+   | Can a page create a dashboard? | Yes, `POST /api/dashboards` with the app's widget embedded, so the admin page can set up a private "Aixle Flow setup" dashboard and send the admin to it (the widget sandbox allows top navigation). |
+   | Can a widget talk to Aixle? | Yes, plain `fetch` to a host that answers CORS (the widget's origin is `null`), and `window.open`. `location.ancestorOrigins[0]` is the instance URL. |
+   | Can the app configure itself? | Yes: `POST /api/admin/apps/{id}/globalConfig` and project app configurations, and attaching itself to projects. A settings write replaces the whole object. |
+   | Do on-change rules deliver? | Yes: created, State, Assignee and comment changes arrive within a second through `postAsync`, and a secret setting's value reaches the header intact. Rules see `issue.id` (readable) and `project.key`; database ids are not exposed. |
+   | Fallback without Hub | A user created through `/api/users` must have a password; with HTTP Basic it can mint its own token (`POST /hub/api/rest/users/me/permanenttokens`) and then delete its own password login (`DELETE /hub/api/rest/userdetails/{id}`), after which the password fails and the token keeps working. This breaks where the instance disables password login or enforces 2FA, so it is not the primary path. |
+
+   **Connect, as the customer sees it.** Either side can start; both run the same pairing. Aixle
+   cannot reach a customer's YouTrack before something is installed there: YouTrack has no
+   central OAuth app registry (every instance is its own Hub, and automatic client registration is
+   off by default), so the admin's session inside YouTrack, through the app, is the only
+   credential that needs no setup. The app itself is installed once, in YouTrack: a YouTrack
+   admin opens Administration → Apps → Add app → Browse JetBrains Marketplace → Aixle Flow.
+
+   *From Aixle (the main path, like every other tracker):*
+   1. Project → Trackers → **Connect YouTrack**, enter the instance URL. The dialog links the
+      Marketplace listing for an instance that does not have the app yet.
+   2. Aixle creates a pairing that is already bound to the project and the signed-in user, and
+      sends the browser to the app's admin page,
+      `<instance>/admin/app/aixle-flow/connect#app_pairing=<id>.<secret>` (a fragment, so the secret
+      never reaches a server log; YouTrack hands an app only parameters prefixed `app_`).
+   3. The admin page, as the YouTrack admin, reads the pairing from Aixle and shows, prominently,
+      **which Aixle company and project** the YouTrack data will go to, with the YouTrack projects
+      to tick and **Approve**. This screen is the consent: a pairing link handed to a YouTrack admin
+      by someone else would otherwise connect that admin's YouTrack to the stranger's project.
+   4. On Approve the page stages the private "Aixle Flow setup" dashboard with the setup widget,
+      passing the pairing and the chosen projects in the widget's settings, and opens it. The
+      widget, as the admin, does the rest without input: create or reuse the password-less service
+      user `aixle-flow` ("Aixle Flow") through Hub, add it to the chosen projects' teams, attach the
+      app to them, mint a permanent token (scopes: YouTrack, and Hub so the token can revoke
+      itself), and hand it to Aixle. Aixle answers with one events URL and secret per project,
+      which the widget writes into each project's app settings, then sends the browser back to
+      the project's Trackers page.
+
+   *From YouTrack (when the admin finds the app first):* Administration → Integrations ›
+   **Aixle Flow** → **Connect** starts an unbound pairing and opens Aixle's approval page in a
+   popup. The admin signs in to Aixle, picks the company and project, checks that the short code
+   matches the one the app shows, and approves; the app's page then continues from step 3's
+   project selection.
+
+   The app only talks to the Aixle at its own `flowUrl` setting, never to a URL taken from a link:
+   a link that named the Aixle to talk to would let anyone collect a service-user token.
+
+   **Aixle's side:**
+   - `POST /company/projects/:project_id/integrations/youtrack_connect` (signed in, `manage_integrations?`)
+     takes the instance URL and returns where to send the browser; the pairing is bound to the
+     project and the user from the start.
+   - `POST /integrations/youtrack/pairings` (public, CORS, rate-limited) starts an unbound
+     pairing for the YouTrack-side entry and returns its id, a secret for the app, the approval URL
+     and the short code. The approval page (signed in, `manage_integrations?` on the chosen project)
+     binds it to a company, a project and the approving user.
+   - A pairing expires after 15 minutes and is completed once.
+   - `GET /integrations/youtrack/pairings/:id` (company and project names, for the consent screen)
+     and `POST /integrations/youtrack/pairings/:id/complete` take the pairing secret as a bearer
+     token. `complete` verifies the token against the claimed instance (`/api/users/me` must be
+     the service user, through `Youtrack::Client`'s guarded transport), then creates the connection
+     (or rotates its credentials in place, §4.3), one `app` subscription per YouTrack project, and
+     the project trackers in the approved project.
+   - Identity: the service user is always Aixle's own, so there is no "kept for Aixle" checkbox any
+     more. One service user per instance; every connection gets its own token.
+   - Events arrive at the subscription's `/webhooks/trackers/:endpoint_token` with `X-Aixle-Token`;
+     the payload is the app's own (payload version, event, issue id, project key, State/Assignee old
+     and new, added comments' id, author and creation time). The rule reads a comment's id from its
+     URL after the commit, so `confirm` re-reads the comment by id, and finds it by author and time
+     when the id is missing; it keeps re-reading everything, as before.
+   - Disconnect (soft, §4.3) can revoke the token through Hub with the token itself
+     (`DELETE /hub/api/rest/users/me/permanenttokens/<id>`, verified; YouTrack keeps accepting a
+     revoked token for up to ~20 seconds). Neither side has a Disconnect yet: the next step, with
+     an Aixle endpoint for the app's own Disconnect.
+   - YouTrack asks the admin to confirm every data-changing request the app makes ("allow this
+     request"): one for the setup dashboard, then a few per project during setup. The consent and
+     setup screens say so.
+
+   **The app** (`youtrack-app/` in this repository, published from it): manifest name
+   `aixle-flow`, title "Aixle Flow", vendor Dualboot Partners. Settings: `flowUrl` (global, default
+   the production URL; staging and self-hosted deployments of open-source Aixle point it at
+   themselves), `eventsUrl` and `secret` (per project). Widgets: an `ADMINISTRATION_MENU_ITEM` page
+   for status and Connect, restricted to administrators through `permissions`, and the
+   `DASHBOARD_WIDGET` that runs the setup. One on-change rule for created, State, Assignee and
+   comment events. Every release goes through JetBrains' manual review (3–4 working days, for each
+   version), and YouTrack does not update installed apps by itself — admins press "Check for
+   updates" — so the payload is versioned and Aixle accepts older app versions. During development
+   the ZIP is uploaded to Aixle's own YouTrack instance only; customers get the Marketplace build.
+   The listing needs a developer EULA, the privacy policy (which must cover tracker data), an SVG
+   icon and the source link. The vendor profile starts unverified; the verified badge needs a
+   published app first.
+
+   Replaced from #410: the YouTrack connect modal, the "kept for Aixle" flag, the `manual`
+   subscriptions with their Webhook setup dialog and existing-token path, and the user guide's
+   Webhook Triggers section. `Youtrack::Client`, `Youtrack::Api`, the provider, `confirm`, the
+   tools and statuses stay as they are.
 
 Later and additive:
 
@@ -1072,7 +1181,13 @@ Later and additive:
 | 17 | Should the platform move tickets on run start, success and failure ("handoff statuses")? | **Agreed: no.** The agent moves tickets with its tools, as the workflow instructs. The only platform write is the failure comment (§6.9). |
 | 18 | GitHub: Projects (v2), repository issues, or both? | **Agreed 2026-10-01: Projects only** (§9.3). Repository issues are a later scope kind of the same provider. |
 | 19 | Linear authentication, and whom the OAuth app acts as? | **Agreed 2026-10-01: both** the OAuth app and a personal API key; the app is installed with `actor=app`, so it acts as itself (§12, phase 4). |
+| 20 | How does YouTrack connect? | **Agreed 2026-10-07: only through the Aixle Flow app** (§12, phase 5). The permanent-token form and Webhook Triggers setup from #410 are removed. |
+| 21 | One Marketplace app per deployment ("Aixle Flow (staging)") or one app? | **Agreed 2026-10-07: one public app**, Aixle Flow, with a `flowUrl` setting that staging and self-hosted deployments change. Nothing is distributed as a private ZIP. |
+| 22 | Marketplace vendor? | **Agreed 2026-10-07: Dualboot Partners**, from the existing JetBrains Account, published unverified first. |
 
 ### 13.2 Open
 
-None.
+| # | Question | Notes |
+|---|---|---|
+| 1 | Does the `aixle-flow` service user take a license seat? | Not visible through the API; check on the instance's license page after the first real connection. |
+| 2 | Ship the password + Basic fallback for instances where Hub is unreachable from a dashboard widget? | Not in the first version: every 2026.2 instance has dashboards, and the fallback fails exactly where SSO-only setups would need it. |

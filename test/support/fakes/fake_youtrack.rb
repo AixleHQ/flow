@@ -151,6 +151,10 @@ module FakeYoutrack
       end
     end
 
+    def recent_comments(issue_id, top: 20)
+      record(:recent_comments, issue_id: issue_id, top: top) { @comments_by_issue[issue_id].reverse.first(top).map(&:dup) }
+    end
+
     def add_comment(issue_id, text)
       record(:add_comment, issue_id: issue_id, text: text) { add_comment_by(issue_id, text: text, author: BOT) }
     end
@@ -194,9 +198,9 @@ module YoutrackTestHelper
     fake
   end
 
-  # A Webhook Triggers payload as the app builds it (workflow-utils.js).
-  def youtrack_payload(event, id: "APP-1", project: "APP", **extra)
-    { "event" => event, "timestamp" => Time.current.iso8601(3), "id" => id, "summary" => "It breaks",
-      "project" => { "key" => project, "name" => "Application", "shortName" => project } }.merge(extra.stringify_keys)
+  # An event as the Aixle Flow app's rule builds it (youtrack-app/README.md, "Events").
+  def youtrack_event(event, issue: "APP-1", project: "APP", **extra)
+    { "version" => 1, "event" => event, "issue" => issue, "project" => project, "actor" => "jdoe",
+      "at" => (Time.current.to_f * 1000).to_i }.merge(extra.stringify_keys)
   end
 end

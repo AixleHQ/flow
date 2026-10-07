@@ -1,0 +1,11 @@
+{
+  "title": "Aixle Flow setup",
+  "type": "object",
+  "properties": {
+    "handover": {
+      "title": "Pending setup",
+      "description": "Written by the Aixle Flow connect page and cleared once the setup has run.",
+      "type": "string"
+    }
+  }
+}

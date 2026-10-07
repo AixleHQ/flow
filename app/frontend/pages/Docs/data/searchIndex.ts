@@ -238,7 +238,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'youtrack',
     title: 'YouTrack',
     section: 'User guide',
-    desc: 'Connect YouTrack Cloud or a self-hosted instance with a permanent token, set up the Webhook Triggers app in each project, and how the state field becomes statuses.',
+    desc: 'Connect YouTrack Cloud or a self-hosted instance through the Aixle Flow app from JetBrains Marketplace, and how the state field becomes statuses.',
   },
   {
     slug: 'trackers',

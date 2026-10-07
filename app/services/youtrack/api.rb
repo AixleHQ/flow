@@ -94,6 +94,16 @@ module Youtrack
       comment_from(@client.post("/api/issues/#{escape(issue_id)}/comments", { text: text.to_s }, fields: COMMENT))
     end
 
+    # The issue's latest comments, newest first, read from its history: the
+    # comments endpoint pages oldest first and ignores $reverse.
+    def recent_comments(issue_id, top: 20)
+      list(@client.get("/api/issues/#{escape(issue_id)}/activities", categories: "CommentsCategory", reverse: true,
+                                                                       fields: "added(#{COMMENT})", "$top": top))
+        .flat_map { |a| Array(a["added"]) }
+        .select { |c| c.is_a?(Hash) && c["id"].present? && !c["deleted"] }
+        .map { |c| comment_from(c) }
+    end
+
     # The issue's latest custom-field changes, newest first:
     # [{ id:, at:, author:, field:, added: [names], removed: [names] }].
     def field_activities(issue_id, top: 50)

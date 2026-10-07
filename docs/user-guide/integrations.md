@@ -43,7 +43,7 @@ each verifies the caller its own way.
 | Azure DevOps | `POST /webhooks/azure_devops/<endpoint id>` | HTTP Basic, one password per subscription |
 | Jira | `POST /webhooks/trackers/<endpoint token>`, or `POST /webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
 | Linear | `POST /webhooks/trackers/<endpoint token>` for an API-key connection, or `POST /webhooks/trackers/app/linear` for the Linear app | `Linear-Signature` HMAC with the subscription's secret, or with `LINEAR_WEBHOOK_SECRET`, and a timestamp within a minute |
-| YouTrack | `POST /webhooks/trackers/<endpoint token>`, one per connected YouTrack project | The token the project's Webhook Triggers app sends, in the header it is set to send it in (`X-YouTrack-Token` by default) |
+| YouTrack | `POST /webhooks/trackers/<endpoint token>`, one per connected YouTrack project | The secret the Aixle Flow app keeps for that project, in `X-Aixle-Token` |
 | Slack | `POST /webhooks/slack/events` | Slack's request signature with `SLACK_SIGNING_SECRET` |
 | Incoming webhook trigger | `POST /webhooks/in/<slug>` | What the trigger is set to: HMAC SHA-256, a shared token header, or nothing |
 

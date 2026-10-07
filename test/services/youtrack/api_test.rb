@@ -77,6 +77,19 @@ class Youtrack::ApiTest < ActiveSupport::TestCase
     assert_requested stub
   end
 
+  test "the latest comments come newest first from the issue's history, without deleted ones" do
+    stub = stub_request(:get, %r{#{BASE}/api/issues/2-1/activities\?.*categories=CommentsCategory.*reverse=true})
+           .to_return(status: 200, body: [ { id: "4-2.0-0", added: [ { id: "4-2", text: "second", created: 1_790_000_060_000,
+                                                                       deleted: false, author: { login: "jdoe" } } ] },
+                                           { id: "4-1.0-0", added: [ { id: "4-1", deleted: true } ] },
+                                           { id: "4-0.0-0", added: [ { id: "4-0", text: "first", created: 1_790_000_000_000,
+                                                                       author: { login: "ann" } } ] } ].to_json)
+
+    assert_equal [ [ "4-2", "second", "jdoe" ], [ "4-0", "first", "ann" ] ],
+                 @api.recent_comments("2-1").map { |c| [ c[:id], c[:text], c.dig(:author, :login) ] }
+    assert_requested stub
+  end
+
   test "a comment is read, a deleted one is gone, and one is added" do
     stub_get("/api/issues/2-1/comments/4-1", { id: "4-1", text: "@aixle go", created: 1_790_000_000_000, author: { login: "jdoe" } })
     stub_get("/api/issues/2-1/comments/4-2", { id: "4-2", deleted: true })

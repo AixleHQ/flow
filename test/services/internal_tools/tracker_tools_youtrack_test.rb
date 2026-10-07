@@ -79,7 +79,7 @@ class InternalTools::TrackerToolsYoutrackTest < ActiveSupport::TestCase
   test "a delivery naming an issue of another project is processed as outside the scope and starts nothing" do
     bind("tracker.issue.created")
     subscription = Trackers::Youtrack::Subscriptions.new(@integration).ensure!.find { |s| s.external_scope_id == APP }
-    notifications = Trackers::Youtrack::Notifications.parse(youtrack_payload("issueCreated", id: "OPS-1"),
+    notifications = Trackers::Youtrack::Notifications.parse(youtrack_event("issue_created", issue: "OPS-1"),
                                                             project: @integration.settings["youtrack_projects"].first)
     delivery = TrackerDelivery.record(subscription: subscription, dedup_key: "d-1", notifications: notifications)
 

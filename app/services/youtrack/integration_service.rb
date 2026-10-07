@@ -1,23 +1,19 @@
 # frozen_string_literal: true
 
 module Youtrack
-  # Connects a project to a YouTrack instance — Cloud or self-hosted — with a
-  # permanent token, which acts as its owner: best an account kept for Aixle.
-  # Each YouTrack project picked becomes a tracker (Trackers::Provisioning), and
-  # gets a manual subscription for its Webhook Triggers app.
+  # Connects a project to a YouTrack instance — Cloud or self-hosted — through
+  # the Aixle Flow app: the app provisions a service user, mints its permanent
+  # token and hands it over when a pairing completes (YoutrackPairing). Each
+  # YouTrack project chosen becomes a tracker (Trackers::Provisioning) with an
+  # `app` subscription the app posts that project's events to.
   #
-  # Connecting again to an instance the project already has replaces the token
-  # in place, so its trackers, subscriptions and triggers stay.
+  # Completing a pairing for an instance the project already has replaces the
+  # token in place, so its trackers, subscriptions and triggers stay.
   class IntegrationService
     class ConfigurationError < StandardError; end
 
-    Inspection = Data.define(:base_url, :identity, :projects)
     # A failed test that says nothing about the connection itself.
     TRANSIENT = %w[rate_limited timeout provider_error].freeze
-
-    # The login the connection acted as before a reconnect replaced its token
-    # with another account's, when it did.
-    attr_reader :previous_login
 
     def initialize(company:, connected_by:, project:)
       @company = company
@@ -25,48 +21,31 @@ module Youtrack
       @project = project
     end
 
-    def inspect_token(base_url:, token:)
+    # The token is checked against the instance it claims to come from before
+    # anything is stored: it must act as the app's service user and see every
+    # project chosen. `project_ids` is the whole set the connection covers.
+    def connect_app(base_url:, token:, login:, project_ids:, app_version: nil)
       url = base_url!(base_url)
-      raise ConfigurationError, "Enter the permanent token" if token.blank?
+      raise ConfigurationError, "The app sent no token" if token.blank?
 
       api = Api.new(Client.new(base_url: url, token: token.to_s.strip))
-      Inspection.new(base_url: url, identity: api.me, projects: api.projects)
-    end
+      identity = api.me
+      unless login.present? && identity[:login].to_s.casecmp?(login.to_s)
+        raise ConfigurationError, "The token does not act as the Aixle Flow service user"
+      end
 
-    def connect(base_url:, token:, project_ids:, dedicated_identity: false)
-      inspection = inspect_token(base_url: base_url, token: token)
-      api = Api.new(Client.new(base_url: inspection.base_url, token: token.to_s.strip))
-      projects = chosen!(api, inspection.projects, project_ids)
-
-      integration = existing(inspection.base_url) || build
-      @previous_login = identity_change(integration, inspection.identity)
+      projects = chosen!(api, api.projects, project_ids)
+      integration = existing(url) || build
       integration.credentials_data = { "permanent_token" => token.to_s.strip }
       integration.assign_attributes(
-        name: "YouTrack · #{URI.parse(inspection.base_url).host}", status: :active, connected_by: @connected_by,
-        settings: integration.settings.to_h.except("error").merge(
-          "auth_mode" => "permanent_token", "base_url" => inspection.base_url,
-          **identity_settings(inspection.identity, dedicated: boolean(dedicated_identity)),
-          "youtrack_projects" => projects, "last_verified_at" => Time.current.iso8601
-        )
+        name: "YouTrack · #{URI.parse(url).host}", status: :active, connected_by: @connected_by,
+        settings: integration.settings.to_h.except("error", "dedicated_identity").merge(
+          "auth_mode" => "app", "app_version" => app_version.to_s.presence, "base_url" => url,
+          **identity_settings(identity), "youtrack_projects" => projects, "last_verified_at" => Time.current.iso8601
+        ).compact
       )
       integration.save!
       after_connect(integration)
-    end
-
-    # Changes which projects a connection covers, or whether its account is kept for Aixle.
-    def configure(integration, project_ids:, dedicated_identity: nil)
-      api = Api.for(integration)
-      projects = chosen!(api, api.projects, project_ids)
-      settings = integration.settings.to_h
-      dedicated = dedicated_identity.nil? ? settings["dedicated_identity"] == true : boolean(dedicated_identity)
-      integration.update!(status: :active, settings: settings.except("error").merge(
-        identity_settings(api.me, dedicated: dedicated), "youtrack_projects" => projects
-      ))
-      after_connect(integration)
-    end
-
-    def available_projects(integration)
-      Api.for(integration).projects
     end
 
     def test(integration)
@@ -78,8 +57,7 @@ module Youtrack
       projects = covered.map { |p| visible[p["id"].to_s] ? p.merge(visible[p["id"].to_s].slice(:key, :name).stringify_keys) : p }
       missing = covered.reject { |p| visible.key?(p["id"].to_s) }.pluck("key")
       integration.update!(status: :active, settings: settings.except("error").merge(
-        identity_settings(identity, dedicated: settings["dedicated_identity"] == true), "youtrack_projects" => projects,
-        "last_verified_at" => Time.current.iso8601
+        identity_settings(identity), "youtrack_projects" => projects, "last_verified_at" => Time.current.iso8601
       ))
       after_connect(integration)
       warning = missing.any? ? "This connection can no longer see #{missing.join(', ')}" : nil
@@ -121,7 +99,7 @@ module Youtrack
 
       by_id = visible.index_by { |p| p[:id] }
       unknown = ids.reject { |id| by_id.key?(id) }
-      raise ConfigurationError, "This token cannot see #{unknown.size} of the chosen projects" if unknown.any?
+      raise ConfigurationError, "The service user cannot see #{unknown.size} of the chosen projects" if unknown.any?
 
       ids.map do |id|
         fields = api.project_fields(id)
@@ -134,22 +112,12 @@ module Youtrack
       end
     end
 
-    # Who the connection acts as. Only an account kept for Aixle is its tracker
-    # identity: a person's own edits must not pass for Aixle's.
-    def identity_settings(identity, dedicated:)
+    # The app's service user is always Aixle's own identity.
+    def identity_settings(identity)
       {
-        "identity_display_name" => identity[:name], "identity_login" => identity[:login], "dedicated_identity" => dedicated,
+        "identity_display_name" => identity[:name], "identity_login" => identity[:login],
         "tracker_identity" => { "id" => identity[:id], "name" => identity[:name], "login" => identity[:login] }.compact
       }
-    end
-
-    def identity_change(integration, identity)
-      before = integration.settings.to_h.dig("tracker_identity", "login")
-      before if integration.persisted? && before.present? && !before.casecmp?(identity[:login].to_s)
-    end
-
-    def boolean(value)
-      ActiveModel::Type::Boolean.new.cast(value) == true
     end
 
     # Trackers follow the projects: new ones are provisioned, dropped ones detached.

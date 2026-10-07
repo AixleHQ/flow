@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/youtrack-app.json",
+  "name": "aixle-flow",
+  "title": "Aixle Flow",
+  "description": "Connects YouTrack projects to Aixle Flow, where AI agents work on your issues. Connect provisions a password-less service user and its token, and the app sends issue created, State, Assignee and comment events to Aixle Flow.",
+  "version": "1.0.0",
+  "url": "https://github.com/AixleHQ/flow/tree/develop/youtrack-app",
+  "icon": "icon.svg",
+  "minYouTrackVersion": "2026.2.0",
+  "vendor": {
+    "name": "Dualboot Partners",
+    "url": "https://dualbootpartners.com"
+  },
+  "widgets": [
+    {
+      "key": "connect",
+      "name": "Aixle Flow",
+      "description": "Connects this YouTrack to Aixle Flow and shows which projects are connected.",
+      "extensionPoint": "ADMINISTRATION_MENU_ITEM",
+      "indexPath": "widgets/connect/index.html",
+      "permissions": ["ADMIN_UPDATE_APP"]
+    },
+    {
+      "key": "setup",
+      "name": "Aixle Flow setup",
+      "description": "Finishes connecting to Aixle Flow. Added by Administration › Integrations › Aixle Flow; not meant to be added by hand.",
+      "extensionPoint": "DASHBOARD_WIDGET",
+      "indexPath": "widgets/setup/index.html",
+      "settingsSchemaPath": "widgets/setup/config-schema.json",
+      "permissions": ["ADMIN_UPDATE_APP"],
+      "defaultDimensions": {
+        "height": "6fr",
+        "width": "6fr"
+      }
+    }
+  ]
+}
