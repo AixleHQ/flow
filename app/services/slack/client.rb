@@ -22,6 +22,23 @@ module Slack
         })
       end
 
+      # Exchange a Sign in with Slack code for the person's OpenID Connect tokens.
+      # Returns the parsed response, whose `id_token` names the Slack user.
+      def openid_token(code:, redirect_uri:)
+        post_form("openid.connect.token", {
+          client_id: Settings.slack.client_id,
+          client_secret: Settings.slack.client_secret,
+          code: code,
+          redirect_uri: redirect_uri
+        })
+      end
+
+      # Open a modal for the person who just acted: `trigger_id` comes with the
+      # shortcut or slash command and is valid for three seconds, once.
+      def open_view(token:, trigger_id:, view:)
+        post_json("views.open", token: token, payload: { trigger_id: trigger_id, view: view })
+      end
+
       # Post a message as the bot. `blocks` (Block Kit) and `thread_ts` (reply in
       # a thread) are optional; `reply_broadcast` additionally surfaces a threaded
       # reply in the channel. Requires the chat:write scope. Returns the posted

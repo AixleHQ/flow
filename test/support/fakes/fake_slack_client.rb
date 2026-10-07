@@ -39,13 +39,15 @@ class FakeSlackClient
   }.freeze
 
   attr_reader :oauth_exchanges, :posted_messages, :uploaded_files, :downloads,
-              :updated_messages, :deleted_messages, :replies_reads
+              :updated_messages, :deleted_messages, :replies_reads, :opened_views, :openid_exchanges
   # Let a test tailor the shared canned values (e.g. a specific team_id) without
   # reaching into the response builders.
   attr_accessor :team_id, :team_name, :bot_token, :bot_user_id, :scope, :file_body
   # The thread conversations.replies hands back, so a test can stage a thread
   # without knowing the wire shape. Each entry is a Slack message hash.
   attr_accessor :thread_messages
+  # The claims Sign in with Slack's ID token carries (openid_token), unsigned.
+  attr_accessor :openid_claims
 
   def initialize
     @oauth_exchanges  = []
@@ -55,6 +57,9 @@ class FakeSlackClient
     @updated_messages = []
     @deleted_messages = []
     @replies_reads    = []
+    @opened_views     = []
+    @openid_exchanges = []
+    @openid_claims    = {}
     @seq              = 0
 
     @team_id     = DEFAULT_TEAM_ID
@@ -185,7 +190,23 @@ class FakeSlackClient
     file_body.dup
   end
 
+  # openid.connect.token — { ok, id_token } with `openid_claims` as the token's claims.
+  def openid_token(code:, redirect_uri:)
+    @openid_exchanges << { code: code, redirect_uri: redirect_uri }
+    { "ok" => true, "id_token" => JWT.encode(openid_claims, nil, "none") }
+  end
+
+  # views.open — { ok, view } echoing the view it was given.
+  def open_view(token:, trigger_id:, view:)
+    @opened_views << { token: token, trigger_id: trigger_id, view: view.deep_stringify_keys }
+    { "ok" => true, "view" => view }
+  end
+
   # --- Convenience readers for callers migrating in Stage B ---
+
+  def last_opened_view
+    opened_views.last&.fetch(:view)
+  end
 
   def last_posted_message
     posted_messages.last

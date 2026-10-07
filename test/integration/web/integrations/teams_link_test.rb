@@ -38,7 +38,7 @@ class Web::Integrations::TeamsLinkTest < ActionDispatch::IntegrationTest
   test "a visitor who is not signed in is asked to sign in to Aixle first" do
     get teams_link_path(@token)
 
-    assert_inertia_page "Integrations/TeamsLink"
+    assert_inertia_page "Integrations/ChatLink"
     assert_inertia_props { |props| props[:state] == "sign_in" }
   end
 

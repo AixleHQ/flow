@@ -46,6 +46,7 @@ agents will post.
 | `channels:history`, `groups:history` | `chat_read_thread` in public and private channels |
 | `files:read` | Downloading files attached to a mention, so the run gets them |
 | `files:write` | Attaching files with `chat_post_message` |
+| `commands` | The **Run workflow** shortcut and the slash command |
 
 The app asks for no direct-message history, so threads in DMs cannot be read.
 
@@ -115,6 +116,31 @@ channel can start the run.
 
 Off-board triggers run unattended. That means a trigger can only be enabled
 when every step of the workflow has auto-run switched on.
+
+### Starting a workflow yourself: Run workflow and the slash command
+
+These start a workflow as **you**, without a trigger:
+
+- **Run workflow** on any message: open the message's **⋯** menu → **Run
+  workflow** (Aixle Flow). Pick a workflow, add notes if you like, and **Run**.
+  The message's text (and your notes) is the request, and the status card
+  follows the run in that message's thread.
+- **`/aixle run`** (the command name is the one your Slack app registers): the
+  same window. The run gets a thread of its own in the channel, opened by a
+  line saying who started which workflow.
+- **`/aixle status`** lists, only to you, the last ten runs started from that
+  channel in the past 30 days, from projects you can open in Flow.
+
+The list holds the workflows of the connected company you may start in Flow
+(projects where you can start runs), and only those whose every step may run
+unattended. The run belongs to you and uses your credentials, and its status
+card says who started it. The app has to be in the channel for its status card.
+
+The first time, the app asks you to **link your Aixle account**: the link opens
+Flow, where you are signed in, and asks you to **Sign in with Slack** as the
+account you use in that workspace. The link expires after an hour, works only
+for the Slack account it was sent to, and does not add a way to sign in to
+Flow.
 
 ### One mention, every project
 
@@ -238,7 +264,7 @@ installs that same app into its own workspace.
      `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback`. Flow builds the
      URL from `PROTOCOL` and `DOMAIN` and sends it to Slack, so it must match
      exactly.
-   - Add the six bot token scopes listed above.
+   - Add the seven bot token scopes listed above.
 3. Under **Event Subscriptions**:
    - Turn events on.
    - Set the Request URL to `https://<DOMAIN>/webhooks/slack/events`. Flow
@@ -247,11 +273,17 @@ installs that same app into its own workspace.
    - Subscribe to the bot events `app_mention`, `app_uninstalled` and
      `tokens_revoked`. The last two let Flow see when a workspace removes the
      app.
-4. Leave **Interactivity** and **Slash Commands** off. Flow has no endpoint for
-   them.
-5. To let workspaces other than the app's own install it, turn on public
+4. Under **Interactivity & Shortcuts**:
+   - Turn interactivity on and set the Request URL to
+     `https://<DOMAIN>/webhooks/slack/interactions`.
+   - Add a shortcut **On messages**: name **Run workflow**, callback ID
+     `run_workflow`.
+5. Under **Slash Commands**, create a command (for example `/aixle`) with the
+   Request URL `https://<DOMAIN>/webhooks/slack/commands`. Its `run` and
+   `status` arguments are the ones Flow answers.
+6. To let workspaces other than the app's own install it, turn on public
    distribution under **Manage Distribution**.
-6. Copy the app's credentials from **Basic Information** into the deployment:
+7. Copy the app's credentials from **Basic Information** into the deployment:
 
    ```bash
    SLACK_CLIENT_ID=<client id>
@@ -265,7 +297,15 @@ not offered Slack.
 Flow checks every event against `SLACK_SIGNING_SECRET`. If the secret is wrong
 or unset, Flow refuses every event and mentions do nothing.
 
-`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the six above
+Linking a Slack account uses Sign in with Slack with the same app. It returns
+to `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback/link`, below the
+redirect URL above, which Slack accepts without registering another.
+
+A workspace that installed the app before the `commands` scope existed has to
+install it again (**Connect → Slack**) before the shortcut and the command show
+up there.
+
+`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the seven above
 and accepts commas or spaces. If you drop a scope, the feature that needs it
 stops working.
 
@@ -276,8 +316,8 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 
 ## Limits
 
-- Only @mentions start anything. Flow does not react to plain messages,
-  reactions, slash commands or buttons.
+- Only @mentions, the **Run workflow** shortcut and the slash command start
+  anything. Flow does not react to plain messages or reactions.
 - Only a leading mention of the app is dropped before matching. See
   [What the pattern is matched against](#what-the-pattern-is-matched-against).
 - Thread reading works in public and private channels, not in DMs. Slack

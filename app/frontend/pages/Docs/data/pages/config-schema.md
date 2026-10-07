@@ -313,7 +313,7 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. Without it and `SLACK_CLIENT_SECRET`, projects are not offered Slack. |
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
 | `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies the Slack event payloads posted to `/webhooks/slack/events`. |
-| `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write` | Bot scopes requested at install time. |
+| `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write,commands` | Bot scopes requested at install time. |
 | `TEAMS_APP_ID`               | no       | `MICROSOFT_CLIENT_ID` | The Entra application (client) id of the deployment's Teams bot. |
 | `TEAMS_HOME_TENANT_ID`       | no       | unset              | The tenant the bot's app registration and Azure Bot live in. Without it projects are not offered Microsoft Teams. |
 | `TEAMS_PRIVATE_KEY`          | no       | `MICROSOFT_PRIVATE_KEY` | PEM private key of the bot's certificate.                    |

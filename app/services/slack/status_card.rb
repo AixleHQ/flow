@@ -47,6 +47,7 @@ module Slack
     def blocks(status)
       icon, label = STATES.fetch(status.state)
       lines = [ "#{icon} *#{label}* — #{escape(status.workflow)}#{" · run ##{status.run_id}" if status.run_id}" ]
+      lines << "Started by #{escape(status.started_by)}" if status.started_by
       lines << "Since <!date^#{status.since.to_i}^{time}|#{status.since.utc.strftime('%H:%M UTC')}>" if status.since
       lines << "Took #{status.duration}" if status.duration
       lines << "> #{escape(status.detail.to_s.truncate(400))}" if status.detail.present?
