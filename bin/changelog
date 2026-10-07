@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# bin/changelog release 1.2.0   moves [Unreleased] into a dated 1.2.0 section
+# bin/changelog notes 1.2.0     prints the 1.2.0 section (the GitHub Release body)
+require "date"
+require_relative "../lib/changelog"
+
+path = File.expand_path("../CHANGELOG.md", __dir__)
+command, version = ARGV
+changelog = Changelog.new(File.read(path))
+
+begin
+  case command
+  when "notes" then puts changelog.notes(version.to_s)
+  when "release" then File.write(path, changelog.release(version.to_s, date: Date.today.iso8601))
+  else abort "usage: bin/changelog release|notes <X.Y.Z>"
+  end
+rescue Changelog::Error => e
+  abort "bin/changelog: #{e.message}"
+end

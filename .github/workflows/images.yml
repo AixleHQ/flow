@@ -6,20 +6,17 @@ name: Build Images
 
 on:
   push:
-    # Only the image-release branch publishes. develop is the integration branch
-    # and deliberately does not build images: every merge would otherwise
-    # republish seven images that nothing is ready to deploy.
-    branches:
-      - main-images
+    # Only a release tag publishes (docs/operations/releasing.md). develop is the
+    # integration branch and deliberately does not build images: every merge would
+    # otherwise republish images that nothing is ready to deploy.
     tags:
       - "v*"
   # Weekly canary. It builds the vendors' newest CLI releases — Cursor and Kiro always
   # install their latest, and for the pinned CLIs the canary passes the newest version
   # instead of the pin — so a vendor-side break is found here, on a Monday morning,
   # rather than in a user's session, and a green run says a pin can be raised. It
-  # publishes only `canary-YYYYMMDD` — not `latest`, and not the `develop` or commit
-  # tags a deployment could pick up — so promoting a canary stays a human act (push to
-  # main-images, or run this workflow by hand from that branch).
+  # publishes only `canary-YYYYMMDD` — not `latest` and not a version a deployment
+  # could pick up — so promoting a canary stays a human act: raise the pin and release.
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
@@ -40,10 +37,46 @@ env:
   REGISTRY_PREFIX: ghcr.io/aixlehq
 
 jobs:
+  # One tag for every image of a run, so the web image can name the agent images built
+  # beside it: X.Y.Z for a release, canary-YYYYMMDD for the canary, and the short
+  # commit for a hand-run build.
+  version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      app_version: ${{ steps.version.outputs.app_version }}
+      stable: ${{ steps.version.outputs.stable }}
+    steps:
+      - name: Resolve Version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          stable=false
+          app_version="$GITHUB_SHA"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::${GITHUB_REF_NAME} is not a vX.Y.Z or vX.Y.Z-pre release tag."
+              exit 1
+            fi
+            app_version="$tag"
+            if [[ "$tag" != *-* ]]; then stable=true; fi
+          elif [ "$EVENT" = "schedule" ]; then
+            tag="canary-$(date -u +%Y%m%d)"
+          else
+            tag="${GITHUB_SHA::7}"
+          fi
+          { echo "tag=${tag}"; echo "app_version=${app_version}"; echo "stable=${stable}"; } >> "$GITHUB_OUTPUT"
+
   web:
     name: Build Web
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    needs: version
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,12 +99,14 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-web
+          # `latest` and the X.Y / X aliases move with stable releases only; a pre-release
+          # (vX.Y.Z-rc.N) publishes just its own tag.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
-            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
-            type=semver,pattern={{version}}
-            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
+            type=raw,value=${{ needs.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Build And Push Web Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -82,8 +117,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # AGENT_IMAGE_TAG becomes the image's default, so web X.Y.Z launches the agent
+          # images X.Y.Z rather than whatever `latest` is when a session starts.
           build-args: |
-            APP_VERSION=${{ github.sha }}
+            APP_VERSION=${{ needs.version.outputs.app_version }}
+            AGENT_IMAGE_TAG=${{ needs.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -91,6 +129,7 @@ jobs:
     name: Build OTLP Ingest
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: version
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -113,12 +152,14 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-otlp-ingest
+          # `latest` and the X.Y / X aliases move with stable releases only; a pre-release
+          # (vX.Y.Z-rc.N) publishes just its own tag.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
-            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
-            type=semver,pattern={{version}}
-            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
+            type=raw,value=${{ needs.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Build And Push OTLP Ingest Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -135,14 +176,13 @@ jobs:
     name: Build Agent Base
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: version
+    # The agent images build FROM this digest, not a tag: the canary once referenced a
+    # commit tag it never published and every agent build failed with "not found".
     outputs:
-      short_sha: ${{ steps.vars.outputs.short_sha }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Compute Short SHA
-        id: vars
-        run: echo "short_sha=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -163,14 +203,17 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-agent-base-core
+          # `latest` and the X.Y / X aliases move with stable releases only; a pre-release
+          # (vX.Y.Z-rc.N) publishes just its own tag.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
-            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
-            type=semver,pattern={{version}}
-            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
+            type=raw,value=${{ needs.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Build And Push Agent Base Core Image
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./docker/base
@@ -211,7 +254,7 @@ jobs:
     name: Build ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [agent-base, runtimes]
+    needs: [version, agent-base, runtimes]
     strategy:
       # Each image stands alone: one vendor's broken release must not cancel the others'
       # builds, or the canary reports every runtime as failed.
@@ -240,12 +283,14 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}
+          # `latest` and the X.Y / X aliases move with stable releases only; a pre-release
+          # (vX.Y.Z-rc.N) publishes just its own tag.
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
-            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
-            type=semver,pattern={{version}}
-            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
+            type=raw,value=${{ needs.version.outputs.tag }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       # A release build installs the registry's pin; the canary swaps in the vendor's
       # newest release where the registry names a source for it. Runtimes without a pin
@@ -276,7 +321,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core:${{ needs.agent-base.outputs.short_sha }}
+            BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core@${{ needs.agent-base.outputs.digest }}
             ${{ steps.cli.outputs.build_arg }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -291,7 +336,7 @@ jobs:
       - name: Report Shipped CLI Version
         if: github.event_name == 'schedule'
         run: |
-          image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}:${{ steps.meta.outputs.version }}"
+          image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image }}:${{ needs.version.outputs.tag }}"
           version="$(docker run --rm --entrypoint cat "$image" /etc/aixle-cli-version)"
           echo "**${{ matrix.label }}** ships CLI version \`${version}\`" >> "$GITHUB_STEP_SUMMARY"
           mkdir -p shipped && printf '%s\n' "$version" > "shipped/${{ matrix.image }}"
@@ -311,7 +356,7 @@ jobs:
   cli-report:
     name: Report CLI Updates
     if: ${{ always() && github.event_name == 'schedule' }}
-    needs: agent-images
+    needs: [version, agent-images]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -339,8 +384,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.run_id }}
           SHIPPED_DIR: shipped
+          TITLE_TAG: ${{ needs.version.outputs.tag }}
         run: |
-          TITLE_TAG="canary-$(date -u +%Y%m%d)" bin/agent-cli-report > "$RUNNER_TEMP/report.md"
+          bin/agent-cli-report > "$RUNNER_TEMP/report.md"
           cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post Report

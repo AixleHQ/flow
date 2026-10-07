@@ -8,12 +8,12 @@
 
 **Legend:** ✅ shipped · 🟡 in progress · ⬜ planned · 💡 exploring
 
-Items roll up to two named milestones: **v0.1 — Open** (this milestone)
-and **v0.2 — Team-ready** (the next).
+Items roll up to two named milestones: **1.0 — Open** (this milestone)
+and **1.1 — Team-ready** (the next).
 
 ---
 
-## v0.1 — Open
+## 1.0 — Open
 
 Goal: the project is publicly releasable. Anyone can clone, run, and
 contribute. Documentation, license, and contributor infrastructure are
@@ -36,7 +36,7 @@ in place.
 
 ---
 
-## v0.2 — Team-ready
+## 1.1 — Team-ready
 
 Goal: a new team can go from clone to running their first workflow in
 under 5 minutes, using a template — no manual configuration of agents
@@ -55,9 +55,9 @@ or workflows required.
 
 ---
 
-## Beyond v0.2
+## Beyond 1.1
 
-Direction-setting items. Specifics will firm up as v0.2 ships.
+Direction-setting items. Specifics will firm up as 1.1 ships.
 
 - 💡 **Enterprise tier** — SSO (SAML), audit logs, custom data retention.
 - 💡 **Aixle Builder v2** — generate a workflow from a freeform task description.

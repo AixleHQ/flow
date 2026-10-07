@@ -107,6 +107,11 @@ ARG APP_VERSION
 ENV APP_VERSION=${APP_VERSION}
 ARG ASSET_HOST
 ENV ASSET_HOST=${ASSET_HOST}
+# The agent image tag a release launches when the deployment sets none: images.yml
+# passes the version it built the agent images under. A deployment's own
+# AGENT_IMAGE_TAG still wins, since container env overrides image env.
+ARG AGENT_IMAGE_TAG
+ENV AGENT_IMAGE_TAG=${AGENT_IMAGE_TAG}
 
 # Runs as `app` even when a Kubernetes `command:` replaces the entrypoint — the
 # way the worker, jobs and MCP workloads start — so none of them runs as root.
