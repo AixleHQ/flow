@@ -212,7 +212,7 @@ Aixle capability names define which operations an integration enables. They are 
 | Aixle capability                                    | Azure permission area to configure/test                             | First release              |
 | --------------------------------------------------- | ------------------------------------------------------------------- | -------------------------- |
 | `repositories.read`                                 | Project visibility and repository Read                              | Required                   |
-| `repositories.write`                                | Repository/branch Contribute and Create branch as needed            | Required for fixes         |
+| (no capability: git push)                           | Repository/branch Contribute and Create branch                      | Required for fixes         |
 | `pull_requests.write`, `pull_request_threads.write` | Contribute to pull requests and relevant repository access          | Required for PRs/replies   |
 | `work_items.read`                                   | View work items in approved area paths                              | Required for task context  |
 | `work_items.write`                                  | Edit work items in approved area paths and applicable process rules | Enabled for task mutations |
@@ -272,7 +272,6 @@ Proposed non-secret `settings` (installation identity fields are serialized from
   "identity_display_name": "Aixle",
   "enabled_capabilities": [
     "repositories.read",
-    "repositories.write",
     "pull_requests.write",
     "pull_request_threads.write",
     "work_items.read",

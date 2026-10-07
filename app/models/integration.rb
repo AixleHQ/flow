@@ -26,6 +26,10 @@ class Integration < ApplicationRecord
   # An API-key connection registered its Linear webhooks itself; nothing else removes them.
   before_destroy :collect_linear_webhooks, prepend: true, if: :linear?
   after_destroy_commit :remove_linear_webhooks, if: :linear?
+  # Azure keeps posting to the Service Hooks a connection created until they are
+  # deleted there; removing the connection in Flow is the only signal it gets.
+  before_destroy :collect_azure_service_hooks, prepend: true, if: :azure_devops?
+  after_destroy_commit :remove_azure_service_hooks, if: :azure_devops?
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
@@ -323,6 +327,17 @@ class Integration < ApplicationRecord
 
   def remove_linear_webhooks
     Trackers::Linear::Subscriptions.release(api_key: @linear_api_key, webhook_ids: @linear_webhook_ids)
+  end
+
+  def collect_azure_service_hooks
+    @azure_service_hooks = azure_devops_subscriptions.where.not(azure_subscription_id: nil)
+                                                     .pluck(:azure_subscription_id, :azure_project_id)
+  end
+
+  def remove_azure_service_hooks
+    return if @azure_service_hooks.blank?
+
+    AzureDevops::SubscriptionService.new(self).release(@azure_service_hooks)
   end
 
   # Deleted rather than disabled: the endpoint is what ties the tenant to this

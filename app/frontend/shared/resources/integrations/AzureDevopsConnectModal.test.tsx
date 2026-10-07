@@ -217,7 +217,7 @@ describe('AzureDevopsConnectModal', () => {
     renderModal();
 
     expect(screen.getByRole('checkbox', { name: /Complete pull requests/ })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: /Read repositories/ })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Clone and push repositories/ })).toBeChecked();
   });
 
   // The one step that happens outside Flow, in another portal, usually by

@@ -160,6 +160,11 @@ are what actually decide whether a merge may happen — Flow never asks to bypas
 one, and refuses to complete a pull request whose source branch moved after the
 agent read it.
 
+Pushing has no checkbox of its own. Git pushes with the same token it clones
+with, so **Clone and push repositories** covers both, and what the identity may
+push is decided by its Azure permissions — **Contribute** and **Create branch**,
+which the project's Contributors group holds.
+
 ## Azure Boards
 
 Each Azure project a connection covers becomes a **tracker** on the project's

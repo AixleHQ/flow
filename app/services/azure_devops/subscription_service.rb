@@ -126,27 +126,19 @@ module AzureDevops
       end
     end
 
-    # Best effort, and deliberately so: disconnect runs this while credentials
-    # are still resolvable, but a failure must not block the disconnect. What is
-    # left behind is a subscription posting to an endpoint that no longer
-    # authenticates, which fails closed.
-    def remove_all!
-      integration.azure_devops_subscriptions.find_each do |subscription|
-        if subscription.azure_subscription_id.present?
-          begin
-            client, = CredentialProvider.client_for(integration, project_id: subscription.azure_project_id)
-            client.request_delete("_apis", "hooks", "subscriptions", subscription.azure_subscription_id)
-          rescue Error => e
-            Rails.logger.warn("[AzureDevops::SubscriptionService] could not delete subscription " \
-                              "#{subscription.azure_subscription_id}: #{e.code}")
-          end
-        end
-        subscription.destroy
+    # Deletes the given subscriptions in Azure after their connection is gone;
+    # the local rows went with it. Best effort, and deliberately so: a removal
+    # must not be blocked by Azure, and what is left behind posts to an endpoint
+    # that no longer authenticates, which fails closed. An inactive connection's
+    # hooks still exist in Azure, so they are deleted too.
+    def release(hooks)
+      hooks.each do |azure_subscription_id, azure_project_id|
+        client, = CredentialProvider.client_for(integration, allow_inactive: true, project_id: azure_project_id)
+        client.request_delete("_apis", "hooks", "subscriptions", azure_subscription_id)
+      rescue Error => e
+        Rails.logger.warn("[AzureDevops::SubscriptionService] could not delete subscription " \
+                          "#{azure_subscription_id}: #{e.code}")
       end
-    rescue Error => e
-      Rails.logger.warn("[AzureDevops::SubscriptionService] cleanup skipped for integration " \
-                        "#{integration.id}: #{e.code}")
-      integration.azure_devops_subscriptions.update_all(status: "disabled", error_code: "cleanup_failed")
     end
 
     private

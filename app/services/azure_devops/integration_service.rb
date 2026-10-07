@@ -12,8 +12,12 @@ module AzureDevops
   # approved.
   class IntegrationService
     # Everything a connection may be permitted to do.
+    #
+    # There is no push capability. Git pushes with the token it clones with, and
+    # the credential helper cannot tell a fetch from a push, so only the
+    # identity's Azure permissions (Contribute, Create branch) can stop a push.
     ALL_CAPABILITIES = %w[
-      repositories.read repositories.write
+      repositories.read
       pull_requests.write pull_request_threads.write
       work_items.read work_items.write
       pull_requests.complete builds.read
@@ -171,20 +175,6 @@ module AzureDevops
                                         .except("error", "error_message")
       integration.save!
       integration
-    end
-
-    # Disconnecting one project connection blocks its new token requests and
-    # API calls and follows the existing repository detach behaviour. It does
-    # NOT disable the shared installation, delete the tenant's service
-    # principal, or rotate the central app credential other connections use.
-    def disconnect(integration)
-      # Cleanup runs FIRST, while this connection's credentials still resolve —
-      # after the row is gone there is nothing left to authenticate with, and the
-      # subscription would keep posting to an endpoint that no longer exists.
-      # Failure is logged, not raised: a disconnect must not be blocked by it,
-      # and what is left behind fails closed.
-      SubscriptionService.new(integration).remove_all! if integration.azure_devops_subscriptions.any?
-      integration.destroy!
     end
 
     private
