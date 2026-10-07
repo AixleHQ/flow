@@ -120,9 +120,11 @@ to ignore changes Aixle made skip them, and a comment that mentions
   id (`2-17`), or its URL on this instance.
 - **Issue type** — a value of the project's **Type** field; `tracker_describe`
   lists them. Left out, YouTrack's default applies.
-- **Labels** — YouTrack tags, by name, among the tags the service user can use.
+- **Labels** — YouTrack tags, by name, among the tags the service user can see.
   A name YouTrack does not have is refused, and the error lists the tags there
-  are; Flow does not create tags.
+  are; Flow does not create tags. YouTrack lets the service user add a tag only
+  when the tag's sharing settings allow **Aixle Flow** (or everyone) to add it
+  to issues, whatever its role in the project.
 - **People** — by login, full name or email; it must match exactly one person
   the project's **Assignee** field offers. `none` clears it.
   `tracker_list_users` lists them.

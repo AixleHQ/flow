@@ -106,7 +106,7 @@ module FakeYoutrack
 
     def issues(query:, top:, skip:)
       record(:issues, query: query, top: top, skip: skip) do
-        key = query[/\Aproject: \{([^}]+)\}/, 1]
+        key = query[/project: \{([^}]+)\}/, 1]
         @issues.values.select { |i| i[:project_key] == key }.drop(skip).first(top).map(&:deep_dup)
       end
     end

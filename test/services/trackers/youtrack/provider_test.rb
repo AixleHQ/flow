@@ -42,13 +42,13 @@ class Trackers::Youtrack::ProviderTest < ActiveSupport::TestCase
     assert_not @provider.owns_reference?(APP, "OPS-7")
   end
 
-  test "search is the project ANDed with the filters, and a native query is bracketed before the sort" do
+  test "search is the project ANDed with the filters and a bracketed native query, its sort leading" do
     page = @provider.search_issues(APP, { status: "Ready for AI", labels: [ "ai" ], assignee: "Jane Doe", open_only: true,
                                           text: "it \"breaks\"", type: "Bug", native_query: "Priority: Major sort by: created" })
 
     assert_equal [ "APP-1" ], page.items.map(&:key)
-    assert_equal "project: {APP} and Type: {Bug} and State: {Ready for AI} and Assignee: jdoe and \"it breaks\" and tag: {ai} " \
-                 "and #Unresolved and (Priority: Major) sort by: created", @youtrack.calls_to(:issues).last[:query]
+    assert_equal "sort by: created project: {APP} and Type: {Bug} and State: {Ready for AI} and Assignee: jdoe and \"it breaks\" " \
+                 "and tag: {ai} and #Unresolved and (Priority: Major)", @youtrack.calls_to(:issues).last[:query]
   end
 
   test "an issue is created with its type, assignee, tags and fields" do
@@ -65,6 +65,14 @@ class Trackers::Youtrack::ProviderTest < ActiveSupport::TestCase
     assert_match(/No such tag: nope/, assert_raises(Trackers::Error) { @provider.create_issue(APP, { title: "x", labels: [ "nope" ] }) }.message)
     assert_match(/not a value of Priority/, assert_raises(Trackers::Error) { @provider.create_issue(APP, { title: "x", fields: { "Priority" => "Low" } }) }.message)
     assert_match(/not a field Aixle can set/, assert_raises(Trackers::Error) { @provider.create_issue(APP, { title: "x", fields: { "Estimation" => "1h" } }) }.message)
+  end
+
+  test "a tag the service user may not add is refused in words that say where to allow it" do
+    @youtrack.fail_next(:create_issue, Trackers::Error.new("Can't tag issue", code: "permission_denied"))
+
+    error = assert_raises(Trackers::Error) { @provider.create_issue(APP, { title: "Tagged", labels: [ "ai" ] }) }
+    assert_equal "permission_denied", error.code
+    assert_match(/would not let Aixle Flow add ai: a tag's settings/, error.message)
   end
 
   test "an update changes the summary and moves tags one by one" do

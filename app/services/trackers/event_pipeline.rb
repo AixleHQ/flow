@@ -144,7 +144,7 @@ module Trackers
                                    .order(created_at: :desc)
       case notification.kind
       when :issue_created then recent.find_by(operation: "create_issue")
-      when :comment_created then recent.find_by(operation: "add_comment")
+      when :comment_created then comment_operation(recent, notification)
       when :issue_updated
         change = events.find { |type, _| type == "tracker.issue.status_changed" }&.dig(1, "change").to_h
         # A transition sets the state; on Azure the event names the column the card moved to.
@@ -155,6 +155,15 @@ module Trackers
         assigned = events.any? { |type, _| type == "tracker.issue.assigned" }
         by_status || (assigned ? recent.find_by(operation: "assign_issue") : nil)
       end
+    end
+
+    # A comment is Aixle's when the ledger names it, or, while the write is still
+    # unanswered, when the connection's own identity wrote it. Anyone else's
+    # comment on the issue is theirs, however recently Aixle commented there.
+    def comment_operation(recent, notification)
+      writes = recent.where(operation: "add_comment")
+      named = notification.comment_id.present? && writes.find_by(result_ref: notification.comment_id.to_s)
+      named || (@provider.own_actor?(notification.actor) ? writes.find_by(result_ref: nil) || writes.first : nil)
     end
 
     def over_limits?(tracker, issue, origin)
