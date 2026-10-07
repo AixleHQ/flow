@@ -20,7 +20,7 @@ module Teams
       user = sender(integration, activity)
       return dialog("Link your Aixle account", RunCards.link(link_url(integration, activity))) if user.nil?
 
-      entries = RunCatalog.entries(user, integration)
+      entries = Chat::RunCatalog.entries(user, integration)
       return notice_dialog("There is no workflow you can start from Teams in #{integration.company.name}.") if entries.empty?
 
       payload = activity.dig("value", "messagePayload").to_h
@@ -38,7 +38,7 @@ module Teams
       user = sender(integration, activity)
       return dialog("Link your Aixle account", RunCards.link(link_url(integration, activity))) if user.nil?
 
-      entry = RunCatalog.find(user, integration, data["workflow"])
+      entry = Chat::RunCatalog.find(user, integration, data["workflow"])
       return notice_dialog(GONE) if entry.nil?
 
       root = activity.dig("conversation", "id").to_s.split(";messageid=", 2)[1]
@@ -68,7 +68,7 @@ module Teams
       return card_response(RunCards.link(link_url(integration, activity))) if user.nil?
 
       data = action["data"].to_h
-      entry = RunCatalog.find(user, integration, data["workflow"])
+      entry = Chat::RunCatalog.find(user, integration, data["workflow"])
       return card_response(RunCards.notice(GONE)) if entry.nil?
 
       # A retried invoke reuses the thread its first delivery opened.

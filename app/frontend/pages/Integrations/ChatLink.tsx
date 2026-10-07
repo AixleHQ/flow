@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { Anchor, Button, Center, Paper, Stack, Text, Title } from '@mantine/core';
-import { IconBrandTeams } from '@tabler/icons-react';
+import { IconBrandSlack, IconBrandTeams } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
@@ -12,6 +12,10 @@ type State = 'expired' | 'sign_in' | 'other_company' | 'ready' | 'linked';
 
 interface Props {
   state: State;
+  // The messenger whose account is being linked, and the sign-in that proves it.
+  provider: 'teams' | 'slack';
+  messenger: string;
+  signInLabel: string;
   account?: { name: string | null; email: string | null } | null;
   workspace?: string;
   signInUrl?: string;
@@ -29,10 +33,11 @@ const Message = ({ title, children }: { title: string; children: ReactNode }) =>
   </Stack>
 );
 
-function TeamsLink({ state, account, workspace, signInUrl, loginUrl }: Props) {
+function ChatLink({ state, provider, messenger, signInLabel, account, workspace, signInUrl, loginUrl }: Props) {
+  const Icon = provider === 'slack' ? IconBrandSlack : IconBrandTeams;
   return (
     <PageShell variant="centered">
-      <Head title="Link your Teams account" />
+      <Head title={`Link your ${messenger} account`} />
       <Paper p="xl" radius="md" w="100%" maw={520} withBorder>
         <Center mb={24}>
           <Logo width={96} />
@@ -41,13 +46,13 @@ function TeamsLink({ state, account, workspace, signInUrl, loginUrl }: Props) {
           <Flash />
           {state === 'expired' && (
             <Message title="This link is no longer valid">
-              It expires an hour after Aixle Flow sends it. Ask Aixle Flow in Teams again for a new one.
+              It expires an hour after Aixle Flow sends it. Ask Aixle Flow in {messenger} again for a new one.
             </Message>
           )}
           {state === 'sign_in' && (
             <>
               <Message title="Sign in to Aixle first">
-                Sign in to your Aixle account, then open the link from Teams again.
+                Sign in to your Aixle account, then open the link from {messenger} again.
               </Message>
               <Button component="a" href={loginUrl} fullWidth>
                 Sign in to Aixle
@@ -56,32 +61,28 @@ function TeamsLink({ state, account, workspace, signInUrl, loginUrl }: Props) {
           )}
           {state === 'other_company' && (
             <Message title={`Switch to ${workspace}`}>
-              This Teams organization is connected to the Aixle workspace {workspace}. Switch to it, then open the link
-              again.
+              This {messenger} workspace is connected to the Aixle workspace {workspace}. Switch to it, then open the
+              link again.
             </Message>
           )}
           {state === 'ready' && (
             <>
               <Title order={3} ta="center">
-                Link your Teams account
+                Link your {messenger} account
               </Title>
               <Text size="sm">
-                Aixle Flow in Teams will start {workspace} workflows as <strong>{account?.name}</strong>
-                {account?.email ? ` (${account.email})` : ''}, with what this account may run. Sign in with the
-                Microsoft account you use in Teams to prove it is yours. This does not add a way to sign in to Aixle.
+                Aixle Flow in {messenger} will start {workspace} workflows as <strong>{account?.name}</strong>
+                {account?.email ? ` (${account.email})` : ''}, with what this account may run. Sign in with the account
+                you use in {messenger} to prove it is yours. This does not add a way to sign in to Aixle.
               </Text>
-              <Button
-                onClick={() => signInUrl && postNavigate(signInUrl)}
-                leftSection={<IconBrandTeams size={18} />}
-                fullWidth
-              >
-                Sign in with Microsoft to link
+              <Button onClick={() => signInUrl && postNavigate(signInUrl)} leftSection={<Icon size={18} />} fullWidth>
+                {signInLabel}
               </Button>
             </>
           )}
           {state === 'linked' && (
-            <Message title="Your Teams account is linked">
-              Aixle Flow in Teams knows you as {account?.name}. Go back to Teams and run the workflow again.
+            <Message title={`Your ${messenger} account is linked`}>
+              Aixle Flow in {messenger} knows you as {account?.name}. Go back to {messenger} and run the workflow again.
             </Message>
           )}
           {state !== 'ready' && (
@@ -95,4 +96,4 @@ function TeamsLink({ state, account, workspace, signInUrl, loginUrl }: Props) {
   );
 }
 
-export default TeamsLink;
+export default ChatLink;

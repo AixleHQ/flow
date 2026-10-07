@@ -70,6 +70,8 @@ Rails.application.routes.draw do
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
   post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
+  post "/webhooks/slack/interactions", to: "webhooks/slack#interactions", as: :slack_interactions_webhook
+  post "/webhooks/slack/commands", to: "webhooks/slack#commands", as: :slack_commands_webhook
   post "/webhooks/teams/activities", to: "webhooks/teams#activities", as: :teams_activities_webhook
 
   # Public asset share links (no session auth — reachable by anyone with the
@@ -422,6 +424,11 @@ Rails.application.routes.draw do
     # Slack OAuth callback — one deployment-wide redirect URI registered on the
     # Slack app; the project is carried in the signed `state`, not the path.
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
+    # A Slack sender linking their Slack account to their Aixle one. Sign in with
+    # Slack returns below the install's redirect URL, which Slack accepts as is.
+    get "integrations/slack/oauth/callback/link", to: "integrations/slack_links#complete", as: :slack_link_callback
+    get "integrations/slack/link/:token", to: "integrations/slack_links#show", as: :slack_link
+    post "integrations/slack/link/:token/sign_in", to: "integrations/slack_links#sign_in", as: :slack_link_sign_in
     # The one redirect URI registered on Aixle's Atlassian OAuth app.
     get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
     # The one redirect URI registered on Aixle's Linear OAuth app.

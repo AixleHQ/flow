@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): all pass, 5 (slash commands, answered as targeted messages) on staging on 2026-10-07. Phase 2, Teams only and without approvals, is built in the same PR (§20)
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): all pass, 5 (slash commands, answered as targeted messages) on staging on 2026-10-07. Phase 2, Teams only and without approvals, is built in the same PR (§20); the same self-service start for Slack followed (§21)
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1260,6 +1260,23 @@ What phase 2 adds to Teams:
 | Status card without a trigger | A run started by an action or `/run` gets a `trigger_events` row (its message, as a `chat.message` from Teams) and a `trigger_dispatches` row with no binding and `detail.status_reporting = "lifecycle"`, so the run-transition seam drives the same card |
 | Commands | `help` (slash and mention), `run` and `status` (slash only). In a 1:1 chat, where every message may be a trigger's, only `/run`, `/status` or the bare word is a command. A Teams trigger may not claim `run` or `status` |
 | Manifest | `composeExtensions` with the `runWorkflow` action, `run` and `status` in `commandLists`; version 1.2.0 |
+
+## 21. Starting a workflow yourself in Slack
+
+The same self-service start as Teams' phase 2, added after it (2026-10-07). The pieces that do not depend
+on the messenger moved into `Chat::`: `Chat::RunCatalog` (what a linked person may start),
+`Chat::RunStarter` (the binding-less `chat.message` and its dispatch), `Chat::RecentRuns` (`status`) and
+`Web::Integrations::ChatLinksController` with one `Integrations/ChatLink` page.
+
+| Piece | Slack |
+|---|---|
+| Account link | `chat_identities` row `(slack, team_id, user_id)`, proof `slack_sign_in`. The bot's link names the Slack account; Sign in with Slack (OpenID Connect, `openid profile`, `team` set to the workspace) must return an ID token whose `https://slack.com/team_id` and `https://slack.com/user_id` are that account's, with this sign-in's `nonce`. It returns to `/integrations/slack/oauth/callback/link`, a subdirectory of the install's registered redirect URL, so no Slack app change is needed for it. Not a sign-in method |
+| Who a sender is | `Slack::Sender`: the linked account, only while it may sign in. There is no Slack sign-in to Aixle to recognise someone by |
+| "Run workflow" on a message | A message shortcut (`callback_id: run_workflow`) opens a modal (`views.open`) of the workflows the person may start; `view_submission` starts the run as them with the message's text and notes, in that message's thread. Unlinked people get a modal with the link |
+| Slash command | `/<command> run` opens the same modal; the run gets a thread opened by "▶ @person started workflow". `/<command> status` answers ephemerally. The command name is the operator's |
+| Endpoints | `POST /webhooks/slack/interactions` and `POST /webhooks/slack/commands`, signed like the Events API; Slack waits three seconds |
+| Install | The `commands` scope joins the bot scopes; a workspace installed before it must install again for the shortcut and the command to appear |
+| Status card | Slack's card names who started a run started this way, as Teams' does |
 
 ## Sources
 

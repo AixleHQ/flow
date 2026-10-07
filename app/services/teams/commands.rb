@@ -10,7 +10,6 @@ module Teams
     DIRECT_PATTERN = %r{\A(?:/(run|status)(?:\s+(.*))?|(run|status))\z}im
     # The words alone, which no Teams trigger may use as its command.
     RESERVED = %r{\A/?(run|status)\z}i
-    STATUS_LIMIT = 10
     STATES = {
       "pending" => "⏳ Accepted", "running" => "▶️ Running", "paused" => "▶️ Running", "completed" => "✅ Completed",
       "failed" => "❌ Failed", "cancelled" => "⏹️ Cancelled"
@@ -51,21 +50,19 @@ module Teams
       user = sender(data)
       return link_card(integration, data) if user.nil?
 
-      entries = RunCatalog.entries(user, integration)
+      entries = Chat::RunCatalog.entries(user, integration)
       return RunCards.notice("There is no workflow you can start from Teams in #{integration.company.name}.") if entries.empty?
 
       RunCards.picker(entries, data: {}, execute: true, notes: notes.presence)
     end
 
-    # Only runs of projects the asker may see in Aixle: a quiet trigger's runs
-    # never showed themselves in the conversation.
     def status_card(integration, conversation, data)
       user = sender(data)
       return link_card(integration, data) if user.nil?
-      return RunCards.notice("You are not a member of #{integration.company.name} in Aixle.") unless RunCatalog.member?(user, integration)
+      return RunCards.notice("You are not a member of #{integration.company.name} in Aixle.") unless Chat::RunCatalog.member?(user, integration)
 
-      projects = RunCatalog.active_projects(integration).select { |project| project.accessible_by?(user) }
-      RunCards.notice(status_text(projects.map(&:id), conversation))
+      RunCards.notice(status_text(Chat::RecentRuns.for(user, integration, provider: Chat::TeamsProvider::KEY,
+                                                                          conversation_id: conversation.external_id)))
     end
 
     def sender(data) = Sender.user(data.dig("workspace", "id"), data.dig("actor", "id"))
@@ -75,11 +72,7 @@ module Teams
                                         object_id: data.dig("actor", "id")))
     end
 
-    def status_text(project_ids, conversation)
-      runs = WorkflowRun.where(project_id: project_ids, created_at: 30.days.ago..)
-                        .where("shared_context -> 'chat' ->> 'provider' = ?", Chat::TeamsProvider::KEY)
-                        .where("shared_context -> 'chat' -> 'conversation' ->> 'id' = ?", conversation.external_id)
-                        .includes(:workflow).order(created_at: :desc).limit(STATUS_LIMIT)
+    def status_text(runs)
       return "No runs were started from this conversation in the last 30 days." if runs.empty?
 
       lines = runs.map do |run|

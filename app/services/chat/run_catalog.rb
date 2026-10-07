@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-module Teams
-  # The workflows a linked person may start from Teams (docs/design/teams-integration.md
-  # §20): in the company the organization is connected to, in projects where the
-  # web would let them start a run, and only workflows that can run unattended,
-  # as every run started from chat does.
+module Chat
+  # The workflows a linked person may start from a messenger (docs/design/teams-integration.md
+  # §20): in the company the workspace or organization is connected to, in projects
+  # where the web would let them start a run, and only workflows that can run
+  # unattended, as every run started from chat does.
   module RunCatalog
     # What a picker shows; a key from an older card is still looked up on its own.
     LIMIT = 50
@@ -19,7 +19,7 @@ module Teams
     def entries(user, integration)
       return [] unless member?(user, integration)
 
-      projects = active_projects(integration).select { |project| may_start?(user, project) }.index_by(&:id)
+      projects = active_projects(integration).includes(:company).select { |project| may_start?(user, project) }.index_by(&:id)
       Workflow.active.where(scope_type: "Project", scope_id: projects.keys).includes(:steps).order(:name)
               .select { |workflow| unattended?(workflow) }
               .first(LIMIT)
@@ -42,7 +42,7 @@ module Teams
     end
 
     def active_projects(integration)
-      Project.where(company_id: integration.company_id).with_state(:active).includes(:company).order(:name)
+      Project.where(company_id: integration.company_id).with_state(:active).order(:name)
     end
 
     def unattended?(workflow) = workflow.visible_steps.all?(&:allow_non_interactive)

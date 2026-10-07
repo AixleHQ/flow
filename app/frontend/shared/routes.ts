@@ -157,6 +157,16 @@ export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /webhooks/slack/interactions(.:format) */
+export function slackInteractionsWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "slack" + "/" + "interactions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/slack/commands(.:format) */
+export function slackCommandsWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "slack" + "/" + "commands" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /webhooks/teams/activities(.:format) */
 export function teamsActivitiesWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "teams" + "/" + "activities" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1295,6 +1305,21 @@ export function userPath(id: ScalarType, options?: object): string {
 /** /integrations/slack/oauth/callback(.:format) */
 export function slackOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/slack/oauth/callback/link(.:format) */
+export function slackLinkCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + "/" + "link" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/slack/link/:token(.:format) */
+export function slackLinkPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "slack" + "/" + "link" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /integrations/slack/link/:token/sign_in(.:format) */
+export function slackLinkSignInPath(token: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "slack" + "/" + "link" + "/" + token + "/" + "sign_in" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
 }
 
 /** /integrations/jira/oauth/callback(.:format) */

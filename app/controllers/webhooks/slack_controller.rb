@@ -39,7 +39,48 @@ class Webhooks::SlackController < ActionController::API
     head :ok # duplicate delivery (same event_id) — already accepted
   end
 
+  # Interactivity: the "Run workflow" shortcut and its modal's submission
+  # (docs/design/teams-integration.md §21). Slack waits three seconds.
+  def interactions
+    return head :unauthorized unless verified?(request.raw_post)
+
+    payload = safe_json(params[:payload].to_s) || {}
+    integration = integration_for(payload.dig("team", "id").to_s)
+    return head :ok if integration.nil?
+
+    case payload["type"]
+    when "message_action"
+      Slack::RunAction.shortcut(integration, payload) if payload["callback_id"] == Slack::RunAction::CALLBACK
+      head :ok
+    when "view_submission"
+      return head :ok unless payload.dig("view", "callback_id") == Slack::RunAction::CALLBACK
+
+      render json: Slack::RunAction.submit(integration, payload)
+    else
+      head :ok # a link button's click, which opens the browser by itself
+    end
+  end
+
+  # The app's slash command: `run` and `status`.
+  def commands
+    return head :unauthorized unless verified?(request.raw_post)
+
+    integration = integration_for(params[:team_id].to_s)
+    if integration.nil?
+      return render(json: { response_type: "ephemeral", text: "This Slack workspace is not connected to Aixle." })
+    end
+
+    answer = Slack::RunAction.command(integration,
+                                      params.permit(:command, :text, :team_id, :user_id, :channel_id, :trigger_id).to_h)
+    answer ? render(json: answer) : head(:ok)
+  end
+
   private
+
+  def integration_for(team_id)
+    endpoint = endpoint_for(team_id)
+    Integration.active.find_by(id: endpoint&.config.to_h["integration_id"], provider: :slack)
+  end
 
   def verified?(raw)
     Webhooks::SignatureVerifier.verify(

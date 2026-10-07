@@ -4,7 +4,7 @@
 # own sign-in, that it is them (docs/design/teams-integration.md §9). It says who
 # is asking; it never lets anyone sign in to Aixle.
 class ChatIdentity < ApplicationRecord
-  PROOFS = %w[microsoft_sign_in].freeze
+  PROOFS = %w[microsoft_sign_in slack_sign_in].freeze
 
   belongs_to :user
 
