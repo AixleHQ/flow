@@ -42,7 +42,7 @@ class Integrations::YoutrackPairingsTest < ActionDispatch::IntegrationTest
     project = response.parsed_body["projects"].sole
     assert_equal [ APP, subscription.secret, "State", "Assignee" ], project.values_at("id", "secret", "status_field", "assignee_field")
     assert_match %r{/webhooks/trackers/#{subscription.endpoint_token}\z}, project["events_url"]
-    assert_match %r{/company/projects/#{@project.id}/trackers\z}, response.parsed_body["return_url"]
+    assert_equal "#{Settings.protocol || 'https'}://#{Settings.domain}/company/projects/#{@project.id}/trackers", response.parsed_body["return_url"]
     assert_equal [ "perm:minted", @user ], [ integration.credentials_data["permanent_token"], integration.connected_by ]
     assert_equal [ "completed", integration ], [ pairing.reload.state, pairing.integration ]
 
@@ -65,7 +65,7 @@ class Integrations::YoutrackPairingsTest < ActionDispatch::IntegrationTest
     assert_response :created
     body = response.parsed_body
     assert_match(/\A[A-Z2-9]{4}-[A-Z2-9]{4}\z/, body["code"])
-    assert_equal youtrack_connect_url, body["approve_url"]
+    assert_equal "#{Settings.protocol || 'https'}://#{Settings.domain}/integrations/youtrack/connect", body["approve_url"]
     pairing = YoutrackPairing.find_by!(public_id: body["id"])
     assert_equal [ "youtrack", "https://acme.youtrack.cloud" ], [ pairing.origin, pairing.instance_url ]
 

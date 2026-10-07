@@ -38,7 +38,9 @@ module Youtrack
     # The project's custom fields: [{ name:, field_type:, values: [{ id:, name:, resolved: }], users: [...] }].
     # `field_type` is YouTrack's own ("state[1]", "enum[*]", "user[1]", …).
     def project_fields(project_id)
-      list(@client.get("/api/admin/projects/#{escape(project_id)}/customFields", fields: PROJECT_FIELD, "$top": 200)).map do |f|
+      raw = list(@client.get("/api/admin/projects/#{escape(project_id)}/customFields", fields: PROJECT_FIELD, "$top": 200))
+      raw = draft_fields(project_id) if raw.empty?
+      raw.map do |f|
         bundle = f["bundle"].to_h
         {
           name: f.dig("field", "name").to_s, field_type: f.dig("field", "fieldType", "id").to_s,
@@ -46,6 +48,24 @@ module Youtrack
                                          .map { |v| { id: v["id"].to_s, name: v["name"].to_s, resolved: v["isResolved"] == true } },
           users: Array(bundle["aggregatedUsers"]).reject { |u| u["banned"] }.map { |u| user(u) }
         }
+      end
+    end
+
+    # The project's fields as a new-issue draft carries them, the way YouTrack's
+    # own form reads them: the admin endpoint answers an account that only
+    # belongs to the project's team — the Aixle Flow app's service user — with
+    # an empty list. The draft is the account's own and is deleted at once.
+    def draft_fields(project_id)
+      draft = @client.post("/api/users/me/drafts", { project: { id: project_id } },
+                           fields: "id,customFields(projectCustomField(#{PROJECT_FIELD}))")
+      Array(draft.is_a?(Hash) ? draft["customFields"] : nil).filter_map { |f| f["projectCustomField"] if f.is_a?(Hash) }
+    ensure
+      if draft.is_a?(Hash) && draft["id"].present?
+        begin
+          @client.delete("/api/users/me/drafts/#{escape(draft['id'])}")
+        rescue Trackers::Error => e
+          Rails.logger.warn("youtrack: draft #{draft['id']} left behind (#{e.code})")
+        end
       end
     end
 

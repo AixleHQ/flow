@@ -19,7 +19,7 @@ class Integrations::YoutrackPairingsController < ActionController::API
 
     pairing, secret = YoutrackPairing.start!(instance_url: url)
     render status: :created, json: {
-      id: pairing.public_id, secret: secret, code: pairing.code, approve_url: youtrack_connect_url,
+      id: pairing.public_id, secret: secret, code: pairing.code, approve_url: app_url(youtrack_connect_path),
       expires_at: pairing.expires_at.iso8601
     }
   end
@@ -47,7 +47,7 @@ class Integrations::YoutrackPairingsController < ActionController::API
                                                              project_ids: Array(params[:projects]).map { |p| p[:id].to_s },
                                                              app_version: params[:app_version])
       @pairing.complete!(integration)
-      render json: { projects: subscriptions_json(integration), return_url: company_project_trackers_url(@pairing.project) }
+      render json: { projects: subscriptions_json(integration), return_url: app_url(company_project_trackers_path(@pairing.project)) }
     end
   rescue Trackers::Error => e
     error(:unprocessable_content, e.code, e.message)
@@ -62,6 +62,11 @@ class Integrations::YoutrackPairingsController < ActionController::API
     secret = request.authorization.to_s.delete_prefix("Bearer ").strip
     error(:not_found, "not_found", "No such pairing") unless @pairing&.authentic?(secret)
   end
+
+  # Pages a person opens are on the app's own domain, never the host this
+  # request came through: a staging deployment serves this API on its public
+  # webhook host, which forwards that host along.
+  def app_url(path) = "#{Settings.protocol || 'https'}://#{Settings.domain}#{path}"
 
   def instance_url(value)
     url = Youtrack::Config.normalize_base_url(value.to_s)
