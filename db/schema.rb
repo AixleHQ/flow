@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1762,6 +1762,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
 
   add_check_constraint "workflows", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'System'::text AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "workflows_tenant_columns", validate: false
 
+  create_table "youtrack_pairings", force: :cascade do |t|
+    t.string "public_id", null: false
+    t.string "secret_digest", null: false
+    t.string "code", null: false
+    t.string "origin", null: false
+    t.string "status", default: "pending", null: false
+    t.string "instance_url", null: false
+    t.bigint "company_id"
+    t.bigint "project_id"
+    t.bigint "user_id"
+    t.bigint "integration_id"
+    t.datetime "expires_at", null: false
+    t.datetime "approved_at"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_youtrack_pairings_on_code", unique: true, where: "((status)::text = 'pending'::text)"
+    t.index ["company_id"], name: "index_youtrack_pairings_on_company_id"
+    t.index ["integration_id"], name: "index_youtrack_pairings_on_integration_id"
+    t.index ["project_id"], name: "index_youtrack_pairings_on_project_id"
+    t.index ["public_id"], name: "index_youtrack_pairings_on_public_id", unique: true
+    t.index ["user_id"], name: "index_youtrack_pairings_on_user_id"
+  end
+
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "agents", "companies", on_delete: :cascade, validate: false
@@ -1949,4 +1973,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120500) do
   add_foreign_key "workflows", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_project_company", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "projects", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "users", column: "published_by_id", on_delete: :nullify
+  add_foreign_key "youtrack_pairings", "companies", on_delete: :cascade
+  add_foreign_key "youtrack_pairings", "integrations", on_delete: :nullify
+  add_foreign_key "youtrack_pairings", "projects", on_delete: :cascade
+  add_foreign_key "youtrack_pairings", "users", on_delete: :cascade
 end

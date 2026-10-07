@@ -30,6 +30,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconCopy,
+  IconExternalLink,
   IconKey,
   IconLayoutKanban,
   IconLink,
@@ -60,12 +61,7 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
-import {
-  YoutrackConnectModal,
-  YoutrackProjectsModal,
-  type YoutrackProps,
-  YoutrackWebhookModal,
-} from './YoutrackConnectModal';
+import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
@@ -136,6 +132,11 @@ const DEFAULT_CODER_LOCK_TTL = 120;
 
 const TOKEN_PROVIDERS = new Set(['gitlab', 'coder']);
 
+const youtrackPendingNotice = (keys: string[]) =>
+  `No event yet from ${keys.join(', ')} — check that the Aixle Flow app is attached to those projects in YouTrack`;
+
+const youtrackManageUrl = (baseUrl: string) => `${baseUrl.replace(/\/+$/, '')}/admin/app/aixle-flow/connect`;
+
 const errorMessage = (errors: unknown, fallback: string) =>
   (typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '') || fallback;
 
@@ -189,8 +190,6 @@ export const IntegrationsContent = ({
   const linearAvailable = isProjectContext && !!linear;
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
-  const [youtrackProjectsTarget, setYoutrackProjectsTarget] = useState<Integration | null>(null);
-  const [youtrackWebhookTarget, setYoutrackWebhookTarget] = useState<Integration | null>(null);
   const youtrackAvailable = isProjectContext && !!youtrack?.enabled;
 
   // The Atlassian and Linear apps' callbacks land here with the connection still to finish.
@@ -760,15 +759,20 @@ export const IntegrationsContent = ({
                           )}
                           {integration.provider === 'youtrack' && (
                             <Text fz={11} c="dimmed" truncate maw={260}>
-                              {`${integration.youtrackProjects.map((p) => p.key).join(', ') || 'no projects'} · as @${
-                                integration.youtrackIdentity ?? integration.connectedBy.name
-                              } (permanent token)`}
+                              {integration.youtrackProjects.map((p) => p.key).join(', ') || 'no projects'}
+                              {integration.youtrackIdentity && ` · as @${integration.youtrackIdentity}`}
                             </Text>
                           )}
                           {integration.youtrackWebhooksPending.length > 0 && (
-                            <Text fz={11} c="yellow.7" truncate maw={260}>
-                              {`No webhook event yet from ${integration.youtrackWebhooksPending.join(', ')}`}
-                            </Text>
+                            <Tooltip
+                              label={youtrackPendingNotice(integration.youtrackWebhooksPending)}
+                              multiline
+                              maw={360}
+                            >
+                              <Text fz={11} c="yellow.7" truncate maw={260}>
+                                {youtrackPendingNotice(integration.youtrackWebhooksPending)}
+                              </Text>
+                            </Tooltip>
                           )}
                           {integration.linearWebhookError && (
                             <Tooltip label={integration.linearWebhookError} multiline maw={360}>
@@ -985,55 +989,49 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {integration.provider === 'youtrack' && canExecute && !readOnly && (
-                          <>
-                            {integration.status !== 'inactive' && (
-                              <Tooltip label="Test connection">
-                                <ActionIcon
-                                  aria-label={`Test connection for ${integration.name}`}
-                                  variant="subtle"
-                                  size="sm"
-                                  onClick={() => handleTestConnection(integration)}
-                                >
-                                  <IconRefresh size={16} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                            <Tooltip label="YouTrack projects">
+                        {integration.provider === 'youtrack' &&
+                          canExecute &&
+                          !readOnly &&
+                          integration.status !== 'inactive' && (
+                            <Tooltip label="Test connection">
                               <ActionIcon
-                                aria-label={`YouTrack projects for ${integration.name}`}
+                                aria-label={`Test connection for ${integration.name}`}
                                 variant="subtle"
                                 size="sm"
-                                onClick={() => setYoutrackProjectsTarget(integration)}
+                                onClick={() => handleTestConnection(integration)}
                               >
-                                <IconPencil size={16} />
+                                <IconRefresh size={16} />
                               </ActionIcon>
                             </Tooltip>
-                            <Tooltip label="Webhook setup">
+                          )}
+                        {integration.provider === 'youtrack' && integration.youtrackBaseUrl && !readOnly && (
+                          <>
+                            <Tooltip label="Open in YouTrack">
                               <ActionIcon
-                                aria-label={`Webhook setup for ${integration.name}`}
+                                aria-label={`Open ${integration.name} in YouTrack`}
                                 variant="subtle"
                                 size="sm"
-                                onClick={() => setYoutrackWebhookTarget(integration)}
+                                component="a"
+                                href={integration.youtrackBaseUrl}
+                                target="_blank"
                               >
-                                <IconWebhook size={16} />
+                                <IconExternalLink size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                            <Tooltip label="Manage in YouTrack">
+                              <ActionIcon
+                                aria-label={`Manage ${integration.name} in YouTrack`}
+                                variant="subtle"
+                                size="sm"
+                                component="a"
+                                href={youtrackManageUrl(integration.youtrackBaseUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <IconSettings size={16} />
                               </ActionIcon>
                             </Tooltip>
                           </>
-                        )}
-                        {integration.provider === 'youtrack' && integration.youtrackBaseUrl && !readOnly && (
-                          <Tooltip label="Open in YouTrack">
-                            <ActionIcon
-                              aria-label={`Open ${integration.name} in YouTrack`}
-                              variant="subtle"
-                              size="sm"
-                              component="a"
-                              href={integration.youtrackBaseUrl}
-                              target="_blank"
-                            >
-                              <IconSettings size={16} />
-                            </ActionIcon>
-                          </Tooltip>
                         )}
                         {TOKEN_PROVIDERS.has(integration.provider) && canExecute && !readOnly && (
                           <>
@@ -1127,19 +1125,12 @@ export const IntegrationsContent = ({
       )}
 
       {youtrack && (
-        <>
-          <YoutrackConnectModal opened={youtrackOpen} onClose={() => setYoutrackOpen(false)} basePath={basePath} />
-          <YoutrackProjectsModal
-            integration={youtrackProjectsTarget}
-            onClose={() => setYoutrackProjectsTarget(null)}
-            basePath={basePath}
-          />
-          <YoutrackWebhookModal
-            integration={youtrackWebhookTarget}
-            onClose={() => setYoutrackWebhookTarget(null)}
-            basePath={basePath}
-          />
-        </>
+        <YoutrackConnectModal
+          opened={youtrackOpen}
+          onClose={() => setYoutrackOpen(false)}
+          basePath={basePath}
+          youtrack={youtrack}
+        />
       )}
 
       <GithubProjectsModal

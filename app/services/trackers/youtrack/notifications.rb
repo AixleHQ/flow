@@ -2,80 +2,70 @@
 
 module Trackers
   module Youtrack
-    # A Webhook Triggers app payload (github.com/JetBrains/youtrack-apps,
-    # packages/webhook-triggers-app) reduced to Trackers::Notification.
+    # An Aixle Flow app event (youtrack-app/README.md, "Events") reduced to
+    # Trackers::Notification.
     #
-    # A delivery is for the YouTrack project whose subscription it reached:
-    # the app holds one token per project. The project the payload names (by
-    # short name, which a rename changes) is not checked here; the issue is
-    # re-read, and one in another project is refused then. People come without
-    # their id, so the actor is only a hint until the provider confirms it.
-    #
-    # Comment text is left out: it is read from YouTrack, and a delivery keeps
-    # identifiers and change hints only.
+    # An event is for the YouTrack project whose subscription it reached. The
+    # project the payload names (by short name, which a rename changes) is not
+    # checked here; the issue is re-read, and one in another project is refused
+    # then. Everything else is a hint until the provider confirms it. A comment
+    # carries its id when the app could read one, and its author and creation
+    # time either way, by which it is found otherwise.
     module Notifications
       module_function
 
       # `project` is the subscription's entry of the connection's youtrack_projects.
       def parse(payload, project:)
-        return [] unless payload.is_a?(Hash) && project
+        return [] unless payload.is_a?(Hash) && project && payload["version"].to_i >= 1
 
-        issue_id = payload["id"].to_s
+        issue_id = payload["issue"].to_s
         return [] if issue_id.blank?
 
-        base = { scope_id: project["id"].to_s, issue_id: issue_id, occurred_at: payload["timestamp"].presence }
+        base = { scope_id: project["id"].to_s, issue_id: issue_id, occurred_at: time(payload["at"]) }
         case payload["event"]
-        when "issueCreated"
-          [ Notification.build(kind: :issue_created, actor: actor(payload["reporter"]), revision: "created", **base) ]
-        when "issueUpdated"
-          changes = changes(payload["changedFields"], project)
+        when "issue_created"
+          [ Notification.build(kind: :issue_created, actor: actor(payload["actor"]), revision: "created", **base) ]
+        when "issue_updated"
+          changes = changes(payload["changes"])
           return [] if changes.empty?
 
-          [ Notification.build(kind: :issue_updated, changes: changes, actor: actor(payload["updatedBy"]),
-                               revision: payload["updated"].to_s.presence, **base) ]
-        when "commentAdded"
+          [ Notification.build(kind: :issue_updated, changes: changes, actor: actor(payload["actor"]),
+                               revision: payload["at"].to_s.presence, **base) ]
+        when "comment_added"
           Array(payload["comments"]).filter_map do |comment|
-            next unless comment.is_a?(Hash) && comment["id"].present?
+            next unless comment.is_a?(Hash)
 
-            Notification.build(kind: :comment_created, comment_id: comment["id"].to_s, actor: actor(comment["author"]), **base)
+            Notification.build(kind: :comment_created, comment_id: comment["id"].to_s.presence, actor: actor(comment["author"]),
+                               **base, occurred_at: time(comment["created"]) || base[:occurred_at])
           end
         else []
         end
       end
 
-      # The project's state field is the status; its assignee field the
-      # assignee, one change per person added to a multi-person field.
-      def changes(fields, project)
-        status = project["status_field"].presence || "State"
-        assignee = project["assignee_field"].presence || "Assignee"
-        Array(fields).flat_map do |field|
-          next [] unless field.is_a?(Hash)
+      # One assignee change per person added to a multi-person field.
+      def changes(changes)
+        return [] unless changes.is_a?(Hash)
 
-          case field["name"]
-          when status then [ { field: "status", from: name_of(field["oldValue"]), to: name_of(field["value"]) }.compact ]
-          when assignee then assignments(field["oldValue"], field["value"])
-          else []
+        status = changes["status"]
+        assignee = changes["assignee"]
+        result = []
+        result << { field: "status", from: status["from"].presence, to: status["to"].presence }.compact if status.is_a?(Hash)
+        if assignee.is_a?(Hash)
+          before = Array(assignee["from"]).compact_blank
+          (Array(assignee["to"]).compact_blank - before).each do |login|
+            result << { field: "assignee", from: before.first, to: login }.compact
           end
-        end.select { |change| change[:to].present? }
+        end
+        result.select { |change| change[:to].present? }
       end
 
-      def assignments(old_value, value)
-        before = logins(old_value)
-        (logins(value) - before).map { |login| { field: "assignee", from: before.first, to: login }.compact }
+      def actor(login)
+        login.is_a?(String) && login.present? ? { login: login } : {}
       end
 
-      def name_of(value)
-        value.is_a?(Hash) ? (value["name"].presence || value["presentation"]) : value.presence
-      end
-
-      def logins(value)
-        Array(value.is_a?(Hash) ? [ value ] : value).filter_map { |v| v["login"].presence if v.is_a?(Hash) }
-      end
-
-      def actor(user)
-        return {} unless user.is_a?(Hash)
-
-        { login: user["login"], name: user["fullName"].presence || user["login"] }.compact
+      # Epoch milliseconds, as YouTrack keeps time.
+      def time(millis)
+        Time.zone.at(millis.to_i / 1000.0).iso8601(3) if millis.is_a?(Numeric) || millis.to_s.match?(/\A\d+\z/)
       end
     end
   end

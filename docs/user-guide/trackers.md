@@ -326,11 +326,10 @@ delivery works:
 - **Linear** — the webhook of Aixle's Linear app, or for an API-key connection
   one webhook per team, which only a workspace admin's key can register. See
   [The webhooks](/docs/linear#the-webhooks).
-- **YouTrack** — JetBrains' Webhook Triggers app, which a project admin sets
-  up in each YouTrack project with the URL, header and token Flow shows. Its
-  token is shared by everything the app posts to, so Flow re-reads the change,
-  the comment and who made them from YouTrack before anything fires. See
-  [The Webhook Triggers app](/docs/youtrack#the-webhook-triggers-app).
+- **YouTrack** — the Aixle Flow app, which sets up each project's events
+  itself when you connect, with a secret per project. Flow still re-reads the
+  change, the comment and who made them from YouTrack before anything fires.
+  See [Connect](/docs/youtrack#connect).
 
 Either way the tracker has to reach the deployment's domain. With a loopback
 or private host, Flow creates no Service Hooks and registers no Jira or Linear
@@ -410,7 +409,7 @@ and the error names the primary tracker when that is a different one.
 In the tracker, a change is made by whoever the connection acts as — see
 [What the connection runs as](/docs/azure-devops#what-the-connection-runs-as)
 for Azure DevOps, and the tables at the top of [Jira](/docs/jira) and
-[Linear](/docs/linear); on [YouTrack](/docs/youtrack) the permanent token's owner. On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
+[Linear](/docs/linear); on [YouTrack](/docs/youtrack) the Aixle Flow app's service user. On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
 write is recorded before it is sent, with the session, run and workflow that
 made it. That record is how "Changes made by Aixle" knows which run caused an
 event, and it makes retries safe:
@@ -435,6 +434,5 @@ event, and it makes retries safe:
   field as the board's columns.
 - [Linear](/docs/linear) — Aixle's Linear app or an API key, the per-team
   webhooks, and workflow states as statuses.
-- [YouTrack](/docs/youtrack) — a permanent token on YouTrack Cloud or a
-  self-hosted server, the Webhook Triggers app in each project, and the State
-  field as statuses.
+- [YouTrack](/docs/youtrack) — the Aixle Flow app from JetBrains Marketplace
+  on YouTrack Cloud or a self-hosted server, and the State field as statuses.

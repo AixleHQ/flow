@@ -60,6 +60,12 @@ Rails.application.routes.draw do
   post "/webhooks/trackers/app/jira", to: "webhooks/trackers#receive_app", as: :tracker_app_webhook
   post "/webhooks/trackers/app/linear", to: "webhooks/trackers#receive_linear_app", as: :tracker_linear_app_webhook
   post "/webhooks/trackers/:endpoint_token", to: "webhooks/trackers#receive", as: :tracker_webhook
+  # The Aixle Flow YouTrack app's side of Connect: public, CORS for any origin
+  # (config/initializers/cors.rb), authenticated by each pairing's secret.
+  post "/integrations/youtrack/pairings", to: "integrations/youtrack_pairings#create", as: :youtrack_pairings
+  get "/integrations/youtrack/pairings/:id", to: "integrations/youtrack_pairings#show", as: :youtrack_pairing
+  post "/integrations/youtrack/pairings/:id/complete", to: "integrations/youtrack_pairings#complete",
+                                                       as: :complete_youtrack_pairing
 
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
@@ -417,6 +423,10 @@ Rails.application.routes.draw do
     get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
     # The one redirect URI registered on Aixle's Linear OAuth app.
     get "integrations/linear/oauth/callback", to: "integrations/linear_oauth#callback", as: :linear_oauth_callback
+    # Where a signed-in user approves, by its code, a pairing the Aixle Flow
+    # YouTrack app started.
+    get "integrations/youtrack/connect", to: "integrations/youtrack_connect#show", as: :youtrack_connect
+    post "integrations/youtrack/connect", to: "integrations/youtrack_connect#create"
     # Redirect URI on Aixle's Entra application for an administrator's sign-in.
     get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
                                                     as: :azure_devops_oauth_callback
@@ -543,8 +553,8 @@ Rails.application.routes.draw do
               # lists the teams a key can see before it is saved.
               get :linear_oauth_start
               post :linear_inspect
-              # YouTrack: what a permanent token can see before it is saved.
-              post :youtrack_inspect
+              # YouTrack: a pairing for the Aixle Flow app on the instance.
+              post :youtrack_connect
             end
             member do
               post :test_connection
@@ -552,9 +562,6 @@ Rails.application.routes.draw do
               get :github_projects
               get :linear_teams
               get :jira_webhook
-              get :youtrack_projects
-              get :youtrack_webhook
-              patch :youtrack_webhook_token
             end
           end
           resources :agents, only: %i[index create update destroy]

@@ -284,12 +284,14 @@ connects with a personal API key only, which needs nothing here.
 
 ### YouTrack
 
-YouTrack connects with a customer's permanent token and needs nothing on the
-deployment (see `docs/user-guide/youtrack.md`).
+YouTrack connects through the Aixle Flow app from JetBrains Marketplace and needs
+nothing on the deployment (see `docs/user-guide/youtrack.md`). The app's
+pairing endpoints (`/integrations/youtrack/pairings…`) answer CORS for any
+origin without credentials, because the app calls them from a sandboxed widget.
 
 | Variable                    | Required | Default                 | Purpose |
 | --------------------------- | -------- | ----------------------- | ------- |
-| `YOUTRACK_WEBHOOK_BASE_URL` | no       | `<protocol>://<domain>` | The base of the webhook URLs the setup dialog shows. Set it only when the deployment's domain is not reachable from the YouTrack server (a tunnel in development). |
+| `YOUTRACK_WEBHOOK_BASE_URL` | no       | `<protocol>://<domain>` | The base of the event addresses Flow hands to the Aixle Flow app. Set it only when the deployment's domain is not reachable from the YouTrack server (a private zone, a tunnel in development). |
 | `YOUTRACK_TRUSTED_HOSTS`    | no       | unset                   | Self-hosted YouTrack hosts that resolve to a private address and may still be called, comma-separated. Every other host must resolve to a public address. |
 
 ## Auth & OAuth providers

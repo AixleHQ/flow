@@ -48,7 +48,6 @@ type Integration = {
   youtrackBaseUrl: string | null;
   youtrackProjects: Array<{ id: string; key: string; name: string }>;
   youtrackIdentity: string | null;
-  youtrackDedicatedIdentity: boolean;
   youtrackWebhooksPending: Array<string>;
 }
 
