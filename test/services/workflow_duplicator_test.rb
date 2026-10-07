@@ -280,4 +280,25 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_not MCPServer.for_project(@project).exists?(name: "their-server")
     assert_equal [], copy.steps.first.mcp_server_ids
   end
+
+  test "references follow the copy; one that cannot becomes its name" do
+    @step1.update!(output_asset_specs: [ { "name" => "notes.md" } ])
+    @step2.update!(instructions: "Read {{output:#{@step1.id}:notes.md}} after {{step:#{@step1.id}}}, ask {{mcp:#{@mcp.id}}}, " \
+                                 "use {{asset:#{@company_asset.id}}} and {{asset:#{@project_asset.id}}}.")
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
+
+    first, second = copy.steps.not_deleted.order(:position).to_a
+    copied_mcp = @project.mcp_servers.find_by!(name: "context7")
+    assert_equal "Read {{output:#{first.id}:notes.md}} after {{step:#{first.id}}}, ask {{mcp:#{copied_mcp.id}}}, " \
+                 "use {{asset:#{@company_asset.id}}} and #{@project_asset.name}.", second.instructions
+  end
+
+  test "a copy inside the same project keeps its asset references" do
+    @step2.update!(instructions: "Use {{asset:#{@project_asset.id}}}.")
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @source_project).duplicate!
+
+    assert_equal "Use {{asset:#{@project_asset.id}}}.", copy.steps.not_deleted.find_by!(name: "Second").instructions
+  end
 end

@@ -27,20 +27,13 @@ class StepSkipEvaluator
 
   private
 
+  # Nothing required to look for is not "everything already exists": a step
+  # whose outputs are all optional runs.
   def all_outputs_satisfied?
-    specs = @step.output_asset_specs
-    return false if specs.blank?
+    required = @step.output_specs.select { |spec| spec.required? && !spec.blank? }
+    return false if required.empty?
 
     existing_names = @workflow_run.workflow_run_assets.pluck(:name)
-
-    specs.select { |s| s["required"] }.all? do |spec|
-      pattern = spec["name_pattern"]
-      if pattern.present?
-        regexp = Regexp.new(pattern) rescue nil
-        regexp ? existing_names.any? { |name| regexp.match?(name) } : false
-      else
-        existing_names.include?(spec["name"])
-      end
-    end
+    required.all? { |spec| existing_names.any? { |name| spec.matches?(name) } }
   end
 end

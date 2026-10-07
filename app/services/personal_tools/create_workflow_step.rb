@@ -37,8 +37,8 @@ module PersonalTools
             items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
             description: "Step ids this step depends on; they must already exist. " \
-                         "Only these steps' /workspace/outputs files are copied into this step's /workspace/assets — " \
-                         "list every earlier step whose files it reads, not just the last one. " \
+                         "The /workspace/outputs files of these steps, and of every step they run after, are copied " \
+                         "into this step's /workspace/assets. " \
                          "Replaces the whole list — read the current value with get_workflow_step first.",
             items: { type: "integer" }
       param :bmad_enabled, type: :boolean, description: "Run this step with the BMAD method enabled."

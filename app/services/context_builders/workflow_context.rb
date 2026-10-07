@@ -11,6 +11,7 @@ module ContextBuilders
       sections << workflow_overview_section
       sections << trigger_message_section if trigger_message.present?
       sections << current_step_section
+      sections << earlier_files_section if earlier_files.any?
       sections << sub_steps_section if sub_steps.any?
       sections << previous_steps_section if completed_step_runs.any?
       sections << workflow_tools_section if sub_steps.any?
@@ -125,8 +126,44 @@ module ContextBuilders
       lines << ""
       lines << "### Instructions"
       lines << ""
-      lines << step.instructions if step.instructions.present?
+      if step.instructions.present?
+        lines << InstructionReferences::Renderer.new(step: step, project: workflow_run.project).render(step.instructions)
+      end
       lines.join("\n")
+    end
+
+    def earlier_files_section
+      section(
+        tag: "earlier-files",
+        priority: :important,
+        content: build_earlier_files
+      )
+    end
+
+    # What WorkflowStepStrategy#inject_prior_step_outputs copies in, so the agent
+    # is not left to discover it.
+    def build_earlier_files
+      lines = [ "## Files from earlier steps (in /workspace/assets/)", "" ]
+      earlier_files.each do |name, step_name|
+        lines << "- `#{Asset::CONTAINER_DIR}/#{name}` — written by #{step_name}"
+      end
+      lines.join("\n")
+    end
+
+    # Name => the nearest step that wrote it, matching which copy wins on disk.
+    def earlier_files
+      @earlier_files ||= begin
+        upstream_ids = step.upstream_step_ids
+        names = upstream_ids.each_with_index.to_h
+        rows = workflow_run.workflow_run_assets
+          .joins("JOIN step_runs ON step_runs.id = workflow_run_assets.produced_by_step_run_id")
+          .joins("JOIN steps ON steps.id = step_runs.step_id")
+          .where(step_runs: { step_id: upstream_ids })
+          .pluck("workflow_run_assets.name", "step_runs.step_id", "steps.name")
+        rows.sort_by { |_, step_id, _| -names.fetch(step_id) }
+            .to_h { |name, _, step_name| [ name, step_name ] }
+            .sort.to_h
+      end
     end
 
     def build_sub_steps

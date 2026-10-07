@@ -54,6 +54,9 @@ class WorkflowService
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
 
+      validate_data_flow!(run, workflow, project, input_asset_ids)
+      return run if run.errors.any?
+
       # Enrol the run in the outbox in the very write that creates it. From here
       # on a dispatch that never lands is a row the relay can find, instead of a
       # run indistinguishable from one the worker simply has not reached yet.
@@ -270,6 +273,20 @@ class WorkflowService
 
       names = blocking_steps.map(&:name)
       run.errors.add(:mode, "Cannot run fully automatic: steps #{names.join(', ')} require user interaction")
+    end
+
+    # What would fail a step for certain — a reference that cannot be honoured, a
+    # required input nothing can provide — refuses the run instead of spending a
+    # session on it. A check that raises does not stand between a user and a
+    # workflow that ran yesterday: it is reported, and the run goes ahead.
+    def validate_data_flow!(run, workflow, project, input_asset_ids)
+      errors = DataFlow::Check.for_workflow(workflow, project: project, run_input_asset_ids: input_asset_ids).errors
+      return if errors.empty?
+
+      run.errors.add(:base, "This workflow would fail: #{errors.map(&:message).first(3).join(' ')}")
+    rescue StandardError => e
+      Rails.logger.error("[WorkflowService] Data-flow check crashed: #{e.class}: #{e.message}")
+      Sentry.capture_exception(e) if defined?(Sentry)
     end
 
     def cancel_active_step_runs(run)

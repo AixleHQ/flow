@@ -41,6 +41,7 @@ class WorkflowStepSync
     rows = @workflow.steps.unscope(:order).includes(:sub_steps).lock.to_a.index_by(&:id)
     park_positions(rows.values)
     key_map = write_steps(rows)
+    rewrite_draft_references(key_map)
     retire_others(rows, key_map)
     write_dependencies(key_map)
     key_map
@@ -73,6 +74,23 @@ class WorkflowStepSync
       step.save!
       write_sub_steps(step, Array(spec["sub_steps"]))
       key_map[spec["key"]] = step.id
+    end
+  end
+
+  # A reference to a step created by this same request names it by its draft
+  # key (`{{step:new-2}}`); now that it has an id, the reference carries that.
+  def rewrite_draft_references(key_map)
+    @specs.each do |spec|
+      text = spec["instructions"].to_s
+      next unless text.include?(":new-")
+
+      rewritten = InstructionReferences.rewrite(text) do |ref|
+        id = ref.valid? && ref.id.is_a?(String) && key_map[ref.id]
+        next nil unless id && ref.id.start_with?("new-")
+
+        ref.type == "output" ? "{{output:#{id}:#{ref.name}}}" : "{{step:#{id}}}"
+      end
+      Step.where(id: key_map.fetch(spec["key"])).update_all(instructions: rewritten) if rewritten != text
     end
   end
 

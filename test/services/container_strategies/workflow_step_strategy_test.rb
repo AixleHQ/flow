@@ -207,6 +207,45 @@ module ContainerStrategies
       assert_includes downloads.first, "mkdir -p /workspace/assets/reports && curl -sSL -o /workspace/assets/reports/summary.md"
     end
 
+    test "inject_prior_step_outputs copies outputs from every step upstream, the nearest one's copy last" do
+      fake = stub_container_runtime(agent_type: "claude_code")
+      Settings.stubs(:container_asset_host).returns(nil)
+
+      workflow = create(:workflow, scope: @project)
+      collect = create(:step, workflow: workflow, position: 1)
+      analyze = create(:step, workflow: workflow, position: 2, depends_on_step_ids: [ collect.id ])
+      report = create(:step, workflow: workflow, position: 3, depends_on_step_ids: [ analyze.id ])
+      workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+      session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+      create(:step_run, workflow_run: workflow_run, step: report, terminal_session: session)
+      { analyze => "analyze", collect => "collect" }.each do |step, body|
+        workflow_run.workflow_run_assets.create!(
+          name: "summary.md", produced_by_step_run: create(:step_run, workflow_run: workflow_run, step: step),
+          content_type: "text/markdown", file_size: 5, file: WorkflowRunAssetUploader.upload(StringIO.new(body), :store)
+        )
+      end
+      collect_url = workflow_run.workflow_run_assets.joins(:produced_by_step_run)
+                                .find_by!(step_runs: { step_id: collect.id }).file.url
+
+      build_strategy(session: session).send(:inject_prior_step_outputs, "abc123")
+
+      downloads = fake.execs.map { |c| Array(c).join(" ") }.select { |c| c.include?("curl") }
+      assert_equal 2, downloads.size
+      assert_includes downloads.first, Shellwords.escape(collect_url), "the farther step's copy is written first"
+    end
+
+    test "the agent prompt is the step's instructions with references rendered" do
+      stub_container_runtime(agent_type: "claude_code")
+      workflow = create(:workflow, scope: @project)
+      asset = create(:asset, scope: @project, name: "brief.md", created_by: @user)
+      step = create(:step, workflow: workflow, asset_ids: [ asset.id ], instructions: "Read {{asset:#{asset.id}}}.")
+      workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+      session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+      create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
+
+      assert_equal "Read `/workspace/assets/brief.md`.", build_strategy(session: session).send(:agent_prompt, session.reload)
+    end
+
     # == rewrite_url_for_container ==
 
     test "rewrite_url_for_container swaps host/scheme/port when a container asset host is configured" do

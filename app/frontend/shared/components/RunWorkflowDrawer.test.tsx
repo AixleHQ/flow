@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildAssetPicker } from 'test/factories/assetPicker';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { RunWorkflowDrawer, type RunWorkflowOption } from './RunWorkflowDrawer';
@@ -28,7 +29,7 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof RunWorkflow
       configuredAgents={['claude_code']}
       defaultAgentRuntime="claude_code"
       repositories={[{ id: 1, name: 'acme/app' }]}
-      assets={[{ id: 2, name: 'brand.css', folder: null }]}
+      assets={[buildAssetPicker({ id: 2, name: 'brand.css', folder: null })]}
       {...overrides}
     />,
   );

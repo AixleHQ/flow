@@ -49,7 +49,8 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       project: project_props,
       workflow: WorkflowResource.new(workflow).to_h,
       steps: workflow.visible_steps.map { |s| StepResource.new(s).to_h },
-      read_only: workflow.scope_type == "Company",
+      read_only: workflow.scope_type == "Company" || !project_permissions_props[:canExecute],
+      issues: DataFlow::Check.for_workflow(workflow, project: current_project).issues.map(&:as_json),
       board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.map { |c|
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
       } || [],
@@ -77,7 +78,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         Skill.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       mcp_servers: InertiaRails.defer(group: "resources") {
-        MCPServer.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
+        MCPServer.visible_for_project(current_project).map { |r| MCPServerPickerResource.new(r).to_h }
       },
       # Company-scoped assets are shared with every project in the company and are
       # already offered by the assets page, the session form and the Aixle Builder.

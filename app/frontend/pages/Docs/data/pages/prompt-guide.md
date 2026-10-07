@@ -4,7 +4,7 @@ A session's **instructions** are the prompt the agent receives. This page is abo
 
 It is not general prompt-engineering advice. Everything here is specific to one Flow session: one container, one agent, and the resources you attached to it.
 
-> **One thing first.** Flow sends your instructions to the agent **exactly as you wrote them**. Nothing in the text is substituted at run time. A `{{something}}` you type stays `{{something}}` in the prompt, and the agent sees the braces. To point the agent at a file, write the file's **path** (see [Where things are](#where-things-are-in-the-container)). `@` references to assets, sessions and connections are planned, and this page will describe them when they ship.
+> **One thing first.** Flow sends your instructions to the agent **as you wrote them**, with one exception: an **`@` reference** you picked from the menu becomes the real path or name when the session starts (see [Referencing things in instructions](#referencing-things-in-instructions)). Nothing else is substituted. A `{{something}}` you type yourself stays `{{something}}` in the prompt, and the agent sees the braces.
 
 ---
 
@@ -18,7 +18,8 @@ Your instructions are not the whole prompt. Before a session starts, Flow writes
 | **Your role** | The agent's persona: title, persona, communication style, principles. | Put *who the agent is* here once, on the agent. Put *what this step does* in the instructions. |
 | **Workflow and step** | Workflow name and description, "Step N of M", the Slack message that triggered the run (if any), then **your instructions**, verbatim. | The instructions sit under the step heading. Write them as the task for this step, not the whole workflow. |
 | **Sub-steps checklist** | Each sub-step's name, id, state and instructions, and a note to mark them with `mark_sub_step`. | A good way to make a long step checkable. See [Sub-steps](#sub-steps). |
-| **Previous steps** | For steps that already finished: their **note** (up to 500 characters) and their sub-step notes. **Not their files.** | If a later step needs what an earlier step produced, make the earlier step write a file and set **Run after**. See [Passing work between sessions](#passing-work-between-sessions). |
+| **Previous steps** | For steps that already finished: their **note** (up to 500 characters) and their sub-step notes. | Notes are for "what happened". For the work itself, see [Passing work between sessions](#passing-work-between-sessions). |
+| **Files from earlier steps** | Every file the steps this one runs after wrote to `/workspace/outputs/`, with its path in `/workspace/assets/`. | The agent knows what it was handed. You still say which file to use for what. |
 | **Board** (board-triggered runs) | The card's title, id, column, priority, tags, assignee, **description (first 500 characters)**, the **last 5 comments (first 200 characters each)**, all columns, and the board tools. | The agent sees only the start of a long description, and only a glimpse of the thread. If the full thread matters, tell it to read the comments with `board_get_comments`. |
 | **Tools and resources** | Shell and MCP tools (always including `aixle-tools`), attached tools, repositories, input assets **with their paths**, skills. | Attached resources are listed for the agent, but nothing tells it *which one to use for this step*. The instructions do. |
 | **Config items** | Names, types and descriptions of secrets and variables. **Never their values.** | Tell the agent which item to read, by name, with `get_config_item`. Never paste a secret into instructions. |
@@ -32,7 +33,7 @@ The whole context has a budget of roughly 6,000 tokens. Over that, previous step
 | Path | What's there | How it gets there |
 |---|---|---|
 | `/workspace/assets/<folder>/<name>` | Files you attached: workflow base assets, the step's assets, the run's input assets | Attach them on the workflow (Base Resources) or on the step |
-| `/workspace/assets/<name>` | **Files produced by the steps listed in this step's Run after** | Automatic, when the earlier step wrote them to `/workspace/outputs/` |
+| `/workspace/assets/<name>` | **Files produced by every step this step runs after**, directly or through others | Automatic, when the earlier step wrote them to `/workspace/outputs/`. If two of them wrote the same name, the nearest one's copy wins. |
 | `/workspace/outputs/` | Whatever the agent writes here is **collected after the session** as a run asset, named by its relative path | The agent writes here. Nothing else is kept. |
 | `/workspace/repo/` | Clones of the attached repositories | Attach repositories on the workflow or the step |
 | `/workspace/_bmad/` | The BMAD method files | Turn on BMAD for the step |
@@ -101,12 +102,12 @@ A lot of what people try to say in instructions is really a setting. When it's a
 | A specific persona | **Agent** on the step. Its persona becomes "Your role". |
 | A specific CLI or model | **Execution environment** and **Model** on the step |
 | The agent to be *able* to use a tool, skill or MCP server | Attach it on the step or on Base Resources |
-| The agent to *use* that tool, skill or server in this step | **Name it in the instructions** ("create the issue with the Linear MCP"). Attaching alone doesn't tell the agent it's wanted here. |
+| The agent to *use* that MCP server in this step | **`@` it in the instructions** ("create the issue with @Linear MCP"). Picking it attaches it if it wasn't. Attaching alone doesn't tell the agent it's wanted here. For tools and skills, name them. |
 | The agent to read a secret or variable | Attach the **config item**, and name it in the instructions ("read `STAGING_URL` with `get_config_item`") |
-| The agent to read a file | Attach the **asset**, and give its path in the instructions |
-| A step to wait for another | **Run after** on the step. It also puts the earlier step's output files in `/workspace/assets/`. |
-| A step to fail if a file it needs is missing | A required **input spec** with that file's name. It is checked before the step starts. |
-| A step to fail if it didn't produce a file | A required **output spec** with that name (or a name pattern). It is checked when the step ends. |
+| The agent to read a file | **`@` the asset** in the instructions. Picking it attaches it and the agent gets its path. |
+| A step to wait for another | **Run after** on the step. It also puts the output files of that step, and of every step before it, in `/workspace/assets/`. |
+| A step to fail if a file it needs is missing | **`@` the file** (an asset or an earlier session's output): every reference is checked before the step starts. For a file picked when the run starts, a required **input spec** with its name. |
+| A step to fail if it didn't produce a file | A required **output spec** with that name, or a glob such as `reports/*.md`. It is checked when the step ends. |
 | A step to be skipped when its output already exists | **Skip policy: if outputs exist** (it needs output specs). `manual` currently has no effect at run time. |
 | A retry on failure | **On failure: retry**. The number of retries isn't in the builder yet and defaults to 0, so retry currently behaves like fail. |
 | A step to run without a person in the loop | **Auto-run available**, on a run mode that allows it |
@@ -115,26 +116,51 @@ The mismatch to avoid is in both directions. Don't attach every server on the pr
 
 ---
 
-## Referencing things in instructions (today)
+## Referencing things in instructions
 
-Until `@` references ship:
+Type **`@`** in a session's instructions to open the reference menu. It lists, in three groups:
 
-- **Files:** write the path. `/workspace/assets/brand/voice.md`, `/workspace/assets/summary.md` (an earlier step's output), `/workspace/outputs/report.md`.
-- **Tools, MCP servers, skills:** use the name as it appears in the step's resources ("the GitHub MCP", "the `chat_post_message` tool").
+- **Assets**: files attached to the session, the workflow's base assets, the project's and company's other assets, this session's declared outputs, and other sessions' declared outputs;
+- **Sessions**: the other sessions of the workflow;
+- **Connections**: MCP servers.
+
+Type after the `@` to filter; arrows and Enter pick, Esc closes. What you pick becomes a chip. Backspace removes the whole chip.
+
+Picking does the wiring for you:
+
+- an asset or MCP server the session doesn't have yet is **attached** to it;
+- another session's output **adds Run after** to that session when needed. A session that already runs after this one can't be picked: it would be a loop.
+
+When the session starts, each chip becomes what the agent can use:
+
+| You picked | The agent reads |
+|---|---|
+| An asset | its path, e.g. `` `/workspace/assets/brand/voice.md` `` |
+| This session's own output | where to write it: `` `/workspace/outputs/summary.md` `` |
+| An earlier session's output | where it was put: `` `/workspace/assets/summary.md` `` |
+| A session | `session "Collect sources"` |
+| An MCP server | `the "GitHub" MCP server` |
+
+A chip that no longer points at anything (the asset was deleted, the server detached, the session removed) turns red. The builder lists it under the instructions, a run won't start with it, and the step fails before its session starts instead of letting the agent improvise.
+
+Still written by hand:
+
+- **Tools and skills:** use the name as it appears in the step's resources ("the `chat_post_message` tool").
 - **Config items:** use the item's name exactly, and tell the agent to read it with `get_config_item`.
 - **Board objects:** the agent's board tools take ids. If the step works on "the card that triggered this run", say that. The agent has it in its context.
-- **`{{artifact_name}}`**, from the builder's helper text, **is not replaced by anything**. Don't use it. Write the path instead.
+- **`{{artifact_name}}`** or any other braces you type **are not replaced by anything**. The builder warns about them.
 - **`{{inputs.<key>}}`** is different, and real, but only in **templates**. It is filled in once, when the template is installed, and a missing input becomes empty text. It is never resolved during a run.
 
 ---
 
 ## Passing work between sessions
 
-Sessions don't share a container, and a later session doesn't see an earlier one's files unless you wire them.
+Sessions don't share a container. A later session gets an earlier one's files when it runs after it, directly or through other sessions.
 
-1. In the earlier session, tell the agent to write the result to `/workspace/outputs/<name>`, and add a required **output spec** for `<name>`.
-2. In the later session, set **Run after** to the earlier one. Flow puts `<name>` at `/workspace/assets/<name>`. Add a required **input spec** for `<name>` so the step fails clearly if it's missing, rather than improvising.
-3. In the later session's instructions, read `/workspace/assets/<name>`.
+1. In the earlier session, add a required **output spec** for `<name>`, and in its instructions `@` that output where the agent should write it (`/workspace/outputs/<name>`).
+2. In the later session's instructions, `@` the same output. If the later session doesn't run after the earlier one yet, picking it adds **Run after**. The reference is checked before the step starts, so it fails clearly if the file is missing rather than improvising.
+
+Without `@`, the same works by hand: write the file to `/workspace/outputs/<name>`, set Run after, and read `/workspace/assets/<name>`. A required **input spec** for `<name>` gives the same early failure.
 
 The earlier step's **note** (its `finish_session` summary) also reaches later steps, but only the first 500 characters. Use it for "what happened", not for the work itself.
 
@@ -260,8 +286,8 @@ Then re-read the card, confirm its column, and call `finish_session`.
 
 ## Things that don't work
 
-- **`{{summary.md}}`, `{{artifact_name}}` or any other braces.** They are not substituted. Write the path.
-- **`@GitHub` or `@someone` typed as text.** It isn't a mention and doesn't bind to anything.
+- **`{{summary.md}}`, `{{artifact_name}}` or any other braces you type.** They are not substituted. Use `@`, or write the path.
+- **`@someone` that didn't become a chip.** Only what you pick from the menu binds to anything.
 - **Raw ids pasted from another page**, such as a step id or asset id, "so the agent can find it". The agent can't resolve them. Give paths and names.
 - **Naming a server, tool or config item that isn't attached.** The agent can't reach it.
 - **"Ask me if anything is unclear"** in an auto-run step. The rules forbid questions. Tell it what to do instead.
@@ -274,10 +300,12 @@ Then re-read the card, confirm its column, and call `finish_session`.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| "Input validation failed: Required input missing: X" before the step starts | An input spec names a file that no Run-after step produced and no attached asset provides | Check the spelling against the earlier step's output spec, or attach the asset |
+| "Input validation failed: Required input missing: X" before the step starts | An input spec names a file that no earlier step produced and no attached asset provides | Check the spelling against the earlier step's output spec, or attach the asset. Names are a file's name or its path under `/workspace/outputs/`; a `/workspace/…` prefix is dropped for you. |
+| "Reference check failed: …" before the step starts | A chip points at something the step won't get: a deleted asset, a detached server, an output of a session that doesn't run before it | Fix the red chip; the builder shows the same message under the instructions |
+| The run won't start: "This workflow would fail: …" | The same check, run when you start it | Fix what it names, or pick the missing file when starting the run |
 | "Output validation failed" after the step | The agent didn't write a required output, or wrote it under another name | Put the exact path in "Done when" and in the steps |
 | The agent says a file isn't there | It looked outside `/workspace/assets/`, or the file is a card attachment (not mounted) | Give the full path. For card files, tell it to use `board_get_task_assets`. |
-| A later step "doesn't know" what an earlier one did | Only the earlier step's note (500 characters) is shared. Its files need Run after. | Write the result to a file, and set Run after plus an input spec. |
+| A later step "doesn't know" what an earlier one did | Only the earlier step's note (500 characters) is shared. Its files need Run after. | Write the result to an output, and `@` it in the later step. |
 | The agent acts on an outdated decision | It read the card description (cut at 500 characters), not the latest comment | Put the current decision at the top of the description, or tell it to read comments first |
 | The step "finished" but skipped a required checklist item | Required sub-steps aren't enforced | Add "don't finish until every sub-step is marked" to the instructions |
 | The agent uses the wrong server or tool | Several are attached and the prompt doesn't say which | Name the one to use for this step |

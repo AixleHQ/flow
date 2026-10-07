@@ -5,13 +5,16 @@ import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import type { ConfigItemPicker, Picker, Project, Step, Workflow } from '@/types/generated';
+import type { ConfigItemPicker, MCPServerPicker, Picker, Project, Step, Workflow } from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
+import type { ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { ApiError, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useUnsavedChangesGuard } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { renameOutputReferences } from 'shared/lib/references';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import type { ChatProviderOption } from 'shared/resources/triggers/types';
@@ -20,13 +23,16 @@ import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import { BaseResourcesTab } from './BaseResourcesTab';
-import { aggregatePayload, draftStep, draftSubStep, remapSelection, snapshotOf } from './builderDraft';
+import { aggregatePayload, draftStep, draftSubStep, remapSelection, snapshotOf, stepKey } from './builderDraft';
 import classes from './BuilderPage.module.css';
+import { downstreamIds, type IssueFix, isPlainSpecName, sessionLabel, type WorkflowIssue } from './dataFlow';
+import { availableInputs, buildReferenceCatalog } from './referenceCatalog';
 import { SessionEditorPanel } from './SessionEditorPanel';
 import { SessionTreeNav } from './SessionTreeNav';
 import type { Selection } from './SessionTreeNav';
 import { StepEditorPanel } from './StepEditorPanel';
 import { TriggersTab } from './TriggersTab';
+import { dataFlowKey, useWorkflowIssues } from './useWorkflowIssues';
 
 type ProjectOrNull = Project | null;
 type AssetSpec = Step['outputAssetSpecs'][number];
@@ -47,7 +53,7 @@ interface Props {
   tools?: Picker[];
   toolGroups?: ToolGroup[];
   skills?: Picker[];
-  mcpServers?: Picker[];
+  mcpServers?: MCPServerPicker[];
   assets?: AssetPickerItem[];
   repositories?: Picker[];
   configItems?: ConfigItemPicker[];
@@ -58,6 +64,8 @@ interface Props {
   boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
   trackers?: TrackerOption[];
   chatProviders?: ChatProviderOption[];
+  /** Data-flow issues of the saved workflow; absent from a server that predates the check. */
+  issues?: WorkflowIssue[];
 }
 
 interface AggregateResponse {
@@ -65,6 +73,8 @@ interface AggregateResponse {
   steps: Step[];
   currentVersionNumber: number;
   versionCreated: boolean;
+  // Optional for one release: a pod still on the previous version answers without it.
+  issues?: WorkflowIssue[];
 }
 
 const BuilderPage = () => {
@@ -87,17 +97,21 @@ const BuilderPage = () => {
     boardColumns,
     trackers,
     chatProviders,
+    issues: initialIssues,
   } = usePage<{ props: Props }>().props as unknown as Props;
+  const { canExecute } = useProjectPermissions();
 
   const agents = rawAgents ?? [];
   const tools = rawTools ?? [];
   const toolGroups = rawToolGroups ?? [];
   const skills = rawSkills ?? [];
-  const mcpServers = rawMcpServers ?? [];
-  const assets = rawAssets ?? [];
+  // Memoized: the reference catalog is rebuilt from these, and deferred props start out undefined.
+  const mcpServers = useMemo(() => rawMcpServers ?? [], [rawMcpServers]);
+  const assets = useMemo(() => rawAssets ?? [], [rawAssets]);
   const repositories = rawRepositories ?? [];
   const configItems = rawConfigItems ?? [];
   const agentModels = rawAgentModels ?? [];
+  const catalogLoading = rawAssets === undefined || rawMcpServers === undefined;
 
   const projectId = project?.id ?? null;
   const backPath = projectId ? `/company/projects/${projectId}/workflows` : '/company/projects';
@@ -120,6 +134,7 @@ const BuilderPage = () => {
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
   const dirty = !readOnly && snapshotOf(workflow, steps) !== savedSnapshot;
   useUnsavedChangesGuard(dirty);
+  const { issues, replaceIssues } = useWorkflowIssues({ projectId, workflow, sortedSteps, initialIssues });
 
   // Run button guard (AC10)
   const canRun = useMemo(() => steps.some((s) => (s.instructions ?? '').trim().length > 0), [steps]);
@@ -217,6 +232,71 @@ const BuilderPage = () => {
     [],
   );
 
+  // A renamed output keeps every `@` reference to it, in every session.
+  const renameOutput = useCallback((stepId: number, before: string, after: string) => {
+    if (!isPlainSpecName(before) || !isPlainSpecName(after)) return;
+    setSteps((prev) =>
+      prev.map((s) =>
+        s.instructions
+          ? { ...s, instructions: renameOutputReferences(s.instructions, stepKey(stepId), before, after) }
+          : s,
+      ),
+    );
+  }, []);
+
+  const stepByKey = useCallback((key: string) => steps.find((s) => stepKey(s.id) === key) ?? null, [steps]);
+
+  // What inserting a reference, or a fix offered by the check, changes so the reference works at run time.
+  const applyFix = useCallback(
+    (stepId: number, fix: IssueFix) => {
+      const session = steps.find((s) => s.id === stepId);
+      if (!session) return;
+      if (fix.kind === 'attach_asset') {
+        if (!session.assetIds.includes(fix.assetId))
+          updateStepField(stepId, 'assetIds', [...session.assetIds, fix.assetId]);
+      } else if (fix.kind === 'attach_mcp_server') {
+        if (!session.mcpServerIds.includes(fix.mcpServerId))
+          updateStepField(stepId, 'mcpServerIds', [...session.mcpServerIds, fix.mcpServerId]);
+      } else {
+        const dependency = stepByKey(fix.stepKey);
+        if (!dependency || dependency.id === stepId || session.dependsOnStepIds.includes(dependency.id)) return;
+        if (downstreamIds(steps, stepId).has(dependency.id)) return;
+        updateStepField(stepId, 'dependsOnStepIds', [...session.dependsOnStepIds, dependency.id]);
+        notifications.show({
+          color: 'blue',
+          message: `${sessionLabel(sortedSteps, stepId)} now runs after ${sessionLabel(sortedSteps, dependency.id)}`,
+        });
+      }
+    },
+    [steps, sortedSteps, stepByKey, updateStepField],
+  );
+
+  const fixLabel = useCallback(
+    (fix: IssueFix): string | null => {
+      if (fix.kind === 'attach_asset') {
+        const asset = assets.find((a) => a.id === fix.assetId);
+        return asset ? `Attach ${asset.name}` : null;
+      }
+      if (fix.kind === 'attach_mcp_server') {
+        const server = mcpServers.find((m) => m.id === fix.mcpServerId);
+        return server ? `Attach ${server.name}` : null;
+      }
+      const dependency = stepByKey(fix.stepKey);
+      return dependency ? `Run after ${sessionLabel(sortedSteps, dependency.id)}` : null;
+    },
+    [assets, mcpServers, sortedSteps, stepByKey],
+  );
+
+  const problemCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const issue of issues) {
+      if (issue.severity !== 'error') continue;
+      const step = stepByKey(issue.stepKey);
+      if (step) counts[step.id] = (counts[step.id] ?? 0) + 1;
+    }
+    return counts;
+  }, [issues, stepByKey]);
+
   // --- Save: the whole workflow, one request, one version ---
   const save = useCallback(async () => {
     if (projectId == null) return;
@@ -237,6 +317,10 @@ const BuilderPage = () => {
       setWorkflow(result.workflow);
       setSteps(result.steps);
       setSavedSnapshot(snapshotOf(result.workflow, result.steps));
+      if (result.issues) {
+        const savedSteps = [...result.steps].sort((a, b) => a.position - b.position);
+        replaceIssues(result.issues, dataFlowKey(result.workflow, savedSteps));
+      }
       notifications.show({
         color: 'green',
         message: result.versionCreated ? `Saved as version ${result.currentVersionNumber}` : 'Nothing to save',
@@ -254,12 +338,33 @@ const BuilderPage = () => {
     } finally {
       setSaving(false);
     }
-  }, [projectId, workflow, sortedSteps]);
+  }, [projectId, workflow, sortedSteps, replaceIssues]);
 
   // Derive selected session and step from selection state
   const selectedSession = useMemo(
     () => (selection ? (steps.find((s) => s.id === selection.sessionId) ?? null) : null),
     [steps, selection],
+  );
+
+  const referenceCatalog = useMemo(
+    () =>
+      selectedSession
+        ? buildReferenceCatalog({ sessionId: selectedSession.id, steps: sortedSteps, workflow, assets, mcpServers })
+        : { items: [] as ReferenceItem[], bindings: new Map<string, IssueFix>() },
+    [selectedSession, sortedSteps, workflow, assets, mcpServers],
+  );
+  const references = useMemo(
+    () => ({ items: referenceCatalog.items, loading: catalogLoading }),
+    [referenceCatalog, catalogLoading],
+  );
+  const sessionInputs = useMemo(
+    () =>
+      selectedSession ? availableInputs({ sessionId: selectedSession.id, steps: sortedSteps, workflow, assets }) : [],
+    [selectedSession, sortedSteps, workflow, assets],
+  );
+  const sessionIssues = useMemo(
+    () => (selectedSession ? issues.filter((issue) => issue.stepKey === stepKey(selectedSession.id)) : []),
+    [issues, selectedSession],
   );
 
   const selectedSubStep = useMemo(() => {
@@ -279,7 +384,9 @@ const BuilderPage = () => {
           radius={0}
           style={{ margin: '-24px -32px 0', borderBottom: '1px solid var(--app-border-default)' }}
         >
-          This is a company-level workflow. Copy it to your project to customize.
+          {project && !canExecute
+            ? 'You have view access to this project, so its workflows are read-only.'
+            : 'This is a company-level workflow. Copy it to your project to customize.'}
         </Alert>
       )}
 
@@ -481,6 +588,7 @@ const BuilderPage = () => {
                 onAddStep={addSubStep}
                 onReorderSessions={reorderSessions}
                 onReorderSteps={reorderSubSteps}
+                problemCounts={problemCounts}
               />
 
               {/* Editor area */}
@@ -503,6 +611,16 @@ const BuilderPage = () => {
                       readOnly={readOnly}
                       onFieldChange={(field, value) => updateStepField(selectedSession.id, field, value)}
                       onAssetSpecsChange={(field, specs) => handleAssetSpecsChange(selectedSession.id, field, specs)}
+                      references={references}
+                      onInsertReference={(item) => {
+                        const binding = referenceCatalog.bindings.get(item.token);
+                        if (binding) applyFix(selectedSession.id, binding);
+                      }}
+                      issues={sessionIssues}
+                      fixLabel={fixLabel}
+                      onFix={(fix) => applyFix(selectedSession.id, fix)}
+                      available={sessionInputs}
+                      onOutputRenamed={(before, after) => renameOutput(selectedSession.id, before, after)}
                     />
                   ) : selectedSubStep ? (
                     <StepEditorPanel

@@ -43,6 +43,27 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_equal @source.agents.pluck(:name, :persona), copy.agents.pluck(:name, :persona)
   end
 
+  test "references travel as package keys and come back as the copy's ids" do
+    workflow = @source.workflows.sole
+    first, second = workflow.steps.order(:position).to_a.first(2)
+    sentry = @source.mcp_servers.find_by!(name: "Sentry")
+    first.update!(output_asset_specs: [ { "name" => "triage.md" } ])
+    second.update!(mcp_server_ids: second.mcp_server_ids | [ sentry.id ], depends_on_step_ids: [ first.id ],
+                   instructions: "Read {{output:#{first.id}:triage.md}} from {{step:#{first.id}}}; ask {{mcp:#{sentry.id}}}.")
+
+    result = export
+    exported = result.package.definition["workflows"].sole["steps"].find { |step| step["name"] == second.name }
+
+    assert_match(/\ARead \{\{output:[a-z][a-z0-9_]*:triage\.md\}\} from \{\{step:[a-z][a-z0-9_]*\}\}; ask \{\{mcp:[a-z][a-z0-9_]*\}\}\.\z/,
+                 exported["instructions"])
+
+    copy = install(result.package).project
+    copy_first, copy_second = copy.workflows.sole.steps.order(:position).to_a.first(2)
+    copy_sentry = copy.mcp_servers.find_by!(name: "Sentry")
+    assert_equal "Read {{output:#{copy_first.id}:triage.md}} from {{step:#{copy_first.id}}}; ask {{mcp:#{copy_sentry.id}}}.",
+                 copy_second.instructions
+  end
+
   test "a skill's extra files travel with it" do
     skill = @source.skills.find_by!(name: "house-style")
     skill.update!(files: skill.files.merge("examples/good.rb" => "def small = 1\n"))

@@ -51,6 +51,30 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_inertia_page "Projects/Workflows/BuilderPage"
   end
 
+  test "builder carries the saved workflow's data-flow issues" do
+    wf = create(:workflow, scope: @project)
+    create(:step, workflow: wf, name: "Report", instructions: "Fill in {{artifact_name}}.")
+
+    get builder_company_project_workflow_path(@project, wf)
+
+    assert_inertia_props do |props|
+      props[:issues].map { |issue| [ issue[:code], issue[:severity], issue[:token] ] } ==
+        [ [ "unknown_braces", "warning", "{{artifact_name}}" ] ]
+    end
+  end
+
+  test "builder is read-only for a project viewer" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD,
+                                                           email: "client-#{SecureRandom.hex(3)}@external.com")
+    @project.add_collaborator(viewer)
+    wf = create(:workflow, scope: @project)
+    sign_in_as(viewer)
+
+    get builder_company_project_workflow_path(@project, wf)
+
+    assert_inertia_props(readOnly: true)
+  end
+
   test "builder lists every tracker, detached ones too, and whether each recognises a mention of Aixle" do
     integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     create(:project_tracker, integration: integration, handle: "boards", status: "detached")

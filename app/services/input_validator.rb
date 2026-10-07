@@ -10,17 +10,11 @@ class InputValidator
   end
 
   def validate!
-    specs = @step.input_asset_specs
-    return Result.new(valid?: true, errors: []) if specs.blank?
+    @step.input_specs.each do |spec|
+      next unless spec.required? && spec.name
+      next if @available_names.any? { |name| spec.matches?(name) }
 
-    specs.each do |spec|
-      next if spec["required"] == false
-
-      name = spec["name"]
-      next if name.blank?
-      next if @available_names.include?(name)
-
-      @errors << "Required input missing: #{name}"
+      @errors << "Required input missing: #{spec.name}"
     end
 
     Result.new(valid?: @errors.empty?, errors: @errors)

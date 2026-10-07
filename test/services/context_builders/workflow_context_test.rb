@@ -303,6 +303,39 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 
   # -- AC #5: BUILDERS registration --
 
+  test "current-step instructions carry rendered references, not tokens" do
+    @step1.update!(output_asset_specs: [ { "name" => "findings.md" } ])
+    @step2.update!(depends_on_step_ids: [ @step1.id ], instructions: "Fix what {{output:#{@step1.id}:findings.md}} lists.")
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "current-step" }.content
+
+    assert_includes content, "Fix what `/workspace/assets/findings.md` lists."
+  end
+
+  test "earlier-files lists what earlier steps wrote, two links up included, by the nearest writer" do
+    @step2.update!(depends_on_step_ids: [ @step1.id ])
+    @step3.update!(depends_on_step_ids: [ @step2.id ])
+    review_run = create(:step_run, :running, workflow_run: @workflow_run, step: @step3)
+    analyze_run = create(:step_run, workflow_run: @workflow_run, step: @step1)
+    create(:workflow_run_asset, workflow_run: @workflow_run, produced_by_step_run: analyze_run, name: "findings.md")
+    create(:workflow_run_asset, workflow_run: @workflow_run, produced_by_step_run: analyze_run, name: "notes.md")
+    create(:workflow_run_asset, workflow_run: @workflow_run, produced_by_step_run: @step_run, name: "notes.md")
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: review_run)
+
+    section = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "earlier-files" }
+
+    assert_equal :important, section.priority
+    assert_includes section.content, "- `/workspace/assets/findings.md` — written by Analyze"
+    assert_includes section.content, "- `/workspace/assets/notes.md` — written by Implement"
+  end
+
+  test "no earlier-files section when nothing upstream wrote a file" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
+
+    assert_nil(ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "earlier-files" })
+  end
+
   test "WorkflowContext is registered in BUILDERS after Workspace and before Tools" do
     builders = SessionContextConstructor::BUILDERS
     workspace_idx = builders.index(ContextBuilders::Workspace)

@@ -32,10 +32,18 @@ module Api
               workflow: WorkflowResource.new(workflow).to_h,
               steps: workflow.steps.not_deleted.includes(:sub_steps).map { |s| StepResource.new(s).to_h },
               currentVersionNumber: workflow.current_version_number,
-              versionCreated: version.present?
+              versionCreated: version.present?,
+              issues: DataFlow::Check.for_workflow(workflow, project: current_project).issues.map(&:as_json)
             }
           rescue WorkflowAggregateSave::Invalid => e
             render json: { errors: [ e.message ] }, status: :unprocessable_entity
+          end
+
+          # The same check as after a Save, over the editor's unsaved payload, so
+          # the builder can show what a run would trip on while it is edited.
+          def check
+            issues = DataFlow::Check.for_payload(current_workflow, aggregate_params, project: current_project).issues
+            render json: { issues: issues.map(&:as_json) }
           end
 
           private

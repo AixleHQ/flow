@@ -462,6 +462,11 @@ export function apiV1ProjectWorkflowTriggerPath(project_id: ScalarType, workflow
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "triggers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","id","format"]);
 }
 
+/** /api/v1/projects/:project_id/workflows/:workflow_id/aggregate/check(.:format) */
+export function checkApiV1ProjectWorkflowAggregatePath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "aggregate" + "/" + "check" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
+}
+
 /** /api/v1/projects/:project_id/workflows/:workflow_id/aggregate(.:format) */
 export function apiV1ProjectWorkflowAggregatePath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "aggregate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);

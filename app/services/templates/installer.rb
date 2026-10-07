@@ -315,11 +315,35 @@ module Templates
         end
         [ entry["key"], step ]
       end
+      step_ids = steps.transform_values(&:id)
       entries.each do |entry|
-        next if entry["depends_on"].blank?
-
-        steps[entry["key"]].update!(depends_on_step_ids: entry["depends_on"].map { |key| steps.fetch(key).id })
+        attrs = {}
+        attrs[:depends_on_step_ids] = entry["depends_on"].map { |key| step_ids.fetch(key) } if entry["depends_on"].present?
+        step = steps[entry["key"]]
+        instructions = install_references(step.instructions, step_ids)
+        attrs[:instructions] = instructions if instructions != step.instructions
+        step.update!(attrs) if attrs.any?
       end
+    end
+
+    # A package's references carry keys (Templates::Exporter#export_instructions);
+    # each becomes the id of the row this install created or reused. A key that
+    # was not installed becomes the name it stood for.
+    def install_references(text, step_ids)
+      InstructionReferences.rewrite_tokens(text) do |type, body|
+        case type
+        when "asset" then (id = @ids["assets"][body]) ? "{{asset:#{id}}}" : package_name("assets", body)
+        when "mcp" then (id = @ids["mcp_servers"][body]) ? "{{mcp:#{id}}}" : package_name("mcp_servers", body)
+        when "step" then (id = step_ids[body]) ? "{{step:#{id}}}" : body
+        when "output"
+          key, name = body.split(":", 2)
+          (id = step_ids[key]) && name.present? ? "{{output:#{id}:#{name}}}" : name.to_s
+        end
+      end
+    end
+
+    def package_name(section, key)
+      @package.section(section).find { |entry| entry["key"] == key }&.then { |entry| entry["name"] } || key
     end
 
     # Keys whose resource was not created (a secret with no value yet) are left

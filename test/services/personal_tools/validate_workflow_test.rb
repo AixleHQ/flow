@@ -59,5 +59,18 @@ module PersonalTools
 
       assert_includes validate["errors"], "Step dependencies form a cycle"
     end
+
+    test "reports references and specs a run would trip on" do
+      collect = create(:step, workflow: @workflow, name: "Collect", instructions: "Collect sources",
+        agent: create(:agent, scope: @project), output_asset_specs: [ { "name" => "summary.md" } ])
+      create(:step, workflow: @workflow, name: "Report", agent: create(:agent, scope: @project),
+        instructions: "Summarise {{output:#{collect.id}:summary.md}} and fill in {{artifact_name}}.")
+
+      report = validate
+
+      refute report["valid"]
+      assert(report["errors"].any? { |e| e.include?(%("Report" reads summary.md from "Collect", which does not run before it)) })
+      assert(report["warnings"].any? { |e| e.include?("{{artifact_name}}") })
+    end
   end
 end

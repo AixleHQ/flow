@@ -108,4 +108,41 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert @workflow.reload.inherit_all_project_resources
     assert @test.reload.deleted?
   end
+
+  test "a reference to a step created in the same save is stored with that step's id" do
+    save([
+      { id: @build.id, name: "Build", output_asset_specs: [ { name: "dist.md", required: true } ] },
+      { key: "new-1", name: "Package", depends_on_step_ids: [ @build.id ] },
+      { id: @test.id, name: "Test", depends_on_step_ids: [ "new-1" ],
+        instructions: "Read {{output:#{@build.id}:dist.md}} after {{step:new-1}}." }
+    ])
+
+    assert_response :success
+    package = @workflow.steps.not_deleted.find_by!(name: "Package")
+    assert_equal "Read {{output:#{@build.id}:dist.md}} after {{step:#{package.id}}}.", @test.reload.instructions
+    assert_empty response.parsed_body["issues"]
+  end
+
+  test "the save response and the check report what a run would trip on, without blocking the save" do
+    steps = [
+      { id: @build.id, name: "Build", instructions: "Read {{output:#{@test.id}:report.md}}." },
+      { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ], output_asset_specs: [ { name: "report.md" } ] }
+    ]
+
+    before = @build.instructions
+
+    post check_api_v1_project_workflow_aggregate_path(@project, @workflow),
+         params: { aggregate: { name: "Release", steps: steps } }, as: :json
+
+    assert_response :success
+    issue = response.parsed_body["issues"].sole
+    assert_equal [ "output_not_upstream", @build.id.to_s, "error" ], issue.values_at("code", "stepKey", "severity")
+    assert_equal before, @build.reload.instructions, "a check writes nothing"
+
+    save(steps)
+
+    assert_response :success
+    assert_equal [ "output_not_upstream" ], response.parsed_body["issues"].pluck("code")
+    assert_equal "Read {{output:#{@test.id}:report.md}}.", @build.reload.instructions
+  end
 end

@@ -24,12 +24,14 @@ class Step < ApplicationRecord
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
   validate :resource_ids_belong_to_project
+  validate :instruction_references_belong_to_project
 
   default_scope { order(:position) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
 
   before_validation :assign_next_position, on: :create
+  before_validation :normalize_asset_specs
 
   def soft_delete!
     update_column(:deleted_at, Time.current)
@@ -63,6 +65,17 @@ class Step < ApplicationRecord
   def root?
     depends_on_step_ids.blank?
   end
+
+  # Every live step this one runs after, directly or through others, nearest first.
+  def upstream_step_ids
+    edges = workflow.steps.not_deleted.pluck(:id, :depends_on_step_ids).to_h
+    edges[id] = depends_on_step_ids
+    DataFlow::Graph.new(edges).upstream(id).map(&:to_i) & edges.keys
+  end
+
+  def input_specs = DataFlow::AssetSpec.list(input_asset_specs)
+
+  def output_specs = DataFlow::AssetSpec.list(output_asset_specs)
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[name position created_at updated_at]
@@ -114,6 +127,34 @@ class Step < ApplicationRecord
       next unless will_save_change_to_attribute?(attribute)
 
       validate_owned_ids(workflow.scope, kind, attribute, attribute_in_database(attribute), self[attribute])
+    end
+  end
+
+  # Stored the way every reader parses them (DataFlow::AssetSpec): an array of
+  # hashes, names without a container prefix — including the rows an older
+  # builder saved as a JSON string, the next time anything saves the step.
+  def normalize_asset_specs
+    %w[input_asset_specs output_asset_specs].each do |column|
+      next unless self[column].is_a?(String) || will_save_change_to_attribute?(column)
+
+      self[column] = DataFlow::AssetSpec.list(self[column]).map(&:to_h)
+    end
+  end
+
+  REFERENCE_OWNERS = { "asset" => :assets, "mcp" => :mcp_servers }.freeze
+
+  # An `{{asset:…}}` or `{{mcp:…}}` token binds a resource the same way the id
+  # columns do, so it is held to the same ownership rule — only for ids the
+  # change adds, as with the columns.
+  def instruction_references_belong_to_project
+    return unless workflow&.scope_type == "Project" && will_save_change_to_instructions?
+
+    REFERENCE_OWNERS.each do |type, kind|
+      added = InstructionReferences.ids(instructions, type) - InstructionReferences.ids(instructions_in_database, type)
+      foreign = ProjectOwnedReferences.foreign_ids(workflow.scope, kind, added)
+      next if foreign.empty?
+
+      errors.add(:instructions, "reference #{kind.to_s.tr('_', ' ')} outside this project: #{foreign.sort.join(', ')}")
     end
   end
 
