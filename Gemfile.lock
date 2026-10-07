@@ -100,8 +100,8 @@ GEM
     auth-sanitizer (0.2.3)
       version_gem (~> 1.1, >= 1.1.14)
     aws-eventstream (1.4.0)
-    aws-partitions (1.1291.0)
-    aws-sdk-bedrock (1.94.0)
+    aws-partitions (1.1293.0)
+    aws-sdk-bedrock (1.95.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sigv4 (~> 1.5)
     aws-sdk-bedrockruntime (1.85.0)
@@ -122,7 +122,7 @@ GEM
     aws-sdk-marketplacemetering (1.105.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sigv4 (~> 1.5)
-    aws-sdk-s3 (1.233.0)
+    aws-sdk-s3 (1.233.1)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sdk-kms (~> 1)
       aws-sigv4 (~> 1.5)
@@ -135,7 +135,7 @@ GEM
     bindata (2.5.1)
     bootsnap (1.26.0)
       msgpack (~> 1.5)
-    brakeman (8.0.6)
+    brakeman (8.1.0)
       racc
     builder (3.3.0)
     bullet (8.2.0)
@@ -296,7 +296,7 @@ GEM
       multi_xml (>= 0.5.2)
     i18n (1.15.2)
       concurrent-ruby (~> 1.0)
-    image_processing (2.1.0)
+    image_processing (2.2.0)
     inertia_cable (0.4.0)
       actioncable (>= 7.0)
       activejob (>= 7.0)
@@ -370,9 +370,10 @@ GEM
       ffi-compiler (~> 1.0)
       rake (~> 13.0)
     logger (1.7.0)
-    lograge (0.15.0)
+    lograge (0.15.1)
       actionpack (>= 4)
       activesupport (>= 4)
+      logger
       railties (>= 4)
       request_store (~> 1.0)
     loofah (2.25.2)
@@ -493,20 +494,20 @@ GEM
     openssl-signature_algorithm (1.3.0)
       openssl (> 2.0)
     ostruct (0.6.3)
-    pagy (43.6.3)
+    pagy (43.7.0)
       json
       uri
       yaml
-    parallel (2.2.0)
+    parallel (2.3.0)
     parser (3.3.12.0)
       ast (~> 2.4.1)
       racc
-    pg (1.6.3)
-    pg (1.6.3-aarch64-linux)
-    pg (1.6.3-aarch64-linux-musl)
-    pg (1.6.3-arm64-darwin)
-    pg (1.6.3-x86_64-linux)
-    pg (1.6.3-x86_64-linux-musl)
+    pg (1.7.0)
+    pg (1.7.0-aarch64-linux)
+    pg (1.7.0-aarch64-linux-musl)
+    pg (1.7.0-arm64-darwin)
+    pg (1.7.0-x86_64-linux)
+    pg (1.7.0-x86_64-linux-musl)
     power_assert (2.0.5)
     pp (0.6.4)
       prettyprint
@@ -645,9 +646,9 @@ GEM
     rubocop-factory_bot (2.28.0)
       lint_roller (~> 1.1)
       rubocop (~> 1.72, >= 1.72.1)
-    rubocop-minitest (0.40.0)
+    rubocop-minitest (0.41.0)
       lint_roller (~> 1.1)
-      rubocop (>= 1.75.0, < 2.0)
+      rubocop (>= 1.89.0, < 2.0)
       rubocop-ast (>= 1.38.0, < 2.0)
     rubocop-performance (1.27.0)
       lint_roller (~> 1.1)
@@ -677,10 +678,10 @@ GEM
     scimitar (2.15.0)
       rails (>= 7.0)
     securerandom (0.4.1)
-    sentry-rails (7.0.0)
+    sentry-rails (7.1.0)
       railties (>= 5.2.0)
-      sentry-ruby (~> 7.0.0)
-    sentry-ruby (7.0.0)
+      sentry-ruby (~> 7.1.0)
+    sentry-ruby (7.1.0)
       bigdecimal
       concurrent-ruby (~> 1.0, >= 1.0.2)
       logger
@@ -759,7 +760,7 @@ GEM
     ts_routes (1.0.3)
       railties (>= 4.0)
     tsort (0.2.0)
-    typelizer (0.13.1)
+    typelizer (0.14.0)
       benchmark
       railties (>= 6.1.0)
     tzinfo (2.0.6)
@@ -835,10 +836,10 @@ DEPENDENCIES
   administrate-field-jsonb
   administrate-field-shrine
   alba
-  aws-sdk-bedrock (~> 1.94)
+  aws-sdk-bedrock (~> 1.95)
   aws-sdk-bedrockruntime (~> 1.85)
   aws-sdk-marketplacemetering (~> 1.77)
-  aws-sdk-s3 (~> 1.232)
+  aws-sdk-s3 (~> 1.233)
   bcrypt (~> 3.1.22)
   bootsnap
   brakeman
@@ -859,7 +860,7 @@ DEPENDENCIES
   gitlab
   haml-rails
   hashie
-  image_processing (~> 2.1)
+  image_processing (~> 2.2)
   inertia_cable
   inertia_rails
   json (< 3)
@@ -869,7 +870,7 @@ DEPENDENCIES
   letter_opener
   letter_opener_web
   license_finder-rubyzip3 (= 7.2.1.1)
-  lograge (~> 0.15.0)
+  lograge (~> 0.15.1)
   marcel (~> 1.0)
   mcp
   minitest
@@ -885,7 +886,7 @@ DEPENDENCIES
   omniauth-rails_csrf_protection
   openid_connect (~> 2.5)
   pagy
-  pg (~> 1.6)
+  pg (~> 1.7)
   propshaft
   pry-byebug
   pry-rails

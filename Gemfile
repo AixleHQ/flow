@@ -7,7 +7,7 @@ ruby file: ".ruby-version"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.4"
 # Use postgresql as the database for Active Record
-gem "pg", "~> 1.6"
+gem "pg", "~> 1.7"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
@@ -193,7 +193,7 @@ gem "shrine", "~> 3.10"
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.232"
+gem "aws-sdk-s3", "~> 1.233"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
@@ -204,12 +204,12 @@ gem "aws-sdk-bedrockruntime", "~> 1.85"
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.94"
+gem "aws-sdk-bedrock", "~> 1.95"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
 gem "aws-sdk-marketplacemetering", "~> 1.77"
-gem "image_processing", "~> 2.1"
+gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
 gem "faraday-retry", "~> 2.3"
@@ -219,7 +219,7 @@ gem "faraday-retry", "~> 2.3"
 # hand-rolled, and idempotency keys on retried writes come with it.
 gem "stripe", "~> 19.6"
 
-gem "lograge", "~> 0.15.0"
+gem "lograge", "~> 0.15.1"
 
 # Reads ONE credential format, not an application database. Kiro CLI keeps its login in
 # a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
