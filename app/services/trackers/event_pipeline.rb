@@ -157,13 +157,20 @@ module Trackers
       end
     end
 
-    # A comment is Aixle's when the ledger names it, or, while the write is still
-    # unanswered, when the connection's own identity wrote it. Anyone else's
-    # comment on the issue is theirs, however recently Aixle commented there.
+    # When the provider names the comment, it is Aixle's only if the ledger
+    # names it too, or if a write is still unanswered and the comment's author
+    # is not known to be someone else. A person's comment right after one of
+    # Aixle's is theirs. A provider that names no comment keeps the recent write.
     def comment_operation(recent, notification)
       writes = recent.where(operation: "add_comment")
-      named = notification.comment_id.present? && writes.find_by(result_ref: notification.comment_id.to_s)
-      named || (@provider.own_actor?(notification.actor) ? writes.find_by(result_ref: nil) || writes.first : nil)
+      return writes.first if notification.comment_id.blank?
+
+      writes.find_by(result_ref: notification.comment_id.to_s) ||
+        (writes.find_by(result_ref: nil) unless someone_else?(notification.actor))
+    end
+
+    def someone_else?(actor)
+      @provider.identity.present? && actor.present? && !@provider.own_actor?(actor)
     end
 
     def over_limits?(tracker, issue, origin)
