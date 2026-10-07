@@ -9,6 +9,8 @@
 # A customer who paid with a new card and was charged the old one next month
 # would be back here in four weeks.
 class Web::Company::BillingInvoicePaymentsController < Web::Company::ApplicationController
+  include HostedBillingOnly
+
   def create
     url = current_company.billing_unpaid_invoice_url
     return refuse("There is no unpaid invoice to pay.") unless current_company.billing_status == "payment_failed" && url

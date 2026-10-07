@@ -115,4 +115,18 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     assert_redirected_to company_settings_billing_path
     assert_empty @client.subscription_updates
   end
+
+  test "outside the hosted product nothing is cancelled or resumed" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::AWS_MARKETPLACE))
+
+    post company_billing_cancellation_path, params: { reason: "unused" }
+    assert_redirected_to company_settings_path
+    assert_match(/not available/, flash[:alert])
+
+    delete company_billing_cancellation_path
+    assert_redirected_to company_settings_path
+
+    assert_empty @client.subscription_updates
+    assert_empty @company.billing_cancellations
+  end
 end

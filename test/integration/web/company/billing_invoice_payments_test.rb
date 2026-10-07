@@ -49,4 +49,13 @@ class Web::Company::BillingInvoicePaymentsTest < ActionDispatch::IntegrationTest
 
     assert_match(/could not reach/, flash[:alert])
   end
+
+  test "outside the hosted product no invoice is opened" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
+
+    post company_billing_invoice_payment_path, headers: { "X-Inertia" => "true" }
+
+    assert_nil response.headers["X-Inertia-Location"]
+    assert_empty @client.subscription_updates
+  end
 end
