@@ -14,14 +14,14 @@ module Teams
 
     # composeExtension/fetchTask: the dialog, or why there is none.
     def fetch(integration, activity)
-      return task_message("Unknown command") unless activity.dig("value", "commandId") == COMMAND
-      return task_message(NOT_HERE) if conversation(integration, activity).nil?
+      return notice_dialog("Unknown command") unless activity.dig("value", "commandId") == COMMAND
+      return notice_dialog(NOT_HERE) if conversation(integration, activity).nil?
 
       user = sender(integration, activity)
       return dialog("Link your Aixle account", RunCards.link(link_url(integration, activity))) if user.nil?
 
       entries = RunCatalog.entries(user, integration)
-      return task_message("There is no workflow you can start from Teams in #{integration.company.name}.") if entries.empty?
+      return notice_dialog("There is no workflow you can start from Teams in #{integration.company.name}.") if entries.empty?
 
       payload = activity.dig("value", "messagePayload").to_h
       message = { "message_id" => payload["id"], "reply_to" => payload["replyToId"], "url" => payload["linkToMessage"],
@@ -33,13 +33,13 @@ module Teams
     def submit(integration, activity)
       data = activity.dig("value", "data").to_h
       conversation = conversation(integration, activity)
-      return task_message(NOT_HERE) if conversation.nil?
+      return notice_dialog(NOT_HERE) if conversation.nil?
 
       user = sender(integration, activity)
       return dialog("Link your Aixle account", RunCards.link(link_url(integration, activity))) if user.nil?
 
       entry = RunCatalog.find(user, integration, data["workflow"])
-      return task_message(GONE) if entry.nil?
+      return notice_dialog(GONE) if entry.nil?
 
       root = activity.dig("conversation", "id").to_s.split(";messageid=", 2)[1]
       thread_id = (root.presence || data["reply_to"].presence || data["message_id"] if conversation.kind == "channel")
@@ -48,9 +48,10 @@ module Teams
                         invoke_id: activity["id"],
                         request: { thread_id: thread_id, message_id: data["message_id"], text: text,
                                    url: data["url"], actor: actor(integration, activity) })
-      task_message("Started #{entry.workflow.name}. Its status card follows the run in the thread.")
+      # Closing the dialog is the answer: the status card appears in the thread.
+      {}
     rescue RunStarter::Refused => e
-      task_message(e.message)
+      notice_dialog(e.message)
     end
 
     # adaptiveCard/action from the /run card: start it, then show the clicker
@@ -132,7 +133,9 @@ module Teams
       { task: { type: "continue", value: { title: title, height: "medium", width: "medium", card: RunCards.attachment(card) } } }
     end
 
-    def task_message(text) = { task: { type: "message", value: text } }
+    # A short pop-up (`task.type: message`) showed as "Unable to reach app" on
+    # staging, so even a refusal is a small dialog.
+    def notice_dialog(text) = dialog("Aixle Flow", RunCards.notice(text))
 
     def card_response(card) = { statusCode: 200, type: "application/vnd.microsoft.card.adaptive", value: card }
   end

@@ -50,6 +50,8 @@ class Teams::RunActionTest < ActiveSupport::TestCase
 
   def card_of(response) = response.dig(:task, :value, :card, :content)
 
+  def notice_of(response) = card_of(response).dig(:body, 0, :text)
+
   test "a person not linked yet is offered the link instead of the workflows" do
     response = Teams::RunAction.fetch(@integration, invoke("composeExtension/fetchTask",
                                                            { "commandId" => "runWorkflow", "messagePayload" => message_payload }))
@@ -82,7 +84,7 @@ class Teams::RunActionTest < ActiveSupport::TestCase
                   "reply_to" => "1700000000001", "text" => "Customer Acme asks for the Q3 digest" }
     }))
 
-    assert_equal "Started Weekly Digest. Its status card follows the run in the thread.", response.dig(:task, :value)
+    assert_equal({}, response)
     dispatch = TriggerDispatch.find_by!(workflow_run: run)
     assert_equal Chat::ACTION_SOURCE, dispatch.source
     assert Chat::RunStatusReporter.applies?(dispatch, "running")
@@ -107,7 +109,7 @@ class Teams::RunActionTest < ActiveSupport::TestCase
     response = Teams::RunAction.submit(@integration, invoke("composeExtension/submitAction",
                                                             { "data" => { "workflow" => "#{outsider.id}:#{hidden.id}" } }))
 
-    assert_match(/can't start that workflow/, response.dig(:task, :value))
+    assert_match(/can't start that workflow/, notice_of(response))
     assert_equal 0, TriggerDispatch.count
   end
 
@@ -174,7 +176,7 @@ class Teams::RunActionTest < ActiveSupport::TestCase
     response = Teams::RunAction.fetch(@integration, invoke("composeExtension/fetchTask",
                                                            { "commandId" => "runWorkflow", "messagePayload" => message_payload }))
 
-    assert_match(/no workflow you can start/, response.dig(:task, :value))
+    assert_match(/no workflow you can start/, notice_of(response))
   end
 
   test "a retried /run click opens one thread, and a start that is refused takes its thread back" do
