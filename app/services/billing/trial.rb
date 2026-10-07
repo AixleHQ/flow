@@ -87,7 +87,7 @@ module Billing
       Company.where(billing_state: "trialing").find_each.filter_map do |company|
         next unless exhausted?(company)
 
-        company.update!(billing_state: "blocked")
+        company.update!(billing_state: "blocked", billing_block_reason: "allowance")
         Rails.logger.info(
           "[Billing::Trial] company #{company.id} spent its #{queue_hours} free queue-hours at #{now.utc.iso8601}"
         )

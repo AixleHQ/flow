@@ -492,6 +492,14 @@ Rails.application.routes.draw do
       # Card entry. Everything after it happens on Stripe's page and comes back
       # as a webhook, so there is nothing here to show and nothing to update.
       resource :billing_checkout, only: :create, controller: "billing_checkouts"
+      # The third tab of company settings: what the workspace pays, and the
+      # controls that change it. Hosted product only.
+      get "settings/billing", to: "billing#show", as: :settings_billing
+      # Stopping at the end of the billing period, and taking that back before
+      # the date arrives.
+      resource :billing_cancellation, only: %i[create destroy], controller: "billing_cancellations"
+      # The invoice whose failed payment stopped the workspace, paid on Stripe's page.
+      resource :billing_invoice_payment, only: :create, controller: "billing_invoice_payments"
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]

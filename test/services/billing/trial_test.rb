@@ -59,6 +59,7 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal [ @company.id ], Billing::Trial.enforce!
 
     assert @company.reload.billing_blocked?
+    assert_equal "allowance", @company.billing_status
   end
 
   test "enforce leaves a company that has not" do

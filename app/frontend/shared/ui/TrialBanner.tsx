@@ -2,7 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { Button } from '@mantine/core';
 import { useState } from 'react';
 
-import { companyBillingCheckoutPath } from 'shared/routes';
+import { companyBillingCheckoutPath, companyBillingInvoicePaymentPath } from 'shared/routes';
 
 import classes from './TrialBanner.module.css';
 import type { SharedProps } from './types';
@@ -25,15 +25,29 @@ export const TrialBanner = () => {
 
   const blocked = trial.state === 'blocked';
   const spent = Math.min(100, Math.round((trial.usedHours / Math.max(trial.allowanceHours, 1)) * 100));
+  // A failed payment is undone by paying its invoice; a new card would open a
+  // second subscription and bill the same minutes twice.
+  const unpaid = blocked && trial.status === 'payment_failed';
+  const ended = blocked && trial.status === 'canceled';
+  const carryOn = trial.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.';
 
   return (
     <div className={`${classes.root} ${blocked ? classes.blocked : ''}`} role="status">
       <p className={classes.text}>
-        {blocked ? (
+        {unpaid ? (
+          <>
+            Your last payment did not go through, so no new sessions start. Anything already running finishes. Pay the
+            open invoice to carry on.
+          </>
+        ) : ended ? (
+          <>
+            Your subscription has ended, so no new sessions start. Anything already running finishes. Your data is kept.{' '}
+            {carryOn}
+          </>
+        ) : blocked ? (
           <>
             You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free worker-hours,
-            so no new sessions start. Anything already running finishes.{' '}
-            {trial.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'}
+            so no new sessions start. Anything already running finishes. {carryOn}
           </>
         ) : (
           <>
@@ -56,10 +70,16 @@ export const TrialBanner = () => {
           loading={starting}
           onClick={() => {
             setStarting(true);
-            router.post(companyBillingCheckoutPath(), {}, { onFinish: () => setStarting(false) });
+            router.post(
+              unpaid ? companyBillingInvoicePaymentPath() : companyBillingCheckoutPath(),
+              {},
+              {
+                onFinish: () => setStarting(false),
+              },
+            );
           }}
         >
-          Add a card
+          {unpaid ? 'Pay invoice' : 'Add a card'}
         </Button>
       ) : (
         <div className={classes.meter} aria-hidden>

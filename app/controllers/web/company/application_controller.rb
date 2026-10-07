@@ -20,6 +20,8 @@ class Web::Company::ApplicationController < Web::ApplicationController
           is_admin: current_membership&.admin? || false,
           can_manage_members: current_membership&.admin? || false,
           can_manage_projects: current_membership&.admin? || false,
+          # Where we host, and only there, is anyone billed.
+          can_manage_billing: Deployment.saas? && (current_membership&.admin? || false),
           can_write: current_membership.present? && !current_membership.viewer?
         }
       }

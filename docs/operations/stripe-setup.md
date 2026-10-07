@@ -138,35 +138,83 @@ subscribed to:
 
 - `checkout.session.completed` — a card has been added; the company moves to
   `active`
-- `customer.subscription.updated`, `customer.subscription.deleted` — a
-  subscription lapsing moves it back
-- `invoice.payment_failed` — what makes a company `blocked` for non-payment
-  rather than for a spent allowance
+- `customer.subscription.created`, `customer.subscription.updated` — the billing
+  period, a scheduled cancellation, and a subscription going `past_due`
+- `customer.subscription.deleted` — the subscription has ended
+- `invoice.payment_failed`, `invoice.paid` — a payment failing, and the invoice
+  being paid afterwards
+
+An endpoint created before the billing tab shipped is missing
+`customer.subscription.created` and `invoice.paid`. Add them under **Developers →
+Webhooks → the endpoint → Edit events**, in both accounts. Without
+`invoice.paid`, a company stopped for a failed payment stays stopped after paying.
 
 The signing secret (`whsec_…`) is shown once on creation. For local development
 use `stripe listen --forward-to localhost:4000/webhooks/stripe` instead, which
 prints its own.
-
-**Not yet created:** the endpoint needs a public host, which is a deployment
-decision rather than a code one. Until it exists, a card added through Checkout
-is taken by Stripe and the company is not moved to `active` — the webhook is the
-only thing that does that.
 
 ### What each event does
 
 | Event | Effect |
 | --- | --- |
 | `checkout.session.completed` | The company becomes `active`, and its subscription id is recorded |
-| `customer.subscription.updated` | Follows the status: `active`, `trialing` and `past_due` keep running; anything else stops |
-| `customer.subscription.deleted` | The company is stopped |
-| `invoice.payment_failed` | The company is stopped |
+| `customer.subscription.created` / `.updated` | `active`/`trialing`: running, and the billing period and any scheduled cancellation date are recorded. `past_due`/`unpaid`: stopped for a failed payment. `incomplete`: nothing yet |
+| `customer.subscription.deleted` | Stopped as `canceled`, dated to when it ended |
+| `invoice.payment_failed` | Stopped for a failed payment; the invoice's hosted page is kept for the admin to pay |
+| `invoice.paid` | A company stopped for a failed payment runs again |
 
-`past_due` deliberately keeps running. A failed payment starts a dunning cycle
-that usually ends in payment, and stopping a customer's work on the first retry
-is a worse mistake than carrying them for a few days.
+A stopped company is `blocked`, with `billing_block_reason` saying why
+(`allowance`, `canceled` or `payment_failed`). It goes to `blocked`, never back to
+`trialing`: the free allowance was spent once, and cancelling does not give it back.
 
-A company stopped this way goes to `blocked`, not back to `trialing`: the free
-allowance was spent once and cancelling does not give it back.
+**A failed payment stops the company at once.** Stripe sends `past_due` and
+`invoice.payment_failed` together, in no promised order, so both stop it. The admin
+pays the open invoice from the Billing tab or the banner. That goes through the
+application first, which sets `payment_settings.save_default_payment_method` on the
+subscription so the card that pays becomes the card charged next month.
+
+**Only the company's current subscription can stop it.** A customer who cancelled
+and came back has two subscriptions behind them, and Stripe does not deliver
+events in order. A `deleted` or failed-payment event for any other subscription is
+ignored. A running one is adopted, since a canceled subscription never runs again.
+
+**An ended subscription stays ended.** The final invoice, for the last period's
+minutes, can fail or be paid after the subscription is deleted. Neither changes a
+`canceled` company: Stripe chases that invoice, and access comes back through a
+new card.
+
+### Failed-payment settings
+
+**Billing → Revenue recovery → Retries** decides what Stripe does once its retries
+run out. Choose **Cancel the subscription**, in both accounts. The application has
+already stopped the company on the first failure; cancelling then sends `deleted`
+and records it as `canceled`, so a new card can restore access through Checkout.
+
+## Cancelling from the application
+
+An admin cancels from **Company Settings → Billing**. The application sets
+`cancel_at_period_end` on the subscription, with the reason as
+`cancellation_details`, and keeps the reason in `billing_cancellations` too. Every
+admin of the company gets an email. Until the period ends the company runs and is
+metered as usual. `customer.subscription.deleted` stops it at the end date, and
+Stripe invoices the period's minutes on its final invoice. An admin can resume the
+subscription from the same tab before that date.
+
+Checkout refuses to open while the company has a subscription that has not ended.
+The meter sums by customer, and every subscription carrying the price invoices
+that sum, so a second subscription would bill the same minutes twice.
+
+### Companies that were paying before the Billing tab
+
+Their billing period was never recorded, and their subscription does not save the
+card used to pay a failed invoice. Run once after deploying:
+
+```bash
+bin/rails billing:sync_subscriptions
+```
+
+It reads each paying company's subscription back from Stripe. It writes only the
+dates and the card setting; whether a company runs stays with the webhooks.
 
 ---
 
@@ -208,6 +256,10 @@ and the deploy will not let you.
 
 - [ ] The whole flow driven on test: signup → allowance spent → blocked → card
       added → running again
+- [ ] Cancel from the Billing tab → `customer.subscription.deleted` → `canceled`
+      → card added → running again
+- [ ] A failing card (`4000 0000 0000 0341`) → `payment_failed` → invoice paid →
+      running again
 - [ ] Meter, product and price recreated in live mode (test-mode objects do not
       carry over), the price carrying the same `transform_quantity`
 - [ ] Live webhook endpoint created and its secret deployed

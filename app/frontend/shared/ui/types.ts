@@ -36,11 +36,22 @@ export interface SharedPermissions {
   canManageProjects: boolean;
   /** False for a viewer. Optional: a page served by an older pod does not send it. */
   canWrite?: boolean;
+  /** An admin, where we host. Optional: a page served by an older pod does not send it. */
+  canManageBilling?: boolean;
 }
+
+/**
+ * Where a workspace's billing stands. A blocked one carries why, which decides what
+ * undoes it: a card for a spent allowance or an ended subscription, the open invoice
+ * for a failed payment.
+ */
+export type BillingStatus = 'trialing' | 'active' | 'cancelling' | 'allowance' | 'canceled' | 'payment_failed';
 
 /** Sent only while a workspace is on free capacity, or has spent it. */
 export interface SharedTrial {
   state: 'trialing' | 'blocked';
+  /** Optional: a page served by an older pod does not send it. */
+  status?: BillingStatus;
   allowanceHours: number;
   usedHours: number;
   remainingHours: number;

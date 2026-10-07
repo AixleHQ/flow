@@ -137,6 +137,21 @@ export function trackerWebhookPath(endpoint_token: ScalarType, options?: object)
   return "/" + "webhooks" + "/" + "trackers" + "/" + endpoint_token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["endpoint_token","format"]);
 }
 
+/** /integrations/youtrack/pairings(.:format) */
+export function youtrackPairingsPath(options?: object): string {
+  return "/" + "integrations" + "/" + "youtrack" + "/" + "pairings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/youtrack/pairings/:id(.:format) */
+export function youtrackPairingPath(id: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "youtrack" + "/" + "pairings" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /integrations/youtrack/pairings/:id/complete(.:format) */
+export function completeYoutrackPairingPath(id: ScalarType, options?: object): string {
+  return "/" + "integrations" + "/" + "youtrack" + "/" + "pairings" + "/" + id + "/" + "complete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /webhooks/slack/events(.:format) */
 export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1287,6 +1302,16 @@ export function linearOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "linear" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/youtrack/connect(.:format) */
+export function youtrackConnectPath(options?: object): string {
+  return "/" + "integrations" + "/" + "youtrack" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/youtrack/connect(.:format) */
+export function integrationsYoutrackConnectPath(options?: object): string {
+  return "/" + "integrations" + "/" + "youtrack" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /integrations/azure_devops/oauth/callback(.:format) */
 export function azureDevopsOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "azure_devops" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1405,6 +1430,21 @@ export function companyDomainVerificationPath(options?: object): string {
 /** /company/billing_checkout(.:format) */
 export function companyBillingCheckoutPath(options?: object): string {
   return "/" + "company" + "/" + "billing_checkout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/settings/billing(.:format) */
+export function companySettingsBillingPath(options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "billing" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/billing_cancellation(.:format) */
+export function companyBillingCancellationPath(options?: object): string {
+  return "/" + "company" + "/" + "billing_cancellation" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/billing_invoice_payment(.:format) */
+export function companyBillingInvoicePaymentPath(options?: object): string {
+  return "/" + "company" + "/" + "billing_invoice_payment" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/identity_providers(.:format) */
@@ -1657,9 +1697,9 @@ export function linearInspectCompanyProjectIntegrationsPath(project_id: ScalarTy
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "linear_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
-/** /company/projects/:project_id/integrations/youtrack_inspect(.:format) */
-export function youtrackInspectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "youtrack_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+/** /company/projects/:project_id/integrations/youtrack_connect(.:format) */
+export function youtrackConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "youtrack_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/integrations/teams_connect(.:format) */
@@ -1700,21 +1740,6 @@ export function linearTeamsCompanyProjectIntegrationPath(project_id: ScalarType,
 /** /company/projects/:project_id/integrations/:id/jira_webhook(.:format) */
 export function jiraWebhookCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "jira_webhook" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
-}
-
-/** /company/projects/:project_id/integrations/:id/youtrack_projects(.:format) */
-export function youtrackProjectsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "youtrack_projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
-}
-
-/** /company/projects/:project_id/integrations/:id/youtrack_webhook(.:format) */
-export function youtrackWebhookCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "youtrack_webhook" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
-}
-
-/** /company/projects/:project_id/integrations/:id/youtrack_webhook_token(.:format) */
-export function youtrackWebhookTokenCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "youtrack_webhook_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/integrations(.:format) */

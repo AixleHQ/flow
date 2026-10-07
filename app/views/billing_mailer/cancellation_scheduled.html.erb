@@ -1,0 +1,55 @@
+<%
+  company_name = @company.branded_name
+  actor = @actor == @recipient ? "You" : (@actor&.name || "An administrator")
+%>
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  Everything keeps working until <%= @ends_on %>.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          The subscription for <%= company_name %> ends on <%= @ends_on %>
+        </td>
+      </tr>
+
+      <!-- Body -->
+      <tr>
+        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          <%= actor %> cancelled the Aixle Flow subscription for <strong style="color:#d1cfcd; font-weight:600;"><%= company_name %></strong>.<br><br>
+          Until <strong style="color:#d1cfcd; font-weight:600;"><%= @ends_on %></strong> everything keeps working. Usage up to that date is billed on the final invoice.<br><br>
+          After that no new sessions start. Your projects, workflows and history are kept, and administrators can still sign in. To restore access later, add a card from the Billing tab.
+        </td>
+      </tr>
+
+      <!-- CTA -->
+      <tr>
+        <td style="padding-bottom:32px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @billing_url %>" target="_blank" role="button" aria-label="Open billing"
+                   style="display:inline-block; padding:11px 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Open billing
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          Changed your mind? Resume the subscription from the Billing tab before <%= @ends_on %>. Every administrator of <%= company_name %> received this email.
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

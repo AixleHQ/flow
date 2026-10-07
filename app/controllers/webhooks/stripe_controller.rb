@@ -20,16 +20,12 @@ class Webhooks::StripeController < ActionController::API
 
   HANDLED = %w[
     checkout.session.completed
+    customer.subscription.created
     customer.subscription.updated
     customer.subscription.deleted
     invoice.payment_failed
+    invoice.paid
   ].freeze
-
-  # A subscription Stripe considers good enough to keep serving. `past_due` is
-  # deliberately included: a failed payment starts a dunning cycle that usually
-  # ends in payment, and stopping a customer's work on the first retry is a worse
-  # mistake than carrying them for a few days.
-  RUNNING_STATUSES = %w[active trialing past_due].freeze
 
   before_action :enforce_payload_limit
 
@@ -52,10 +48,16 @@ class Webhooks::StripeController < ActionController::API
     company = company_for(object)
     return Rails.logger.info("[Webhooks::Stripe] #{event.type} names no company we hold") if company.nil?
 
+    @event_at = event.try(:created) && Time.zone.at(event.created)
+    return ignore(company, "#{event.type} #{event.id}, older than the last event applied") if stale?(company)
+
     case event.type
     when "checkout.session.completed" then activate(company, object)
-    when "customer.subscription.updated" then follow_status(company, object)
-    when "customer.subscription.deleted", "invoice.payment_failed" then block(company, event.type)
+    when "customer.subscription.created", "customer.subscription.updated"
+      follow(company, Billing::SubscriptionState.from(object))
+    when "customer.subscription.deleted" then ended(company, Billing::SubscriptionState.from(object))
+    when "invoice.payment_failed" then payment_failed(company, object)
+    when "invoice.paid" then paid(company, object)
     end
   end
 
@@ -76,26 +78,105 @@ class Webhooks::StripeController < ActionController::API
     company.update!(
       stripe_customer_id: session.customer.presence || company.stripe_customer_id,
       stripe_subscription_id: session.subscription.presence || company.stripe_subscription_id,
-      billing_state: "active"
+      billing_state: "active",
+      billing_cancels_at: nil,
+      **applied
     )
     Rails.logger.info("[Webhooks::Stripe] company #{company.id} is paying")
   end
 
-  def follow_status(company, subscription)
-    if RUNNING_STATUSES.include?(subscription.status)
-      company.update!(billing_state: "active", stripe_subscription_id: subscription.id)
-    else
-      block(company, "subscription #{subscription.status}")
+  # A running subscription is adopted whichever one it is: a canceled one never
+  # runs again, so a running one is the company's current subscription. Stopping
+  # is narrower — see #current_subscription?.
+  #
+  # `past_due` stops the company. Stripe sends it together with
+  # `invoice.payment_failed`, in no promised order, and the two must agree or the
+  # company flips between running and stopped on delivery order.
+  def follow(company, subscription)
+    if subscription.running?
+      company.update!(billing_state: "active", stripe_subscription_id: subscription.id,
+                      billing_cancels_at: subscription.cancels_at, **period_of(subscription), **applied)
+    elsif !current_subscription?(company, subscription.id)
+      ignore(company, "subscription #{subscription.id} #{subscription.status}, not its current one")
+    elsif subscription.unpaid?
+      block(company, "payment_failed", "subscription #{subscription.status}") unless company.billing_status == "canceled"
+    elsif subscription.ended?
+      ended(company, subscription)
     end
+  end
+
+  def ended(company, subscription)
+    return ignore(company, "end of #{subscription.id}, not its current one") unless current_subscription?(company, subscription.id)
+
+    block(company, "canceled", "subscription ended",
+          billing_cancels_at: subscription.ended_at || subscription.cancels_at || Time.current)
+  end
+
+  # An invoice that fails after the subscription has ended — the final one, for
+  # the last period's minutes — is Stripe's to chase. Treating it as a failed
+  # payment would offer a "pay to restore access" for a subscription that no
+  # longer exists.
+  def payment_failed(company, invoice)
+    subscription_id = subscription_of(invoice)
+    return ignore(company, "failed invoice for #{subscription_id}, not its current one") unless current_subscription?(company, subscription_id)
+    return if company.billing_status == "canceled"
+
+    block(company, "payment_failed", "invoice #{invoice.id} unpaid",
+          billing_unpaid_invoice_url: invoice.try(:hosted_invoice_url))
+  end
+
+  def paid(company, invoice)
+    return unless company.billing_status == "payment_failed"
+    return unless current_subscription?(company, subscription_of(invoice))
+
+    company.update!(billing_state: "active", **applied)
+    Rails.logger.info("[Webhooks::Stripe] company #{company.id} paid #{invoice.id} and runs again")
   end
 
   # Back to blocked rather than to trialing: the free allowance was spent once and
   # is not given back by cancelling.
-  def block(company, reason)
-    return if company.billing_blocked?
+  def block(company, reason, detail, **attributes)
+    company.update!(billing_state: "blocked", billing_block_reason: reason, **attributes, **applied)
+    Rails.logger.info("[Webhooks::Stripe] company #{company.id} stopped: #{reason} (#{detail})")
+  end
 
-    company.update!(billing_state: "blocked")
-    Rails.logger.info("[Webhooks::Stripe] company #{company.id} stopped (#{reason})")
+  # A customer who cancelled and came back has had two subscriptions, and Stripe
+  # does not deliver events in order. Only the subscription the company is on now
+  # may stop it — a late `deleted` for the old one would otherwise stop a company
+  # that is paying again.
+  def current_subscription?(company, subscription_id)
+    company.stripe_subscription_id.blank? || subscription_id.blank? ||
+      company.stripe_subscription_id == subscription_id
+  end
+
+  # API 2025-03-31 moved an invoice's subscription under `parent`; the version a
+  # payload is shaped by belongs to the endpoint.
+  def subscription_of(invoice)
+    data = invoice.to_hash.deep_symbolize_keys
+    data.dig(:parent, :subscription_details, :subscription) || data[:subscription]
+  end
+
+  def period_of(subscription)
+    { billing_period_starts_at: subscription.period_starts_at,
+      billing_period_ends_at: subscription.period_ends_at }.compact
+  end
+
+  # Stripe does not deliver in order, and a delivery that failed is retried for
+  # days. A `customer.subscription.updated` from before a failed payment or a
+  # cancellation, arriving after it, would start the company again without
+  # anyone paying. Strictly older only: events created in the same second are
+  # the halves of one change (`past_due` and `invoice.payment_failed`), and they
+  # agree.
+  def stale?(company)
+    @event_at.present? && company.billing_event_at.present? && @event_at < company.billing_event_at
+  end
+
+  def applied
+    @event_at ? { billing_event_at: @event_at } : {}
+  end
+
+  def ignore(company, what)
+    Rails.logger.info("[Webhooks::Stripe] company #{company.id}: ignored #{what}")
   end
 
   def client

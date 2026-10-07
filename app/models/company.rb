@@ -38,6 +38,7 @@ class Company < ApplicationRecord
   has_many :terminal_sessions, dependent: :destroy
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
+  has_many :billing_cancellations, dependent: :delete_all
 
   # A session whose runtime is still being torn down holds a reservation, and
   # destroying it would free a slot that is not free (TerminalSession refuses).
@@ -53,12 +54,18 @@ class Company < ApplicationRecord
   #   trialing  spending the allowance, capped to one session at a time,
   #             invoiced for nothing
   #   active    someone is paying; the company's own limit is the only bound
-  #   blocked   the allowance is spent and there is no card, so it runs nothing
+  #   blocked   runs nothing, for the reason in `billing_block_reason`
   #
   # Meaningless outside the hosted product: a self-hosted operator pays nobody
   # and a Marketplace customer already bought their capacity from AWS. Every
   # company that existed before this shipped is `active`.
   BILLING_STATES = %w[trialing active blocked].freeze
+
+  # Each one is undone differently, which is why it is kept: a spent allowance and
+  # an ended subscription both need a new card through Checkout, while a failed
+  # payment needs its open invoice paid — a second subscription would bill the
+  # same metered minutes twice.
+  BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed].freeze
 
   # Constants
   RESERVED_DOMAINS = %w[
@@ -72,6 +79,7 @@ class Company < ApplicationRecord
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
   validates :billing_state, inclusion: { in: BILLING_STATES }
+  validates :billing_block_reason, inclusion: { in: BILLING_BLOCK_REASONS }, allow_nil: true
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
@@ -83,6 +91,7 @@ class Company < ApplicationRecord
   # enabled row per deployment provider the moment it exists.
   after_create :seed_auth_policies
   before_validation :downcase_email_domain
+  before_validation :forget_billing_block, unless: :billing_blocked?
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active") }
@@ -90,6 +99,21 @@ class Company < ApplicationRecord
   def billing_trialing? = billing_state == "trialing"
   def billing_active? = billing_state == "active"
   def billing_blocked? = billing_state == "blocked"
+
+  def billing_cancellation_scheduled? = billing_active? && billing_cancels_at.present?
+
+  # The one word the billing screen and the banner are written against.
+  def billing_status
+    case billing_state
+    when "trialing" then "trialing"
+    when "active" then billing_cancellation_scheduled? ? "cancelling" : "active"
+    else billing_block_reason.presence || "allowance"
+    end
+  end
+
+  def billing_admins
+    users.where(company_memberships: { role: "admin" })
+  end
 
   scope :domain_verified, -> { where.not(domain_verified_at: nil) }
 
@@ -155,6 +179,13 @@ class Company < ApplicationRecord
   end
 
   private
+
+  # A company that is running again has no reason to be stopped, and an unpaid
+  # invoice it was pointed at belongs to the stop that has just been undone.
+  def forget_billing_block
+    self.billing_block_reason = nil
+    self.billing_unpaid_invoice_url = nil
+  end
 
   # Only when the form submitted the field, so saving a logo cannot silently
   # exempt a customer from billing.

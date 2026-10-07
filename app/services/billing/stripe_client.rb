@@ -13,6 +13,10 @@ module Billing
   class StripeClient
     class Error < StandardError; end
 
+    # Stripe holds no object by that id — a subscription deleted in the
+    # dashboard, or test data that has been cleared.
+    class NotFound < Error; end
+
     EVENT_NAME = "queue_minutes"
 
     # Every write carries one. Capacity is replayed from a ledger after a failed
@@ -59,6 +63,43 @@ module Billing
           request_options
         )
       end
+    end
+
+    def retrieve_subscription(subscription_id:)
+      api { ::Stripe::Subscription.retrieve(subscription_id, request_options) }
+    end
+
+    # A card a customer pays an outstanding invoice with becomes the one the
+    # subscription charges next. Off by default, and Checkout cannot set it, so
+    # without this a customer who fixed a failed payment fails again next month.
+    def adopt_subscription(subscription_id:)
+      api do
+        ::Stripe::Subscription.update(
+          subscription_id,
+          { payment_settings: { save_default_payment_method: "on_subscription" } },
+          request_options
+        )
+      end
+    end
+
+    # At the end of the period, never sooner: the minutes metered up to then
+    # are invoiced on that period's own invoice, and nothing is refunded.
+    # `customer.subscription.deleted` arrives when it actually ends.
+    def schedule_cancellation(subscription_id:, reason:, comment:)
+      params = { cancel_at_period_end: true }
+      details = { feedback: reason, comment: comment }.compact_blank
+      params[:cancellation_details] = details if details.any?
+
+      api { ::Stripe::Subscription.update(subscription_id, params, request_options) }
+    end
+
+    def resume_subscription(subscription_id:)
+      api { ::Stripe::Subscription.update(subscription_id, { cancel_at_period_end: false }, request_options) }
+    end
+
+    # What a worker-minute costs, as the price on the subscription says.
+    def retrieve_price
+      api { ::Stripe::Price.retrieve(settings.price_id, request_options) }
     end
 
     # Stripe answers a repeated identifier with a 400 carrying neither a code nor
@@ -118,6 +159,8 @@ module Billing
       raise Error, "Stripe is not configured" unless configured?
 
       yield
+    rescue ::Stripe::InvalidRequestError => e
+      raise (e.code == "resource_missing" ? NotFound : Error), "#{e.class.name.demodulize}: #{e.message}"
     rescue ::Stripe::StripeError => e
       raise Error, "#{e.class.name.demodulize}: #{e.message}"
     end

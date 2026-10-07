@@ -11,6 +11,7 @@ export { StatusBadge } from './StatusBadge';
 export type {
   SharedProps,
   SharedTrial,
+  BillingStatus,
   SharedSettings,
   SharedPermissions,
   ProjectPermissions,

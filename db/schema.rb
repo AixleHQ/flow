@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -206,6 +206,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.index ["endpoint_id"], name: "index_azure_devops_subscriptions_on_endpoint_id", unique: true
     t.index ["integration_id", "azure_project_id", "event_type"], name: "idx_ado_subscriptions_integration_project_event", unique: true, nulls_not_distinct: true
     t.index ["integration_id"], name: "index_azure_devops_subscriptions_on_integration_id"
+  end
+
+  create_table "billing_cancellations", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "user_id"
+    t.string "reason"
+    t.text "comment"
+    t.datetime "cancels_at", null: false
+    t.datetime "resumed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
+    t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
   end
 
   create_table "board_activities", force: :cascade do |t|
@@ -457,6 +470,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.string "stripe_customer_id"
     t.string "stripe_subscription_id"
     t.datetime "updated_at", null: false
+    t.datetime "billing_period_starts_at"
+    t.datetime "billing_period_ends_at"
+    t.datetime "billing_cancels_at"
+    t.string "billing_block_reason"
+    t.string "billing_unpaid_invoice_url"
+    t.datetime "billing_event_at"
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
@@ -1839,6 +1858,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
   add_foreign_key "azure_devops_installations", "users", column: "approved_by_id", on_delete: :nullify
   add_foreign_key "azure_devops_operations", "integrations", on_delete: :cascade
   add_foreign_key "azure_devops_subscriptions", "integrations", on_delete: :cascade
+  add_foreign_key "billing_cancellations", "companies", on_delete: :cascade
+  add_foreign_key "billing_cancellations", "users", on_delete: :nullify
   add_foreign_key "board_activities", "board_tasks", on_delete: :cascade
   add_foreign_key "board_activities", "boards", on_delete: :cascade
   add_foreign_key "board_activities", "users", column: "actor_id", on_delete: :nullify

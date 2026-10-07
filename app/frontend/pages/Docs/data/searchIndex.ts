@@ -52,7 +52,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'plans-and-limits',
     title: 'Plans & limits',
     section: 'Using Flow',
-    desc: 'Hosted Flow: what a worker costs, why capacity is charged for whether or not it is busy, the first 100 worker-hours free and the rate you spend them at, and what happens when they run out.',
+    desc: 'Hosted Flow: what a worker costs, why capacity is charged for whether or not it is busy, the first 100 worker-hours free and the rate you spend them at, what happens when they run out, and how to add a card, cancel, or pay a failed invoice.',
   },
   {
     slug: 'aws-marketplace-billing',
