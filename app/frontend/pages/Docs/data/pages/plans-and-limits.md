@@ -55,8 +55,38 @@ what is left will last **at the rate you are currently running**.
 - Queued work stays queued, and starts as soon as the workspace is running again.
 - You are not charged for the time you are stopped.
 
-To carry on, talk to us and we will switch your workspace to a paid plan. A card
-can be added from the product itself once payment is live.
+To carry on, an administrator adds a card, from the banner or from **Settings →
+Billing**. The workspace runs again as soon as the card is confirmed.
+
+## Your bill so far
+
+**Settings → Billing** shows administrators where the subscription stands, the
+current billing period, and the worker-minutes used in it so far, with an estimate
+of what they cost. The estimate is counted the way the invoice is, but it is an
+estimate: each hour is added once it closes, and the invoice has the final amount.
+
+## Cancelling
+
+An administrator cancels from **Settings → Billing**, in two steps: the button,
+then a confirmation that says what will happen.
+
+- The subscription ends at the **end of the current billing period**. Until then
+  everything keeps working.
+- Usage up to that date is billed on the **final invoice**. Nothing is refunded.
+- After it, no new session starts, as when the free capacity runs out. Your
+  projects, workflows and history are **kept**, and administrators can still sign
+  in.
+- Changed your mind? **Keep subscription** on the same tab undoes it, any time
+  before the end date. After it, adding a card restores access.
+
+Every administrator gets an email when the subscription is cancelled.
+
+## If a payment fails
+
+The workspace stops at once, as above: no new session starts and running ones
+finish. The banner and **Settings → Billing** offer **Pay invoice**, which opens
+the unpaid invoice. Once it is paid, the workspace runs again, and the card you
+paid with is the one charged from then on.
 
 ## Who can change what
 
@@ -65,6 +95,7 @@ can be added from the product itself once payment is live.
 | The number of workers | Any **administrator** of the workspace, on Settings → General |
 | Reserving some of them for one project | Any administrator, on that project's settings |
 | Removing the limit entirely | Nobody — a workspace without a limit is one nobody is invoiced for. Ask us |
+| Adding a card, cancelling, paying an unpaid invoice | Any administrator, on Settings → Billing |
 
 Raising your limit costs more per hour from the moment you raise it. Lowering it
 costs less from the moment you lower it. Nothing is prorated at the end of a

@@ -35,12 +35,55 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     assert_equal 1, @client.customers.size, "a second customer would split the company's usage across two bills"
   end
 
-  test "the session comes back to the settings screen either way" do
+  test "the session comes back to the billing tab either way" do
     post company_billing_checkout_path
 
     opened = @client.checkout_sessions.sole
-    assert_match(/billing=done/, opened[:success_url])
-    assert_match(/billing=cancelled/, opened[:cancel_url])
+    assert_match(%r{/company/settings/billing\?billing=done}, opened[:success_url])
+    assert_match(%r{/company/settings/billing\?billing=cancelled}, opened[:cancel_url])
+  end
+
+  # The meter sums by customer and every subscription carrying the price
+  # invoices that sum, so a second subscription bills the same minutes twice.
+  test "a company with a running subscription is not sent to open a second one" do
+    @company.update!(billing_state: "active", stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
+    @client.add_subscription(id: "sub_1", status: "active")
+
+    post company_billing_checkout_path
+
+    assert_empty @client.checkout_sessions
+    assert_match(/already has a card/, flash[:alert])
+  end
+
+  test "a company stopped for a failed payment is pointed at its invoice instead" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "payment_failed",
+                     stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
+    @client.add_subscription(id: "sub_1", status: "past_due")
+
+    post company_billing_checkout_path
+
+    assert_empty @client.checkout_sessions
+    assert_match(/Pay the open invoice/, flash[:alert])
+  end
+
+  test "a company whose subscription ended starts a new one" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "canceled",
+                     stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
+    @client.add_subscription(id: "sub_1", status: "canceled")
+
+    post company_billing_checkout_path
+
+    assert_equal "cus_1", @client.checkout_sessions.sole[:session].customer
+  end
+
+  # An id Stripe no longer holds (deleted in the dashboard, cleared test data)
+  # must not lock the company out of paying.
+  test "a subscription id Stripe does not know does not stand in the way" do
+    @company.update!(billing_state: "blocked", stripe_customer_id: "cus_1", stripe_subscription_id: "sub_gone")
+
+    post company_billing_checkout_path
+
+    assert_equal 1, @client.checkout_sessions.size
   end
 
   test "a member cannot start it" do
@@ -61,8 +104,7 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     post company_billing_checkout_path
 
     assert_empty @client.checkout_sessions
-    follow_redirect!
-    assert_inertia_props { |props| assert_match(/not set up/, props[:errors][:base]) }
+    assert_match(/not set up/, flash[:alert])
   end
 
   # A provider that is down must read as "try again", not as a stack trace, and
@@ -73,7 +115,6 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     post company_billing_checkout_path
 
     assert_nil @company.reload.stripe_customer_id
-    follow_redirect!
-    assert_inertia_props { |props| assert_match(/could not reach/i, props[:errors][:base]) }
+    assert_match(/could not reach/i, flash[:alert])
   end
 end

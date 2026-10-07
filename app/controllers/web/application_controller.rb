@@ -86,6 +86,10 @@ class Web::ApplicationController < ApplicationController
     max_sessions = SessionConcurrencyLimit.for_company(current_company.id)
     {
       state: current_company.billing_state,
+      # Why a blocked company is blocked, which decides what undoes it: a card
+      # for a spent allowance or an ended subscription, the open invoice for a
+      # failed payment.
+      status: current_company.billing_status,
       allowance_hours: ::Billing::Trial.queue_hours,
       used_hours: ::Billing::Trial.used_hours(current_company).to_f,
       remaining_hours: ::Billing::Trial.remaining_hours(current_company).to_f,

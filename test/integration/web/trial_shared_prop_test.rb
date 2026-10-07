@@ -87,9 +87,20 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
   end
 
   test "a workspace that has spent it says so" do
-    @company.update!(billing_state: "blocked")
+    @company.update!(billing_state: "blocked", billing_block_reason: "allowance")
 
     assert_equal "blocked", trial_prop[:state]
+    assert_equal "allowance", trial_prop[:status]
+  end
+
+  # The banner offers what undoes the stop: a card for a spent allowance or an
+  # ended subscription, the open invoice for a failed payment.
+  test "a stopped workspace says why it was stopped" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "payment_failed")
+    assert_equal "payment_failed", trial_prop[:status]
+
+    @company.update!(billing_block_reason: "canceled")
+    assert_equal "canceled", trial_prop[:status]
   end
 
   # Nobody is on an allowance outside the hosted product, whatever the column

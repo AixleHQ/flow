@@ -160,24 +160,36 @@ past the allowance before the next run stops it.
 
 ### Starting again
 
-**Today:** a platform administrator moves the company's **Billing state** to
-`active` in the admin (Companies → the company). That is what "someone is paying"
-means until Stripe is wired up, and the banner says "talk to us" rather than
-offering a button that does not exist.
+An admin adds a card, from the banner or from **Company Settings → Billing**.
+Stripe Checkout takes it, and the workspace runs again once Stripe confirms it.
+An installation with no Stripe credentials offers no button: there, a platform
+administrator moves the company's **Billing state** to `active` in the admin, and
+the banner says "talk to us".
 
-**Next:** the card. See [operations/stripe-setup.md](../operations/stripe-setup.md)
-for what has to exist in Stripe before that can ship. Once it does, the two
-moments we ask for one are (a) the allowance running out and (b) the admin raising
-the limit above what the allowance covers — the strongest buying signal there is,
-and the one place a decision is already being made.
+### Paying, cancelling, and a payment that fails
+
+The **Billing** tab, admins only, shows where the subscription stands, the current
+billing period, and the worker-minutes used so far in it, with an estimate of what
+they cost. The estimate is priced the way the invoice is: in packs of 60
+worker-minutes, rounded down.
+
+- **Cancelling** takes effect at the end of the current period. Until then the
+  workspace runs as before, and its usage up to the end date is billed on the final
+  invoice. After it, the workspace stops as it does when the allowance runs out.
+  Nothing is deleted, admins can still sign in, and a new card restores access.
+  The admin can resume the subscription before the end date. The reason they gave
+  is kept, and every admin gets an email.
+- **A failed payment** stops the workspace at once. The banner and the Billing tab
+  offer the open invoice, not a new card, since a second subscription would bill
+  the same minutes twice. Paying it starts the workspace again.
 
 ### Billing states
 
 | State | Meaning | Runs | Invoiced |
 | --- | --- | --- | --- |
 | `trialing` | Spending the free allowance | Its own limit | Nothing |
-| `active` | Somebody is paying | Its own limit | Everything it is offered |
-| `blocked` | Allowance spent, no card | Nothing new | Nothing |
+| `active` | Somebody is paying, including a cancellation not yet due | Its own limit | Everything it is offered |
+| `blocked` | Stopped: allowance spent, subscription ended, or a payment failed | Nothing new | Nothing |
 
 `active` is the default, and **only a company that signs itself up starts out
 `trialing`** — the signup form says so explicitly. A company an operator makes in

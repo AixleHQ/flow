@@ -24,6 +24,15 @@ FactoryBot.define do
       billing_state { "blocked" }
     end
 
+    # Paying through Stripe, partway through a monthly period.
+    trait :subscribed do
+      billing_state { "active" }
+      sequence(:stripe_customer_id) { |n| "cus_test_#{n}" }
+      sequence(:stripe_subscription_id) { |n| "sub_test_#{n}" }
+      billing_period_starts_at { 10.days.ago.beginning_of_hour }
+      billing_period_ends_at { 20.days.from_now.beginning_of_hour }
+    end
+
     trait :domain_unverified do
       domain_verified_at { nil }
     end

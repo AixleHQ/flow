@@ -7,11 +7,14 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
   def create
     return refuse("Payment is not set up on this installation") unless client.configured?
 
+    live = live_subscription
+    return refuse(already_subscribed(live)) if live
+
     session = client.create_checkout_session(
       company: current_company,
       customer_id: customer_id!,
-      success_url: company_settings_url(billing: "done"),
-      cancel_url: company_settings_url(billing: "cancelled")
+      success_url: company_settings_billing_url(billing: "done"),
+      cancel_url: company_settings_billing_url(billing: "cancelled")
     )
 
     # 409 + X-Inertia-Location: an Inertia visit is an XHR and cannot follow a
@@ -23,6 +26,28 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
   end
 
   private
+
+  # A second subscription on the same customer bills the same metered minutes a
+  # second time: the meter sums by customer, and every subscription carrying
+  # the price invoices that sum. Asked of Stripe rather than of our columns,
+  # which lag it by a webhook.
+  def live_subscription
+    id = current_company.stripe_subscription_id
+    return nil if id.blank?
+
+    subscription = Billing::SubscriptionState.from(client.retrieve_subscription(subscription_id: id))
+    subscription.ended? ? nil : subscription
+  rescue Billing::StripeClient::NotFound
+    nil
+  end
+
+  def already_subscribed(subscription)
+    if subscription.unpaid?
+      "Your last payment did not go through. Pay the open invoice to restore access."
+    else
+      "This workspace already has a card on file."
+    end
+  end
 
   # Created on the first attempt and kept: a second customer for the same company
   # would split its usage across two bills.
@@ -38,7 +63,9 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
     @client ||= Billing::StripeClient.new
   end
 
+  # A flash rather than a form error: the button lives on the banner as well as
+  # the billing tab, and the layout shows a flash on any page.
   def refuse(message)
-    redirect_to company_settings_path, inertia: { errors: { base: message } }
+    redirect_back fallback_location: company_settings_billing_path, alert: message
   end
 end

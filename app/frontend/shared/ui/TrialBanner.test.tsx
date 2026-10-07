@@ -105,6 +105,29 @@ describe('TrialBanner', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Add a card to carry on');
   });
 
+  // Paying the open invoice undoes a failed payment; a new card would open a
+  // second subscription and bill the same minutes twice.
+  it('offers the open invoice, not a new card, after a failed payment', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const, status: 'payment_failed' as const }, permissions: admin },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Your last payment did not go through');
+    expect(screen.getByRole('button', { name: 'Pay invoice' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+  });
+
+  it('says the subscription ended rather than that free hours ran out', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const, status: 'canceled' as const }, permissions: admin },
+    });
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent('Your subscription has ended');
+    expect(banner).not.toHaveTextContent('free worker-hours');
+    expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
   it('points at us when there is not', () => {
     renderPage(<TrialBanner />, {
       props: { trial: { ...trial, state: 'blocked' as const, canPay: false }, permissions: admin },

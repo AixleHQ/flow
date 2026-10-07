@@ -5,7 +5,10 @@ require "test_helper"
 # The adapter and its fake have to stay the same shape, or every test below the
 # fake is testing something the application does not do.
 class Billing::StripeClientContractTest < ActiveSupport::TestCase
-  METHODS = %i[configured? create_customer create_checkout_session send_meter_event construct_event].freeze
+  METHODS = %i[
+    configured? create_customer create_checkout_session send_meter_event construct_event
+    retrieve_subscription adopt_subscription schedule_cancellation resume_subscription retrieve_price
+  ].freeze
 
   test "the fake answers every method the adapter does, with the same arguments" do
     METHODS.each do |name|
@@ -82,6 +85,38 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
     )
 
     assert_includes CGI.unescape(captured.to_s), "adaptive_pricing[enabled]=false"
+  end
+
+  # Never sooner than the period's end, so the minutes metered up to it are
+  # invoiced on that period's own invoice; the reason travels to Stripe's own
+  # cancellation analytics as well as ours.
+  test "a cancellation is scheduled for the period's end, with its reason" do
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
+    captured = nil
+    stub_request(:post, "https://api.stripe.com/v1/subscriptions/sub_1")
+      .with { |request| captured = CGI.unescape(request.body.to_s) }
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { id: "sub_1", object: "subscription", status: "active", cancel_at_period_end: true }.to_json)
+
+    Billing::StripeClient.new.schedule_cancellation(subscription_id: "sub_1", reason: "unused", comment: nil)
+
+    assert_includes captured, "cancel_at_period_end=true"
+    assert_includes captured, "cancellation_details[feedback]=unused"
+    assert_not_includes captured, "cancellation_details[comment]"
+  end
+
+  # Told apart from an outage: an id Stripe does not hold is an ended
+  # subscription to a caller, while an unreachable Stripe is "try again".
+  test "an id Stripe does not hold is NotFound, not a generic failure" do
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
+    stub_request(:get, "https://api.stripe.com/v1/subscriptions/sub_gone")
+      .to_return(status: 404, headers: { "Content-Type" => "application/json" },
+                 body: { error: { type: "invalid_request_error", code: "resource_missing",
+                                  message: "No such subscription: 'sub_gone'" } }.to_json)
+
+    assert_raises(Billing::StripeClient::NotFound) do
+      Billing::StripeClient.new.retrieve_subscription(subscription_id: "sub_gone")
+    end
   end
 
   private
