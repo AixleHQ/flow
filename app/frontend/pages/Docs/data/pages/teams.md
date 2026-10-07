@@ -191,6 +191,11 @@ If someone mentions the app from an organization that is not connected, it
 answers at most once a day per conversation that the organization has not
 connected Flow yet.
 
+Deleting the **Aixle Flow** enterprise application in Microsoft Entra removes
+everything the organization granted it, including what Teams granted when the
+app was added to each team. To connect again, approve again, then remove and
+add the app in each team so it can read their threads.
+
 ---
 
 ## Self-hosted: the Teams app

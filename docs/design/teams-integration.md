@@ -1,6 +1,6 @@
 # Microsoft Teams integration — technical design
 
-**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19), awaiting an end-to-end run on staging. Spikes (§16): 1, 2, 4 and 7 pass in the bot's home tenant and a second one — one bot serves every customer, and file access works by its own admin consent; 3 and 5 are still open
+**Status:** Direction agreed 2026-09-30 (§18). Phase 0 in PR #365; phase 1 built on top of it (§19) and verified end to end on staging with a second Microsoft 365 tenant (2026-10-07). Spikes (§16): 1, 2, 3, 4 and 7 pass; 5 (slash commands) is open
 **Date:** 2026-09-30
 **Code baseline:** `6438f08a`
 **Audience:** backend, frontend and operations engineers
@@ -1203,9 +1203,23 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 | Distribution (decision 6, §6.3) | The approval sign-in also asks for delegated `AppCatalog.ReadWrite.All` and publishes the package to the organization's catalog as the approving administrator (`POST /appCatalogs/teamsApps`, or a new app definition for a newer version). A role that cannot publish falls back to the downloadable package | Product owner, 2026-10-06: no manual upload. Microsoft has no application permission for catalog publishing |
 | App manifest (§6.3) | Schema 1.24, with the `help` command list; no `slash` trigger and no targeted messages | Spike 5 has not run; 1.24 is what the spikes verified |
 
-Still to verify live (staging, a real customer-like tenant): spike 3 (`wids` in the sign-in's ID token, which
-needs **Token configuration → Directory roles** on the app), the approval and file-access flows end to end, the
-1:1 file consent card, and Graph thread reads from a tool.
+**Verified live on staging, 2026-10-06/07**, with a second Microsoft 365 tenant:
+
+- Approval by a directory administrator: `wids` arrives once the app has Token configuration → Directory roles
+  (spike 3). One consent screen grants sign-in, catalog publishing and `Files.ReadWrite.All` together; the
+  app is published to the organization's catalog in the same callback.
+- Disconnect frees the tenant; reconnecting binds it again.
+- Installing in a team records its channels and posts the welcome; `help` answers.
+- A channel mention starts a run; the status card goes Accepted → Running → Completed with a link; the agent reads
+  the thread through Graph and answers in it; its file lands in the channel's `Aixle` folder; a file attached
+  to the channel message reaches the run.
+- A 1:1 message with a file starts a run with the file; the agent's file goes out through the consent card, and
+  accepting it uploads to the person's OneDrive.
+
+Two defects only a live run could show were fixed: the bot's copy of a channel message carries no trace of its
+files (the message is now read from Graph when file access is granted), and SharePoint's signed links answer 401
+when a client re-encodes their query (they are now sent byte for byte). Deleting the app's enterprise application
+in a tenant also drops its resource-specific permissions; the app has to be added to each team again.
 
 ## Sources
 
