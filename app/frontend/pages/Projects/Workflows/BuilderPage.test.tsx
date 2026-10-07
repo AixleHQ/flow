@@ -271,6 +271,29 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(0);
   });
 
+  it('the BMAD "Learn more" link points to the BMAD docs and opens in a new tab', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, bmadEnabled: false })] }),
+    });
+
+    const link = screen.getByRole('link', { name: /Learn more/ });
+    expect(link).toHaveAttribute('href', 'https://docs.bmad-method.org/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+    // Toggling the BMAD Method switch must not change the link.
+    // The BMAD switch lives in the same row (togRow) as the "BMAD Method" label.
+    const bmadLabel = screen.getByText('BMAD Method');
+    const bmadRow = bmadLabel.parentElement?.parentElement as HTMLElement;
+    const bmadSwitch = within(bmadRow).getByRole('switch');
+    await userEvent.click(bmadSwitch);
+
+    const linkAfter = screen.getByRole('link', { name: /Learn more/ });
+    expect(linkAfter).toHaveAttribute('href', 'https://docs.bmad-method.org/');
+    expect(linkAfter).toHaveAttribute('target', '_blank');
+    expect(linkAfter).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
   it('marks a session with no dependencies as "ROOT" and a dependent session with an "↳ AFTER" badge', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
