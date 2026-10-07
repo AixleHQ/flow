@@ -785,28 +785,44 @@ class AgentCredentialTest < ActiveSupport::TestCase
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
 
     cred = AgentCredential.find_by!(user: @user, agent_type: "claude_code")
-    assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ cred.id, 77 ]) do
-      AgentCredential.rotating_for_session(77) do
-        AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
-      end
+    TemporalService.expects(:start_workflow)
+                   .with(TemporalWorkflowRegistry.workflows["agent_credential_fan_out_workflow"],
+                         { credential_id: cred.id, origin_session_id: 77 }, has_key(:id))
+                   .returns(ok: true)
+
+    AgentCredential.rotating_for_session(77) do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
     end
+  end
+
+  # The refused block keeps no refresh token, so there is nothing for the new one to replace;
+  # the holders waiting on that login still have to be handed the new one.
+  test "hands a re-login after the vendor refused the grant to every holder" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
+                                          { "claudeAiOauth" => { "scopes" => %w[user:inference] } })
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: cred.id, origin_session_id: nil }, has_key(:id))
+                   .returns(ok: true)
+
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-new", "rt-new"),
+                                   new_authorization: true)
   end
 
   test "a write that keeps the refresh token hands nothing out" do
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
 
-    assert_no_enqueued_jobs(only: Agents::CredentialFanOutJob) do
-      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1b", "rt-1"))
-    end
+    TemporalService.expects(:start_workflow).never
+
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1b", "rt-1"))
   end
 
   test "a writer that delivers to the holders itself is not doubled by the fan-out" do
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
 
-    assert_no_enqueued_jobs(only: Agents::CredentialFanOutJob) do
-      AgentCredential.delivering_inline do
-        AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
-      end
+    TemporalService.expects(:start_workflow).never
+
+    AgentCredential.delivering_inline do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
     end
   end
 end

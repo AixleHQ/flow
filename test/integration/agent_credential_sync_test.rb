@@ -92,9 +92,23 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
 
   # The other containers still hold the refresh token this one just spent.
   test "hands a token one container rotated to the others, not back to that container" do
-    assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ @credential.id, @session.id ]) do
-      post PATH, params: rotated_body, headers: headers
-    end
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: @credential.id, origin_session_id: @session.id }, has_key(:id))
+                   .returns(ok: true)
+
+    post PATH, params: rotated_body, headers: headers
+  end
+
+  # Claude Code blanks the block it was refused on. That is no token, and taking it would
+  # read as a fresh login and lift the credential out of `error`.
+  test "ignores the blanked block a refused CLI writes" do
+    @credential.mark_refresh_error!("claudeAiOauth invalid_grant", permanent: true)
+
+    post PATH, params: rotated_body(access_token: "", refresh_token: "", expires_at: Time.zone.at(0)), headers: headers
+
+    assert_response :no_content
+    assert_equal "error", @credential.reload.status
+    assert_equal "rt-old", @credential.config_data.dig("claudeAiOauth", "refreshToken")
   end
 
   test "an unchanged file is accepted and changes nothing" do

@@ -1211,7 +1211,9 @@ module Agents
     # stored blob has (the incoming session may simply not have touched that scope).
     def freshest_oauth_block(current_block, incoming_block)
       return incoming_block if current_block.blank?
-      return current_block if incoming_block.blank?
+      # Claude Code blanks a block it was refused on (accessToken "", expiresAt 0); that is a
+      # verdict on the container's copy, never a token to keep.
+      return current_block if incoming_block.blank? || incoming_block["accessToken"].blank?
 
       incoming_block["expiresAt"].to_i >= current_block["expiresAt"].to_i ? incoming_block : current_block
     end

@@ -334,10 +334,11 @@ and its failed step took the run's other steps with it
     metadata (`AgentCredential#retire_replaced_refresh_tokens`);
   - an unknown token (a login made inside the container) goes on to the vendor;
   - a vendor `invalid_grant` is passed back to the CLI unchanged.
-- **The fan-out.** Every write that replaces a refresh token enqueues
-  `Agents::CredentialFanOutJob`, which delivers the new grant to every other live holder. The
-  CLI adopts it on its next 401, or inside its next refresh lock. The sweep's held path still
-  delivers inline.
+- **The fan-out.** Every write that replaces a refresh token starts
+  `Workflows::AgentCredentialFanOutWorkflow`. Its activity delivers the new grant to every
+  other live holder, and runs in the worker because only the worker has the container
+  runtime. The CLI adopts the grant on its next 401, or inside its next refresh lock. The
+  sweep's held path still delivers inline.
 - **It fails open.** If the URL is unset, the endpoint is unreachable or slow (25 s), or the
   broker declines, the request goes to the vendor as before. Claude is the only runtime that
   declares broker endpoints so far.
@@ -347,6 +348,12 @@ Checked inside the agent image on mitmproxy 11.0.2:
 - when the broker answers, the CLI gets the broker's answer;
 - when the broker declines or is down, the request reaches the vendor;
 - `mitm_logger.py`, loaded alongside, still drops both bodies.
+
+Checked live on a local stack (2026-10-08). Two interactive Claude Code sessions shared one
+login, and both were forced to cross its expiry at the same moment. One refresh reached
+Anthropic. The second session waited on the lease and received the same new pair, and both
+went on answering. A refresh made by one session alone was delivered to the other session's
+container within a second.
 
 Together these restore read-through in both directions: the container writes what it rotates,
 we write what we rotate, the database is the file both sides share, and its row is the lock.
@@ -461,6 +468,17 @@ deleted container took the work with it.
   replaces the refresh token, which fans out and resumes every paused holder.
 - **Giving up.** `AGENT_AUTH_PAUSE_LIMIT_MINUTES` (720) bounds the wait. After it, the session
   fails as before, as `auth_expired`.
+- **Checked live (2026-10-08).**
+  - A dead grant (the refresh token replaced with garbage) paused two parallel steps and their
+    run. A re-login on Profile resumed both steps within a second, and each agent carried on
+    from where it had stopped.
+  - A refusal in one container, with the stored grant still good, paused that step. About two
+    minutes later it healed and resumed with no one involved.
+  - The run surfaced three faults, all fixed in the same change:
+    - a CLI's blanked block was being accepted on write-back, which lifted the credential out
+      of `error`;
+    - a terminal redraw was read as the agent working again;
+    - a re-login after a refusal was not fanned out.
 - **Declined: resuming in a new container.** `claude --resume` brings back the conversation
   but not the filesystem, and a new pod clones its repositories fresh. The research doc gives
   the reasoning.

@@ -66,8 +66,8 @@ class AgentCredential < ApplicationRecord
   end
 
   # Every write that replaces a refresh token hands the new grant to the live containers
-  # still holding the old one (Agents::CredentialFanOutJob). The writer says which session
-  # it is acting for, so that session is not handed what it already has.
+  # still holding the old one (Workflows::AgentCredentialFanOutWorkflow). The writer says
+  # which session it is acting for, so that session is not handed what it already has.
   def self.rotating_for_session(session_id, &)
     with_fan_out(session_id ? { origin_session_id: session_id } : nil, &)
   end
@@ -469,13 +469,18 @@ class AgentCredential < ApplicationRecord
   # one of them is a holder we have not yet handed the new grant to, not an impostor: the
   # broker answers it with the current tokens instead of letting it spend a dead one and be
   # logged out.
+  #
+  # A write that puts a new refresh token in place is handed to every live holder. That
+  # includes a re-login after the vendor refused the old grant, when the refused block no
+  # longer carries a refresh token to compare against.
   def retire_replaced_refresh_tokens
-    previous = stored_config_data
-    return if previous.blank?
+    return unless persisted?
 
-    kept = adapter.refresh_tokens(config_data)
-    replaced = adapter.refresh_tokens(previous).reject { |block, token| kept[block] == token }
-    return if replaced.empty?
+    before = adapter.refresh_tokens(stored_config_data || {})
+    after = adapter.refresh_tokens(config_data)
+    replaced = before.reject { |block, token| after[block] == token }
+    granted = after.reject { |block, token| before[block] == token }
+    return if replaced.empty? && granted.empty?
 
     now = Time.current.utc.iso8601(6)
     retired = retired_refresh_tokens.select { |_digest, entry| retired_recently?(entry) }
@@ -483,6 +488,9 @@ class AgentCredential < ApplicationRecord
     self.metadata = (metadata || {}).merge(
       "retired_refresh_tokens" => retired.sort_by { |_digest, entry| entry["at"] }.last(MAX_RETIRED_REFRESH_TOKENS).to_h
     )
+    return if granted.empty?
+
+    self.metadata = metadata.merge("refresh_token_granted_at" => now)
     @rotation_fan_out = ActiveSupport::IsolatedExecutionState[:agent_credential_fan_out] || :all_holders
   rescue Encryptable::DecryptionError
     nil
@@ -506,7 +514,16 @@ class AgentCredential < ApplicationRecord
     @rotation_fan_out = nil
     return if mode == :inline || !active?
 
-    Agents::CredentialFanOutJob.perform_later(id, mode.is_a?(Hash) ? mode[:origin_session_id] : nil)
+    origin = mode.is_a?(Hash) ? mode[:origin_session_id] : nil
+    result = TemporalService.start_workflow(
+      TemporalWorkflowRegistry.workflows["agent_credential_fan_out_workflow"],
+      { credential_id: id, origin_session_id: origin },
+      id: "agent-credential-fan-out-#{id}-#{SecureRandom.hex(6)}"
+    )
+    return if result[:ok]
+
+    # The holders still adopt the grant through the refresh broker on their next refresh.
+    Rails.logger.warn("[AgentCredential] fan-out for credential #{id} not started: #{result[:error]}")
   end
 
   def record_refresh_outcome(result, source:)

@@ -15,10 +15,11 @@ module Sessions
   # can renew waits for its owner to sign in again, which is delivered the same way, until
   # the pause limit fails the session as before.
   class AuthPause
-    PAUSE_KEYS = %w[auth_paused_at auth_pause_reason auth_heal_attempts auth_heal_attempted_at].freeze
+    # The heal counters outlive a pause: a grant that keeps getting refused must not be
+    # retried for every episode it causes.
+    PAUSE_KEYS = %w[auth_paused_at auth_pause_reason].freeze
 
-    # The banner has to be the last thing the agent did. A pane that changed this recently is
-    # an agent that is working, whatever its scrollback says.
+    # The banner has to be the last thing the agent did, a minute ago at least.
     QUIET_BEFORE_PAUSE = 1.minute
     # Read from the end of the pane: Claude Code draws its prompt box and status line below
     # the banner, a few lines each.
@@ -27,8 +28,8 @@ module Sessions
     # Each attempt is a refresh against the vendor; repeating one sooner only repeats its answer.
     HEAL_INTERVAL = 5.minutes
     MAX_HEAL_ATTEMPTS = 3
-    # A grant written this recently is newer than the one the agent was refused: handing it
-    # over is the whole repair, with no refresh spent on it.
+    # A refresh token granted this recently is newer than the one the agent was refused:
+    # handing it over is the whole repair, with no refresh spent on it.
     FRESH_GRANT = 10.minutes
     FORCE_REFRESH_MARGIN_MS = 100.years.in_milliseconds
 
@@ -56,7 +57,7 @@ module Sessions
 
       pause!(banner)
       heal!
-      :paused
+      self.class.paused?(session.reload) ? :paused : :resumed
     end
 
     # The session's container holds a working login again. Types the prompt that sends the
@@ -80,12 +81,14 @@ module Sessions
 
     attr_reader :session
 
+    # Only what the pane says can end a pause. Its log's mtime cannot: opening the session's
+    # terminal in a browser redraws the CLI and moves it.
     def continue(pane)
-      return unpause_quietly if banner_in(pane).nil? || working?
+      return unpause_quietly if banner_in(pane).nil?
       return expire! if paused_at < self.class.limit.ago
 
       heal! if heal_due?
-      :paused
+      self.class.paused?(session.reload) ? :paused : :resumed
     end
 
     def banner_in(pane)
@@ -103,13 +106,9 @@ module Sessions
       lines[banner_at].strip.truncate(500)
     end
 
-    # Both false when the container cannot say: an unknown pane is neither quiet nor working.
+    # False when the container cannot say: an unknown pane is not a quiet one.
     def quiet?
       last_output_at.present? && last_output_at < QUIET_BEFORE_PAUSE.ago
-    end
-
-    def working?
-      last_output_at.present? && last_output_at >= QUIET_BEFORE_PAUSE.ago
     end
 
     def last_output_at
@@ -126,8 +125,9 @@ module Sessions
       log(:info, "paused: #{banner}")
     end
 
-    # Renews the login if the platform can, then hands whatever is stored to every holder.
-    # Delivery is what resumes this session, so it runs even when no refresh was needed.
+    # Renews the login if the platform can, then hands whatever is stored to every holder,
+    # here in the worker. Delivery is what resumes this session, so it runs even when no
+    # refresh was needed.
     def heal!
       credential = session_credential
       return unless credential&.active?
@@ -142,7 +142,8 @@ module Sessions
         return log(:warn, "could not renew credential #{credential.id}: #{result[:detail]}") if result[:status] == :error
       end
 
-      Agents::CredentialFanOutJob.perform_later(credential.id)
+      holders = credential.reload.live_holder_sessions.where.not(container_id: [ nil, "" ]).to_a
+      Agents::CredentialDelivery.new(runtime: container_runtime).deliver(credential, sessions: holders)
     end
 
     def heal_due?
@@ -157,8 +158,8 @@ module Sessions
     end
 
     def fresh_grant?(credential)
-      written = Time.zone.parse(credential.metadata&.dig("collected_at").to_s)
-      written.present? && written > FRESH_GRANT.ago
+      granted = Time.zone.parse(credential.metadata&.dig("refresh_token_granted_at").to_s)
+      granted.present? && granted > FRESH_GRANT.ago
     end
 
     def expire!
@@ -172,7 +173,8 @@ module Sessions
       :failed
     end
 
-    # Someone signed in from the session's own terminal, or the agent went on by itself.
+    # The banner left the pane's tail: someone signed in from the session's own terminal, or
+    # the agent went on by itself.
     def unpause_quietly
       unpause!
       log(:info, "is working again")

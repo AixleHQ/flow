@@ -406,7 +406,9 @@ transcript. The agent then re-reads the real files rather than trusting its memo
 
 - **P1. Does a refresh revoke the previous access token immediately?** This sets the size of
   the gap between our rotation and delivery landing. It decides whether B1 on its own is
-  enough to let the sweep refresh busy holders.
+  enough to let the sweep refresh busy holders. **Measured locally on 2026-10-08: no.** A CLI
+  still running on the access token a refresh had just replaced got a 200 about 40 seconds
+  later, with no 401 in between.
 - **P2. Live delivery.** Write a new `.credentials.json` into a container whose agent is
   mid-turn. Confirm the CLI adopts it without failing a turn. The CLI source says it will. The
   comment in `Agents::CredentialDelivery` still calls this unverified.

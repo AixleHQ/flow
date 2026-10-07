@@ -4,8 +4,6 @@ require "test_helper"
 
 module Sessions
   class AuthPauseTest < ActiveSupport::TestCase
-    include ActiveJob::TestHelper
-
     BANNER_PANE = <<~PANE
       ● Running the test suite
         ⎿  Login expired · Please run /login
@@ -24,6 +22,9 @@ module Sessions
       @session = step_session
       @runtime = stub_container_runtime
       @runtime.set_terminal_pane(BANNER_PANE, last_output_at: 5.minutes.ago)
+      # Another container spent the shared refresh token a moment ago: the stored grant is the
+      # one that replaced it.
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", login("at-0", "rt-0"))
       @credential = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", login("at-1", "rt-1"))
     end
 
@@ -51,16 +52,20 @@ module Sessions
 
     RESUME_PROMPT_TYPED = [ "tmux", "send-keys", "-t", "agent", "-l", Agents::BaseAdapter::AUTH_RESUME_PROMPT ].freeze
 
+    def delivered_refresh_token
+      written = @runtime.read_file(nil, "/home/claude/.claude/.credentials.json")
+      written && JSON.parse(written).dig("claudeAiOauth", "refreshToken")
+    end
+
     # The usual case: another container spent the shared refresh token first, and the grant
     # that replaced it is already stored. Handing it over is the whole repair.
-    test "pauses a step whose agent was refused its login, and hands it the grant already stored" do
-      assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ @credential.id ]) do
-        assert_equal :paused, observe
-      end
+    test "hands a refused agent the grant already stored and sends it back to its task" do
+      assert_equal :resumed, observe
 
-      assert AuthPause.paused?(@session.reload)
-      assert_match %r{Login expired · Please run /login}, @session.metadata["auth_pause_reason"]
-      assert_equal "paused", @run.reload.state
+      assert_equal "rt-1", delivered_refresh_token
+      assert_includes @runtime.execs, RESUME_PROMPT_TYPED
+      refute AuthPause.paused?(@session.reload)
+      assert_equal "running", @run.reload.state
       assert_equal "ready", @session.state, "the container and the agent's work are kept"
     end
 
@@ -71,20 +76,22 @@ module Sessions
         .to_return(status: 200, body: { access_token: "at-2", refresh_token: "rt-2", expires_in: 28_800 }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
-      assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ @credential.id ]) do
-        assert_equal :paused, observe
-      end
+      assert_equal :resumed, observe
 
       assert_equal "rt-2", @credential.reload.config_data.dig("claudeAiOauth", "refreshToken")
+      assert_equal "rt-2", delivered_refresh_token
     end
 
-    test "waits for its owner when the login cannot be renewed" do
+    test "pauses the step and its run when the login cannot be renewed" do
       @credential.mark_refresh_error!("invalid_grant", permanent: true)
 
-      assert_no_enqueued_jobs(only: Agents::CredentialFanOutJob) do
-        assert_equal :paused, observe
-      end
+      assert_equal :paused, observe
+
       assert AuthPause.paused?(@session.reload)
+      assert_match %r{Login expired · Please run /login}, @session.metadata["auth_pause_reason"]
+      assert_equal "paused", @run.reload.state
+      assert_nil delivered_refresh_token
+      refute_includes @runtime.execs, RESUME_PROMPT_TYPED
     end
 
     test "leaves an agent that is still producing output alone" do
@@ -122,14 +129,23 @@ module Sessions
       assert_match(/agent authentication failed — Login expired/, @session.error_message)
     end
 
-    test "lets a paused step go once its agent is working again" do
+    test "lets a paused step go once the banner has left its pane" do
       @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
       @run.pause!
-      @runtime.set_terminal_pane(BANNER_PANE, last_output_at: 5.seconds.ago)
 
-      assert_equal :resumed, observe
+      assert_equal :resumed, AuthPause.new(@session.reload, runtime: @runtime).observe("● tick-12\n● tick-13\n> \n")
       refute AuthPause.paused?(@session.reload)
       assert_equal "running", @run.reload.state
+    end
+
+    # Opening the session's terminal in a browser redraws the CLI and moves the pane log.
+    test "a redrawn terminal still showing the banner stays paused" do
+      @credential.mark_refresh_error!("invalid_grant", permanent: true)
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
+      @runtime.set_terminal_pane(BANNER_PANE, last_output_at: 5.seconds.ago)
+
+      assert_equal :paused, observe
+      assert AuthPause.paused?(@session.reload)
     end
 
     test "types the resume prompt into a paused agent and lets its run go on" do

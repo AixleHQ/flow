@@ -54,9 +54,11 @@ class AgentCredentialRefreshTest < ActionDispatch::IntegrationTest
       .to_return(status: 200, body: { access_token: "at-2", refresh_token: "rt-2", expires_in: 28_800 }.to_json,
                  headers: { "Content-Type" => "application/json" })
 
-    assert_enqueued_with(job: Agents::CredentialFanOutJob, args: [ @credential.id, @session.id ]) do
-      post PATH, params: cli_refresh("rt-1"), headers: headers
-    end
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: @credential.id, origin_session_id: @session.id }, has_key(:id))
+                   .returns(ok: true)
+
+    post PATH, params: cli_refresh("rt-1"), headers: headers
 
     answer = served
     assert_equal "at-2", answer["access_token"]
