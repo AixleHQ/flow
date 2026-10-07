@@ -279,6 +279,11 @@ module Tools
             project-admin). A column with tasks cannot be deleted.
           - `create_board_task` puts work on it; `move_board_task` between
             columns is what a column trigger reacts to.
+          - Files on a card: `create_task_asset_upload` returns an upload URL,
+            the caller PUTs the bytes to it (`curl -T`), and
+            `attach_task_asset` with the upload_id attaches them. Short text
+            goes straight in `attach_task_asset`'s `content`. Never pass a
+            binary file's bytes as an argument.
           - `archive_board_task` takes a card off the board reversibly (and
             puts it back with `archived: false`); `delete_board_task` destroys
             it with its comments, assets and gates. Archive unless the user
