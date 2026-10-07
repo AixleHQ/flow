@@ -314,8 +314,42 @@ nothing about a session that never goes quiet. The durable form is an explicit h
 A wedged or abandoned `ready` session then costs ten minutes of skipped sweeps, not
 twenty-five hours, and no container has to be probed to find out.
 
-Together the three restore read-through in both directions: the container writes what it
-rotates, we write what we rotate, and the database is the file both sides share.
+**2d. One lock for every refresh: the refresh broker — landed (task #2731).** 2a and 2b made
+the database the shared *file*; nothing made it the shared *lock*. On a laptop Claude Code
+refreshes under `~/.claude/.oauth_refresh.lock`, and inside the lock it re-reads the
+credentials file: if another process has already refreshed, it uses that result instead of
+spending the refresh token again (read from the 2.1.281 binary). Each container has its own
+lock, and the sweep stands down while a holder is mid-turn. So two busy containers crossing
+an expiry together both spent the same single-use refresh token, the second one was logged out,
+and its failed step took the run's other steps with it
+(`docs/research/technical-graceful-agent-auth-expiry-research-2026-10-08.md`).
+
+- **The proxy.** It runs in every agent image (`docker/base/logger/refresh_broker.py`) and
+  hands any request to one of the adapter's `refresh_broker_endpoints` to
+  `POST /agents/credentials/refresh`, using the write-back's session key.
+- **The broker.** `Agents::RefreshBroker` decides under the refresh lease:
+  - a refresh token the row still holds is refreshed for real;
+  - one the row replaced within the last day is answered with the tokens that replaced it.
+    Every write records the refresh tokens it replaces as SHA-256 digests in the credential's
+    metadata (`AgentCredential#retire_replaced_refresh_tokens`);
+  - an unknown token (a login made inside the container) goes on to the vendor;
+  - a vendor `invalid_grant` is passed back to the CLI unchanged.
+- **The fan-out.** Every write that replaces a refresh token enqueues
+  `Agents::CredentialFanOutJob`, which delivers the new grant to every other live holder. The
+  CLI adopts it on its next 401, or inside its next refresh lock. The sweep's held path still
+  delivers inline.
+- **It fails open.** If the URL is unset, the endpoint is unreachable or slow (25 s), or the
+  broker declines, the request goes to the vendor as before. Claude is the only runtime that
+  declares broker endpoints so far.
+
+Checked inside the agent image on mitmproxy 11.0.2:
+
+- when the broker answers, the CLI gets the broker's answer;
+- when the broker declines or is down, the request reaches the vendor;
+- `mitm_logger.py`, loaded alongside, still drops both bodies.
+
+Together these restore read-through in both directions: the container writes what it rotates,
+we write what we rotate, the database is the file both sides share, and its row is the lock.
 
 ### Layer 3 — remove the second holder (measured, optional)
 
@@ -402,6 +436,35 @@ rebuild; the tracked-domain changes are app-side and take effect on the next ses
 
 ---
 
+### Layer 6 — pause instead of dying — **landed (task #2731)**
+
+A login that really cannot be renewed (its refresh token expired or was revoked) still has to
+reach a person. Claude Code does not exit when that happens. It prints
+`Login expired · Please run /login` and waits at its prompt, with the conversation and the
+workspace intact. The no-output watchdog used to end that wait 30 minutes later, and the
+deleted container took the work with it.
+
+- **Detecting.** The per-minute pane read in `ScanQuotaErrorsActivity` also runs
+  `Sessions::AuthPause`. A session is paused when all three hold:
+  - the adapter's narrow `auth_banner_pattern` appears in the last 40 lines;
+  - no resume prompt comes after it;
+  - the pane has been quiet for a minute.
+
+  Pausing marks the session `auth_paused_at` and the run `paused`. The watchdog skips a paused
+  session, and sibling steps keep running.
+- **Healing.** A grant written in the last 10 minutes is delivered as it is. Otherwise the base
+  login is refreshed and then delivered. Delivery types
+  `Login renewed by Aixle. Continue the task from where you stopped.` into each paused holder.
+  The run resumes once none of its steps is waiting.
+- **Waiting for the owner.** A grant the vendor refuses condemns the credential, which sends
+  the existing mail, and the step waits. The run page links to signing in again. A re-login
+  replaces the refresh token, which fans out and resumes every paused holder.
+- **Giving up.** `AGENT_AUTH_PAUSE_LIMIT_MINUTES` (720) bounds the wait. After it, the session
+  fails as before, as `auth_expired`.
+- **Declined: resuming in a new container.** `claude --resume` brings back the conversation
+  but not the filesystem, and a new pod clones its repositories fresh. The research doc gives
+  the reasoning.
+
 ## 5. Sequencing
 
 | Phase | Work | State |
@@ -410,6 +473,7 @@ rebuild; the tracked-domain changes are app-side and take effect on the next ses
 | **P0** | Layer 0 contract + test; `error` in `connection_status` + mailer; kiro refresh | **done** |
 | **P1** | Layer 2a write-back, 2b delivery to holders | **done** |
 | **P1** | 2c lease (replacing the per-sweep idle probe) | open |
+| **P1** | 2d refresh broker + fan-out to every holder; Layer 6 pause, heal and resume in place | **done** (task #2731); the broker needs the agent images rebuilt |
 | **P2** | Layer 4 event log + sweep metrics | open — turns the next incident into a query |
 | **P3** | antigravity refresh; the cursor 404; Layer 3 broker probes | open — each blocked on a live credential or a vendor answer |
 | **P4** | Layer 5: publishing, canary, version file | **done**; the per-runtime login pass after a rebuild is manual and open |
