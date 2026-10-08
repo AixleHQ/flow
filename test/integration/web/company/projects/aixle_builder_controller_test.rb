@@ -130,6 +130,17 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_equal "Test validation failure", flash[:alert]
   end
 
+  test "start redirects back with the sign-in message when the agent login has expired" do
+    create(:agent_credential, :errored, user: @user, company: @company, agent_type: "claude_code")
+
+    assert_no_difference -> { TerminalSession.count } do
+      post company_project_aixle_builder_start_path(@project), params: { agent_runtime: "claude_code" }
+    end
+
+    assert_redirected_to company_project_aixle_builder_path(@project)
+    assert_match(/Claude Code login has expired/, flash[:alert])
+  end
+
   # ── session ───────────────────────────────────────
 
   test "session renders session page for own session" do
