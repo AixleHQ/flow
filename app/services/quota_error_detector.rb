@@ -20,7 +20,10 @@ class QuotaErrorDetector
       /Quota exceeded for metric:.*generativelanguage/i,
       /You exceeded your current quota.*generativelanguage/i,
       /\[API Error: got status: 429/i,
-      /request a quota increase through AI Studio/i
+      /request a quota increase through AI Studio/i,
+      # Antigravity CLI (Google AI credits), read from the 1.3.1 binary. Not caught by
+      # anthropic's "credit balance" pattern: Google writes "credits balance".
+      /AI credits balance is too low/i
     ],
     openai: [
       /You exceeded your current quota/i,

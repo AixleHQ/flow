@@ -238,11 +238,12 @@ module Agents
       assert_includes toml, 'trust_level = "trusted"'
     end
 
-    test "config_files keeps a session out of the Codex background server" do
+    test "Codex runs in-process and keeps its transcript in the tmux scrollback" do
       stub_codex_models([])
 
       [ codex_toml({}), @adapter.auth_setup_files["/home/codex/.codex/config.toml"] ].each do |toml|
         assert_match(/^\[features\]\ndaemon_auto_start = false$/, toml)
+        assert_match(/^\[tui\]\nfullscreen_transcript = false$/, toml)
       end
     end
 

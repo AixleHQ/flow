@@ -9,13 +9,7 @@ module Agents
   #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal | gemini-api-key)
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
-    METRIC_TOKENS_NAME = "gemini_cli.token.usage"
-    METRIC_COST_NAME = "gemini_cli.cost.usage"
     LOG_EVENT_NAME = "gemini_cli.api_response"
-    LEGACY_METRIC_NAMES = {
-      "terminal.session.tokens" => METRIC_TOKENS_NAME,
-      "terminal.session.cost" => METRIC_COST_NAME
-    }.freeze
 
     API_KEY_CREDS_PATH = "gemini-credentials.json"
 
@@ -321,82 +315,14 @@ module Agents
       settings
     end
 
+    # Usage is read from the `gemini_cli.api_response` log record, one per model response.
+    # The CLI's `gemini_cli.token.usage` metric is CUMULATIVE — every export repeats the
+    # running total — and it arrives in a separate request from the logs, so adding it up,
+    # alongside the logs or not, counted a session's tokens several times over.
     def extract_events_from_otlp(payload, terminal_session_token)
       return [] if terminal_session_token.blank?
 
-      metric_events = extract_events_from_otlp_metrics(payload, terminal_session_token)
-      return metric_events unless metric_events.empty?
-
       extract_events_from_otlp_logs(payload, terminal_session_token)
-    end
-
-    def extract_events_from_otlp_metrics(payload, terminal_session_token)
-      events = []
-
-      resource_metrics = payload["resourceMetrics"] || []
-      resource_metrics.each do |resource_metric|
-        resource_attrs = resource_metric.dig("resource", "attributes") || []
-        scope_metrics = resource_metric["scopeMetrics"] || []
-
-        scope_metrics.each do |scope_metric|
-          per_model = Hash.new do |hash, key|
-            hash[key] = {
-              model: nil,
-              token_breakdown: Hash.new(0),
-              cost_usd: 0.0,
-              timestamp_ns: nil
-            }
-          end
-
-          metrics = scope_metric["metrics"] || []
-          metrics.each do |metric|
-            name = normalize_metric_name(metric["name"].to_s)
-            next if name.blank?
-
-            data_points = extract_data_points(metric)
-            data_points.each do |data_point|
-              token_value = extract_terminal_session_token(data_point["attributes"] || [], resource_attrs)
-              next if token_value != terminal_session_token
-
-              value = number_from_data_point(data_point)
-              next if value.nil?
-
-              dp_attrs = data_point["attributes"] || []
-              point_model = extract_model(dp_attrs)
-              model_key = point_model.presence || "__unknown__"
-              entry = per_model[model_key]
-              entry[:model] ||= point_model
-              entry[:timestamp_ns] ||= data_point["timeUnixNano"]
-
-              case name
-              when METRIC_TOKENS_NAME
-                token_type = normalize_token_type(attribute_string(dp_attrs, "type") || attribute_string(dp_attrs, "token_type"))
-                entry[:token_breakdown][token_type] += value.to_i
-              when METRIC_COST_NAME
-                entry[:cost_usd] += value.to_f
-              end
-            end
-          end
-
-          per_model.each_value do |entry|
-            token_breakdown = entry[:token_breakdown]
-            cost_usd = entry[:cost_usd]
-            next if token_breakdown.values.sum.zero? && cost_usd.zero?
-
-            events << build_usage_event(
-              model: entry[:model],
-              timestamp_ns: entry[:timestamp_ns],
-              input_tokens: token_breakdown["input"],
-              output_tokens: token_breakdown["output"],
-              cache_read_tokens: token_breakdown["cacheRead"],
-              cache_write_tokens: token_breakdown["cacheCreation"],
-              total_cents: (cost_usd * 100).round(6)
-            )
-          end
-        end
-      end
-
-      events
     end
 
     def extract_events_from_otlp_logs(payload, terminal_session_token)
@@ -458,24 +384,6 @@ module Agents
       }
     end
 
-    def normalize_metric_name(name)
-      return name if name == METRIC_TOKENS_NAME || name == METRIC_COST_NAME
-
-      LEGACY_METRIC_NAMES[name]
-    end
-
-    def normalize_token_type(raw_type)
-      case raw_type.to_s
-      when "input", "prompt", "promptTokens", "input_token_count" then "input"
-      when "output", "completion", "completionTokens", "output_token_count" then "output"
-      when "thought", "tool" then "output"
-      when "cache" then "cacheRead"
-      when "cacheRead", "cache_read", "cached_content", "cached_content_token_count" then "cacheRead"
-      when "cacheCreation", "cacheWrite", "cache_write", "cache_write_token_count" then "cacheCreation"
-      else raw_type.to_s
-      end
-    end
-
     def extract_model(attrs)
       attribute_string(attrs, "model") || attribute_string(attrs, "model_id")
     end
@@ -488,16 +396,6 @@ module Agents
       return (usd * 100).round(6) if usd.present?
 
       0.0
-    end
-
-    def extract_data_points(metric)
-      sum = metric["sum"]
-      return sum["dataPoints"] if sum.is_a?(Hash) && sum["dataPoints"].is_a?(Array)
-
-      gauge = metric["gauge"]
-      return gauge["dataPoints"] if gauge.is_a?(Hash) && gauge["dataPoints"].is_a?(Array)
-
-      []
     end
 
     def extract_terminal_session_token(attrs, resource_attrs)
@@ -538,14 +436,6 @@ module Agents
       return nil if token.blank?
 
       token
-    end
-
-    def number_from_data_point(data_point)
-      if data_point.key?("asInt")
-        data_point["asInt"].to_f
-      elsif data_point.key?("asDouble")
-        data_point["asDouble"].to_f
-      end
     end
   end
 end

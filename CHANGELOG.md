@@ -13,11 +13,26 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.294, Codex 0.161.0,
+  Gemini CLI 0.60.0 and Grok 1.0.46, and Cursor CLI (2026.10.01-e373342) and
+  Kiro CLI (2.28.0) are now pinned like the others instead of installing the
+  vendor's newest release on every image build. Gemini CLI stays below 0.61,
+  whose `--yolo` stops at a confirmation dialog whenever the agent edits a
+  build file (`package.json`, a lockfile, a `Dockerfile`). Antigravity CLI
+  stays at 1.1.27: 1.3.1 ignores the setting the image turns its telemetry
+  off with.
+
 ### Fixed
 - **Integrations**: agents get the Slack/Teams message tools (`chat_post_message`
   and the rest) and the Azure DevOps pull request tools again; a rolling
   deploy could leave them switched off, so runs started from Slack could not
   answer in the thread.
+- **Sessions & Runs**: a Gemini CLI session no longer counts its tokens more
+  than once; usage now comes from one record per model response.
+- **Sessions & Runs**: a Codex session stuck on the "Trust this folder?"
+  dialog is recognised and stopped with an explanation again, and Codex's
+  expired or reused sign-in is reported as one.
 
 ## [1.0.0] - 2026-10-08
 

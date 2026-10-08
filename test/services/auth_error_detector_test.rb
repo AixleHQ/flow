@@ -37,6 +37,15 @@ class AuthErrorDetectorTest < ActiveSupport::TestCase
     assert AuthErrorDetector.detect("OAuth token has expired").auth_error?
   end
 
+  test "detects Codex reporting a dead refresh token" do
+    assert AuthErrorDetector.detect("Your access token could not be refreshed because your refresh token has expired.").auth_error?
+    assert AuthErrorDetector.detect("Your access token could not be refreshed because your refresh token was already used.").auth_error?
+  end
+
+  test "detects the Antigravity CLI telling the user to sign in again" do
+    assert AuthErrorDetector.detect("Please log out (/logout) and log back in (/login).").auth_error?
+  end
+
   test "detects a dead Gemini API key" do
     assert AuthErrorDetector.detect("API key not valid. Please pass a valid API key.").auth_error?
   end

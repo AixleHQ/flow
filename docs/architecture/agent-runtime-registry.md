@@ -44,8 +44,8 @@ on the reviewer.
 
 ## Raising a CLI pin
 
-Edit `cli_version` and nothing else. The Dockerfiles carry no default, so the registry is
-the only pin; a Docker build without the arg fails with a message naming the file.
+Edit `cli_version`. The Dockerfiles carry no default, so the registry is the only pin; a
+Docker build without the arg fails with a message naming the file.
 Antigravity and Kiro need a second edit: their downloads are checksum-verified, so
 `docker/antigravity-cli/Dockerfile` and `docker/kiro-cli/Dockerfile` keep a checksum pair
 per release, and the registry test fails while the pin has none. Kiro publishes checksums
@@ -53,6 +53,20 @@ only for its latest release (in `stable/latest/manifest.json`), so its Dockerfil
 accepts a version without a pair while it is the channel's latest, checked against that
 manifest; that is how the canary builds Kiro's newest. Cursor publishes no checksums, so
 its pin is the versioned package URL alone.
+
+For the runtimes whose usage arrives over OTLP (Claude Code, Codex, Gemini CLI), re-capture
+what the new CLI exports: `make build-agents`, then `bin/capture-agent-otlp <id>` writes
+`test/fixtures/files/otlp/<id>-<version>.json` (the CLI answers one prompt against a mock
+model API, its telemetry relayed through `docker/otlp-ingest`).
+`test/services/agents/otlp_contract_test.rb` parses that fixture with the real adapter and
+fails while the pinned version has none — so a renamed metric or attribute is caught in CI,
+not in production usage numbers.
+
+Read the vendor's release notes between the two versions against the adapter too, for more
+than credentials: a CLI can keep its login files and telemetry and still change a default
+that blocks a headless session or hides its output (Gemini CLI 0.61's build-file prompt
+under `--yolo`, Codex 0.157's background server and alternate-screen transcript), or drop
+a setting the image relies on (Antigravity 1.3.1 no longer reads `enableTelemetry`).
 
 The Monday canary (`canary-YYYYMMDD` tags) builds the newest releases and keeps one issue
 labelled `agent-cli-updates` up to date: each pin against the vendor's newest release,

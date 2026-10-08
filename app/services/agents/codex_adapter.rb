@@ -798,6 +798,11 @@ module Agents
         [features]
         daemon_auto_start = false
 
+        # On by default since 0.157: the conversation is drawn on the alternate screen,
+        # out of the tmux scrollback the live log tail and the quota sweep read.
+        [tui]
+        fullscreen_transcript = false
+
         [projects."#{workspace}"]
         trust_level = "trusted"
 

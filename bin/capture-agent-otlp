@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# bin/capture-agent-otlp <runtime_id> [image]
+#
+# Captures the OTLP an agent CLI really emits, for test/services/agents/otlp_contract_test.rb.
+# The CLI answers one prompt against test/otlp_capture/mock.py (a canned reply with known
+# token counts); its telemetry goes through docker/otlp-ingest exactly as in a session, and
+# the JSON the app would receive is written to
+# test/fixtures/files/otlp/<runtime_id>-<cli_version from config/agent_runtimes.json>.json.
+#
+# Runtimes: claude_code, codex, gemini_cli. The image defaults to the local
+# `make build-agents` build (aixle/<image>:${AGENT_IMAGE_TAG:-latest}); set PLATFORM=linux/amd64
+# to run a GHCR image on an arm64 host. Runs on the host: needs docker and jq.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+runtime="${1:?usage: bin/capture-agent-otlp <claude_code|codex|gemini_cli> [image]}"
+entry="$(jq -c --arg id "$runtime" '.runtimes[] | select(.id == $id)' config/agent_runtimes.json)"
+[ -n "$entry" ] || { echo "unknown runtime: $runtime" >&2; exit 1; }
+version="$(jq -r .cli_version <<<"$entry")"
+image="${2:-aixle/$(jq -r .image <<<"$entry"):${AGENT_IMAGE_TAG:-latest}}"
+platform=(${PLATFORM:+--platform "$PLATFORM"})
+token=OTLP_CAPTURE_TOKEN
+fixture="test/fixtures/files/otlp/${runtime}-${version}.json"
+
+work="$(mktemp -d)"
+net="otlp-capture-$$"
+cleanup() {
+  docker rm -f "$net-mock" "$net-ingest" >/dev/null 2>&1 || true
+  docker network rm "$net" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+docker network create ${OTLP_CAPTURE_SUBNET:+--subnet "$OTLP_CAPTURE_SUBNET"} "$net" >/dev/null
+docker build -q -t aixle/otlp-capture-ingest docker/otlp-ingest >/dev/null
+docker run -d --name "$net-mock" --network "$net" -v "$PWD/test/otlp_capture/mock.py:/mock.py:ro" \
+  -v "$work:/out" python:3.13-slim python -u /mock.py 8080 >/dev/null
+docker run -d --name "$net-ingest" --network "$net" \
+  -e OTLP_INGEST_WEB_BASE_URL="http://$net-mock:8080" aixle/otlp-capture-ingest >/dev/null
+sleep 2
+
+mock="http://$net-mock:8080"
+run=(docker run --rm ${platform[@]+"${platform[@]}"} --network "$net" --entrypoint "" -w /tmp
+     -e DISABLE_AUTOUPDATER=1 -e "OTEL_RESOURCE_ATTRIBUTES=terminal_session_token=$token")
+
+# The telemetry settings below mirror what each adapter writes for a session
+# (Agents::<Runtime>Adapter); the endpoint is the mock, so the export is captured raw
+# and replayed into otlp-ingest afterwards, independent of how fast the CLI exits.
+case "$runtime" in
+  claude_code)
+    "${run[@]}" -u claude -e HOME=/home/claude \
+      -e ANTHROPIC_BASE_URL="$mock" -e ANTHROPIC_API_KEY=sk-ant-api03-capture \
+      -e CLAUDE_CODE_ENABLE_TELEMETRY=1 -e OTEL_EXPORTER_OTLP_ENDPOINT="$mock" \
+      -e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf -e OTEL_METRICS_EXPORTER=otlp -e OTEL_METRIC_EXPORT_INTERVAL=2000 \
+      "$image" sh -c '/home/claude/.local/bin/claude -p "say hi" --model claude-sonnet-4-5; sleep 4' ;;
+  codex)
+    "${run[@]}" -u codex -e HOME=/home/codex -e CAPTURE_API_KEY=capture -e MOCK="$mock" \
+      "$image" sh -c 'mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF
+model = "gpt-5"
+model_provider = "capture"
+
+[model_providers.capture]
+name = "capture"
+base_url = "$MOCK/v1"
+wire_api = "responses"
+env_key = "CAPTURE_API_KEY"
+
+[otel]
+exporter = { otlp-http = { endpoint = "$MOCK/v1/logs", protocol = "binary" } }
+EOF
+codex exec --skip-git-repo-check "say hi"; sleep 4' ;;
+  gemini_cli)
+    "${run[@]}" -u gemini -e HOME=/home/gemini -e GEMINI_API_KEY=capture -e GOOGLE_GEMINI_BASE_URL="$mock" -e MOCK="$mock" \
+      "$image" sh -c 'mkdir -p ~/.gemini && cat > ~/.gemini/settings.json <<EOF
+{"security": {"auth": {"selectedType": "gemini-api-key"}, "folderTrust": {"enabled": false}},
+ "privacy": {"usageStatisticsEnabled": true},
+ "telemetry": {"enabled": true, "target": "local", "otlpEndpoint": "$MOCK", "otlpProtocol": "http", "logPrompts": false},
+ "tools": {"sandbox": false}}
+EOF
+gemini -m gemini-2.5-pro -p "say hi"; sleep 8' ;;
+  *) echo "no capture recipe for $runtime" >&2; exit 1 ;;
+esac
+
+for raw in "$work"/raw/*-metrics-* "$work"/raw/*-logs-*; do
+  [ -f "$raw" ] || continue
+  name="$(basename "$raw" .bin)"; kind="$(cut -d- -f2 <<<"$name")"; ctype="$(cut -d- -f3- <<<"$name" | sed 's#_#/#')"
+  docker run --rm --network "$net" -v "$raw:/body:ro" curlimages/curl:8.11.1 -sf -o /dev/null \
+    -H "Content-Type: $ctype" --data-binary @/body "http://$net-ingest:4318/v1/$kind"
+done
+sleep 1
+
+shopt -s nullglob
+payloads=("$work"/*.json)
+[ "${#payloads[@]}" -gt 0 ] || { echo "ERROR: $runtime exported no metrics or logs" >&2; exit 1; }
+jq -s . "${payloads[@]}" > "$fixture"
+echo "$fixture: ${#payloads[@]} payload(s) from $image"
