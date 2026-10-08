@@ -1223,7 +1223,9 @@ module Agents
       # verdict on the container's copy, never a token to keep.
       return current_block if incoming_block.blank? || incoming_block["accessToken"].blank?
 
-      incoming_block["expiresAt"].to_i >= current_block["expiresAt"].to_i ? incoming_block : current_block
+      # Strictly later: a real rotation always moves the expiry on, so a block that claims the
+      # stored expiry with other tokens is not one, whoever sent it.
+      incoming_block["expiresAt"].to_i > current_block["expiresAt"].to_i ? incoming_block : current_block
     end
 
     # Returns an array of normalized models, or [] on any non-success / empty

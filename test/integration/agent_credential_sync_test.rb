@@ -124,6 +124,17 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert Sessions::AuthPause.paused?(@session.reload)
   end
 
+  # Found by editing a container's file by hand: the same expiry with another refresh token
+  # was taken as a rotation and handed to every other container.
+  test "does not take other tokens that claim the stored expiry" do
+    post PATH, params: rotated_body(access_token: "at-old", refresh_token: "rt-planted",
+                                    expires_at: Time.zone.at(@credential.expires_at)),
+               headers: headers
+
+    assert_response :no_content
+    assert_equal "rt-old", @credential.reload.config_data.dig("claudeAiOauth", "refreshToken")
+  end
+
   test "an unchanged file is accepted and changes nothing" do
     post PATH, params: rotated_body(access_token: "at-old", refresh_token: "rt-old",
                                     expires_at: Time.zone.at(@credential.expires_at)),

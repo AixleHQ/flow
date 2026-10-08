@@ -482,6 +482,14 @@ deleted container took the work with it.
     from where it had stopped.
   - A refusal in one container, with the stored grant still good, paused that step. About two
     minutes later it healed and resumed with no one involved.
+  - **Under load.** Three Haiku agents ran in parallel, each building a CommonMark converter
+    against the spec, and all three were refused while busy.
+    - The write-back signal paused each one 6–20 s after its refusal.
+    - One re-login resumed all three.
+    - One agent went from 218 to 241 of 652 examples straight afterwards: it continued its work
+      rather than restarting it.
+  - A hand-planted refresh token with the stored expiry was taken as a rotation and fanned out
+    to every holder. A rotation must now carry a strictly later expiry.
   - The run surfaced three faults, all fixed in the same change:
     - a CLI's blanked block was being accepted on write-back, which lifted the credential out
       of `error`;
