@@ -140,7 +140,7 @@ export class TtydConnection {
     if (this.pending > FLOW_HIGH_WATER) this.send(PAUSE_FRAME);
   }
 
-  private send(frame: Uint8Array): void {
+  private send(frame: Uint8Array<ArrayBuffer>): void {
     if (this.socket?.readyState === OPEN) this.socket.send(frame);
   }
 
