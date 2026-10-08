@@ -8,6 +8,7 @@ module Api
           class CommentsPolicy < Web::Company::Projects::Board::Task::CommentsPolicy
             def index? = project_accessible?
             def create? = project_writable?
+            def update? = project_writable?
           end
         end
       end

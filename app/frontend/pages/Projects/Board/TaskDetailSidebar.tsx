@@ -39,6 +39,7 @@ import {
   IconLink,
   IconListDetails,
   IconMessage,
+  IconPencil,
   IconPlayerPlay,
   IconSend,
   IconTag,
@@ -75,6 +76,7 @@ import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import {
   apiV1ProjectTaskPath,
   apiV1ProjectTaskCommentsPath,
+  apiV1ProjectTaskCommentPath,
   apiV1ProjectTaskAssetsPath,
   apiV1ProjectTaskAssetPath,
   shareApiV1ProjectTaskAssetPath,
@@ -89,6 +91,7 @@ import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { ActivityAvatar } from './ActivityAvatar';
 import { formatCostCents, formatDuration, formatRelativeTime, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
+import { canEditComment } from './canEditComment';
 import { gateCiStatus, gateDetail, gateLink, gateTooltip } from './gates';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { InlineTagsEditor } from './InlineTagsEditor';
@@ -132,6 +135,16 @@ async function addTaskComment(projectId: number, taskId: number, body: string, t
     method: 'POST',
     headers: jsonHeaders,
     body: JSON.stringify({ taskComment: { body, tags } }),
+  });
+  if (saved) router.reload({ only: ['task_comments', 'task_activities'] });
+  return saved;
+}
+
+async function editTaskComment(projectId: number, taskId: number, commentId: number, body: string) {
+  const saved = await apiMutate(apiV1ProjectTaskCommentPath(projectId, taskId, commentId), {
+    method: 'PATCH',
+    headers: jsonHeaders,
+    body: JSON.stringify({ taskComment: { body } }),
   });
   if (saved) router.reload({ only: ['task_comments', 'task_activities'] });
   return saved;
@@ -184,6 +197,7 @@ export function TaskDetailSidebar({
   workflowRuns,
   stats,
   canExecute,
+  currentUserId,
 }: {
   task: Task | null;
   /** A task number whose props are still in flight — draws the skeleton until it resolves. */
@@ -207,6 +221,8 @@ export function TaskDetailSidebar({
   workflowRuns: TaskWorkflowRun[];
   stats: TaskStatistics | null;
   canExecute: boolean;
+  /** The signed-in user, so a comment's own-author edit window can be gated client-side. */
+  currentUserId: number;
 }) {
   const [tab, setTab] = useState<string | null>('details');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -220,6 +236,9 @@ export function TaskDetailSidebar({
   const [commentBody, setCommentBody] = useState('');
   const [commentTags, setCommentTags] = useState<string[]>([]);
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentBody, setEditingCommentBody] = useState('');
+  const [savingCommentEdit, setSavingCommentEdit] = useState(false);
   const [authorFilter, setAuthorFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
@@ -351,6 +370,26 @@ export function TaskDetailSidebar({
       body: JSON.stringify({ boardTask: { [field]: value } }),
     });
     router.reload({ only: ['selected_task'] });
+  };
+
+  const startEditComment = (c: TaskComment) => {
+    setEditingCommentId(c.id);
+    setEditingCommentBody(c.body);
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentBody('');
+  };
+
+  const saveEditComment = async (commentId: number) => {
+    if (!task) return;
+    const body = editingCommentBody.trim();
+    if (!body) return;
+    setSavingCommentEdit(true);
+    const saved = await editTaskComment(projectId, task.id, commentId, body);
+    setSavingCommentEdit(false);
+    if (saved) cancelEditComment();
   };
 
   const moveToColumn = async (columnId: string) => {
@@ -1334,12 +1373,41 @@ export function TaskDetailSidebar({
                   </Box>
 
                   {/* Comment body */}
-                  <Box
-                    className={styles.commentMd}
-                    style={{ fontSize: 13, color: 'var(--mantine-color-dimmed)', lineHeight: 1.6, marginTop: 8 }}
-                  >
-                    <Markdown remarkPlugins={[remarkGfm]}>{c.body}</Markdown>
-                  </Box>
+                  {editingCommentId === c.id ? (
+                    <Box style={{ marginTop: 8 }}>
+                      <Textarea
+                        autosize
+                        minRows={2}
+                        value={editingCommentBody}
+                        onChange={(e) => setEditingCommentBody(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') cancelEditComment();
+                        }}
+                        aria-label="Edit comment"
+                        data-testid={`edit-comment-input-${c.id}`}
+                      />
+                      <Group gap={8} mt={8}>
+                        <Button
+                          size="xs"
+                          loading={savingCommentEdit}
+                          disabled={editingCommentBody.trim() === ''}
+                          onClick={() => saveEditComment(c.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button size="xs" variant="subtle" color="gray" onClick={cancelEditComment}>
+                          Cancel
+                        </Button>
+                      </Group>
+                    </Box>
+                  ) : (
+                    <Box
+                      className={styles.commentMd}
+                      style={{ fontSize: 13, color: 'var(--mantine-color-dimmed)', lineHeight: 1.6, marginTop: 8 }}
+                    >
+                      <Markdown remarkPlugins={[remarkGfm]}>{c.body}</Markdown>
+                    </Box>
+                  )}
 
                   {/* Tags */}
                   {c.tags && c.tags.length > 0 && (
@@ -1367,6 +1435,31 @@ export function TaskDetailSidebar({
 
                   {/* Actions */}
                   <Box style={{ display: 'flex', gap: 2, marginTop: 8 }}>
+                    {editingCommentId !== c.id && canEditComment(c, currentUserId) && (
+                      <Box
+                        component="button"
+                        onClick={() => startEditComment(c)}
+                        data-testid={`edit-comment-${c.id}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--mantine-color-placeholder)',
+                          fontFamily: 'inherit',
+                          fontSize: 12,
+                          padding: '4px 8px',
+                          borderRadius: 5,
+                          cursor: 'pointer',
+                          transition: 'color .12s, background .12s',
+                        }}
+                        className={styles.cmtAct}
+                      >
+                        <IconPencil size={13} />
+                        Edit
+                      </Box>
+                    )}
                     <Box
                       component="button"
                       style={{

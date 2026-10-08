@@ -8,6 +8,7 @@ module Web
           class CommentsPolicy < Web::Company::ApplicationPolicy
             def index? = project_accessible?
             def create? = project_writable?
+            def update? = project_writable?
           end
         end
       end
