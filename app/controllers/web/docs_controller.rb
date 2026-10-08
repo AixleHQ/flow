@@ -11,16 +11,19 @@ class Web::DocsController < Web::ApplicationController
     slug = (params[:slug].presence || "user-guide").downcase
 
     unless page_exists?(slug)
-      render inertia: "Docs/DocsPage", props: { slug: slug }, status: :not_found
+      render inertia: "Docs/DocsPage", props: { slug: slug, github_stars: github_stars }, status: :not_found
       return
     end
 
     render inertia: "Docs/DocsPage", props: {
-      slug: slug
+      slug: slug,
+      github_stars: github_stars
     }
   end
 
   private
+
+  def github_stars = InertiaRails.defer { OpenSourceRepository.stars }
 
   # Mirrors the slugs registered in
   # app/frontend/pages/Docs/data/pages/index.ts, because the page bodies are

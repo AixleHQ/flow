@@ -1,16 +1,23 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { IconBrandGithub, IconMenu2, IconSearch } from '@tabler/icons-react';
 
 import { Logo } from 'shared/ui/Logo';
 
+import { DOCS_SECTIONS, type DocsSection } from '../data/sections';
 import classes from '../DocsPage.module.css';
 
+const starCount = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
 interface Props {
+  active: DocsSection;
   onMenuClick: () => void;
   onSearchClick: () => void;
 }
 
-export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
+export function DocsNavBar({ active, onMenuClick, onSearchClick }: Props) {
+  // Deferred: absent until the follow-up request lands, null when GitHub could not be read.
+  const { githubStars } = usePage<{ githubStars?: number | null }>().props;
+
   return (
     <header className={classes.navbar}>
       <button type="button" className={classes.hamburger} onClick={onMenuClick} aria-label="Open navigation menu">
@@ -22,13 +29,17 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
         <span className={classes.navBrandFlow}>Flow</span>
       </Link>
 
-      <nav className={classes.navLinks}>
-        <Link href="/docs" className={`${classes.navLink} ${classes.navLinkActive}`}>
-          Docs
-        </Link>
-        <Link href="/docs/api-guide" className={classes.navLink}>
-          API
-        </Link>
+      <nav className={classes.navLinks} aria-label="Site sections">
+        {DOCS_SECTIONS.map((section) => (
+          <Link
+            key={section.id}
+            href={section.href}
+            className={`${classes.navLink} ${section.id === active ? classes.navLinkActive : ''}`}
+            aria-current={section.id === active ? 'page' : undefined}
+          >
+            {section.label}
+          </Link>
+        ))}
       </nav>
 
       <div className={classes.navbarRight}>
@@ -46,7 +57,9 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
         >
           <IconBrandGithub size={15} />
           GitHub
-          <span className={classes.githubStars}>★ 2.4k</span>
+          {typeof githubStars === 'number' && (
+            <span className={classes.githubStars}>★ {starCount.format(githubStars).toLowerCase()}</span>
+          )}
         </a>
       </div>
     </header>

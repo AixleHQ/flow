@@ -356,6 +356,7 @@ Rails.application.routes.draw do
 
     get "docs", to: "docs#show", as: :docs
     get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
+    get "changelog", to: "changelog#show", as: :changelog
 
     # What Flow does, what a queue costs and the ROI model the sales team
     # quotes. Public: the signup form links to it, and its reader has no
