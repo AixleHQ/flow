@@ -2,6 +2,8 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
+    UNBOUNDED_PAYING_COMPANY = "is required for a company that pays — tick Managed by Aixle for one that does not"
+
     def create
       # Extract initial admin credentials before building company
       initial_admin_email = params.dig(:company, :initial_admin_email)
@@ -10,8 +12,13 @@ module Admin
       # Remove virtual attributes from params before creating company
       company_params = resource_params.except(:initial_admin_email, :initial_admin_password)
       company = Company.new(company_params)
+      apply_billing_terms(company)
 
-      if company.save
+      if unbounded_paying_company?(company)
+        company.validate
+        company.errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY)
+        render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      elsif company.save
         # Create initial admin user if credentials provided
         if initial_admin_email.present? && initial_admin_password.present?
           admin_user = User.new(
@@ -41,6 +48,30 @@ module Admin
       else
         render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
+    end
+
+    private
+
+    # Where we host, a company made here pays the way a self-serve signup does —
+    # free allowance, then a card — unless it is one we carry. Left at the
+    # column's `active`, it is billed with nothing to bill through: the billing
+    # tab offers no Checkout, and the meter drops its minutes for want of a
+    # Stripe customer.
+    def apply_billing_terms(company)
+      return unless Deployment.saas?
+
+      if company.managed_by_aixle?
+        company.session_concurrency_limit = Company::MANAGED_SESSION_LIMIT if company.session_concurrency_limit.blank?
+      else
+        company.billing_state = "trialing"
+      end
+    end
+
+    # No limit means nothing is metered, so a paying company without one runs
+    # for free. A rule of this form, not of Company: the seeds and the factories
+    # make companies without a limit, and an operator may still clear one later.
+    def unbounded_paying_company?(company)
+      Deployment.saas? && !company.managed_by_aixle? && company.session_concurrency_limit.blank?
     end
 
     # Override this method to specify custom lookup behavior.

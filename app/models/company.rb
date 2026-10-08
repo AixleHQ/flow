@@ -67,6 +67,10 @@ class Company < ApplicationRecord
   # same metered minutes twice.
   BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed].freeze
 
+  # What a company we carry (`managed_by_aixle`) is given when it is made. Its
+  # admins cannot change it; we can, from the admin.
+  MANAGED_SESSION_LIMIT = 2
+
   # Constants
   RESERVED_DOMAINS = %w[
     admin.com api.com www.com app.com mail.com ftp.com
@@ -91,10 +95,13 @@ class Company < ApplicationRecord
   # enabled row per deployment provider the moment it exists.
   after_create :seed_auth_policies
   before_validation :downcase_email_domain
+  # Before forget_billing_block, so a blocked company that becomes ours loses
+  # its block reason with its block.
+  before_validation :keep_managed_company_running, if: :managed_by_aixle?
   before_validation :forget_billing_block, unless: :billing_blocked?
   after_save :apply_session_concurrency_limit
 
-  scope :billing_billable, -> { where(billing_state: "active") }
+  scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }
 
   def billing_trialing? = billing_state == "trialing"
   def billing_active? = billing_state == "active"
@@ -179,6 +186,12 @@ class Company < ApplicationRecord
   end
 
   private
+
+  # Nobody pays for a company we carry, so it has no allowance to spend and no
+  # subscription to lapse: neither trialing nor blocked means anything for it.
+  def keep_managed_company_running
+    self.billing_state = "active"
+  end
 
   # A company that is running again has no reason to be stopped, and an unpaid
   # invoice it was pointed at belongs to the stop that has just been undone.

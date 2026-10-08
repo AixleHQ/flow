@@ -4,9 +4,9 @@
 # not us — decides what the company is called and how much it may run.
 #
 # WHY A FORM AND NOT VALIDATIONS ON Company. Requiring a session limit is a rule
-# of this path alone. Every other way a company comes into being — the admin, the
-# seeds, the factories — legitimately makes one without a limit, and a model
-# validation would refuse all of them to constrain one.
+# of the paths that create a paying company — this one, and the admin's create
+# action. The seeds, the factories and a company we carry legitimately make one
+# without a limit, and a model validation would refuse them all.
 #
 # The form is built twice for a stranger: once to check the answers before they
 # are emailed, and again from the signed link to write them. Only the second
@@ -15,9 +15,8 @@
 class WorkspaceOnboardingForm
   include ApplicationFormWithoutActiveRecord
 
-  # A number is required here and nowhere else. Absence means unbounded and
-  # unbilled, which is ours to grant from the admin — a company cannot arrive
-  # that way by signing itself up.
+  # A number is required. Absence means unbounded and unbilled, which is ours to
+  # grant from the admin — a company cannot arrive that way by signing itself up.
   attribute :name, :string
   attribute :email, :string
   attribute :email_domain, :string
@@ -47,9 +46,8 @@ class WorkspaceOnboardingForm
     return false unless valid?
 
     ActiveRecord::Base.transaction do
-      # Said out loud rather than left to the column default: the free allowance
-      # belongs to this path alone, and a company made any other way is somebody
-      # deciding rather than somebody trying.
+      # Said out loud rather than left to the column default, which is `active`
+      # for the seeds and every other path that does not choose.
       @company = Company.create!(
         name: name.strip, email_domain: email_domain, state: "active", billing_state: "trialing"
       )

@@ -24,6 +24,10 @@ FactoryBot.define do
       billing_state { "blocked" }
     end
 
+    trait :managed_by_aixle do
+      managed_by_aixle { true }
+    end
+
     # Paying through Stripe, partway through a monthly period.
     trait :subscribed do
       billing_state { "active" }
