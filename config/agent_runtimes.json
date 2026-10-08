@@ -1,0 +1,89 @@
+{
+  "$comment": "The built-in agent runtimes. CI builds one image per entry, the app launches and validates against this list, and the UI describes runtimes from it. Field reference: docs/architecture/agent-runtime-registry.md",
+  "runtimes": [
+    {
+      "id": "claude_code",
+      "label": "Claude Code",
+      "product_name": "Claude Code",
+      "vendor": "Anthropic",
+      "description": "Anthropic's AI coding assistant with deep reasoning capabilities",
+      "image": "claude-code",
+      "dockerfile": "docker/claude-code/Dockerfile",
+      "cli_version": "2.1.281",
+      "cli_latest": { "url": "https://downloads.claude.ai/claude-code-releases/latest" },
+      "cli_releases": { "github": "anthropics/claude-code", "tag_prefix": "v" }
+    },
+    {
+      "id": "cursor_cli",
+      "label": "Cursor CLI",
+      "product_name": "Cursor CLI",
+      "vendor": "Cursor",
+      "description": "AI-powered code editor with context-aware suggestions",
+      "image": "cursor-cli",
+      "dockerfile": "docker/cursor-cli/Dockerfile",
+      "cli_version": null,
+      "cli_latest": null,
+      "cli_releases": null
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "product_name": "OpenAI Codex",
+      "vendor": "OpenAI",
+      "description": "OpenAI's code generation model optimized for multiple languages",
+      "image": "codex",
+      "dockerfile": "docker/codex/Dockerfile",
+      "cli_version": "0.156.1",
+      "cli_latest": { "npm": "@openai/codex" },
+      "cli_releases": { "github": "openai/codex", "tag_prefix": "rust-v" }
+    },
+    {
+      "id": "gemini_cli",
+      "label": "Gemini CLI",
+      "product_name": "Gemini CLI",
+      "vendor": "Google",
+      "description": "Google's multimodal AI for code and documentation tasks",
+      "image": "gemini-cli",
+      "dockerfile": "docker/gemini-cli/Dockerfile",
+      "cli_version": "0.57.0",
+      "cli_latest": { "npm": "@google/gemini-cli" },
+      "cli_releases": { "github": "google-gemini/gemini-cli", "tag_prefix": "v" }
+    },
+    {
+      "id": "antigravity_cli",
+      "label": "Antigravity CLI",
+      "product_name": "Antigravity CLI",
+      "vendor": "Google",
+      "description": "Google's agent-first terminal runtime, signed in with your Google account",
+      "image": "antigravity-cli",
+      "dockerfile": "docker/antigravity-cli/Dockerfile",
+      "cli_version": "1.1.27",
+      "cli_latest": null,
+      "cli_releases": { "github": "google-antigravity/antigravity-cli", "tag_prefix": "" }
+    },
+    {
+      "id": "grok",
+      "label": "Grok",
+      "product_name": "Grok",
+      "vendor": "xAI",
+      "description": "xAI's Grok CLI for agentic coding in the terminal",
+      "image": "grok",
+      "dockerfile": "docker/grok/Dockerfile",
+      "cli_version": "1.0.41",
+      "cli_latest": { "npm": "@xai-official/grok" },
+      "cli_releases": null
+    },
+    {
+      "id": "kiro_cli",
+      "label": "Kiro CLI",
+      "product_name": "Kiro CLI",
+      "vendor": "AWS",
+      "description": "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
+      "image": "kiro-cli",
+      "dockerfile": "docker/kiro-cli/Dockerfile",
+      "cli_version": null,
+      "cli_latest": null,
+      "cli_releases": null
+    }
+  ]
+}

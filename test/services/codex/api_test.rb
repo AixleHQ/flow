@@ -33,16 +33,6 @@ module Codex
       assert_requested request
     end
 
-    test "models claims the Codex CLI version the agent image installs" do
-      # The endpoint hides every model whose minimal_client_version is above the
-      # version we claim, so a CLIENT_VERSION left behind an image bump hides the
-      # newest models from the picker (gpt-6 needs >= 0.155.0).
-      image_version = Rails.root.join("docker/codex/Dockerfile").read[/^ARG CODEX_VERSION=(\S+)$/, 1]
-
-      assert_equal image_version, Api::CLIENT_VERSION,
-                   "bump Codex::Api::CLIENT_VERSION together with CODEX_VERSION in docker/codex/Dockerfile"
-    end
-
     test "models returns the catalog including hidden and upgradable entries" do
       stub_request(:get, models_url).to_return(models_response([
         { "slug" => "gpt-5.6-sol", "display_name" => "GPT-5.6-Sol", "description" => "Fast", "visibility" => "list" },

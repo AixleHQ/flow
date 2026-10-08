@@ -336,23 +336,9 @@ build-web:
 build-otlp-ingest:
 	docker build -f docker/otlp-ingest/Dockerfile -t otlp-ingest docker/otlp-ingest
 
-# Build agent images (core first, then agents in parallel).
-#
-# A bare `wait` returns 0 even when a child build failed, which silently shipped a broken
-# image (seen 2026-08-05: a network blip killed one agent build and the target stayed green).
-# So: collect the PIDs and wait on each one, and fail the target if any of them failed.
+# Build agent images (core first, then every runtime in config/agent_runtimes.json).
 build-agents:
-	docker build -t aixle/agent-base-core:latest -f docker/base/Dockerfile docker/base
-	@pids=""; \
-	docker build -t aixle/claude-code:latest -f docker/claude-code/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/cursor-cli:latest -f docker/cursor-cli/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/codex:latest -f docker/codex/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/gemini-cli:latest -f docker/gemini-cli/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/antigravity-cli:latest -f docker/antigravity-cli/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/grok:latest -f docker/grok/Dockerfile docker/ & pids="$$pids $$!"; \
-	docker build -t aixle/kiro-cli:latest -f docker/kiro-cli/Dockerfile docker/ & pids="$$pids $$!"; \
-	fail=0; for p in $$pids; do wait $$p || fail=1; done; \
-	if [ $$fail -ne 0 ]; then echo "ERROR: at least one agent image failed to build"; exit 1; fi
+	bin/build-agent-images
 
 # Help command
 help:
@@ -390,5 +376,5 @@ help:
 	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "Agent Docker Images:"
-	@echo "  make build-agents           - Build all agent images (core + 7 agents in parallel)"
+	@echo "  make build-agents           - Build all agent images (core + every runtime in config/agent_runtimes.json)"
 	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"
