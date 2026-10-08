@@ -2285,6 +2285,14 @@ describe('Projects/Board/BoardPage', () => {
 
     // Activate a filter so the "Save current filters" menu item appears.
     await userEvent.type(screen.getByPlaceholderText('Search tasks'), 'auth');
+    // The search reaches the server 300 ms later. Wait for it here, while this test still answers
+    // it: left pending, it could land after mockRestore() below and fail the test as unanswered.
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=auth'),
+        expect.anything(),
+      ),
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: /Save current filters/i }));
