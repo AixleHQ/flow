@@ -421,8 +421,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   # The Codex append is a read-modify-write over the same config.toml the credential
   # step already wrote, and that file carries the trusted-project entry. Overwriting
   # it with the MCP block alone leaves a file that still parses and trusts nothing, so
-  # the CLI starts and asks "Do you trust the contents of this directory?" — which a
-  # non_interactive workflow step can never answer (task #605).
+  # the CLI starts and asks "Trust this folder?" — which a non_interactive workflow
+  # step can never answer (task #605).
   test "inject_mcp_config keeps an unreadable config.toml instead of overwriting it" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
 

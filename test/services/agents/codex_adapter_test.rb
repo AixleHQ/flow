@@ -371,11 +371,11 @@ module Agents
     # =========================================================================
     # Workspace-trust prompt (task #605)
     #
-    # `--yolo` does NOT cover Codex's "Do you trust the contents of this directory?"
-    # dialog — it is keyed on the cwd, not on a notice flag. A non_interactive
-    # workflow step that reaches it produces no further output and never finishes,
-    # so trust is granted twice: in config.toml AND on the launch command, because
-    # config.toml is read-modify-written after it is created and can lose the entry.
+    # `--yolo` does NOT cover Codex's "Trust this folder?" dialog — it is keyed on
+    # the cwd, not on a notice flag. A non_interactive workflow step that reaches it
+    # produces no further output and never finishes, so trust is granted twice: in
+    # config.toml AND on the launch command, because config.toml is
+    # read-modify-written after it is created and can lose the entry.
     # =========================================================================
 
     test "session_command grants workspace trust so the launch cannot depend on config.toml" do

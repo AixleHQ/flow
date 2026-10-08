@@ -307,10 +307,12 @@ module Activities
         container = mock("container")
         @runtime_mock.stubs(:resolve_container).with(container_id).returns(container)
         @runtime_mock.stubs(:exec!).returns([
-          [ "> You are in /workspace\n",
-            "  Do you trust the contents of this directory? Working with untrusted contents\n",
-            "› 1. Yes, continue\n",
-            "  2. No, quit\n" ],
+          [ "  Folder access\n",
+            "  /workspace\n",
+            "  Trust this folder? Codex can read, edit, and run files here, subject to your\n",
+            "› 1. Trust and continue\n",
+            "  2. Quit\n",
+            "  enter continue · esc quit\n" ],
           [],
           0
         ])

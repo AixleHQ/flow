@@ -849,8 +849,8 @@ class SessionContextService
     # MCP block on its own whenever a container hiccup swallowed the read, silently
     # discarding everything the credential step had put in the same file. For Codex
     # that file is config.toml, which holds the trusted-project entry: the result
-    # still parses, so the CLI starts and asks "Do you trust the contents of this
-    # directory?", and a non_interactive session has nobody to answer (task #605).
+    # still parses, so the CLI starts and asks "Trust this folder?", and a
+    # non_interactive session has nobody to answer (task #605).
     #
     # An existing file we could not read is therefore left alone. Losing MCP servers
     # surfaces as an agent reporting a missing tool; losing the trust entry surfaces
