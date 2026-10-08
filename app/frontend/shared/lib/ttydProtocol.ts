@@ -24,7 +24,7 @@ export type TtydFrame =
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function withCommand(command: number, body: Uint8Array): Uint8Array {
+function withCommand(command: number, body: Uint8Array): Uint8Array<ArrayBuffer> {
   const frame = new Uint8Array(body.length + 1);
   frame[0] = command;
   frame.set(body, 1);
@@ -32,16 +32,16 @@ function withCommand(command: number, body: Uint8Array): Uint8Array {
 }
 
 /** The first frame after the socket opens: ttyd spawns the command at this size. */
-export function encodeHandshake(cols: number, rows: number): Uint8Array {
+export function encodeHandshake(cols: number, rows: number): Uint8Array<ArrayBuffer> {
   return encoder.encode(JSON.stringify({ AuthToken: '', columns: cols, rows }));
 }
 
 /** Keystrokes as xterm reports them: `onData` gives text, `onBinary` gives byte strings. */
-export function encodeInput(data: string | Uint8Array): Uint8Array {
+export function encodeInput(data: string | Uint8Array): Uint8Array<ArrayBuffer> {
   return withCommand(INPUT, typeof data === 'string' ? encoder.encode(data) : data);
 }
 
-export function encodeResize(cols: number, rows: number): Uint8Array {
+export function encodeResize(cols: number, rows: number): Uint8Array<ArrayBuffer> {
   return withCommand(RESIZE, encoder.encode(JSON.stringify({ columns: cols, rows })));
 }
 
