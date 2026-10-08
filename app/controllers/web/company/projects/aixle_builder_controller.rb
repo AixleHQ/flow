@@ -49,6 +49,9 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     end
 
     redirect_to company_project_aixle_builder_session_path(current_project, session)
+  rescue Oauth::PreflightError, CloudAuth::PreflightError, AgentCredential::PreflightError,
+         SessionService::UnsafeMcpUrlError, SessionAdmissionService::Stopped => e
+    redirect_to company_project_aixle_builder_path(current_project), alert: e.message
   end
 
   def show_session

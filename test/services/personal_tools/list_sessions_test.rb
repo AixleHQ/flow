@@ -16,6 +16,13 @@ module PersonalTools
 
     def payload(result) = JSON.parse(result[:stdout])
 
+    def queries_during(&)
+      count = 0
+      counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+      ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &)
+      count
+    end
+
     test "lists the caller's active sessions newest first and leaves finished ones out" do
       running = create(:terminal_session, :agent_session, :running, user: @user, project: @project)
       finished = create(:terminal_session, :agent_session, :collected, user: @user, project: @project)
@@ -83,6 +90,14 @@ module PersonalTools
       assert_equal "Build", row["step_name"]
       assert_not_includes row.keys, "metadata"
       assert_not_includes row.to_s, "secret plan"
+    end
+
+    test "listing more sessions costs no more queries" do
+      create(:terminal_session, :agent_session, :running, user: @user, project: @project)
+      one = queries_during { execute }
+      create_list(:terminal_session, 3, :agent_session, :running, user: @user, project: @project)
+
+      assert_equal one, queries_during { execute }
     end
 
     test "limit is clamped to the cap" do

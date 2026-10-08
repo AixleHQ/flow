@@ -59,7 +59,7 @@ module PersonalTools
     end
 
     def scope(project, state)
-      scope = readable_sessions.includes(:user).order(created_at: :desc)
+      scope = readable_sessions.includes(:user, :session_admission).order(created_at: :desc)
       scope = scope.where(project_id: project.id) if project
       scope = scope.where(state: STATE_FILTERS.fetch(state)) unless state == "all"
       scope

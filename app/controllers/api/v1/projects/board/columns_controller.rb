@@ -6,7 +6,8 @@ module Api
       module Board
         class ColumnsController < Board::ApplicationController
           def index
-            columns = current_board.board_columns.with_tasks_count.order(:position)
+            columns = current_board.board_columns.with_tasks_count.includes(column_workflow_binding: :workflow)
+                                   .order(:position)
             render json: columns.map { |c| BoardColumnResource.new(c).to_h }
           end
 
@@ -46,7 +47,8 @@ module Api
               current_board.update_column(:preset_origin, nil) if current_board.preset_origin.present?
             end
 
-            reordered = current_board.board_columns.reload.with_tasks_count.order(:position)
+            reordered = current_board.board_columns.reload.with_tasks_count.includes(column_workflow_binding: :workflow)
+                                     .order(:position)
             render json: reordered.map { |c| BoardColumnResource.new(c).to_h }
           end
 

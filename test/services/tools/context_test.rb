@@ -66,6 +66,26 @@ class Tools::ContextTest < ActiveSupport::TestCase
     assert_no_queries { assert_not ctx.connected?(:slack) }
   end
 
+  test "repository_providers lists the attached repositories' providers in one memoized query" do
+    github = create(:integration, company: @company, connected_by: @user, status: :active)
+    azure = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.repositories << create(:repository, integration: github, scope: @project)
+    session.repositories << create(:repository, :azure_devops, integration: azure, scope: @project)
+    session.repositories << create(:repository, :public_source, full_name: "torvalds/linux",
+      scope: @project, clone_url: "https://github.com/torvalds/linux.git")
+    ctx = Tools::Context.for_session(session)
+
+    assert_queries_count(1) { assert_equal Set["github", "azure_devops"], ctx.repository_providers }
+    assert_no_queries { ctx.repository_providers }
+  end
+
+  test "repository_providers is empty without a session" do
+    ctx = Tools::Context.new(project: @project, company: @company)
+
+    assert_no_queries { assert_empty ctx.repository_providers }
+  end
+
   test "for_session carries session mode and type" do
     session = create(:terminal_session, user: @user, project: @project,
                      session_type: "workflow_step", mode: "non_interactive",

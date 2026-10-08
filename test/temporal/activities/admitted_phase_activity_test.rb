@@ -25,8 +25,12 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   end
 
   def stub_exec_raising(error)
-    strategy = mock("strategy")
-    strategy.stubs(:exec).raises(error)
+    stub_exec { raise error }
+  end
+
+  def stub_exec(&behaviour)
+    strategy = Object.new
+    strategy.define_singleton_method(:exec) { |**| behaviour.call }
     @session.stubs(:strategy).returns(strategy)
     SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
     @admission.stubs(:terminal_session).returns(@session)
@@ -66,8 +70,9 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   test "a failure that may have reached the runtime is recorded as uncertain" do
     stub_exec_raising(Errno::ECONNRESET.new("connection reset by peer"))
 
-    assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
 
+    assert_equal TemporalExceptions::UNSPECIFIED, error.category
     assert_equal "uncertain", @admission.session_runtime_operations.find_by(phase: "exec").state
     # Recorded, but not a lien on the pool: an exec can only act inside a
     # container, and release is reached only once that container is provably
@@ -75,6 +80,35 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     # test below.
     SessionAdmissionService.release!(@admission)
     assert @admission.reload.released_at
+  end
+
+  test "a login the user has to renew is raised as an expected error" do
+    credential = create(:agent_credential, :errored, user: @session.user)
+    stub_exec_raising(AgentCredential::PreflightError.new(credential))
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert_equal TemporalExceptions::BENIGN, error.category
+  end
+
+  test "a phase that breaks after a stop was requested is filed with the stop" do
+    admission = @admission
+    stub_exec do
+      admission.update_column(:stop_requested_at, Time.current)
+      raise "Could not write the session's prompt into the container"
+    end
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert_equal TemporalExceptions::BENIGN, error.category
+  end
+
+  test "a cancelled activity is raised as an expected error" do
+    stub_exec_raising(Temporalio::Error::CanceledError.new("Activity canceled"))
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert_equal TemporalExceptions::BENIGN, error.category
   end
 
   test "a definitive credential preflight failure is not left uncertain" do

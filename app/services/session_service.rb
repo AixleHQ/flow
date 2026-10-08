@@ -137,17 +137,25 @@ class SessionService
       session
     end
 
+    # Built first and admitted second, in separate transactions. Building renders
+    # the instructions and attaches every resolved resource, and doing that under
+    # the installation-wide writer lock stalled every other admission decision for
+    # up to 20 s (PALAD-AI-RAILS-2Z). The step_run row lock is what keeps a retried
+    # launch from building twice; the run is re-checked under the writer lock,
+    # which is where a cancel writes its stop marker.
     def create_for_workflow_step(step_run:)
-      session = nil
-      SessionAdmissionService.transaction do
-        step_run.workflow_run.lock!
+      session = ActiveRecord::Base.transaction do
         step_run.lock!
-        return step_run.terminal_session if step_run.terminal_session
-        raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
-        preflight_company_active!(step_run.workflow_run.project&.company)
-        session = build_for_workflow_step(step_run: step_run)
-        SessionAdmissionService.enqueue!(session)
+        step_run.terminal_session || begin
+          run = step_run.workflow_run
+          raise SessionAdmissionService::Stopped, "Workflow cancelled" if run.stop_requested_at || run.state == "cancelled"
+          preflight_company_active!(run.project&.company)
+          build_for_workflow_step(step_run: step_run)
+        end
       end
+      return session if session.session_admission
+
+      admit_step_session!(step_run, session)
       launch_session(session)
       session
     end
@@ -195,6 +203,19 @@ class SessionService
     end
 
     private
+
+    # A run stopped between the build and this point leaves a session nobody
+    # will launch; the cancel fan-out skips it, since it has no admission to close.
+    def admit_step_session!(step_run, session)
+      SessionAdmissionService.transaction do
+        step_run.workflow_run.lock!
+        SessionAdmissionService.enqueue!(session)
+      end
+    rescue SessionAdmissionService::Stopped
+      session.reload
+      session.cancel! if session.may_cancel?
+      raise
+    end
 
     def stop_admission_operations(session)
       return unless session.session_admission

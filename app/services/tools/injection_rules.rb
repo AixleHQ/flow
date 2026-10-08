@@ -17,19 +17,13 @@ module Tools
       coder_integration_connected: ->(ctx) { ctx.connected?(:coder) },
       # refresh_github_token — only sessions holding a GitHub clone carry the
       # one-hour installation token that can expire mid-run.
-      github_repositories_attached: lambda { |ctx|
-        ctx.session.present? &&
-          ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.github? }
-      },
+      github_repositories_attached: ->(ctx) { ctx.repository_providers.include?("github") },
       # azure_devops_* repository tools — every one of them takes a
       # `repository_id` that must already be attached to the session, so there
       # is nothing for them to act on without one. They are not offered in the
       # picker at all (TagCatalog marks the tag hidden and the tools are not
       # user_attachable): attaching an Azure repository IS the opt-in.
-      azure_repositories_attached: lambda { |ctx|
-        ctx.session.present? &&
-          ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.azure_devops? }
-      },
+      azure_repositories_attached: ->(ctx) { ctx.repository_providers.include?("azure_devops") },
       # azure_devops_* build tools, plus list_connections. These are scoped by
       # `integration_id` rather than by a repository, so the connection is the
       # only thing they need. Mirrors the Coder gating exactly. Azure Boards work

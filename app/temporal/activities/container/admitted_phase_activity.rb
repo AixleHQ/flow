@@ -66,7 +66,7 @@ module Activities
           return { "capacity_wait" => true }
         end
         record_failed_operation(operation, e)
-        raise TemporalExceptions.non_retryable(e)
+        raise TemporalExceptions.non_retryable(e, benign: expected_phase_failure?(admission, e.original_error))
       rescue SessionAdmissionService::Stopped, SessionAdmissionService::UncertainOperation => e
         # A stop somebody asked for is expected control flow, not a fault: they
         # closed the dialog or cancelled the run while a phase was in flight, and
@@ -76,10 +76,20 @@ module Activities
         raise TemporalExceptions.non_retryable(e, benign: deliberate_stop?(e))
       rescue StandardError => e
         record_failed_operation(operation, e)
-        raise TemporalExceptions.non_retryable(e)
+        # Wrapping hides a cancellation from the Sentry interceptor's own check.
+        raise TemporalExceptions.non_retryable(e, benign: Temporalio::Error.canceled?(e))
       end
 
       private
+
+      # A login the user has to renew is reported to them on the step, and a phase
+      # that breaks once a stop was requested is the container being torn down
+      # under it — the stop, not a fault. Cleanup never gets here: it sets the stop
+      # marker itself, so the marker would excuse every cleanup failure.
+      def expected_phase_failure?(admission, cause)
+        Temporalio::Error.canceled?(cause) || cause.is_a?(AgentCredential::PreflightError) ||
+          admission.reload.stop_requested_at.present?
+      end
 
       def deliberate_stop?(error)
         error.is_a?(SessionAdmissionService::Stopped) && !error.is_a?(SessionAdmissionService::StalePermit)

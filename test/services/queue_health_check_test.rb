@@ -152,6 +152,44 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     assert_empty QueueHealthCheck.problems(stats).grep(/reservations/)
   end
 
+  def admission_in_pool_of_one(admitted_at: nil, waiting_since: nil)
+    with_scope_defaults(project: 1)
+    session = create(:terminal_session, user: @user, project: @project)
+    admission = SessionAdmissionService.enqueue!(session)
+    SessionAdmissionService.drain!
+    admission.reload
+    admission.update_columns(admitted_at: admitted_at) if admitted_at
+    admission.update_columns(created_at: waiting_since) if waiting_since
+    admission
+  end
+
+  # The production shape of PALAD-AI-RAILS-39: one project's pool at its cap,
+  # sessions finishing and the next one granted each time, the oldest wait
+  # reported as an error every minute all the same.
+  test "a long wait in a pool that keeps granting slots is not reported" do
+    admission_in_pool_of_one(admitted_at: 5.minutes.ago)
+    admission_in_pool_of_one(waiting_since: 2.hours.ago)
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_operator stats[:oldest_admission_wait_seconds], :>=, 2.hours.to_i
+    assert_empty stats[:stalled_pools]
+    assert_empty QueueHealthCheck.problems(stats)
+    assert_empty QueueHealthCheck.warnings(stats)
+  end
+
+  test "a pool that has granted nothing while a session waited is a warning, not an error" do
+    admission_in_pool_of_one(admitted_at: 3.hours.ago)
+    admission_in_pool_of_one(waiting_since: 40.minutes.ago)
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_equal [ { key: "project:#{@project.id}", limit: 1, occupied: 1 } ],
+                 stats[:stalled_pools].map { |pool| pool.slice(:key, :limit, :occupied) }
+    assert_empty QueueHealthCheck.problems(stats)
+    assert_match(/pool project:#{@project.id} has granted no slot/, QueueHealthCheck.warnings(stats).sole)
+  end
+
   test "call returns the snapshot it reported" do
     run_pending_since(20.minutes.ago, relay_state: "dispatched")
 
