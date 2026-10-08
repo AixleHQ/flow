@@ -648,6 +648,45 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_includes session.input_assets, asset
   end
 
+  test "create_for_workflow_step builds the session before it takes the admission writer lock" do
+    mock_temporal_start
+    step_run = workflow_step_run
+    statements = []
+    record = ->(*, payload) { statements << payload[:sql] }
+
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") do
+      SessionService.create_for_workflow_step(step_run: step_run)
+    end
+
+    insert = statements.index { |sql| sql.start_with?('INSERT INTO "terminal_sessions"') }
+    writer_lock = statements.index { |sql| sql.include?('FROM "session_admission_policies"') && sql.include?("FOR UPDATE") }
+    assert_operator insert, :<, writer_lock, "the session must be built before the installation-wide lock is taken"
+  end
+
+  test "a retried launch queues the session an earlier attempt built but never admitted" do
+    mock_temporal_start
+    step_run = workflow_step_run
+    built = SessionService.build_for_workflow_step(step_run: step_run)
+
+    session = assert_no_difference(-> { TerminalSession.count }) do
+      SessionService.create_for_workflow_step(step_run: step_run)
+    end
+
+    assert_equal built, session
+    assert session.session_admission.present?
+  end
+
+  test "a run stopped after its step session was built cancels that session instead of queueing it" do
+    step_run = workflow_step_run
+    built = SessionService.build_for_workflow_step(step_run: step_run)
+    step_run.workflow_run.update!(stop_requested_at: Time.current)
+
+    assert_raises(SessionAdmissionService::Stopped) { SessionService.create_for_workflow_step(step_run: step_run) }
+
+    assert_equal "cancelled", built.reload.state
+    assert_nil built.session_admission
+  end
+
   # == preflight_oauth! with near-expiry token refresh ==
 
   test "preflight_oauth! calls refresh_if_expiring_soon for a token expiring within PRE_START_SKEW" do
@@ -683,5 +722,14 @@ class SessionServiceTest < ActiveSupport::TestCase
     Oauth::TokenService.expects(:fresh).never
 
     SessionService.send(:preflight_oauth!, @user, [ server.id ])
+  end
+
+  private
+
+  def workflow_step_run
+    workflow = create(:workflow, scope: @project)
+    step = create(:step, workflow: workflow, instructions: "Do the thing")
+    workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    create(:step_run, workflow_run: workflow_run, step: step)
   end
 end
