@@ -61,6 +61,12 @@ module Agents
       end
     end
 
+    test "reads the block a refused CLI blanks as a refused login, and a rotation as none" do
+      assert @adapter.refused_login?({ "claudeAiOauth" => { "accessToken" => "", "refreshToken" => "", "expiresAt" => 0 } })
+      refute @adapter.refused_login?({ "claudeAiOauth" => { "accessToken" => "at", "refreshToken" => "rt", "expiresAt" => 1 } })
+      refute @adapter.refused_login?({ "designOauth" => { "accessToken" => "" } }), "an add-on is not the login"
+    end
+
     # The pane is read every minute while the agent works on whatever codebase it was given.
     test "does not take an agent's own talk about logins for the banner" do
       [ "grep -rn 'Login expired' app/", "the user must run /login again", "invalid_grant handling in auth.rb" ].each do |line|

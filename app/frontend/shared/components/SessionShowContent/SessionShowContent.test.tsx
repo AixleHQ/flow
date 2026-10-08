@@ -65,6 +65,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     pendingArtifactsCount: 0,
     sessionLogsCount: 0,
     cloudConnectRequested: false,
+    authNotice: null,
     ...overrides,
   };
 }
@@ -139,6 +140,37 @@ describe('SessionShowContent', () => {
     expect(screen.getByText('A repository did not clone')).toBeInTheDocument();
     expect(screen.getByText('acme/api')).toBeInTheDocument();
     expect(screen.getByText(/Integration not active/)).toBeInTheDocument();
+  });
+
+  it('says the login was refused and links to signing in again', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          authNotice: { state: 'expired', agentType: 'claude_code', at: '2026-10-08T10:00:00Z' },
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByRole('alert', { name: 'The Claude Code login was refused' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in again' })).toHaveAttribute(
+      'href',
+      '/profile?authenticate=claude_code',
+    );
+  });
+
+  it('tells the person the login is back, since nothing is typed into their session', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          authNotice: { state: 'renewed', agentType: 'claude_code', at: '2026-10-08T10:05:00Z' },
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByRole('alert', { name: 'Login renewed' })).toHaveTextContent(/Send your last message again/);
+    expect(screen.queryByText(/login was refused/)).not.toBeInTheDocument();
   });
 
   it('names cluster capacity as the reason when that is what it is', () => {

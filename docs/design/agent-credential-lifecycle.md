@@ -466,6 +466,14 @@ deleted container took the work with it.
 - **Waiting for the owner.** A grant the vendor refuses condemns the credential, which sends
   the existing mail, and the step waits. The run page links to signing in again. A re-login
   replaces the refresh token, which fans out and resumes every paused holder.
+- **Interactive sessions.**
+  - The pane scan never reads them: it would cost an exec into every open session every
+    minute. They are paused off the write-back instead. A refused CLI blanks its own block,
+    the watcher posts it within seconds, and `ClaudeCodeAdapter#refused_login?` recognises it.
+  - Nothing is typed into them, because a person may be typing there.
+  - The session page says "The Claude Code login was refused" while the session waits, then
+    "Login renewed — send your last message again" once a working grant has been delivered.
+  - Checked live: the CLI took the delivered token on the next message, with no `/login`.
 - **Giving up.** `AGENT_AUTH_PAUSE_LIMIT_MINUTES` (720) bounds the wait. After it, the session
   fails as before, as `auth_expired`.
 - **Checked live (2026-10-08).**

@@ -77,6 +77,23 @@ class TerminalSessionResource < ApplicationResource
     viewable_for?(session) ? session.context_metadata : nil
   end
 
+  # A refused agent login, then its renewal (Sessions::AuthPause). An interactive session is
+  # never typed into, so this is how its person learns the login is back.
+  RENEWED_NOTICE_FOR = 30.minutes
+
+  typelize "{ state: 'expired' | 'renewed'; agentType: string; at: string } | null"
+  attribute :auth_notice do |session|
+    next nil unless session.active?
+
+    paused_at = session.metadata&.dig("auth_paused_at")
+    renewed_at = session.metadata&.dig("auth_renewed_at")
+    if paused_at.present?
+      { state: "expired", agent_type: session.agent_type, at: paused_at }
+    elsif renewed_at.present? && Time.zone.parse(renewed_at.to_s)&.after?(RENEWED_NOTICE_FOR.ago)
+      { state: "renewed", agent_type: session.agent_type, at: renewed_at }
+    end
+  end
+
   # The IDE's connection token stays with the owner: the IDE is theirs alone.
   typelize "Record<string, unknown> | null"
   attribute :metadata do |session|

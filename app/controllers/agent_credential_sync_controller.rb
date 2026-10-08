@@ -98,6 +98,8 @@ class AgentCredentialSyncController < ActionController::API
                                                            log_prefix: "AgentCredentialSync")
     return head :unprocessable_entity if captured.blank?
 
+    Sessions::AuthPause.new(session).login_refused! if credential.adapter.refused_login?(captured)
+
     # The same read-merge-write the cleanup path uses, under the same row lock. Rotations
     # only (BaseAdapter#merge_container_credentials): a token block the credential already
     # holds, fresher, same account, plausible expiry — never anything new.

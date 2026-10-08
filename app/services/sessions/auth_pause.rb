@@ -60,11 +60,38 @@ module Sessions
       self.class.paused?(session.reload) ? :paused : :resumed
     end
 
-    # The session's container holds a working login again. Types the prompt that sends the
-    # agent back to its task.
+    # The CLI in this session's container was refused its refresh and blanked its own
+    # credentials (AgentCredentialSyncController: the write-back of that blank block). Read
+    # off the write-back rather than the pane, so it reaches interactive sessions too without
+    # an exec into every one of them every minute.
+    def login_refused!
+      return if self.class.paused?(session)
+
+      pause!("The #{adapter_label} login was refused in this session")
+      credential = session_credential
+      return unless credential&.active?
+
+      # The stored grant still works (another holder renewed it, or only this copy was bad):
+      # hand it over. A dead one waits for its owner to sign in again.
+      TemporalService.start_workflow(
+        TemporalWorkflowRegistry.workflows["agent_credential_fan_out_workflow"],
+        { credential_id: credential.id, origin_session_id: nil },
+        id: "agent-credential-fan-out-#{credential.id}-#{SecureRandom.hex(6)}"
+      )
+    end
+
+    # The session's container holds a working login again. A workflow step is sent back to
+    # its task with a typed prompt. An interactive session is not typed into, because a person
+    # may be typing there; its page says the login was renewed instead.
     # @return [Boolean] whether the session was paused and has been resumed
     def resume!
       return false unless self.class.paused?(session)
+
+      if interactive_session?
+        unpause!(renewed: true)
+        log(:info, "login renewed")
+        return true
+      end
       return false unless nudge
 
       unpause!
@@ -120,6 +147,8 @@ module Sessions
 
     def pause!(banner)
       session.merge_jsonb!(:metadata, "auth_paused_at" => Time.current.iso8601, "auth_pause_reason" => banner)
+      session.remove_jsonb_keys!(:metadata, "auth_renewed_at")
+      announce
       run = session.step_run&.workflow_run
       run.pause! if run&.may_pause?
       log(:info, "paused: #{banner}")
@@ -181,8 +210,10 @@ module Sessions
       :resumed
     end
 
-    def unpause!
+    def unpause!(renewed: false)
       session.remove_jsonb_keys!(:metadata, *PAUSE_KEYS)
+      session.merge_jsonb!(:metadata, "auth_renewed_at" => Time.current.iso8601) if renewed
+      announce
       run = session.step_run&.workflow_run
       return unless run&.paused?
       return if run.step_runs.joins(:terminal_session).merge(TerminalSession.active.auth_paused).exists?
@@ -205,6 +236,19 @@ module Sessions
 
     def paused_at
       Time.zone.parse(session.metadata["auth_paused_at"].to_s) || Time.current
+    end
+
+    def interactive_session?
+      session.session_type != "workflow_step"
+    end
+
+    # The jsonb writes skip callbacks, so the session's page would not hear about them.
+    def announce
+      session.touch
+    end
+
+    def adapter_label
+      session.agent_type.to_s.titleize
     end
 
     def session_credential

@@ -170,6 +170,19 @@ module Sessions
       assert_equal "paused", @run.reload.state
     end
 
+    # A person may be typing there.
+    test "types nothing into an interactive session whose login is back, and says so on its page" do
+      session = create(:terminal_session, :running, session_type: "agent_session", user: @user, project: @project,
+                                                    company: @company, agent_type: "claude_code", container_id: "ctr-i")
+      session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
+
+      assert AuthPause.new(session, runtime: @runtime).resume!
+
+      refute_includes @runtime.execs, RESUME_PROMPT_TYPED
+      refute AuthPause.paused?(session.reload)
+      assert session.metadata["auth_renewed_at"].present?
+    end
+
     test "types nothing into a session that is not paused" do
       refute AuthPause.new(@session, runtime: @runtime).resume!
       refute_includes @runtime.execs, RESUME_PROMPT_TYPED

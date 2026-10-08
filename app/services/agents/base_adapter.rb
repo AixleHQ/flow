@@ -634,6 +634,12 @@ module Agents
       nil
     end
 
+    # Whether a write-back from the container is the CLI giving up on its login: the blank
+    # block it leaves after its refresh was refused.
+    def refused_login?(_captured)
+      false
+    end
+
     # Typed into a paused session once it holds a working login again.
     AUTH_RESUME_PROMPT = "Login renewed by Aixle. Continue the task from where you stopped."
 

@@ -109,6 +109,19 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_response :no_content
     assert_equal "error", @credential.reload.status
     assert_equal "rt-old", @credential.config_data.dig("claudeAiOauth", "refreshToken")
+    assert Sessions::AuthPause.paused?(@session.reload), "its page says the login has to be renewed"
+  end
+
+  # Only this container's copy was refused; the stored grant still works and is handed over.
+  test "a refused CLI with a working stored grant is handed that grant" do
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: @credential.id, origin_session_id: nil }, has_key(:id))
+                   .returns(ok: true)
+
+    post PATH, params: rotated_body(access_token: "", refresh_token: "", expires_at: Time.zone.at(0)), headers: headers
+
+    assert_response :no_content
+    assert Sessions::AuthPause.paused?(@session.reload)
   end
 
   test "an unchanged file is accepted and changes nothing" do

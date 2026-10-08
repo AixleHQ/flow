@@ -322,6 +322,14 @@ module Agents
 
     def base_refresh_blocks = BASE_OAUTH_BLOCKS
 
+    # Claude Code 2.1.281 blanks a block whose refresh was refused (accessToken "",
+    # refreshToken "", expiresAt 0) and then prints "Login expired".
+    def refused_login?(captured)
+      BASE_OAUTH_BLOCKS.any? do |block|
+        captured[block].is_a?(Hash) && captured[block].key?("accessToken") && captured[block]["accessToken"].blank?
+      end
+    end
+
     def merge_refreshed_credentials(current, incoming)
       merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
       OAUTH_BLOCKS.each do |block|
