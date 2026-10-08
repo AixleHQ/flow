@@ -174,7 +174,7 @@ class Tool < ApplicationRecord
 
     rows = not_deleted.code_source.where(name: names).to_a
     if (names - rows.map(&:name)).any?
-      Tools::Reconciler.run!
+      Tools::Reconciler.materialize!
       rows = not_deleted.code_source.where(name: names).to_a
     end
     rows

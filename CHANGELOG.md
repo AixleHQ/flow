@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Integrations**: agents get the Slack/Teams message tools (`chat_post_message`
+  and the rest) and the Azure DevOps pull request tools again; a rolling
+  deploy could leave them switched off, so runs started from Slack could not
+  answer in the thread.
+
 ## [1.0.0] - 2026-10-08
 
 The first tagged release. The list below is everything Aixle Flow does as of
