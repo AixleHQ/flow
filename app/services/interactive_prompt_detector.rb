@@ -2,12 +2,12 @@
 
 # InteractivePromptDetector
 #
-# Finds CLI startup prompts in live terminal output that a `non_interactive`
-# session can never answer. Such a session does not fail and does not finish: the
-# CLI sits on a TTY dialog, the terminal produces no further bytes, the step stays
-# `running` and the terminal session stays `ready` on zero tokens until a human
+# Finds CLI prompts — at startup or mid-tool-call — in live terminal output that a
+# `non_interactive` session can never answer. Such a session does not fail and does
+# not finish: the CLI sits on a TTY dialog, the terminal produces no further bytes,
+# the step stays `running` and the terminal session stays `ready` until a human
 # notices (task #605 — Codex's workspace-trust dialog wedged run 3190 / step run
-# 3476 / session 3834 for ~52 minutes).
+# 3476 / session 3834 for ~52 minutes on zero tokens).
 #
 # Detection is deliberately conservative, because the action it triggers is
 # destructive. Two independent conditions have to hold:
@@ -63,6 +63,40 @@ class InteractivePromptDetector
                "session cannot answer. Trust is granted both on the launch command " \
                "(Agents::CodexAdapter#cli_trust_flag) and by the [projects.\"<workspace>\"] " \
                "entry in ~/.codex/config.toml — both were missing for this container."
+    },
+    {
+      # Claude Code 2.1.287+ shows this when an MCP server (2025-11-25 protocol) asks
+      # the user to open a link mid-tool-call, typically to sign in; 2.1.274 declined
+      # such requests on its own. It has no timeout: the tool call waits for a person.
+      id: :claude_mcp_url_prompt,
+      agent_types: %w[claude_code],
+      markers: [
+        /MCP server\s[\s\S]{1,120}?\swants to open a URL/,
+        /Accept\s+Decline/
+      ],
+      footer: %r{\A\s*Esc to cancel · ←/→ to switch\z},
+      message: "Claude Code is blocked on an MCP server's URL prompt " \
+               '("MCP server … wants to open a URL"), which a non_interactive session ' \
+               "cannot answer: the server asked a person to open a link, usually to sign " \
+               "in, and the tool call waits for Accept or Decline. Sign in to that MCP " \
+               "server outside the step, or run the step interactively."
+    },
+    {
+      # The form variant of the same MCP elicitation (2.1.294 renders it; 2.1.274
+      # declined it on its own). The footer's hints depend on the fields, so only its
+      # fixed start is matched.
+      id: :claude_mcp_input_form,
+      agent_types: %w[claude_code],
+      markers: [
+        /MCP server\s[\s\S]{1,120}?\srequests your input/,
+        /Accept\s+Decline/
+      ],
+      footer: %r{\A\s*Esc to cancel · ↑/↓ to navigate\b},
+      message: "Claude Code is blocked on an MCP server's input form " \
+               '("MCP server … requests your input"), which a non_interactive session ' \
+               "cannot fill in: the tool call waits for a person to Accept or Decline. " \
+               "Give the MCP server what it asks for in its configuration, or run the " \
+               "step interactively."
     }
   ].freeze
 
