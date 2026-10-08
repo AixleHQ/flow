@@ -74,6 +74,53 @@ class ChangelogTest < ActiveSupport::TestCase
     assert_match(/no ## \[2.0.0\]/, assert_raises(Changelog::Error) { released.notes("2.0.0") }.message)
   end
 
+  test "releases are the non-empty sections, with each entry split from its product area" do
+    released = Changelog.new(<<~MD).releases
+      # Changelog
+
+      ## [Unreleased]
+
+      ## [1.0.0] - 2026-10-08
+
+      The first tagged release.
+
+      ### Added
+      - **Workflows**: version history, kept
+        for every save.
+      - Apache License 2.0.
+
+      ### Removed
+      For deployments that ran a build from before this release:
+      - `RAILS_PORT`.
+
+      [Unreleased]: https://github.com/AixleHQ/flow/compare/v1.0.0...develop
+      [1.0.0]: https://github.com/AixleHQ/flow/releases/tag/v1.0.0
+    MD
+
+    assert_equal [ {
+      version: "1.0.0",
+      date: "2026-10-08",
+      url: "https://github.com/AixleHQ/flow/releases/tag/v1.0.0",
+      summary: "The first tagged release.",
+      changes: [
+        { kind: "Added", note: nil, entries: [
+          { area: "Workflows", text: "version history, kept for every save." },
+          { area: nil, text: "Apache License 2.0." }
+        ] },
+        { kind: "Removed", note: "For deployments that ran a build from before this release:",
+          entries: [ { area: nil, text: "`RAILS_PORT`." } ] }
+      ]
+    } ], released
+  end
+
+  test "unreleased changes are listed first, without a date" do
+    unreleased = Changelog.new(BEFORE_FIRST_RELEASE).releases.first
+
+    assert_equal "Unreleased", unreleased[:version]
+    assert_nil unreleased[:date]
+    assert_equal %w[Added Fixed], unreleased[:changes].pluck(:kind)
+  end
+
   test "every product area an entry names is one the changelog taxonomy defines" do
     areas = Rails.root.join("docs/product/changelog-product-areas.md").read.scan(/^\| \*\*([^*]+)\*\* \|/).flatten
     named = Rails.root.join("CHANGELOG.md").read.scan(/^- \*\*([^*]+)\*\*:/).flatten.uniq
@@ -86,5 +133,6 @@ class ChangelogTest < ActiveSupport::TestCase
 
     assert_kind_of String, changelog.notes("Unreleased")
     changelog.released_versions.each { |version| assert_match Changelog::VERSION, version }
+    assert_includes changelog.releases.pluck(:version), changelog.released_versions.first
   end
 end

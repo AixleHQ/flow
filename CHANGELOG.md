@@ -13,7 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Docs**: a changelog page at `/changelog`, linked next to Docs and API in
+  the docs header and from the landing page, lists every release by product
+  area. It reads `CHANGELOG.md` from the public repository, and the copy the
+  installation shipped with when GitHub cannot be reached.
+
 ### Changed
+- **Sign-in & onboarding**: an AWS Marketplace installation opens sign-in, or
+  the projects page for someone already signed in, instead of the landing
+  page.
 - **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.294, Codex 0.161.0,
   Gemini CLI 0.60.0 and Grok 1.0.46, and Cursor CLI (2026.10.01-e373342) and
   Kiro CLI (2.28.0) are now pinned like the others instead of installing the
@@ -30,6 +39,10 @@ governance, community health — carry none.
   that were already running with no Stripe customer are marked managed.
 
 ### Fixed
+- **Docs**: the GitHub star count in the docs header is the repository's real
+  one instead of a fixed number.
+- **Docs**: the navigation menu on a phone lists the docs pages again; it
+  opened empty.
 - **Integrations**: agents get the Slack/Teams message tools (`chat_post_message`
   and the rest) and the Azure DevOps pull request tools again; a rolling
   deploy could leave them switched off, so runs started from Slack could not

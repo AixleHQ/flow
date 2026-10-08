@@ -29,6 +29,22 @@ class Changelog
     sections.filter_map { |title, _| title[/\A## \[(\d[^\]]*)\]/, 1] }
   end
 
+  # The sections with anything in them, newest first, as /changelog shows them:
+  # a release's opening text, then its changes by kind, each entry split from
+  # the product area it leads with.
+  def releases
+    targets = text[LINKS].to_s.scan(/^\[([^\]]+)\]: (\S+)$/).to_h
+
+    sections.filter_map do |title, body|
+      version, date = title.match(/\A## \[([^\]]+)\](?: - (\S+))?/)&.captures
+      next if version.nil? || body.strip.empty?
+
+      summary, *groups = body.split(/^(?=### )/)
+      { version:, date:, url: targets[version], summary: summary.strip,
+        changes: groups.map { |group| changes(group) } }
+    end
+  end
+
   # Moves everything under [Unreleased] into a dated section and points the
   # link references at the new tag.
   def release(version, date:)
@@ -45,6 +61,28 @@ class Changelog
 
   def sections
     text.sub(LINKS, "").split(/^(?=## )/).drop(1).map { |chunk| chunk.split("\n", 2).then { |title, rest| [ title, rest.to_s ] } }
+  end
+
+  # A `### Kind` block: list items, their wrapped continuation lines, and any
+  # plain line around them as the block's note.
+  def changes(group)
+    heading, rest = group.split("\n", 2)
+    note = []
+    entries = []
+    rest.to_s.each_line do |line|
+      if line.start_with?("- ") then entries << [ line.delete_prefix("- ").strip ]
+      elsif entries.any? && line.match?(/\A\s+\S/) then entries.last << line.strip
+      elsif !line.strip.empty? then note << line.strip
+      end
+    end
+
+    { kind: heading.delete_prefix("###").strip, note: note.empty? ? nil : note.join(" "),
+      entries: entries.map { |lines| entry(lines.join(" ")) } }
+  end
+
+  def entry(text)
+    area, rest = text.match(/\A\*\*([^*]+)\*\*:\s*(.*)\z/m)&.captures
+    area ? { area:, text: rest } : { area: nil, text: }
   end
 
   def links(version, previous)

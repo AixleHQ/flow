@@ -13,6 +13,10 @@ class Web::HomeController < Web::ApplicationController
   before_action { request.content_security_policy_nonce_directives = [] }
 
   def show
+    # A Marketplace buyer already owns the product, so there is nothing for the
+    # landing page to sell them.
+    return redirect_to(signed_in? ? company_projects_path : login_path) if Deployment.aws_marketplace?
+
     if request.path == "/"
       render html: "", layout: "web/landing"
     elsif signed_in? && current_user.super_admin?

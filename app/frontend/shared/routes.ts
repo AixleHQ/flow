@@ -1157,6 +1157,11 @@ export function docsPagePath(slug: ScalarType[], options?: object): string {
   return "/" + "docs" + "/" + slug.map((part) => $encode(part)).join("/") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /changelog(.:format) */
+export function changelogPath(options?: object): string {
+  return "/" + "changelog" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /how-it-works(.:format) */
 export function howItWorksPath(options?: object): string {
   return "/" + "how-it-works" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

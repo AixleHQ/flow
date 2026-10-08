@@ -1,0 +1,321 @@
+.main {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--app-bg-default);
+}
+
+.inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 56px 40px 120px;
+}
+
+/* ─── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  max-width: 640px;
+  margin-bottom: 56px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--app-primary-strong);
+}
+
+.title {
+  margin: 0 0 14px;
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--app-text-primary);
+}
+
+.lead {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--app-text-secondary);
+}
+
+.lead a {
+  color: var(--app-primary-strong);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(224, 88, 46, 0.35);
+  transition: border-color 0.15s;
+}
+
+.lead a:hover {
+  border-color: var(--mantine-color-brand-4);
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--app-text-secondary);
+  text-decoration: none;
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
+  border-radius: 4px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.sourceLink:hover {
+  color: var(--app-text-primary);
+  border-color: var(--app-border-strong);
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--app-text-tertiary);
+}
+
+/* ─── Release ─────────────────────────────────────────────────────────────── */
+
+.release {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  column-gap: 48px;
+  scroll-margin-top: 24px;
+}
+
+.releaseMeta {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  padding-bottom: 24px;
+}
+
+.version {
+  margin: 0;
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--app-text-primary);
+}
+
+.date {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.badge {
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+
+.badge[data-tone='brand'] {
+  color: var(--app-primary-strong);
+  background: rgba(224, 88, 46, 0.1);
+  border-color: rgba(224, 88, 46, 0.28);
+}
+
+.badge[data-tone='success'] {
+  color: var(--app-success-fg);
+  background: var(--app-success-bg);
+  border-color: var(--app-success-border);
+}
+
+.badge[data-tone='neutral'] {
+  color: var(--app-text-secondary);
+  background: var(--app-bg-elevated);
+  border-color: var(--app-border-default);
+}
+
+.releaseLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--app-text-tertiary);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.releaseLink:hover {
+  color: var(--app-primary-strong);
+}
+
+/* The rail runs down every release body; the dot marks where a release starts. */
+.releaseBody {
+  position: relative;
+  padding: 2px 0 64px 32px;
+  border-left: 1px solid var(--app-bg-elevated);
+}
+
+.releaseBody::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: -6px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--app-bg-default);
+  border: 2px solid var(--app-border-strong);
+}
+
+.release[data-latest] .releaseBody::before {
+  background: var(--app-primary);
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 4px rgba(224, 88, 46, 0.15);
+}
+
+.release:last-child .releaseBody {
+  padding-bottom: 0;
+}
+
+.releaseBody p,
+.releaseBody ul {
+  max-width: 68ch;
+}
+
+/* ─── Changes ─────────────────────────────────────────────────────────────── */
+
+.change + .change {
+  margin-top: 36px;
+}
+
+.kind {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid;
+  border-radius: 4px;
+}
+
+.kind[data-tone='success'] {
+  color: var(--app-success-fg);
+  background: var(--app-success-bg);
+  border-color: var(--app-success-border);
+}
+
+.kind[data-tone='info'] {
+  color: var(--app-info-fg);
+  background: var(--app-info-bg);
+  border-color: var(--app-info-border);
+}
+
+.kind[data-tone='tip'] {
+  color: var(--app-tip-fg);
+  background: var(--app-tip-bg);
+  border-color: var(--app-tip-border);
+}
+
+.kind[data-tone='warning'] {
+  color: var(--app-warning-fg);
+  background: var(--app-warning-bg);
+  border-color: var(--app-warning-border);
+}
+
+.kind[data-tone='danger'] {
+  color: var(--app-danger-fg);
+  background: var(--app-danger-bg);
+  border-color: var(--app-danger-border);
+}
+
+.kind[data-tone='neutral'] {
+  color: var(--app-text-secondary);
+  background: var(--app-bg-elevated);
+  border-color: var(--app-border-default);
+}
+
+.note p {
+  margin-bottom: 14px;
+  font-style: italic;
+  color: var(--app-text-tertiary);
+}
+
+.areaTitle {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+}
+
+.area ul {
+  margin-bottom: 16px;
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .inner {
+    padding: 40px 24px 96px;
+  }
+
+  .release {
+    grid-template-columns: 150px minmax(0, 1fr);
+    column-gap: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .inner {
+    padding: 28px 16px 72px;
+  }
+
+  .header {
+    margin-bottom: 36px;
+  }
+
+  .title {
+    font-size: 30px;
+  }
+
+  .release {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .releaseMeta {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    padding-bottom: 16px;
+  }
+
+  .date,
+  .badges,
+  .releaseLink {
+    margin-top: 0;
+  }
+
+  .releaseBody {
+    padding: 0 0 48px 20px;
+  }
+}

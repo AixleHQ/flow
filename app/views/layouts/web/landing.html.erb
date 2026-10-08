@@ -831,6 +831,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
         <span class="flyout">
           <span class="flyout-eyebrow">Develop</span>
           <a href="<%= docs_path %>" target="_blank" rel="noopener">Documentation</a>
+          <a href="<%= changelog_path %>" target="_blank" rel="noopener">Changelog</a>
           <a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a>
           <span class="flyout-eyebrow">Ecosystem</span>
           <a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a>
@@ -858,6 +859,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
     <button onclick="go('compare')">Compare</button>
     <button onclick="go('opensource')">Open source</button>
     <button onclick="window.open('<%= docs_path %>','_blank');openSheet(false)">Docs</button>
+    <button onclick="window.open('<%= changelog_path %>','_blank');openSheet(false)">Changelog</button>
     <button onclick="window.location.href='<%= login_path %>'">Log in</button>
   </div>
   <button class="btn btn-primary sheet-cta" onclick="go('contact')">Get in touch</button>
@@ -1600,7 +1602,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
         <h3>One governed surface for agents, people, and the work between them.</h3>
       </div>
       <div class="footer-col"><h4>Product</h4><a href="#" onclick="go('what');return false">How we fill the gap</a><a href="#" onclick="go('how');return false">How it works</a><a href="#" onclick="go('fits');return false">Where it fits</a><a href="#" onclick="go('handoffs');return false">Handoffs</a><a href="#" onclick="go('compare');return false">Compare</a><a href="#" onclick="go('opensource');return false">Open source</a></div>
-      <div class="footer-col"><h4>Resources</h4><a href="<%= docs_path %>" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a><a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a><a href="#" onclick="go('contact');return false">Get in touch</a></div>
+      <div class="footer-col"><h4>Resources</h4><a href="<%= docs_path %>" target="_blank" rel="noopener">Documentation</a><a href="<%= changelog_path %>" target="_blank" rel="noopener">Changelog</a><a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a><a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a><a href="#" onclick="go('contact');return false">Get in touch</a></div>
     </div>
     <div class="footer-bottom">
       <span>© Aixle 2026 · Apache 2.0</span>

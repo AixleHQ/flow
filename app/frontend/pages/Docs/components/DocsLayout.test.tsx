@@ -86,4 +86,18 @@ describe('Docs/components/DocsLayout', () => {
     expect(screen.queryByRole('navigation', { name: 'Table of contents' })).not.toBeInTheDocument();
     expect(screen.getByText('Body without toc')).toBeInTheDocument();
   });
+
+  it('marks API as the current section on the API guide, and Docs everywhere else', () => {
+    const { unmount } = renderPage(
+      <DocsLayout slug="api-guide" title="API" section="Reference" toc={[]}>
+        <p>API body</p>
+      </DocsLayout>,
+    );
+    const sections = () => screen.getByRole('navigation', { name: 'Site sections' });
+    expect(within(sections()).getByRole('link', { name: 'API' })).toHaveAttribute('aria-current', 'page');
+    unmount();
+
+    renderLayout();
+    expect(within(sections()).getByRole('link', { name: 'Docs' })).toHaveAttribute('aria-current', 'page');
+  });
 });
