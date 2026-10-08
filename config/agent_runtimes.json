@@ -9,7 +9,7 @@
       "description": "Anthropic's AI coding assistant with deep reasoning capabilities",
       "image": "claude-code",
       "dockerfile": "docker/claude-code/Dockerfile",
-      "cli_version": "2.1.293",
+      "cli_version": "2.1.294",
       "cli_latest": { "url": "https://downloads.claude.ai/claude-code-releases/latest" },
       "cli_releases": { "github": "anthropics/claude-code", "tag_prefix": "v" }
     },
