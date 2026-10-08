@@ -20,29 +20,47 @@ class AgentCredentialSyncController < ActionController::API
   # stops a compromised container from posting a body big enough to matter.
   MAX_BODY_BYTES = 256 * 1024
 
+  before_action :authenticate_container
+
   def create
+    files = permitted_files(@credential.adapter)
+    return head :unprocessable_entity if files.blank?
+
+    persist(@session, @credential, files)
+  end
+
+  # A refresh the CLI was about to send to its vendor, handed over by the in-container proxy
+  # (Agents::RefreshBroker). No content: the proxy sends the original request on.
+  def refresh
+    result = Agents::RefreshBroker.new(@credential, session: @session)
+                                  .call(url: params[:url], body: params[:token_request], content_type: params[:content_type])
+    return head :no_content unless result.serve?
+
+    render json: { status: result.status, content_type: "application/json", body: result.body }
+  rescue StandardError => e
+    Rails.logger.error("[AgentCredentialSync] session=#{@session.id} credential=#{@credential.id} refresh failed: " \
+                       "#{e.class}: #{e.message}")
+    head :no_content
+  end
+
+  private
+
+  def authenticate_container
     return head :content_too_large if request.content_length.to_i > MAX_BODY_BYTES
 
-    session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
-    return unauthorized unless session&.active?
-    return unauthorized unless Agents::SessionKey.valid?(session, request.headers["X-Agent-Key"])
-    return unauthorized unless session.owner_entitled?
+    @session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
+    return unauthorized unless @session&.active?
+    return unauthorized unless Agents::SessionKey.valid?(@session, request.headers["X-Agent-Key"])
+    return unauthorized unless @session.owner_entitled?
 
     # An auth_setup session is a login in progress: AgentAuthStrategy owns what it captures
     # and how (the design-login merge rules, the completion gate). A write-back racing that
     # would resurrect exactly the stale blocks it exists to drop.
-    return head :conflict if session.session_type == "auth_setup"
+    return head :conflict if @session.session_type == "auth_setup"
 
-    credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session.agent_type)
-    return head :not_found if credential.nil?
-
-    files = permitted_files(credential.adapter)
-    return head :unprocessable_entity if files.blank?
-
-    persist(session, credential, files)
+    @credential = SessionCompany.agent_credentials_for(@session).find_by(agent_type: @session.agent_type)
+    head :not_found if @credential.nil?
   end
-
-  private
 
   def unauthorized
     render json: { error: "unauthorized" }, status: :unauthorized
@@ -80,16 +98,20 @@ class AgentCredentialSyncController < ActionController::API
                                                            log_prefix: "AgentCredentialSync")
     return head :unprocessable_entity if captured.blank?
 
+    Sessions::AuthPause.new(session).login_refused! if credential.adapter.refused_login?(captured)
+
     # The same read-merge-write the cleanup path uses, under the same row lock. Rotations
     # only (BaseAdapter#merge_container_credentials): a token block the credential already
     # holds, fresher, same account, plausible expiry — never anything new.
-    changed = credential.with_lock do
-      current = credential.config_data
-      merged = credential.adapter.merge_container_credentials(current, captured)
-      next false if merged == current
+    changed = AgentCredential.rotating_for_session(session.id) do
+      credential.with_lock do
+        current = credential.config_data
+        merged = credential.adapter.merge_container_credentials(current, captured)
+        next false if merged == current
 
-      AgentCredential.from_artifacts(credential.user_id, credential.company_id, credential.agent_type, merged)
-      true
+        AgentCredential.from_artifacts(credential.user_id, credential.company_id, credential.agent_type, merged)
+        true
+      end
     end
 
     if changed

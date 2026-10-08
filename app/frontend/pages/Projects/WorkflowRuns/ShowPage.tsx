@@ -28,6 +28,7 @@ import {
   shareApiV1ProjectWorkflowRunWorkflowRunAssetPath,
 } from 'shared/routes';
 import {
+  agentLabel,
   ConsoleFrame,
   DetailHeader,
   LiveTerminal,
@@ -401,6 +402,27 @@ const WorkflowRunShowPage = () => {
               {run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ')}): each session ran the version saved when it
               started. Each session card names its version.
             </Text>
+          </Alert>
+        )}
+
+        {run.authPause && (
+          <Alert
+            icon={<IconAlertTriangle size={16} />}
+            color="yellow"
+            title={`Paused: the ${agentLabel(run.authPause.agentType)} login needs renewing`}
+            radius={0}
+          >
+            <Stack gap="xs">
+              <Text size="sm">
+                A step stopped because its agent&apos;s login was refused. Its session and its work are kept. Sign in
+                again and the step continues where it stopped.
+              </Text>
+              <Group gap="xs">
+                <Anchor size="xs" href={`/profile?authenticate=${encodeURIComponent(run.authPause.agentType)}`}>
+                  Sign in again
+                </Anchor>
+              </Group>
+            </Stack>
           </Alert>
         )}
 

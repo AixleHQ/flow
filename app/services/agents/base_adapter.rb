@@ -575,6 +575,78 @@ module Agents
       nil
     end
 
+    # == Refreshes brokered through the platform (Agents::RefreshBroker) ==
+    #
+    # On a laptop every CLI process shares one credentials file and refreshes under one
+    # lockfile, so a single-use refresh token is only ever spent once. Each container has
+    # its own file and its own lock, so two busy containers spend the same token and the
+    # loser is logged out. The in-container proxy therefore hands the CLI's refresh request
+    # to us, and the credential row is the lock.
+
+    # The token endpoints the CLI refreshes against, as "host/path". Empty: this runtime's
+    # refreshes go straight to the vendor.
+    def refresh_broker_endpoints
+      []
+    end
+
+    def refresh_broker_endpoint?(url)
+      uri = URI.parse(url.to_s)
+      refresh_broker_endpoints.include?("#{uri.host}#{uri.path}".downcase)
+    rescue URI::InvalidURIError
+      false
+    end
+
+    # The refresh token in a refresh request the CLI sent, or nil when it is some other grant.
+    def presented_refresh_token(body, content_type)
+      params = content_type.to_s.include?("json") ? JSON.parse(body.to_s) : URI.decode_www_form(body.to_s).to_h
+      return nil unless params.is_a?(Hash) && params["grant_type"] == "refresh_token"
+
+      params["refresh_token"].presence
+    rescue JSON::ParserError, ArgumentError
+      nil
+    end
+
+    # Every refresh token the credential holds, by the block that holds it.
+    # @return [Hash{String => String}]
+    def refresh_tokens(_credentials)
+      {}
+    end
+
+    # The vendor's token-endpoint answer for a stored block, served to a CLI on the
+    # vendor's behalf. nil when the block has nothing to serve.
+    def token_response(_block)
+      nil
+    end
+
+    # The blocks of the login the CLI cannot run without, for a refresh that must renew that
+    # login and nothing else (#refresh!'s `blocks:`). nil: the credential is one block.
+    def base_refresh_blocks
+      nil
+    end
+
+    # == Pausing on an expired login (Sessions::AuthPause) ==
+
+    # What the CLI prints when its login is gone and it is waiting for a person to sign in
+    # again. Narrower than AuthErrorDetector on purpose: this one is read from a live pane
+    # every minute, where the agent's own output (a codebase about OAuth) also appears.
+    # nil: sessions of this runtime are never paused, and fail as before.
+    def auth_banner_pattern
+      nil
+    end
+
+    # Whether a write-back from the container is the CLI giving up on its login: the blank
+    # block it leaves after its refresh was refused.
+    def refused_login?(_captured)
+      false
+    end
+
+    # Typed into a paused session once it holds a working login again.
+    AUTH_RESUME_PROMPT = "Login renewed by Aixle. Continue the task from where you stopped."
+
+    def auth_resume_prompt
+      AUTH_RESUME_PROMPT
+    end
+
     # Rotations only. Returns `current` unchanged unless every rule holds.
     def merge_container_credentials(current, incoming)
       keys = rotatable_credential_keys & current.keys & incoming.keys
@@ -628,12 +700,14 @@ module Agents
     # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
     #   refreshing. Only agents that store their own expiry (Claude, with a block per
     #   login) can honour it; single-block agents refresh whenever they are called.
-    def refresh!(credential, margin_ms: nil)
+    # @param blocks [Array<String>, nil] only these blocks, for an adapter that stores several
+    #   (Claude); nil for all of them.
+    def refresh!(credential, margin_ms: nil, blocks: nil)
       return NOT_REFRESHABLE unless server_refresh?
 
       outcome = credential.with_refresh_lease do
         stored = credential.encrypted_config_data
-        result = perform_refresh!(credential, margin_ms: margin_ms)
+        result = blocks ? perform_refresh!(credential, margin_ms: margin_ms, blocks: blocks) : perform_refresh!(credential, margin_ms: margin_ms)
         rotated_elsewhere?(credential, stored, result) ? ROTATED_ELSEWHERE : result.except(:persisted)
       end
       outcome == :busy ? REFRESH_BUSY : outcome

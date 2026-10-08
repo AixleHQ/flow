@@ -9,7 +9,9 @@ module Activities
     #
     # An interactive step is left alone, as the quota scanner leaves it: silence
     # is what one looks like while its person reviews the work, and whoever is
-    # watching can answer a dialog in the web terminal themselves.
+    # watching can answer a dialog in the web terminal themselves. So is a step
+    # waiting for its agent's login to be renewed: Sessions::AuthPause bounds that
+    # wait itself.
     class ScanNoOutputSessionsActivity < ::Activities::Base
       MIN_AGE = Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD + 1.minute
 
@@ -44,6 +46,7 @@ module Activities
           .where("mode IS NULL OR mode <> 'interactive'")
           .where.not(container_id: [ nil, "" ])
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
+          .where.not(id: TerminalSession.auth_paused.select(:id))
       end
 
       def runtime

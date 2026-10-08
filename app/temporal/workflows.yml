@@ -131,6 +131,12 @@ workflows:
       - name: agent_credentials_refresh_expiring_tokens_activity
         task_queue: aixle_ruby
 
+  - name: agent_credential_fan_out_workflow
+    owner: aixle_ruby
+    activities:
+      - name: agent_credentials_fan_out_activity
+        task_queue: aixle_ruby
+
   - name: oauth_token_refresh_workflow
     owner: aixle_ruby
     activities:

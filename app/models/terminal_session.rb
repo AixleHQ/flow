@@ -135,6 +135,8 @@ class TerminalSession < ApplicationRecord
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
+  # Waiting for its agent's login to be renewed (Sessions::AuthPause).
+  scope :auth_paused, -> { where("terminal_sessions.metadata->>'auth_paused_at' IS NOT NULL") }
   scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
   # Sessions `user` may be shown at all: their own, plus every session in a

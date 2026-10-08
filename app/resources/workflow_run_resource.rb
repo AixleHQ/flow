@@ -15,6 +15,13 @@ class WorkflowRunResource < ApplicationResource
     run.failed_agent_credential&.agent_type
   end
 
+  # A step whose agent is waiting for its login to be renewed (Sessions::AuthPause).
+  typelize "{ agentType: string; since: string } | null"
+  attribute :auth_pause do |run|
+    session = run.step_runs.filter_map(&:terminal_session).find { |s| s.active? && Sessions::AuthPause.paused?(s) }
+    session && { agent_type: session.agent_type, since: session.metadata["auth_paused_at"] }
+  end
+
   typelize :string?
   attribute :workflow_name do |run|
     run.workflow&.name

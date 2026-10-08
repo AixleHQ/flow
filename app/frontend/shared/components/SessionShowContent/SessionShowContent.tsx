@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -41,7 +42,15 @@ import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 import { ContainerFrame } from 'shared/ui/ContainerFrame';
-import { ConsoleFrame, DetailHeader, LiveTerminal, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
+import {
+  agentLabel,
+  ConsoleFrame,
+  DetailHeader,
+  LiveTerminal,
+  StatusTag,
+  type Crumb,
+  type HeaderStat,
+} from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';
@@ -510,6 +519,31 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       {header}
 
       <div className={isTerminal ? classes.body : `${classes.body} ${classes.bodyLive}`}>
+        {s.authNotice?.state === 'expired' && (
+          <Alert
+            color="yellow"
+            variant="light"
+            icon={<IconAlertTriangle size={16} />}
+            title={`The ${agentLabel(s.authNotice.agentType)} login was refused`}
+          >
+            <Stack gap={4}>
+              <Text size="sm">
+                The agent is waiting at its prompt and nothing is lost. Sign in again and this session gets the new
+                login by itself.
+              </Text>
+              <Anchor size="sm" href={`/profile?authenticate=${encodeURIComponent(s.authNotice.agentType)}`}>
+                Sign in again
+              </Anchor>
+            </Stack>
+          </Alert>
+        )}
+
+        {s.authNotice?.state === 'renewed' && (
+          <Alert color="green" variant="light" icon={<IconCheck size={16} />} title="Login renewed">
+            <Text size="sm">The agent has the new login. Send your last message again to carry on.</Text>
+          </Alert>
+        )}
+
         {s.failedRepositories.length > 0 && (
           <Alert
             color="orange"

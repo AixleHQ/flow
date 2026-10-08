@@ -510,6 +510,12 @@ agents:
   # send the report to whatever answers on `web` instead. Never a public host: the
   # request carries a per-session write-back key.
   credential_sync_url: <%= ENV['AGENT_CREDENTIAL_SYNC_URL'] || "#{internal_base}/agents/credentials" %>
+  # Where the in-container proxy hands a CLI's OAuth refresh (Agents::RefreshBroker). Same
+  # host and key as the write-back above.
+  credential_refresh_url: <%= ENV['AGENT_CREDENTIAL_REFRESH_URL'] || "#{internal_base}/agents/credentials/refresh" %>
+  # How long a session whose agent lost its login waits for it to be renewed before it is
+  # failed (Sessions::AuthPause). Bounded by the container's own 24 hours.
+  auth_pause_limit_minutes: <%= ENV['AGENT_AUTH_PAUSE_LIMIT_MINUTES'] || 720 %>
 
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>

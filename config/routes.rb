@@ -29,6 +29,7 @@ Rails.application.routes.draw do
   # longer takes the rotation with it. Authenticated by a derived per-session key
   # (Agents::SessionKey), like the two vending endpoints above.
   post "/agents/credentials", to: "agent_credential_sync#create"
+  post "/agents/credentials/refresh", to: "agent_credential_sync#refresh"
 
   # CSP violation report sink (report-only mode, M-16). Browsers POST here with
   # Content-Type application/csp-report; no session/CSRF token is sent.

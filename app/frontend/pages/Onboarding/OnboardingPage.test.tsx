@@ -70,6 +70,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   pendingArtifactsCount: 0,
   sessionLogsCount: 0,
   cloudConnectRequested: false,
+  authNotice: null,
   ...overrides,
 });
 

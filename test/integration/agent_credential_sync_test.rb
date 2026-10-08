@@ -90,6 +90,51 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_equal "rt-new", stored["refreshToken"]
   end
 
+  # The other containers still hold the refresh token this one just spent.
+  test "hands a token one container rotated to the others, not back to that container" do
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: @credential.id, origin_session_id: @session.id }, has_key(:id))
+                   .returns(ok: true)
+
+    post PATH, params: rotated_body, headers: headers
+  end
+
+  # Claude Code blanks the block it was refused on. That is no token, and taking it would
+  # read as a fresh login and lift the credential out of `error`.
+  test "ignores the blanked block a refused CLI writes" do
+    @credential.mark_refresh_error!("claudeAiOauth invalid_grant", permanent: true)
+
+    post PATH, params: rotated_body(access_token: "", refresh_token: "", expires_at: Time.zone.at(0)), headers: headers
+
+    assert_response :no_content
+    assert_equal "error", @credential.reload.status
+    assert_equal "rt-old", @credential.config_data.dig("claudeAiOauth", "refreshToken")
+    assert Sessions::AuthPause.paused?(@session.reload), "its page says the login has to be renewed"
+  end
+
+  # Only this container's copy was refused; the stored grant still works and is handed over.
+  test "a refused CLI with a working stored grant is handed that grant" do
+    TemporalService.expects(:start_workflow)
+                   .with(anything, { credential_id: @credential.id, origin_session_id: nil }, has_key(:id))
+                   .returns(ok: true)
+
+    post PATH, params: rotated_body(access_token: "", refresh_token: "", expires_at: Time.zone.at(0)), headers: headers
+
+    assert_response :no_content
+    assert Sessions::AuthPause.paused?(@session.reload)
+  end
+
+  # Found by editing a container's file by hand: the same expiry with another refresh token
+  # was taken as a rotation and handed to every other container.
+  test "does not take other tokens that claim the stored expiry" do
+    post PATH, params: rotated_body(access_token: "at-old", refresh_token: "rt-planted",
+                                    expires_at: Time.zone.at(@credential.expires_at)),
+               headers: headers
+
+    assert_response :no_content
+    assert_equal "rt-old", @credential.reload.config_data.dig("claudeAiOauth", "refreshToken")
+  end
+
   test "an unchanged file is accepted and changes nothing" do
     post PATH, params: rotated_body(access_token: "at-old", refresh_token: "rt-old",
                                     expires_at: Time.zone.at(@credential.expires_at)),

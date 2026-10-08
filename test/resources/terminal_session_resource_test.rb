@@ -80,6 +80,25 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
 
   # == shared sessions ==
 
+  # An interactive session is never typed into, so its page is where its person learns the
+  # login is gone and then back.
+  test "a session waiting for its login says so, then that the login was renewed" do
+    session = create(:terminal_session, :running, user: @user, project: @project, agent_type: "claude_code")
+    assert_nil payload(session)["authNotice"]
+
+    session.merge_jsonb!(:metadata, "auth_paused_at" => "2026-10-08T10:00:00Z")
+    assert_equal({ "state" => "expired", "agentType" => "claude_code", "at" => "2026-10-08T10:00:00Z" },
+                 payload(session)["authNotice"].stringify_keys)
+
+    session.remove_jsonb_keys!(:metadata, "auth_paused_at")
+    session.merge_jsonb!(:metadata, "auth_renewed_at" => 1.minute.ago.iso8601)
+    assert_equal "renewed", payload(session)["authNotice"].stringify_keys["state"]
+
+    travel(TerminalSessionResource::RENEWED_NOTICE_FOR + 1.minute) do
+      assert_nil payload(session)["authNotice"]
+    end
+  end
+
   test "someone the session is shared with gets the read-only terminal, no IDE and no IDE token" do
     colleague = create(:user, :employee, company: @user.companies.first)
     session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",

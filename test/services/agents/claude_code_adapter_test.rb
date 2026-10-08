@@ -12,6 +12,68 @@ module Agents
       @session = create(:terminal_session, :running, user: @user, project: @project)
     end
 
+    # == Refreshes handed to the platform (Agents::RefreshBroker) ==
+
+    test "brokers the endpoints Claude Code refreshes against, and nothing else" do
+      assert @adapter.refresh_broker_endpoint?("https://platform.claude.com/v1/oauth/token")
+      assert @adapter.refresh_broker_endpoint?("https://api.anthropic.com/v1/oauth/token")
+      refute @adapter.refresh_broker_endpoint?("https://api.anthropic.com/v1/messages")
+      refute @adapter.refresh_broker_endpoint?("not a url at all ::")
+    end
+
+    test "reads the refresh token from the CLI's JSON request and from a form" do
+      json = { grant_type: "refresh_token", refresh_token: "rt", client_id: "c", scope: "user:inference" }.to_json
+      form = URI.encode_www_form(grant_type: "refresh_token", refresh_token: "rt")
+
+      assert_equal "rt", @adapter.presented_refresh_token(json, "application/json")
+      assert_equal "rt", @adapter.presented_refresh_token(form, "application/x-www-form-urlencoded")
+      assert_nil @adapter.presented_refresh_token({ grant_type: "authorization_code", code: "x" }.to_json, "application/json")
+      assert_nil @adapter.presented_refresh_token("{not json", "application/json")
+    end
+
+    test "names every refresh token by the block that holds it" do
+      credentials = {
+        "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "rt-base" },
+        "designOauth" => { "accessToken" => "d", "refreshToken" => "rt-design" },
+        "primaryApiKey" => "sk-ant"
+      }
+
+      assert_equal({ "claudeAiOauth" => "rt-base", "designOauth" => "rt-design" }, @adapter.refresh_tokens(credentials))
+    end
+
+    test "answers for the vendor with a stored block, in the token endpoint's own shape" do
+      freeze_time do
+        block = { "accessToken" => "at", "refreshToken" => "rt", "expiresAt" => (2.hours.from_now.to_f * 1000).to_i,
+                  "scopes" => %w[user:inference user:profile] }
+
+        assert_equal({ "token_type" => "Bearer", "access_token" => "at", "refresh_token" => "rt",
+                       "expires_in" => 7_200, "scope" => "user:inference user:profile" }, @adapter.token_response(block))
+        assert_nil @adapter.token_response(block.except("refreshToken"))
+      end
+    end
+
+    # == Pausing on a refused login (Sessions::AuthPause) ==
+
+    test "recognises the banners Claude Code prints once its login is refused" do
+      [ "Login expired · Please run /login", "OAuth token revoked · Please run /login",
+        "Not logged in · Please run /login", "Please run /login · API Error: 401 {\"type\":\"error\"}" ].each do |banner|
+        assert_match @adapter.auth_banner_pattern, "  ⎿  #{banner}", banner
+      end
+    end
+
+    test "reads the block a refused CLI blanks as a refused login, and a rotation as none" do
+      assert @adapter.refused_login?({ "claudeAiOauth" => { "accessToken" => "", "refreshToken" => "", "expiresAt" => 0 } })
+      refute @adapter.refused_login?({ "claudeAiOauth" => { "accessToken" => "at", "refreshToken" => "rt", "expiresAt" => 1 } })
+      refute @adapter.refused_login?({ "designOauth" => { "accessToken" => "" } }), "an add-on is not the login"
+    end
+
+    # The pane is read every minute while the agent works on whatever codebase it was given.
+    test "does not take an agent's own talk about logins for the banner" do
+      [ "grep -rn 'Login expired' app/", "the user must run /login again", "invalid_grant handling in auth.rb" ].each do |line|
+        refute_match @adapter.auth_banner_pattern, line
+      end
+    end
+
     # == Paths ==
 
     test "config_path returns claude json path" do

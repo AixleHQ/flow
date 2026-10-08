@@ -24,6 +24,7 @@ class Rack::Attack
   # it is Traefik's ForwardAuth, asked once per terminal request.
   AGENT_ENDPOINTS = %w[
     /agents/credentials
+    /agents/credentials/refresh
     /agents/git/credentials
     /azure/git/credentials
     /cloud/aws/credentials
