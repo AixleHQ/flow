@@ -32,4 +32,5 @@ Keep PRs focused on a single concern. See CONTRIBUTING.md.
 - [ ] `make check_all` passes locally (tests, rubocop, brakeman, eslint, typescript).
 - [ ] I added/updated tests where it makes sense.
 - [ ] I updated documentation where it makes sense.
+- [ ] User-visible changes have an entry under `[Unreleased]` in [CHANGELOG.md](../CHANGELOG.md).
 - [ ] My commits use clear, descriptive messages.

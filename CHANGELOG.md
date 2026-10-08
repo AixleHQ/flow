@@ -37,6 +37,9 @@ governance, community health — carry none.
   Aixle**. A managed company is never billed, has no Billing tab, starts with
   two workers, and only a platform administrator can change them. Companies
   that were already running with no Stripe customer are marked managed.
+- Contribution rule: a pull request with a change a user or an operator can
+  notice adds its entry under `[Unreleased]` in the same pull request. The
+  pull-request template asks for it, and `CLAUDE.md` spells it out for agents.
 
 ### Fixed
 - **Docs**: the GitHub star count in the docs header is the repository's real

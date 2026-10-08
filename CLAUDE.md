@@ -81,6 +81,22 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
 Examples: `fix(onboarding): guard complete event without configured agent`,
 `refactor(state-machine): collapse onboarding to two steps`.
 
+## Writing the changelog
+
+Every PR with a change a user or an operator can notice adds its entry under
+`## [Unreleased]` in `CHANGELOG.md`, in the same PR. Releases are cut from that
+section (`docs/operations/releasing.md`), so an entry left out is a change the
+release notes never mention.
+
+- Prefix the entry with its product area from
+  `docs/product/changelog-product-areas.md` (`- **Workflows**: …`). Repository-level
+  entries (licensing, contributor rules) carry none. `test/lib/changelog_test.rb` fails
+  on an area the taxonomy does not define — add a new sidebar area there, don't invent one.
+- Put it under `### Added`, `### Changed`, `### Fixed` or `### Removed`. Say what the
+  user can do now, or what changed for an operator (a variable, a migration step), in
+  one or two lines — not how it was built.
+- Internal-only changes (refactors, tests, CI) get no entry.
+
 ## Writing comments
 
 Default to no comment. Code, names and tests carry the *what*; a comment is for
