@@ -167,6 +167,36 @@ describe('Projects/Analytics/AnalyticsPage', () => {
     );
   });
 
+  it('opens a date picker for a custom range and navigates once both days are picked', async () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: '30d' as const, from: '2026-09-08', to: '2026-10-08' },
+    });
+
+    await userEvent.click(screen.getByDisplayValue('Last 30 days'));
+    await userEvent.click(await screen.findByText('Custom range'));
+    expect(router.get).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Custom date range' }));
+    await userEvent.click(await screen.findByRole('button', { name: '14 September 2026' }));
+    expect(router.get).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: '21 September 2026' }));
+
+    expect(router.get).toHaveBeenCalledWith(
+      window.location.pathname,
+      { scope: 'project', period: 'custom', from: '2026-09-14', to: '2026-09-21' },
+      expect.objectContaining({ preserveState: true, preserveScroll: true }),
+    );
+  });
+
+  it('shows a custom period with its picker open on the chosen days', () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: 'custom' as const, from: '2026-09-24', to: '2026-10-07' },
+    });
+
+    expect(screen.getByDisplayValue('Custom range')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Custom date range' })).toHaveTextContent('Sep 24, 2026 – Oct 7, 2026');
+  });
+
   it('renders the summary skeleton fallback while the summary prop is absent', () => {
     renderAuthedPage(<AnalyticsPage />, {
       props: { project, scope: 'project' as const, period: '30d' as const },

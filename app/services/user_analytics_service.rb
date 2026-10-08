@@ -21,8 +21,8 @@ class UserAnalyticsService
   def initialize(user:, company:, period:, project_id: nil)
     @user       = user
     @company    = company
-    @period     = period.to_s
-    @since      = AnalyticsPeriod.since(@period)
+    @period     = AnalyticsPeriod.window(period)
+    @range      = @period.range
     @project_id = project_id.presence
   end
 
@@ -43,7 +43,7 @@ class UserAnalyticsService
 
   private
 
-  attr_reader :user, :company, :period, :since, :project_id
+  attr_reader :user, :company, :period, :range, :project_id
 
   # Company isolation: usage sessions are always project-bound, so the inner
   # project join scopes the slice to the given company without a company_id
@@ -52,7 +52,7 @@ class UserAnalyticsService
     scope = user.terminal_sessions
                 .joins(:project)
                 .where(projects: { company_id: company.id })
-                .where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+                .where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end
 
@@ -68,7 +68,7 @@ class UserAnalyticsService
   end
 
   def base_workflow_runs
-    runs = WorkflowRun.for_user_in_period(user, since)
+    runs = WorkflowRun.for_user_in_period(user, range)
                       .joins(:project)
                       .where(projects: { company_id: company.id })
     project_id ? runs.where(project_id:) : runs

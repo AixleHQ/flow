@@ -1,4 +1,5 @@
 import { Box, Paper, Skeleton, Text } from '@mantine/core';
+import dayjs from 'dayjs';
 import { type CSSProperties, type ReactNode } from 'react';
 
 import { LOGO_TILE_BG } from 'shared/theme/vendorColors';
@@ -7,7 +8,14 @@ import codexLogo from 'shared/ui/agent-logos/codex.png';
 import cursorLogo from 'shared/ui/agent-logos/cursor.png';
 import geminiLogo from 'shared/ui/agent-logos/gemini.png';
 
-export type Period = '7d' | '30d' | '90d' | '1y';
+export type Period = '7d' | '30d' | '90d' | '1y' | 'custom';
+
+/** The window an analytics page covers, as the server resolved it: both ends are inclusive ISO dates. */
+export interface PeriodWindow {
+  period: Period;
+  from: string;
+  to: string;
+}
 
 export interface AgentSessionCount {
   agentType: string;
@@ -136,7 +144,13 @@ export const PERIOD_OPTIONS = [
   { value: '30d', label: 'Last 30 days' },
   { value: '90d', label: 'Last 90 days' },
   { value: '1y', label: 'Last year' },
+  { value: 'custom', label: 'Custom range' },
 ];
+
+/** Router params for a period: a custom one carries its dates, a preset only its key. */
+export function periodParams({ period, from, to }: PeriodWindow): Record<string, string> {
+  return period === 'custom' ? { period, from, to } : { period };
+}
 
 export const chartTooltipStyle = {
   backgroundColor: 'var(--app-bg-default)',
@@ -159,8 +173,9 @@ export function sharePct(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 100) : 0;
 }
 
-export function tickIntervalForPeriod(period: Period): number {
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
+export function tickIntervalForWindow({ from, to }: Pick<PeriodWindow, 'from' | 'to'>): number {
+  const days = dayjs(to).diff(dayjs(from), 'day') + 1;
+  if (!Number.isFinite(days)) return 4;
   return days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
 }
 

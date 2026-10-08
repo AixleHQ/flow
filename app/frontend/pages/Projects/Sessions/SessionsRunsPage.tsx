@@ -21,6 +21,14 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { rowsCompanyProjectSessionsPath, userPath } from 'shared/routes';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
+import {
+  DateRangeFilter,
+  formatListSort,
+  isDefaultListSort,
+  type ListSort,
+  parseListSort,
+  SortableHeader,
+} from 'shared/ui/list-controls';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -51,14 +59,24 @@ interface Filters {
   agentType?: string;
   status?: string;
   userId?: string;
+  workflowId?: string;
+}
+
+/** The ransack `q` the list honours: a date range and a sort. */
+export interface ListQuery {
+  s?: string;
+  createdFrom?: string;
+  createdUntil?: string;
 }
 
 export interface SessionsRunsPageProps {
   project: { id: number; name: string };
   entries: ListEntry[];
   filters: Filters;
+  query?: ListQuery;
   total: number;
   userOptions: { id: number; name: string }[];
+  workflowOptions?: { id: number; name: string }[];
   /** Signed stream the page hands out; it names the sessions and runs that changed. */
   cableStream?: string;
 }
@@ -82,6 +100,18 @@ const STATUS_OPTIONS = [
 // A run's session is never opened straight from the list while it is still
 // being provisioned — there is nothing to show yet.
 const OPENABLE_SESSION_STATES = new Set(['queued', 'cancelled', 'ready', 'finished', 'failed', 'finishing']);
+
+const NO_QUERY: ListQuery = {};
+const NO_OPTIONS: { id: number; name: string }[] = [];
+
+/** Router params for the list's `q`; the default sort stays out of the URL. */
+function listQueryParams({ s, createdFrom, createdUntil }: ListQuery): Record<string, string> | null {
+  const q: Record<string, string> = {};
+  if (createdFrom) q.created_from = createdFrom;
+  if (createdUntil) q.created_until = createdUntil;
+  if (s && !isDefaultListSort(parseListSort(s))) q.s = s;
+  return Object.keys(q).length > 0 ? q : null;
+}
 
 function entryKey(entry: ListEntry): string {
   return `${entry.kind}-${entry.id}`;
@@ -108,7 +138,16 @@ function stateLabel(entry: ListEntry): string {
   );
 }
 
-const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cableStream }: SessionsRunsPageProps) => {
+const SessionsRunsPage = ({
+  project,
+  entries,
+  filters,
+  query = NO_QUERY,
+  total,
+  userOptions,
+  workflowOptions = NO_OPTIONS,
+  cableStream,
+}: SessionsRunsPageProps) => {
   const { canExecute } = useProjectPermissions();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [newSessionOpen, setNewSessionOpen] = useState(false);
@@ -127,7 +166,7 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
   // map to the new first page — stale entries from the old filter must not
   // survive a narrowed result set.
   useEffect(() => {
-    const filtersKey = JSON.stringify(filters);
+    const filtersKey = JSON.stringify([filters, query]);
     const filtersChanged = filtersKey !== prevFiltersRef.current;
     prevFiltersRef.current = filtersKey;
 
@@ -143,7 +182,7 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
       for (const e of newEntries) map.set(entryKey(e), e);
       return map;
     });
-  }, [entries, filters]);
+  }, [entries, filters, query]);
 
   const entryMapRef = useRef(entryMap);
   entryMapRef.current = entryMap;
@@ -192,17 +231,23 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
 
   const listUrl = `/company/projects/${project.id}/sessions`;
 
+  const sort = parseListSort(query.s);
+
   const navigate = useCallback(
-    (next: Partial<Filters>) => {
-      const merged: Record<string, string> = {};
+    (next: Partial<Filters>, nextQuery: Partial<ListQuery> = {}) => {
+      const merged: Record<string, string | Record<string, string>> = {};
       const combined = { ...filters, ...next };
       for (const [key, value] of Object.entries(combined)) {
         if (value) merged[key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)] = String(value);
       }
+      const q = listQueryParams({ ...query, ...nextQuery });
+      if (q) merged.q = q;
       router.get(listUrl, merged, { preserveState: true, preserveScroll: true });
     },
-    [filters, listUrl],
+    [filters, query, listUrl],
   );
+
+  const onSort = useCallback((next: ListSort) => navigate({}, { s: formatListSort(next) }), [navigate]);
 
   const debouncedSearch = useDebouncedCallback((value: string) => navigate({ search: value }), 350);
 
@@ -215,13 +260,24 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
     });
   }, []);
 
-  const hasFilters = !!(filters.search || filters.agentType || filters.status || filters.userId);
+  const hasFilters = !!(
+    filters.search ||
+    filters.agentType ||
+    filters.status ||
+    filters.userId ||
+    filters.workflowId ||
+    query.createdFrom
+  );
 
   // "All" offers both create actions; each filtered tab offers only its own.
   const showRunWorkflow = canExecute && filters.type !== 'solo';
   const showNewSession = canExecute && filters.type !== 'run';
 
   const userSelectData = useMemo(() => userOptions.map((u) => ({ value: String(u.id), label: u.name })), [userOptions]);
+  const workflowSelectData = useMemo(
+    () => workflowOptions.map((w) => ({ value: String(w.id), label: w.name })),
+    [workflowOptions],
+  );
 
   return (
     <>
@@ -312,6 +368,23 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
           searchable
           w={160}
         />
+        {workflowSelectData.length > 0 && filters.type !== 'solo' && (
+          <Select
+            placeholder="Workflow"
+            aria-label="Filter by workflow"
+            data={workflowSelectData}
+            value={filters.workflowId ?? null}
+            onChange={(v) => navigate({ workflowId: v ?? undefined })}
+            clearable
+            searchable
+            w={180}
+          />
+        )}
+        <DateRangeFilter
+          from={query.createdFrom}
+          until={query.createdUntil}
+          onChange={(createdFrom, createdUntil) => navigate({}, { createdFrom, createdUntil })}
+        />
       </div>
 
       {entries.length === 0 ? (
@@ -335,10 +408,18 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cable
                 <span>Name</span>
                 <span>Agent</span>
                 <span>User</span>
-                <span className={classes.right}>Tokens</span>
-                <span className={classes.right}>Cost</span>
-                <span className={classes.right}>Duration</span>
-                <span style={{ paddingLeft: 24 }}>Started</span>
+                <span className={classes.right}>
+                  <SortableHeader label="Tokens" field="total_tokens" sort={sort} onSort={onSort} />
+                </span>
+                <span className={classes.right}>
+                  <SortableHeader label="Cost" field="cost_cents" sort={sort} onSort={onSort} />
+                </span>
+                <span className={classes.right}>
+                  <SortableHeader label="Duration" field="duration_seconds" sort={sort} onSort={onSort} />
+                </span>
+                <span style={{ paddingLeft: 24 }}>
+                  <SortableHeader label="Started" field="created_at" sort={sort} onSort={onSort} />
+                </span>
                 <span />
               </div>
               {orderedEntries.map((entry) => (

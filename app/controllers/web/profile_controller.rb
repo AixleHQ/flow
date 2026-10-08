@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::ProfileController < Web::ApplicationController
+  include AnalyticsPeriodParams
+
   layout "inertia"
 
   before_action :require_auth
@@ -107,11 +109,11 @@ class Web::ProfileController < Web::ApplicationController
     # Usage is ALWAYS a current-company slice — a dual-membership user's other
     # companies' sessions/costs must never surface here.
     company = current_company or raise ActiveRecord::RecordNotFound
-    period = params.fetch(:period, "30d")
+    period = analytics_window
     project_id = params[:project_id].presence
 
     render inertia: "Profile/Usage", props: {
-      period:,
+      **analytics_period_props,
       project_id:,
       summary: InertiaRails.defer(group: "usage") {
         r = UserAnalyticsService.new(user: current_user, company:, period:, project_id:).call

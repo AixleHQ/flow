@@ -1,15 +1,17 @@
 import { Deferred, Head, router } from '@inertiajs/react';
-import { Avatar, Badge, Box, Card, Group, Select, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Avatar, Badge, Box, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
 import { useCallback, useMemo } from 'react';
 
 import type { Member } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { type Period, periodParams } from 'shared/analytics/chartHelpers';
+import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { RoleTag } from 'shared/resources/members/MembersContent';
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
-import { PERIOD_OPTIONS, UsageAnalytics, type Period } from 'shared/resources/usage/UsageAnalytics';
+import { UsageAnalytics } from 'shared/resources/usage/UsageAnalytics';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import { companyProjectSessionPath, companySessionPath, userPath } from 'shared/routes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -29,6 +31,8 @@ export interface UserShowProps {
   usageLimits?: UsageLimitsEntry[];
   /** Window the spend charts cover. The panels read their own deferred props. */
   period: Period;
+  from: string;
+  to: string;
 }
 
 /**
@@ -51,6 +55,8 @@ function UserShow({
   accessibleProjectIds,
   usageLimits,
   period,
+  from,
+  to,
 }: UserShowProps) {
   const displayName = member.name || member.email;
   const accessible = useMemo(() => new Set(accessibleProjectIds), [accessibleProjectIds]);
@@ -134,19 +140,18 @@ function UserShow({
         <Title order={5} style={{ margin: 0 }}>
           Usage
         </Title>
-        <Select
-          value={period}
-          onChange={(value) =>
-            router.get(userPath(member.id), { period: value ?? '30d' }, { preserveState: true, preserveScroll: true })
+        <PeriodFilter
+          period={period}
+          from={from}
+          to={to}
+          label="Usage period"
+          onChange={(next) =>
+            router.get(userPath(member.id), periodParams(next), { preserveState: true, preserveScroll: true })
           }
-          data={PERIOD_OPTIONS}
-          size="sm"
-          w={140}
-          aria-label="Usage period"
         />
       </Group>
 
-      <UsageAnalytics period={period} />
+      <UsageAnalytics from={from} to={to} />
 
       <Stack gap={12}>
         <Group justify="space-between" align="baseline" gap="xs">

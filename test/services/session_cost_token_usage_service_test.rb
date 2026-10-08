@@ -86,6 +86,23 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
     assert { result.totals.total_tokens == 0 }
   end
 
+  test "a custom period counts only sessions between its two days" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      create_session_with_usage(project: @project, user: @admin, cost_cents: 1, total_tokens: 1,
+        created_at: Time.zone.parse("2026-09-23 23:00"))
+      create_session_with_usage(project: @project, user: @admin, cost_cents: 40, total_tokens: 400,
+        created_at: Time.zone.parse("2026-09-24 01:00"))
+      create_session_with_usage(project: @project, user: @admin, cost_cents: 2, total_tokens: 2,
+        created_at: Time.zone.parse("2026-10-02 09:00"))
+
+      window = AnalyticsPeriod.window("custom", from: "2026-09-24", to: "2026-10-01")
+      result = call_service(scope: "project", period: window)
+
+      assert_equal 40, result.totals.total_cost_cents
+      assert_equal [ "2026-09-24" ], result.time_series.map(&:date)
+    end
+  end
+
   # ─── Scope: user ─────────────────────────────────────────────────────────────
 
   test "user scope returns only the current user's sessions in the project" do

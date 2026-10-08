@@ -5,6 +5,7 @@ class TerminalSession < ApplicationRecord
 
   include TerminalSessionStateMachine
   include JsonbDocument
+  include CreatedWithinDates
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
 
@@ -123,11 +124,25 @@ class TerminalSession < ApplicationRecord
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
-    %w[agent_type project_id session_type state created_at user_id]
+    %w[agent_type project_id session_type state created_at user_id cost_cents total_tokens duration_seconds]
   end
 
   def self.ransackable_associations(_auth_object = nil)
     %w[user project session_logs]
+  end
+
+  def self.ransackable_scopes(_auth_object = nil)
+    %w[created_from created_until]
+  end
+
+  # Start to finish. A live session counts up to now, as its list row does; one
+  # that never started, or stopped without a finish time, has none.
+  ransacker :duration_seconds, type: :integer do
+    Arel.sql(<<~SQL.squish)
+      EXTRACT(EPOCH FROM (COALESCE(terminal_sessions.finished_at,
+        CASE WHEN terminal_sessions.state IN ('not_started', 'running', 'ready') THEN NOW() END)
+        - terminal_sessions.started_at))
+    SQL
   end
 
   # Scopes

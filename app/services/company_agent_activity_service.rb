@@ -10,7 +10,7 @@ class CompanyAgentActivityService
     @company = company
     @user = user
     @scope = scope.to_s
-    @since = AnalyticsPeriod.since(period.to_s)
+    @range = AnalyticsPeriod.window(period).range
   end
 
   def call
@@ -64,10 +64,10 @@ class CompanyAgentActivityService
 
   private
 
-  attr_reader :company, :user, :scope, :since
+  attr_reader :company, :user, :scope, :range
 
   def base_sessions
-    scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+    scope_sessions.where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
   end
 
   def scope_sessions

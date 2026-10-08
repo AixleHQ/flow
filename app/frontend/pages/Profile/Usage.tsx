@@ -1,12 +1,14 @@
 import { Deferred, Head, router, usePage } from '@inertiajs/react';
-import { Badge, Box, Divider, Group, Paper, Select, Skeleton, Table, Text, Title, Tooltip } from '@mantine/core';
+import { Badge, Box, Divider, Group, Paper, Skeleton, Table, Text, Title, Tooltip } from '@mantine/core';
 import { formatDistanceToNow } from 'date-fns';
 
 import type { TerminalSession } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { type Period, type PeriodWindow, periodParams } from 'shared/analytics/chartHelpers';
+import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatTokens } from 'shared/lib/formatUsage';
-import { PERIOD_OPTIONS, UsageAnalytics, type Period } from 'shared/resources/usage/UsageAnalytics';
+import { UsageAnalytics } from 'shared/resources/usage/UsageAnalytics';
 import { type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -15,6 +17,8 @@ import { ProfileTabs } from './ProfileTabs';
 
 interface Props {
   period: Period;
+  from: string;
+  to: string;
   projectId?: string | null;
   sessions?: TerminalSession[];
 }
@@ -134,14 +138,14 @@ function SessionsPanel() {
 // --- Main page ---
 
 const UsagePage = () => {
-  const { period } = usePage<{ props: Props }>().props as unknown as Props;
+  const { period, from, to } = usePage<{ props: Props }>().props as unknown as Props;
   // Shared props (not this page's Props): only label the company when the user
   // actually belongs to more than one, so single-company users see no change.
   const { currentUser } = usePage<SharedProps>().props;
   const companyName = (currentUser?.memberships?.length ?? 0) > 1 ? currentUser?.currentCompany?.name : null;
 
-  const navigate = (nextPeriod: string) => {
-    router.get(window.location.pathname, { period: nextPeriod }, { preserveState: true, preserveScroll: true });
+  const navigate = (next: PeriodWindow) => {
+    router.get(window.location.pathname, periodParams(next), { preserveState: true, preserveScroll: true });
   };
 
   return (
@@ -165,10 +169,10 @@ const UsagePage = () => {
         <ProfileTabs active="usage" />
 
         <Group justify="flex-end" mb="xl">
-          <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
+          <PeriodFilter period={period} from={from} to={to} onChange={navigate} />
         </Group>
 
-        <UsageAnalytics period={period} />
+        <UsageAnalytics from={from} to={to} />
 
         {/* Sessions list */}
         <Deferred data="sessions" fallback={<Skeleton height={200} radius="sm" />}>

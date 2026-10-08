@@ -33,6 +33,13 @@ class Web::ProfileUsageControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props period: "7d"
   end
 
+  test "passes a custom range back to the picker" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      get usage_profile_path(period: "custom", from: "2026-09-24", to: "2026-10-07")
+      assert_inertia_props period: "custom", from: "2026-09-24", to: "2026-10-07"
+    end
+  end
+
   test "declares all usage props as deferred" do
     get usage_profile_path
     assert_inertia_deferred_props :summary, :agent_activity, :cost_token,

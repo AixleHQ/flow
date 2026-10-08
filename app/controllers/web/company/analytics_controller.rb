@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 class Web::Company::AnalyticsController < Web::Company::ApplicationController
+  include AnalyticsPeriodParams
+
   def index
     scope = params.fetch(:scope, "company")
-    period = params.fetch(:period, "30d")
-    filter_opts = { company: current_company, user: current_user, scope: scope, period: period }
+    filter_opts = { company: current_company, user: current_user, scope: scope, period: analytics_window }
 
     render inertia: "Company/Analytics/AnalyticsPage", props: {
       scope: scope,
-      period: period,
+      **analytics_period_props,
       summary: InertiaRails.defer(group: "analytics") {
         result = CompanyAnalyticsService.new(**filter_opts).call
         {

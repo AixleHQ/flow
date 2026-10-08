@@ -9,9 +9,15 @@
 # of competing with it for a top-level row.
 #
 # Ordering has to happen in SQL across both tables (you cannot paginate a feed
-# you sorted in Ruby), so the spine is a UNION ALL of (id, kind, created_at).
-# The page of ids that comes back is then hydrated with the associations each
-# kind needs, and re-ordered to match.
+# you sorted in Ruby), so the spine is a UNION ALL of (id, kind, created_at,
+# sort value). The page of ids that comes back is then hydrated with the
+# associations each kind needs, and re-ordered to match.
+#
+# `query` is a ransack `q`: its date-range scopes and the sort (`s`) mean the
+# same thing on both models, so each side of the union applies it to its own
+# table. The `filters` are the ones that do not: a status is two state
+# vocabularies, an agent is reached through a run's steps, and the search has to
+# respect who may read a prompt.
 class SessionsRunsFeed
   # Standalone sessions only — a workflow_step session appears nested under its
   # run, and auth/tool setup sessions are plumbing the user never asked for.
@@ -47,19 +53,22 @@ class SessionsRunsFeed
   # One row of the feed. `record` is a TerminalSession or a WorkflowRun.
   Entry = Struct.new(:kind, :record, keyword_init: true)
 
-  def initialize(project:, viewer:, filters: {}, type: "all")
+  def initialize(project:, viewer:, filters: {}, type: "all", query: {})
     @project = project
     @viewer = viewer
     @filters = filters.to_h.symbolize_keys
     @type = TYPES.include?(type.to_s) ? type.to_s : "all"
+    query = query.to_h.symbolize_keys
+    @sort = SessionListSort.new(query[:s])
+    @conditions = query.except(:s)
   end
 
-  attr_reader :project, :viewer, :filters, :type
+  attr_reader :project, :viewer, :filters, :type, :sort, :conditions
 
   # Returns a Page whose `entries` are already hydrated and ordered.
   def page(page: 1, limit: 20)
-    pagy = Pagy::Offset.new(count: spine.count(:all), page: page, limit: limit)
-    rows = spine.offset(pagy.offset).limit(pagy.limit)
+    pagy = Pagy::Offset.new(count: spine(sorted: false).count(:all), page: page, limit: limit)
+    rows = spine(sorted: true).offset(pagy.offset).limit(pagy.limit)
 
     Page.new(pagy: pagy, entries: hydrate(rows))
   end
@@ -72,6 +81,12 @@ class SessionsRunsFeed
     User.where(id: ids.compact).order(:name).map { |u| { id: u.id, name: u.name.presence || u.email } }
   end
 
+  # Workflows this project has run — the Workflow filter's options.
+  def workflow_options
+    Workflow.where(id: WorkflowRun.where(project: project).select(:workflow_id))
+            .order(:name).map { |w| { id: w.id, name: w.name } }
+  end
+
   private
 
   # The ordered (id, kind) spine, as a real relation so pagination is AR's job
@@ -80,42 +95,55 @@ class SessionsRunsFeed
   # TerminalSession is only the query carrier — `from` replaces its table
   # entirely, and the two selected aliases are the only attributes the returned
   # objects have. Nothing but `entry_id`/`entry_kind` may be read off them.
-  def spine
+  #
+  # The count leaves the sort value out: for a run it is a subquery per row.
+  def spine(sorted:)
     relation = TerminalSession.unscoped
                               .select("feed.entry_id", "feed.entry_kind")
-                              .from(feed_alias)
-    relation.order(Arel.sql("feed.entry_created_at DESC, feed.entry_id DESC"))
+                              .from(feed_alias(sorted))
+    return relation unless sorted
+
+    relation.order(sort.order(Arel.sql("feed.entry_sort_value")),
+                   Arel.sql("feed.entry_created_at DESC, feed.entry_id DESC"))
   end
 
-  def feed_alias
-    Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(union_node), Arel.sql("feed"))
+  def feed_alias(sorted)
+    Arel::Nodes::TableAlias.new(Arel::Nodes::Grouping.new(union_node(sorted)), Arel.sql("feed"))
   end
 
-  def union_node
-    return sessions_spine.arel if type == "solo"
-    return runs_spine.arel if type == "run"
+  def union_node(sorted)
+    return sessions_spine(sorted).arel if type == "solo"
+    return runs_spine(sorted).arel if type == "run"
 
-    Arel::Nodes::UnionAll.new(sessions_spine.arel, runs_spine.arel)
+    Arel::Nodes::UnionAll.new(sessions_spine(sorted).arel, runs_spine(sorted).arel)
   end
 
-  def sessions_spine
-    filtered_sessions.reselect(
+  def sessions_spine(sorted)
+    columns = [
       "terminal_sessions.id AS entry_id",
       "'session' AS entry_kind",
       "terminal_sessions.created_at AS entry_created_at"
-    )
+    ]
+    columns << sort.column(TerminalSession).as("entry_sort_value") if sorted
+    filtered_sessions.reselect(*columns)
   end
 
-  def runs_spine
-    filtered_runs.reselect(
+  def runs_spine(sorted)
+    columns = [
       "workflow_runs.id AS entry_id",
       "'run' AS entry_kind",
       "workflow_runs.created_at AS entry_created_at"
-    ).distinct
+    ]
+    columns << sort.column(WorkflowRun).as("entry_sort_value") if sorted
+    filtered_runs.reselect(*columns).distinct
   end
 
   def filtered_sessions
+    # A standalone session belongs to no workflow.
+    return TerminalSession.none if filters[:workflow_id].present?
+
     scope = TerminalSession.where(project: project, session_type: TOP_LEVEL_SESSION_TYPES)
+                           .ransack(conditions).result
     scope = scope.where(agent_type: filters[:agent_type]) if filters[:agent_type].present?
     scope = scope.where(user_id: filters[:user_id]) if filters[:user_id].present?
     if (states = status_states(:sessions))
@@ -145,7 +173,8 @@ class SessionsRunsFeed
   end
 
   def filtered_runs
-    scope = WorkflowRun.where(project: project)
+    scope = WorkflowRun.where(project: project).ransack(conditions).result
+    scope = scope.where(workflow_id: filters[:workflow_id]) if filters[:workflow_id].present?
     scope = scope.where(user_id: filters[:user_id]) if filters[:user_id].present?
     states = status_states(:runs)
     if states == QUEUED_STEP

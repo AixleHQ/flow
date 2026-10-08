@@ -8,6 +8,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { companySessionPath, rowsCompanySessionsPath, userPath } from 'shared/routes';
+import { type ListSort, SortableHeader } from 'shared/ui/list-controls';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import classes from './SessionFeedTable.module.css';
@@ -74,6 +75,21 @@ function stateLabel(state: string): string {
   );
 }
 
+function ColumnHeader({
+  label,
+  field,
+  sort,
+  onSort,
+}: {
+  label: string;
+  field: string;
+  sort?: ListSort;
+  onSort?: (next: ListSort) => void;
+}) {
+  if (!sort || !onSort) return <>{label}</>;
+  return <SortableHeader label={label} field={field} sort={sort} onSort={onSort} />;
+}
+
 interface Props {
   /** The page accumulated so far by InfiniteScroll. */
   sessions: SessionFeedRow[];
@@ -95,6 +111,9 @@ interface Props {
   sessionHref?: (session: SessionFeedRow) => string | null;
   /** Signed stream the page hands out; the table refreshes the rows it names. */
   cableStream?: string;
+  /** The list's order. Given together with `onSort`, the numeric and Started headers sort it. */
+  sort?: ListSort;
+  onSort?: (next: ListSort) => void;
 }
 
 /**
@@ -113,6 +132,8 @@ export function SessionFeedTable({
   emptyLabel = 'No sessions yet',
   sessionHref = (session) => companySessionPath(session.id),
   cableStream,
+  sort,
+  onSort,
 }: Props) {
   // Local map mirrors the InfiniteScroll-accumulated sessions prop. Cable
   // updates patch individual entries in-place without touching the rest, so
@@ -189,10 +210,18 @@ export function SessionFeedTable({
             <span>Agent</span>
             {showUser && <span>User</span>}
             <span>Project</span>
-            <span className={classes.right}>Tokens</span>
-            <span className={classes.right}>Cost</span>
-            <span className={classes.right}>Duration</span>
-            <span style={{ paddingLeft: 24 }}>Started</span>
+            <span className={classes.right}>
+              <ColumnHeader label="Tokens" field="total_tokens" sort={sort} onSort={onSort} />
+            </span>
+            <span className={classes.right}>
+              <ColumnHeader label="Cost" field="cost_cents" sort={sort} onSort={onSort} />
+            </span>
+            <span className={classes.right}>
+              <ColumnHeader label="Duration" field="duration_seconds" sort={sort} onSort={onSort} />
+            </span>
+            <span style={{ paddingLeft: 24 }}>
+              <ColumnHeader label="Started" field="created_at" sort={sort} onSort={onSort} />
+            </span>
             <span />
           </div>
           {displaySessions.map((s) => (

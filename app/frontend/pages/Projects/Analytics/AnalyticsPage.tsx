@@ -25,9 +25,10 @@ import {
   formatAxisDate,
   type AgentActivityData,
   type Period,
-  PERIOD_OPTIONS,
+  type PeriodWindow,
+  periodParams,
   SummarySkeletons,
-  tickIntervalForPeriod,
+  tickIntervalForWindow,
 } from 'shared/analytics/chartHelpers';
 import {
   AgentActivityPanel,
@@ -38,6 +39,7 @@ import {
   SummaryPanel,
   type UsageScope,
 } from 'shared/analytics/panels';
+import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatCostCents, formatTokens } from 'shared/lib/formatUsage';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -101,6 +103,8 @@ interface Props {
   project: Project;
   scope: Scope;
   period: Period;
+  from: string;
+  to: string;
   participantId?: string | null;
   participants: Participant[];
   summary?: SummaryData;
@@ -152,10 +156,10 @@ function formatDuration(seconds: number): string {
   return `${s}s`;
 }
 
-function navigateWithFilters(scope: string, period: string, participantId?: string | null) {
+function navigateWithFilters(scope: string, periodWindow: PeriodWindow, participantId?: string | null) {
   router.get(
     window.location.pathname,
-    { scope, period, ...(participantId ? { participant_id: participantId } : {}) },
+    { scope, ...periodParams(periodWindow), ...(participantId ? { participant_id: participantId } : {}) },
     { preserveState: true, preserveScroll: true },
   );
 }
@@ -538,6 +542,8 @@ const AnalyticsPage = () => {
     project,
     scope,
     period,
+    from,
+    to,
     participantId,
     participants,
     summary,
@@ -546,12 +552,13 @@ const AnalyticsPage = () => {
     workflowCosts,
     sources,
   } = usePage<{ props: Props }>().props as unknown as Props;
-  const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
+  const tickInterval = useMemo(() => tickIntervalForWindow({ from, to }), [from, to]);
+  const periodWindow: PeriodWindow = { period, from, to };
   const [usageScope, setUsageScope] = useState<UsageScope>('all');
 
   useEffect(() => {
     setUsageScope('all');
-  }, [period, scope, participantId]);
+  }, [period, from, to, scope, participantId]);
 
   const participantOptions = (participants ?? []).map((p) => ({
     value: String(p.id),
@@ -569,7 +576,7 @@ const AnalyticsPage = () => {
       <Group mb="xl" gap="sm" wrap="wrap">
         <SegmentedControl
           value={scope}
-          onChange={(v) => navigateWithFilters(v, period, participantId)}
+          onChange={(v) => navigateWithFilters(v, periodWindow, participantId)}
           data={[
             { label: 'Project', value: 'project' },
             { label: 'My Activity', value: 'user' },
@@ -580,19 +587,13 @@ const AnalyticsPage = () => {
           <Select
             placeholder="All participants"
             value={participantId ?? null}
-            onChange={(v) => navigateWithFilters(scope, period, v)}
+            onChange={(v) => navigateWithFilters(scope, periodWindow, v)}
             data={participantOptions}
             clearable
             size="sm"
             w={180}
           />
-          <Select
-            value={period}
-            onChange={(v) => navigateWithFilters(scope, v ?? '30d', participantId)}
-            data={PERIOD_OPTIONS}
-            size="sm"
-            w={140}
-          />
+          <PeriodFilter {...periodWindow} onChange={(next) => navigateWithFilters(scope, next, participantId)} />
         </Group>
       </Group>
 

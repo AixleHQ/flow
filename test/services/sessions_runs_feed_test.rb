@@ -11,8 +11,21 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "Weekly GA report")
   end
 
-  def feed(filters: {}, type: "all", viewer: @user)
-    SessionsRunsFeed.new(project: @project, viewer: viewer, filters: filters, type: type)
+  def feed(filters: {}, type: "all", viewer: @user, query: {})
+    SessionsRunsFeed.new(project: @project, viewer: viewer, filters: filters, type: type, query: query)
+  end
+
+  def run_costing(cost_cents:, total_tokens: 0, **attrs)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, **attrs)
+    step = create(:step, workflow: @workflow, position: run.id)
+    session = create(:terminal_session, project: @project, user: @user, session_type: "workflow_step",
+                                        agent_type: "claude_code", cost_cents: cost_cents, total_tokens: total_tokens)
+    create(:step_run, workflow_run: run, step: step, terminal_session: session)
+    run
+  end
+
+  def kinds_and_ids(page)
+    page.entries.map { |e| [ e.kind, e.record.id ] }
   end
 
   def standalone(**attrs)
@@ -225,6 +238,103 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal 4, first.entries.size
     assert_equal 2, second.entries.size
     assert_empty first.entries.map { |e| [ e.kind, e.record.id ] } & second.entries.map { |e| [ e.kind, e.record.id ] }
+  end
+
+  test "sorts sessions and runs together by cost, a run costing what its step sessions cost" do
+    cheap = standalone(cost_cents: 50)
+    pricey_run = run_costing(cost_cents: 900)
+    mid = standalone(cost_cents: 300)
+
+    by_cost = feed(query: { s: "cost_cents desc" }).page(page: 1, limit: 10)
+    assert_equal [ [ "run", pricey_run.id ], [ "session", mid.id ], [ "session", cheap.id ] ], kinds_and_ids(by_cost)
+
+    cheapest_first = feed(query: { s: "cost_cents asc" }).page(page: 1, limit: 10)
+    assert_equal [ [ "session", cheap.id ], [ "session", mid.id ], [ "run", pricey_run.id ] ],
+                 kinds_and_ids(cheapest_first)
+  end
+
+  test "sorts by tokens through the same step-session sums" do
+    run = run_costing(cost_cents: 0, total_tokens: 40_000)
+    session = standalone(total_tokens: 1_000)
+
+    assert_equal [ [ "run", run.id ], [ "session", session.id ] ],
+                 kinds_and_ids(feed(query: { s: "total_tokens desc" }).page(page: 1, limit: 10))
+  end
+
+  test "sorting by duration puts rows without one last in both directions" do
+    freeze_time do
+      long_run = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user,
+                                                   started_at: 3.hours.ago, completed_at: 1.hour.ago)
+      short = standalone(state: "finished", started_at: 10.minutes.ago, finished_at: 5.minutes.ago)
+      never_started = standalone(state: "cancelled", started_at: nil, finished_at: nil)
+
+      longest = feed(query: { s: "duration_seconds desc" }).page(page: 1, limit: 10)
+      assert_equal [ [ "run", long_run.id ], [ "session", short.id ], [ "session", never_started.id ] ],
+                   kinds_and_ids(longest)
+
+      shortest = feed(query: { s: "duration_seconds asc" }).page(page: 1, limit: 10)
+      assert_equal [ [ "session", short.id ], [ "run", long_run.id ], [ "session", never_started.id ] ],
+                   kinds_and_ids(shortest)
+    end
+  end
+
+  test "a live session's duration runs up to now" do
+    freeze_time do
+      live = standalone(state: "ready", started_at: 2.hours.ago, finished_at: nil)
+      done = standalone(state: "finished", started_at: 30.minutes.ago, finished_at: 20.minutes.ago)
+
+      assert_equal [ [ "session", live.id ], [ "session", done.id ] ],
+                   kinds_and_ids(feed(query: { s: "duration_seconds desc" }).page(page: 1, limit: 10))
+    end
+  end
+
+  test "an unknown sort falls back to newest first" do
+    older = standalone(created_at: 2.hours.ago, cost_cents: 999)
+    newer = standalone(created_at: 1.hour.ago, cost_cents: 1)
+
+    page = feed(query: { s: "initial_prompt desc" }).page(page: 1, limit: 10)
+
+    assert_equal [ newer.id, older.id ], page.entries.map { |e| e.record.id }
+    assert_equal "created_at desc", feed(query: { s: "initial_prompt desc" }).sort.to_s
+  end
+
+  test "the date range keeps both of its days whole, on both sides of the union" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      create(:workflow_run, workflow: @workflow, project: @project, user: @user,
+                            created_at: Time.zone.parse("2026-09-23 23:59"))
+      first_day = standalone(created_at: Time.zone.parse("2026-09-24 00:01"))
+      last_day_run = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
+                                           created_at: Time.zone.parse("2026-10-01 23:59"))
+      standalone(created_at: Time.zone.parse("2026-10-02 00:01"))
+
+      page = feed(query: { created_from: "2026-09-24", created_until: "2026-10-01" }).page(page: 1, limit: 10)
+
+      assert_equal [ [ "run", last_day_run.id ], [ "session", first_day.id ] ], kinds_and_ids(page)
+    end
+  end
+
+  test "an unreadable date filters nothing" do
+    standalone
+
+    assert_equal 1, feed(query: { created_from: "yesterday" }).page(page: 1, limit: 10).pagy.count
+  end
+
+  test "workflow filter keeps that workflow's runs and drops standalone sessions" do
+    standalone
+    other_workflow = create(:workflow, scope: @project, name: "Nightly sync")
+    create(:workflow_run, workflow: other_workflow, project: @project, user: @user)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    page = feed(filters: { workflow_id: @workflow.id }).page(page: 1, limit: 10)
+
+    assert_equal [ [ "run", run.id ] ], kinds_and_ids(page)
+  end
+
+  test "workflow_options lists only workflows this project has run" do
+    create(:workflow, scope: @project, name: "Never run")
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    assert_equal [ { id: @workflow.id, name: "Weekly GA report" } ], feed.workflow_options
   end
 
   test "user_options lists only people who have run something here" do

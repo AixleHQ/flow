@@ -8,7 +8,8 @@ project, per company.
 The project's **Analytics** page answers "what did this cost us, and where did
 it go?"
 
-- **Period** — pick the window; every panel follows it.
+- **Period** — the last 7, 30 or 90 days, the last year, or a custom range of
+  days (say, the last two weeks); every panel follows it.
 - **Scope** — switch between all sessions and workflow-driven ones, so ad-hoc
   experiments do not muddy the numbers for an automated process.
 - **Participant** — narrow to one person's work.

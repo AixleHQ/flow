@@ -19,6 +19,8 @@
 # token, the session-sharing switches, "leave company". Those stay on the
 # owner's own Profile — this page is a read, not a second account screen.
 class Web::Company::UsersController < Web::Company::ApplicationController
+  include AnalyticsPeriodParams
+
   def show
     membership = member_membership
 
@@ -53,7 +55,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
       usage_limits: InertiaRails.defer(group: "limits") {
         Agents::SubscriptionUsageService.new(membership: membership, force: params[:refresh].present?).call
       },
-      period: period,
+      **analytics_period_props,
       **analytics_props(membership.user)
     }
   end
@@ -76,6 +78,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
   # services and the same deferral group as Profile -> Usage.
   def analytics_props(target)
     company = current_company
+    period = analytics_window
 
     {
       summary: InertiaRails.defer(group: "usage") {
@@ -104,12 +107,6 @@ class Web::Company::UsersController < Web::Company::ApplicationController
         { days: ActivityHeatmapService.new(scope:).call.map { |d| { date: d.date, count: d.count } } }
       }
     }
-  end
-
-  # The window the charts cover. An unknown value would reach the services as a
-  # period they cannot answer, so only the ones the picker offers are accepted.
-  def period
-    @period ||= AnalyticsPeriod::DAYS.key?(params[:period]) ? params[:period] : AnalyticsPeriod::DEFAULT
   end
 
   # The current company's projects this viewer may open a session in — the same
