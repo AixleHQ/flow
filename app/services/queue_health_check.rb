@@ -26,10 +26,11 @@ class QueueHealthCheck
   # `pending` — so nothing legitimate parks a run here.
   UNSTARTED_RUN_THRESHOLD = 5.minutes
 
-  # A session that has waited this long for a slot is not necessarily wrong — a
-  # full pool is the feature working — but it is worth seeing, because "the pool
-  # is full" and "the pool is full of reservations nothing will ever release" look
-  # identical from outside.
+  # A long wait for a slot is a full pool — the feature working — for as long as
+  # the pool keeps granting. What is worth seeing is a pool that has granted
+  # nothing for this long while somebody waits: "full of sessions that run for
+  # hours" and "full of reservations nothing will ever release" look identical
+  # from outside, so it is a warning to look at, not an outage.
   ADMISSION_WAIT_THRESHOLD = 30.minutes
 
   class << self
@@ -53,6 +54,7 @@ class QueueHealthCheck
         oldest_undispatched_seconds: age(undispatched.minimum(:created_at), now),
         queued_admissions: waiting.count,
         oldest_admission_wait_seconds: age(waiting.minimum(:created_at), now),
+        stalled_pools: stalled_pools(now),
         pinned_reservations: SessionRuntimeOperation.pinning.count,
         pinned_overdue: SessionRuntimeOperation.pinning
                                                .where(absent_since: ..(now - (2 * SessionAdmissionPolicy.pinned_release_window))).count,
@@ -74,9 +76,6 @@ class QueueHealthCheck
         problems << "#{stats[:unstarted_runs]} run(s) unstarted for over " \
                     "#{UNSTARTED_RUN_THRESHOLD.inspect} (oldest #{stats[:oldest_unstarted_seconds]}s) — " \
                     "nothing is executing the queue"
-      end
-      if stats[:oldest_admission_wait_seconds] > ADMISSION_WAIT_THRESHOLD.to_i
-        problems << "a session has waited #{stats[:oldest_admission_wait_seconds]}s for a slot"
       end
       # The model allows a company to be lowered below its own reservations, so
       # the drain keeps the company hard and the reservations are the promise
@@ -101,22 +100,54 @@ class QueueHealthCheck
       problems
     end
 
+    def warnings(stats)
+      stats[:stalled_pools].map do |pool|
+        "pool #{pool[:key]} has granted no slot for #{ADMISSION_WAIT_THRESHOLD.inspect} while a session waits " \
+          "(oldest #{pool[:oldest_wait_seconds]}s, #{pool[:occupied]}/#{pool[:limit]} slots occupied)"
+      end
+    end
+
     private
 
     def age(timestamp, now) = timestamp ? (now - timestamp).to_i : 0
+
+    def stalled_pools(now)
+      since = now - ADMISSION_WAIT_THRESHOLD
+      oldest = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil, created_at: ..since)
+                               .group(:session_admission_pool_id).minimum(:created_at)
+      return [] if oldest.empty?
+
+      moving = SessionAdmission.where(session_admission_pool_id: oldest.keys, admitted_at: since..)
+                               .distinct.pluck(:session_admission_pool_id)
+      stalled = oldest.keys - moving
+      occupied = SessionAdmission.occupied.where(session_admission_pool_id: stalled)
+                                 .group(:session_admission_pool_id).count
+      SessionAdmissionPool.where(id: stalled).order(:id).map do |pool|
+        { key: pool.key, limit: pool.limit, occupied: occupied.fetch(pool.id, 0),
+          oldest_wait_seconds: age(oldest[pool.id], now) }
+      end
+    end
 
     # One structured line every tick so the log pipeline has a series to draw, and
     # a Sentry event only when something is actually wrong — a watchdog that cries
     # every minute is one nobody reads.
     def report(stats)
       Rails.logger.info("[QueueHealth] #{stats.to_json}")
-      found = problems(stats)
-      return stats if found.empty?
-
-      message = "Queue is not draining: #{found.join('; ')}"
-      Rails.logger.error("[QueueHealth] #{message}")
-      Sentry.capture_message(message, level: :error, extra: stats) if Sentry.initialized?
+      notify("Queue is not draining", problems(stats), stats, level: :error)
+      notify("Admission queue is not moving", warnings(stats), stats, level: :warning)
       stats
+    end
+
+    # A fixed fingerprint per kind: the message carries counts and ages, and every
+    # new number would otherwise be a new issue.
+    def notify(headline, found, stats, level:)
+      return if found.empty?
+
+      message = "#{headline}: #{found.join('; ')}"
+      Rails.logger.public_send(level == :error ? :error : :warn, "[QueueHealth] #{message}")
+      return unless Sentry.initialized?
+
+      Sentry.capture_message(message, level: level, extra: stats, fingerprint: [ "queue-health", headline ])
     end
   end
 end
