@@ -21,6 +21,7 @@ Account OAuth is fully supported here, unlike the earlier design of this doc ass
 - MCP servers use `~/.gemini/config/mcp_config.json` and the documented `serverUrl` schema.
 - Antigravity imports Gemini-compatible `GEMINI.md` and skills, so Aixle writes those established paths.
 - Vendor telemetry is disabled. Antigravity does not expose an OTLP export contract; automatic-run token counts remain available in its stream-JSON result and terminal log.
+- The pin is held at 1.1.27 on purpose. In 1.3.1, `settings.json`'s `enableTelemetry` is no longer read (the field is `json:"-"`, and the CLI drops the key when it rewrites the file); telemetry is instead synced from the Google account's server-side setting, so after a raise it follows each user's account rather than this image. Find a local opt-out before raising it.
 
 Build from the `docker/` directory:
 
