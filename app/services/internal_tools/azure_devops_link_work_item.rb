@@ -3,7 +3,7 @@
 module InternalTools
   # Linking is deliberately separate from transitioning: a linked pull request
   # must not close the work item by itself. Move the state with
-  # azure_devops_update_work_item when that is actually what should happen.
+  # tracker_transition_issue when that is actually what should happen.
   class AzureDevopsLinkWorkItem < Base
     include Concerns::AzureDevopsContext
 

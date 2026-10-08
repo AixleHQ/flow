@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module InternalTools
-  # The entry point for every other Azure tool: work-item tools require an
-  # explicit `integration_id` rather than defaulting to one, so the agent needs
+  # The entry point for the connection-scoped Azure tools: the build tools require
+  # an explicit `integration_id` rather than defaulting to one, so the agent needs
   # a way to see which connections exist and what each one is allowed to do.
   #
   # Returns the operation PROFILE (what this connection enables), not Azure's

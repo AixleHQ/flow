@@ -64,14 +64,29 @@ class Tools::ReconcilerTest < ActiveSupport::TestCase
     assert_not row.reload.enabled?
   end
 
-  test "resurrects a soft-deleted row when its definition returns" do
+  test "resurrects a retired row, enabled, when its definition returns" do
     Tools::Reconciler.run!
     row = Tool.code_source.find_by!(name: "board_get_task")
-    row.update_columns(deleted_at: Time.current)
+    row.update_columns(deleted_at: Time.current, enabled: false)
 
     Tools::Reconciler.run!
 
-    assert_nil row.reload.deleted_at
+    row.reload
+    assert_nil row.deleted_at
+    assert row.enabled?
+  end
+
+  test "materializing on demand never retires a row this code does not define" do
+    Tools::Reconciler.run!
+    renamed = Tool.code_source.find_by!(name: "board_get_task")
+    renamed.update_columns(name: "board_get_task_from_a_newer_release")
+
+    rows = Tool.shadow_rows_for_names([ "board_get_task" ])
+
+    assert_equal [ "board_get_task" ], rows.map(&:name)
+    renamed.reload
+    assert_nil renamed.deleted_at
+    assert renamed.enabled?
   end
 
   test "shadow_for materializes the row on demand before any reconcile ran" do

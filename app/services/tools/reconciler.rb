@@ -9,25 +9,33 @@ module Tools
   # Rows with source: "code" are owned by this reconciler; humans never write
   # them. Diff-based: steady-state runs are write-free. Removed platform tools
   # are only ever soft-deleted (tool_results has a RESTRICT FK; history must
-  # survive). `enabled` is set only on insert so a manual admin disable
-  # survives reconciles, matching the old seeds behavior.
+  # survive). `enabled` is set on insert and on revival only, so a manual admin
+  # disable survives reconciles, matching the old seeds behavior.
   #
   # Runs: on deploy (platform_tools:seed rake), at boot (self-heal, try-lock so
   # N-1 processes of a rolling restart no-op — see tools_registry initializer),
-  # and lazily via Tool.shadow_for when a row is needed before either happened.
+  # and lazily via Tool.shadow_for when a row is needed before either happened
+  # (materialize!, which never retires a row).
   class Reconciler
     LOCK_KEY = "aixle_tools_reconcile"
 
     class << self
       def run!
-        with_guards { reconcile(blocking: true) }
+        with_guards { reconcile(blocking: true, retire: true) }
+      end
+
+      # During a rolling deploy an old process lands here for a name the new
+      # release renamed away. The rows it does not know belong to that newer
+      # release, so this path creates and converges rows but never retires one.
+      def materialize!
+        with_guards { reconcile(blocking: true, retire: false) }
       end
 
       # Boot-time variant: skips (rather than waits) when another process
       # holds the lock, and never raises — a drifted registry must not become
       # a crash-looping deploy.
       def run_if_needed!
-        with_guards { reconcile(blocking: false) }
+        with_guards { reconcile(blocking: false, retire: true) }
       rescue StandardError => e
         Rails.logger.error("[Tools::Reconciler] boot reconcile skipped: #{e.class}: #{e.message}")
         false
@@ -49,13 +57,13 @@ module Tools
         true
       end
 
-      def reconcile(blocking:)
+      def reconcile(blocking:, retire:)
         Tool.transaction do
           return false unless acquire_lock(blocking: blocking)
 
           existing = Tool.where(source: "code").index_by(&:name)
           upsert_definitions(existing)
-          soft_delete_stale(existing)
+          soft_delete_stale(existing) if retire
         end
         true
       end
@@ -81,11 +89,7 @@ module Tools
           desired = definition.to_row_attributes
           row = existing[definition.name]
 
-          if row.nil?
-            create_row(desired)
-          elsif drifted?(row, desired)
-            row.update!(desired)
-          end
+          row.nil? ? create_row(desired) : converge(row, desired)
         end
       end
 
@@ -94,9 +98,15 @@ module Tools
       rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
         # Raced by another process (partial unique index on name where
         # source='code'); their row is as good as ours.
-        Tool.find_by!(source: "code", name: desired[:name]).tap do |row|
-          row.update!(desired) if drifted?(row, desired)
-        end
+        Tool.find_by!(source: "code", name: desired[:name]).tap { |row| converge(row, desired) }
+      end
+
+      # A retired row is disabled by its retirement (soft_delete_stale), not by
+      # an admin, so bringing it back re-enables it.
+      def converge(row, desired)
+        return unless drifted?(row, desired)
+
+        row.update!(row.deleted? ? desired.merge(enabled: true) : desired)
       end
 
       def drifted?(row, desired)
