@@ -57,5 +57,15 @@ module Tools
         end
       end
     end
+
+    # Providers of the repositories attached to the session. Every repository
+    # injection rule asks this, once per tool definition, on every MCP request.
+    def repository_providers
+      @repository_providers ||= if session.nil?
+        Set.new
+      else
+        Set.new(session.repositories.joins(:integration).distinct.pluck("integrations.provider"))
+      end
+    end
   end
 end
