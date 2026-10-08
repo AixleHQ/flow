@@ -865,15 +865,18 @@ module ContainerStrategies
     # == persist_refreshed_credentials (#2: capture tokens refreshed mid-session) ==
 
     test "persist_refreshed_credentials updates existing credential when token changed" do
-      @credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "old", "refreshToken" => "r1" } })
+      @credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "old", "refreshToken" => "r1",
+                                                              "expiresAt" => (1.hour.from_now.to_f * 1000).to_i } })
       strategy = build_strategy
       container = mock("container")
       agent_service = AgentCredentialsService.for("claude_code")
       strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      # A rotation the CLI made in the container: new tokens, a later expiry.
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude/.credentials.json")
-              .returns({ "claudeAiOauth" => { "accessToken" => "NEW", "refreshToken" => "r2" } }.to_json)
+              .returns({ "claudeAiOauth" => { "accessToken" => "NEW", "refreshToken" => "r2",
+                                              "expiresAt" => (8.hours.from_now.to_f * 1000).to_i } }.to_json)
 
       strategy.send(:persist_refreshed_credentials, container, @session, agent_service)
 
