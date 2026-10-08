@@ -33,6 +33,10 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Codex session stuck on the "Trust this folder?"
   dialog is recognised and stopped with an explanation again, and Codex's
   expired or reused sign-in is reported as one.
+- **Sessions & Runs**: an unattended Claude Code step that an MCP server stops
+  with a link to open (for example to sign in) or a form to fill in is now
+  stopped with an explanation, instead of waiting for a person who never
+  comes.
 
 ## [1.0.0] - 2026-10-08
 
