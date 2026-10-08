@@ -72,6 +72,33 @@ class TaskCommentTest < ActiveSupport::TestCase
     assert_equal 1, TaskComment.by_author_type(:agent).count
   end
 
+  test "editable_by? true for own fresh human comment" do
+    comment = TaskComment.create!(body: "A", board_task: @task, author: @owner)
+    assert comment.editable_by?(@owner)
+  end
+
+  test "editable_by? false for another user's comment" do
+    other = create(:user, company: @company)
+    comment = TaskComment.create!(body: "A", board_task: @task, author: @owner)
+    refute comment.editable_by?(other)
+  end
+
+  test "editable_by? false for agent-authored comment" do
+    comment = TaskComment.create!(body: "A", board_task: @task, author: @owner, author_type: :agent)
+    refute comment.editable_by?(@owner)
+  end
+
+  test "editable_by? false for comment older than the edit window" do
+    comment = TaskComment.create!(body: "A", board_task: @task, author: @owner)
+    comment.update_column(:created_at, (TaskComment::EDIT_WINDOW + 1.minute).ago)
+    refute comment.editable_by?(@owner)
+  end
+
+  test "editable_by? false for nil user" do
+    comment = TaskComment.create!(body: "A", board_task: @task, author: @owner)
+    refute comment.editable_by?(nil)
+  end
+
   test "destroying task destroys comments" do
     TaskComment.create!(body: "A", board_task: @task, author: @owner)
 

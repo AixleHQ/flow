@@ -161,6 +161,15 @@ class TaskService
       comment
     end
 
+    def update_comment(task:, comment:, params:, actor:)
+      if comment.update(params)
+        record_activity(task.board, :comment_updated, actor, task: task,
+          metadata: { tag: comment.tags&.first, preview: comment.body.to_s.truncate(100) })
+      end
+
+      comment
+    end
+
     def add_asset(task:, params:, actor:)
       asset = task.task_assets.build(params)
       asset.author = actor

@@ -10,6 +10,12 @@ class TaskComment < ApplicationRecord
 
   validates :body, presence: true
 
+  EDIT_WINDOW = 3.hours
+
+  def editable_by?(user)
+    author_id == user&.id && author_type.human? && created_at > EDIT_WINDOW.ago
+  end
+
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :by_author_type, ->(type) { where(author_type: type) }
 

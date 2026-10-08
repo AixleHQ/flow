@@ -277,7 +277,7 @@ Rails.application.routes.draw do
                 get :workflow_runs
               end
               scope module: :task do
-                resources :comments, only: %i[index create]
+                resources :comments, only: %i[index create update]
                 resources :assets, only: %i[index create destroy] do
                   member { delete :share, action: :unshare }
                 end

@@ -1039,6 +1039,7 @@ const BoardPage = () => {
         workflowRuns={taskWorkflowRuns ?? []}
         stats={taskStatistics ?? null}
         canExecute={canExecute}
+        currentUserId={currentUserId ?? 0}
       />
       <BoardSettingsDialog
         opened={settingsOpen}

@@ -597,6 +597,11 @@ export function apiV1ProjectTaskCommentsPath(project_id: ScalarType, task_id: Sc
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "comments" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","format"]);
 }
 
+/** /api/v1/projects/:project_id/tasks/:task_id/comments/:id(.:format) */
+export function apiV1ProjectTaskCommentPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "comments" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/tasks/:task_id/assets/:id/share(.:format) */
 export function shareApiV1ProjectTaskAssetPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "assets" + "/" + id + "/" + "share" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
