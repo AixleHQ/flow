@@ -13,7 +13,19 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-09
+
 ### Added
+- **Tasks**: edit a comment you wrote on a card, for three hours after posting
+  it.
+- **Sessions & Runs**: sort the list by tokens, cost, duration or start time
+  (highest first; click again to flip), and filter it by date range and by
+  workflow.
+- **Analytics**: every period picker offers a custom date range next to the
+  presets — in project and company analytics, the Usage tab of Profile and a
+  member's page — so a two-week sprint can be looked at on its own.
+- **Company sessions**: the same sorting and date-range filter, plus a filter
+  by project.
 - **Docs**: a changelog page at `/changelog`, linked next to Docs and API in
   the docs header and from the landing page, lists every release by product
   area. It reads `CHANGELOG.md` from the public repository, and the copy the
@@ -59,6 +71,10 @@ governance, community health — carry none.
   with a link to open (for example to sign in) or a form to fill in is now
   stopped with an explanation, instead of waiting for a person who never
   comes.
+- **Sessions & Runs**: a finished session no longer waits, up to 20 seconds
+  under load, while a workflow step's session is being prepared.
+- **Aixle Builder**: starting a builder session with an expired agent login
+  shows the reason instead of an error page.
 
 ## [1.0.0] - 2026-10-08
 
@@ -336,5 +352,6 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.0.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.1.0...develop
+[1.1.0]: https://github.com/AixleHQ/flow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AixleHQ/flow/releases/tag/v1.0.0
