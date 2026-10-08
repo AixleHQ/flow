@@ -104,9 +104,12 @@ module Agents
 
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
+    # --disable-auto-update (hidden): every chat otherwise starts a background download of
+    # the newest release (~180 MB) two seconds in, replacing the version the image pins.
     # The prompt is appended by AgentSessionStrategy, read from its prompt file.
     def session_command(mode:, model: nil)
-      model ? "agent --force --model #{Shellwords.shellescape(model)}" : "agent --force"
+      command = "agent --force --disable-auto-update"
+      model ? "#{command} --model #{Shellwords.shellescape(model)}" : command
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)

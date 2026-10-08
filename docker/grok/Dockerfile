@@ -46,9 +46,8 @@ RUN set -eux; \
     npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
-# installers that install only the latest release, and the canary builds the newest
-# release of the pinned ones, so the version is not always the one this file names.
+# `docker run <image> cat /etc/aixle-cli-version`. The canary builds the vendor's newest
+# release instead of the pin, so the version is not always the one the registry names.
 RUN su - grok -c "grok --version" > /etc/aixle-cli-version
 
 # Integration boundary: Agents::GrokAdapter#context_file_path writes every session's

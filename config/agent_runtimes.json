@@ -21,9 +21,9 @@
       "description": "AI-powered code editor with context-aware suggestions",
       "image": "cursor-cli",
       "dockerfile": "docker/cursor-cli/Dockerfile",
-      "cli_version": null,
-      "cli_latest": null,
-      "cli_releases": null
+      "cli_version": "2026.10.01-e373342",
+      "cli_latest": { "url": "https://cursor.com/install", "pattern": "downloads\\.cursor\\.com/lab/([^/]+)/" },
+      "cli_releases": { "url": "https://cursor.com/docs/cli/changelog" }
     },
     {
       "id": "codex",
@@ -81,9 +81,9 @@
       "description": "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
       "image": "kiro-cli",
       "dockerfile": "docker/kiro-cli/Dockerfile",
-      "cli_version": null,
-      "cli_latest": null,
-      "cli_releases": null
+      "cli_version": "2.28.0",
+      "cli_latest": { "url": "https://prod.download.cli.kiro.dev/stable/latest/manifest.json", "jq": ".version" },
+      "cli_releases": { "url": "https://kiro.dev/changelog/cli/" }
     }
   ]
 }

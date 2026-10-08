@@ -424,12 +424,10 @@ rebuild; the tracked-domain changes are app-side and take effect on the next ses
 - **`antigravity-cli` was missing from the `.github/workflows/images.yml` matrix** — the
   Makefile built it locally, CI never published it, so there was no
   `ghcr.io/aixlehq/flow-antigravity-cli` for production to pull. Added.
-- **CLI versions.** Claude Code (through `claude.ai/install.sh`'s version argument),
-  Codex, Gemini, Grok and Antigravity are pinned in their Dockerfiles; a release reaches
-  an image when someone raises the pin. Cursor and Kiro come from vendor installers that
-  install only the latest release — their install layers rebuild when the installer or
-  its manifest changes, so identical Dockerfiles still produce different CLIs on
-  different days for those two. Every image records its CLI version at
+- **CLI versions.** Every runtime's CLI is pinned in `config/agent_runtimes.json`; a
+  release reaches an image when someone raises the pin. Cursor and Kiro, whose vendor
+  installers install only the latest release, are installed from the versioned package
+  URL the installer itself downloads. Every image records its CLI version at
   `/etc/aixle-cli-version`.
 - **A weekly canary build** (done) so a vendor-side auth change is found on a Monday
   morning rather than in a user's session. It builds the newest release of every pinned

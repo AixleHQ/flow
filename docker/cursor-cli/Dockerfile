@@ -17,19 +17,26 @@ RUN useradd -m -d /home/cursor -s /bin/bash -G ${AGENT_BROWSERS_GROUP} cursor \
 
 USER cursor
 WORKDIR /home/cursor
-# The installer embeds the one release it downloads, so it cannot pin. The registry
-# build cache keys this layer on the Dockerfile text; the script is ADDed instead —
-# BuildKit checksums an ADDed URL on every build — so the install reruns exactly when
-# a release ships. Running a downloaded file also replaces `curl … | bash`, where a
-# failed download ran an empty script and exited 0.
-ADD --chmod=755 https://cursor.com/install /tmp/cursor-install.sh
-RUN bash /tmp/cursor-install.sh \
-    && test -x /home/cursor/.local/bin/agent
+# What https://cursor.com/install does, for the release the registry pins: that script
+# embeds the one release it downloads, so it cannot install any other. Cursor publishes
+# no checksum for the package; the vendor's installer verifies none either.
+ARG TARGETARCH
+ARG CLI_VERSION
+RUN set -eux; \
+    : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}"; \
+    arch="${TARGETARCH:-amd64}"; [ "$arch" = "amd64" ] && arch=x64; \
+    dir="/home/cursor/.local/share/cursor-agent/versions/${CLI_VERSION}"; \
+    mkdir -p "$dir" /home/cursor/.local/bin; \
+    curl -fsSL "https://downloads.cursor.com/lab/${CLI_VERSION}/linux/${arch}/agent-cli-package.tar.gz" \
+      | tar --strip-components=1 -xzf - -C "$dir"; \
+    ln -s "$dir/cursor-agent" /home/cursor/.local/bin/agent; \
+    ln -s "$dir/cursor-agent" /home/cursor/.local/bin/cursor-agent; \
+    test "$(/home/cursor/.local/bin/agent --version)" = "$CLI_VERSION"
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 USER root
 # `install -d` creates just the config dirs with the right owner. A `chown -R` over
-# /home/cursor would be a no-op (the installer above ran AS cursor) that still copied
+# /home/cursor would be a no-op (the install above ran AS cursor) that still copied
 # up the whole 229 MB install — bundled node included — into this layer
 # (docs/research/technical-agent-image-size-audit-2026-08-04.md).
 RUN test -x /home/cursor/.local/bin/agent \
@@ -37,9 +44,8 @@ RUN test -x /home/cursor/.local/bin/agent \
     && install -d -o cursor -g cursor /home/cursor/.config /home/cursor/.config/cursor /home/cursor/.cursor
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
-# installers that install only the latest release, and the canary builds the newest
-# release of the pinned ones, so the version is not always the one this file names.
+# `docker run <image> cat /etc/aixle-cli-version`. The canary builds the vendor's newest
+# release instead of the pin, so the version is not always the one the registry names.
 RUN agent --version > /etc/aixle-cli-version
 
 # =============================================================================

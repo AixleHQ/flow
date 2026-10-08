@@ -40,9 +40,8 @@ ENV PATH="/home/claude/.local/bin:${PATH}"
 USER root
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
-# installers that install only the latest release, and the canary builds the newest
-# release of the pinned ones, so the version is not always the one this file names.
+# `docker run <image> cat /etc/aixle-cli-version`. The canary builds the vendor's newest
+# release instead of the pin, so the version is not always the one the registry names.
 RUN /home/claude/.local/bin/claude --version > /etc/aixle-cli-version
 
 # -----------------------------------------------------------------------------
