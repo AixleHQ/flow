@@ -194,6 +194,60 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     );
   });
 
+  it('sorts by a column through q[s], highest first, and flips on a second click', async () => {
+    const { unmount } = renderWith(seed());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cost' }));
+    expect(router.get).toHaveBeenLastCalledWith(
+      '/company/projects/7/sessions',
+      { type: 'all', q: { s: 'cost_cents desc' } },
+      expect.anything(),
+    );
+    unmount();
+
+    renderWith(seed({ query: { s: 'cost_cents desc' } }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cost, sorted descending' }));
+    expect(router.get).toHaveBeenLastCalledWith(
+      '/company/projects/7/sessions',
+      { type: 'all', q: { s: 'cost_cents asc' } },
+      expect.anything(),
+    );
+  });
+
+  it('keeps the sort and date range when another filter changes', async () => {
+    renderWith(
+      seed({
+        query: { s: 'duration_seconds desc', createdFrom: '2026-09-24', createdUntil: '2026-10-01' },
+        workflowOptions: [{ id: 12, name: 'Weekly GA report' }],
+      }),
+    );
+
+    await userEvent.click(screen.getByPlaceholderText('Workflow'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Weekly GA report' }));
+
+    expect(router.get).toHaveBeenLastCalledWith(
+      '/company/projects/7/sessions',
+      {
+        type: 'all',
+        workflow_id: '12',
+        q: { s: 'duration_seconds desc', created_from: '2026-09-24', created_until: '2026-10-01' },
+      },
+      expect.anything(),
+    );
+  });
+
+  it('offers no workflow filter on the Standalone tab', () => {
+    renderWith(seed({ filters: { type: 'solo' }, workflowOptions: [{ id: 12, name: 'Weekly GA report' }] }));
+
+    expect(screen.queryByPlaceholderText('Workflow')).not.toBeInTheDocument();
+  });
+
+  it('says the filters matched nothing when only a date range is set', () => {
+    renderWith(seed({ entries: [], total: 0, query: { createdFrom: '2026-09-24', createdUntil: '2026-10-01' } }));
+
+    expect(screen.getByText('No sessions match these filters.')).toBeInTheDocument();
+  });
+
   it('says the project is empty when nothing has run in it', () => {
     renderWith(seed({ entries: [], total: 0 }));
 

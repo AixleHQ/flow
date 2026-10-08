@@ -22,6 +22,7 @@ class WorkflowRun < ApplicationRecord
   end
 
   include WorkflowRunStateMachine
+  include CreatedWithinDates
   extend Enumerize
 
   belongs_to :workflow
@@ -100,11 +101,42 @@ class WorkflowRun < ApplicationRecord
   scope :for_user_in_period, ->(user, range) { where(user: user, created_at: range) }
 
   def self.ransackable_attributes(_auth_object = nil)
-    %w[state mode project_id user_id created_at]
+    %w[state mode project_id user_id created_at cost_cents total_tokens duration_seconds]
   end
 
   def self.ransackable_associations(_auth_object = nil)
     []
+  end
+
+  def self.ransackable_scopes(_auth_object = nil)
+    %w[created_from created_until]
+  end
+
+  # A run has no cost or tokens of its own: they are its step sessions', each
+  # counted once — the same sums its list row shows.
+  ransacker :cost_cents, type: :integer do
+    Arel.sql(<<~SQL.squish)
+      (SELECT COALESCE(SUM(step_sessions.cost_cents), 0) FROM terminal_sessions step_sessions
+       WHERE step_sessions.id IN
+         (SELECT run_steps.terminal_session_id FROM step_runs run_steps WHERE run_steps.workflow_run_id = workflow_runs.id))
+    SQL
+  end
+
+  ransacker :total_tokens, type: :integer do
+    Arel.sql(<<~SQL.squish)
+      (SELECT COALESCE(SUM(step_sessions.total_tokens), 0) FROM terminal_sessions step_sessions
+       WHERE step_sessions.id IN
+         (SELECT run_steps.terminal_session_id FROM step_runs run_steps WHERE run_steps.workflow_run_id = workflow_runs.id))
+    SQL
+  end
+
+  # Start to completion; a live run counts up to now, as its list row does.
+  ransacker :duration_seconds, type: :integer do
+    Arel.sql(<<~SQL.squish)
+      EXTRACT(EPOCH FROM (COALESCE(workflow_runs.completed_at,
+        CASE WHEN workflow_runs.state IN ('pending', 'running', 'paused') THEN NOW() END)
+        - workflow_runs.started_at))
+    SQL
   end
 
   def can_run_non_interactive?

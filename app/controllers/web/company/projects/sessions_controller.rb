@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::SessionsController < Web::Company::Projects::ApplicationController
+  include SessionListQuery
+
   ROWS_LIMIT = 100
 
   # The unified Sessions & Runs list. Standalone sessions and workflow runs are
@@ -10,7 +12,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       project: current_project,
       viewer: current_user,
       filters: feed_filters,
-      type: list_type
+      type: list_type,
+      query: list_query
     )
     result = feed.page(page: [ (params[:page] || 1).to_i, 1 ].max, limit: per_page)
 
@@ -18,8 +21,10 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       project: project_props,
       entries: InertiaRails.scroll(result.pagy) { result.entries.map { |entry| serialize_entry(entry) } },
       filters: feed_filters.merge(type: list_type),
+      query: list_query.merge(s: feed.sort.to_s),
       total: result.pagy.count,
       user_options: feed.user_options,
+      workflow_options: feed.workflow_options,
       # Both create flows are drawers on this page now, so their option lists
       # live here — but only a user who actually opens a drawer pays for them.
       create_options: InertiaRails.optional { create_options },
@@ -99,7 +104,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       search: params[:search].presence,
       agent_type: params[:agent_type].presence,
       status: params[:status].presence,
-      user_id: params[:user_id].presence
+      user_id: params[:user_id].presence,
+      workflow_id: params[:workflow_id].presence
     }.compact
   end
 

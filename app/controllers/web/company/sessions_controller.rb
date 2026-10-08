@@ -5,26 +5,31 @@
 # project feed this stays session-level: a workflow step is its own row, never
 # folded under a parent run — SessionsRunsFeed::LISTABLE_SESSION_TYPES.
 class Web::Company::SessionsController < Web::Company::ApplicationController
+  include SessionListQuery
+
   # In-flight states, for the visibility-scoped search below.
   SEARCH_IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
   ROWS_LIMIT = 100
 
   def index
     base = filtered_scope
+    sort = SessionListSort.new(list_query[:s])
 
     scope = base.with_cached_resource_counts
               .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :config_items,
                         :input_assets, :repositories)
-              .order(created_at: :desc)
+              .order(sort.order(sort.column(TerminalSession)), created_at: :desc, id: :desc)
 
     render inertia: "Company/Sessions/Index", props: {
       sessions: inertia_scroll(scope) { |records|
         records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
       filters: feed_filters.merge(type: list_type),
+      query: list_query.merge(s: sort.to_s),
       total: base.count,
       user_options: user_options,
+      project_options: project_options,
       cable_stream: inertia_cable_stream(current_company, :sessions)
     }
   end
@@ -70,15 +75,18 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
       search: params[:search].presence,
       agent_type: params[:agent_type].presence,
       status: params[:status].presence,
-      user_id: params[:user_id].presence
+      user_id: params[:user_id].presence,
+      project_id: params[:project_id].presence
     }.compact
   end
 
   def filtered_scope
     scope = company_sessions_scope.where(session_type: type_session_types)
+                                  .ransack(list_query.except(:s)).result
 
     scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
     scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
+    scope = scope.where(project_id: params[:project_id]) if params[:project_id].present?
 
     if params[:status].present?
       states = SessionsRunsFeed::STATUS_FILTERS.dig(params[:status].to_s, :sessions)
@@ -124,5 +132,13 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
     ids = company_sessions_scope.where(session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
                                 .distinct.pluck(:user_id)
     User.where(id: ids.compact).order(:name).map { |u| { id: u.id, name: u.name.presence || u.email } }
+  end
+
+  # Projects with a session in this company's list — the Project filter's
+  # options, named as the rows already name them.
+  def project_options
+    ids = company_sessions_scope.where(session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+                                .distinct.select(:project_id)
+    Project.where(id: ids).order(:name).map { |p| { id: p.id, name: p.name } }
   end
 end

@@ -144,6 +144,29 @@ describe('Company/Sessions/Index', () => {
     expect(router.get).toHaveBeenCalledWith('/company/sessions', { user_id: '3' }, expect.anything());
   });
 
+  it('sorts by a column header through q[s] and filters by project', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<SessionsIndex {...seed({ projectOptions: [{ id: 9, name: 'Analytics Revamp' }] })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Duration' }));
+    expect(router.get).toHaveBeenCalledWith(
+      '/company/sessions',
+      { q: { s: 'duration_seconds desc' } },
+      expect.anything(),
+    );
+
+    await user.click(screen.getByPlaceholderText('Project'));
+    await user.click(await screen.findByRole('option', { name: 'Analytics Revamp' }));
+    expect(router.get).toHaveBeenCalledWith('/company/sessions', { project_id: '9' }, expect.anything());
+  });
+
+  it('marks the active sort column', () => {
+    renderAuthedPage(<SessionsIndex {...seed({ query: { s: 'total_tokens asc' } })} />);
+
+    expect(screen.getByRole('button', { name: 'Tokens, sorted ascending' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cost' })).toBeInTheDocument();
+  });
+
   it('shows the no-sessions empty state, and a filtered one when filters are active', () => {
     const { rerender } = renderAuthedPage(<SessionsIndex {...seed({ sessions: [], total: 0 })} />);
     expect(screen.getByText('No sessions yet')).toBeInTheDocument();

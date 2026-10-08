@@ -15,6 +15,20 @@ class Web::Company::Projects::SessionsControllerTest < ActionDispatch::Integrati
     assert_inertia_page "Projects/Sessions/SessionsRunsPage"
   end
 
+  test "index sorts and narrows the feed through q and the workflow filter" do
+    workflow = create(:workflow, scope: @project, name: "Weekly GA report")
+    create(:terminal_session, :agent_session, user: @user, project: @project)
+    older = create(:workflow_run, workflow: workflow, project: @project, user: @user, created_at: 2.hours.ago)
+    newer = create(:workflow_run, workflow: workflow, project: @project, user: @user, created_at: 1.hour.ago)
+
+    get company_project_sessions_path(@project, workflow_id: workflow.id, q: { s: "created_at asc" })
+
+    assert_equal [ older.id, newer.id ], inertia.props[:entries].map { |e| e[:id] }
+    assert_equal "created_at asc", inertia.props[:query][:s]
+    assert_equal workflow.id.to_s, inertia.props[:filters][:workflowId]
+    assert_equal [ { id: workflow.id, name: "Weekly GA report" } ], inertia.props[:workflowOptions].map(&:symbolize_keys)
+  end
+
   test "new renders new session page" do
     get new_company_project_session_path(@project)
     assert_inertia_page "Projects/Sessions/NewPage"
