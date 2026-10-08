@@ -18,6 +18,19 @@ class AgentRuntimesRegistryTest < ActiveSupport::TestCase
     end
   end
 
+  test "a Dockerfile that verifies per-release checksums has a pair for its pin" do
+    RUNTIMES.each do |runtime|
+      version = runtime.fetch("cli_version")
+      dockerfile = Rails.root.join(runtime.fetch("dockerfile")).read
+      next if version.nil? || !dockerfile.include?('case "${CLI_VERSION}/$arch" in')
+
+      arches = dockerfile.scan(%r{^\s*#{Regexp.escape(version)}/(\w+)\)\s+sha256="\h{64}"}).flatten
+
+      assert_equal 2, arches.uniq.size,
+                   "#{runtime['id']}: add the #{version} checksum for both architectures to #{runtime['dockerfile']}"
+    end
+  end
+
   test "every runtime has an image override setting and both launch commands" do
     ids = AgentRuntime.ids.sort
 

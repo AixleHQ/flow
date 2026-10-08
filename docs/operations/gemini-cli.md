@@ -16,7 +16,7 @@ credentials.
 
 ## Runtime contract
 
-- Image package: `@google/gemini-cli@0.57.0`, pinned in the Dockerfile.
+- Image package: `@google/gemini-cli`, pinned by `cli_version` in `config/agent_runtimes.json`.
 - Executable: `gemini`.
 - Authentication: `GEMINI_API_KEY`; personal OAuth is not captured or injected.
 - Configuration: `/home/gemini/.gemini/settings.json`.
@@ -48,9 +48,9 @@ docker run --rm --entrypoint gemini aixle/gemini-cli:latest --version
 docker run --rm --entrypoint gemini aixle/gemini-cli:latest --help
 ```
 
-The version must be `0.57.0`; help must list `--model`, `--yolo`, `mcp`, `skills`,
-and `hooks`. For an authenticated end-to-end smoke test, inject a test API key and
-run headlessly without printing the key:
+The version must match the `gemini_cli` pin in `config/agent_runtimes.json`; help must
+list `--model`, `--yolo`, `mcp`, `skills`, and `hooks`. For an authenticated end-to-end
+smoke test, inject a test API key and run headlessly without printing the key:
 
 ```sh
 docker run --rm -e GEMINI_API_KEY --entrypoint gemini \

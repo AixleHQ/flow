@@ -9,7 +9,7 @@
       "description": "Anthropic's AI coding assistant with deep reasoning capabilities",
       "image": "claude-code",
       "dockerfile": "docker/claude-code/Dockerfile",
-      "cli_version": "2.1.281",
+      "cli_version": "2.1.294",
       "cli_latest": { "url": "https://downloads.claude.ai/claude-code-releases/latest" },
       "cli_releases": { "github": "anthropics/claude-code", "tag_prefix": "v" }
     },
@@ -21,9 +21,9 @@
       "description": "AI-powered code editor with context-aware suggestions",
       "image": "cursor-cli",
       "dockerfile": "docker/cursor-cli/Dockerfile",
-      "cli_version": null,
-      "cli_latest": null,
-      "cli_releases": null
+      "cli_version": "2026.10.01-e373342",
+      "cli_latest": { "url": "https://cursor.com/install", "pattern": "downloads\\.cursor\\.com/lab/([^/]+)/" },
+      "cli_releases": { "url": "https://cursor.com/docs/cli/changelog" }
     },
     {
       "id": "codex",
@@ -33,7 +33,7 @@
       "description": "OpenAI's code generation model optimized for multiple languages",
       "image": "codex",
       "dockerfile": "docker/codex/Dockerfile",
-      "cli_version": "0.156.1",
+      "cli_version": "0.161.0",
       "cli_latest": { "npm": "@openai/codex" },
       "cli_releases": { "github": "openai/codex", "tag_prefix": "rust-v" }
     },
@@ -45,7 +45,7 @@
       "description": "Google's multimodal AI for code and documentation tasks",
       "image": "gemini-cli",
       "dockerfile": "docker/gemini-cli/Dockerfile",
-      "cli_version": "0.57.0",
+      "cli_version": "0.63.0",
       "cli_latest": { "npm": "@google/gemini-cli" },
       "cli_releases": { "github": "google-gemini/gemini-cli", "tag_prefix": "v" }
     },
@@ -69,7 +69,7 @@
       "description": "xAI's Grok CLI for agentic coding in the terminal",
       "image": "grok",
       "dockerfile": "docker/grok/Dockerfile",
-      "cli_version": "1.0.41",
+      "cli_version": "1.0.46",
       "cli_latest": { "npm": "@xai-official/grok" },
       "cli_releases": null
     },
@@ -81,9 +81,9 @@
       "description": "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
       "image": "kiro-cli",
       "dockerfile": "docker/kiro-cli/Dockerfile",
-      "cli_version": null,
-      "cli_latest": null,
-      "cli_releases": null
+      "cli_version": "2.28.0",
+      "cli_latest": { "url": "https://prod.download.cli.kiro.dev/stable/latest/manifest.json", "jq": ".version" },
+      "cli_releases": { "url": "https://kiro.dev/changelog/cli/" }
     }
   ]
 }

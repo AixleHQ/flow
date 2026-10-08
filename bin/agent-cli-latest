@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Prints the vendor's newest release of one runtime in config/agent_runtimes.json (by id
+# or image), read from its `cli_latest` source, or nothing when it names none. The weekly
+# canary builds this version and bin/agent-cli-report compares the pin with it. Needs jq
+# and curl.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+runtime="$(jq -ce --arg id "${1:?usage: bin/agent-cli-latest <runtime id or image>}" \
+  '.runtimes[] | select(.id == $id or .image == $id)' config/agent_runtimes.json)"
+latest="$(jq -c '.cli_latest // empty' <<<"$runtime")"
+[ -n "$latest" ] || exit 0
+
+npm="$(jq -r '.npm // empty' <<<"$latest")"
+url="$(jq -r '.url // empty' <<<"$latest")"
+filter="$(jq -r '.jq // empty' <<<"$latest")"
+pattern="$(jq -r '.pattern // empty' <<<"$latest")"
+
+if [ -n "$npm" ]; then
+  version="$(curl -fsSL "https://registry.npmjs.org/${npm}/latest" | jq -r .version)"
+else
+  body="$(curl -fsSL "$url")"
+  if [ -n "$filter" ]; then
+    version="$(jq -r "$filter" <<<"$body")"
+  elif [ -n "$pattern" ]; then
+    version="$(jq -Rrs --arg re "$pattern" 'first(match($re).captures[0].string) // empty' <<<"$body")"
+  else
+    version="$body"
+  fi
+fi
+
+# The value becomes a Docker build arg and a download path: an error page or an empty
+# match must fail here, not as a confusing build failure.
+if ! [[ "$version" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]]; then
+  echo "agent-cli-latest: $(jq -r .id <<<"$runtime"): no version in ${npm:-$url}" >&2
+  exit 1
+fi
+echo "$version"

@@ -21,12 +21,14 @@ module Agents
     # The map is therefore built from the live catalog (see fetch_model_upgrades),
     # which is the same source the CLI reads — a hardcoded target slug goes stale
     # the moment OpenAI moves the migration target and the dialog comes back.
-    # FALLBACK_MODEL_MIGRATIONS is the last resort for when the catalog is
-    # unreachable (expired token, network failure); it mirrors the mappings the CLI
-    # ships in codex-rs/models-manager/models.json.
+    # FALLBACK_MODEL_MIGRATIONS covers what the live catalog cannot: the catalog is
+    # unreachable (expired token, network failure), or it no longer lists the
+    # configured model at all. It mirrors the mappings the CLI hardcodes for a saved
+    # model that outlived its catalog entry (codex-rs/tui/src/app/startup_prompts.rs,
+    # model_upgrade_for_migration, as of 0.161.0).
     FALLBACK_MODEL_MIGRATIONS = {
-      "gpt-5.4" => "gpt-5.6-terra",
-      "gpt-5.4-mini" => "gpt-5.6-luna"
+      "gpt-5.4" => "gpt-6-sol",
+      "gpt-5.4-mini" => "gpt-6-luna"
     }.freeze
 
     # Migration mappings become TOML keys, and the CLI compares the *parsed* key
@@ -789,6 +791,12 @@ module Agents
 
         # The image pins the CLI version: no startup update check or update prompt
         check_for_update_on_startup = false
+
+        # On by default since 0.157: the TUI moves the session into a shared background
+        # server whenever argv carries no -c override, and offers an interactive recovery
+        # choice when that server's settings disagree. Keep every session in-process.
+        [features]
+        daemon_auto_start = false
 
         [projects."#{workspace}"]
         trust_level = "trusted"

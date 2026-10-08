@@ -761,13 +761,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
     adapter = Agents::CursorCliAdapter.new
-    assert_equal "agent --force", adapter.session_command(mode: "interactive")
+    assert_equal "agent --force --disable-auto-update", adapter.session_command(mode: "interactive")
   end
 
   test "Cursor adapter session_command returns agent --force for non_interactive mode" do
     adapter = Agents::CursorCliAdapter.new
     result = adapter.session_command(mode: "non_interactive")
-    assert_equal "agent --force", result
+    assert_equal "agent --force --disable-auto-update", result
   end
 
   test "Base adapter session_command raises NotImplementedError" do

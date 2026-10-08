@@ -159,7 +159,7 @@ module Agents
       toml = codex_toml({ model: "gpt-5.4" })
 
       assert_includes toml, '"gpt-5.4" = "gpt-6-future"'
-      refute_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
+      refute_includes toml, "\"gpt-5.4\" = \"#{Agents::CodexAdapter::FALLBACK_MODEL_MIGRATIONS.fetch("gpt-5.4")}\""
     end
 
     test "config_files falls back to the shipped migration map when the catalog is unreachable" do
@@ -236,6 +236,14 @@ module Agents
       assert_includes toml, '"hide_gpt-5.1-codex-max_migration_prompt" = true'
       # The trust dialog stays suppressed through the project entry.
       assert_includes toml, 'trust_level = "trusted"'
+    end
+
+    test "config_files keeps a session out of the Codex background server" do
+      stub_codex_models([])
+
+      [ codex_toml({}), @adapter.auth_setup_files["/home/codex/.codex/config.toml"] ].each do |toml|
+        assert_match(/^\[features\]\ndaemon_auto_start = false$/, toml)
+      end
     end
 
     test "fetch_subscription_usage returns nil for an API-key login" do

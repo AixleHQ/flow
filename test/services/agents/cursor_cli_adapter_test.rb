@@ -158,15 +158,17 @@ module Agents
     # session_command
     # =========================================================================
 
-    test "session_command returns agent --force without a model" do
-      assert_equal "agent --force", @adapter.session_command(mode: "interactive")
-      assert_equal "agent --force", @adapter.session_command(mode: "non_interactive")
+    test "session_command runs the pinned CLI without updating it" do
+      assert_equal "agent --force --disable-auto-update", @adapter.session_command(mode: "interactive")
+      assert_equal "agent --force --disable-auto-update", @adapter.session_command(mode: "non_interactive")
     end
 
     test "session_command appends a shell-escaped model flag when model provided" do
-      assert_equal "agent --force --model gpt-5.1", @adapter.session_command(mode: "interactive", model: "gpt-5.1")
+      assert_equal "agent --force --disable-auto-update --model gpt-5.1",
+                   @adapter.session_command(mode: "interactive", model: "gpt-5.1")
       # Space in the model name must be shell-escaped so it stays one argument.
-      assert_equal "agent --force --model claude\\ sonnet", @adapter.session_command(mode: "interactive", model: "claude sonnet")
+      assert_equal "agent --force --disable-auto-update --model claude\\ sonnet",
+                   @adapter.session_command(mode: "interactive", model: "claude sonnet")
     end
 
     # =========================================================================

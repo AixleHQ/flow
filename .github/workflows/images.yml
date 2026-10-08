@@ -11,10 +11,10 @@ on:
     # otherwise republish images that nothing is ready to deploy.
     tags:
       - "v*"
-  # Weekly canary. It builds the vendors' newest CLI releases — Cursor and Kiro always
-  # install their latest, and for the pinned CLIs the canary passes the newest version
-  # instead of the pin — so a vendor-side break is found here, on a Monday morning,
-  # rather than in a user's session, and a green run says a pin can be raised. It
+  # Weekly canary. It builds the vendors' newest CLI releases — passing the newest
+  # version instead of the pin wherever the registry names a source for it — so a
+  # vendor-side break is found here, on a Monday morning, rather than in a user's
+  # session, and a green run says a pin can be raised. It
   # publishes only `canary-YYYYMMDD` — not `latest` and not a version a deployment
   # could pick up — so promoting a canary stays a human act: raise the pin and release.
   schedule:
@@ -254,9 +254,9 @@ jobs:
         run: |
           matrix="$(jq -c '{include: [.runtimes[] | {
             label, image, dockerfile,
+            id,
             cli_version: (.cli_version // ""),
-            latest_npm: (.cli_latest.npm // ""),
-            latest_url: (.cli_latest.url // "")
+            has_latest: (.cli_latest != null)
           }]}' config/agent_runtimes.json)"
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
@@ -303,22 +303,19 @@ jobs:
             type=semver,pattern={{major}}
 
       # A release build installs the registry's pin; the canary swaps in the vendor's
-      # newest release where the registry names a source for it. Runtimes without a pin
-      # (Cursor, Kiro) install the vendor's newest either way.
+      # newest release where the registry names a source for it.
       - name: Resolve CLI Version
         id: cli
         env:
+          RUNTIME: ${{ matrix.id }}
           PINNED: ${{ matrix.cli_version }}
-          LATEST_NPM: ${{ matrix.latest_npm }}
-          LATEST_URL: ${{ matrix.latest_url }}
+          HAS_LATEST: ${{ matrix.has_latest }}
           CANARY: ${{ github.event_name == 'schedule' }}
         run: |
           set -euo pipefail
           version="$PINNED"
-          if [ "$CANARY" = "true" ] && [ -n "$LATEST_NPM" ]; then
-            version="$(curl -fsSL "https://registry.npmjs.org/${LATEST_NPM}/latest" | jq -r .version)"
-          elif [ "$CANARY" = "true" ] && [ -n "$LATEST_URL" ]; then
-            version="$(curl -fsSL "$LATEST_URL")"
+          if [ "$CANARY" = "true" ] && [ "$HAS_LATEST" = "true" ]; then
+            version="$(bin/agent-cli-latest "$RUNTIME")"
           fi
           if [ -n "$version" ]; then echo "build_arg=CLI_VERSION=${version}" >> "$GITHUB_OUTPUT"; fi
 
