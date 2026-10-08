@@ -14,8 +14,8 @@ class CompanyWorkflowCostAnalyticsService
     @company = company
     @user    = user
     @scope   = scope.to_s
-    @period  = period.to_s
-    @since   = AnalyticsPeriod.since(@period)
+    @period  = AnalyticsPeriod.window(period)
+    @range   = @period.range
   end
 
   def call
@@ -42,10 +42,10 @@ class CompanyWorkflowCostAnalyticsService
 
   private
 
-  attr_reader :company, :user, :scope, :since, :period
+  attr_reader :company, :user, :scope, :range, :period
 
   def base_runs
-    base = WorkflowRun.joins(:project).where(projects: { company_id: company.id }, created_at: since..)
+    base = WorkflowRun.joins(:project).where(projects: { company_id: company.id }, created_at: range)
     scope == "user" ? base.where(user:) : base
   end
 end

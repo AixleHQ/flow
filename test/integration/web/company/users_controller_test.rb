@@ -191,6 +191,14 @@ class Web::Company::UsersControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props period: "7d"
   end
 
+  test "a custom range is passed through with its dates" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      get user_path(@colleague, period: "custom", from: "2026-09-24", to: "2026-10-07")
+
+      assert_inertia_props period: "custom", from: "2026-09-24", to: "2026-10-07"
+    end
+  end
+
   test "a member of another company is a 404, not a 403" do
     other_company = create(:company)
     stranger = create(:user, :employee, :onboarding_completed, company: other_company)

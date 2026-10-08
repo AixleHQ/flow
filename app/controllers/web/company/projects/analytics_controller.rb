@@ -1,19 +1,20 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::AnalyticsController < Web::Company::Projects::ApplicationController
+  include AnalyticsPeriodParams
+
   def index
     scope = params.fetch(:scope, "project")
-    period = params.fetch(:period, "30d")
     participant_id = params[:participant_id].presence
     filter_opts = {
-      project: current_project, user: current_user, scope: scope, period: period,
+      project: current_project, user: current_user, scope: scope, period: analytics_window,
       tags: params[:tags], task_type: params[:task_type], participant_id: participant_id
     }
 
     render inertia: "Projects/Analytics/AnalyticsPage", props: {
       project: project_props,
       scope: scope,
-      period: period,
+      **analytics_period_props,
       participant_id: participant_id,
       participants: current_project.member_users.map { |u| { id: u.id, name: u.name, email: u.email } },
       activity_heatmap: InertiaRails.defer(group: "analytics") {

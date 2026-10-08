@@ -9,8 +9,8 @@ class CompanySessionCostTokenUsageService
     @company = company
     @user    = user
     @scope   = scope.to_s
-    @period  = period.to_s
-    @since   = AnalyticsPeriod.since(@period)
+    @period  = AnalyticsPeriod.window(period)
+    @range   = @period.range
   end
 
   def call
@@ -51,10 +51,10 @@ class CompanySessionCostTokenUsageService
 
   private
 
-  attr_reader :company, :user, :scope, :since, :period
+  attr_reader :company, :user, :scope, :range, :period
 
   def base_sessions
-    scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+    scope_sessions.where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
   end
 
   def scope_sessions

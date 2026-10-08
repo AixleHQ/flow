@@ -53,6 +53,20 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     assert { result.workflows.first.total_cost_cents == 100 }
   end
 
+  test "a custom period counts only runs between its two days" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 7, input_tokens: 1, output_tokens: 1,
+        created_at: Time.zone.parse("2026-10-02 08:00"))
+      create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 30, input_tokens: 1, output_tokens: 1,
+        created_at: Time.zone.parse("2026-09-30 08:00"))
+
+      result = call_service(scope: "project", period: AnalyticsPeriod.window("custom", from: "2026-09-24", to: "2026-10-01"))
+
+      assert_equal 30, result.totals[:total_cost_cents]
+      assert_equal 1, result.workflows.sum(&:run_count)
+    end
+  end
+
   test "project scope excludes runs outside the period window" do
     create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 50, input_tokens: 100, output_tokens: 50, created_at: 60.days.ago)
 

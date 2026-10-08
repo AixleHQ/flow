@@ -1,5 +1,5 @@
 import { Deferred, Head, router, usePage } from '@inertiajs/react';
-import { Box, Grid, Group, Paper, SegmentedControl, Select, SimpleGrid, Skeleton, Text } from '@mantine/core';
+import { Box, Grid, Group, Paper, SegmentedControl, SimpleGrid, Skeleton, Text } from '@mantine/core';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
@@ -9,9 +9,10 @@ import {
   ChartSkeleton,
   type AgentActivityData,
   type Period,
-  PERIOD_OPTIONS,
+  type PeriodWindow,
+  periodParams,
   SummarySkeletons,
-  tickIntervalForPeriod,
+  tickIntervalForWindow,
 } from 'shared/analytics/chartHelpers';
 import {
   AgentActivityPanel,
@@ -23,6 +24,7 @@ import {
   SummaryPanel,
   type UsageScope,
 } from 'shared/analytics/panels';
+import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatCostCents, formatTokens } from 'shared/lib/formatUsage';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -54,6 +56,8 @@ interface WorkflowCostData {
 interface Props {
   scope: Scope;
   period: Period;
+  from: string;
+  to: string;
   summary?: SummaryData;
   agentActivity?: AgentActivityData;
   sources?: SourceData;
@@ -61,8 +65,12 @@ interface Props {
   workflowCosts?: WorkflowCostData;
 }
 
-function navigateWithFilters(scope: string, period: string) {
-  router.get(window.location.pathname, { scope, period }, { preserveState: true, preserveScroll: true });
+function navigateWithFilters(scope: string, periodWindow: PeriodWindow) {
+  router.get(
+    window.location.pathname,
+    { scope, ...periodParams(periodWindow) },
+    { preserveState: true, preserveScroll: true },
+  );
 }
 
 // --- Data panels ---
@@ -147,10 +155,11 @@ function ProjectBreakdownPanel() {
 // --- Main page ---
 
 const AnalyticsPage = () => {
-  const { scope, period, summary, agentActivity, costToken, workflowCosts, sources } = usePage<{
+  const { scope, period, from, to, summary, agentActivity, costToken, workflowCosts, sources } = usePage<{
     props: Props;
   }>().props as unknown as Props;
-  const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
+  const tickInterval = useMemo(() => tickIntervalForWindow({ from, to }), [from, to]);
+  const periodWindow: PeriodWindow = { period, from, to };
   const [usageScope, setUsageScope] = useState<UsageScope>('all');
   const pageSubtitle =
     scope === 'user'
@@ -159,7 +168,7 @@ const AnalyticsPage = () => {
 
   useEffect(() => {
     setUsageScope('all');
-  }, [period, scope]);
+  }, [period, from, to, scope]);
 
   return (
     <AuthLayout>
@@ -173,7 +182,7 @@ const AnalyticsPage = () => {
         <Group mb="xl" gap="sm" wrap="wrap">
           <SegmentedControl
             value={scope}
-            onChange={(v) => navigateWithFilters(v, period)}
+            onChange={(v) => navigateWithFilters(v, periodWindow)}
             data={[
               { label: 'Company', value: 'company' },
               { label: 'My activity', value: 'user' },
@@ -181,13 +190,7 @@ const AnalyticsPage = () => {
             size="sm"
           />
           <Group gap="sm" ml="auto">
-            <Select
-              value={period}
-              onChange={(v) => navigateWithFilters(scope, v ?? '30d')}
-              data={PERIOD_OPTIONS}
-              size="sm"
-              w={140}
-            />
+            <PeriodFilter {...periodWindow} onChange={(next) => navigateWithFilters(scope, next)} />
           </Group>
         </Group>
 

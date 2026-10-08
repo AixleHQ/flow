@@ -10,8 +10,8 @@ class UserSessionCostTokenUsageService
   def initialize(user:, company:, period:, project_id: nil)
     @user       = user
     @company    = company
-    @period     = period.to_s
-    @since      = AnalyticsPeriod.since(@period)
+    @period     = AnalyticsPeriod.window(period)
+    @range      = @period.range
     @project_id = project_id.presence
   end
 
@@ -36,12 +36,12 @@ class UserSessionCostTokenUsageService
 
   private
 
-  attr_reader :user, :company, :since, :project_id
+  attr_reader :user, :company, :range, :project_id
 
   def base_sessions
     scope = user.terminal_sessions
                 .where(company_id: company.id)
-                .where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+                .where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end
 end

@@ -17,7 +17,7 @@ class SessionSourceBreakdownService
     @project = project
     @user    = user
     @scope   = scope.to_s
-    @since   = AnalyticsPeriod.since(period.to_s)
+    @range   = AnalyticsPeriod.window(period).range
     @tags      = Array(tags).presence
     @task_type = task_type.presence
     @participant_id = participant_id.presence
@@ -41,10 +41,10 @@ class SessionSourceBreakdownService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :tags, :task_type, :participant_id
+  attr_reader :project, :user, :scope, :range, :tags, :task_type, :participant_id
 
   def base_sessions
-    s = scope_sessions.where(created_at: since..)
+    s = scope_sessions.where(created_at: range)
     s = s.where(user_id: participant_id) if participant_id
     apply_task_filters(s)
   end

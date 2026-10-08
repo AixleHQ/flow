@@ -22,6 +22,30 @@ class Web::Company::Projects::AnalyticsControllerTest < ActionDispatch::Integrat
     assert_inertia_props scope: "user", period: "7d"
   end
 
+  test "a custom period hands its range back to the picker and narrows the panels to it" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      [ "2026-09-30 10:00", "2026-10-05 10:00" ].each do |at|
+        s = build(:terminal_session, project: @project, user: @user, session_type: "agent_session",
+                                     agent_type: "claude_code", created_at: Time.zone.parse(at))
+        s.save!(validate: false)
+      end
+
+      get company_project_analytics_path(@project, period: "custom", from: "2026-09-24", to: "2026-10-01")
+      assert_inertia_props period: "custom", from: "2026-09-24", to: "2026-10-01"
+
+      inertia_load_deferred_props("analytics")
+      assert_inertia_props { |props| props[:summary][:totalSessions] == 1 }
+    end
+  end
+
+  test "a malformed custom period falls back to the default window" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      get company_project_analytics_path(@project, period: "custom", from: "2026-10-01", to: "2026-09-24")
+
+      assert_inertia_props period: "30d", from: "2026-09-08", to: "2026-10-08"
+    end
+  end
+
   test "index declares all analytics props as deferred including the heatmap" do
     get company_project_analytics_path(@project)
 

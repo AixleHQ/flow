@@ -54,6 +54,8 @@ function seed(overrides: Partial<UserShowProps> = {}): UserShowProps {
     accessibleProjectIds: [9],
     usageLimits: [],
     period: '30d',
+    from: '2026-09-08',
+    to: '2026-10-08',
     ...overrides,
   };
 }

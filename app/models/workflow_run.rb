@@ -95,9 +95,9 @@ class WorkflowRun < ApplicationRecord
       AS total_cost_cents
     SQL
   }
-  scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
-  scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }
-  scope :for_user_in_period, ->(user, since) { where(user: user, created_at: since..) }
+  scope :for_project_in_period, ->(project, range) { where(project: project, created_at: range) }
+  scope :for_user_in_project, ->(project, user, range) { where(project: project, user: user, created_at: range) }
+  scope :for_user_in_period, ->(user, range) { where(user: user, created_at: range) }
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[state mode project_id user_id created_at]

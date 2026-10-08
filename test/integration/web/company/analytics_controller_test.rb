@@ -36,6 +36,13 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props period: "7d"
   end
 
+  test "index passes a custom range back to the picker" do
+    travel_to Time.zone.parse("2026-10-08 12:00") do
+      get company_analytics_path(period: "custom", from: "2026-09-24", to: "2026-10-07")
+      assert_inertia_props period: "custom", from: "2026-09-24", to: "2026-10-07"
+    end
+  end
+
   test "index declares all analytics props as deferred" do
     get company_analytics_path
 

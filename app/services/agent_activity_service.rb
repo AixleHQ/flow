@@ -12,8 +12,8 @@ class AgentActivityService
     @project = project
     @user = user
     @scope = scope.to_s
-    @since = AnalyticsPeriod.since(period.to_s)
-    @period = period.to_s
+    @period = AnalyticsPeriod.window(period)
+    @range = @period.range
     @tags = Array(tags).presence
     @task_type = task_type.presence
     @participant_id = participant_id.presence
@@ -74,10 +74,10 @@ class AgentActivityService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :tags, :task_type, :participant_id
+  attr_reader :project, :user, :scope, :range, :tags, :task_type, :participant_id
 
   def base_sessions
-    s = scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+    s = scope_sessions.where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     s = s.where(user_id: participant_id) if participant_id
     apply_task_filters(s)
   end

@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { type PeriodWindow, tickIntervalForWindow } from 'shared/analytics/chartHelpers';
 import { formatCostCents, formatTokens } from 'shared/lib/formatUsage';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
@@ -30,8 +31,6 @@ import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
  * opts in simply by serving props under these names; the panels render nothing
  * until their prop arrives.
  */
-
-export type Period = '7d' | '30d' | '90d' | '1y';
 
 interface ProjectBreakdown {
   projectId: number | null;
@@ -85,13 +84,6 @@ const AGENT_COLORS = CHART_SERIES;
 const PROJECT_COLORS = CHART_SERIES;
 const getAgentColor = (i: number) => AGENT_COLORS[i % AGENT_COLORS.length];
 
-export const PERIOD_OPTIONS = [
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '90d', label: 'Last 90 days' },
-  { value: '1y', label: 'Last year' },
-];
-
 const chartTooltipStyle = {
   backgroundColor: 'var(--app-bg-default)',
   border: '1px solid var(--app-border-default)',
@@ -99,11 +91,6 @@ const chartTooltipStyle = {
   fontSize: 12,
   color: 'var(--app-text-primary)',
 };
-
-function tickIntervalForPeriod(period: Period): number {
-  const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-  return days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
-}
 
 // --- Skeletons ---
 
@@ -388,13 +375,9 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
   );
 }
 
-interface UsageAnalyticsProps {
-  period: Period;
-}
-
 /** The whole analytics block, in the order the two pages show it. */
-export function UsageAnalytics({ period }: UsageAnalyticsProps) {
-  const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
+export function UsageAnalytics({ from, to }: Pick<PeriodWindow, 'from' | 'to'>) {
+  const tickInterval = useMemo(() => tickIntervalForWindow({ from, to }), [from, to]);
 
   return (
     <>

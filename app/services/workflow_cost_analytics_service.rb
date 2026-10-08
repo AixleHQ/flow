@@ -36,9 +36,8 @@ class WorkflowCostAnalyticsService
     @project = project
     @user = user
     @scope = scope.to_s
-    @period = period.to_s
-    @days = AnalyticsPeriod.days(@period)
-    @since = @days.days.ago
+    @period = AnalyticsPeriod.window(period)
+    @range = @period.range
     @tags = Array.wrap(tags).reject(&:blank?)
     @task_type = task_type.presence
     @participant_id = participant_id.presence
@@ -56,14 +55,14 @@ class WorkflowCostAnalyticsService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :days, :period, :tags, :task_type, :participant_id
+  attr_reader :project, :user, :scope, :range, :period, :tags, :task_type, :participant_id
 
   def base_workflow_runs
     runs = case scope
     when "user"
-      WorkflowRun.for_user_in_project(project, user, since)
+      WorkflowRun.for_user_in_project(project, user, range)
     else
-      WorkflowRun.for_project_in_period(project, since)
+      WorkflowRun.for_project_in_period(project, range)
     end
 
     runs = runs.where(user_id: participant_id) if participant_id
@@ -157,6 +156,6 @@ class WorkflowCostAnalyticsService
   end
 
   def time_series_trunc
-    AnalyticsPeriod.bucket(period)
+    period.bucket
   end
 end
