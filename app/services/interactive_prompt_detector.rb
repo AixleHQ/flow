@@ -42,20 +42,24 @@ class InteractivePromptDetector
   # failed step does not have to rediscover the cause.
   SIGNATURES = [
     {
+      # Codex 0.156.0+ (codex-rs/tui/src/onboarding/trust_directory.rs). 0.155 and
+      # earlier asked "Do you trust the contents of this directory?"; every image
+      # since #303 pins 0.156.1 or newer, so that wording is not matched.
       id: :codex_workspace_trust,
       agent_types: %w[codex],
       markers: [
-        /Do you trust the contents of this directory\?/i,
-        /Yes,\s*continue/i,
-        /No,\s*quit/i
+        /Trust this folder\?/i,
+        /Trust and continue/i
       ],
-      # The last thing a blocked pane shows: the "press enter" hint, or — when the
-      # pane is captured before that line renders — the final option of the dialog.
-      # Anchored past the TUI's selection decoration ("› 1. ", "  2. ") so prose that
-      # merely mentions the phrase mid-sentence does not qualify as a footer.
-      footer: /\A[\s>›*•|-]*(?:\d+[.)]\s*)?(?:No,\s*quit|Press enter to continue)\b/i,
+      # The last thing a blocked pane shows: the key hint, or — when the pane is
+      # captured before that line renders — the dialog's final option. The cancel
+      # choice depends on where the TUI runs: "Quit" / "esc quit" in-process, "Back to
+      # Agent Command Center" / "esc back" when attached to the background server.
+      # Anchored at the start of the line so prose that merely mentions the phrase
+      # mid-sentence does not qualify as a footer.
+      footer: /\A\s*(?:enter continue\b.*\besc (?:quit|back)\b|[›>]?\s*2\.\s+(?:Quit|Back to Agent Command Center)\z)/i,
       message: "Codex is blocked on the workspace-trust prompt " \
-               '("Do you trust the contents of this directory?"), which a non_interactive ' \
+               '("Trust this folder?"), which a non_interactive ' \
                "session cannot answer. Trust is granted both on the launch command " \
                "(Agents::CodexAdapter#cli_trust_flag) and by the [projects.\"<workspace>\"] " \
                "entry in ~/.codex/config.toml — both were missing for this container."

@@ -1,7 +1,8 @@
 # Codex workspace-trust prompt wedging non-interactive workflow sessions
 
 **Date:** 2026-08-14 · **Board task:** 605 · **Incident:** project 1, task 583, run 3190,
-step run 3476, terminal session 3834 · **Codex CLI verified against:** 0.147.0 (`@openai/codex`)
+step run 3476, terminal session 3834 · **Codex CLI verified against:** 0.147.0 (`@openai/codex`);
+the 0.156.0+ dialog is in [the 2026-10-08 update](#update-2026-10-08-codex-0156-and-later)
 
 ## The wedge
 
@@ -25,6 +26,43 @@ root@terminal-85e5e5e154c24953c45f4c3cfa323594:/workspace# codex --yolo "$AGENT_
 
 The session is `non_interactive`: nobody is attached to press Enter. The step stays `running`,
 the session stays `ready`, and the run holds its pod until a human intervenes.
+
+## Update 2026-10-08: Codex 0.156 and later
+
+Codex 0.156.0 replaced this dialog (openai/codex #44732 and #46695; 0.155.0 still shows the text
+above). Captured from 0.161.0 in an 80x24 tmux pane, the TUI running in-process:
+
+```text
+  Folder access
+  /workspace
+
+  Trust this folder? Codex can read, edit, and run files here, subject to your
+  permission settings. Folder settings can run code automatically, even
+  without a model request. Continue only if you trust these files. Your trust
+  decision will be saved.
+
+› 1. Trust and continue
+  2. Quit
+
+  enter continue · esc quit
+```
+
+When the TUI is attached to Codex's background server (`daemon_auto_start`, on by default since
+0.157), the second option reads `Back to Agent Command Center` and the hint ends with `esc back`.
+None of the old wording survives, so `InteractivePromptDetector` now matches the new question, the
+`Trust and continue` label and the new key hint. The images have pinned 0.156.1 or newer since #303,
+so the detector no longer matches the old text. OpenAI's Codex docs (config basics, configuration
+reference, agent approvals & security) describe trust only by its effects: project `.codex/` layers
+load in trusted projects only, `projects.<path>.trust_level` records the decision, and a session may
+start read-only "until you explicitly trust the working directory" through an onboarding prompt.
+They do not quote the dialog, so the wording above comes from the CLI source
+(`codex-rs/tui/src/onboarding/trust_directory.rs` and its insta snapshots) and the capture.
+
+The dialog also shows up in fewer places. A folder with no project-root marker (`.git`) never gets
+it. In the 0.161.0 capture, a folder with a minimal `.git` (`HEAD`, `objects/`, `refs/`) and no
+`.codex/` directory also started without the dialog. It appeared only once the workspace held a
+`.codex/config.toml`. To re-run the harness below on these versions, `git init` the workspace and
+give it a `.codex/config.toml` for row 1, and grep for `Trust this folder?`.
 
 ## Reproduction harness
 
@@ -137,7 +175,8 @@ in `capture-pane` output within seconds of launch.
    when the dialog is the screen the CLI is **currently** blocked on: **every** marker has to
    appear within the pane's trailing block (`TAIL_LINES`, blank rows dropped — tmux pads
    `capture-pane` to the pane height) *and* the pane's last nonblank line has to be the dialog's
-   own footer (`Press enter to continue`, or the final option when the hint has not rendered yet).
+   own footer (the key hint, `enter continue · esc quit` on 0.156.0+ and `Press enter to continue`
+   on 0.147.0, or the final option when the hint has not rendered yet).
    The sweep hands over 1,000 lines of scrollback, and the full dialog appears verbatim in bug
    reports, task #605's description and this document — so matching anywhere in that scrollback
    would kill the session investigating the incident. A pane whose last word is not the dialog's
@@ -161,5 +200,7 @@ Automated (`docker compose exec -T web bin/rails test <file>`):
   the prompt is failed with the diagnostic; an `interactive` one is left for its owner.
 
 Manual, for a CLI upgrade (the automated tests pin *our* behaviour, not OpenAI's): re-run the
-harness above with rows 1, 2, 3 and 6. Row 1 must still show the prompt — if it stops doing so,
-the guard is no longer being exercised and the harness, not the platform, is what has drifted.
+harness above with rows 1, 2, 3 and 6 (on 0.156.0+, with the changes in the 2026-10-08 update).
+Row 1 must still show the prompt — if it stops doing so, the guard is no longer being exercised and
+the harness, not the platform, is what has drifted. Compare the rendered dialog with the
+`codex_workspace_trust` signature too: a reworded dialog never matches, and nothing reports that.

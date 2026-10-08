@@ -38,8 +38,8 @@ module Agents
     MODEL_SLUG_FORMAT = /\A[A-Za-z0-9._-]+\z/
 
     # The working directory every agent container runs the CLI in. Codex asks
-    # "Do you trust the contents of this directory?" for any cwd that is not a
-    # trusted project, and in a non_interactive session nobody can answer it — the
+    # "Trust this folder?" before starting in a project folder that is not
+    # trusted, and in a non_interactive session nobody can answer it — the
     # step just sits at `ready` forever. Both places that grant trust (config.toml
     # and the launch command) key off this one constant.
     DEFAULT_WORKSPACE = "/workspace"
