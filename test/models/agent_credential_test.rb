@@ -635,6 +635,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
 
     assert_equal "error", cred.reload.status
     assert_equal AgentCredential::REFRESH_ERROR_SOURCE, report.source
+    assert_equal :warning, report.severity
     assert_equal({ agent_type: "claude_code", refresh_source: "sweep", permanent: true },
                  report.context.slice(:agent_type, :refresh_source, :permanent))
   end
@@ -644,8 +645,9 @@ class AgentCredentialTest < ActiveSupport::TestCase
                                      config_data: { "accessToken" => "old", "refreshToken" => "r1" })
     stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_raise(Errno::ECONNRESET)
 
-    assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :launch) }
+    report = assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :launch) }
 
+    assert_equal :error, report.severity
     cred.reload
     assert_equal "active", cred.status
     assert_equal 1, cred.refresh_failure_count

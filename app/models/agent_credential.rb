@@ -542,11 +542,13 @@ class AgentCredential < ApplicationRecord
     end
   end
 
+  # A permanent refusal is the vendor ending the login, which the user is mailed
+  # about and only they can renew; a transient one may be ours.
   def report_refresh_failure(detail, source:, permanent:)
     Rails.error.report(
       RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
       handled: true,
-      severity: :error,
+      severity: permanent ? :warning : :error,
       source: REFRESH_ERROR_SOURCE,
       context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
                  permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
