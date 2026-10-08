@@ -28,9 +28,9 @@ class CompanyDashboard < Administrate::BaseDashboard
       collection: ->(field) { available_events_collection(field, :state) }
     ),
     settings: Field::JSONB,
-    # The stand-in for a card until Stripe is wired up: moving a company to
-    # `active` is what "someone is paying" means today, and it is the only way a
-    # company that has spent its free allowance runs again.
+    # An operator's override. A company that pays moves between these on its
+    # own, through the allowance and Stripe's webhooks; setting `active` here
+    # without a subscription behind it runs the company for free.
     billing_state: Field::Select.with_options(
       include_blank: false,
       collection: Company::BILLING_STATES
@@ -38,6 +38,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     # Virtual, so never searchable: Administrate would build a LIKE against a
     # column that is not there.
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
+    managed_by_aixle: Field::Boolean,
     initial_admin_email: Field::String.with_options(searchable: false),
     initial_admin_password: Field::Password,
     users: Field::HasMany,
@@ -52,6 +53,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     email_domain
     state
     billing_state
+    managed_by_aixle
     session_concurrency_limit
     users
     created_at
@@ -70,6 +72,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     secondary_color
     state
     billing_state
+    managed_by_aixle
     settings
     session_concurrency_limit
     users
@@ -87,6 +90,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     primary_color
     secondary_color
     state_event
+    managed_by_aixle
     billing_state
     settings
     session_concurrency_limit
@@ -100,6 +104,8 @@ class CompanyDashboard < Administrate::BaseDashboard
     auto_accept_users
     primary_color
     secondary_color
+    managed_by_aixle
+    session_concurrency_limit
     initial_admin_email
     initial_admin_password
   ].freeze
@@ -109,7 +115,8 @@ class CompanyDashboard < Administrate::BaseDashboard
     suspended: ->(resources) { resources.suspended },
     archived: ->(resources) { resources.archived },
     trialing: ->(resources) { resources.where(billing_state: "trialing") },
-    billing_blocked: ->(resources) { resources.where(billing_state: "blocked") }
+    billing_blocked: ->(resources) { resources.where(billing_state: "blocked") },
+    managed_by_aixle: ->(resources) { resources.where(managed_by_aixle: true) }
   }.freeze
 
   def display_resource(company)

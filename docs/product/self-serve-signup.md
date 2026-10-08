@@ -110,7 +110,9 @@ that limit for themselves, and the rest share what is left.
 The limit is the **company admin's** to set, on Settings → General, and they may
 raise or lower it whenever they like. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
-something a company does to itself.
+something a company does to itself. In a company **managed by Aixle** (see
+[Billing states](#billing-states)) the limit is read-only for its admins: nobody
+pays for it, so raising it would cost them nothing.
 
 **Capacity is the whole price.** No seats, no per-token charge. A worker is
 reserved capacity and is charged for every hour it stands ready, whether or not a
@@ -191,11 +193,18 @@ worker-minutes, rounded down.
 | `active` | Somebody is paying, including a cancellation not yet due | Its own limit | Everything it is offered |
 | `blocked` | Stopped: allowance spent, subscription ended, or a payment failed | Nothing new | Nothing |
 
-`active` is the default, and **only a company that signs itself up starts out
-`trialing`** — the signup form says so explicitly. A company an operator makes in
-the admin is somebody deciding rather than somebody trying, and one that stopped
-after a hundred worker-hours because a column defaulted that way would be a
-surprise nobody would connect to this page.
+A company made in the admin pays the same way a signup does: it starts
+`trialing` and needs a session limit. Both are said out loud by the path that
+creates the company — the signup form and the admin's create action — rather than
+left to a column default, so a trial is never one nobody chose. The column still
+defaults to `active`, for the seeds and anything else that makes a company.
+
+**Managed by Aixle** is the other choice on the admin's form, for a company we
+carry — ours, a partner's, a pilot. It is never invoiced, never trialing or
+blocked, has no Billing tab, and cannot start Checkout. It starts with
+**two workers**, and only a platform administrator can change that, from the
+admin. Every company that was already `active` with no Stripe customer when the
+flag shipped was given it.
 
 ---
 

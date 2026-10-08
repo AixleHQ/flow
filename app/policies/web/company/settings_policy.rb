@@ -11,7 +11,10 @@ module Web
       # number costs them what it gives them. What they may never do is clear it
       # — see the controller — because a company with no limit is one nobody is
       # invoiced for, and that is ours to grant, not theirs to take.
-      def manage_capacity? = admin?
+      #
+      # A company we carry pays nothing for its number, so raising it would cost
+      # them nothing: there the number is ours alone.
+      def manage_capacity? = admin? && !context.company&.managed_by_aixle?
     end
   end
 end

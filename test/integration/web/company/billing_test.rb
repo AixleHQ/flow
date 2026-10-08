@@ -88,6 +88,18 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_match(/not available/, flash[:alert])
   end
 
+  test "a company we carry has no billing tab" do
+    @company.update!(managed_by_aixle: true)
+
+    get company_settings_billing_path
+
+    assert_redirected_to company_settings_path
+    assert_match(/managed by Aixle/, flash[:alert])
+
+    get company_settings_path
+    assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
+  end
+
   private
 
   def billing_props

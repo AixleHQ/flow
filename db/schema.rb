@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_08_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -476,6 +476,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_090000) do
     t.string "billing_block_reason"
     t.string "billing_unpaid_invoice_url"
     t.datetime "billing_event_at"
+    t.boolean "managed_by_aixle", default: false, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true

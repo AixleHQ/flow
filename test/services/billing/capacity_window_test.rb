@@ -183,6 +183,18 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       assert_minutes 300, result, "only the paying company reaches the provider"
     end
 
+    test "a company we carry is measured but not billed" do
+      @acme.update!(managed_by_aixle: true)
+      change(@acme, 2, @hour - 2.hours)
+      change(@globex, 5, @hour - 2.hours)
+
+      result = window
+
+      assert_includes result.offered_per_company, @acme.id
+      assert_not_includes result.per_company, @acme.id
+      assert_minutes 300, result, "only the paying company reaches the provider"
+    end
+
     test "a blocked company is offered nothing at all" do
       @acme.update!(billing_state: "blocked")
       change(@acme, 10, @hour - 2.hours)

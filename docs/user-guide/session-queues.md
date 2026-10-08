@@ -139,7 +139,9 @@ gives its place to the next one immediately.
 Capacity is a company's limit, held in the database and set on the company's own
 page in the admin. A project's limit is a reservation drawn from it; projects
 without one share what the reservations leave. A company with no limit of its own
-is unbounded — which is also how an internal organisation is left unbilled.
+is unbounded, and nothing is metered for it. Where we host, an internal
+organisation is left unbilled by ticking **Managed by Aixle** on the company,
+which also takes the limit out of its own admins' hands.
 
 There is no deployment-wide ceiling. `SESSION_CONCURRENCY_LIMIT` used to be one
 and nothing reads it any more: a single number for the whole installation could

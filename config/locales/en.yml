@@ -28,6 +28,10 @@
 #       enabled: "ON"
 
 en:
+  activerecord:
+    attributes:
+      company:
+        managed_by_aixle: "Managed by Aixle"
   activemodel:
     errors:
       models:

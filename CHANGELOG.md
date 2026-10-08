@@ -22,6 +22,12 @@ governance, community health — carry none.
   build file (`package.json`, a lockfile, a `Dockerfile`). Antigravity CLI
   stays at 1.1.27: 1.3.1 ignores the setting the image turns its telemetry
   off with.
+- **Company settings**: on the hosted product a company created by a platform
+  administrator now pays like a self-serve signup — it starts on the free
+  allowance and needs a worker limit — unless it is marked **Managed by
+  Aixle**. A managed company is never billed, has no Billing tab, starts with
+  two workers, and only a platform administrator can change them. Companies
+  that were already running with no Stripe customer are marked managed.
 
 ### Fixed
 - **Integrations**: agents get the Slack/Teams message tools (`chat_post_message`

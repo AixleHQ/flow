@@ -166,6 +166,32 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| assert props[:capacity][:canManage] }
   end
 
+  # Nobody pays for a company we carry, so raising its number would cost its
+  # admins nothing.
+  test "the admin of a company we carry may not change its limit" do
+    saas!
+    @company.update!(managed_by_aixle: true)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "12" }
+
+    assert_equal 2, limit_for(@company)&.max_sessions
+    assert_match(/administrator can change/, Array(session["inertia_errors"][:capacity]).to_sentence)
+  end
+
+  test "the admin of a company we carry is shown the limit, not offered the field" do
+    saas!
+    @company.update!(managed_by_aixle: true)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
+
+    get company_settings_path
+
+    assert_inertia_props do |props|
+      assert_equal false, props[:capacity][:canManage] # rubocop:disable Minitest/RefuteFalse
+      assert_equal 2, props[:capacity][:maxSessions]
+    end
+  end
+
   # Nothing is invoiced in a self-hosted installation, so an unbounded company
   # there costs nobody anything and the operator may say so.
   test "a self-hosted admin may clear the limit" do
