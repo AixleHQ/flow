@@ -129,81 +129,32 @@ module Agents
       assert_equal :accepted, result
     end
 
-    test "ingest_usage persists metric token breakdown and cost" do
+    test "ingest_usage ignores the cumulative token metric" do
+      # Every export repeats the running total, and the same response also arrives as a
+      # gemini_cli.api_response log: counting this too would double the session.
       payload = {
         "resourceMetrics" => [ {
-          "resource" => { "attributes" => [] },
+          "resource" => { "attributes" => [ session_token_attribute ] },
           "scopeMetrics" => [ {
-            "metrics" => [
-              {
-                "name" => "gemini_cli.token.usage",
-                "sum" => {
-                  "dataPoints" => [
-                    {
-                      "attributes" => [
-                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                        { "key" => "type", "value" => { "stringValue" => "input" } },
-                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
-                      ],
-                      "asInt" => "100",
-                      "timeUnixNano" => "1700000000000000000"
-                    },
-                    {
-                      "attributes" => [
-                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                        { "key" => "type", "value" => { "stringValue" => "output" } },
-                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
-                      ],
-                      "asInt" => "40",
-                      "timeUnixNano" => "1700000000000000000"
-                    },
-                    {
-                      "attributes" => [
-                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                        { "key" => "type", "value" => { "stringValue" => "cacheRead" } },
-                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
-                      ],
-                      "asInt" => "60",
-                      "timeUnixNano" => "1700000000000000000"
-                    }
-                  ]
-                }
-              },
-              {
-                "name" => "gemini_cli.cost.usage",
-                "sum" => {
-                  "dataPoints" => [ {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
-                    ],
-                    "asDouble" => 0.123456
-                  } ]
-                }
+            "metrics" => [ {
+              "name" => "gemini_cli.token.usage",
+              "sum" => {
+                "aggregationTemporality" => "AGGREGATION_TEMPORALITY_CUMULATIVE",
+                "dataPoints" => [ {
+                  "attributes" => [ { "key" => "type", "value" => { "stringValue" => "input" } } ],
+                  "asInt" => "100"
+                } ]
               }
-            ]
+            } ]
           } ]
         } ]
       }
 
-      result = @adapter.ingest_usage(payload, @session)
-
-      assert_equal :ok, result
-      @session.reload
-      stat = @session.usage_statistic
-
-      assert_equal 100, stat.input_tokens
-      assert_equal 40, stat.output_tokens
-      assert_equal 60, stat.cache_read_tokens
-      assert_equal 0, stat.cache_write_tokens
-      assert_equal BigDecimal("12.3456"), stat.total_cents_precise
-      assert_equal 13, stat.cost_cents
-      assert_equal [ "gemini-2.5-pro" ], stat.models
-      assert_equal 1, stat.events_count
-      assert_equal 200, stat.tokens
+      assert_equal :accepted, @adapter.ingest_usage(payload, @session)
+      assert_nil @session.reload.usage_statistic
     end
 
-    test "ingest_usage falls back to OTLP logs when metrics are absent" do
+    test "ingest_usage counts an api_response log, generated thoughts and tool tokens as output" do
       payload = {
         "resourceLogs" => [ {
           "resource" => { "attributes" => [] },
@@ -242,164 +193,30 @@ module Agents
     end
 
     test "ingest_usage appends new events to existing usage statistic" do
-      payload = {
-        "resourceMetrics" => [ {
-          "resource" => { "attributes" => [] },
-          "scopeMetrics" => [ {
-            "metrics" => [ {
-              "name" => "gemini_cli.token.usage",
-              "sum" => {
-                "dataPoints" => [ {
-                  "attributes" => [
-                    { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                    { "key" => "type", "value" => { "stringValue" => "input" } }
-                  ],
-                  "asInt" => "10"
-                } ]
-              }
-            } ]
-          } ]
-        } ]
-      }
+      payload = api_response_logs({ model: "gemini-2.5-pro", input: 10 })
 
       first = @adapter.ingest_usage(payload, @session)
       second = @adapter.ingest_usage(payload, @session)
 
       assert_equal :ok, first
       assert_equal :ok, second
-
-      @session.reload
-      stat = @session.usage_statistic
+      stat = @session.reload.usage_statistic
       assert_equal 20, stat.input_tokens
       assert_equal 2, stat.events_count
       assert_equal 2, stat.events_data.size
     end
 
-    test "ingest_usage stores multiple models when one metric scope includes multiple models" do
-      payload = {
-        "resourceMetrics" => [ {
-          "resource" => { "attributes" => [] },
-          "scopeMetrics" => [ {
-            "metrics" => [ {
-              "name" => "gemini_cli.token.usage",
-              "sum" => {
-                "dataPoints" => [
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash-lite" } },
-                      { "key" => "type", "value" => { "stringValue" => "input" } }
-                    ],
-                    "asInt" => "100"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-3-flash-preview" } },
-                      { "key" => "type", "value" => { "stringValue" => "input" } }
-                    ],
-                    "asInt" => "200"
-                  }
-                ]
-              }
-            } ]
-          } ]
-        } ]
-      }
+    test "ingest_usage stores each model a batch of responses used" do
+      payload = api_response_logs({ model: "gemini-2.5-flash-lite", input: 100 },
+                                  { model: "gemini-3-flash-preview", input: 200 })
 
-      result = @adapter.ingest_usage(payload, @session)
-
-      assert_equal :ok, result
-      @session.reload
-      stat = @session.usage_statistic
+      assert_equal :ok, @adapter.ingest_usage(payload, @session)
+      stat = @session.reload.usage_statistic
       assert_equal %w[gemini-2.5-flash-lite gemini-3-flash-preview].sort, stat.models.sort
       assert_equal 300, stat.input_tokens
       assert_equal 2, stat.events_count
-      assert_equal 2, stat.events_data.size
     end
 
-    test "ingest_usage maps gemini token types to claude-style breakdown buckets" do
-      payload = {
-        "resourceMetrics" => [ {
-          "resource" => { "attributes" => [] },
-          "scopeMetrics" => [ {
-            "metrics" => [ {
-              "name" => "gemini_cli.token.usage",
-              "sum" => {
-                "dataPoints" => [
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "input" } }
-                    ],
-                    "asInt" => "10"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "output" } }
-                    ],
-                    "asInt" => "20"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "cache" } }
-                    ],
-                    "asInt" => "30"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "thought" } }
-                    ],
-                    "asInt" => "40"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "tool" } }
-                    ],
-                    "asInt" => "50"
-                  },
-                  {
-                    "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
-                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
-                      { "key" => "type", "value" => { "stringValue" => "cacheCreation" } }
-                    ],
-                    "asInt" => "60"
-                  }
-                ]
-              }
-            } ]
-          } ]
-        } ]
-      }
-
-      result = @adapter.ingest_usage(payload, @session)
-
-      assert_equal :ok, result
-      @session.reload
-      stat = @session.usage_statistic
-
-      assert_equal 10, stat.input_tokens
-      # output + thought + tool
-      assert_equal 110, stat.output_tokens
-      # cache token type maps to cacheReadTokens
-      assert_equal 30, stat.cache_read_tokens
-      # cacheCreation maps to cacheWriteTokens
-      assert_equal 60, stat.cache_write_tokens
-      assert_equal 210, stat.tokens
-    end
-
-    # API keys are per company so the vendor bill lands on the company that ran the
-    # session. Injecting another company's key would spend its quota here.
     test "default_env_vars injects the API key of the session's company only" do
       other_company = create(:company)
       create(:company_membership, user: @user, company: other_company)
@@ -427,6 +244,25 @@ module Agents
       assert_equal [ pinned, "--headless" ], args
       # Emitted command cannot float independently of PLAYWRIGHT_MCP_VERSION.
       refute_includes args, "@playwright/mcp@latest"
+    end
+
+    private
+
+    def session_token_attribute
+      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } }
+    end
+
+    def api_response_logs(*responses)
+      records = responses.map do |response|
+        { "timeUnixNano" => "1700000000000001000",
+          "attributes" => [
+            { "key" => "event.name", "value" => { "stringValue" => "gemini_cli.api_response" } },
+            { "key" => "model", "value" => { "stringValue" => response[:model] } },
+            { "key" => "input_token_count", "value" => { "intValue" => response[:input].to_s } }
+          ] }
+      end
+      { "resourceLogs" => [ { "resource" => { "attributes" => [ session_token_attribute ] },
+                              "scopeLogs" => [ { "logRecords" => records } ] } ] }
     end
   end
 end
