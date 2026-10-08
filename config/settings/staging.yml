@@ -8,4 +8,4 @@ agents:
   # See config/settings/production.yml — one registry prefix instead of seven
   # per-runtime entries.
   image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
-  image_tag: <%= ENV['AGENT_IMAGE_TAG'] || '' %>
+  image_tag: "<%= ENV['AGENT_IMAGE_TAG'] || '' %>"

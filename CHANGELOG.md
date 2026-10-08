@@ -3,17 +3,13 @@
 All notable changes to Aixle Flow are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project aims to follow [Semantic Versioning](https://semver.org/) once
-tagged releases begin. Entries a *user* sees in the product carry a product
-area from
+and the project follows [Semantic Versioning](https://semver.org/) from 1.0.0 —
+what each kind of bump promises, and how a release is cut, is in
+[docs/operations/releasing.md](docs/operations/releasing.md). Entries a *user*
+sees in the product carry a product area from
 [docs/product/changelog-product-areas.md](docs/product/changelog-product-areas.md)
 as their prefix; repository-level entries a *contributor* needs — licensing,
 governance, community health — carry none.
-
-> Versioning and tagged releases begin with the open-source launch. The first
-> tag will be **`v0.1.0`** (the project is pre-1.0), cut from the *Unreleased*
-> changes below — likely accompanied by prebuilt images. Until that launch,
-> notable changes accumulate here under *Unreleased*.
 
 ## [Unreleased]
 
@@ -50,6 +46,10 @@ governance, community health — carry none.
   reference content.
 - Community health files: Code of Conduct, Security Policy, Governance, issue
   and pull-request templates, CODEOWNERS, and this changelog.
+- Versioned releases, starting at **1.0.0**. A `vX.Y.Z` tag on `develop`
+  publishes every image to `ghcr.io/aixlehq` as `X.Y.Z` (and `X.Y`, `X` and
+  `latest` for a stable release) and a GitHub Release whose notes are this
+  file's section for that version.
 
 ### Changed
 - **Workflows**: a session receives the output files of every session it runs
@@ -82,6 +82,12 @@ governance, community health — carry none.
   `--build-arg CLI_VERSION=<version from the registry>`. The weekly canary
   keeps an `agent-cli-updates` issue comparing each pin with the vendor's
   newest release, with the vendor's release notes in between.
+- A release's web image launches the agent images of its own version
+  (`AGENT_IMAGE_TAG` defaults to it) instead of `latest`, so a deployment that
+  pins `flow-web:X.Y.Z` runs one version end to end. Setting `AGENT_IMAGE_TAG`
+  still overrides it.
+- Images are no longer published from the `main-images` branch: `latest`
+  moves with stable releases only.
 
 ### Removed
 - Configuration nothing read: `AUTHOR_NAME`, `AUTHOR_EMAIL`, `RAILS_PORT`,

@@ -137,7 +137,7 @@ per-project namespaces and network policies separate them.
 | `DOCKER_NETWORK`               | no       | `app_default`     | The stack's own Docker network (web, db, redis, temporal).       |
 | `DOCKER_AGENT_NETWORK`         | no       | `DOCKER_NETWORK`, else `app_agents` | The Docker network agent containers join. Keep it separate from `DOCKER_NETWORK`: it should reach web, otlp-ingest and traefik and nothing else. |
 | `AGENT_IMAGE_PREFIX`           | no       | `aixle/`          | Registry/name prefix every built-in runtime image is derived from: runtime `claude_code` becomes `<prefix>claude-code[:<tag>]`. Deployed environments default to `ghcr.io/aixlehq/flow-`, where the images are published. |
-| `AGENT_IMAGE_TAG`              | no       | `latest`          | Tag appended to derived images; blank means the registry default. Deployed environments default to blank. |
+| `AGENT_IMAGE_TAG`              | no       | `latest`          | Tag appended to derived images; blank means the registry default. A release web image sets it to its own version, so web `X.Y.Z` launches agent images `X.Y.Z`; set it only to run a different agent version. |
 | `AGENT_IMAGE_CLAUDE_CODE`      | no       | derived           | Per-runtime override (a digest pin, or a different registry).    |
 | `AGENT_IMAGE_CURSOR_CLI`       | no       | derived           | Per-runtime override.                                            |
 | `AGENT_IMAGE_CODEX`            | no       | derived           | Per-runtime override.                                            |

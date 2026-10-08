@@ -1,0 +1,24 @@
+name: PR Title
+
+# Pull requests are squash-merged, so the title becomes the commit on develop — and the
+# line a release's notes list for it. Conventional Commits, as CONTRIBUTING.md describes.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  title:
+    name: Conventional Title
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check The Title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|refactor|test|docs|chore|ci|style|perf|build|revert)(\([^)]+\))?!?: [^ ]'
+          if [[ "$TITLE" =~ $pattern ]]; then exit 0; fi
+          echo "::error::The PR title must follow Conventional Commits, for example 'fix(onboarding): guard the complete event'. Got: ${TITLE}"
+          exit 1

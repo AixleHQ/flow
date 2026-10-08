@@ -1,0 +1,64 @@
+name: Release
+
+# A pushed vX.Y.Z tag becomes a GitHub Release whose notes are CHANGELOG.md's section for
+# that version; images.yml publishes the images from the same tag event. How a release is
+# cut: docs/operations/releasing.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check The Tag
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/develop:refs/remotes/origin/develop
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/develop; then
+            echo "::error::${GITHUB_REF_NAME} is not on develop; releases are tagged from develop."
+            exit 1
+          fi
+
+      # Plain Ruby, no bundle: the runner image ships an interpreter. A pre-release has no
+      # section of its own — cutting one would empty [Unreleased] before the release it
+      # previews — so its notes are [Unreleased] as of the tagged commit.
+      - name: Write Release Notes
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          section="$version"
+          if [[ "$version" == *-* ]]; then section="Unreleased"; fi
+          images="$(jq -r '["web", "otlp-ingest", "agent-base-core", (.runtimes[].image)] | map("`flow-\(.)`") | join(", ")' config/agent_runtimes.json)"
+          {
+            ruby bin/changelog notes "$section"
+            echo
+            echo "### Images"
+            echo
+            echo "Published as \`ghcr.io/aixlehq/flow-<name>:${version}\`: ${images}. Web ${version} launches the agent images of the same version."
+          } > "$RUNNER_TEMP/notes.md"
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          flags=(--verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md")
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); else flags+=(--latest); fi
+          # Appends the merged PRs since the previous tag; a first release has nothing to
+          # compare with, and would list the whole history.
+          if git describe --tags --abbrev=0 --match 'v*' "${TAG}^" >/dev/null 2>&1; then
+            flags+=(--generate-notes)
+          fi
+          gh release create "$TAG" "${flags[@]}"

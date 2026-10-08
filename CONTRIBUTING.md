@@ -33,7 +33,10 @@ Before opening a PR, ensure the following pass (inside the container: `docker co
 ## Pull Request Guidelines
 
 - Keep PRs focused on a single concern.
-- Write descriptive commit messages.
+- Title the PR in [Conventional Commits](https://www.conventionalcommits.org/) form
+  (`fix(onboarding): guard the complete event`). PRs are squash-merged, so the title is
+  the commit — and the line the release notes list. The `PR Title` check enforces it.
+- Add user-visible changes to `CHANGELOG.md` under `[Unreleased]` in the same PR.
 - Ensure CI passes before requesting review.
 - Reference related issues in the PR description when applicable.
 
