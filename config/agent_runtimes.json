@@ -45,7 +45,7 @@
       "description": "Google's multimodal AI for code and documentation tasks",
       "image": "gemini-cli",
       "dockerfile": "docker/gemini-cli/Dockerfile",
-      "cli_version": "0.63.0",
+      "cli_version": "0.60.0",
       "cli_latest": { "npm": "@google/gemini-cli" },
       "cli_releases": { "github": "google-gemini/gemini-cli", "tag_prefix": "v" }
     },

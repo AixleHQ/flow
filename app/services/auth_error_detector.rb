@@ -29,10 +29,13 @@ class AuthErrorDetector
     # OAuth-level rejections, printed by the CLI when a refresh or an API call is refused.
     /invalid_grant/i,
     /OAuth token (?:has )?expired/i,
-    /\brefresh token (?:is )?(?:invalid|expired|revoked)/i,
+    /\brefresh token (?:is |has |was )?(?:invalid|expired|revoked|already used)/i,
     # Google's own wording for a dead API key (gemini_cli), observed in production.
     /API key not valid\. Please pass a valid API key/i,
-    /\bAPI key expired\b/i
+    /\bAPI key expired\b/i,
+    # Antigravity CLI 1.3.1, read from the binary: since 1.2.5 it signs the user out when
+    # Google refuses a refresh and prints this instead of a "run … login" line.
+    %r{log out \(/logout\) and log back in \(/login\)}i
   ].freeze
 
   Result = Struct.new(:auth_error, :message, keyword_init: true) do

@@ -128,6 +128,12 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal :gemini, result.provider
   end
 
+  test "detects the Antigravity CLI's AI credits message as a Google quota stop" do
+    result = QuotaErrorDetector.detect("Error: Your AI credits balance is too low to continue.")
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
   test "detects gemini resource exhausted message" do
     result = QuotaErrorDetector.detect("Resource has been exhausted (e.g. check quota).")
     assert result.quota_error?

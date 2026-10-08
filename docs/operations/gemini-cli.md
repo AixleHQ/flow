@@ -16,7 +16,13 @@ credentials.
 
 ## Runtime contract
 
-- Image package: `@google/gemini-cli`, pinned by `cli_version` in `config/agent_runtimes.json`.
+- Image package: `@google/gemini-cli`, pinned by `cli_version` in
+  `config/agent_runtimes.json` (0.60.0). **Do not raise it past 0.60.x yet:** from 0.61.0
+  `--yolo` no longer approves edits to build files (`package.json`, lockfiles,
+  `Dockerfile`, `Makefile`, …) — the CLI opens a "Build File Modification" dialog that no
+  one answers in a headless session (upstream #29250, no opt-out), and 0.63.0 adds an
+  "Untrusted Command Flags" prompt after MCP output (#29579). The weekly canary keeps
+  reporting the newer release; that is expected until upstream offers a switch.
 - Executable: `gemini`.
 - Authentication: `GEMINI_API_KEY`; personal OAuth is not captured or injected.
 - Configuration: `/home/gemini/.gemini/settings.json`.
