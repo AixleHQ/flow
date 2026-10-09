@@ -14,7 +14,7 @@ module GitCredentials
       @dir = Dir.mktmpdir("gh-wrapper")
       @root = File.join(@dir, "repo")
       FileUtils.mkdir_p([ @root, bin_dir("wrapper"), bin_dir("real") ])
-      FileUtils.cp(SessionGitSetup::GH_WRAPPER_SOURCE, wrapper)
+      FileUtils.cp(Rails.root.join("docker/base/git/gh-aixle"), wrapper)
       FileUtils.chmod(0o755, wrapper)
       write_executable(File.join(bin_dir("real"), "gh"), %(#!/bin/bash\necho "token=${GH_TOKEN:-none} args=$*"\n))
       write_executable(helper, <<~SH)
@@ -64,6 +64,17 @@ module GitCredentials
 
       assert_equal "token=none args=pr list -R someone/else", stdout.strip
       assert_match(/no platform credential/, stderr)
+    end
+
+    test "a session with no GitHub checkout runs gh untouched and says nothing" do
+      stdout, stderr, = gh("pr", "list")
+
+      assert_equal "token=none args=pr list", stdout.strip
+      assert_empty stderr
+    end
+
+    test "the agent base image installs the wrapper ahead of the real gh" do
+      assert_match %r{^COPY git/gh-aixle /usr/local/bin/gh$}, Rails.root.join("docker/base/Dockerfile").read
     end
 
     test "a token the caller set, or a container with no session key, passes straight through" do

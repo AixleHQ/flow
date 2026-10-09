@@ -1030,8 +1030,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal 0o600, runtime.file_attributes(header_file)[:mode]
     assert_equal "Authorization: Basic #{Base64.strict_encode64('x-access-token:ghs_test_token')}", runtime.fs[header_file]
     assert runtime.fs["/workspace/.aixle/git-credential-aixle"].present?
-    assert_equal Rails.root.join("docker/base/git/gh-aixle").read, runtime.fs["/usr/local/bin/gh"]
-    assert_equal({ mode: 0o755, uid: 0, gid: 0 }, runtime.file_attributes("/usr/local/bin/gh").slice(:mode, :uid, :gid))
     assert_not_nil repo.reload.last_fetched_at
   end
 
@@ -1093,7 +1091,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     assert commands.any? { |c| c.include?("clone --filter=blob:none --branch=main https://gitlab.example.com/team/service.git") }
     assert commands.none? { |c| c.include?("gitlab.com") || c.include?("glpat-secret") }
-    assert_nil runtime.fs["/usr/local/bin/gh"], "the gh wrapper only knows github.com"
   end
 
   test "inject_repositories clones a public repository anonymously" do

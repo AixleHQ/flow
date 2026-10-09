@@ -109,6 +109,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     apt-get update && apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
+# Authenticates each gh call through the session's git credential helper. It has
+# to ship in the image: the platform cannot write into /usr/local/bin at session
+# start, because on Kubernetes its exec runs as the non-root agent user.
+COPY git/gh-aixle /usr/local/bin/gh
+RUN chmod 0755 /usr/local/bin/gh
+
 # -----------------------------------------------------------------------------
 # MITM proxy for request/response logging
 # -----------------------------------------------------------------------------
