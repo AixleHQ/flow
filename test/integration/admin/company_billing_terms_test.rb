@@ -79,4 +79,30 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert company.managed_by_aixle
     assert_equal "active", company.billing_state
   end
+
+  test "unticking a company we carry puts it on the allowance, where it can add a card" do
+    company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, managed_by_aixle: "0",
+                 session_concurrency_limit: "2" }
+    }
+
+    company.reload
+    assert_equal false, company.managed_by_aixle # rubocop:disable Minitest/RefuteFalse
+    assert_equal "trialing", company.billing_state
+  end
+
+  test "unticking a company we carry that has no limit is refused" do
+    company = create(:company, :managed_by_aixle)
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, managed_by_aixle: "0",
+                 session_concurrency_limit: "" }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match(/required for a company that pays/, response.body)
+    assert company.reload.managed_by_aixle
+  end
 end

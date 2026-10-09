@@ -36,6 +36,12 @@ governance, community health — carry none.
   repositories on Kubernetes deployments too, so agents can read checks, watch
   Actions runs and open pull requests without building a token by hand. Until
   now it only worked with the Docker runtime.
+- **Company settings**: unticking **Managed by Aixle** on a company puts it
+  on the free allowance, or stops it until a card is added if it has already
+  used the allowance or its subscription has ended. It no longer shows an
+  Active subscription with a Cancel button that refuses. Unticking needs a worker limit, as creating a paying
+  company does. An active workspace with no subscription is offered **Add a
+  card** instead of **Cancel subscription**.
 
 ## [1.1.0] - 2026-10-09
 

@@ -37,6 +37,7 @@ interface Billing {
   usage: Usage | null;
   allowance: { hours: number; usedHours: number } | null;
   canPay: boolean;
+  hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
   cancellationReasons: string[];
 }
@@ -76,7 +77,7 @@ const formatMoney = (cents: number, currency: string) =>
 
 const formatMinutes = (minutes: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(minutes);
 
-function CheckoutResult({ result, status }: { result: Props['checkoutResult']; status: BillingStatus }) {
+function CheckoutResult({ result, billing }: { result: Props['checkoutResult']; billing: Billing }) {
   if (result === 'cancelled') {
     return (
       <Alert color="gray" title="Card entry cancelled">
@@ -88,7 +89,7 @@ function CheckoutResult({ result, status }: { result: Props['checkoutResult']; s
 
   // Stripe confirms the card by webhook, which can land a few seconds after the
   // customer is sent back here.
-  const confirmed = status === 'active';
+  const confirmed = billing.status === 'active' && billing.hasSubscription;
   return (
     <Alert color="green" title={confirmed ? 'Card added' : 'Card received'}>
       {confirmed
@@ -198,6 +199,11 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
       action = addCard;
       break;
     case 'active':
+      if (!billing.hasSubscription) {
+        body = 'No card is on file, so nothing is billed yet. Add a card to pay for the worker-minutes you use.';
+        action = addCard;
+        break;
+      }
       body = (
         <>
           Billed monthly by card for the worker-minutes you use. Current period:{' '}
@@ -318,7 +324,7 @@ const BillingPage = () => {
       <Head title={`Billing — ${company.name}`} />
       <SettingsTabs active="billing" companyName={company.name}>
         <Stack gap="lg" maw={720}>
-          <CheckoutResult result={checkoutResult} status={billing.status} />
+          <CheckoutResult result={checkoutResult} billing={billing} />
           <SubscriptionCard billing={billing} />
           {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
         </Stack>

@@ -71,6 +71,14 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_nil billing[:usage]
   end
 
+  test "the page says whether there is a subscription to cancel" do
+    assert billing_props[:billing][:hasSubscription]
+
+    @company.update!(stripe_subscription_id: nil)
+
+    assert_equal false, billing_props[:billing][:hasSubscription] # rubocop:disable Minitest/RefuteFalse
+  end
+
   test "Checkout's way back is reported, and nothing else from the query string" do
     get company_settings_billing_path(billing: "done")
     assert_inertia_props { |props| props[:checkoutResult] == "done" }
