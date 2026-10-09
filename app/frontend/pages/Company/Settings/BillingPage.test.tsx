@@ -30,6 +30,7 @@ const billing = {
   },
   allowance: null,
   canPay: true,
+  hasSubscription: true,
   hasUnpaidInvoice: false,
   cancellationReasons: REASONS,
 };
@@ -126,6 +127,15 @@ describe('Company billing page', () => {
     render({ status: 'trialing', usage: null, allowance: { hours: 100, usedHours: 40 } });
 
     expect(screen.getByText(/40 of 100 worker-hours used/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel subscription' })).not.toBeInTheDocument();
+  });
+
+  // Running without ever having paid: an operator set it active by hand.
+  it('offers a card, and nothing to cancel, to an active workspace with no subscription', () => {
+    render({ hasSubscription: false, periodStartsAt: null, periodEndsAt: null, usage: null });
+
+    expect(screen.getByText(/No card is on file/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel subscription' })).not.toBeInTheDocument();
   });

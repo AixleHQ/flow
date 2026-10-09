@@ -71,6 +71,10 @@ class Company < ApplicationRecord
   # admins cannot change it; we can, from the admin.
   MANAGED_SESSION_LIMIT = 2
 
+  # No limit means nothing is metered, so a paying company without one runs for
+  # free.
+  UNBOUNDED_PAYING_COMPANY = "is required for a company that pays — tick Managed by Aixle for one that does not"
+
   # Constants
   RESERVED_DOMAINS = %w[
     admin.com api.com www.com app.com mail.com ftp.com
@@ -88,6 +92,7 @@ class Company < ApplicationRecord
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
   validate :session_concurrency_limit_is_a_positive_integer
+  validate :company_we_stop_carrying_is_bounded, if: :leaving_management?
 
   # Callbacks
   before_validation :generate_slug, on: :create
@@ -98,6 +103,7 @@ class Company < ApplicationRecord
   # Before forget_billing_block, so a blocked company that becomes ours loses
   # its block reason with its block.
   before_validation :keep_managed_company_running, if: :managed_by_aixle?
+  before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
   before_validation :forget_billing_block, unless: :billing_blocked?
   after_save :apply_session_concurrency_limit
 
@@ -191,6 +197,28 @@ class Company < ApplicationRecord
   # subscription to lapse: neither trialing nor blocked means anything for it.
   def keep_managed_company_running
     self.billing_state = "active"
+  end
+
+  def leaving_management? = Deployment.saas? && managed_by_aixle_changed?(from: true, to: false)
+
+  # Left `active`, a company we stop carrying shows a subscription it never had:
+  # Cancel that refuses, no way to add a card, minutes the meter drops for want
+  # of a Stripe customer. The allowance counts what it ran while we carried it,
+  # so one already past it is stopped until a card is added. A subscription from
+  # before we took it on is still live in Stripe and keeps billing it.
+  def start_billing_company_we_stop_carrying
+    return if stripe_subscription_id.present?
+
+    if Billing::Trial.exhausted?(self)
+      self.billing_state = "blocked"
+      self.billing_block_reason = "allowance"
+    else
+      self.billing_state = "trialing"
+    end
+  end
+
+  def company_we_stop_carrying_is_bounded
+    errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY) if session_concurrency_limit.blank?
   end
 
   # A company that is running again has no reason to be stopped, and an unpaid

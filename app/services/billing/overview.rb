@@ -22,6 +22,7 @@ module Billing
         usage: usage,
         allowance: allowance,
         can_pay: client.configured?,
+        has_subscription: company.stripe_subscription_id.present?,
         has_unpaid_invoice: company.billing_unpaid_invoice_url.present?,
         cancellation_reasons: BillingCancellation::REASONS
       }

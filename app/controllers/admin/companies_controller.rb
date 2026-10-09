@@ -2,8 +2,6 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
-    UNBOUNDED_PAYING_COMPANY = "is required for a company that pays — tick Managed by Aixle for one that does not"
-
     def create
       # Extract initial admin credentials before building company
       initial_admin_email = params.dig(:company, :initial_admin_email)
@@ -16,7 +14,7 @@ module Admin
 
       if unbounded_paying_company?(company)
         company.validate
-        company.errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY)
+        company.errors.add(:session_concurrency_limit, Company::UNBOUNDED_PAYING_COMPANY)
         render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       elsif company.save
         # Create initial admin user if credentials provided
@@ -56,7 +54,7 @@ module Admin
     # free allowance, then a card — unless it is one we carry. Left at the
     # column's `active`, it is billed with nothing to bill through: the billing
     # tab offers no Checkout, and the meter drops its minutes for want of a
-    # Stripe customer.
+    # Stripe customer. Unticking the box later does the same in Company.
     def apply_billing_terms(company)
       return unless Deployment.saas?
 
@@ -67,9 +65,8 @@ module Admin
       end
     end
 
-    # No limit means nothing is metered, so a paying company without one runs
-    # for free. A rule of this form, not of Company: the seeds and the factories
-    # make companies without a limit, and an operator may still clear one later.
+    # A rule of this form, not of Company: the seeds and the factories make
+    # companies without a limit, and an operator may still clear one later.
     def unbounded_paying_company?(company)
       Deployment.saas? && !company.managed_by_aixle? && company.session_concurrency_limit.blank?
     end
