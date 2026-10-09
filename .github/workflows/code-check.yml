@@ -82,25 +82,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Enable the containerd image store
-        # `load: true` below is the single most expensive thing in this job, and
-        # none of it is compilation. With the runner's stock daemon every layer
-        # resolves from cache in seconds, and then handing the 1.45 GB image to
-        # the daemon costs ~100s (31254450213: 97.8s backend, 102.8s frontend) —
-        # a tarball serialised out of buildkit and unpacked layer by layer back
-        # in. Writing OCI mediatypes into the containerd store drops the unpack
-        # stage entirely and halves what remains: 69.6s and 60.4s on 31258372193.
+        # Handing the 1.45 GB image from a buildx builder container to the
+        # daemon was the most expensive thing in this job, and none of it is
+        # compilation: ~100s on the stock daemon (31254450213), 60–70s once the
+        # containerd store took OCI mediatypes without unpacking (31258372193).
+        # The containerd store also lets the daemon's own builder (the `docker`
+        # driver below) import a registry cache, so the image is built where it
+        # runs and there is nothing to hand over.
         #
         # Patching the daemon rather than reinstalling it with
         # docker/setup-docker-action: the runner image already ships Docker with
         # the Compose plugin that the steps below rely on, and reinstalling from
         # a release channel would put both back in play to save nothing.
-        # Ordered before the buildx setup, which starts a builder container on
-        # this daemon.
+        #
+        # The mirror: docker.io base images come through Google's mirror, away
+        # from Docker Hub's anonymous pull rate limit on shared runner egress
+        # IPs. FROM lines stay on docker.io, so Dependabot keeps tracking them.
         run: |
           set -euo pipefail
 
           config=$(sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}')
-          jq '.features["containerd-snapshotter"] = true' <<<"$config" > /tmp/daemon.json
+          jq '.features["containerd-snapshotter"] = true | .["registry-mirrors"] = ["https://mirror.gcr.io"]' \
+            <<<"$config" > /tmp/daemon.json
           sudo mv /tmp/daemon.json /etc/docker/daemon.json
           sudo systemctl restart docker
 
@@ -112,12 +115,7 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
-          # Pull docker.io base images through Google's mirror to avoid Docker
-          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
-          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["mirror.gcr.io"]
+          driver: docker
 
       - name: Build test image
         # Materialised here rather than pulled whole from a registry: the image

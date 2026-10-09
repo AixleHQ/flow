@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Runs one CI shard of the Rails suite: bin/rails-test-shard <shard> <total> [--list]
+# Runs one CI shard of the Rails suite: bin/rails-test-shard <shard> <total> [--list | rails test args...]
 #
 # The union of all shards must be exactly the file set a bare `rails test` runs,
 # so the exclusion glob is the one railties applies (DEFAULT_TEST_EXCLUDE or its
@@ -17,9 +17,10 @@ def die(message)
 end
 
 list = ARGV.delete("--list")
-die "usage: bin/rails-test-shard <shard> <total> [--list]" unless ARGV.size == 2 && ARGV.all?(/\A[1-9]\d*\z/)
+positional = ARGV.shift(2)
+die "usage: bin/rails-test-shard <shard> <total> [--list | rails test args...]" unless positional.size == 2 && positional.all?(/\A[1-9]\d*\z/)
 
-shard, total = ARGV.map { |arg| Integer(arg, 10) }
+shard, total = positional.map { |arg| Integer(arg, 10) }
 die "shard #{shard} is out of range for #{total} shards" if shard > total
 
 Dir.chdir(File.expand_path("..", __dir__))
@@ -34,5 +35,5 @@ die "shard #{shard}/#{total} selected no files out of #{files.size}" if selected
 if list
   puts selected
 else
-  exec "bundle", "exec", "rails", "test", *selected
+  exec "bundle", "exec", "rails", "test", *ARGV, *selected
 end

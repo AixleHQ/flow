@@ -123,7 +123,7 @@ jobs:
         shard: [ 1, 2, 3 ]
     uses: ./.github/workflows/code-check.yml
     with:
-      command: rails_check_all SHARD=${{ matrix.shard }} TOTAL_SHARDS=${{ strategy.job-total }}
+      command: rails_check_all SHARD=${{ matrix.shard }} TOTAL_SHARDS=${{ strategy.job-total }} RAILS_TEST_ARGS=-v
       needs-db: true
       run-coverage: '1'
       shard-artifact: coverage-shard-rails-${{ matrix.shard }}

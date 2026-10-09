@@ -63,10 +63,13 @@ FE_SHARD        ?= 1
 FE_TOTAL_SHARDS ?= 1
 COVERAGE_SHARDS := coverage/shards
 
+# Extra `rails test` arguments, e.g. RAILS_TEST_ARGS=-v for per-test timings.
+RAILS_TEST_ARGS ?=
+
 ifeq ($(strip $(TOTAL_SHARDS)),1)
-  RAILS_TEST_CMD := bundle exec rails test
+  RAILS_TEST_CMD := bundle exec rails test $(RAILS_TEST_ARGS)
 else
-  RAILS_TEST_CMD := bin/rails-test-shard $(SHARD) $(TOTAL_SHARDS)
+  RAILS_TEST_CMD := bin/rails-test-shard $(SHARD) $(TOTAL_SHARDS) $(RAILS_TEST_ARGS)
 endif
 
 ifeq ($(strip $(RUN_COVERAGE)),1)
@@ -261,6 +264,7 @@ rails_check_all:
 	  mkdir -p $(COVERAGE_SHARDS)/rails && \
 	  cp coverage/.resultset.json $(COVERAGE_SHARDS)/rails/$(SHARD)-$(TOTAL_SHARDS).json; \
 	fi
+	@mkdir -p $(COVERAGE_SHARDS)/logs && cp $(CHECK_RESULTS)/rails-test.log $(COVERAGE_SHARDS)/logs/rails-$(SHARD).log # TEMPORARY timings
 	$(summarize_checks)
 
 # CI's Vitest job: shard FE_SHARD of FE_TOTAL_SHARDS of the frontend suite.
@@ -268,6 +272,7 @@ vitest_check_all:
 	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
 	@echo "Running fe-test (shard $(FE_SHARD)/$(FE_TOTAL_SHARDS))..."
 	@$(FE_TEST)
+	@mkdir -p $(COVERAGE_SHARDS)/logs && cp $(CHECK_RESULTS)/fe-test.log $(COVERAGE_SHARDS)/logs/vitest-$(FE_SHARD).log # TEMPORARY timings
 	$(summarize_checks)
 
 # CI's coverage job: merges the shards' results under coverage/shards/ into the reports an
