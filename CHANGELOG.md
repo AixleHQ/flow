@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 ### Added
 - **Profile**: set a password under Profile → Security if you were onboarded
   without one, or change the one you have. Every set, change or reset emails
@@ -60,9 +62,9 @@ governance, community health — carry none.
 - **Company settings**: unticking **Managed by Aixle** on a company puts it
   on the free allowance, or stops it until a card is added if it has already
   used the allowance or its subscription has ended. It no longer shows an
-  Active subscription with a Cancel button that refuses. Unticking needs a worker limit, as creating a paying
-  company does. An active workspace with no subscription is offered **Add a
-  card** instead of **Cancel subscription**.
+  Active subscription with a Cancel button that refuses. Unticking needs a
+  worker limit, as creating a paying company does. An active workspace with no
+  subscription is offered **Add a card** instead of **Cancel subscription**.
 
 ## [1.1.0] - 2026-10-09
 
@@ -403,6 +405,7 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.1.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.0...develop
+[1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/AixleHQ/flow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AixleHQ/flow/releases/tag/v1.0.0
