@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: read
+  # The coverage job polls this run's job list (code-check.yml, wait-for-jobs).
+  actions: read
 
 env:
   # Buildx layer cache for the test image. Its own package rather than a tag on
@@ -123,7 +125,7 @@ jobs:
         shard: [ 1, 2, 3 ]
     uses: ./.github/workflows/code-check.yml
     with:
-      command: rails_check_all SHARD=${{ matrix.shard }} TOTAL_SHARDS=${{ strategy.job-total }} RAILS_TEST_ARGS=-v
+      command: rails_check_all SHARD=${{ matrix.shard }} TOTAL_SHARDS=${{ strategy.job-total }}
       needs-db: true
       run-coverage: '1'
       shard-artifact: coverage-shard-rails-${{ matrix.shard }}
@@ -144,15 +146,17 @@ jobs:
 
   coverage:
     name: Coverage
-    needs: [ rails, vitest ]
     # Coverage floors gate the pull request, not the merge: measured only on develop
     # pushes, a drop was found after it had landed. A failed shard still uploads what it
     # measured, so the floors are checked here whether or not every test passed.
-    if: ${{ !cancelled() }}
+    #
+    # No `needs:` on the shards: this job builds its image while they run and waits for
+    # them itself (wait-for-jobs), which takes its ~70s of setup off the critical path.
     uses: ./.github/workflows/code-check.yml
     with:
       command: coverage_merge
       run-coverage: '1'
+      wait-for-jobs: Rails Vitest
       merge-coverage: true
       coverage-summary: both
       coverage-report: coverage-report

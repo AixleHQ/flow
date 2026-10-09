@@ -32,6 +32,13 @@ on:
         required: false
         type: boolean
         default: false
+      wait-for-jobs:
+        # Space-separated prefixes of job names in this run to wait for before the
+        # check. A job that merges other jobs' results can then build its image
+        # while they run, instead of starting after them through `needs:`.
+        required: false
+        type: string
+        default: ""
       coverage-report:
         # Name to upload the coverage reports under (coverage/ without the shards).
         # Empty uploads nothing.
@@ -58,6 +65,8 @@ on:
 
 permissions:
   contents: read
+  # wait-for-jobs reads this run's job list.
+  actions: read
 
 env:
   COMPOSE_FILE: docker-compose.ci.yml
@@ -153,6 +162,33 @@ jobs:
       - name: Prepare database
         if: ${{ inputs.needs-db }}
         run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web bundle exec rails db:create db:migrate
+
+      - name: Wait for jobs
+        if: ${{ inputs.wait-for-jobs != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIXES: ${{ inputs.wait-for-jobs }}
+        run: |
+          set -euo pipefail
+
+          # filter=latest: a re-run's jobs, not the attempt they replaced.
+          while :; do
+            states=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
+              | jq -r --arg prefixes "$PREFIXES" '
+                  ($prefixes | split(" ") | map(select(length > 0))) as $p
+                  | .jobs[] | select(.name as $n | any($p[]; . as $q | $n | startswith($q)))
+                  | "\(.status) \(.name)"')
+
+            if [ -z "$states" ]; then
+              echo "::error::no job in this run matches: $PREFIXES"
+              exit 1
+            fi
+            if ! grep -qv '^completed ' <<<"$states"; then
+              echo "$states"
+              break
+            fi
+            sleep 10
+          done
 
       - name: Download shard coverage
         if: ${{ inputs.merge-coverage }}
