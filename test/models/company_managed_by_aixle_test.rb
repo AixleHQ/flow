@@ -66,6 +66,28 @@ class CompanyManagedByAixleTest < ActiveSupport::TestCase
     assert_equal "active", company.reload.billing_state
   end
 
+  # What the deleted webhook does to a company we carry: the block is dropped,
+  # the end date stays.
+  test "a company we stop carrying whose subscription ended needs a new card" do
+    saas!
+    company = managed_company(stripe_customer_id: "cus_test_1", stripe_subscription_id: "sub_test_1")
+    company.update!(billing_state: "blocked", billing_block_reason: "canceled", billing_cancels_at: 1.day.ago)
+
+    company.update!(managed_by_aixle: false)
+
+    assert_equal "canceled", company.reload.billing_status
+  end
+
+  test "a company we stop carrying keeps a cancellation that has not happened yet" do
+    saas!
+    company = managed_company(stripe_customer_id: "cus_test_1", stripe_subscription_id: "sub_test_1",
+                              billing_cancels_at: 1.week.from_now)
+
+    company.update!(managed_by_aixle: false)
+
+    assert_equal "cancelling", company.reload.billing_status
+  end
+
   test "a company we stop carrying needs a limit to be metered against" do
     saas!
     company = create(:company, :managed_by_aixle)
