@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# An administrator asking for a company's subscription to stop at the end of its
-# billing period, and why. Kept after a resume so the reasons survive for
-# analytics.
+# An administrator stopping a company's subscription, and why. `cancels_at` is
+# when it ended — or, for one made while cancelling waited for the period's end,
+# when it was due to. Kept after a resume so the reasons survive for analytics.
 class BillingCancellation < ApplicationRecord
   # Stripe's own `cancellation_details.feedback` values, so the same answer is
   # readable in its dashboard and in ours without a mapping between them.

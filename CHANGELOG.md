@@ -30,6 +30,12 @@ governance, community health — carry none.
   longer carries the native extensions its gems ship for Ruby versions other
   than the one it runs. The `flow-grok` image is about 160 MB smaller (about
   65 MB to pull) without a second, unused copy of the Grok CLI binary.
+- **Company settings**: cancelling the subscription stops it at once instead of
+  at the end of the billing period, so workers are no longer billed for the
+  rest of a month nobody wants. Usage up to the cancellation goes on a final
+  invoice, and the email to admins says the subscription is cancelled. A
+  cancellation already scheduled for a period's end can still be taken back
+  until its date.
 
 ### Fixed
 - **Repositories**: `gh` inside a session is signed in for the attached GitHub

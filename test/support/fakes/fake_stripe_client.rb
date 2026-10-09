@@ -79,9 +79,8 @@ class FakeStripeClient
     update_subscription(subscription_id, payment_settings: { save_default_payment_method: "on_subscription" })
   end
 
-  def schedule_cancellation(subscription_id:, reason:, comment:)
-    period_end = subscription!(subscription_id).items.data.first.current_period_end
-    update_subscription(subscription_id, cancel_at_period_end: true, cancel_at: period_end,
+  def cancel_subscription(subscription_id:, reason:, comment:)
+    update_subscription(subscription_id, status: "canceled", ended_at: Time.current.to_i,
                                          cancellation_details: { feedback: reason, comment: comment })
   end
 

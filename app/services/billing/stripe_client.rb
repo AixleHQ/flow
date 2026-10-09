@@ -82,17 +82,21 @@ module Billing
       end
     end
 
-    # At the end of the period, never sooner: the minutes metered up to then
-    # are invoiced on that period's own invoice, and nothing is refunded.
-    # `customer.subscription.deleted` arrives when it actually ends.
-    def schedule_cancellation(subscription_id:, reason:, comment:)
-      params = { cancel_at_period_end: true }
+    # Now, not at the period's end: capacity is billed in arrears for every hour
+    # it is offered, so the rest of a period is not something already paid for,
+    # and running it out bills workers nobody wants. `invoice_now` puts the
+    # minutes already metered on a final invoice; an hour the meter has not sent
+    # yet is never invoiced.
+    def cancel_subscription(subscription_id:, reason:, comment:)
+      params = { invoice_now: true }
       details = { feedback: reason, comment: comment }.compact_blank
       params[:cancellation_details] = details if details.any?
 
-      api { ::Stripe::Subscription.update(subscription_id, params, request_options) }
+      api { ::Stripe::Subscription.cancel(subscription_id, params, request_options) }
     end
 
+    # Only for a cancellation scheduled at the period's end, which the
+    # application no longer makes.
     def resume_subscription(subscription_id:)
       api { ::Stripe::Subscription.update(subscription_id, { cancel_at_period_end: false }, request_options) }
     end

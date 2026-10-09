@@ -192,13 +192,22 @@ and records it as `canceled`, so a new card can restore access through Checkout.
 
 ## Cancelling from the application
 
-An admin cancels from **Company Settings → Billing**. The application sets
-`cancel_at_period_end` on the subscription, with the reason as
-`cancellation_details`, and keeps the reason in `billing_cancellations` too. Every
-admin of the company gets an email. Until the period ends the company runs and is
-metered as usual. `customer.subscription.deleted` stops it at the end date, and
-Stripe invoices the period's minutes on its final invoice. An admin can resume the
-subscription from the same tab before that date.
+An admin cancels from **Company Settings → Billing**. The application cancels
+the subscription at once (`DELETE /v1/subscriptions/:id` with `invoice_now`), with
+the reason as `cancellation_details`, and keeps the reason in
+`billing_cancellations` too. Every admin of the company gets an email.
+
+Cancelling does not wait for the end of the period. Capacity is billed in arrears
+for every hour it is offered, so the rest of a period is not something the
+customer has already paid for. The application stops the company as `canceled`
+itself rather than waiting for `customer.subscription.deleted`. It also records
+the cancellation time as `billing_event_at`, so an older
+`customer.subscription.updated` that arrives late cannot start the company again.
+Stripe invoices the minutes already metered on a final invoice. An hour the meter
+had not sent yet when the subscription ended is not invoiced.
+
+A cancellation scheduled for the period's end before this change can still be
+taken back from the same tab (**Keep subscription**) until its date.
 
 Checkout refuses to open while the company has a subscription that has not ended.
 The meter sums by customer, and every subscription carrying the price invoices

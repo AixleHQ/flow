@@ -1,8 +1,0 @@
-<%= @actor == @recipient ? "You cancelled" : "#{@actor&.name || 'An administrator'} cancelled" %> the Aixle Flow subscription for <%= @company.branded_name %>.
-
-Until <%= @ends_on %> everything keeps working. Usage up to that date is billed on the final invoice.
-
-After <%= @ends_on %> no new sessions start. Your projects, workflows and history are kept, and administrators can still sign in.
-
-To restore access later, add a card from the Billing tab. To keep the subscription, resume it there before <%= @ends_on %>:
-<%= @billing_url %>

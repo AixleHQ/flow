@@ -99,17 +99,7 @@ function CheckoutResult({ result, billing }: { result: Props['checkoutResult']; 
   );
 }
 
-function CancelModal({
-  opened,
-  onClose,
-  endsOn,
-  reasons,
-}: {
-  opened: boolean;
-  onClose: () => void;
-  endsOn: string;
-  reasons: string[];
-}) {
+function CancelModal({ opened, onClose, reasons }: { opened: boolean; onClose: () => void; reasons: string[] }) {
   const [reason, setReason] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -127,8 +117,8 @@ function CancelModal({
     <Modal opened={opened} onClose={onClose} title="Cancel the subscription?" size="md">
       <Stack gap="md">
         <List size="sm" spacing={6}>
-          <List.Item>Until {endsOn} everything keeps working; after that no new sessions start.</List.Item>
-          <List.Item>Usage up to {endsOn} is billed on the final invoice.</List.Item>
+          <List.Item>It stops now: no new sessions start, and anything already running finishes.</List.Item>
+          <List.Item>Usage up to now is billed on a final invoice.</List.Item>
           <List.Item>Projects, workflows and history are kept, and admins can still sign in.</List.Item>
           <List.Item>Add a card at any time to restore access.</List.Item>
         </List>
@@ -270,12 +260,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
         </Text>
         {action && <Group>{action}</Group>}
       </Stack>
-      <CancelModal
-        opened={cancelOpen}
-        onClose={() => setCancelOpen(false)}
-        endsOn={formatDateMedium(billing.periodEndsAt)}
-        reasons={billing.cancellationReasons}
-      />
+      <CancelModal opened={cancelOpen} onClose={() => setCancelOpen(false)} reasons={billing.cancellationReasons} />
     </Card>
   );
 }

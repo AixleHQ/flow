@@ -71,8 +71,8 @@ describe('Company billing page', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel subscription' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('Usage up to');
-    expect(dialog).toHaveTextContent('billed on the final invoice');
+    expect(dialog).toHaveTextContent('It stops now');
+    expect(dialog).toHaveTextContent('Usage up to now is billed on a final invoice');
     expect(dialog).toHaveTextContent('Projects, workflows and history are kept');
 
     await userEvent.click(within(dialog).getByRole('combobox', { name: /Why are you cancelling/ }));
