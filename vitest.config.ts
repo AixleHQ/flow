@@ -32,6 +32,10 @@ export default defineConfig({
     clearMocks: true, // reset spy call history between tests, keep implementations
     testTimeout: isSlowRunner ? 20000 : 5000,
     hookTimeout: isSlowRunner ? 20000 : 10000,
+    // Vitest keeps a core for its main process by default (cpus - 1). CI's Vitest job runs
+    // nothing else, and a fourth worker on its 4 vCPUs measured 12–15% faster. Locally the
+    // default stays: the same machine is also running everything else.
+    maxWorkers: process.env.CI ? '100%' : undefined,
     retry: 0,
     include: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules/**', 'test/playwright/**'],
