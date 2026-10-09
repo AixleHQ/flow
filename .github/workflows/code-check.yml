@@ -198,6 +198,15 @@ jobs:
           path: coverage/shards
           merge-multiple: true
 
+      - name: TEMP A/B — Vitest with 3 workers (before)
+        if: ${{ startsWith(inputs.command, 'vitest_check_all') }}
+        env:
+          RUN_COVERAGE: ${{ inputs.run-coverage }}
+        run: |
+          mkdir -p coverage && chmod 777 coverage
+          docker compose -f "$COMPOSE_FILE" run --rm --no-deps -e VITEST_MAX_WORKERS=3 \
+            -v "$GITHUB_WORKSPACE/coverage:/app/coverage" web make ${{ inputs.command }} || true
+
       - name: Run check
         env:
           # Forwarded into the container by docker-compose.ci.yml (RUN_COVERAGE).
@@ -216,6 +225,15 @@ jobs:
 
           docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
             "${mounts[@]}" web make ${{ inputs.command }}
+
+      - name: TEMP A/B — Vitest with 3 workers (after)
+        if: ${{ startsWith(inputs.command, 'vitest_check_all') }}
+        env:
+          RUN_COVERAGE: ${{ inputs.run-coverage }}
+        run: |
+          mkdir -p coverage-ab && chmod 777 coverage-ab
+          docker compose -f "$COMPOSE_FILE" run --rm --no-deps -e VITEST_MAX_WORKERS=3 \
+            -v "$GITHUB_WORKSPACE/coverage-ab:/app/coverage" web make ${{ inputs.command }} || true
 
       - name: Read line coverage
         id: line-coverage
