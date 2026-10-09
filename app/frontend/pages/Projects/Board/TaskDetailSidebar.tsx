@@ -87,6 +87,7 @@ import {
   triggerWorkflowApiV1ProjectTaskPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
+import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
 import { ActivityAvatar } from './ActivityAvatar';
 import { formatCostCents, formatDuration, formatRelativeTime, formatTokens } from './boardFormat';
@@ -763,22 +764,7 @@ export function TaskDetailSidebar({
               >
                 {(pendingDesc ?? task.description) ? (
                   <Box className={styles.commentMd}>
-                    <Markdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ onClick, ...props }) => (
-                          <a
-                            {...props}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onClick?.(event);
-                            }}
-                          />
-                        ),
-                      }}
-                    >
+                    <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
                       {pendingDesc ?? task.description ?? ''}
                     </Markdown>
                   </Box>
@@ -1405,7 +1391,9 @@ export function TaskDetailSidebar({
                       className={styles.commentMd}
                       style={{ fontSize: 13, color: 'var(--mantine-color-dimmed)', lineHeight: 1.6, marginTop: 8 }}
                     >
-                      <Markdown remarkPlugins={[remarkGfm]}>{c.body}</Markdown>
+                      <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                        {c.body}
+                      </Markdown>
                     </Box>
                   )}
 

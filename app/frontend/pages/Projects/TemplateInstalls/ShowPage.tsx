@@ -18,6 +18,7 @@ import Markdown from 'react-markdown';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { MarkdownLink } from 'shared/ui/MarkdownLink';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 interface SetupItem {
@@ -152,7 +153,7 @@ const ShowPage = () => {
         {install.setup && (
           <Card withBorder padding="lg" radius="md">
             <Typography>
-              <Markdown>{install.setup}</Markdown>
+              <Markdown components={{ a: MarkdownLink }}>{install.setup}</Markdown>
             </Typography>
           </Card>
         )}

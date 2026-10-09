@@ -36,6 +36,11 @@ governance, community health — carry none.
   invoice, and the email to admins says the subscription is cancelled. A
   cancellation already scheduled for a period's end can still be taken back
   until its date.
+- **Tasks**: a link to another site in a card comment opens in a new tab, as
+  one in the card description already did; links within Flow stay in the same
+  tab, in the description too.
+- **Templates**: links to other sites in a template's readme and setup notes,
+  and in the setup page of an installed template, open in a new tab.
 
 ### Fixed
 - **Repositories**: `gh` inside a session is signed in for the attached GitHub
