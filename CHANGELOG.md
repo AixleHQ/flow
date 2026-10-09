@@ -19,6 +19,10 @@ governance, community health — carry none.
   you and signs you out on your other devices; this one stays signed in.
 - **Sign-in & onboarding**: **Forgot password?** on the sign-in screen emails a
   single-use link, valid for an hour, to choose a new password.
+- **Sessions & Runs**: the **Model** field in **New session** names the default
+  model the session will run on (e.g. `Default · Claude Opus 4.8`), taken from
+  the runtime's default in Profile, and lists it first in the dropdown. A
+  runtime with no default set keeps `Default (runtime selects)`.
 
 ### Changed
 - **Docs**: the User guide overview and *What Flow is* describe every way a

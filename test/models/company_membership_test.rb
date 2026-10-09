@@ -180,10 +180,31 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     props = nil
     assert_no_error_reported { props = membership.agent_models_for_props }
 
-    assert_equal [ { agent_type: "cursor_cli", models: [] } ], props
+    assert_equal [ { agent_type: "cursor_cli", models: [], default_model: nil } ], props
     assert_equal 1, credential.reload.refresh_failure_count
     assert_not_requested :post, Agents::CursorCliAdapter::CURSOR_MODELS_URL
     assert_not_requested :post, Agents::CursorCliAdapter::CURSOR_AUTH_URL
+  end
+
+  # The New Session form names the model a session launches with when none is
+  # picked; that is AgentCredential#default_model, the one the launch resolves.
+  test "agent_models_for_props exposes each credential's default model" do
+    membership = create(:company_membership, user: @user, company: @company)
+    create(:agent_credential, :claude_code, user: @user, company: @company,
+           metadata: { "default_model" => "claude-opus-4-8" })
+
+    props = membership.agent_models_for_props
+
+    assert_equal 1, props.size
+    assert_equal "claude_code", props.first[:agent_type]
+    assert_equal "claude-opus-4-8", props.first[:default_model]
+  end
+
+  test "agent_models_for_props reports a nil default model when none is pinned" do
+    membership = create(:company_membership, user: @user, company: @company)
+    create(:agent_credential, :claude_code, user: @user, company: @company)
+
+    assert_nil membership.agent_models_for_props.first[:default_model]
   end
 
   # === cable disconnect on revoke ===

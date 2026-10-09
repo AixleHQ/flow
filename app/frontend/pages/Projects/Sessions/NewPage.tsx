@@ -19,6 +19,7 @@ interface AgentModel {
 interface AgentModelsEntry {
   agentType: string;
   models: AgentModel[];
+  defaultModel?: string | null;
 }
 
 interface Props {

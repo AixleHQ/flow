@@ -77,7 +77,12 @@ interface AgentModel {
 interface AgentModelsEntry {
   agentType: string;
   models: AgentModel[];
+  /** The model a session on this runtime launches with when none is picked. */
+  defaultModel?: string | null;
 }
+
+// Stands in for "no model" inside the dropdown; never stored in state or sent.
+const DEFAULT_MODEL_OPTION = '__runtime_default__';
 
 export const SessionNewForm = ({
   projectId: fixedProjectId,
@@ -140,6 +145,22 @@ export const SessionNewForm = ({
   }, [agentModels]);
 
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
+
+  const defaultModelId = agentType ? (agentModels.find((e) => e.agentType === agentType)?.defaultModel ?? null) : null;
+  const defaultModelLabel = defaultModelId
+    ? `Default · ${models.find((m) => m.modelId === defaultModelId)?.displayName || defaultModelId}`
+    : 'Default (runtime selects)';
+
+  const modelOptions = useMemo(
+    () => [
+      ...(agentType ? [{ value: DEFAULT_MODEL_OPTION, label: defaultModelLabel }] : []),
+      ...models.filter((m) => m.modelId).map((m) => ({ value: m.modelId, label: m.displayName || m.modelId })),
+    ],
+    [agentType, defaultModelLabel, models],
+  );
+  const modelFieldLabel = selectedModel
+    ? (modelOptions.find((o) => o.value === selectedModel)?.label ?? selectedModel)
+    : defaultModelLabel;
 
   const avgCostCents = agentType ? (costHint?.avgCostCentsByRuntime?.[agentType] ?? null) : null;
 
@@ -357,10 +378,12 @@ export const SessionNewForm = ({
 
       <Select
         label="Model"
-        placeholder="Default (runtime selects)"
+        placeholder={defaultModelLabel}
+        title={modelFieldLabel}
         value={selectedModel}
-        onChange={setSelectedModel}
-        data={models.filter((m) => m.modelId).map((m) => ({ value: m.modelId, label: m.displayName || m.modelId }))}
+        onChange={(value) => setSelectedModel(value === DEFAULT_MODEL_OPTION ? null : value)}
+        data={modelOptions}
+        classNames={{ input: classes.modelInput, option: classes.modelOption }}
         searchable
         clearable
         disabled={!agentType}
