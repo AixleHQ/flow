@@ -9,7 +9,7 @@ time without being thrown out of either.
 
 | Method | Who sets it up | Notes |
 | --- | --- | --- |
-| **Password** | the person | Always available |
+| **Password** | the person | Set, changed or reset by the person — see [Your password](#your-password) |
 | **Google** | the operator, once per installation | One OAuth client for everyone |
 | **Microsoft** | the operator, once per installation | Entra ID work/school accounts |
 | **Your own OpenID Connect** | a workspace admin | Okta, Entra, Ping, OneLogin, JumpCloud, Google Workspace — anything that speaks OIDC |
@@ -156,6 +156,35 @@ What it does and does not do:
 **Profile → Security** shows what you hold: the methods you sign in with, your
 passkeys, whether codes are on, and every device signed in. A sign-in you do not
 recognise can be ended from there.
+
+### Your password
+
+A workspace admin who was onboarded with Google, Microsoft or an email link has
+no password. **Profile → Security → Password → Set password** adds one: type it
+twice, no current password needed — you are already signed in. From then on
+**Password** appears under *Sign-in methods*, and a Google or Microsoft link that
+was your only way in can be removed.
+
+With a password set, the same card offers **Change password**, which asks for the
+current one. Passwords need at least 8 characters.
+
+Forgot it? **Forgot password?** on the sign-in screen — or **Forgot your current
+password?** in the change form — emails a link to choose a new one. The link
+works once and expires after an hour, and the screen says the same thing whether
+or not the address has an account. Opening the link only shows the form;
+nothing is spent until you save, so a mail scanner that follows links cannot use
+it up.
+
+Every set, change or reset:
+
+- emails you, so a change you did not make does not go unnoticed;
+- signs you out on every other device — the browser you made the change in stays
+  signed in — and turns off your personal MCP token;
+- is written to the audit log.
+
+The card offers nothing to set when none of your workspaces accepts a password,
+and no reset link is sent for such an account. An administrator acting as you
+cannot set or change your password.
 
 ### Linking a method
 

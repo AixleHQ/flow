@@ -373,6 +373,15 @@ Rails.application.routes.draw do
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
 
+    # Forgotten passwords. Like a sign-in link, the emailed link's GET only opens
+    # the form; the PATCH is what spends it.
+    get "password/reset", to: "password_resets#new", as: :new_password_reset
+    post "password/reset", to: "password_resets#create", as: :password_resets
+    scope constraints: { token: /[^\/]+/ } do
+      get "password/reset/:token", to: "password_resets#edit", as: :edit_password_reset
+      patch "password/reset/:token", to: "password_resets#update", as: :password_reset
+    end
+
     # The platform operator's own door. /login decides what to offer by the
     # address's domain, and the operator's domain belongs to no workspace, so
     # that screen never reaches a password for them (AD-19: password only).
@@ -410,6 +419,7 @@ Rails.application.routes.draw do
       get :security, on: :member
     end
     resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
+    patch "profile/password", to: "passwords#update", as: :profile_password
     # The confirmation link a stranger is emailed: opening it is the proof of
     # the address, and the only thing that writes the company.
     resource :workspace, only: %i[new create], controller: "workspaces" do

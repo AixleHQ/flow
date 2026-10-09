@@ -3,11 +3,20 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import SecurityPage from './Security';
 
 type SignInMethod = Parameters<typeof SecurityPage>[0]['signInMethods'][number];
+type PasswordState = Parameters<typeof SecurityPage>[0]['password'];
+
+const buildPassword = (overrides: Partial<PasswordState> = {}): PasswordState => ({
+  set: true,
+  changedAt: '2026-09-01T10:00:00Z',
+  accepted: true,
+  minLength: 8,
+  ...overrides,
+});
 
 const buildMethod = (overrides: Partial<SignInMethod> = {}): SignInMethod => ({
   id: 1,
@@ -33,17 +42,18 @@ const stubEnrolment = (body: Record<string, unknown>) =>
 
 const renderPage = (
   totpEnabled = false,
-  { signInMethods = [buildMethod()], linkableKinds = ['google', 'microsoft'] } = {},
+  { signInMethods = [buildMethod()], linkableKinds = ['google', 'microsoft'], password = buildPassword() } = {},
 ) =>
   renderAuthedPage(
     <SecurityPage
       signInMethods={signInMethods}
       linkableKinds={linkableKinds}
+      password={password}
       passkeys={[]}
       totpEnabled={totpEnabled}
       sessions={[]}
     />,
-    { props: { signInMethods, linkableKinds, passkeys: [], totpEnabled, sessions: [] } },
+    { props: { signInMethods, linkableKinds, password, passkeys: [], totpEnabled, sessions: [] } },
   );
 
 afterEach(() => {
@@ -93,7 +103,7 @@ describe('Profile Security tab — sign-in methods', () => {
     });
 
     expect(screen.getByRole('heading', { name: 'Sign-in methods' })).toBeInTheDocument();
-    expect(screen.getByText('Password')).toBeInTheDocument();
+    expect(screen.getByText('Password', { ignore: 'h4' })).toBeInTheDocument();
     expect(screen.getByText('Microsoft')).toBeInTheDocument();
     expect(screen.getByText(/me@contoso\.example · not used yet/)).toBeInTheDocument();
     expect(screen.getByText(/me@acme\.test · last used/)).toBeInTheDocument();
@@ -146,5 +156,75 @@ describe('Profile Security tab — sign-in methods', () => {
     renderPage(false, { signInMethods: [buildMethod()] });
 
     expect(screen.queryByRole('button', { name: /^Remove Password/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Profile Security tab — password', () => {
+  type Visit = { onError: (errors: Record<string, string>) => void };
+
+  it('lets someone without a password set one without asking for a current one', async () => {
+    renderPage(false, { password: buildPassword({ set: false, changedAt: null }) });
+
+    expect(screen.getByText('No password set')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Set password' }));
+
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('New password'), 'Sunflower42');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'Sunflower42');
+    await userEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/profile/password',
+      { currentPassword: '', password: 'Sunflower42', passwordConfirmation: 'Sunflower42' },
+      expect.anything(),
+    );
+  });
+
+  it('asks for the current password to change one, and offers a reset for a forgotten one', async () => {
+    renderPage();
+
+    expect(screen.getByText(/Password set · last changed/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    expect(await screen.findByText('Enter your current password.')).toBeInTheDocument();
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Forgot your current password?' }));
+    expect(router.post).toHaveBeenCalledWith('/password/reset', {}, expect.anything());
+  });
+
+  it('says inline when the passwords are too short or do not match', async () => {
+    renderPage(false, { password: buildPassword({ set: false }) });
+    await userEvent.click(screen.getByRole('button', { name: 'Set password' }));
+
+    await userEvent.type(screen.getByLabelText('New password'), 'short');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'shorter');
+    await userEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    expect(await screen.findByText('Use at least 8 characters.')).toBeInTheDocument();
+    expect(screen.getByText('The passwords do not match.')).toBeInTheDocument();
+    expect(router.patch).not.toHaveBeenCalled();
+  });
+
+  it('shows what the server refused under the field it belongs to', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    await userEvent.type(screen.getByLabelText('Current password'), 'not-it-at-all');
+    await userEvent.type(screen.getByLabelText('New password'), 'Sunflower42');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'Sunflower42');
+    await userEvent.click(screen.getByRole('button', { name: 'Save password' }));
+
+    const visit = vi.mocked(router.patch).mock.calls[0][2] as unknown as Visit;
+    act(() => visit.onError({ currentPassword: 'That is not your current password.' }));
+
+    expect(await screen.findByText('That is not your current password.')).toBeInTheDocument();
+  });
+
+  it('offers nothing to set where no workspace takes a password', () => {
+    renderPage(false, { password: buildPassword({ set: false, accepted: false }) });
+
+    expect(screen.queryByRole('button', { name: 'Set password' })).not.toBeInTheDocument();
+    expect(screen.getByText(/None of your workspaces accepts a password/)).toBeInTheDocument();
   });
 });

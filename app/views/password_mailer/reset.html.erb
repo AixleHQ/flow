@@ -1,0 +1,52 @@
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  Choose a new password for your Aixle Flow account. The link works once.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          Reset your password
+        </td>
+      </tr>
+
+      <!-- Body -->
+      <tr>
+        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          Hello <strong style="color:#d1cfcd; font-weight:600;"><%= @user.name %></strong>, someone asked to reset the password for your Aixle Flow account. Choose a new one with the button below.
+        </td>
+      </tr>
+
+      <!-- CTA -->
+      <tr>
+        <td style="padding-bottom:28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @url %>" target="_blank" role="button" aria-label="Choose a new password"
+                   style="display:inline-block; padding:11px 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Choose a new password
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Expiry note + fallback link -->
+      <tr>
+        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          The link works once and expires in <%= @ttl_minutes %> minutes. If you did not ask for it, ignore this message: your password stays as it is.<br><br>
+          If the button doesn't work, paste this link into your browser:<br>
+          <a href="<%= @url %>" style="color:#cf6b4a; text-decoration:underline; overflow-wrap:break-word; word-break:break-word;"><%= @url %></a>
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

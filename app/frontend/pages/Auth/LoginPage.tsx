@@ -1,5 +1,18 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Button, Center, Checkbox, Divider, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
+import {
+  Anchor,
+  Button,
+  Center,
+  Checkbox,
+  Divider,
+  Group,
+  Paper,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
@@ -7,7 +20,7 @@ import { z } from 'zod';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
-import { loginIdentifyPath, loginPath } from 'shared/routes';
+import { loginIdentifyPath, loginPath, newPasswordResetPath } from 'shared/routes';
 import { BrandLockup, PageShell } from 'shared/ui';
 
 import classes from './LoginPage.module.css';
@@ -28,6 +41,7 @@ interface PageProps {
   dead_end?: boolean;
   /** Set only on the redirect from a sign-in that left the person outside their domain's workspace. */
   claimedDomain?: ClaimedDomain | null;
+  flash?: { notice?: unknown; alert?: unknown };
   [key: string]: unknown;
 }
 
@@ -122,6 +136,16 @@ const LoginPage = () => {
     password: '',
     rememberMe: false,
   });
+
+  // A finished password reset lands here with a notice.
+  const flash = usePage<PageProps>().props.flash;
+  const shownFlashRef = useRef<typeof flash>(undefined);
+  useEffect(() => {
+    if (!flash || flash === shownFlashRef.current) return;
+    shownFlashRef.current = flash;
+    if (typeof flash.notice === 'string') notifications.show({ message: flash.notice, color: 'green' });
+    if (typeof flash.alert === 'string') notifications.show({ message: flash.alert, color: 'red' });
+  }, [flash]);
 
   useEffect(() => {
     if (error && !errorShownRef.current) {
@@ -254,12 +278,17 @@ const LoginPage = () => {
                         }}
                         visibilityToggleButtonProps={{ 'aria-label': 'Toggle password visibility' }}
                       />
-                      <Checkbox
-                        label="Remember me"
-                        size="sm"
-                        checked={data.rememberMe}
-                        onChange={(e) => setData('rememberMe', e.currentTarget.checked)}
-                      />
+                      <Group justify="space-between">
+                        <Checkbox
+                          label="Remember me"
+                          size="sm"
+                          checked={data.rememberMe}
+                          onChange={(e) => setData('rememberMe', e.currentTarget.checked)}
+                        />
+                        <Anchor href={newPasswordResetPath({ email: prefillEmail ?? data.email })} size="sm">
+                          Forgot password?
+                        </Anchor>
+                      </Group>
                       <Button
                         type="submit"
                         fullWidth
