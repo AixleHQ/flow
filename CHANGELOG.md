@@ -47,6 +47,12 @@ governance, community health — carry none.
   and in the setup page of an installed template, open in a new tab.
 
 ### Fixed
+- **Sign-in & onboarding**: sign-in and magic-link rate limits now count attempts
+  sent as JSON, not only form posts, so the per-account brute-force limit can no
+  longer be bypassed by changing the request's content type.
+- **Sessions & Runs**: usage reported for a session is accepted only when the
+  batch carries that session's key. Token and cost figures can no longer be
+  written to a session by anyone who has seen its (non-secret) terminal link.
 - **Repositories**: `gh` inside a session is signed in for the attached GitHub
   repositories on Kubernetes deployments too, so agents can read checks, watch
   Actions runs and open pull requests without building a token by hand. Until

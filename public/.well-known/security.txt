@@ -1,0 +1,6 @@
+# Aixle Flow security contact (RFC 9116).
+# Update Expires before it lapses, or clients should treat this file as stale.
+Contact: https://github.com/AixleHQ/flow/security/advisories/new
+Expires: 2027-10-09T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://flow.aixle.com/.well-known/security.txt

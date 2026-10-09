@@ -15,6 +15,15 @@ class ContentSecurityPolicyTest < ActionDispatch::IntegrationTest
     assert_includes reported, "media-src 'self'"
   end
 
+  test "the modern Permissions-Policy header denies unused features, not the legacy Feature-Policy" do
+    get login_path
+
+    assert_equal "camera=(), microphone=(), geolocation=()", response.headers["Permissions-Policy"]
+    # config.permissions_policy would emit the superseded Feature-Policy header,
+    # which current browsers ignore; guard against regressing to it.
+    assert_nil response.headers["Feature-Policy"], "the superseded Feature-Policy header must not be sent"
+  end
+
   test "the app layout's inline script carries the nonce the policy names" do
     get login_path
 

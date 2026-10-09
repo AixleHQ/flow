@@ -9,7 +9,38 @@ class Rack::Attack
   # yielded nil and silently disabled the per-email/combo throttles. Returns nil
   # when absent so the discriminator is skipped rather than keyed on "".
   def self.login_email(req)
-    (req.params["email"] || req.params.dig("user", "email")).to_s.downcase.presence
+    p = params_with_json(req)
+    (p["email"] || p.dig("user", "email")).to_s.downcase.presence
+  end
+
+  JSON_BODY_LIMIT = 16_384
+
+  # `req.params` parses the query string and form-encoded bodies but NOT a JSON
+  # body; the login and magic-link actions read JSON too (a JSON login succeeds),
+  # so a throttle keyed only on `req.params` was bypassable by sending the request
+  # as application/json — the per-email and per-combo discriminators saw nil and
+  # were silently skipped. Merge a bounded, rewound parse of the JSON body so the
+  # throttles see the address whatever the content type. The body is rewound after
+  # reading, so the app downstream still parses it.
+  def self.params_with_json(req)
+    json = json_body(req)
+    json.empty? ? req.params : req.params.merge(json)
+  end
+
+  def self.json_body(req)
+    return {} unless req.content_type.to_s.include?("application/json")
+
+    body = req.body
+    return {} unless body
+
+    raw = body.read(JSON_BODY_LIMIT + 1)
+    body.rewind
+    return {} if raw.nil? || raw.bytesize > JSON_BODY_LIMIT
+
+    parsed = JSON.parse(raw)
+    parsed.is_a?(Hash) ? parsed : {}
+  rescue JSON::ParserError, IOError, NoMethodError
+    {}
   end
 
   LOGIN_PATHS = %w[/login /admin/login].freeze
@@ -84,7 +115,7 @@ class Rack::Attack
   throttle("credential/ip", limit: 20, period: 60) { |req| req.ip if credential_request?(req) }
   # Mail specifically: one address must not be reachable at volume from many IPs.
   throttle("magic_link/email", limit: 5, period: 300) do |req|
-    req.params["email"].to_s.downcase.presence if req.post? && req.path == "/login/magic"
+    params_with_json(req)["email"].to_s.downcase.presence if req.post? && req.path == "/login/magic"
   end
 
   throttle("login/combo", limit: 10, period: 3600) do |req|

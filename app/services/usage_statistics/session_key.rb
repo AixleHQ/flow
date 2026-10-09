@@ -15,8 +15,9 @@ module UsageStatistics
   module SessionKey
     PURPOSE = "usage-ingest"
     ATTRIBUTE = "terminal_session_key"
-    # Stamped in the session's metadata by the launch that handed the key out. A session
-    # without it was launched before keys existed and is still trusted by token alone.
+    # Stamped in the session's metadata by the launch that handed the key out
+    # (AgentBaseStrategy). Still written for observability, but no longer gates
+    # whether a key is required — see #required_for?.
     LAUNCH_MARKER = "usage_key"
 
     module_function
@@ -38,8 +39,15 @@ module UsageStatistics
       "terminal_session_token=#{token},#{ATTRIBUTE}=#{generate(token)}"
     end
 
-    def required_for?(session)
-      session.metadata.is_a?(Hash) && session.metadata[LAUNCH_MARKER].present?
+    # Every usage batch must prove it came from the session it names — no
+    # exception. A pre-key "grandfather" clause once trusted sessions launched
+    # before keys existed by route_token alone; but the route_token is in every
+    # terminal URL and is broadcast company-wide, so over the (publicly reachable)
+    # ingest endpoint anyone who had seen a URL could forge token and cost into
+    # that session's usage. Every live launch has stamped the key since keys
+    # shipped, so the clause only widened the attack surface for no live benefit.
+    def required_for?(_session)
+      true
     end
 
     def secret
