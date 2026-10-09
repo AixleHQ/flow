@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: read
+  # The coverage job polls this run's job list (code-check.yml, wait-for-jobs).
+  actions: read
 
 env:
   # Buildx layer cache for the test image. Its own package rather than a tag on
@@ -88,31 +90,102 @@ jobs:
           # manifest shape and only accepts one written as an OCI image manifest.
           cache-to: type=registry,ref=${{ env.BUILD_CACHE }},mode=max,image-manifest=true,oci-mediatypes=true
 
-  be-checks:
-    name: Backend Checks
+  # The checks are split across parallel jobs, so a run lasts as long as its slowest job
+  # rather than the sum of its suites. Each job pays about two minutes for the image (and the
+  # database, where it needs one) before its own work starts, which is why the fast checks
+  # share one job instead of each getting their own, and why a suite gets a shard only when
+  # its share of the work outweighs that overhead. The org's free plan runs 20 hosted jobs at
+  # once across all runs; a run here is about a dozen.
+  lint:
+    name: Lint
     uses: ./.github/workflows/code-check.yml
     with:
-      # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
-      command: be_check_all
-      needs-db: true
-      # Coverage floors gate the pull request, not the merge: measured only on
-      # develop pushes, a drop was found after it had landed.
-      run-coverage: '1'
-      timeout: 45
+      # rubocop, brakeman, eslint, tsc, steiger and the watcher's node tests, all at once.
+      command: lint_check_all
+      run-coverage: '0'
+      timeout: 20
 
-  fe-checks:
-    name: Frontend Checks
+  system:
+    name: System Tests
     uses: ./.github/workflows/code-check.yml
     with:
-      # eslint + tsc, then Vitest on its own (backendless, no DB needed).
-      command: fe_check_all
-      needs-db: false
+      # The worker boot smoke, the eager-load check and the browser suite.
+      command: system_check_all
+      needs-db: true
+      run-coverage: '0'
+      timeout: 30
+
+  rails:
+    name: Rails Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    strategy:
+      # The default cancels the other shards when one fails, and a cancelled shard
+      # reports nothing about the tests it did not get to.
+      fail-fast: false
+      matrix:
+        shard: [ 1, 2, 3 ]
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: rails_check_all SHARD=${{ matrix.shard }} TOTAL_SHARDS=${{ strategy.job-total }}
+      needs-db: true
       run-coverage: '1'
-      timeout: 40
+      shard-artifact: coverage-shard-rails-${{ matrix.shard }}
+      timeout: 30
+
+  vitest:
+    name: Vitest (${{ matrix.shard }}/${{ strategy.job-total }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [ 1, 2, 3 ]
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: vitest_check_all FE_SHARD=${{ matrix.shard }} FE_TOTAL_SHARDS=${{ strategy.job-total }}
+      run-coverage: '1'
+      shard-artifact: coverage-shard-vitest-${{ matrix.shard }}
+      timeout: 30
+
+  coverage:
+    name: Coverage
+    # Coverage floors gate the pull request, not the merge: measured only on develop
+    # pushes, a drop was found after it had landed. A failed shard still uploads what it
+    # measured, so the floors are checked here whether or not every test passed.
+    #
+    # No `needs:` on the shards: this job builds its image while they run and waits for
+    # them itself (wait-for-jobs), which takes its ~70s of setup off the critical path.
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: coverage_merge
+      run-coverage: '1'
+      wait-for-jobs: Rails Vitest
+      merge-coverage: true
+      coverage-summary: both
+      coverage-report: coverage-report
+      timeout: 15
+
+  # One status for branch protection to require. It tests every result itself: a bare
+  # `needs:` lets a skipped or cancelled job through.
+  checks:
+    name: Checks
+    if: ${{ !cancelled() }}
+    needs: [ lint, system, rails, vitest, coverage, secret-scan ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a check job did not succeed ($RESULTS)"
+              exit 1
+            fi
+          done
 
   coverage-badges:
     name: Coverage Badges
-    needs: [ be-checks, fe-checks ]
+    needs: [ coverage ]
     # Every run measures coverage; develop is the branch the README advertises.
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
     # Pushes run side by side, so their writes to the `badges` branch take turns.
@@ -129,8 +202,8 @@ jobs:
 
       - name: Publish shields.io endpoints
         env:
-          BACKEND: ${{ needs.be-checks.outputs.line-coverage }}
-          FRONTEND: ${{ needs.fe-checks.outputs.line-coverage }}
+          BACKEND: ${{ needs.coverage.outputs.backend-line-coverage }}
+          FRONTEND: ${{ needs.coverage.outputs.frontend-line-coverage }}
         run: |
           set -euo pipefail
 

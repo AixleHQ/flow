@@ -20,23 +20,53 @@ on:
         required: false
         type: number
         default: 30
-      artifact-path:
+      shard-artifact:
+        # Name to upload this shard's raw coverage (coverage/shards/) under, for a later
+        # job with merge-coverage. Empty uploads nothing.
         required: false
         type: string
         default: ""
-      artifact-name:
+      merge-coverage:
+        # Downloads every coverage-shard-* artifact of the run into coverage/shards/
+        # before the check.
+        required: false
+        type: boolean
+        default: false
+      wait-for-jobs:
+        # Space-separated prefixes of job names in this run to wait for before the
+        # check. A job that merges other jobs' results can then build its image
+        # while they run, instead of starting after them through `needs:`.
         required: false
         type: string
-        default: "check-artifacts"
+        default: ""
+      coverage-report:
+        # Name to upload the coverage reports under (coverage/ without the shards).
+        # Empty uploads nothing.
+        required: false
+        type: string
+        default: ""
+      coverage-summary:
+        # The line-coverage summaries this job must produce: backend, frontend or both.
+        # A requested summary that is missing fails the job. Empty reads none.
+        required: false
+        type: string
+        default: ""
     outputs:
-      line-coverage:
+      backend-line-coverage:
         description: >-
-          Line coverage percentage this run measured, as a bare number
-          ("90.6"). Empty unless run-coverage was "1".
-        value: ${{ jobs.check.outputs.line-coverage }}
+          Backend line coverage this run measured, as a bare number ("93.7").
+          Empty unless coverage-summary asked for it.
+        value: ${{ jobs.check.outputs.backend-line-coverage }}
+      frontend-line-coverage:
+        description: >-
+          Frontend line coverage this run measured, as a bare number ("85.1").
+          Empty unless coverage-summary asked for it.
+        value: ${{ jobs.check.outputs.frontend-line-coverage }}
 
 permissions:
   contents: read
+  # wait-for-jobs reads this run's job list.
+  actions: read
 
 env:
   COMPOSE_FILE: docker-compose.ci.yml
@@ -55,30 +85,34 @@ jobs:
     env:
       RAILS_ENV: test
     outputs:
-      line-coverage: ${{ steps.line-coverage.outputs.percent }}
+      backend-line-coverage: ${{ steps.line-coverage.outputs.backend }}
+      frontend-line-coverage: ${{ steps.line-coverage.outputs.frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Enable the containerd image store
-        # `load: true` below is the single most expensive thing in this job, and
-        # none of it is compilation. With the runner's stock daemon every layer
-        # resolves from cache in seconds, and then handing the 1.45 GB image to
-        # the daemon costs ~100s (31254450213: 97.8s backend, 102.8s frontend) —
-        # a tarball serialised out of buildkit and unpacked layer by layer back
-        # in. Writing OCI mediatypes into the containerd store drops the unpack
-        # stage entirely and halves what remains: 69.6s and 60.4s on 31258372193.
+        # Handing the 1.45 GB image from a buildx builder container to the
+        # daemon was the most expensive thing in this job, and none of it is
+        # compilation: ~100s on the stock daemon (31254450213), 60–70s once the
+        # containerd store took OCI mediatypes without unpacking (31258372193).
+        # The containerd store also lets the daemon's own builder (the `docker`
+        # driver below) import a registry cache, so the image is built where it
+        # runs and there is nothing to hand over.
         #
         # Patching the daemon rather than reinstalling it with
         # docker/setup-docker-action: the runner image already ships Docker with
         # the Compose plugin that the steps below rely on, and reinstalling from
         # a release channel would put both back in play to save nothing.
-        # Ordered before the buildx setup, which starts a builder container on
-        # this daemon.
+        #
+        # The mirror: docker.io base images come through Google's mirror, away
+        # from Docker Hub's anonymous pull rate limit on shared runner egress
+        # IPs. FROM lines stay on docker.io, so Dependabot keeps tracking them.
         run: |
           set -euo pipefail
 
           config=$(sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}')
-          jq '.features["containerd-snapshotter"] = true' <<<"$config" > /tmp/daemon.json
+          jq '.features["containerd-snapshotter"] = true | .["registry-mirrors"] = ["https://mirror.gcr.io"]' \
+            <<<"$config" > /tmp/daemon.json
           sudo mv /tmp/daemon.json /etc/docker/daemon.json
           sudo systemctl restart docker
 
@@ -90,12 +124,7 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
-          # Pull docker.io base images through Google's mirror to avoid Docker
-          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
-          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
-          buildkitd-config-inline: |
-            [registry."docker.io"]
-              mirrors = ["mirror.gcr.io"]
+          driver: docker
 
       - name: Build test image
         # Materialised here rather than pulled whole from a registry: the image
@@ -134,6 +163,41 @@ jobs:
         if: ${{ inputs.needs-db }}
         run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web bundle exec rails db:create db:migrate
 
+      - name: Wait for jobs
+        if: ${{ inputs.wait-for-jobs != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIXES: ${{ inputs.wait-for-jobs }}
+        run: |
+          set -euo pipefail
+
+          # filter=latest: a re-run's jobs, not the attempt they replaced.
+          while :; do
+            states=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=latest&per_page=100" \
+              | jq -r --arg prefixes "$PREFIXES" '
+                  ($prefixes | split(" ") | map(select(length > 0))) as $p
+                  | .jobs[] | select(.name as $n | any($p[]; . as $q | $n | startswith($q)))
+                  | "\(.status) \(.name)"')
+
+            if [ -z "$states" ]; then
+              echo "::error::no job in this run matches: $PREFIXES"
+              exit 1
+            fi
+            if ! grep -qv '^completed ' <<<"$states"; then
+              echo "$states"
+              break
+            fi
+            sleep 10
+          done
+
+      - name: Download shard coverage
+        if: ${{ inputs.merge-coverage }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: coverage-shard-*
+          path: coverage/shards
+          merge-multiple: true
+
       - name: Run check
         env:
           # Forwarded into the container by docker-compose.ci.yml (RUN_COVERAGE).
@@ -141,19 +205,9 @@ jobs:
         run: |
           mounts=()
 
-          ARTIFACT_PATH="${{ inputs.artifact-path }}"
-          if [ -n "$ARTIFACT_PATH" ]; then
-            mkdir -p "$ARTIFACT_PATH"
-            # web runs as the non-root `app` user (L-22), whose uid won't match
-            # the runner's uid that owns this freshly-created host directory.
-            # Ephemeral, single-job runner — world-writable is fine here.
-            chmod 777 "$ARTIFACT_PATH"
-            mounts+=(-v "$GITHUB_WORKSPACE/$ARTIFACT_PATH:/app/$ARTIFACT_PATH")
-          fi
-
-          # SimpleCov and Vitest write their summaries inside the container, and
+          # SimpleCov and Vitest write their results inside the container, and
           # `docker compose run` leaves nothing behind. Mount the directory out
-          # so the next step can read the percentage for the coverage badges.
+          # so the steps below can read and upload them.
           if [ "$RUN_COVERAGE" = "1" ]; then
             mkdir -p coverage
             chmod 777 coverage
@@ -167,31 +221,58 @@ jobs:
         id: line-coverage
         # Runs even when the check failed: a red suite still measured coverage,
         # and the badge job only publishes on green develop pushes anyway.
-        if: ${{ always() && inputs.run-coverage == '1' }}
+        if: ${{ always() && inputs.coverage-summary != '' }}
+        env:
+          WANTED: ${{ inputs.coverage-summary }}
         run: |
-          # A job runs either the backend suite or the frontend one, never both,
-          # so exactly one of these summaries exists.
-          if [ -f coverage/.last_run.json ]; then
-            percent=$(jq -r '.result.line' coverage/.last_run.json)
-          elif [ -f coverage/frontend/coverage-summary.json ]; then
-            percent=$(jq -r '.total.lines.pct' coverage/frontend/coverage-summary.json)
-          else
-            # No summary means no coverage floor was checked either: Rails 8.1.4
-            # with simplecov 1.3.1 skipped both and still exited 0 (simplecov#1308).
-            echo "::error::coverage was requested but no summary file was produced"
-            exit 1
+          missing=0
+
+          if [ "$WANTED" = "backend" ] || [ "$WANTED" = "both" ]; then
+            if [ -f coverage/.last_run.json ]; then
+              backend=$(jq -r '.result.line' coverage/.last_run.json)
+              echo "Backend line coverage: $backend%"
+              echo "backend=$backend" >> "$GITHUB_OUTPUT"
+            else
+              # No summary means no coverage floor was checked either: Rails 8.1.4
+              # with simplecov 1.3.1 skipped both and still exited 0 (simplecov#1308).
+              echo "::error::backend coverage was requested but no summary file was produced"
+              missing=1
+            fi
           fi
 
-          echo "Line coverage: $percent%"
-          echo "percent=$percent" >> "$GITHUB_OUTPUT"
+          if [ "$WANTED" = "frontend" ] || [ "$WANTED" = "both" ]; then
+            if [ -f coverage/frontend/coverage-summary.json ]; then
+              frontend=$(jq -r '.total.lines.pct' coverage/frontend/coverage-summary.json)
+              echo "Frontend line coverage: $frontend%"
+              echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::frontend coverage was requested but no summary file was produced"
+              missing=1
+            fi
+          fi
 
-      - name: Upload artifacts
-        if: ${{ inputs.artifact-path != '' }}
+          exit "$missing"
+
+      - name: Upload shard coverage
+        # A failed shard still measured coverage; the merge needs every shard's part.
+        if: ${{ always() && inputs.shard-artifact != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.artifact-name }}
-          path: ${{ inputs.artifact-path }}
-          retention-days: 30
+          name: ${{ inputs.shard-artifact }}
+          path: coverage/shards
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload coverage report
+        if: ${{ always() && inputs.coverage-report != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.coverage-report }}
+          path: |
+            coverage
+            !coverage/shards
+          include-hidden-files: true
+          retention-days: 14
 
       - name: Tear down
         if: ${{ always() && inputs.needs-db }}

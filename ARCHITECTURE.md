@@ -144,9 +144,10 @@ The heart of the platform: running agents and tools safely and reproducibly.
   base (`make build-agents`).
 - **Monitoring:** structured JSON logging (Lograge), error tracking with
   Sentry (backend and browser), and the Temporal UI for workflow runs.
-- **CI/CD:** GitHub Actions runs `make be_check_all` and `make fe_check_all`
-  as separate jobs, plus a gitleaks secret scan. `make check_all` runs both
-  locally — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- **CI/CD:** GitHub Actions runs the checks as parallel jobs — lint, system
+  tests, the Rails suite and Vitest in shards, a coverage job that merges the
+  shards and enforces the floors — plus a gitleaks secret scan. `make check_all`
+  runs everything locally — see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Key trade-offs
 

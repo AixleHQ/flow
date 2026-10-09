@@ -1,0 +1,15 @@
+#!/bin/sh
+# Runs one check of a Makefile batch: bin/run-check <name> <command> [args...]
+#
+# Writes $CHECK_RESULTS/<name>.log, <name>.status and <name>.seconds for
+# summarize_checks, and always exits 0 so a batch never short-circuits.
+
+name=$1
+shift
+dir=${CHECK_RESULTS:-tmp/check_results}
+
+started=$(date +%s)
+"$@" > "$dir/$name.log" 2>&1
+status=$?
+echo $(($(date +%s) - started)) > "$dir/$name.seconds"
+echo "$status" > "$dir/$name.status"

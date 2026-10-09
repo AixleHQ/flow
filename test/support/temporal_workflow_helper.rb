@@ -13,7 +13,11 @@ module TemporalWorkflowHelper
   ActivityRef = Struct.new(:name, :task_queue)
 
   def run_workflow(workflow_class, *args, activities: [], task_queue: "test-queue", interceptors: [])
-    env = Temporalio::Testing::WorkflowEnvironment.start_time_skipping(data_converter: TemporalService.data_converter)
+    env = Temporalio::Testing::WorkflowEnvironment.start_time_skipping(
+      data_converter: TemporalService.data_converter,
+      # Seeded into the image (bin/seed-temporal-test-server); unset, the SDK downloads to tmp.
+      test_server_download_dest_dir: ENV["TEMPORAL_TEST_SERVER_DIR"].presence
+    )
     worker = Temporalio::Worker.new(
       client: env.client, task_queue: task_queue,
       workflows: [ workflow_class ], activities: activities, interceptors: interceptors,
