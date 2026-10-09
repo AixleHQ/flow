@@ -12,8 +12,8 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
 
   test "process persists usage and returns ok for a valid OTLP payload" do
     payload = otlp_payload(
-      otlp_resource_metric(
-        token: @session.route_token,
+      keyed_metric(
+        @session,
         tokens: { input: 120, output: 30, cacheRead: 10, cacheCreation: 5 },
         cost_usd: 0.5,
         model: "claude-sonnet-4-6"
@@ -45,8 +45,8 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     other_session = create(:terminal_session, :running, user: @user, project: @project)
 
     payload = otlp_payload(
-      otlp_resource_metric(token: @session.route_token, tokens: { input: 100 }, cost_usd: 0.1),
-      otlp_resource_metric(token: other_session.route_token, tokens: { output: 200 }, cost_usd: 0.2)
+      keyed_metric(@session, tokens: { input: 100 }, cost_usd: 0.1),
+      keyed_metric(other_session, tokens: { output: 200 }, cost_usd: 0.2)
     )
 
     result = nil
@@ -70,9 +70,7 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
   end
 
   test "process returns accepted without persisting when the session has no usage to record" do
-    payload = otlp_payload(
-      otlp_resource_metric(token: @session.route_token, tokens: { input: 0 }, cost_usd: 0.0)
-    )
+    payload = otlp_payload(keyed_metric(@session, tokens: { input: 0 }, cost_usd: 0.0))
 
     result = nil
     assert_no_difference("UsageStatistic.count") do
@@ -86,12 +84,11 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
   # == Session keys ==
   #
   # The route token is in every terminal URL; only the key proves the batch came
-  # from the container the session launched.
+  # from the container the session launched. Every session requires it — there is
+  # no exemption for a session that names itself without a key.
 
-  test "a keyed session accepts a batch that carries its key" do
-    keyed!(@session)
-    payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 7 }, cost_usd: 0.01,
-                                                key: UsageStatistics::SessionKey.generate(@session.route_token)))
+  test "a session accepts a batch that carries its key" do
+    payload = otlp_payload(keyed_metric(@session, tokens: { input: 7 }, cost_usd: 0.01))
 
     result = UsageStatisticsService.process(payload.to_json)
 
@@ -99,12 +96,11 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     assert_equal 7, @session.reload.usage_statistic.input_tokens
   end
 
-  test "a keyed session refuses a batch that names it without the key, or with a wrong one" do
-    keyed!(@session)
-
+  test "a batch that names a session without its key, or with a wrong one, is refused" do
     [ nil, "0" * 64, UsageStatistics::SessionKey.generate("someone-else") ].each do |key|
-      payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 999 }, cost_usd: 50.0,
-                                                  key: key))
+      payload = otlp_payload(
+        otlp_resource_metric(token: @session.route_token, tokens: { input: 999 }, cost_usd: 50.0, key: key)
+      )
 
       result = UsageStatisticsService.process(payload.to_json)
 
@@ -115,11 +111,8 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
 
   test "a batch keyed for one session cannot write into another" do
     victim = create(:terminal_session, :running, user: @user, project: @project)
-    keyed!(@session)
-    keyed!(victim)
     payload = otlp_payload(
-      otlp_resource_metric(token: @session.route_token, tokens: { input: 5 }, cost_usd: 0.01,
-                           key: UsageStatistics::SessionKey.generate(@session.route_token)),
+      keyed_metric(@session, tokens: { input: 5 }, cost_usd: 0.01),
       otlp_resource_metric(token: victim.route_token, tokens: { input: 999 }, cost_usd: 50.0)
     )
 
@@ -130,20 +123,15 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     assert_nil victim.reload.usage_statistic
   end
 
-  # Containers launched before keys existed keep reporting until they end.
-  test "a session launched before keys existed is still accepted by token alone" do
-    payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 3 }, cost_usd: 0.01))
-
-    result = UsageStatisticsService.process(payload.to_json)
-
-    assert_equal :ok, result.status
-    assert_equal 3, @session.reload.usage_statistic.input_tokens
-  end
-
   private
 
-  def keyed!(session)
-    session.update_column(:metadata, session.metadata.merge(UsageStatistics::SessionKey::LAUNCH_MARKER => 1))
+  # A resource metric carrying the session's valid usage-ingest key.
+  def keyed_metric(session, **opts)
+    otlp_resource_metric(
+      token: session.route_token,
+      key: UsageStatistics::SessionKey.generate(session.route_token),
+      **opts
+    )
   end
 
   # Build one OTLP resourceMetrics entry carrying the terminal_session_token on

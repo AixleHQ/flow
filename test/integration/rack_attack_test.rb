@@ -27,6 +27,28 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_response :too_many_requests
   end
 
+  test "login brute-force by one email is cut off even when the attempt is sent as JSON" do
+    # req.params does not parse a JSON body, so a per-email throttle keyed on it
+    # alone let an attacker evade the limit by switching content type to
+    # application/json (which sessions#create still reads). The throttle now reads
+    # the JSON body too, so the email is seen whatever the content type.
+    body = { email: "victim@example.com", password: "guess" }
+    5.times { post "/login", params: body, as: :json }
+    assert_not_equal 429, response.status
+
+    post "/login", params: body, as: :json
+
+    assert_response :too_many_requests
+  end
+
+  test "login_email reads the address from a JSON body, flat or nested" do
+    flat = rack_request({ input: StringIO.new({ email: "A@Example.com" }.to_json), "CONTENT_TYPE" => "application/json" }, path: "/login")
+    nested = rack_request({ input: StringIO.new({ user: { email: "B@Example.com" } }.to_json), "CONTENT_TYPE" => "application/json" }, path: "/login")
+
+    assert_equal "a@example.com", Rack::Attack.login_email(flat)
+    assert_equal "b@example.com", Rack::Attack.login_email(nested)
+  end
+
   test "guessing invitation tokens from one address is cut off" do
     30.times { get "/invitations/not-a-token" }
     assert_not_equal 429, response.status

@@ -26,5 +26,15 @@ module UsageStatistics
                    SessionKey.resource_attributes(session)
       assert_nil SessionKey.resource_attributes(nil)
     end
+
+    test "a key is required for every session, with no grandfather exemption" do
+      # The route token is in every terminal URL, so trusting a batch by token
+      # alone (the old pre-key exemption) let anyone who saw a URL forge usage.
+      with_marker = build(:terminal_session, metadata: { SessionKey::LAUNCH_MARKER => 1 })
+      without_marker = build(:terminal_session, metadata: {})
+
+      assert SessionKey.required_for?(with_marker)
+      assert SessionKey.required_for?(without_marker)
+    end
   end
 end
