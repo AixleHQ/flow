@@ -9,9 +9,8 @@ import DocsPage from './DocsPage';
 // DocsPage reads `slug` from usePage().props and renders inside its own DocsLayout
 // (not AuthLayout), so renderPage is used directly with a page-specific `slug` prop.
 describe('Docs/DocsPage', () => {
-  it('renders the not-found branch for an unknown slug (including the default slug)', () => {
-    // No props -> slug defaults to 'what-is-aixle', which is not a registered doc page.
-    renderPage(<DocsPage />);
+  it('renders the not-found branch for an unknown slug', () => {
+    renderPage(<DocsPage />, { props: { slug: 'no-such-page' } });
 
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByText(/does not exist yet/)).toBeInTheDocument();

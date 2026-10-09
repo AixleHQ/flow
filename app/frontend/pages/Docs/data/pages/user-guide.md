@@ -4,38 +4,74 @@
 > [What Flow is](/docs/using-flow). This section describes how Flow works
 > underneath — containers, DAGs, credentials — for the people who run it.
 
-Aixle Flow turns AI coding agents into a team workflow. The pieces fit
-together like this:
+Aixle Flow turns AI coding agents into a team workflow. Every run, whatever
+started it, takes the same path:
 
 ```
-Board ── card moves to column ──► Workflow ── DAG of Steps ──► Agent in container
-  ▲                                                                  │
-  └─────────────── results, status, cost return ◄────────────────────┘
+ card enters a column · schedule · Slack/Teams · webhook · tracker
+                               │ event
+                               ▼
+      trigger, or Run ── gates may hold it ──► workflow run ──► steps (a DAG)
+                                                                     │
+                                                                     ▼ one per step
+  container ◄── session queue ◄── agent session: persona × runtime × credential
+      │
+      └──► status, files and cost go back to the source — card, tracker issue,
+           chat thread — and into Assets, Sessions & Runs and Analytics
 ```
 
 Read in any order:
 
-- **Board** — projects, columns, cards, and column → workflow bindings.
-- **Workflows** — DAG steps, retries, approval gates, parallel runs.
-- **Prompt guide** — writing session instructions an agent can run.
-- **Agents** — personas, the container, and how session context is built.
-- **Runtimes** — the seven LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials, and cost tracking.
-- **Tools** — tool kinds, execution modes, the built-in board tools, and resource resolution.
-- **MCP servers** — transports, the internal `aixle-tools` server, and Config Items credentials.
-- **Integrations** — GitHub, GitLab, Azure DevOps, Jira, Slack, Coder and the trackers they provide, and webhooks.
-- **Configuration** — env vars, OAuth, agent credentials, and other knobs.
+- **[Board](/docs/board)** — projects, columns, cards, and column → workflow bindings.
+- **[Workflows](/docs/workflows)** — DAG steps, retries, approval gates, parallel runs.
+- **[Triggers and gates](/docs/triggers-and-gates)** — every way a run starts, who it runs as, and the CI gates that hold one back.
+- **[Prompt guide](/docs/prompt-guide)** — writing session instructions an agent can run.
+- **[Agents](/docs/agents)** — personas, the container, and how session context is built.
+- **[Runtimes](/docs/runtimes)** — the seven LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials, and cost tracking.
+- **[Tools](/docs/tools)** — tool kinds, execution modes, the built-in board tools, and resource resolution.
+- **[MCP servers](/docs/mcp)** — transports, the internal `aixle-tools` server, Config Items credentials, and the personal token that turns Aixle itself into an MCP server.
+- **[Integrations](/docs/integrations)** — GitHub, GitLab, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder and the trackers they provide, and webhooks.
+- **[Session queues](/docs/session-queues)** — why a session waits before its container starts, and the limits behind it.
+- **[Configuration](/docs/configuration)** — env vars, OAuth, agent credentials, and other knobs.
+- **[Configuring sign-in methods](/docs/configuring-sso)** — Google, Microsoft Entra and per-company OpenID Connect on your installation.
 
-If you've just installed Aixle Flow and want to see something move, see the Quick start page first.
+If you've just installed Aixle Flow and want to see something move, see the [Quick start](/docs/quick-start) page first.
 
-## Mental model in one paragraph
+## Mental model
 
-A **Company** owns shared resources. Inside it, **Projects** each have
-one **Board**. A Board has ordered **Columns**; each column can be
-**bound to a Workflow**. Drop a card into the column and the workflow
-starts. A Workflow is a DAG of **Steps**; each Step is one **Agent**
-session running in an isolated **container**, producing artifacts and
-optionally pushing PRs. Steps can depend on each other (parallel
-branches are fine), retry on failure, or block on a human approval.
-Every run is tracked with cost, tokens, and a full log.
+**Three levels.** A **Company** is the workspace: members and their roles, how
+people sign in, capacity and billing, the workflow catalog, company-wide
+assets, and the chat apps one install serves to every project (Slack,
+Microsoft Teams). A **Project** owns everything a run uses — one board, its
+workflows and their triggers, agents, tools, skills, MCP servers,
+repositories, trackers, secrets — and none of it crosses into another
+project. A person's **Profile** holds what is theirs: the agent credentials
+they connected, and their usage.
 
-That's the whole product.
+**Triggers start runs.** A workflow declares how it launches. A card entering a
+bound column is one way. The others are **Run** on a task or a workflow (or an
+agent calling the MCP tools), a cron schedule, a Slack or Teams message, an
+inbound webhook, and an event in a connected tracker — Jira, Linear, YouTrack,
+Azure Boards or GitHub Projects. A run that does not start from a card is about
+no card, an existing one, or a card it creates. **Gates defer runs:** a card waiting on CI — a
+GitHub check, a GitLab pipeline, an Azure build or PR policies — does not set
+off its column's workflow until the check reports or goes stale.
+
+**A workflow is a DAG of steps.** Each step is one **Agent** session — a
+persona on one of the seven runtimes — in its own isolated container.
+Sub-steps are a checklist inside that session, not sessions of their own. Steps
+run in parallel where nothing connects them, wait for the steps they depend on,
+retry or skip on failure, or pause until a person approves them.
+
+**A session runs on a person's credential.** A run belongs to someone. A
+card's run belongs to its assignee when they have a connected agent, else to
+whoever moved the card or pressed **Run** on it; a workflow started by hand
+belongs to whoever pressed **Run**; any other trigger runs as its creator,
+because nobody is at the keyboard when it fires. Each step uses that person's
+credential for its runtime. Before its container starts, a session can wait in the
+**session queue** until the project and the installation have a free slot.
+
+**Results go back where the run came from.** A card shows the run's status,
+comments and files. A chat thread gets a status card that follows the run; a
+tracker issue gets a comment if the run fails. Deliverables are kept in
+Assets; the full log, tokens and cost in Sessions & Runs and Analytics.

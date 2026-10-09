@@ -92,9 +92,11 @@ The repository mirror of the in-app portal served at `/docs`
 (`app/frontend/pages/Docs/data/pages/`). Written for people installing and
 running Flow — the product-level guide outlined above is a separate document set.
 
-- **[user-guide/index.md](./user-guide/index.md)** — Entry point: the board → workflow → agent loop and the mental model
+- **[user-guide/index.md](./user-guide/index.md)** — Entry point: the event → trigger → workflow → agent session path and the mental model (company/project/profile, triggers and gates, whose credential a session runs on, the session queue, where results go)
 - **[user-guide/board.md](./user-guide/board.md)** — Projects, columns, cards, and column → workflow bindings
 - **[user-guide/workflows.md](./user-guide/workflows.md)** — DAG steps, retries, approval gates, parallel runs
+- **[user-guide/triggers-and-gates.md](./user-guide/triggers-and-gates.md)** — Triggers start runs, gates defer them: every trigger source (column, manual, schedule, chat, webhook, tracker), the project's Triggers page, who a trigger runs as, `subject_policy`, and the CI gates that hold a card's column workflow
+- **[user-guide/prompt-guide.md](./user-guide/prompt-guide.md)** — Writing session instructions an agent can run: what it sees, where its files are, and what belongs on the step form
 - **[user-guide/agents.md](./user-guide/agents.md)** — Personas, the container, and how session context is built
 - **[user-guide/runtimes.md](./user-guide/runtimes.md)** — The seven agent CLIs, their images, credentials, and where each one's usage and cost come from
 - **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
