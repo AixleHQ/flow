@@ -69,4 +69,13 @@ describe('Projects/TemplateInstalls/ShowPage', () => {
 
     expect(screen.getByRole('link', { name: 'Connect' })).toHaveAttribute('href', '/company/projects/5/integrations');
   });
+
+  it('opens links in the setup notes in a new tab', () => {
+    const base = props([]);
+    renderAuthedPage(<ShowPage />, {
+      props: { ...base, install: { ...base.install, setup: 'Create a [Sentry token](https://sentry.io/settings/).' } },
+    });
+
+    expect(screen.getByRole('link', { name: 'Sentry token' })).toHaveAttribute('target', '_blank');
+  });
 });
