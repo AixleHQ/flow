@@ -2,9 +2,10 @@
 
 require "test_helper"
 
-# Stopping at the end of the billing period, and taking that back. Stripe is the
-# fake; what is asserted is what the company row, the cancellation record and
-# the outbox of mail say afterwards.
+# Stopping a subscription at once, and taking back one scheduled for the end of a
+# period before cancelling became immediate. Stripe is the fake; what is asserted
+# is what the company row, the cancellation record and the outbox of mail say
+# afterwards.
 class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
   include ActionMailer::TestHelper
 
@@ -22,18 +23,21 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
   end
 
-  test "an admin schedules the end of the subscription for the end of the period" do
+  # Capacity is billed for every hour it is offered, so running out the period
+  # would bill workers the company no longer wants.
+  test "an admin cancels the subscription, and the company stops at once" do
+    freeze_time
     post company_billing_cancellation_path, params: { reason: "too_expensive", comment: "Budget cut" }
 
     assert_redirected_to company_settings_billing_path
+    assert_match(/cancelled/, flash[:notice])
     update = @client.subscription_updates.sole
-    assert_equal true, update[:cancel_at_period_end] # rubocop:disable Minitest/AssertTruthy
+    assert_equal "canceled", update[:status]
     assert_equal({ feedback: "too_expensive", comment: "Budget cut" }, update[:cancellation_details])
 
     @company.reload
-    assert @company.billing_active?, "the company runs until the period ends"
-    assert_equal "cancelling", @company.billing_status
-    assert_equal @period_end, @company.billing_cancels_at
+    assert_equal "canceled", @company.billing_status
+    assert_equal Time.current, @company.billing_cancels_at
 
     cancellation = @company.billing_cancellations.sole
     assert_equal @admin, cancellation.user
@@ -54,16 +58,30 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     assert_not @client.subscription_updates.sole[:cancellation_details].values.any?(&:present?)
   end
 
-  test "pressing it twice schedules once and mails once" do
+  test "pressing it twice cancels once and mails once" do
     post company_billing_cancellation_path, params: { reason: "unused" }
 
     assert_enqueued_emails 0 do
       post company_billing_cancellation_path, params: { reason: "unused" }
     end
     assert_redirected_to company_settings_billing_path
-    assert_nil flash[:alert]
     assert_equal 1, @company.billing_cancellations.count
     assert_equal 1, @client.subscription_updates.size
+  end
+
+  # Stripe does not deliver in order.
+  test "an update from before the cancellation that arrives after it does not start the company again" do
+    post company_billing_cancellation_path
+    running = @client.subscriptions[@company.stripe_subscription_id]
+                     .merge(status: "active", ended_at: nil, customer: @company.stripe_customer_id)
+    event = { id: "evt_late", type: "customer.subscription.updated", created: 1.minute.ago.to_i,
+              data: { object: running } }
+
+    post stripe_webhook_path, params: event.to_json,
+                              headers: { "CONTENT_TYPE" => "application/json", "Stripe-Signature" => "t=1,v1=fake" }
+
+    assert_response :ok
+    assert_equal "canceled", @company.reload.billing_status
   end
 
   test "a reason that is not on the list is refused" do
@@ -96,8 +114,10 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     assert_empty @company.billing_cancellations
   end
 
-  test "a scheduled cancellation can be taken back before the date" do
-    post company_billing_cancellation_path, params: { reason: "unused" }
+  test "a cancellation scheduled for the period's end can still be taken back before the date" do
+    @client.subscriptions[@company.stripe_subscription_id].merge!(cancel_at_period_end: true, cancel_at: @period_end.to_i)
+    @company.update!(billing_cancels_at: @period_end)
+    @company.billing_cancellations.create!(user: @admin, reason: "unused", cancels_at: @period_end)
 
     delete company_billing_cancellation_path
 

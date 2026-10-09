@@ -10,15 +10,17 @@ class BillingMailerTest < ActionMailer::TestCase
                                                   cancels_at: Time.zone.parse("2026-11-01 00:00"))
   end
 
-  test "it tells another admin who cancelled, when access ends, and what is kept" do
+  test "it tells another admin who cancelled, that access has stopped, and what is kept" do
     other = create(:user, email: "other-admin@example.com", company: @company, membership_role: "admin")
 
-    email = BillingMailer.cancellation_scheduled(@cancellation, other)
+    email = BillingMailer.subscription_cancelled(@cancellation, other)
 
     assert_equal [ "other-admin@example.com" ], email.to
-    assert_match(/ends on November 1, 2026/, email.subject)
+    assert_match(/is cancelled/, email.subject)
     [ email.text_part.decoded, email.html_part.decoded ].each do |body|
       assert_includes body, "Dana Admin cancelled"
+      assert_includes body, "November 1, 2026"
+      assert_includes body, "No new sessions start"
       assert_includes body, "billed on the final invoice"
       assert_includes body, "history are kept"
       assert_includes body, "/company/settings/billing"
@@ -26,7 +28,7 @@ class BillingMailerTest < ActionMailer::TestCase
   end
 
   test "it tells the admin who cancelled that they did" do
-    email = BillingMailer.cancellation_scheduled(@cancellation, @actor)
+    email = BillingMailer.subscription_cancelled(@cancellation, @actor)
 
     assert_includes email.text_part.decoded, "You cancelled"
   end

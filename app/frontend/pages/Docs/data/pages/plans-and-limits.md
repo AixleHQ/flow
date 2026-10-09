@@ -70,14 +70,13 @@ estimate: each hour is added once it closes, and the invoice has the final amoun
 An administrator cancels from **Settings → Billing**, in two steps: the button,
 then a confirmation that says what will happen.
 
-- The subscription ends at the **end of the current billing period**. Until then
-  everything keeps working.
-- Usage up to that date is billed on the **final invoice**. Nothing is refunded.
-- After it, no new session starts, as when the free capacity runs out. Your
-  projects, workflows and history are **kept**, and administrators can still sign
-  in.
-- Changed your mind? **Keep subscription** on the same tab undoes it, any time
-  before the end date. After it, adding a card restores access.
+- The subscription ends **at once**. Workers are billed for every hour they are
+  available, so it does not run on to the end of the billing period.
+- No new session starts, as when the free capacity runs out. Sessions already
+  running finish.
+- Usage up to the cancellation is billed on a **final invoice**.
+- Your projects, workflows and history are **kept**, and administrators can still
+  sign in. Adding a card restores access.
 
 Every administrator gets an email when the subscription is cancelled.
 

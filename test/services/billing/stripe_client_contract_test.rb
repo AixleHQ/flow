@@ -7,7 +7,7 @@ require "test_helper"
 class Billing::StripeClientContractTest < ActiveSupport::TestCase
   METHODS = %i[
     configured? create_customer create_checkout_session send_meter_event construct_event
-    retrieve_subscription adopt_subscription schedule_cancellation resume_subscription retrieve_price
+    retrieve_subscription adopt_subscription cancel_subscription resume_subscription retrieve_price
   ].freeze
 
   test "the fake answers every method the adapter does, with the same arguments" do
@@ -87,22 +87,22 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
     assert_includes CGI.unescape(captured.to_s), "adaptive_pricing[enabled]=false"
   end
 
-  # Never sooner than the period's end, so the minutes metered up to it are
-  # invoiced on that period's own invoice; the reason travels to Stripe's own
-  # cancellation analytics as well as ours.
-  test "a cancellation is scheduled for the period's end, with its reason" do
+  # At once, with the minutes metered so far invoiced; the reason travels to
+  # Stripe's own cancellation analytics as well as ours.
+  test "a cancellation ends the subscription now and invoices what was metered, with its reason" do
     Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
     captured = nil
-    stub_request(:post, "https://api.stripe.com/v1/subscriptions/sub_1")
-      .with { |request| captured = CGI.unescape(request.body.to_s) }
+    stub_request(:delete, %r{\Ahttps://api\.stripe\.com/v1/subscriptions/sub_1})
+      .with { |request| captured = CGI.unescape("#{request.uri.query}&#{request.body}") }
       .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-                 body: { id: "sub_1", object: "subscription", status: "active", cancel_at_period_end: true }.to_json)
+                 body: { id: "sub_1", object: "subscription", status: "canceled", ended_at: 1_791_000_000 }.to_json)
 
-    Billing::StripeClient.new.schedule_cancellation(subscription_id: "sub_1", reason: "unused", comment: nil)
+    subscription = Billing::StripeClient.new.cancel_subscription(subscription_id: "sub_1", reason: "unused", comment: nil)
 
-    assert_includes captured, "cancel_at_period_end=true"
+    assert_includes captured, "invoice_now=true"
     assert_includes captured, "cancellation_details[feedback]=unused"
     assert_not_includes captured, "cancellation_details[comment]"
+    assert Billing::SubscriptionState.from(subscription).ended?
   end
 
   # Told apart from an outage: an id Stripe does not hold is an ended
