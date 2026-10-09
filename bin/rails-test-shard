@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs one CI shard of the Rails suite: bin/rails-test-shard <shard> <total> [--list]
+#
+# The union of all shards must be exactly the file set a bare `rails test` runs,
+# so the exclusion glob is the one railties applies (DEFAULT_TEST_EXCLUDE or its
+# default). Files are dealt round-robin over a sorted list, so a slow directory
+# is spread across shards instead of landing on one. --list prints the shard's
+# files instead of running them.
+
+DEFAULT_EXCLUDE = "test/{system,dummy,fixtures}/**/*_test.rb"
+
+def die(message)
+  warn "bin/rails-test-shard: #{message}"
+  exit 2
+end
+
+list = ARGV.delete("--list")
+die "usage: bin/rails-test-shard <shard> <total> [--list]" unless ARGV.size == 2 && ARGV.all?(/\A[1-9]\d*\z/)
+
+shard, total = ARGV.map { |arg| Integer(arg, 10) }
+die "shard #{shard} is out of range for #{total} shards" if shard > total
+
+Dir.chdir(File.expand_path("..", __dir__))
+
+files = Dir.glob("test/**/*_test.rb") - Dir.glob(ENV.fetch("DEFAULT_TEST_EXCLUDE", DEFAULT_EXCLUDE))
+selected = files.select.with_index { |_file, index| index % total == shard - 1 }
+
+# `rails test` with no paths runs the whole suite, which would turn an empty
+# shard into a silent duplicate of every other one.
+die "shard #{shard}/#{total} selected no files out of #{files.size}" if selected.empty?
+
+if list
+  puts selected
+else
+  exec "bundle", "exec", "rails", "test", *selected
+end

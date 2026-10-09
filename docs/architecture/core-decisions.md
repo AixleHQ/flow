@@ -115,7 +115,7 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 **Monitoring:** Lograge (structured JSON logging), Sentry (error tracking, backend and browser), Temporal UI (workflow monitoring).
 
-**CI/CD:** GitHub Actions. Quality gate: `make check_all` (`make check` is an alias) — Rails and system tests, worker boot, eager-load check, rubocop, brakeman, eslint, tsc, steiger, Vitest, coverage floors included. CI runs the same checks as two jobs, `make be_check_all` and `make fe_check_all`, per pull request; CI also runs gitleaks (`make secret-scan`).
+**CI/CD:** GitHub Actions. Quality gate: `make check_all` (`make check` is an alias) — Rails and system tests, worker boot, eager-load check, rubocop, brakeman, eslint, tsc, steiger, Vitest, coverage floors included. CI runs the same checks per pull request as parallel jobs — lint, system tests, the Rails suite and Vitest in shards, and a coverage job that merges the shards and enforces the floors; CI also runs gitleaks (`make secret-scan`).
 
 ---
 

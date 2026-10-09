@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Merges the Rails shards' SimpleCov results: bin/collate-coverage <dir>
+#
+# <dir> holds one <shard>-<total>.json resultset per shard (see the Makefile's
+# rails_check_all). Writes the merged report to coverage/, like an unsharded
+# run would, and exits non-zero when a shard is missing or the merged total is
+# under COVERAGE_MIN.
+
+require "simplecov"
+
+dir = ARGV.fetch(0) { abort "usage: bin/collate-coverage <dir>" }
+resultsets = Dir.glob(File.join(dir, "*-*.json"))
+abort "collate-coverage: no shard resultsets in #{dir}" if resultsets.empty?
+
+totals = resultsets.map { |path| File.basename(path, ".json").split("-").last.to_i }.uniq
+expected = totals.first
+unless totals.one? && resultsets.size == expected
+  abort "collate-coverage: expected #{expected} shard resultsets with one shard count, got #{resultsets.map { |p| File.basename(p) }}"
+end
+
+minimum = ENV["COVERAGE_MIN"].to_s.strip
+
+SimpleCov.collate resultsets, "rails" do
+  primary_coverage :line
+  minimum_coverage Float(minimum) unless minimum.empty?
+end

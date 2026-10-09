@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Aixle Flow!
 docker compose exec -T web make check_all
 ```
 
-(`make check` is an alias.) CI runs the same checks as two jobs, `make be_check_all` and `make fe_check_all`. It also scans the history for secrets with gitleaks; `make secret-scan` runs the same scan (on the host, it needs Docker).
+(`make check` is an alias.) CI runs the same checks split into parallel jobs — lint, system tests, the Rails suite and Vitest in shards, and a coverage job that merges the shards and enforces the floors (`make lint_check_all`, `system_check_all`, `rails_check_all`, `vitest_check_all`, `coverage_merge`). It also scans the history for secrets with gitleaks; `make secret-scan` runs the same scan (on the host, it needs Docker).
 
 ## Code Quality
 

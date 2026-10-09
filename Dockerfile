@@ -130,12 +130,22 @@ FROM build AS development
 
 USER root
 RUN apk add --no-cache less vim vips-tools openssh-client chromium ttf-freefont font-noto nss freetype harfbuzz
+# World-writable like GEM_HOME: the dev stack runs as the host's uid, and a temporalio
+# bump in the bundle volume downloads its own server version next to the seeded one.
+RUN install -d -m 1777 /opt/temporal-test-server
 USER app
 
 COPY --chown=app:app Gemfile Gemfile.lock .ruby-version ./
 RUN bundle config set --local frozen true && \
     bundle install && \
     rm -rf "$GEM_HOME/cache"
+
+# The Temporal test server the workflow tests boot, fetched here once instead of by every
+# test run (see bin/seed-temporal-test-server). Its version follows temporalio's, so this
+# layer rebuilds with Gemfile.lock and nothing else.
+ENV TEMPORAL_TEST_SERVER_DIR=/opt/temporal-test-server
+COPY --chown=app:app bin/seed-temporal-test-server bin/
+RUN bundle exec bin/seed-temporal-test-server
 
 COPY --chown=app:app package.json yarn.lock .yarnrc.yml ./
 RUN corepack install
