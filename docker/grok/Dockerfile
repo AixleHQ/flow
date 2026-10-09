@@ -32,6 +32,10 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 # the decompression was paid at build time for the AGENT's home; that is no longer true,
 # so a session may pay it once on first launch.
 #
+# Once the CLI has run as the agent user, root's unpacked copy goes: it is byte-identical
+# to the package's `bin/grok-native`, which is what `grok` runs, and the agent cannot
+# read /root (0700) anyway — 163 MB nothing executes.
+#
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
 # Pinned (config/agent_runtimes.json): the registry build cache keys this layer on its
@@ -43,6 +47,7 @@ RUN set -eux; \
     npm install -g "@xai-official/grok@${CLI_VERSION}"; \
     ls /root/.grok/bin/grok-* >/dev/null; \
     su - grok -c "grok --version"; \
+    rm -rf /root/.grok/bin; \
     npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:

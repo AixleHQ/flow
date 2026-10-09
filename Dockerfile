@@ -68,10 +68,16 @@ RUN gem install bundler -v 4.0.11
 FROM build AS production-build
 
 COPY --chown=app:app Gemfile Gemfile.lock .ruby-version ./
+# Precompiled native gems ship one extension per Ruby minor (`lib/<gem>/3.4/x.so`,
+# `.../4.0/x.so`) and load only the RUBY_VERSION one. The others were ~130 MB of the
+# image — temporalio alone ships a 58 MB bridge for each of 3.3, 3.4 and 4.0.
 RUN bundle config set --local frozen true && \
     bundle config set --local without "development test" && \
     bundle install && \
-    rm -rf "$GEM_HOME/cache"
+    rm -rf "$GEM_HOME/cache" && \
+    ruby_abi="$(ruby -e 'print RUBY_VERSION[/\A\d+\.\d+/]')" && \
+    find "$GEM_HOME"/gems/*-linux* -mindepth 1 -type d \( -name '[0-9].[0-9]' -o -name '[0-9].[0-9][0-9]' \) ! -name "$ruby_abi" | \
+      while read -r dir; do if ls "$dir"/*.so >/dev/null 2>&1; then rm -rf "$dir"; fi; done
 
 # Yarn is provisioned via Corepack driven by the "packageManager" field in
 # package.json — the Yarn release is NOT vendored into the repo.

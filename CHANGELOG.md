@@ -19,6 +19,10 @@ governance, community health — carry none.
   whose agent credential it runs on, the session queue, and where results go
   back — not only a card moving on the board. *Triggers & gates* adds Teams
   messages, tracker events and who a run belongs to.
+- The `flow-web` image is about 130 MB smaller (about 35 MB to pull): it no
+  longer carries the native extensions its gems ship for Ruby versions other
+  than the one it runs. The `flow-grok` image is about 160 MB smaller (about
+  65 MB to pull) without a second, unused copy of the Grok CLI binary.
 
 ## [1.1.0] - 2026-10-09
 
