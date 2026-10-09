@@ -277,9 +277,13 @@ class CompanyMembership < ApplicationRecord
     end
   end
 
+  # default_model is the one a session launches with when no model is picked,
+  # so the New Session form can name it instead of "runtime selects".
   def agent_models_for_props
+    default_models = credentials.to_h { |cred| [ cred.agent_type, cred.default_model ] }
+
     agent_models_by_type.map do |agent_type, models|
-      { agent_type: agent_type, models: models }
+      { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end
   end
 

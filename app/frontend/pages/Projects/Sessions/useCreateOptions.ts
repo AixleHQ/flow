@@ -30,7 +30,11 @@ export interface CreateOptions {
   mcpServers: NamedItem[];
   assets: AssetPickerItem[];
   repositories: NamedItem[];
-  agentModels: { agentType: string; models: { modelId: string; displayName: string }[] }[];
+  agentModels: {
+    agentType: string;
+    models: { modelId: string; displayName: string }[];
+    defaultModel?: string | null;
+  }[];
   configuredAgents: string[];
   defaultAgentRuntime: string | null;
   workflows: WorkflowOption[];

@@ -392,4 +392,127 @@ describe('SessionNewForm', () => {
 
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
   });
+
+  describe('default model label', () => {
+    const agentModels = [
+      {
+        agentType: 'claude_code',
+        models: [
+          { modelId: 'opus-9', displayName: 'Opus 9' },
+          { modelId: 'sonnet-9', displayName: 'Sonnet 9' },
+        ],
+        defaultModel: 'opus-9',
+      },
+      { agentType: 'codex', models: [{ modelId: 'gpt-9', displayName: 'GPT 9' }], defaultModel: null },
+      { agentType: 'cursor_cli', models: [], defaultModel: 'arn:aws:bedrock:us-east-1:1234:profile/abc' },
+    ];
+
+    it('names the default model of the selected runtime', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['claude_code']) });
+
+      await user.click(screen.getByText('Claude Code'));
+
+      expect(screen.getByRole('combobox', { name: 'Model' })).toHaveAttribute('placeholder', 'Default · Opus 9');
+    });
+
+    it('lists the default first in the dropdown, next to the other models', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['claude_code']) });
+
+      await user.click(screen.getByText('Claude Code'));
+      await user.click(screen.getByRole('combobox', { name: 'Model' }));
+
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Default · Opus 9', 'Opus 9', 'Sonnet 9']);
+    });
+
+    it('falls back to "runtime selects" after switching to a runtime with no default', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, {
+        props: authProps(['claude_code', 'codex']),
+      });
+
+      await user.click(screen.getByText('Claude Code'));
+      await user.click(screen.getByText('Codex'));
+
+      expect(screen.getByRole('combobox', { name: 'Model' })).toHaveAttribute(
+        'placeholder',
+        'Default (runtime selects)',
+      );
+    });
+
+    it('falls back to "runtime selects" for a runtime that is not set up', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['gemini_cli']) });
+
+      await user.click(screen.getByText('Gemini CLI'));
+
+      expect(screen.getByRole('combobox', { name: 'Model' })).toHaveAttribute(
+        'placeholder',
+        'Default (runtime selects)',
+      );
+    });
+
+    it('shows the raw id when the default is not among the listed models', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['cursor_cli']) });
+
+      await user.click(screen.getByText('Cursor CLI'));
+
+      expect(screen.getByRole('combobox', { name: 'Model' })).toHaveAttribute(
+        'placeholder',
+        'Default · arn:aws:bedrock:us-east-1:1234:profile/abc',
+      );
+    });
+
+    it('starts on the default without sending a requested model', async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['claude_code']),
+      });
+
+      await user.click(screen.getByText('Claude Code'));
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).not.toHaveProperty('requestedModel');
+
+      fetchSpy.mockRestore();
+    });
+
+    it('picking the Default option clears an explicit model choice', async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['claude_code']),
+      });
+
+      await user.click(screen.getByText('Claude Code'));
+      const modelField = screen.getByRole('combobox', { name: 'Model' });
+      await user.click(modelField);
+      await user.click(await screen.findByRole('option', { name: 'Sonnet 9' }));
+      expect(modelField).toHaveValue('Sonnet 9');
+
+      await user.click(modelField);
+      await user.click(await screen.findByRole('option', { name: 'Default · Opus 9' }));
+      expect(modelField).toHaveValue('');
+
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).not.toHaveProperty('requestedModel');
+
+      fetchSpy.mockRestore();
+    });
+  });
 });

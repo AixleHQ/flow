@@ -37,3 +37,20 @@
 .promptCharCount {
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Model field ────────────────────────────────── */
+
+/* Bedrock inference-profile ARNs and long display names must not widen the
+   460px drawer. */
+.modelInput,
+.modelInput::placeholder {
+  text-overflow: ellipsis;
+}
+
+.modelOption {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
