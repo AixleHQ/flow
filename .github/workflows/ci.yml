@@ -162,29 +162,6 @@ jobs:
       coverage-report: coverage-report
       timeout: 15
 
-  # TEMPORARY, removed before merge: the unsharded jobs develop runs today, to compare
-  # coverage and timings against the sharded jobs on the same commit.
-  baseline:
-    name: Baseline (${{ matrix.command }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - command: be_check_all
-            needs-db: true
-            summary: backend
-          - command: fe_check_all
-            needs-db: false
-            summary: frontend
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: ${{ matrix.command }}
-      needs-db: ${{ matrix.needs-db }}
-      run-coverage: '1'
-      coverage-summary: ${{ matrix.summary }}
-      coverage-report: coverage-baseline-${{ matrix.summary }}
-      timeout: 45
-
   # One status for branch protection to require. It tests every result itself: a bare
   # `needs:` lets a skipped or cancelled job through.
   checks:
