@@ -10,7 +10,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'using-flow',
     title: 'What Flow is',
     section: 'Using Flow',
-    desc: 'What Aixle Flow does for a team: the board → workflow → agent loop, the company/project/profile levels, and the supported agent runtimes.',
+    desc: 'What Aixle Flow does for a team: the loop from whatever starts a workflow to the results that come back, whose credential an agent works under, the company/project/profile levels, and the supported agent runtimes.',
   },
   {
     slug: 'getting-started',
@@ -40,7 +40,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'starting-work',
     title: 'Triggers & gates',
     section: 'Using Flow',
-    desc: 'The four ways a workflow starts — column, schedule, Slack, incoming webhook — and CI gates: waiting, passed, failed, stale.',
+    desc: 'Every way a workflow starts — column, schedule, Slack or Teams message, incoming webhook, tracker event, Run — who a run belongs to, and CI gates: waiting, passed, failed, stale.',
   },
   {
     slug: 'session-queues',
@@ -142,7 +142,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'user-guide',
     title: 'User Guide',
     section: 'User guide',
-    desc: 'Overview of Aixle Flow: the mental model, how the board, workflows, and agents fit together.',
+    desc: 'Overview for operators: the path every run takes (event → trigger → workflow → agent session) and the mental model — company, project and profile, triggers and gates, whose credential a session runs on, the session queue, where results go.',
   },
   {
     slug: 'quick-start',

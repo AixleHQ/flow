@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Docs**: the User guide overview and *What Flow is* describe every way a
+  run starts (column, **Run**, schedule, Slack or Teams, webhook, tracker),
+  whose agent credential it runs on, the session queue, and where results go
+  back — not only a card moving on the board. *Triggers & gates* adds Teams
+  messages, tracker events and who a run belongs to.
+
 ## [1.1.0] - 2026-10-09
 
 ### Added

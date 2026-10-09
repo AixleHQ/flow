@@ -10,18 +10,29 @@ instead. This section is for people who *use* the product.
 ## The loop
 
 ```
-Board ── card enters a bound column ──► Workflow ── step by step ──► Agent
-  ▲                                                                    │
-  └──────────── status, files, comments and cost come back ◄───────────┘
+ a card moves · Run · a schedule ──► Workflow ── step by step ──► Agent
+ Slack or Teams · a tracker issue                                   │
+ a webhook                                                          │
+  ▲                                                                 │
+  └────────── status, files, comments and cost come back ◄──────────┘
 ```
 
-1. A card moves into a column that is bound to a workflow.
-2. The workflow starts — automatically, or from a button if the column is set
-   to manual.
-3. Each step of the workflow is one agent session doing one job. Independent
-   steps run at the same time.
-4. Results come back: files in Assets, comments and status on the card, a full
-   trail in Sessions & Runs, and cost in Analytics.
+1. Something starts a workflow. Most often a card moves into a column that is
+   bound to it — the workflow starts automatically, or from a button if the
+   column is set to manual. It can also start on a schedule, from a Slack or
+   Teams message, from an issue in a connected tracker, from a webhook, or from
+   **Run**. See [Triggers & gates](/docs/starting-work).
+2. Each step of the workflow is one agent session doing one job. Independent
+   steps run at the same time. When the project is at its limit, a session
+   waits its turn in the [session queue](/docs/session-queues).
+3. The agent works under the credential of the person the run belongs to: the
+   card's assignee, else whoever moved the card or pressed **Run**; for a
+   schedule, a message, a webhook or a tracker event, whoever set up the
+   trigger.
+4. Results come back to where the work started. A card gets status, comments
+   and files; a Slack or Teams thread gets a status card that follows the run;
+   a tracker issue gets a comment if the run fails. Files are kept in Assets,
+   the full trail in Sessions & Runs, and cost in Analytics.
 
 Nothing in that loop asks you to run a command yourself. Your part is writing
 the card, deciding the process once, and reviewing what comes back.

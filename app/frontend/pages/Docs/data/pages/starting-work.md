@@ -12,15 +12,28 @@ switched off with **Enabled** without deleting it.
 | --- | --- | --- |
 | **Task enters column** | A card lands in the chosen column | The mode decides whether it runs on its own (**Auto**) or offers a button (**Manual**) |
 | **On schedule** | A cron expression matches, in the timezone you pick | Use it for recurring work with no card behind it — a nightly report, a weekly sweep |
-| **Slack message** | A message in a channel matches your text pattern | Optionally limited to one channel; a cooldown stops a busy channel from starting a run per message |
+| **Chat message** | Someone addresses the Flow app in Slack or Microsoft Teams and the message matches your text pattern | Optionally limited to one channel or to direct messages; a cooldown stops a busy channel from starting a run per message. The thread gets a status card that follows the run |
 | **Incoming webhook** | An external system posts to the trigger's request URL | The workflow becomes a start API for anything that can send an HTTP request |
+| **Task tracker event** | An issue in a connected tracker is created, moves to a status, is assigned, or gets a comment | Offered once the project has a tracker attached; **Connect a board column** on the Trackers page sets one up for you |
 
 Triggers that create a card as they fire let you template its title and give
 the run a subject, so the board does not fill up with rows called *Run 41*.
 
+A workflow can also start by hand — **Run** on a card or on the workflow — and
+that needs no trigger at all.
+
 > tip Manual mode on a column trigger is the safest way to introduce
 > automation: the process is bound and visible, but a person still decides when
 > a card is ready for it.
+
+### Who a run belongs to
+
+Every run belongs to a person and uses *their* agent credential. A card's run
+belongs to its assignee when they have a connected agent, else to whoever moved
+the card or pressed **Run** on it. A run from a schedule, a chat
+message, a webhook or a tracker belongs to whoever created the trigger, because
+nobody is at the keyboard when it fires — so the creator needs a connected
+credential for every runtime the workflow uses.
 
 ## Gates
 
