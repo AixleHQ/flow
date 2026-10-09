@@ -24,6 +24,12 @@ governance, community health — carry none.
   than the one it runs. The `flow-grok` image is about 160 MB smaller (about
   65 MB to pull) without a second, unused copy of the Grok CLI binary.
 
+### Fixed
+- **Repositories**: `gh` inside a session is signed in for the attached GitHub
+  repositories on Kubernetes deployments too, so agents can read checks, watch
+  Actions runs and open pull requests without building a token by hand. Until
+  now it only worked with the Docker runtime.
+
 ## [1.1.0] - 2026-10-09
 
 ### Added

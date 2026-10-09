@@ -1,6 +1,6 @@
 #!/bin/bash
 # `gh` for a session with GitHub repositories attached, installed ahead of the
-# real one on PATH (GitCredentials::SessionGitSetup).
+# real one on PATH by the agent base image (docker/base/Dockerfile).
 #
 # No token sits in the environment or on disk for gh to find — that is the point
 # of git-credential-aixle. So each call asks git's credential helper for a fresh
@@ -70,6 +70,7 @@ target="${target%/}"
 target="${target%.git}"
 
 checkout=""
+found=()
 if [ -n "$target" ]; then
   for dir in "$root"/*/; do
     [ -d "$dir" ] || continue
@@ -83,7 +84,6 @@ else
   if [ -n "$top" ] && github_checkout "$top"; then
     checkout="$top"
   else
-    found=()
     for dir in "$root"/*/; do
       [ -d "$dir" ] && github_checkout "$dir" && found+=("$dir")
     done
@@ -91,6 +91,9 @@ else
   fi
 fi
 
+if [ -z "$checkout" ] && [ -z "$target" ] && [ "${#found[@]}" -eq 0 ]; then
+  exec "$real" "$@"
+fi
 if [ -z "$checkout" ]; then
   echo "gh: no platform credential for this call — run it inside a checkout under ${root}, or pass -R <owner>/<repo> for a repository attached to this session" >&2
   exec "$real" "$@"

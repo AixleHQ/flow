@@ -43,13 +43,13 @@ module GitCredentials
       assert_not git_clone_ran?
     end
 
-    test "a gh wrapper that could not be written leaves the clone to run, since git does not need it" do
-      @runtime.fail_write(SessionGitSetup::GH_WRAPPER)
-
+    test "a clone writes only under /workspace and /tmp, since a Kubernetes exec runs as the non-root agent user" do
       _stdout, _stderr, exit_code = @setup.clone(@repository, "/workspace/repo/my-app", 1001)
 
+      written = @runtime.fs.keys.select { |path| @runtime.file_attributes(path) }
       assert_equal 0, exit_code
-      assert git_clone_ran?
+      assert_not_empty written
+      assert_empty written.reject { |path| path.start_with?("/workspace/", "/tmp/") }
     end
 
     test "installing the helper on its own says so when it cannot be written" do
