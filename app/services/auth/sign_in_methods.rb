@@ -30,6 +30,17 @@ module Auth
       linkable_kinds(user).include?(kind.to_s)
     end
 
+    # The same rule for a password: setting or resetting one is offered only
+    # where a company the person belongs to takes passwords. The platform
+    # operator's password is not reset by email at all (AD-19).
+    def password_accepted?(user)
+      return false if user.super_admin?
+
+      Auth::PolicyResolver.accepted_kinds(
+        company_ids: user.company_memberships.active.select(:company_id), kinds: %w[password]
+      ).any?
+    end
+
     # @return [String, nil] why `identity` may not be removed, in words for the person
     def removal_refusal(user, identity)
       name = identity.identity_provider.display_name

@@ -1187,6 +1187,26 @@ export function logoutPath(options?: object): string {
   return "/" + "logout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /password/reset(.:format) */
+export function newPasswordResetPath(options?: object): string {
+  return "/" + "password" + "/" + "reset" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /password/reset(.:format) */
+export function passwordResetsPath(options?: object): string {
+  return "/" + "password" + "/" + "reset" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /password/reset/:token(.:format) */
+export function editPasswordResetPath(token: ScalarType, options?: object): string {
+  return "/" + "password" + "/" + "reset" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /password/reset/:token(.:format) */
+export function passwordResetPath(token: ScalarType, options?: object): string {
+  return "/" + "password" + "/" + "reset" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
 /** /admin/login(.:format) */
 export function adminLoginPath(options?: object): string {
   return "/" + "admin" + "/" + "login" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1285,6 +1305,11 @@ export function signInMethodsPath(options?: object): string {
 /** /profile/sign_in_methods/:id(.:format) */
 export function signInMethodPath(id: ScalarType, options?: object): string {
   return "/" + "profile" + "/" + "sign_in_methods" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /profile/password(.:format) */
+export function profilePasswordPath(options?: object): string {
+  return "/" + "profile" + "/" + "password" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /workspace/confirm(.:format) */

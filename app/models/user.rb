@@ -12,8 +12,13 @@ class User < ApplicationRecord
   # State machine
   include UserStateMachine
 
-  has_secure_password validations: false
+  PASSWORD_MIN_LENGTH = 8
 
+  # The emailed reset link is signed over the password's salt, so setting any
+  # new password spends every link issued before it.
+  has_secure_password validations: false, reset_token: { expires_in: 1.hour }
+
+  before_save :stamp_password_change, if: :will_save_change_to_password_digest?
   # A new password ends every browser signed in with the old one.
   after_update_commit :end_sessions_after_password_change, if: :saved_change_to_password_digest?
 
@@ -167,7 +172,7 @@ class User < ApplicationRecord
                     uniqueness: { case_sensitive: false },
                     format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
-  validates :password, length: { minimum: 8 }, if: :password_digest_changed?, allow_blank: true
+  validates :password, length: { minimum: PASSWORD_MIN_LENGTH }, if: :password_digest_changed?, allow_blank: true
 
   broadcasts_to ->(user) { user }, on: :update
 
@@ -227,8 +232,15 @@ class User < ApplicationRecord
     Rails.logger.warn("[User] Failed to revoke live access for user #{id}: #{e.message}")
   end
 
+  # Except the browser this person changed it from: the request that set the
+  # password is the one place it is known to be theirs.
   def end_sessions_after_password_change
-    UserSession.revoke_all_for!(self)
+    own = Current.user_session if Current.user_session&.user_id == id
+    UserSession.revoke_all_for!(self, except: own)
+  end
+
+  def password_set?
+    password_digest.present?
   end
 
   def restore!
@@ -295,6 +307,11 @@ class User < ApplicationRecord
     reload_active_memberships
     super
   end
+
+  def stamp_password_change
+    self.password_changed_at = password_digest.present? ? Time.current : nil
+  end
+  private :stamp_password_change
 
   # Encryptable calls the first from a private context; the second is an
   # after_save callback. Neither is anyone else's business.

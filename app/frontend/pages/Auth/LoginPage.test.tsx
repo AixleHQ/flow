@@ -127,6 +127,21 @@ describe('LoginPage', () => {
       expect(form.post).toHaveBeenCalledWith('/login', expect.objectContaining({ onSuccess: expect.any(Function) }));
     });
 
+    it('links a forgotten password to the reset page, carrying the address', () => {
+      renderPage(<LoginPage />, { props: stepTwo() });
+
+      expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute(
+        'href',
+        '/password/reset?email=person%40acme.test',
+      );
+    });
+
+    it('shows the notice a finished reset lands with', async () => {
+      renderPage(<LoginPage />, { props: { flash: { notice: 'Password reset. Sign in with your new password.' } } });
+
+      expect(await screen.findByText('Password reset. Sign in with your new password.')).toBeInTheDocument();
+    });
+
     it('toggles the password field between hidden and visible', async () => {
       renderPage(<LoginPage />, { props: stepTwo() });
 

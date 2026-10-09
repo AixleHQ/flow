@@ -44,6 +44,12 @@ class Web::ProfileController < Web::ApplicationController
     render inertia: "Profile/Security", props: {
       sign_in_methods: sign_in_methods,
       linkable_kinds: Auth::SignInMethods.linkable_kinds(current_user),
+      password: {
+        set: current_user.password_set?,
+        changed_at: current_user.password_changed_at,
+        accepted: Auth::SignInMethods.password_accepted?(current_user),
+        min_length: User::PASSWORD_MIN_LENGTH
+      },
       passkeys: current_user.webauthn_credentials.order(created_at: :desc).map { |c|
         { id: c.id, name: c.display_name, last_used_at: c.last_used_at, created_at: c.created_at }
       },

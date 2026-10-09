@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1695,6 +1695,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_090000) do
     t.datetime "totp_confirmed_at"
     t.string "uid"
     t.datetime "updated_at", null: false
+    t.datetime "password_changed_at"
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true

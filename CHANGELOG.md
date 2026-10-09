@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Profile**: set a password under Profile → Security if you were onboarded
+  without one, or change the one you have. Every set, change or reset emails
+  you and signs you out on your other devices; this one stays signed in.
+- **Sign-in & onboarding**: **Forgot password?** on the sign-in screen emails a
+  single-use link, valid for an hour, to choose a new password.
+
 ### Changed
 - **Docs**: the User guide overview and *What Flow is* describe every way a
   run starts (column, **Run**, schedule, Slack or Teams, webhook, tracker),

@@ -17,6 +17,7 @@ import {
   totpPath,
 } from 'shared/routes';
 
+import { PasswordSection, type PasswordState } from './PasswordSection';
 import { ProfileTabs } from './ProfileTabs';
 
 interface SignInMethod {
@@ -49,6 +50,7 @@ interface PageProps {
   signInMethods: SignInMethod[];
   /** Redirect providers this person may link: offered here and accepted by a company of theirs. */
   linkableKinds: string[];
+  password: PasswordState;
   passkeys: Passkey[];
   totpEnabled: boolean;
   sessions: SessionRow[];
@@ -143,7 +145,14 @@ function SignInMethodsSection({ methods, linkableKinds }: { methods: SignInMetho
   );
 }
 
-export default function Security({ signInMethods, linkableKinds, passkeys, totpEnabled, sessions }: PageProps) {
+export default function Security({
+  signInMethods,
+  linkableKinds,
+  password,
+  passkeys,
+  totpEnabled,
+  sessions,
+}: PageProps) {
   const [busy, setBusy] = useState(false);
   const [totpSetup, setTotpSetup] = useState<{ secret: string; qrCode: string | null } | null>(null);
   const [code, setCode] = useState('');
@@ -178,6 +187,8 @@ export default function Security({ signInMethods, linkableKinds, passkeys, totpE
         <ProfileTabs active="security" />
 
         <SignInMethodsSection methods={signInMethods} linkableKinds={linkableKinds} />
+
+        <PasswordSection password={password} />
 
         <Paper p="md" radius="md" withBorder>
           <Stack gap="sm">
