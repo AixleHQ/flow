@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
+  the whole conversation again, live and after the session ends. It used to show
+  only the last screen, frozen on the spinner.
+
 ## [1.2.0] - 2026-10-09
 
 ### Added
