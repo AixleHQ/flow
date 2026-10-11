@@ -1060,7 +1060,13 @@ module Agents
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
         "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session),
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
-        "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
+        "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s,
+        # The CLI picks its fullscreen renderer on a fresh install, which every container
+        # is. That renderer repaints one 24-row frame on the alternate screen, so the tmux
+        # scrollback, the live log tail and the stored log replay held a single frame with
+        # nothing to scroll back to. This forces the classic renderer, which prints the
+        # conversation into the scrollback.
+        "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" => "1"
       }.merge(cloud_credential_env(session)).compact
     end
 

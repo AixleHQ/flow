@@ -532,6 +532,12 @@ module Agents
       assert_equal "90000", env["MCP_TIMEOUT"]
     end
 
+    test "default_env_vars keeps the CLI off the alternate screen so the session log scrolls" do
+      env = @adapter.default_env_vars(@session)
+
+      assert_equal "1", env["CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN"]
+    end
+
     # == Ingest Usage ==
 
     test "ingest_usage returns accepted when no events" do
