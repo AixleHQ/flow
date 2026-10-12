@@ -49,6 +49,38 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_equal "b@example.com", Rack::Attack.login_email(nested)
   end
 
+  test "a query string shaped to break the sign-in throttles is answered, not a server error" do
+    get "/mobileredir/openApp.jsp?user=x"
+    assert_response :not_found
+
+    get "/mobileredir/openApp.jsp?user[]=x"
+    assert_response :not_found
+
+    get "/mobileredir/openApp.jsp?user=x&user[a]=1"
+    assert_response :not_found
+  end
+
+  test "the sign-in throttles key on an address, and on nothing else a query string can carry" do
+    assert_equal "a@b.test", Rack::Attack.login_email(rack_request({}, path: "/login?email=A@B.test"))
+    assert_equal "a@b.test", Rack::Attack.login_email(rack_request({}, path: "/login?user[email]=A@B.test"))
+
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login?user=x"))
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login?user[]=x"))
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login?email[]=a@b.test"))
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login?user[email][x]=1"))
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login?user=x&user[a]=1"))
+    assert_nil Rack::Attack.login_email(rack_request({}, path: "/login"))
+  end
+
+  test "junk alongside a real address does not buy the guesser a fresh bucket" do
+    5.times { post "/admin/login", params: { email: "admin@operator.example", password: "guess" } }
+    assert_not_equal 429, response.status
+
+    post "/admin/login?user=x", params: { email: "admin@operator.example", password: "guess" }
+
+    assert_response :too_many_requests
+  end
+
   test "guessing invitation tokens from one address is cut off" do
     30.times { get "/invitations/not-a-token" }
     assert_not_equal 429, response.status
