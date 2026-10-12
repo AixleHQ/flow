@@ -117,10 +117,18 @@ module ContextBuilders
       lines << ""
       lines << "### Instructions"
       lines << ""
-      if step.instructions.present?
+      if instructions_are_the_prompt?
+        lines << "This step's instructions are the prompt this session started with."
+      elsif step.instructions.present?
         lines << InstructionReferences::Renderer.new(step: step, project: workflow_run.project).render(step.instructions)
       end
       lines.join("\n")
+    end
+
+    # A non-interactive session is launched with these same rendered instructions as its
+    # prompt (AgentSessionStrategy#launch_agent_in_tmux); an interactive one gets none.
+    def instructions_are_the_prompt?
+      non_interactive? && session.initial_prompt.present? && step.instructions.present?
     end
 
     def earlier_files_section

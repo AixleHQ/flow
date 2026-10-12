@@ -94,6 +94,25 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_includes content, "Write the code"
   end
 
+  test "a non-interactive step is launched with its instructions, so current-step does not repeat them" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run,
+      mode: "non_interactive", initial_prompt: "Write the code")
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "current-step" }.content
+    assert_includes content, "## Step: Implement"
+    assert_includes content, "the prompt this session started with"
+    assert_not_includes content, "Write the code"
+  end
+
+  test "an interactive step gets no launch prompt, so current-step keeps its instructions" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run,
+      mode: "interactive", initial_prompt: "Write the code")
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "current-step" }.content
+    assert_includes content, "Write the code"
+    assert_not_includes content, "the prompt this session started with"
+  end
+
   test "build returns exactly 2 sections for step without sub-steps" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
     builder = ContextBuilders::WorkflowContext.new(session)
