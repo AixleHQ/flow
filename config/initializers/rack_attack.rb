@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# Every discriminator below runs in middleware, ahead of routing, on every
+# request: anything one raises answers 500 on every url in the app, so a
+# discriminator reads the request defensively and skips what it cannot key on.
 class Rack::Attack
   cache.store = ActiveSupport::Cache::RedisCacheStore.new(url: Settings.redis.url)
 
@@ -10,7 +13,7 @@ class Rack::Attack
   # when absent so the discriminator is skipped rather than keyed on "".
   def self.login_email(req)
     p = params_with_json(req)
-    (p["email"] || p.dig("user", "email")).to_s.downcase.presence
+    (string_param(p, "email") || string_param(p, "user", "email")).to_s.downcase.presence
   end
 
   JSON_BODY_LIMIT = 16_384
@@ -24,7 +27,8 @@ class Rack::Attack
   # reading, so the app downstream still parses it.
   def self.params_with_json(req)
     json = json_body(req)
-    json.empty? ? req.params : req.params.merge(json)
+    params = safe_params(req)
+    json.empty? ? params : params.merge(json)
   end
 
   def self.json_body(req)
@@ -40,6 +44,30 @@ class Rack::Attack
     parsed = JSON.parse(raw)
     parsed.is_a?(Hash) ? parsed : {}
   rescue JSON::ParserError, IOError, NoMethodError
+    {}
+  end
+
+  # The caller controls the shape as well as the value ("?user=x" is a String,
+  # "?user[]=x" an Array). Only a String leaf can be an address; any other shape
+  # reads as absent, which also keeps "?email[]=a@b.test" from earning a bucket
+  # separate from "?email=a@b.test".
+  def self.string_param(params, *path)
+    value = params
+    path.each do |key|
+      return nil unless value.is_a?(Hash)
+
+      value = value[key]
+    end
+    value if value.is_a?(String)
+  end
+
+  # Rack::BadRequest marks the query strings Rack refuses to decode
+  # ("?user=x&user[a]=1", invalid %-encoding, nesting past its limit). Rails
+  # answers 400 for that family downstream, and undecodable input carries no
+  # address.
+  def self.safe_params(req)
+    req.params
+  rescue Rack::BadRequest
     {}
   end
 
@@ -115,12 +143,16 @@ class Rack::Attack
   throttle("credential/ip", limit: 20, period: 60) { |req| req.ip if credential_request?(req) }
   # Mail specifically: one address must not be reachable at volume from many IPs.
   throttle("magic_link/email", limit: 5, period: 300) do |req|
-    params_with_json(req)["email"].to_s.downcase.presence if req.post? && req.path == "/login/magic"
+    string_param(params_with_json(req), "email").to_s.downcase.presence if req.post? && req.path == "/login/magic"
   end
 
+  # The path check first, so only sign-in requests have their params and body
+  # parsed.
   throttle("login/combo", limit: 10, period: 3600) do |req|
+    next unless login_request?(req)
+
     email = login_email(req)
-    "#{req.ip}:#{email}" if login_request?(req) && email
+    "#{req.ip}:#{email}" if email
   end
 
   # The limits below cover what answers without a signed-in user. They sit far
