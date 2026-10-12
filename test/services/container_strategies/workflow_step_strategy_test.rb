@@ -234,6 +234,27 @@ module ContainerStrategies
       assert_includes downloads.first, Shellwords.escape(collect_url), "the farther step's copy is written first"
     end
 
+    test "inject_prior_step_outputs writes the request body of the webhook that started the run, as the agent" do
+      fake = stub_container_runtime(agent_type: "claude_code")
+      session, _step_run, _step, workflow_run = create_workflow_step_session
+      body = { "title" => "Security Hub scan", "description" => "## Totals\n375 findings" }
+      workflow_run.update!(shared_context: { "webhook" => { "payload" => body } })
+
+      build_strategy(session: session).send(:inject_prior_step_outputs, "abc123")
+
+      assert_equal body, JSON.parse(fake.fs["/workspace/assets/webhook-payload.json"])
+      assert_equal 1001, fake.file_attributes("/workspace/assets/webhook-payload.json")[:uid]
+    end
+
+    test "inject_prior_step_outputs writes no payload file for a run no webhook started" do
+      fake = stub_container_runtime(agent_type: "claude_code")
+      session, = create_workflow_step_session
+
+      build_strategy(session: session).send(:inject_prior_step_outputs, "abc123")
+
+      assert_nil fake.fs["/workspace/assets/webhook-payload.json"]
+    end
+
     test "the agent prompt is the step's instructions with references rendered" do
       stub_container_runtime(agent_type: "claude_code")
       workflow = create(:workflow, scope: @project)

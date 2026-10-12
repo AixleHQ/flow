@@ -60,6 +60,20 @@ module Webhooks
       assert_equal 2, TriggerDispatch.count
     end
 
+    test "a workflow's own webhook hands its run the request body, even with no card to carry it" do
+      endpoint = WebhookEndpoint.create_for_trigger!(project: @project, created_by: @user)
+      create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+        event_type: endpoint.config["event_type"], subject_policy: :none)
+      body = { "column" => "Backlog", "title" => "Security Hub scan", "description" => "375 findings" }
+      rw = ReceivedWebhook.create!(webhook_endpoint: endpoint, idempotency_key: "d1", event_type: "generic", raw_payload: body)
+
+      WorkflowService.expects(:enqueue).with(
+        has_entries(task: nil, shared_context: { "webhook" => { "payload" => body } })
+      ).once.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
+    end
+
     test "ignores plain channel messages that do not mention the bot" do
       payload = {
         "type" => "event_callback", "event_id" => "EvMsg", "team_id" => "T1",
