@@ -8,6 +8,7 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
 
   def create
     return refuse("Payment is not set up on this installation") unless client.configured?
+    return refuse("Pay the final invoice of your last subscription first.") if final_invoice_unpaid?
 
     live = live_subscription
     return refuse(already_subscribed(live)) if live
@@ -41,6 +42,10 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
     subscription.ended? ? nil : subscription
   rescue Billing::StripeClient::NotFound
     nil
+  end
+
+  def final_invoice_unpaid?
+    current_company.billing_status == "canceled" && current_company.billing_unpaid_invoice_url.present?
   end
 
   def already_subscribed(subscription)

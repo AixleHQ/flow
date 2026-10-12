@@ -95,6 +95,54 @@ module Billing
       api { ::Stripe::Subscription.cancel(subscription_id, params, request_options) }
     end
 
+    # The final invoice a cancellation makes starts as a draft that Stripe
+    # finalizes on its own an hour later, reading the meter again as it does.
+    # Held, it waits for us instead — see Billing::CancellationSettlement.
+    # Only a draft: on an open invoice `auto_advance` is what keeps Stripe
+    # retrying the card, and turning it off would stop that.
+    def hold_invoice(invoice_id:)
+      api do
+        invoice = ::Stripe::Invoice.retrieve(invoice_id, request_options)
+        invoice.status == "draft" ? update_invoice(invoice_id, auto_advance: false) : invoice
+      end
+    end
+
+    # Handed back to Stripe, which finalizes it with whatever the meter has
+    # counted by then.
+    def release_invoice(invoice_id:)
+      api do
+        invoice = ::Stripe::Invoice.retrieve(invoice_id, request_options)
+        invoice.status == "draft" ? update_invoice(invoice_id, auto_advance: true) : invoice
+      end
+    end
+
+    # Finalized and charged now rather than an hour from now. A finalized
+    # invoice is not charged for another hour unless asked, and a card that is
+    # declined leaves it open with its hosted page — the customer's to pay
+    # there, and Stripe's to retry. Safe to repeat: each step is skipped once
+    # it has happened.
+    def issue_invoice(invoice_id:)
+      api do
+        invoice = ::Stripe::Invoice.retrieve(invoice_id, request_options)
+        if invoice.status == "draft"
+          invoice = ::Stripe::Invoice.finalize_invoice(invoice_id, { auto_advance: true }, request_options)
+        end
+        invoice.status == "open" && !invoice.attempted ? pay_invoice(invoice_id) : invoice
+      end
+    end
+
+    # What Stripe has counted for a customer between two minutes. It counts an
+    # event about a minute after accepting it, and an invoice finalized before
+    # then does not bill it.
+    def metered_minutes(customer_id:, from:, to:)
+      api do
+        summaries = ::Stripe::Billing::Meter.list_event_summaries(
+          meter_id, { customer: customer_id, start_time: from.to_i, end_time: to.to_i }, request_options
+        )
+        summaries.data.sum(BigDecimal(0)) { |summary| BigDecimal(summary.aggregated_value.to_s) }
+      end
+    end
+
     # Only for a cancellation scheduled at the period's end, which the
     # application no longer makes.
     def resume_subscription(subscription_id:)
@@ -155,6 +203,21 @@ module Billing
 
     def request_options
       { api_key: settings.secret_key }
+    end
+
+    def update_invoice(invoice_id, **params)
+      ::Stripe::Invoice.update(invoice_id, params, request_options)
+    end
+
+    def pay_invoice(invoice_id)
+      ::Stripe::Invoice.pay(invoice_id, {}, request_options)
+    rescue ::Stripe::CardError
+      ::Stripe::Invoice.retrieve(invoice_id, request_options)
+    end
+
+    # The meter the price bills, so it is not a second setting to keep in step.
+    def meter_id
+      @meter_id ||= ::Stripe::Price.retrieve(settings.price_id, request_options).recurring.meter
     end
 
     # One error class out of this adapter, so callers are not written against the

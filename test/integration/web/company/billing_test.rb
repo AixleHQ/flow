@@ -60,6 +60,19 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_equal Time.utc(2026, 11, 1), Time.zone.parse(billing[:cancelsAt])
   end
 
+  test "a cancelled company sees its final invoice: being prepared, then issued" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "canceled")
+    cancellation = create(:billing_cancellation, company: @company, settlement_state: "settling")
+
+    assert_equal "settling", billing_props[:billing][:finalInvoice][:state]
+
+    cancellation.update!(settlement_state: "settled", final_invoice_url: "https://invoice.stripe.test/in_1")
+
+    invoice = billing_props[:billing][:finalInvoice]
+    assert_equal "settled", invoice[:state]
+    assert_equal "https://invoice.stripe.test/in_1", invoice[:url]
+  end
+
   test "a trialing company sees its allowance and no usage to invoice" do
     @company.update!(billing_state: "trialing", stripe_subscription_id: nil)
     Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))

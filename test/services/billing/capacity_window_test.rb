@@ -222,4 +222,15 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
                    "half an hour at two and half at forty"
     end
   end
+
+  # What a company cancelling mid-hour is billed for: the hour up to then, and
+  # nobody else's.
+  test "an hour cut short is measured up to the cut, for the companies asked about" do
+    change(@acme, 2, @hour - 2.hours)
+    change(@globex, 5, @hour - 2.hours)
+
+    result = Billing::CapacityWindow.for_hour(@hour, until_time: @hour + 20.minutes, company_ids: [ @acme.id ])
+
+    assert_equal({ @acme.id => 2 * 20 * 60 }, result.per_company)
+  end
 end

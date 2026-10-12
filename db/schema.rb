@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -217,6 +217,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_150000) do
     t.datetime "resumed_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "settlement_state"
+    t.jsonb "final_usage", default: {}, null: false
+    t.string "final_invoice_id"
+    t.string "final_invoice_url"
+    t.datetime "settled_at"
+    t.text "settlement_error"
     t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
     t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
   end

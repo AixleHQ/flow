@@ -112,25 +112,45 @@ class Webhooks::StripeController < ActionController::API
           billing_cancels_at: subscription.ended_at || subscription.cancels_at || Time.current)
   end
 
-  # An invoice that fails after the subscription has ended — the final one, for
-  # the last period's minutes — is Stripe's to chase. Treating it as a failed
-  # payment would offer a "pay to restore access" for a subscription that no
-  # longer exists.
   def payment_failed(company, invoice)
     subscription_id = subscription_of(invoice)
     return ignore(company, "failed invoice for #{subscription_id}, not its current one") unless current_subscription?(company, subscription_id)
-    return if company.billing_status == "canceled"
+    return final_invoice_unpaid(company, invoice) if company.billing_status == "canceled"
 
     block(company, "payment_failed", "invoice #{invoice.id} unpaid",
           billing_unpaid_invoice_url: invoice.try(:hosted_invoice_url))
   end
 
+  # The final invoice of a subscription that has ended. The company stays
+  # cancelled — there is no subscription for paying to restore — but the
+  # billing tab offers the invoice, and a new subscription waits until it is
+  # paid. Stripe retries the card and sends this again each time; the admins
+  # hear of it once.
+  def final_invoice_unpaid(company, invoice)
+    url = invoice.try(:hosted_invoice_url)
+    return if url.blank? || company.billing_unpaid_invoice_url == url
+
+    first = company.billing_unpaid_invoice_url.blank?
+    company.update!(billing_unpaid_invoice_url: url, **applied)
+    Rails.logger.info("[Webhooks::Stripe] company #{company.id}: final invoice #{invoice.id} unpaid")
+    return unless first
+
+    company.billing_admins.find_each { |admin| BillingMailer.final_invoice_unpaid(company, admin).deliver_later }
+  end
+
   def paid(company, invoice)
-    return unless company.billing_status == "payment_failed"
     return unless current_subscription?(company, subscription_of(invoice))
 
-    company.update!(billing_state: "active", **applied)
-    Rails.logger.info("[Webhooks::Stripe] company #{company.id} paid #{invoice.id} and runs again")
+    case company.billing_status
+    when "payment_failed"
+      company.update!(billing_state: "active", **applied)
+      Rails.logger.info("[Webhooks::Stripe] company #{company.id} paid #{invoice.id} and runs again")
+    when "canceled"
+      return if company.billing_unpaid_invoice_url.blank?
+
+      company.update!(billing_unpaid_invoice_url: nil, **applied)
+      Rails.logger.info("[Webhooks::Stripe] company #{company.id} paid its final invoice #{invoice.id}")
+    end
   end
 
   # Back to blocked rather than to trialing: the free allowance was spent once and

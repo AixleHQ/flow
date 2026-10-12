@@ -1,6 +1,20 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Alert, Badge, Button, Card, Group, List, Modal, Select, Stack, Text, Textarea } from '@mantine/core';
-import { useState } from 'react';
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  List,
+  Loader,
+  Modal,
+  Select,
+  Stack,
+  Text,
+  Textarea,
+} from '@mantine/core';
+import { useEffect, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
@@ -29,6 +43,12 @@ interface Usage {
   estimate: Estimate | null;
 }
 
+interface FinalInvoice {
+  /** `settling` while the last usage is still on its way to Stripe. */
+  state: 'settling' | 'settled' | 'failed';
+  url: string | null;
+}
+
 interface Billing {
   status: BillingStatus;
   periodStartsAt: string | null;
@@ -39,6 +59,7 @@ interface Billing {
   canPay: boolean;
   hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
+  finalInvoice: FinalInvoice | null;
   cancellationReasons: string[];
 }
 
@@ -71,6 +92,8 @@ const REASON_LABELS: Record<string, string> = {
 };
 
 const COMMENT_MAX = 1000;
+
+const SETTLING_POLL_MS = 5000;
 
 const formatMoney = (cents: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
@@ -156,6 +179,30 @@ function CancelModal({ opened, onClose, reasons }: { opened: boolean; onClose: (
   );
 }
 
+function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
+  switch (invoice.state) {
+    case 'settling':
+      return (
+        <Group gap="xs">
+          <Loader size="xs" />
+          <Text size="sm">
+            Preparing the final invoice for usage up to the cancellation. This takes a minute or two.
+          </Text>
+        </Group>
+      );
+    case 'settled':
+      return (
+        invoice.url && (
+          <Anchor href={invoice.url} target="_blank" rel="noopener noreferrer" size="sm">
+            View the final invoice
+          </Anchor>
+        )
+      );
+    case 'failed':
+      return <Text size="sm">Stripe issues the final invoice within the hour.</Text>;
+  }
+}
+
 function SubscriptionCard({ billing }: { billing: Billing }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -227,6 +274,20 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
       );
       break;
     case 'canceled':
+      if (billing.hasUnpaidInvoice) {
+        body = (
+          <>
+            On {endsOn} the subscription ended, so no new sessions start. Your data is kept. The final invoice is
+            unpaid: pay it to add a card again.
+          </>
+        );
+        action = (
+          <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
+            Pay final invoice
+          </Button>
+        );
+        break;
+      }
       body = (
         <>
           On {endsOn} the subscription ended, so no new sessions start. Your data is kept. Add a card to restore access.
@@ -258,6 +319,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
         <Text size="sm" c="dimmed">
           {body}
         </Text>
+        {billing.finalInvoice && <FinalInvoiceStatus invoice={billing.finalInvoice} />}
         {action && <Group>{action}</Group>}
       </Stack>
       <CancelModal opened={cancelOpen} onClose={() => setCancelOpen(false)} reasons={billing.cancellationReasons} />
@@ -301,8 +363,19 @@ function UsageCard({ billing, usage }: { billing: Billing; usage: Usage }) {
   );
 }
 
+// The final invoice is settled by a background job a minute or two after the
+// cancellation; the page asks for the billing prop again until it is done.
+function useRefreshWhileSettling(settling: boolean) {
+  useEffect(() => {
+    if (!settling) return;
+    const timer = setInterval(() => router.reload({ only: ['billing'] }), SETTLING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [settling]);
+}
+
 const BillingPage = () => {
   const { company, billing, checkoutResult } = usePage<Props>().props;
+  useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
 
   return (
     <AuthLayout>
