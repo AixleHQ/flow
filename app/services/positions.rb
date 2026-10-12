@@ -23,4 +23,23 @@ module Positions
     end
     final
   end
+
+  # Closes the gaps a removed row leaves, keeping the order. Same park-then-settle
+  # as reorder!, but as two set-based UPDATEs so the query count stays constant.
+  def compact!(scope)
+    rows = scope.reorder(:position, :id).pluck(:id, :position)
+    return [] if rows.empty?
+
+    ids = rows.map(&:first)
+    offset = rows.filter_map(&:last).max.to_i
+    model = scope.model
+    relation = scope.unscope(:order).where(id: ids)
+    cases = ids.each_with_index.map { |id, index| model.sanitize_sql_array([ "WHEN ? THEN ?", id, index + 1 ]) }.join(" ")
+
+    model.transaction do
+      relation.update_all([ "position = position + ?", offset ])
+      relation.update_all("position = CASE id #{cases} END")
+    end
+    ids
+  end
 end

@@ -54,6 +54,46 @@ module Api
             assert_response :no_content
           end
 
+          test "destroy renumbers the remaining columns in two UPDATEs" do
+            col3 = create(:board_column, board: @board, name: "C")
+            col4 = create(:board_column, board: @board, name: "D")
+
+            assert_queries_match(/UPDATE "board_columns"/, count: 2) do
+              delete :destroy, params: { project_id: @project.id, id: @col2.id }
+            end
+
+            assert_response :no_content
+            ordered = @board.board_columns.reload.order(:position)
+            assert_equal [ @col1.id, col3.id, col4.id ], ordered.map(&:id)
+            assert_equal [ 1, 2, 3 ], ordered.map(&:position)
+          end
+
+          test "destroy removes the column's transitions in one DELETE per side" do
+            task = create(:board_task, board: @board, board_column: @col2)
+            transitions = [
+              ColumnTransition.create!(board_task: task, from_column: nil, to_column: @col1, actor: @user, actor_type: :human),
+              ColumnTransition.create!(board_task: task, from_column: @col1, to_column: @col2, actor: @user, actor_type: :human)
+            ]
+
+            assert_queries_match(/DELETE FROM "column_transitions"/, count: 2) do
+              delete :destroy, params: { project_id: @project.id, id: @col1.id }
+            end
+
+            assert_response :no_content
+            assert ColumnTransition.where(id: transitions.map(&:id)).none?
+          end
+
+          test "destroy of a column that still holds tasks keeps its transitions" do
+            task = create(:board_task, board: @board, board_column: @col1)
+            transition = ColumnTransition.create!(board_task: task, from_column: nil, to_column: @col1, actor: @user, actor_type: :human)
+
+            delete :destroy, params: { project_id: @project.id, id: @col1.id }
+
+            assert_response :unprocessable_entity
+            assert ColumnTransition.exists?(transition.id)
+            assert BoardColumn.exists?(@col1.id)
+          end
+
           test "reorder returns columns json" do
             patch :reorder, params: {
               project_id: @project.id,
