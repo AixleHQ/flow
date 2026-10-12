@@ -205,6 +205,16 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal "Agent comment", data.first["body"]
   end
 
+  test "board_get_comments limit returns only the newest comments" do
+    create(:task_comment, board_task: @task, author: @user, body: "Oldest", created_at: 3.hours.ago)
+    create(:task_comment, board_task: @task, author: @user, body: "Middle", created_at: 2.hours.ago)
+    create(:task_comment, board_task: @task, author: @user, body: "Newest", created_at: 1.hour.ago)
+
+    result = InternalTools::BoardGetComments.new(params: { task_id: @task.id, limit: 2 }, session: @session).execute
+    data = JSON.parse(result[:stdout])
+    assert_equal %w[Newest Middle], data.map { |c| c["body"] }
+  end
+
   # === board_get_task_assets ===
 
   test "board_get_task_assets returns assets" do

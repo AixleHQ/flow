@@ -29,7 +29,7 @@ class ContextBuilders::OutputRulesTest < ActiveSupport::TestCase
     sections = ContextBuilders::OutputRules.new(session).build
     content = sections.first.content
 
-    assert_includes content, "/workspace/outputs/"
+    assert_not_includes content, "/workspace/outputs/"
     assert_includes content, "READ-ONLY"
     assert_includes content, "MCP servers"
     assert_includes content, "clean, production-quality"

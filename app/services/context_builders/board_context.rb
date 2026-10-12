@@ -2,6 +2,10 @@
 
 module ContextBuilders
   class BoardContext < Base
+    # Past this a description is a spec, and a cut-down spec reads as the whole one,
+    # so the agent gets a pointer to board_get_task instead of a truncated copy.
+    DESCRIPTION_INLINE_LIMIT = 1500
+
     def applicable?
       board_task.present?
     end
@@ -34,9 +38,11 @@ module ContextBuilders
       lines << "- **Task:** ##{task.number} #{task.title} (id: #{task.id})"
       lines << "- **Column:** #{column.name}" if column
       lines << "- **Priority:** #{task.priority}" if task.priority.present?
-      lines << "- **Description:** #{task.description.truncate(500)}" if task.description.present?
+      lines << "- **Description:** #{task.description}" if inline_description?(task)
       lines << "- **Tags:** #{task.tags.join(', ')}" if task.tags.present?
       lines << "- **Assignee:** #{task.assignee.name} (id: #{task.assignee_id})" if task.assignee
+      lines << ""
+      lines << fetch_hint(task)
 
       lines << ""
       lines << "### Board Columns"
@@ -45,34 +51,20 @@ module ContextBuilders
         lines << "- #{col.position}. **#{col.name}**#{marker}"
       end
 
-      comments = task.task_comments.recent.includes(:author).limit(5)
-      if comments.any?
-        lines << ""
-        lines << "### Recent Comments"
-        comments.each do |comment|
-          author = comment.author&.name || "Unknown"
-          lines << "- **#{author}** (#{comment.author_type}): #{comment.body.truncate(200)}"
-        end
-      end
-
-      lines << ""
-      lines << "### Board Tools"
-      lines << ""
-      lines << "- **board_get_board_info** — get board details with all columns"
-      lines << "- **board_list_tasks** — list a page of tasks, without descriptions " \
-               "(filter by column_name/tag/task_type/assignee_id; paginate with limit/offset)"
-      lines << "- **board_get_task** — get full task details by task_id"
-      lines << "- **board_get_comments** — get comments for a task"
-      lines << "- **board_get_task_assets** — get assets attached to a task"
-      lines << "- **board_add_comment** — add a comment to a task (markdown supported in body)"
-      lines << "- **board_update_task** — update task fields (title, description, priority, assignee_id, etc)"
-      lines << "- **board_create_task** — create a new task on the board (optionally assignee_id)"
-      lines << "- **board_move_task** — move a task to a different column by column_name"
-      lines << "- **board_attach_asset** — attach a file to a task (use file_path for screenshots, file_content for small text)"
-      lines << "- **board_manage_tags** — add/remove tags on a task"
-      lines << "- **board_list_members** — list project members with the user ids to assign a task to"
-
       lines.join("\n")
+    end
+
+    def inline_description?(task)
+      task.description.present? && task.description.length <= DESCRIPTION_INLINE_LIMIT
+    end
+
+    def fetch_hint(task)
+      if task.description.present? && !inline_description?(task)
+        "The task's description and comments are not repeated here: read them with " \
+          "`board_get_task` and `board_get_comments`."
+      else
+        "The task's comments are not repeated here: read them with `board_get_comments`."
+      end
     end
   end
 end

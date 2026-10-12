@@ -37,8 +37,7 @@ module ContextBuilders
         1. Analyze the prompt and all available context (MCP tools, project files, skills)
         2. Break the task into concrete steps
         3. Execute each step fully — write files, create artifacts, run commands
-        4. Save all results to `/workspace/outputs/` so they persist after the session
-        5. At the end, write a summary of what was done and any assumptions made
+        4. At the end, write a summary of what was done and any assumptions made
 
         Your output MUST be actionable artifacts (documents, code, configs), not a conversation.
 

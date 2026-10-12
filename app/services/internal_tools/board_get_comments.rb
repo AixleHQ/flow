@@ -4,7 +4,8 @@ module InternalTools
   class BoardGetComments < Base
     tool do
       display_name "Board Get Comments"
-      description "List comments for a task on the current board with optional tag or author-type filters."
+      description "List comments for a task on the current board, newest first, with optional tag or " \
+                  "author-type filters and a limit."
       tags :board
       inject_when :workflow_step_session
       input_schema({
@@ -23,6 +24,10 @@ module InternalTools
             enum: %w[user agent],
             type: "string",
             description: "Optional author type filter"
+          },
+          limit: {
+            type: "integer",
+            description: "Return only the newest N comments (default: all)"
           }
         }
       })
@@ -39,6 +44,7 @@ module InternalTools
       comments = task.task_comments.includes(:author).order(created_at: :desc)
       comments = comments.with_tag(params[:tag]) if params[:tag].present?
       comments = comments.by_author_type(params[:author_type]) if params[:author_type].present?
+      comments = comments.limit(params[:limit].to_i) if params[:limit].to_i.positive?
 
       result = comments.map { |c| TaskCommentResource.new(c, params: { snake_keys: true }).to_h }
       success(result.to_json)

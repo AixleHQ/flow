@@ -62,7 +62,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_equal "board_context", section.builder_name
   end
 
-  # -- AC #4: content includes board name, task title, column, priority, description, tags --
+  # -- AC #4: content includes board name, task title, column, priority, tags --
 
   test "content includes board name, task title with id, and column name" do
     task = create(:board_task, board: @board, board_column: @column, title: "Fix login flow")
@@ -98,18 +98,6 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_not_includes content, "Priority"
   end
 
-  test "content includes description truncated to 500 chars" do
-    long_desc = "A" * 600
-    task = create(:board_task, board: @board, board_column: @column, title: "Desc task", description: long_desc)
-    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
-    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
-
-    content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, ("A" * 497) + "..."
-    assert_not_includes content, "A" * 600
-  end
-
   test "content includes tags when present" do
     task = create(:board_task, board: @board, board_column: @column, title: "Tagged task", tags: %w[backend auth urgent])
     workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
@@ -118,20 +106,6 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
     assert_includes content, "backend, auth, urgent"
-  end
-
-  test "content includes all board tool names" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Any task")
-    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
-    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
-
-    content = ContextBuilders::BoardContext.new(session).build.first.content
-    %w[board_get_board_info board_list_tasks board_get_task board_get_comments
-       board_get_task_assets board_add_comment board_update_task board_create_task
-       board_move_task board_attach_asset board_manage_tags board_list_members].each do |tool|
-      assert_includes content, tool, "Expected content to include #{tool}"
-    end
   end
 
   test "content includes board columns with current marker" do
@@ -159,76 +133,35 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_not_includes content, "Task Completion Rule"
   end
 
-  # -- Story 27.2: Recent Comments in Board Context --
-
-  # -- AC 27.2#1: Recent comments included (up to 5) --
-
-  test "content includes recent comments when present" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Commented task")
-    create(:task_comment, board_task: task, body: "First comment", author: @user)
-    create(:task_comment, board_task: task, body: "Second comment", author: @user)
+  test "a short description is shown whole and comments are left to their tool" do
+    task = create(:board_task, board: @board, board_column: @column, title: "Short task",
+      description: "Rename the settings tab to Billing")
+    create(:task_comment, board_task: task, body: "Reviewed: needs a migration", author: @user)
 
     workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
     step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, "Recent Comments"
-    assert_includes content, "First comment"
-    assert_includes content, "Second comment"
+    assert_includes content, "- **Description:** Rename the settings tab to Billing"
+    assert_not_includes content, "Reviewed: needs a migration"
+    assert_includes content, "`board_get_comments`"
+    assert_not_includes content, "`board_get_task`"
   end
 
-  test "at most 5 comments shown" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Many comments task")
-    7.times { |i| create(:task_comment, board_task: task, body: "Comment #{i}", author: @user, created_at: i.hours.ago) }
+  test "a description over the inline limit is replaced by a pointer, never truncated" do
+    long_spec = "Acceptance criteria. " * 100
+    task = create(:board_task, board: @board, board_column: @column, title: "Spec task", description: long_spec)
 
     workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
     step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
-    comment_lines = content.lines.select { |l| l.match?(/\*\*#{Regexp.escape(@user.name)}\*\*/) }
-    assert_equal 5, comment_lines.length
-  end
-
-  # -- AC 27.2#2: Comment details with author name and truncated body --
-
-  test "comment body truncated to 200 chars" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Long comment task")
-    long_body = "B" * 300
-    create(:task_comment, board_task: task, body: long_body, author: @user)
-
-    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
-    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
-
-    content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, ("B" * 197) + "..."
-    assert_not_includes content, "B" * 300
-  end
-
-  test "comment includes author name" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Author test")
-    create(:task_comment, board_task: task, body: "Hello world", author: @user)
-
-    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
-    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
-
-    content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, @user.name
-  end
-
-  # -- AC 27.2#3: No comments subsection when empty --
-
-  test "no Recent Comments subsection when task has no comments" do
-    task = create(:board_task, board: @board, board_column: @column, title: "No comments task")
-    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
-    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
-
-    content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_not_includes content, "Recent Comments"
+    assert_operator long_spec.length, :>, ContextBuilders::BoardContext::DESCRIPTION_INLINE_LIMIT
+    assert_not_includes content, "Acceptance criteria."
+    assert_includes content, "`board_get_task`"
+    assert_includes content, "`board_get_comments`"
   end
 
   # -- AC #5: BUILDERS registration position --

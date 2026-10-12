@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Sessions & Runs**: a workflow step's agent starts with a shorter context,
+  so every model call in the session costs fewer tokens. The context stops
+  repeating what the agent already gets elsewhere: the task's comments, the
+  tools' descriptions, the sub-step tool notes and the outputs-directory rule.
+  A task description up to 1,500 characters is shown whole instead of cut at
+  500; a longer one is left to `board_get_task`. Comments are read with
+  `board_get_comments`, which now takes a `limit` that returns only the newest.
+
 ### Fixed
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show

@@ -34,7 +34,7 @@ module ContextBuilders
       section(
         tag: "custom-tools",
         priority: :info,
-        content: build_tool_descriptions,
+        content: build_tool_index,
         position_hint: :bottom
       )
     end
@@ -63,8 +63,7 @@ module ContextBuilders
 
       # Always include aixle-tools
       lines << "### aixle-tools"
-      lines << "Internal tools server. Provides project-specific tools configured for this session."
-      lines << "Call tools via MCP — use `tools/list` to see available tools."
+      lines << "Internal tools server: the platform tools listed under Available Tools."
       lines << ""
 
       external_servers.each do |server|
@@ -76,35 +75,29 @@ module ContextBuilders
       lines.join("\n")
     end
 
-    def build_tool_descriptions
-      tools = available_tools
-      has_container = tools.any? { |t| t.respond_to?(:execution_mode) && t.execution_mode.to_s == "container" }
+    # Names only: every runtime receives each tool's description and parameters from
+    # the MCP server itself, so repeating them here cost tokens on every model call.
+    def build_tool_index
+      container, instant = available_tools.partition { |tool| container_tool?(tool) }
 
       lines = [ "## Available Tools" ]
       lines << ""
-      lines << "These tools are provided via the **aixle-tools** MCP server. Call them through MCP."
+      lines << "Provided by the **aixle-tools** MCP server:"
       lines << ""
+      lines << instant.map { |tool| "`#{tool.name}`" }.join(", ") if instant.any?
 
-      if has_container
+      if container.any?
+        lines << ""
         lines << tool_execution_modes_section
         lines << ""
-      end
-
-      tools.each do |tool|
-        mode = tool.respond_to?(:execution_mode) ? tool.execution_mode.to_s : "app"
-        marker = mode == "container" ? "⏳ container" : "⚡ app"
-        lines << "### #{tool.name} #{marker}"
-        desc = [ tool.display_name, tool.description ].compact.join(" — ")
-        lines << desc if desc.present?
-        lines << (mode == "container" ? "Returns: execution ID → use read_tool_result to get results" : "Returns: direct result")
-        if tool.input_schema.present? && tool.input_schema["properties"].present?
-          params = tool.input_schema["properties"].map { |k, v| "#{k} (#{v['type']})" }.join(", ")
-          lines << "Parameters: #{params}" if params.present?
-        end
-        lines << ""
+        lines << "Container tools: #{container.map { |tool| "`#{tool.name}`" }.join(', ')}"
       end
 
       lines.join("\n")
+    end
+
+    def container_tool?(tool)
+      tool.respond_to?(:execution_mode) && tool.execution_mode.to_s == "container"
     end
 
     def tool_execution_modes_section
@@ -113,9 +106,9 @@ module ContextBuilders
 
         Tools on this platform work in two modes:
 
-        **Instant tools (⚡ app)** return results directly in the MCP response. Use them normally.
+        **Instant tools** return results directly in the MCP response. Use them normally.
 
-        **Container tools (⏳ container)** run in Docker containers and may take seconds to minutes. They work asynchronously:
+        **Container tools** (listed below) run in Docker containers and may take seconds to minutes. They work asynchronously:
 
         1. **Call the tool** — you receive an execution ID (e.g. `tr-a1b2c3d4e5f6`)
         2. **Check status** — call `read_tool_result(tool_result_id: "tr-...")`.

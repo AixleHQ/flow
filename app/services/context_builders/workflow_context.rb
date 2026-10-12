@@ -14,7 +14,6 @@ module ContextBuilders
       sections << earlier_files_section if earlier_files.any?
       sections << sub_steps_section if sub_steps.any?
       sections << previous_steps_section if completed_step_runs.any?
-      sections << workflow_tools_section if sub_steps.any?
       sections
     end
 
@@ -98,14 +97,6 @@ module ContextBuilders
         tag: "previous-steps",
         priority: :info,
         content: build_previous_steps
-      )
-    end
-
-    def workflow_tools_section
-      section(
-        tag: "workflow-tools",
-        priority: :important,
-        content: build_workflow_tools
       )
     end
 
@@ -228,20 +219,6 @@ module ContextBuilders
 
         lines << ""
       end
-
-      lines.join("\n")
-    end
-
-    def build_workflow_tools
-      lines = []
-      lines << "## Workflow Tools (MCP)"
-      lines << ""
-      lines << "You have special tools to track progress within this step:"
-      lines << ""
-      lines << "- **list_sub_steps** — List all sub-steps with their current statuses. Call this first to see what needs to be done."
-      lines << "- **mark_sub_step** — Update a sub-step status. Parameters: `id` (sub-step run ID), `status` (`in_progress`/`completed`/`skipped`), optional `note` and `data`."
-      lines << ""
-      lines << "Always mark sub-steps as you work through them so the workflow dashboard stays up to date."
 
       lines.join("\n")
     end
