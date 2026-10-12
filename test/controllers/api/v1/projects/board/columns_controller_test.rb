@@ -70,10 +70,10 @@ module Api
 
           test "destroy removes the column's transitions in one DELETE per side" do
             task = create(:board_task, board: @board, board_column: @col2)
-            transitions = [
-              ColumnTransition.create!(board_task: task, from_column: nil, to_column: @col1, actor: @user, actor_type: :human),
-              ColumnTransition.create!(board_task: task, from_column: @col1, to_column: @col2, actor: @user, actor_type: :human)
-            ]
+            hops = [ [ nil, @col1 ], [ @col1, @col2 ], [ @col2, @col1 ], [ @col1, @col2 ], [ @col2, @col1 ], [ @col1, @col2 ] ]
+            transitions = hops.map do |from, to|
+              ColumnTransition.create!(board_task: task, from_column: from, to_column: to, actor: @user, actor_type: :human)
+            end
 
             assert_queries_match(/DELETE FROM "column_transitions"/, count: 2) do
               delete :destroy, params: { project_id: @project.id, id: @col1.id }
