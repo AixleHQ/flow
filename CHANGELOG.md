@@ -17,6 +17,10 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show
   only the last screen, frozen on the spinner.
+- **Sign-in & onboarding**: a request whose query string carries `user` as a
+  plain value (`?user=x`) is answered normally instead of failing with a server
+  error. The sign-in rate limiter read that parameter as a nested sign-in form
+  on every request, including requests to addresses that do not exist.
 
 ## [1.2.0] - 2026-10-09
 

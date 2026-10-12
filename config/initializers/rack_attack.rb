@@ -10,7 +10,7 @@ class Rack::Attack
   # when absent so the discriminator is skipped rather than keyed on "".
   def self.login_email(req)
     p = params_with_json(req)
-    (p["email"] || p.dig("user", "email")).to_s.downcase.presence
+    (string_param(p, "email") || string_param(p, "user", "email")).to_s.downcase.presence
   end
 
   JSON_BODY_LIMIT = 16_384
@@ -24,7 +24,8 @@ class Rack::Attack
   # reading, so the app downstream still parses it.
   def self.params_with_json(req)
     json = json_body(req)
-    json.empty? ? req.params : req.params.merge(json)
+    params = safe_params(req)
+    json.empty? ? params : params.merge(json)
   end
 
   def self.json_body(req)
@@ -40,6 +41,35 @@ class Rack::Attack
     parsed = JSON.parse(raw)
     parsed.is_a?(Hash) ? parsed : {}
   rescue JSON::ParserError, IOError, NoMethodError
+    {}
+  end
+
+  # A discriminator runs in middleware, ahead of routing, so anything it raises
+  # answers 500 on EVERY url, a scanner's sweep of paths that do not exist
+  # included. The caller controls the shape as well as the value: "?user=x"
+  # makes params["user"] a String and "?user[]=x" makes it an Array, and
+  # traversing either as if it were a Hash raises TypeError. Only a String leaf
+  # can be an address, so every other shape reads as absent and the
+  # discriminator is skipped — which also keeps "?email[]=a@b.test" from
+  # earning a throttle bucket separate from "?email=a@b.test".
+  def self.string_param(params, *path)
+    value = params
+    path.each do |key|
+      return nil unless value.is_a?(Hash)
+
+      value = value[key]
+    end
+    value if value.is_a?(String)
+  end
+
+  # Rack refuses to decode some query strings at all ("?user=x&user[a]=1",
+  # invalid %-encoding, params nested past its limit) and marks that whole
+  # 400-class family with Rack::BadRequest. Undecodable input carries no
+  # address, and Rails answers 400 for the same family one layer down — this
+  # layer must not be louder than the one it sits in front of.
+  def self.safe_params(req)
+    req.params
+  rescue Rack::BadRequest
     {}
   end
 
@@ -115,12 +145,16 @@ class Rack::Attack
   throttle("credential/ip", limit: 20, period: 60) { |req| req.ip if credential_request?(req) }
   # Mail specifically: one address must not be reachable at volume from many IPs.
   throttle("magic_link/email", limit: 5, period: 300) do |req|
-    params_with_json(req)["email"].to_s.downcase.presence if req.post? && req.path == "/login/magic"
+    string_param(params_with_json(req), "email").to_s.downcase.presence if req.post? && req.path == "/login/magic"
   end
 
+  # The cheap predicate first: otherwise the middleware parses the params — and
+  # on a POST the body — of every request in the app to build a key it discards.
   throttle("login/combo", limit: 10, period: 3600) do |req|
+    next unless login_request?(req)
+
     email = login_email(req)
-    "#{req.ip}:#{email}" if login_request?(req) && email
+    "#{req.ip}:#{email}" if email
   end
 
   # The limits below cover what answers without a signed-in user. They sit far
