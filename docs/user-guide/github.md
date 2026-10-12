@@ -225,8 +225,9 @@ payload — `action` equal to `opened`, or `ref` equal to `refs/heads/main`.
 Dot-paths such as `repository.full_name` work. Without a condition, the ping
 GitHub sends when the webhook is created starts a run too.
 
-The payload reaches the agent only through a task. Set
-**Subject (what the run is about)** to **Create a task** and pick a
+Every step's agent gets the payload in
+`/workspace/assets/webhook-payload.json`. To also put the event on the board,
+set **Subject (what the run is about)** to **Create a task** and pick a
 **Task column**: the new card's description carries the JSON, and
 **Task title template** takes fields from it, such as `{{pull_request.title}}`.
 Every step of the workflow needs auto-run, because nobody is there to start one.

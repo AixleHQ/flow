@@ -207,6 +207,14 @@ routes to your workflow. In effect, **a webhook endpoint is a small, signed,
 idempotent API for starting a workflow** — the groundwork for an
 `aixle flow` CLI.
 
+### What the run receives
+
+The JSON body is the run's input, whatever the trigger's subject policy. Every
+step's agent finds it in `/workspace/assets/webhook-payload.json`, and its
+context says the run came from the webhook and points to that file. Write the
+step against the body's fields ("create a card titled `title` in `column`").
+A body that is not JSON is not passed on.
+
 ### Scope: per project
 
 Triggers are **project-scoped**. Every `WorkflowRun` belongs to a project (even

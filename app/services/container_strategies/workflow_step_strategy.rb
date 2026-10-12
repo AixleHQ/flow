@@ -157,6 +157,8 @@ module ContainerStrategies
       end
 
       inject_workflow_run_assets(container, workflow_run, injected_names)
+      # Last, so an asset of the same name cannot stand in for the request body.
+      inject_webhook_payload(container, workflow_run, injected_names)
 
       Rails.logger.info("[WorkflowStepStrategy] Injected #{injected_names.size} files into /workspace/assets/: #{injected_names.join(', ')}")
     end
@@ -174,6 +176,19 @@ module ContainerStrategies
         injected_names << asset.name
       rescue StandardError => e
         Rails.logger.warn("[WorkflowStepStrategy] Failed to inject run asset #{asset.name}: #{e.message}")
+      end
+    end
+
+    def inject_webhook_payload(container, workflow_run, injected_names)
+      payload = Webhooks::TriggerSupport.payload(workflow_run)
+      return if payload.blank?
+
+      path = Webhooks::TriggerSupport::PAYLOAD_PATH
+      uid = AgentCredentialsService.for(input[:agent_type]).adapter.container_uid
+      if runtime.write_file(container, path, JSON.pretty_generate(payload), uid: uid, gid: uid)
+        injected_names << File.basename(path)
+      else
+        Rails.logger.warn("[WorkflowStepStrategy] Failed to write the webhook payload to #{path}")
       end
     end
 

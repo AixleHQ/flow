@@ -228,7 +228,9 @@ class TriggerEngine
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: Chat.run_context(event).merge(Trackers::TriggerSupport.run_context(event))
+            shared_context: Chat.run_context(event).merge(
+              Trackers::TriggerSupport.run_context(event), Webhooks::TriggerSupport.run_context(event)
+            )
           )
           started = result.try(:persisted?)
           dispatch.update!(

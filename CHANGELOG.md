@@ -19,6 +19,10 @@ governance, community health — carry none.
   and is issued and charged within a few minutes instead of an hour later. The
   Billing tab shows it being prepared, then links to it. A declined final
   invoice is emailed to every admin and must be paid before a new card is added.
+- **Triggers & gates**: a run started by an incoming webhook hands the request's
+  JSON body to every step's agent in `/workspace/assets/webhook-payload.json`.
+  It used to reach the agent only through a card the trigger created, so a
+  trigger set to run without one gave the agent nothing to work on.
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show
   only the last screen, frozen on the spinner.
