@@ -41,7 +41,7 @@ class PositionsTest < ActiveSupport::TestCase
   end
 
   test "compact! closes the gap a removed row leaves" do
-    @b.destroy!
+    @b.delete
 
     Positions.compact!(@workflow.steps)
 

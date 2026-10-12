@@ -34,11 +34,13 @@ module Positions
     offset = rows.filter_map(&:last).max.to_i
     model = scope.model
     relation = scope.unscope(:order).where(id: ids)
-    cases = ids.each_with_index.map { |id, index| model.sanitize_sql_array([ "WHEN ? THEN ?", id, index + 1 ]) }.join(" ")
+    settled = ids.each_with_index.reduce(Arel::Nodes::Case.new(model.arel_table[:id])) do |node, (id, index)|
+      node.when(id).then(index + 1)
+    end
 
     model.transaction do
       relation.update_all([ "position = position + ?", offset ])
-      relation.update_all("position = CASE id #{cases} END")
+      relation.update_all(position: settled)
     end
     ids
   end
