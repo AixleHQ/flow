@@ -21,7 +21,6 @@ module ContextBuilders
     def build_output_rules
       lines = [ "## Output Rules" ]
       lines << ""
-      lines << "- Save ALL results and deliverables to `/workspace/outputs/`"
       lines << "- Files in `/workspace/assets/` are READ-ONLY — copy to outputs before editing"
       lines << "- Use all available MCP servers and tools"
       lines << "- Write clean, production-quality code following project conventions"

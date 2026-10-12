@@ -14,7 +14,6 @@ module ContextBuilders
       sections << earlier_files_section if earlier_files.any?
       sections << sub_steps_section if sub_steps.any?
       sections << previous_steps_section if completed_step_runs.any?
-      sections << workflow_tools_section if sub_steps.any?
       sections
     end
 
@@ -101,14 +100,6 @@ module ContextBuilders
       )
     end
 
-    def workflow_tools_section
-      section(
-        tag: "workflow-tools",
-        priority: :important,
-        content: build_workflow_tools
-      )
-    end
-
     def build_workflow_overview
       <<~MD.strip
         ## Workflow: #{workflow.name}
@@ -126,10 +117,18 @@ module ContextBuilders
       lines << ""
       lines << "### Instructions"
       lines << ""
-      if step.instructions.present?
+      if instructions_are_the_prompt?
+        lines << "This step's instructions are the prompt this session started with."
+      elsif step.instructions.present?
         lines << InstructionReferences::Renderer.new(step: step, project: workflow_run.project).render(step.instructions)
       end
       lines.join("\n")
+    end
+
+    # A non-interactive session is launched with these same rendered instructions as its
+    # prompt (AgentSessionStrategy#launch_agent_in_tmux); an interactive one gets none.
+    def instructions_are_the_prompt?
+      non_interactive? && session.initial_prompt.present? && step.instructions.present?
     end
 
     def earlier_files_section
@@ -228,20 +227,6 @@ module ContextBuilders
 
         lines << ""
       end
-
-      lines.join("\n")
-    end
-
-    def build_workflow_tools
-      lines = []
-      lines << "## Workflow Tools (MCP)"
-      lines << ""
-      lines << "You have special tools to track progress within this step:"
-      lines << ""
-      lines << "- **list_sub_steps** — List all sub-steps with their current statuses. Call this first to see what needs to be done."
-      lines << "- **mark_sub_step** — Update a sub-step status. Parameters: `id` (sub-step run ID), `status` (`in_progress`/`completed`/`skipped`), optional `note` and `data`."
-      lines << ""
-      lines << "Always mark sub-steps as you work through them so the workflow dashboard stays up to date."
 
       lines.join("\n")
     end

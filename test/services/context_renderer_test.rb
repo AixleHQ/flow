@@ -128,7 +128,7 @@ class ContextRendererTest < ActiveSupport::TestCase
     sections = [
       ContextSection.new(tag: "critical-rules", priority: :critical, content: "rules"),
       ContextSection.new(tag: "previous-steps", priority: :info, content: build_previous_steps_content(large)),
-      ContextSection.new(tag: "board-context", priority: :important, content: build_board_context_with_comments(6))
+      ContextSection.new(tag: "board-context", priority: :important, content: "## Board Task Context")
     ]
     output = ContextRenderer.render(sections)
 
@@ -151,19 +151,6 @@ class ContextRendererTest < ActiveSupport::TestCase
     assert_includes output, "small board content"
   end
 
-  test "board comments reduced to 3 during compression" do
-    big_filler = "f" * 25_000
-    board_content = build_board_context_with_comments(5)
-    sections = [
-      ContextSection.new(tag: "previous-steps", priority: :info, content: big_filler),
-      ContextSection.new(tag: "board-context", priority: :important, content: board_content)
-    ]
-    output = ContextRenderer.render(sections)
-
-    comment_matches = output.scan(/\*\*Author\d+\*\*/)
-    assert_operator comment_matches.length, :<=, 3
-  end
-
   private
 
   def build_previous_steps_content(filler)
@@ -175,21 +162,6 @@ class ContextRendererTest < ActiveSupport::TestCase
         → data: {"files": 42}
       - Step 2: Review (completed)
         → Short note
-    MD
-  end
-
-  def build_board_context_with_comments(count)
-    comments = (1..count).map { |i| "- **Author#{i}** (human): Comment body #{i}" }.join("\n")
-    <<~MD
-      ## Board Task Context
-
-      - **Board:** Test Board
-      - **Task:** Test Task (id: 1)
-
-      ### Recent Comments
-      #{comments}
-
-      Use board MCP tools to interact with the board.
     MD
   end
 end

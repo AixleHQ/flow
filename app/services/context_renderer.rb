@@ -7,7 +7,7 @@ class ContextRenderer
   PRIORITY_ORDER = { critical: 0, important: 1, info: 2 }.freeze
   POSITION_ORDER = { top: 0, middle: 1, bottom: 2, footer: 3 }.freeze
 
-  COMPRESSIBLE_TAGS = %w[previous-steps board-context custom-tools available-resources repositories].freeze
+  COMPRESSIBLE_TAGS = %w[previous-steps available-resources repositories].freeze
 
   def self.render(sections)
     return "" if sections.empty?
@@ -54,8 +54,6 @@ class ContextRenderer
   def self.compression_steps
     [
       method(:compress_previous_steps),
-      method(:compress_board_comments),
-      method(:compress_tool_descriptions),
       method(:compress_skills),
       method(:compress_repositories)
     ]
@@ -89,32 +87,6 @@ class ContextRenderer
     end
   end
 
-  def self.compress_board_comments(sections)
-    replace_section(sections, "board-context") do |content|
-      in_comments = false
-      comment_count = 0
-      lines = content.lines
-      lines.select do |line|
-        if line.include?("### Recent Comments")
-          in_comments = true
-          true
-        elsif in_comments && line.strip.start_with?("- **")
-          comment_count += 1
-          comment_count <= 3
-        else
-          true
-        end
-      end.join
-    end
-  end
-
-  def self.compress_tool_descriptions(sections)
-    replace_section(sections, "custom-tools") do |content|
-      lines = content.lines
-      lines.reject { |line| line.strip.start_with?("- Parameter", "  - ", "Parameters:") }.join
-    end
-  end
-
   def self.compress_skills(sections)
     replace_section(sections, "available-resources") do |content|
       lines = content.lines
@@ -140,6 +112,5 @@ class ContextRenderer
   end
 
   private_class_method :compress, :compression_steps, :replace_section,
-    :compress_previous_steps, :compress_board_comments,
-    :compress_tool_descriptions, :compress_skills, :compress_repositories
+    :compress_previous_steps, :compress_skills, :compress_repositories
 end

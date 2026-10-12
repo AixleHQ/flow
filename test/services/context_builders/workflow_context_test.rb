@@ -65,6 +65,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 
     content = sections.find { |s| s.tag == "workflow-context" }.content
     assert_includes content, "Product Planning"
+    assert_includes content, "End-to-end product planning workflow"
     assert_includes content, "non_interactive"
     assert_includes content, @workflow_run.id.to_s
     assert_includes content, "Step 2 of 3"
@@ -91,6 +92,25 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     content = sections.find { |s| s.tag == "current-step" }.content
     assert_includes content, "Implement"
     assert_includes content, "Write the code"
+  end
+
+  test "a non-interactive step is launched with its instructions, so current-step does not repeat them" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run,
+      mode: "non_interactive", initial_prompt: "Write the code")
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "current-step" }.content
+    assert_includes content, "## Step: Implement"
+    assert_includes content, "the prompt this session started with"
+    assert_not_includes content, "Write the code"
+  end
+
+  test "an interactive step gets no launch prompt, so current-step keeps its instructions" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run,
+      mode: "interactive", initial_prompt: "Write the code")
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "current-step" }.content
+    assert_includes content, "Write the code"
+    assert_not_includes content, "the prompt this session started with"
   end
 
   test "build returns exactly 2 sections for step without sub-steps" do
@@ -252,53 +272,15 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_nil sections.find { |s| s.tag == "previous-steps" }
   end
 
-  # -- Story 26.4: Workflow Tools Section --
-
-  test "workflow-tools section produced when step has sub-steps" do
+  test "no workflow-tools section: the sub-steps checklist already says how to mark them" do
     create(:sub_step, step: @step2, name: "Task A", position: 1)
     create(:sub_step_run, step_run: @step_run, sub_step: @step2.sub_steps.first)
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
-    builder = ContextBuilders::WorkflowContext.new(session)
-    sections = builder.build
-
-    tools_section = sections.find { |s| s.tag == "workflow-tools" }
-    assert_not_nil tools_section
-    assert_equal :important, tools_section.priority
-  end
-
-  test "workflow-tools content includes tool names" do
-    create(:sub_step, step: @step2, name: "Task A", position: 1)
-    create(:sub_step_run, step_run: @step_run, sub_step: @step2.sub_steps.first)
-
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
-    builder = ContextBuilders::WorkflowContext.new(session)
-    content = builder.build.find { |s| s.tag == "workflow-tools" }.content
-
-    assert_includes content, "list_sub_steps"
-    assert_includes content, "mark_sub_step"
-  end
-
-  test "workflow-tools content includes key parameters" do
-    create(:sub_step, step: @step2, name: "Task A", position: 1)
-    create(:sub_step_run, step_run: @step_run, sub_step: @step2.sub_steps.first)
-
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
-    builder = ContextBuilders::WorkflowContext.new(session)
-    content = builder.build.find { |s| s.tag == "workflow-tools" }.content
-
-    assert_includes content, "in_progress"
-    assert_includes content, "completed"
-    assert_includes content, "skipped"
-    assert_includes content, "note"
-  end
-
-  test "no workflow-tools section when no sub-steps" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
-    builder = ContextBuilders::WorkflowContext.new(session)
-    sections = builder.build
+    sections = ContextBuilders::WorkflowContext.new(session).build
 
     assert_nil sections.find { |s| s.tag == "workflow-tools" }
+    assert_includes sections.find { |s| s.tag == "sub-steps" }.content, "mark_sub_step"
   end
 
   # -- AC #5: BUILDERS registration --

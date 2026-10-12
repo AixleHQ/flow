@@ -13,6 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Sessions & Runs**: a workflow step's agent starts with a shorter context,
+  so every model call in the session costs fewer tokens. The context stops
+  repeating what the agent already gets elsewhere: the step's instructions in an
+  unattended run (they are already its starting prompt), the task's comments,
+  the tools' descriptions, the sub-step tool notes and the outputs-directory rule.
+  A task description up to 1,500 characters is shown whole instead of cut at
+  500; a longer one is left to `board_get_task`. Comments are read with
+  `board_get_comments`, which now takes a `limit` that returns only the newest.
+
 ### Fixed
 - **Company settings**: the final invoice after cancelling a subscription now
   bills usage up to the minute of cancelling, including the hour under way,

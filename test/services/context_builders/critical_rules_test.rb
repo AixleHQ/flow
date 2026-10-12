@@ -73,7 +73,8 @@ class ContextBuilders::CriticalRulesTest < ActiveSupport::TestCase
 
     assert_includes content, "NEVER ask questions"
     assert_includes content, "NEVER present options"
-    assert_includes content, "`/workspace/outputs/`"
     assert_includes content, "actionable artifacts"
+    # The workspace section is the one place that names the outputs directory.
+    assert_not_includes content, "/workspace/outputs/"
   end
 end
