@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
@@ -32,6 +32,7 @@ const billing = {
   canPay: true,
   hasSubscription: true,
   hasUnpaidInvoice: false,
+  finalInvoice: null as { state: 'settling' | 'settled' | 'failed'; url: string | null } | null,
   cancellationReasons: REASONS,
 };
 
@@ -145,6 +146,49 @@ describe('Company billing page', () => {
 
     expect(screen.getByText(/the subscription ended/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  describe('the final invoice after cancelling', () => {
+    const canceled = { status: 'canceled' as const, cancelsAt: '2026-10-12T14:20:00Z', usage: null };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('is shown as being prepared, and the page asks again until it is ready', () => {
+      vi.useFakeTimers();
+      const reload = vi.spyOn(router, 'reload').mockImplementation(() => undefined);
+      render({ ...canceled, finalInvoice: { state: 'settling', url: null } });
+
+      expect(screen.getByText(/Preparing the final invoice/)).toBeInTheDocument();
+      vi.advanceTimersByTime(5000);
+
+      expect(reload).toHaveBeenCalledWith({ only: ['billing'] });
+    });
+
+    it('links to the invoice once it is issued, and stops asking', () => {
+      vi.useFakeTimers();
+      const reload = vi.spyOn(router, 'reload').mockImplementation(() => undefined);
+      render({ ...canceled, finalInvoice: { state: 'settled', url: 'https://invoice.stripe.test/in_1' } });
+
+      expect(screen.getByRole('link', { name: 'View the final invoice' })).toHaveAttribute(
+        'href',
+        'https://invoice.stripe.test/in_1',
+      );
+      vi.advanceTimersByTime(15000);
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    // A new subscription waits until the declined final invoice is paid.
+    it('offers the unpaid invoice instead of a new card', async () => {
+      const post = vi.spyOn(router, 'post').mockImplementation(() => undefined);
+      render({ ...canceled, hasUnpaidInvoice: true, finalInvoice: { state: 'settled', url: null } });
+
+      expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Pay final invoice' }));
+
+      expect(post.mock.calls[0][0]).toBe('/company/billing_invoice_payment');
+    });
   });
 
   // Stripe confirms the card by webhook, which can land after the redirect back.

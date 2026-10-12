@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Paying the invoice whose failure stopped the workspace, on Stripe's hosted
-# invoice page. Paying it there is what brings the workspace back:
-# `invoice.paid` arrives as a webhook.
+# Paying the invoice whose failure stopped the workspace, or the declined final
+# invoice of a cancelled one, on Stripe's hosted invoice page. Paying it there
+# is what brings the workspace back, or lets it subscribe again: `invoice.paid`
+# arrives as a webhook.
 #
 # Through here rather than a plain link, so the card used to pay becomes the
 # one the subscription charges next (Billing::StripeClient#adopt_subscription).
@@ -13,9 +14,11 @@ class Web::Company::BillingInvoicePaymentsController < Web::Company::Application
 
   def create
     url = current_company.billing_unpaid_invoice_url
-    return refuse("There is no unpaid invoice to pay.") unless current_company.billing_status == "payment_failed" && url
+    return refuse("There is no unpaid invoice to pay.") unless url && current_company.billing_status.in?(%w[payment_failed canceled])
 
-    client.adopt_subscription(subscription_id: current_company.stripe_subscription_id)
+    # A cancelled subscription charges nothing again, so there is no card for it
+    # to adopt — and Stripe refuses most changes to one.
+    client.adopt_subscription(subscription_id: current_company.stripe_subscription_id) unless current_company.billing_status == "canceled"
     # An Inertia visit cannot follow a cross-origin redirect; see BillingCheckoutsController.
     inertia_location(url)
   rescue Billing::StripeClient::Error => e

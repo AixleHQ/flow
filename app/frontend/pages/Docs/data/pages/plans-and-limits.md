@@ -74,7 +74,9 @@ then a confirmation that says what will happen.
   available, so it does not run on to the end of the billing period.
 - No new session starts, as when the free capacity runs out. Sessions already
   running finish.
-- Usage up to the cancellation is billed on a **final invoice**.
+- Usage up to the minute of cancelling is billed on a **final invoice**, issued
+  and charged a few minutes later. Settings → Billing links to it once it is
+  ready.
 - Your projects, workflows and history are **kept**, and administrators can still
   sign in. Adding a card restores access.
 
@@ -86,6 +88,10 @@ The workspace stops at once, as above: no new session starts and running ones
 finish. The banner and **Settings → Billing** offer **Pay invoice**, which opens
 the unpaid invoice. Once it is paid, the workspace runs again, and the card you
 paid with is the one charged from then on.
+
+If the card is declined for the **final invoice** of a cancelled subscription,
+every administrator gets an email, and Settings → Billing offers **Pay final
+invoice**. A new card can be added once it is paid.
 
 ## Who can change what
 

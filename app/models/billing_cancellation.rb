@@ -13,12 +13,24 @@ class BillingCancellation < ApplicationRecord
 
   COMMENT_MAX = 1000
 
+  # nil on a cancellation made before the final invoice was settled here.
+  SETTLEMENT_STATES = %w[settling settled failed].freeze
+
   belongs_to :company
   belongs_to :user, optional: true
 
   validates :reason, inclusion: { in: REASONS }, allow_nil: true
   validates :comment, length: { maximum: COMMENT_MAX }
   validates :cancels_at, presence: true
+  validates :settlement_state, inclusion: { in: SETTLEMENT_STATES }, allow_nil: true
 
   scope :pending, -> { where(resumed_at: nil) }
+
+  def settling? = settlement_state == "settling"
+
+  # Hour => worker-seconds, as the meter keys an hour: the capacity this
+  # company was offered that Stripe had not been sent when it cancelled.
+  def final_usage_by_hour
+    final_usage.to_h { |hour, seconds| [ Time.iso8601(hour).utc, seconds.to_i ] }
+  end
 end

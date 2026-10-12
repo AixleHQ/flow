@@ -45,6 +45,26 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     assert_equal "Budget cut", cancellation.comment
   end
 
+  # Stopped, the company is offered nothing, so the hour under way has to be
+  # measured first or it is never billed.
+  test "what Stripe has not been sent is measured before the company stops, and settled after" do
+    CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 2, occurred_at: 1.day.ago)
+    hour = (Time.current + 1.hour).beginning_of_hour
+
+    travel_to hour + 20.minutes do
+      assert_enqueued_with(job: Billing::SettleCancellationJob) do
+        post company_billing_cancellation_path, params: { reason: "unused" }
+      end
+    end
+
+    assert_match(/final invoice/, flash[:notice])
+    cancellation = @company.billing_cancellations.sole
+    assert_equal "settling", cancellation.settlement_state
+    assert_equal "in_final_#{@company.stripe_subscription_id}", cancellation.final_invoice_id
+    assert_equal({ hour - 1.hour => 2 * 3600, hour => 2 * 20 * 60 }, cancellation.final_usage_by_hour)
+    assert_equal 2 * 20 * 60, CompanyCapacityUsage.find_by!(company: @company, period_start: hour).quantity_seconds
+  end
+
   test "every admin hears of it, and nobody else" do
     assert_enqueued_emails 2 do
       post company_billing_cancellation_path, params: { reason: "unused" }

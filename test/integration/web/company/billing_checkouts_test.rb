@@ -76,6 +76,18 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     assert_equal "cus_1", @client.checkout_sessions.sole[:session].customer
   end
 
+  test "a company whose final invoice is unpaid pays it before subscribing again" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "canceled",
+                     stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1",
+                     billing_unpaid_invoice_url: "https://invoice.stripe.test/i/in_1")
+    @client.add_subscription(id: "sub_1", status: "canceled")
+
+    post company_billing_checkout_path
+
+    assert_empty @client.checkout_sessions
+    assert_match(/Pay the final invoice/, flash[:alert])
+  end
+
   # An id Stripe no longer holds (deleted in the dashboard, cleared test data)
   # must not lock the company out of paying.
   test "a subscription id Stripe does not know does not stand in the way" do

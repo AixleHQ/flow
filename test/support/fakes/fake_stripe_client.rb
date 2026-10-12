@@ -15,8 +15,10 @@ class FakeStripeClient
   CheckoutSession = Struct.new(:id, :url, :customer, keyword_init: true)
   MeterEvent = Struct.new(:identifier, :customer_id, :minutes, :occurred_at, keyword_init: true)
 
-  attr_reader :customers, :checkout_sessions, :meter_events, :subscriptions, :subscription_updates
-  attr_accessor :configured, :failure, :checkout_url, :price
+  attr_reader :customers, :checkout_sessions, :meter_events, :subscriptions, :subscription_updates, :invoices
+  # `counting` false is Stripe still counting what it was sent: the meter
+  # answers zero. `card_declines` makes paying an invoice leave it open.
+  attr_accessor :configured, :failure, :checkout_url, :price, :counting, :card_declines
 
   def initialize(configured: true)
     @configured = configured
@@ -25,6 +27,9 @@ class FakeStripeClient
     @meter_events = []
     @subscriptions = {}
     @subscription_updates = []
+    @invoices = {}
+    @counting = true
+    @card_declines = false
     @checkout_url = "https://checkout.stripe.test/session"
     @price = { id: "price_fake", object: "price", currency: "usd", unit_amount: 500,
                transform_quantity: { divide_by: 60, round: "down" } }
@@ -79,9 +84,48 @@ class FakeStripeClient
     update_subscription(subscription_id, payment_settings: { save_default_payment_method: "on_subscription" })
   end
 
+  # As Stripe does with `invoice_now`: the final invoice starts as a draft.
   def cancel_subscription(subscription_id:, reason:, comment:)
-    update_subscription(subscription_id, status: "canceled", ended_at: Time.current.to_i,
-                                         cancellation_details: { feedback: reason, comment: comment })
+    invoice_id = "in_final_#{subscription_id}"
+    canceled = update_subscription(subscription_id, status: "canceled", ended_at: Time.current.to_i,
+                                                    cancellation_details: { feedback: reason, comment: comment },
+                                                    latest_invoice: invoice_id)
+    @invoices[invoice_id] = { id: invoice_id, object: "invoice", status: "draft", auto_advance: true,
+                              attempted: false, hosted_invoice_url: nil }
+    canceled
+  end
+
+  def hold_invoice(invoice_id:)
+    draft_only(invoice_id) { update_invoice(invoice_id, auto_advance: false) }
+  end
+
+  def release_invoice(invoice_id:)
+    draft_only(invoice_id) { update_invoice(invoice_id, auto_advance: true) }
+  end
+
+  def issue_invoice(invoice_id:)
+    raise_failure!
+    invoice!(invoice_id)
+    if @invoices[invoice_id][:status] == "draft"
+      update_invoice(invoice_id, status: "open", auto_advance: true,
+                                 hosted_invoice_url: "https://invoice.stripe.test/#{invoice_id}")
+    end
+    return invoice!(invoice_id) unless @invoices[invoice_id][:status] == "open" && !@invoices[invoice_id][:attempted]
+
+    update_invoice(invoice_id, attempted: true, status: card_declines ? "open" : "paid")
+  end
+
+  def metered_minutes(customer_id:, from:, to:)
+    raise_failure!
+    return BigDecimal(0) unless counting
+
+    @meter_events.select { |event| event.customer_id == customer_id && event.occurred_at >= from && event.occurred_at < to }
+                 .sum(BigDecimal(0)) { |event| BigDecimal(event.minutes.to_s) }
+  end
+
+  def add_invoice(id:, **attributes)
+    @invoices[id] = { id: id, object: "invoice", status: "draft", auto_advance: true, attempted: false,
+                      hosted_invoice_url: nil }.merge(attributes)
   end
 
   def resume_subscription(subscription_id:)
@@ -117,6 +161,24 @@ class FakeStripeClient
     @subscription_updates << { id: id, **changes }
     @subscriptions[id] = @subscriptions[id].merge(changes)
     subscription!(id)
+  end
+
+  def invoice!(id)
+    data = @invoices[id]
+    raise Billing::StripeClient::NotFound, "InvalidRequestError: No such invoice: '#{id}'" if data.nil?
+
+    ::Stripe::Invoice.construct_from(data)
+  end
+
+  def update_invoice(id, **changes)
+    @invoices[id] = @invoices[id].merge(changes)
+    invoice!(id)
+  end
+
+  def draft_only(id)
+    raise_failure!
+    invoice!(id)
+    @invoices[id][:status] == "draft" ? yield : invoice!(id)
   end
 
   def raise_failure!

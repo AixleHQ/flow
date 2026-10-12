@@ -8,6 +8,7 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
   METHODS = %i[
     configured? create_customer create_checkout_session send_meter_event construct_event
     retrieve_subscription adopt_subscription cancel_subscription resume_subscription retrieve_price
+    hold_invoice release_invoice issue_invoice metered_minutes
   ].freeze
 
   test "the fake answers every method the adapter does, with the same arguments" do
@@ -105,6 +106,84 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
     assert Billing::SubscriptionState.from(subscription).ended?
   end
 
+  # On an open invoice `auto_advance` is what keeps Stripe retrying the card.
+  test "only a draft invoice is held" do
+    stub_stripe_settings
+    stub_invoice("in_draft", status: "draft")
+    stub_invoice("in_open", status: "open")
+    held = stub_request(:post, "https://api.stripe.com/v1/invoices/in_draft").with(body: { auto_advance: "false" })
+                                                                             .to_return(invoice_body("in_draft", status: "draft"))
+
+    client = Billing::StripeClient.new
+    client.hold_invoice(invoice_id: "in_draft")
+    client.hold_invoice(invoice_id: "in_open")
+
+    assert_requested held, times: 1
+    assert_not_requested :post, "https://api.stripe.com/v1/invoices/in_open"
+  end
+
+  # Finalized, Stripe waits another hour before charging unless asked.
+  test "issuing a draft finalizes it and charges it now" do
+    stub_stripe_settings
+    stub_invoice("in_1", status: "draft")
+    finalized = stub_request(:post, "https://api.stripe.com/v1/invoices/in_1/finalize")
+                .to_return(invoice_body("in_1", status: "open", attempted: false))
+    paid = stub_request(:post, "https://api.stripe.com/v1/invoices/in_1/pay")
+           .to_return(invoice_body("in_1", status: "paid", attempted: true))
+
+    invoice = Billing::StripeClient.new.issue_invoice(invoice_id: "in_1")
+
+    assert_requested finalized
+    assert_requested paid
+    assert_equal "paid", invoice.status
+  end
+
+  # A decline is the customer's to fix on the hosted page, not a failure to retry.
+  test "a declined card leaves the issued invoice open, with its page to pay on" do
+    stub_stripe_settings
+    stub_request(:get, "https://api.stripe.com/v1/invoices/in_1")
+      .to_return(invoice_body("in_1", status: "open", attempted: false))
+      .then.to_return(invoice_body("in_1", status: "open", attempted: true))
+    stub_request(:post, "https://api.stripe.com/v1/invoices/in_1/pay")
+      .to_return(status: 402, headers: { "Content-Type" => "application/json" },
+                 body: { error: { type: "card_error", code: "card_declined", message: "Your card was declined." } }.to_json)
+
+    invoice = Billing::StripeClient.new.issue_invoice(invoice_id: "in_1")
+
+    assert_equal "open", invoice.status
+    assert_equal "https://invoice.stripe.test/in_1", invoice.hosted_invoice_url
+  end
+
+  test "an invoice already charged is not charged again" do
+    stub_stripe_settings
+    stub_invoice("in_1", status: "open", attempted: true)
+
+    Billing::StripeClient.new.issue_invoice(invoice_id: "in_1")
+
+    assert_not_requested :post, %r{/v1/invoices/in_1/}
+  end
+
+  # The meter is the one the price bills, so it is not a second setting.
+  test "metered minutes are what the price's meter has counted for the customer" do
+    stub_stripe_settings
+    stub_request(:get, "https://api.stripe.com/v1/prices/price_test")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { id: "price_test", object: "price", recurring: { meter: "mtr_1" } }.to_json)
+    from = Time.utc(2026, 10, 12, 14)
+    summaries = stub_request(:get, "https://api.stripe.com/v1/billing/meters/mtr_1/event_summaries")
+                .with(query: { customer: "cus_1", start_time: from.to_i.to_s, end_time: (from + 1.hour).to_i.to_s })
+                .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                           body: { object: "list", has_more: false, data: [
+                             { object: "billing.meter_event_summary", aggregated_value: 60.5 },
+                             { object: "billing.meter_event_summary", aggregated_value: 20 }
+                           ] }.to_json)
+
+    minutes = Billing::StripeClient.new.metered_minutes(customer_id: "cus_1", from: from, to: from + 1.hour)
+
+    assert_requested summaries
+    assert_equal BigDecimal("80.5"), minutes
+  end
+
   # Told apart from an outage: an id Stripe does not hold is an ended
   # subscription to a caller, while an unreachable Stripe is "try again".
   test "an id Stripe does not hold is NotFound, not a generic failure" do
@@ -120,6 +199,20 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
   end
 
   private
+
+  def stub_stripe_settings
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
+  end
+
+  def invoice_body(id, status:, attempted: false)
+    { status: 200, headers: { "Content-Type" => "application/json" },
+      body: { id: id, object: "invoice", status: status, attempted: attempted,
+              hosted_invoice_url: status == "draft" ? nil : "https://invoice.stripe.test/#{id}" }.to_json }
+  end
+
+  def stub_invoice(id, **attributes)
+    stub_request(:get, "https://api.stripe.com/v1/invoices/#{id}").to_return(invoice_body(id, **attributes))
+  end
 
   def stripe_signature(payload, secret:, timestamp: Time.current.to_i)
     digest = OpenSSL::HMAC.hexdigest("SHA256", secret, "#{timestamp}.#{payload}")

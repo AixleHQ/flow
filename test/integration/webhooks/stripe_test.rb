@@ -7,6 +7,8 @@ require "test_helper"
 # sign real bodies and let the real adapter verify them — the one path that must
 # not be faked.
 class Webhooks::StripeTest < ActionDispatch::IntegrationTest
+  include ActionMailer::TestHelper
+
   SECRET = "whsec_test_secret"
 
   setup do
@@ -237,16 +239,24 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
     assert_nil @company.billing_unpaid_invoice_url
   end
 
-  # The final invoice, for the last period's minutes, is Stripe's to chase.
-  # Neither its failure nor its payment brings back a subscription that has ended.
-  test "the final invoice of an ended subscription neither stops nor restores anything" do
+  # Nothing brings back a subscription that has ended; the declined final
+  # invoice is kept to pay, and Stripe's retries do not mail anyone again.
+  test "a declined final invoice is kept to pay, and paying it restores nothing" do
     @company.update!(billing_state: "blocked", billing_block_reason: "canceled", stripe_subscription_id: "sub_1")
+    create(:user, :onboarding_completed, company: @company, membership_role: "admin")
 
-    deliver("invoice.payment_failed", invoice_object)
-    assert_equal "canceled", @company.reload.billing_status
+    assert_enqueued_emails 1 do
+      deliver("invoice.payment_failed", invoice_object)
+      deliver("invoice.payment_failed", invoice_object)
+    end
+    @company.reload
+    assert_equal "canceled", @company.billing_status
+    assert_equal "https://invoice.stripe.test/i/in_1", @company.billing_unpaid_invoice_url
 
     deliver("invoice.paid", invoice_object(status: "paid"))
-    assert_equal "canceled", @company.reload.billing_status
+    @company.reload
+    assert_equal "canceled", @company.billing_status
+    assert_nil @company.billing_unpaid_invoice_url
   end
 
   # ── What it does not do ───────────────────────────────────────────────────

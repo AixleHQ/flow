@@ -32,4 +32,16 @@ class BillingMailerTest < ActionMailer::TestCase
 
     assert_includes email.text_part.decoded, "You cancelled"
   end
+
+  test "it tells an admin the final invoice was declined, and where to pay it" do
+    email = BillingMailer.final_invoice_unpaid(@company, @actor)
+
+    assert_equal [ @actor.email ], email.to
+    assert_match(/final .* invoice .* is unpaid/i, email.subject)
+    [ email.text_part.decoded, email.html_part.decoded ].each do |body|
+      assert_includes body, "declined"
+      assert_includes body, "Acme Robotics"
+      assert_includes body, "/company/settings/billing"
+    end
+  end
 end

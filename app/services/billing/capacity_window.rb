@@ -28,17 +28,20 @@ module Billing
       def quantity_minutes = (BigDecimal(quantity_seconds) / 60).round(4)
     end
 
-    def self.for_hour(period_start)
-      new(period_start).call
+    def self.for_hour(period_start, until_time: nil, company_ids: nil)
+      new(period_start, until_time: until_time, company_ids: company_ids).call
     end
 
-    def initialize(period_start)
+    # `until_time` cuts the hour short — a company cancelling at 14:20 is billed
+    # 14:00–14:20 and nothing after. `company_ids` narrows the measurement to
+    # them; everyone else is left out, not counted as zero.
+    def initialize(period_start, until_time: nil, company_ids: nil)
       @period_start = period_start.utc.beginning_of_hour
+      @period_end = [ @period_start + 1.hour, until_time&.utc ].compact.min
+      @company_ids = company_ids
     end
 
-    attr_reader :period_start
-
-    def period_end = period_start + 1.hour
+    attr_reader :period_start, :period_end
 
     def call
       limits = opening_limits
@@ -136,7 +139,11 @@ module Billing
 
     # Everyone whose capacity is measured, billable or not.
     def measured_company_ids
-      @measured_company_ids ||= Company.active.pluck(:id)
+      @measured_company_ids ||= begin
+        scope = Company.active
+        scope = scope.where(id: @company_ids) if @company_ids
+        scope.pluck(:id)
+      end
     end
   end
 end

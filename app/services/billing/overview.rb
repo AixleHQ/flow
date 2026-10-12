@@ -24,6 +24,7 @@ module Billing
         can_pay: client.configured?,
         has_subscription: company.stripe_subscription_id.present?,
         has_unpaid_invoice: company.billing_unpaid_invoice_url.present?,
+        final_invoice: final_invoice,
         cancellation_reasons: BillingCancellation::REASONS
       }
     end
@@ -80,6 +81,15 @@ module Billing
     rescue StripeClient::Error => e
       Rails.logger.warn("[Billing::Overview] price unavailable: #{e.message}")
       nil
+    end
+
+    # The invoice the last cancellation settles. `settling` while its usage is
+    # still on its way to Stripe; the page asks again until it is not.
+    def final_invoice
+      return nil unless company.billing_status == "canceled"
+
+      cancellation = company.billing_cancellations.where.not(settlement_state: nil).order(:created_at).last
+      cancellation && { state: cancellation.settlement_state, url: cancellation.final_invoice_url }
     end
 
     # The free allowance, for a company still on it or stopped for spending it.

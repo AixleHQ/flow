@@ -14,6 +14,11 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Company settings**: the final invoice after cancelling a subscription now
+  bills usage up to the minute of cancelling, including the hour under way,
+  and is issued and charged within a few minutes instead of an hour later. The
+  Billing tab shows it being prepared, then links to it. A declined final
+  invoice is emailed to every admin and must be paid before a new card is added.
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show
   only the last screen, frozen on the spinner.

@@ -19,10 +19,13 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
     # Under the row lock, so a double submit cancels once and mails once: the
     # second request finds the company already stopped and does nothing.
     cancellation = current_company.with_lock { cancel! if cancellable? }
-    notify_admins(cancellation) if cancellation
+    if cancellation
+      Billing::SettleCancellationJob.perform_later(cancellation.id)
+      notify_admins(cancellation)
+    end
 
     redirect_to company_settings_billing_path,
-                notice: "Your subscription is cancelled. Usage up to now is billed on a final invoice."
+                notice: "Your subscription is cancelled. The final invoice, for usage up to now, follows in a few minutes."
   rescue Billing::StripeClient::Error => e
     Rails.logger.error("[BillingCancellations] company #{current_company.id}: #{e.message}")
     refuse(UNREACHABLE)
@@ -51,20 +54,34 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
     current_company.billing_active? && current_company.stripe_subscription_id.present?
   end
 
+  # The usage Stripe has not been sent is measured first, while the company is
+  # still running: once it is stopped it is offered nothing, and the hourly
+  # meter would bill none of the hour under way.
+  #
   # `billing_event_at` too, so a `customer.subscription.updated` from before the
   # cancellation that arrives after it is dropped as stale instead of starting
   # the company again.
   def cancel!
-    subscription = Billing::SubscriptionState.from(
-      client.cancel_subscription(subscription_id: current_company.stripe_subscription_id,
-                                 reason: reason, comment: comment)
-    )
-    ended_at = subscription.ended_at || Time.current
+    final_usage = Billing::FinalUsage.new(current_company, until_time: Time.current)
+    billed = final_usage.billed
+    response = client.cancel_subscription(subscription_id: current_company.stripe_subscription_id,
+                                          reason: reason, comment: comment)
+    ended_at = Billing::SubscriptionState.from(response).ended_at || Time.current
 
+    final_usage.record!
     current_company.update!(billing_state: "blocked", billing_block_reason: "canceled",
                             billing_cancels_at: ended_at, billing_event_at: ended_at)
-    current_company.billing_cancellations.create!(user: current_user, reason: reason, comment: comment,
-                                                  cancels_at: ended_at)
+    current_company.billing_cancellations.create!(
+      user: current_user, reason: reason, comment: comment, cancels_at: ended_at,
+      settlement_state: "settling", final_usage: billed.transform_keys(&:iso8601),
+      final_invoice_id: final_invoice_id(response)
+    )
+  end
+
+  # The draft `invoice_now` made, unless the response came back expanded.
+  def final_invoice_id(subscription)
+    invoice = subscription.try(:latest_invoice)
+    invoice.respond_to?(:id) ? invoice.id : invoice.presence
   end
 
   # Every admin, the one who cancelled included: there is no billing contact,

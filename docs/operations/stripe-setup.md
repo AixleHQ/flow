@@ -160,8 +160,8 @@ prints its own.
 | `checkout.session.completed` | The company becomes `active`, and its subscription id is recorded |
 | `customer.subscription.created` / `.updated` | `active`/`trialing`: running, and the billing period and any scheduled cancellation date are recorded. `past_due`/`unpaid`: stopped for a failed payment. `incomplete`: nothing yet |
 | `customer.subscription.deleted` | Stopped as `canceled`, dated to when it ended |
-| `invoice.payment_failed` | Stopped for a failed payment; the invoice's hosted page is kept for the admin to pay |
-| `invoice.paid` | A company stopped for a failed payment runs again |
+| `invoice.payment_failed` | Stopped for a failed payment; the invoice's hosted page is kept for the admin to pay. For a `canceled` company, the declined final invoice is kept to pay and every admin is emailed once |
+| `invoice.paid` | A company stopped for a failed payment runs again. A `canceled` company's paid final invoice is cleared, and Checkout opens again |
 
 A stopped company is `blocked`, with `billing_block_reason` saying why
 (`allowance`, `canceled` or `payment_failed`). It goes to `blocked`, never back to
@@ -178,10 +178,11 @@ and came back has two subscriptions behind them, and Stripe does not deliver
 events in order. A `deleted` or failed-payment event for any other subscription is
 ignored. A running one is adopted, since a canceled subscription never runs again.
 
-**An ended subscription stays ended.** The final invoice, for the last period's
-minutes, can fail or be paid after the subscription is deleted. Neither changes a
-`canceled` company: Stripe chases that invoice, and access comes back through a
-new card.
+**An ended subscription stays ended.** The final invoice can fail or be paid after
+the subscription is deleted. Neither starts or stops a `canceled` company. A
+declined final invoice is kept on the company and shown on the Billing tab to pay,
+and Checkout refuses a new subscription until it is paid. Stripe's own retries keep
+charging the card in the meantime.
 
 ### Failed-payment settings
 
@@ -203,8 +204,35 @@ customer has already paid for. The application stops the company as `canceled`
 itself rather than waiting for `customer.subscription.deleted`. It also records
 the cancellation time as `billing_event_at`, so an older
 `customer.subscription.updated` that arrives late cannot start the company again.
-Stripe invoices the minutes already metered on a final invoice. An hour the meter
-had not sent yet when the subscription ended is not invoiced.
+
+### The final invoice
+
+The final invoice covers usage up to the minute of cancelling, including the hour
+under way and any hour the meter had not sent yet:
+
+1. Before stopping the company, the application measures what Stripe has not been
+   sent: the hour under way up to now, the hour just closed, and any hour the meter
+   failed to send. A stopped company is offered nothing, so after this point the
+   hourly meter would bill none of it. The figures are kept on the
+   `billing_cancellations` row (`final_usage`).
+2. `invoice_now` makes the final invoice as a **draft** that Stripe would finalize
+   on its own an hour later, reading the meter again as it does.
+   `Billing::SettleCancellationJob` holds it (`auto_advance=false`), sends the
+   measured hours under the meter's own identifiers, so a repeat from the hourly
+   run is refused rather than billed twice, and waits until Stripe's meter shows
+   them. That takes about a minute.
+3. It then finalizes the invoice and charges it at once. The Billing tab shows
+   "Preparing the final invoice" until then, and a link to the invoice after.
+
+If Stripe never shows the usage (10 minutes) or cannot be reached (about 4 hours of
+retries), the job reports the error and hands the invoice back to Stripe
+(`auto_advance=true`), which finalizes it with whatever the meter has counted.
+Look for `settlement_state = 'failed'` on `billing_cancellations`.
+
+Two Stripe settings this depends on, in both accounts: **Settings → Billing →
+Invoices → Invoice finalization grace period** must stay above zero (the default
+is 1 hour), and the subscription's price must not be swapped mid-period. Either
+one makes Stripe finalize without reading the meter again.
 
 A cancellation scheduled for the period's end before this change can still be
 taken back from the same tab (**Keep subscription**) until its date.
@@ -266,6 +294,7 @@ and the deploy will not let you.
 - [ ] The whole flow driven on test: signup → allowance spent → blocked → card
       added → running again
 - [ ] Cancel from the Billing tab → `customer.subscription.deleted` → `canceled`
+      → the final invoice issued within a few minutes, with the hour under way on it
       → card added → running again
 - [ ] A failing card (`4000 0000 0000 0341`) → `payment_failed` → invoice paid →
       running again

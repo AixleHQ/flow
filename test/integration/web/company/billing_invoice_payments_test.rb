@@ -33,6 +33,16 @@ class Web::Company::BillingInvoicePaymentsTest < ActionDispatch::IntegrationTest
                  @client.subscription_updates.sole[:payment_settings])
   end
 
+  # A cancelled subscription charges nothing again, so it takes no card.
+  test "a cancelled workspace is sent to its unpaid final invoice" do
+    @company.update!(billing_block_reason: "canceled")
+
+    post company_billing_invoice_payment_path, headers: { "X-Inertia" => "true" }
+
+    assert_equal INVOICE_URL, response.headers["X-Inertia-Location"]
+    assert_empty @client.subscription_updates
+  end
+
   test "a workspace that is not stopped for a payment has no invoice to pay" do
     @company.update!(billing_state: "active")
 
