@@ -23,6 +23,12 @@ governance, community health — carry none.
   JSON body to every step's agent in `/workspace/assets/webhook-payload.json`.
   It used to reach the agent only through a card the trigger created, so a
   trigger set to run without one gave the agent nothing to work on.
+- **Sign-in & onboarding**: an agent login that went wrong while connecting an
+  agent — a dead terminal, an auth code pasted into the shell — can be dropped
+  with **Start over**, which opens a fresh login in its place. The card used to
+  stay in *Connecting* on the dead terminal for up to 23 hours.
+- **Profile**: the **Authenticate** dialog has the same **Start over** for a
+  login that went wrong. Nothing the dropped login captured is saved.
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show
   only the last screen, frozen on the spinner.
