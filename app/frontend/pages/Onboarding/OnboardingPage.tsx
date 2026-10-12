@@ -32,6 +32,7 @@ import {
   IconCursorText,
   IconDots,
   IconPlug,
+  IconRefresh,
   IconSparkles,
   IconTestPipe,
 } from '@tabler/icons-react';
@@ -41,7 +42,11 @@ import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
-import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
+import {
+  apiV1TerminalSessionsPath,
+  finishApiV1TerminalSessionPath,
+  resetApiV1TerminalSessionPath,
+} from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
@@ -107,6 +112,14 @@ const STEP_MAP: Record<string, number> = {
 
 // ── Agent Auth Terminal ────────────────────────────
 
+function StartOverButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button size="xs" variant="subtle" color="gray" leftSection={<IconRefresh size={12} />} onClick={onClick}>
+      Start over
+    </Button>
+  );
+}
+
 function AgentAuthTerminal({
   agentType,
   session,
@@ -120,6 +133,9 @@ function AgentAuthTerminal({
 }) {
   const [authDetected, setAuthDetected] = useState(false);
   const [finishError, setFinishError] = useState(false);
+  // The session being thrown away. It stays in `auth_sessions` until the reload lands,
+  // and showing its dead terminal until then would read as the reset having failed.
+  const [resettingId, setResettingId] = useState<number | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishedRef = useRef(false);
   const creatingRef = useRef(false);
@@ -204,6 +220,23 @@ function AgentAuthTerminal({
     if (authDetected && session?.state === 'ready') handleFinish();
   }, [authDetected, session?.state, handleFinish]);
 
+  // No create call here: once the reload drops the old session, the create-on-mount
+  // effect starts a fresh one.
+  const startOver = useCallback(async () => {
+    if (!session) return;
+    setResettingId(session.id);
+    try {
+      await apiRequest(resetApiV1TerminalSessionPath(session.id), { method: 'POST' });
+      setAuthDetected(false);
+      setFinishError(false);
+      finishedRef.current = false;
+      router.reload({ only: ['auth_sessions'] });
+    } catch {
+      setResettingId(null);
+      notifications.show({ message: 'Failed to start over', color: 'red' });
+    }
+  }, [session]);
+
   if (isConfigured) {
     return (
       <Stack align="center" justify="center" h="100%" gap="sm">
@@ -217,11 +250,23 @@ function AgentAuthTerminal({
     );
   }
 
+  if (session && session.id === resettingId) {
+    return (
+      <Stack align="center" justify="center" h="100%" gap="sm">
+        <Loader size="sm" />
+        <Text size="sm" c="dimmed">
+          Starting over...
+        </Text>
+      </Stack>
+    );
+  }
+
   if (sessionState === 'queued') {
     return (
       <Stack align="center" justify="center" h="100%" gap="sm">
         <Loader size="sm" />
         <Text size="sm">Waiting for an available session slot</Text>
+        <StartOverButton onClick={startOver} />
       </Stack>
     );
   }
@@ -258,9 +303,12 @@ function AgentAuthTerminal({
               <Text size="xs" c="red">
                 Couldn&apos;t save credentials.
               </Text>
-              <Button color="green" size="xs" onClick={handleFinish}>
-                Retry
-              </Button>
+              <Group gap="xs">
+                <StartOverButton onClick={startOver} />
+                <Button color="green" size="xs" onClick={handleFinish}>
+                  Retry
+                </Button>
+              </Group>
             </>
           ) : authDetected ? (
             <Group gap="xs">
@@ -270,9 +318,12 @@ function AgentAuthTerminal({
               </Text>
             </Group>
           ) : (
-            <Text size="xs" c="dimmed">
-              Complete authentication in the terminal above
-            </Text>
+            <>
+              <Text size="xs" c="dimmed">
+                Complete authentication in the terminal above
+              </Text>
+              <StartOverButton onClick={startOver} />
+            </>
           )}
         </Group>
       </Box>
@@ -285,6 +336,7 @@ function AgentAuthTerminal({
       <Text size="sm" c="dimmed">
         Starting auth session...
       </Text>
+      {session && <StartOverButton onClick={startOver} />}
     </Stack>
   );
 }

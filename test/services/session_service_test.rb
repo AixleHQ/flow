@@ -536,6 +536,33 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert waiting.session_admission.reload.released_at
   end
 
+  # == reset_auth ==
+
+  test "reset_auth cancels a login in progress and its container workflow" do
+    mock_temporal_start
+    session = SessionService.create_and_start(user: @user, company: @company,
+                                              session_type: "auth_setup", agent_type: "claude_code")
+    session.start!
+    session.mark_ready!
+
+    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
+
+    SessionService.reset_auth(session: session)
+
+    assert_equal "cancelled", session.reload.state
+    assert session.session_admission.reload.stop_requested_at
+  end
+
+  test "reset_auth leaves a login that already ended as it is" do
+    session = create(:terminal_session, :auth_setup, user: @user, company: @company, state: "failed")
+
+    TemporalService.expects(:cancel_workflow).never
+
+    SessionService.reset_auth(session: session)
+
+    assert_equal "failed", session.reload.state
+  end
+
   # == fail_session ==
 
   test "fail_session records the error, fails the session and signals its container workflow" do

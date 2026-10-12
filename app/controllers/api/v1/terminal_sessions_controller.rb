@@ -81,6 +81,13 @@ module Api
         render json: { error: e.message }, status: :bad_request
       end
 
+      # @summary Throw away an authentication session so a fresh one can start
+      def reset
+        session = current_user.terminal_sessions.auth_sessions.find(params[:id])
+        SessionService.reset_auth(session: session)
+        render json: TerminalSessionResource.new(session.reload, params: { viewer: current_user }).to_h
+      end
+
       # Cap the bytes served (and buffered) per replay request. The raw PTY stream
       # can be large (TUI redraw spam); serve only the tail so neither the server
       # nor the browser buffers an unbounded blob.

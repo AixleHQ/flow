@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentCredential, CurrentUser } from '@/types/generated';
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { answerFetch } from 'test/fetchStub';
 import { makeFormStub, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -662,6 +663,33 @@ describe('Profile/Show', () => {
       ),
     );
     expect(fetchSpy).not.toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything());
+  });
+
+  it('starts a stuck login over: the session is reset and a fresh one started in its place', async () => {
+    installFakeWebSocket();
+    let created = 0;
+    const fetchSpy = profileFetch({
+      'POST /api/v1/terminal_sessions': () => {
+        created += 1;
+        return { data: { id: created, state: 'ready', websocketUrl: `wss://term.example/${created}` } };
+      },
+      'GET /api/v1/terminal_sessions/:id': { data: { id: 1, state: 'ready', websocketUrl: 'wss://term.example/1' } },
+      'POST /api/v1/terminal_sessions/:id/reset': { data: { id: 1, state: 'cancelled' } },
+    });
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const card = screen.getByText('OpenAI Codex').closest('.mantine-Card-root') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: 'Authenticate' }));
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://term.example/1'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start over' }));
+
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://term.example/2'));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/1/reset',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   // == AWS Bedrock connection ==

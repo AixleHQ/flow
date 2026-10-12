@@ -24,7 +24,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { type Subscription } from '@rails/actioncable';
-import { IconCheck, IconDoorExit, IconLock, IconTrash } from '@tabler/icons-react';
+import { IconCheck, IconDoorExit, IconLock, IconRefresh, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
@@ -48,6 +48,7 @@ import {
   companyMembershipPath,
   finishApiV1TerminalSessionPath,
   healthApiV1CloudAwsConnectionPath,
+  resetApiV1TerminalSessionPath,
 } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { type AgentType, type UserRole } from 'shared/ui';
@@ -533,6 +534,7 @@ function AgentAuthModal({
   const [cloudRequested, setCloudRequested] = useState(false);
   const [cloudConnected, setCloudConnected] = useState(false);
   const [finishError, setFinishError] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const cableSubRef = useRef<Subscription | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishingRef = useRef(false);
@@ -583,11 +585,14 @@ function AgentAuthModal({
 
   const startAuth = useCallback(async () => {
     cleanup();
+    setSessionId(null);
     setSessionState('starting');
     setTerminalSocketUrl(null);
     setWatcherUrl(null);
     setCableStream(null);
     setAuthDetected(false);
+    setCloudRequested(false);
+    setCloudConnected(false);
     setFinishError(false);
     finishingRef.current = false;
     try {
@@ -708,6 +713,32 @@ function AgentAuthModal({
     if (authDetected && sessionState === 'ready') handleFinish();
   }, [authDetected, sessionState, handleFinish]);
 
+  const startOver = useCallback(async () => {
+    if (!sessionId) return;
+    setResetting(true);
+    try {
+      await apiRequest(resetApiV1TerminalSessionPath(sessionId), { method: 'POST' });
+      startAuth();
+    } catch {
+      notifications.show({ message: 'Failed to start over', color: 'red' });
+    } finally {
+      setResetting(false);
+    }
+  }, [sessionId, startAuth]);
+
+  const startOverButton = (
+    <Button
+      size="xs"
+      variant="subtle"
+      color="gray"
+      leftSection={<IconRefresh size={12} />}
+      loading={resetting}
+      onClick={startOver}
+    >
+      Start over
+    </Button>
+  );
+
   const handleClose = useCallback(() => {
     cleanup();
     if (sessionId && !['finished', 'failed', 'cancelled'].includes(sessionState)) {
@@ -804,9 +835,12 @@ function AgentAuthModal({
                 <Text size="xs" c="var(--app-danger-fg)">
                   Couldn&apos;t save credentials.
                 </Text>
-                <Button color="green" size="xs" onClick={handleFinish}>
-                  Retry
-                </Button>
+                <Group gap="xs">
+                  {startOverButton}
+                  <Button color="green" size="xs" onClick={handleFinish}>
+                    Retry
+                  </Button>
+                </Group>
               </>
             ) : authDetected ? (
               <Group gap="xs">
@@ -816,11 +850,14 @@ function AgentAuthModal({
                 </Text>
               </Group>
             ) : (
-              <Text size="xs" c="dimmed">
-                {isDesign
-                  ? 'Approve the design login in your browser'
-                  : 'Complete authentication in the terminal above'}
-              </Text>
+              <>
+                <Text size="xs" c="dimmed">
+                  {isDesign
+                    ? 'Approve the design login in your browser'
+                    : 'Complete authentication in the terminal above'}
+                </Text>
+                {startOverButton}
+              </>
             )}
           </Group>
         </Box>
@@ -833,6 +870,7 @@ function AgentAuthModal({
         <Text size="sm" c="dimmed">
           Starting authentication session...
         </Text>
+        {sessionId !== null && startOverButton}
       </Stack>
     );
   };

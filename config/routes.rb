@@ -163,6 +163,7 @@ Rails.application.routes.draw do
       resources :terminal_sessions, only: %i[show create destroy] do
         member do
           post :finish
+          post :reset
           get :terminal_log
         end
       end

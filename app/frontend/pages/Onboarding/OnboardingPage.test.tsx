@@ -416,6 +416,41 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
   });
 
+  it('starts a stuck login over: the session is reset and the agent sessions reloaded', async () => {
+    installFakeWebSocket();
+    const fetchSpy = answerFetch({
+      'POST /api/v1/terminal_sessions/:id/reset': { data: buildTerminalSession({ id: 7, state: 'cancelled' }) },
+    });
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({
+          onboardingState: 'step2',
+          selectedAgents: ['claude_code'] as AgentType[],
+          configuredAgents: [],
+        }),
+        authSessions: [
+          buildTerminalSession({
+            id: 7,
+            agentType: 'claude_code',
+            state: 'ready',
+            websocketUrl: 'wss://term.example/ws',
+          }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
+    await userEvent.click(await screen.findByRole('button', { name: 'Start over' }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/7/reset',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(await screen.findByText('Starting over...')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Agent Authentication Terminal' })).not.toBeInTheDocument();
+    expect(router.reload).toHaveBeenCalledWith({ only: ['auth_sessions'] });
+  });
+
   it('renders role radio cards on profile step', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },

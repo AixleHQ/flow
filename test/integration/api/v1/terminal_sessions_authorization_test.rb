@@ -14,6 +14,7 @@ module Api
     #   create?  => !read_only?   (viewers denied)
     #   destroy? => !read_only?   (viewers denied)
     #   finish?  => !read_only?   (viewers denied)
+    #   reset?   => !read_only?   (viewers denied)
     #
     # Authorization runs in the `dynamic_authorize!` before_action with
     # context = BaseContext(current_user, params); the policy never loads the
@@ -151,6 +152,30 @@ module Api
           post finish_api_v1_terminal_session_path(@owner_session), headers: json_headers
           assert_response :not_found, "expected #{role} to be scoped out of another user's session"
         end
+      end
+
+      # ---- reset (POST member) : reset? == !read_only? ----
+
+      test "reset: viewer is forbidden (read-only)" do
+        sign_in_as(@viewer)
+        post reset_api_v1_terminal_session_path(@viewer_session), headers: json_headers
+        assert_response :forbidden
+      end
+
+      test "reset: owner clears authorization on own session" do
+        # A failed session is already over, so reset leaves it as it is and answers 200.
+        sign_in_as(@owner)
+        post reset_api_v1_terminal_session_path(@owner_failed), headers: json_headers
+        assert_response :success
+      end
+
+      test "reset: non-owners cannot reset another user's session (scoped to 404)" do
+        @non_owners.each do |role, actor|
+          sign_in_as(actor)
+          post reset_api_v1_terminal_session_path(@owner_session), headers: json_headers
+          assert_response :not_found, "expected #{role} to be scoped out of another user's session"
+        end
+        assert_equal "ready", @owner_session.reload.state
       end
 
       private

@@ -107,6 +107,17 @@ class SessionService
       session
     end
 
+    # The way out of a login that went wrong — a dead pane, a code pasted into the
+    # shell — short of waiting out the container's 23-hour signal timeout. The
+    # session is cancelled, so its container is torn down and nothing it captured is
+    # saved (AgentAuthStrategy#before_cleanup); a session that already ended, or is
+    # already being finished, is left as it is.
+    def reset_auth(session:)
+      return session unless session.active?
+
+      cancel(session: session)
+    end
+
     # Fail a session AND wake its container workflow, so the container's cleanup
     # phase actually runs. THE blessed way to fail a session from outside the
     # container workflow (watchdogs, scanners) — do not hand-roll
