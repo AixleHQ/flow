@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+# Every discriminator below runs in middleware, ahead of routing, on every
+# request: anything one raises answers 500 on every url in the app, so a
+# discriminator reads the request defensively and skips what it cannot key on.
 class Rack::Attack
   cache.store = ActiveSupport::Cache::RedisCacheStore.new(url: Settings.redis.url)
 
@@ -44,14 +47,10 @@ class Rack::Attack
     {}
   end
 
-  # A discriminator runs in middleware, ahead of routing, so anything it raises
-  # answers 500 on EVERY url, a scanner's sweep of paths that do not exist
-  # included. The caller controls the shape as well as the value: "?user=x"
-  # makes params["user"] a String and "?user[]=x" makes it an Array, and
-  # traversing either as if it were a Hash raises TypeError. Only a String leaf
-  # can be an address, so every other shape reads as absent and the
-  # discriminator is skipped — which also keeps "?email[]=a@b.test" from
-  # earning a throttle bucket separate from "?email=a@b.test".
+  # The caller controls the shape as well as the value ("?user=x" is a String,
+  # "?user[]=x" an Array). Only a String leaf can be an address; any other shape
+  # reads as absent, which also keeps "?email[]=a@b.test" from earning a bucket
+  # separate from "?email=a@b.test".
   def self.string_param(params, *path)
     value = params
     path.each do |key|
@@ -62,11 +61,10 @@ class Rack::Attack
     value if value.is_a?(String)
   end
 
-  # Rack refuses to decode some query strings at all ("?user=x&user[a]=1",
-  # invalid %-encoding, params nested past its limit) and marks that whole
-  # 400-class family with Rack::BadRequest. Undecodable input carries no
-  # address, and Rails answers 400 for the same family one layer down — this
-  # layer must not be louder than the one it sits in front of.
+  # Rack::BadRequest marks the query strings Rack refuses to decode
+  # ("?user=x&user[a]=1", invalid %-encoding, nesting past its limit). Rails
+  # answers 400 for that family downstream, and undecodable input carries no
+  # address.
   def self.safe_params(req)
     req.params
   rescue Rack::BadRequest
@@ -148,8 +146,8 @@ class Rack::Attack
     string_param(params_with_json(req), "email").to_s.downcase.presence if req.post? && req.path == "/login/magic"
   end
 
-  # The cheap predicate first: otherwise the middleware parses the params — and
-  # on a POST the body — of every request in the app to build a key it discards.
+  # The path check first, so only sign-in requests have their params and body
+  # parsed.
   throttle("login/combo", limit: 10, period: 3600) do |req|
     next unless login_request?(req)
 

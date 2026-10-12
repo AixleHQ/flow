@@ -50,8 +50,6 @@ class RackAttackTest < ActionDispatch::IntegrationTest
   end
 
   test "a query string shaped to break the sign-in throttles is answered, not a server error" do
-    # The throttles read params in middleware, ahead of routing, so whatever a
-    # discriminator raises becomes the answer to every url in the app.
     get "/mobileredir/openApp.jsp?user=x"
     assert_response :not_found
 
