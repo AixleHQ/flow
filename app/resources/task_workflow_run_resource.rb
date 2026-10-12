@@ -16,32 +16,27 @@ class TaskWorkflowRunResource < ApplicationResource
   end
 
   typelize "number | null"
-  attribute :duration_seconds do |run|
-    next nil unless run.started_at && run.completed_at
-    duration = (run.completed_at - run.started_at).round
-    duration >= 0 ? duration : nil
-  end
+  attribute :duration_seconds, &:execution_seconds
 
   typelize "{ name: string; state: string; startedAt: string | null; finishedAt: string | null; " \
            "durationSeconds: number | null; terminalSessionId: number | null }[]"
   attribute :steps do |run|
-    # A caller that preloaded `step_runs: :step` gets no further queries; `.includes`
+    # A caller that preloaded `step_runs: [:step, :terminal_session]` gets no further queries; `.includes`
     # here would discard that preload and re-query per run (an N+1 on the board, which
     # renders this for every run of the selected task).
     ordered = if run.association(:step_runs).loaded?
       run.step_runs.sort_by(&:created_at)
     else
-      run.step_runs.includes(:step).order(:created_at).to_a
+      run.step_runs.includes(:step, :terminal_session).order(:created_at).to_a
     end
 
     ordered.map do |sr|
-      dur = sr.started_at && sr.completed_at ? (sr.completed_at - sr.started_at).round : nil
       {
         name: sr.step&.name || "Step",
         state: sr.state.to_s,
         startedAt: sr.started_at&.iso8601,
         finishedAt: sr.completed_at&.iso8601,
-        durationSeconds: dur && dur >= 0 ? dur : nil,
+        durationSeconds: sr.execution_seconds,
         # Lets the board task drawer link straight into the step's terminal session
         # instead of routing the user through the workflow run page.
         terminalSessionId: sr.terminal_session_id

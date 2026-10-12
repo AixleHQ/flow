@@ -47,7 +47,8 @@ class Chat::StatusCardTest < ActiveSupport::TestCase
     assert_requested posted
     assert_equal({ "message_id" => "1700000000555", "state" => "accepted" }, dispatch.reload.detail["chat_status"])
 
-    run.update_columns(state: "running", started_at: Time.utc(2026, 10, 6, 12, 4))
+    run.update_columns(state: "running", started_at: Time.utc(2026, 10, 6, 12, 0),
+                       execution_started_at: Time.utc(2026, 10, 6, 12, 4))
     edited = stub_request(:put, "#{@thread}/1700000000555").with { |request|
       body = JSON.parse(request.body)
       body["id"] == "1700000000555" && card_text(request) == "▶️ Running — Weekly Digest · run ##{run.id}" &&
@@ -111,7 +112,8 @@ class Chat::StatusCardTest < ActiveSupport::TestCase
     assert_equal [ "C1", "1.1", "Accepted: Weekly Digest" ], posted.values_at(:channel, :thread_ts, :text)
     assert_match(/Accepted\* — Weekly Digest · run ##{run.id}/, posted[:blocks].first.dig(:text, :text))
 
-    run.update_columns(state: "completed", started_at: 5.minutes.ago, completed_at: Time.current)
+    run.update_columns(state: "completed", started_at: 15.minutes.ago, execution_started_at: 5.minutes.ago,
+                       completed_at: Time.current)
     Chat::RunStatusReporter.report(dispatch, "completed")
     updated = fake_slack.last_updated_message
     assert_equal posted[:ts], updated[:ts]

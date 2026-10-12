@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1766,6 +1766,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120000) do
     t.bigint "board_task_id"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.datetime "execution_started_at"
     t.bigint "failed_agent_credential_id"
     t.string "failure_reason"
     t.jsonb "input_asset_ids", default: []

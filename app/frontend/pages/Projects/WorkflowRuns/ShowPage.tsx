@@ -75,7 +75,7 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
     agentType: stepRun.agentType ?? null,
     totalTokens: stepRun.totalTokens,
     costCents: stepRun.costCents,
-    startedAt: stepRun.startedAt,
+    startedAt: stepRun.executionStartedAt,
     completedAt: stepRun.completedAt,
     excerpt: stepRun.stepNote ?? stepRun.initialPrompt ?? null,
     prompt: stepRun.initialPrompt ?? null,
@@ -209,7 +209,7 @@ const WorkflowRunShowPage = () => {
   // failed run to learn.
   const stats = [
     { label: 'Sessions', value: `${run.stepsCompleted}/${run.stepsTotal}` },
-    { label: 'Duration', value: formatDuration(run.startedAt, run.completedAt, run.state, now) },
+    { label: 'Duration', value: formatDuration(run.executionStartedAt, run.completedAt, run.state, now) },
     { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
     ...(run.workflowVersionNumbers.length > 0
       ? [{ label: 'Workflow version', value: run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ') }]

@@ -33,7 +33,16 @@ export function costColor(cents: number | null | undefined): string | undefined 
   return 'var(--app-warning-fg)';
 }
 
-const LIVE_STATES = new Set(['running', 'ready', 'in_progress', 'waiting_input', 'paused', 'pending', 'not_started']);
+const LIVE_STATES = new Set([
+  'running',
+  'ready',
+  'in_progress',
+  'waiting_input',
+  'paused',
+  'pending',
+  'not_started',
+  'queued',
+]);
 
 /**
  * Elapsed time between two timestamps. An unfinished record only ticks against

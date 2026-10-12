@@ -87,6 +87,47 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('times the run from its first step leaving the queue', () => {
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({
+          state: 'completed',
+          startedAt: '2026-06-23T10:00:00Z',
+          executionStartedAt: '2026-06-23T10:10:00Z',
+          completedAt: '2026-06-23T10:15:00Z',
+        }),
+      }),
+    });
+
+    expect(screen.getByText('5m 0s')).toBeInTheDocument();
+  });
+
+  it("times each session card from its session's start, not from when the step began waiting", () => {
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({
+          state: 'completed',
+          executionStartedAt: '2026-06-23T10:10:00Z',
+          completedAt: '2026-06-23T10:40:00Z',
+          stepRuns: [
+            buildStepRun({
+              id: 101,
+              stepName: 'Compile Specs',
+              state: 'completed',
+              startedAt: '2026-06-23T10:00:00Z',
+              executionStartedAt: '2026-06-23T10:10:00Z',
+              completedAt: '2026-06-23T10:17:00Z',
+            }),
+          ],
+        }),
+      }),
+    });
+
+    expect(screen.getByText('30m 0s')).toBeInTheDocument();
+    expect(screen.getByText('7m 0s')).toBeInTheDocument();
+    expect(screen.queryByText('17m 0s')).not.toBeInTheDocument();
+  });
+
   it('says which chat a chat-started run came from, linking back to the message', () => {
     const chatOrigin = {
       provider: 'Microsoft Teams',

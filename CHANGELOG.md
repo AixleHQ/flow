@@ -39,6 +39,18 @@ governance, community health — carry none.
   stay in *Connecting* on the dead terminal for up to 23 hours.
 - **Profile**: the **Authenticate** dialog has the same **Start over** for a
   login that went wrong. Nothing the dropped login captured is saved.
+- **Sessions & Runs**: a workflow run's Duration counts from the moment its
+  first session leaves the queue, so time spent waiting for a free slot no
+  longer makes a run look slower than it was. A run still waiting for its
+  first session shows "—", and sorting by Duration follows the same value.
+  Each session card on a run's page is timed from its session's start the same way.
+- **Tasks**: run and step durations on a task's card, its runs and its
+  statistics leave out time spent in the queue, matching Sessions & Runs. A
+  task's total run time no longer counts each run once per step.
+- **Analytics**: a workflow's total and average run time leave out queue time
+  and count each run once; a run with several steps used to be counted once per step.
+- **Triggers & gates**: a run's status card in Slack or Teams shows when the
+  run started executing, and how long it took, without the time it waited in the queue.
 - **Sessions & Runs**: a Claude Code session's terminal log scrolls back through
   the whole conversation again, live and after the session ends. It used to show
   only the last screen, frozen on the spinner.

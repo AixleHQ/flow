@@ -35,10 +35,28 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     step = create(:step, workflow: @workflow, name: "Implementation")
     create(:step_run, workflow_run: @run, step: step)
 
-    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, step_runs: :step).first
+    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, step_runs: %i[step terminal_session]).first
 
     assert_no_queries do
       assert_equal [ "Implementation" ], TaskWorkflowRunResource.new(preloaded).to_h["steps"].map { |s| s["name"] }
+    end
+  end
+
+  test "a run and its steps are timed from leaving the queue, not from being dispatched" do
+    freeze_time do
+      @run.update_columns(state: "completed", started_at: 30.minutes.ago, execution_started_at: 20.minutes.ago,
+                          completed_at: Time.current)
+      session = create(:terminal_session, project: @project, user: @user, state: "finished",
+                                          started_at: 20.minutes.ago, finished_at: 5.minutes.ago)
+      create(:step_run, :completed, workflow_run: @run, step: create(:step, workflow: @workflow),
+                                    started_at: 30.minutes.ago, completed_at: 5.minutes.ago, terminal_session: session)
+      create(:step_run, :failed, workflow_run: @run, step: create(:step, workflow: @workflow),
+                                 started_at: 5.minutes.ago, completed_at: Time.current)
+
+      resource = TaskWorkflowRunResource.new(@run.reload).to_h
+
+      assert_equal 20.minutes.to_i, resource["durationSeconds"]
+      assert_equal [ 15.minutes.to_i, nil ], resource["steps"].map { |s| s["durationSeconds"] }
     end
   end
 

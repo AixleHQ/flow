@@ -40,7 +40,7 @@ module Chat
       base = { workflow: workflow, run_id: run.id, url: Chat::RunFailure.url(run), started_by: started_by }
       case run.state.to_s
       when "pending" then Status.new(state: "accepted", **base)
-      when "running", "paused" then Status.new(state: "running", since: run.started_at, **base)
+      when "running", "paused" then Status.new(state: "running", since: run.execution_started_at, **base)
       when "completed" then Status.new(state: "completed", duration: duration(run), **base)
       when "failed" then Status.new(state: "failed", detail: Chat::RunFailure.summary(run), **base)
       else Status.new(state: "cancelled", **base)
@@ -53,9 +53,9 @@ module Chat
     end
 
     def duration(run)
-      return nil unless run.started_at && run.completed_at
+      seconds = run.execution_seconds
+      return nil unless seconds
 
-      seconds = (run.completed_at - run.started_at).to_i
       seconds < 60 ? "#{seconds} s" : ActiveSupport::Duration.build((seconds / 60) * 60).inspect
     end
   end

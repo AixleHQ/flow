@@ -52,15 +52,13 @@ class TaskStatisticsService
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS total_cost_cents",
         "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
         "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens",
-        "COALESCE(SUM(EXTRACT(EPOCH FROM (workflow_runs.completed_at - workflow_runs.started_at))::bigint) " \
-        "FILTER (WHERE workflow_runs.completed_at IS NOT NULL AND workflow_runs.started_at IS NOT NULL), 0) AS total_duration_seconds"
+        "SUM(usage_statistics.tokens), 0) AS total_tokens"
       ).take
 
     {
       total_cost_cents: row.total_cost_cents.to_i,
       total_tokens: row.total_tokens.to_i,
-      total_duration_seconds: row.total_duration_seconds.to_i
+      total_duration_seconds: task_runs.timed.sum(Arel.sql(WorkflowRun::EXECUTION_SECONDS_SQL)).to_i
     }
   end
 
@@ -77,11 +75,11 @@ class TaskStatisticsService
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS cost_cents",
         "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
         "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens",
-        "COALESCE(SUM(EXTRACT(EPOCH FROM (workflow_runs.completed_at - workflow_runs.started_at))::bigint) " \
-        "FILTER (WHERE workflow_runs.completed_at IS NOT NULL AND workflow_runs.started_at IS NOT NULL), 0) AS duration_seconds"
+        "SUM(usage_statistics.tokens), 0) AS total_tokens"
       )
       .order("cost_cents DESC")
+
+    durations = task_runs.timed.group(:workflow_id).sum(Arel.sql(WorkflowRun::EXECUTION_SECONDS_SQL))
 
     rows.map do |row|
       WorkflowBreakdown.new(
@@ -89,9 +87,15 @@ class TaskStatisticsService
         workflow_name: row.workflow_name,
         cost_cents: row.cost_cents.to_i,
         total_tokens: row.total_tokens.to_i,
-        duration_seconds: row.duration_seconds.to_i
+        duration_seconds: durations[row.workflow_id].to_i
       )
     end
+  end
+
+  # Durations come from the runs alone: summed over the step-run join above, a
+  # run would count once per step.
+  def task_runs
+    WorkflowRun.where(board_task_id: @task.id)
   end
 
   def build_gate_stats

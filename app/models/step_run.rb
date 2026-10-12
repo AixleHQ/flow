@@ -37,6 +37,17 @@ class StepRun < ApplicationRecord
       "error" => error_message.truncate(HISTORY_ERROR_LIMIT), "at" => (completed_at || updated_at)&.iso8601 }.compact
   end
 
+  # From the step's session leaving the admission queue to the step's end. The
+  # step is marked running before its session is even created, so its own
+  # started_at includes the wait for a slot.
+  def execution_seconds
+    started = terminal_session&.started_at
+    return unless started && completed_at
+
+    seconds = (completed_at - started).round
+    seconds unless seconds.negative?
+  end
+
   def mark_running!
     update!(state: :running, started_at: Time.current, error_message: nil)
   end

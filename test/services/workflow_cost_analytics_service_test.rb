@@ -90,6 +90,29 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
 
   # ─── Aggregate totals ────────────────────────────────────────────────────────
 
+  test "run time counts each run once, from its first step leaving the queue" do
+    freeze_time do
+      two_steps = create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 1, input_tokens: 1,
+                                                output_tokens: 1)
+      create(:step_run, workflow_run: two_steps, step: create(:step, workflow: @workflow))
+      two_steps.update_columns(state: "completed", started_at: 1.hour.ago, execution_started_at: 10.minutes.ago,
+                               completed_at: Time.current)
+      single = create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 1, input_tokens: 1,
+                                             output_tokens: 1)
+      single.update_columns(state: "completed", started_at: 40.minutes.ago, execution_started_at: 30.minutes.ago,
+                            completed_at: Time.current)
+      never_left_queue = create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 1, input_tokens: 1,
+                                                       output_tokens: 1)
+      never_left_queue.update_columns(state: "cancelled", started_at: 1.hour.ago, completed_at: Time.current)
+
+      row = call_service(scope: "project").workflows.sole
+
+      assert_equal 3, row.run_count
+      assert_equal 40.minutes.to_i, row.total_duration_seconds
+      assert_equal 20.minutes.to_i, row.avg_duration_seconds
+    end
+  end
+
   test "aggregate_totals sums cost and tokens across all workflow rows" do
     workflow2 = create(:workflow, :with_project_scope, scope: @project)
     run2 = create(:workflow_run, workflow: workflow2, project: @project, user: @admin)

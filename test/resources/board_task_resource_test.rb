@@ -41,9 +41,10 @@ class BoardTaskResourceTest < ActiveSupport::TestCase
     assert_equal [ "running" ], states
   end
 
-  test "a finished run tells the card how long it took, and a failed one why" do
+  test "a finished run tells the card how long it ran, leaving out its wait in the queue, and a failed one why" do
     done = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user, board_task: @task,
-                                             started_at: 90.seconds.ago, completed_at: Time.current, created_at: 2.minutes.ago)
+                                             started_at: 10.minutes.ago, execution_started_at: 90.seconds.ago,
+                                             completed_at: Time.current, created_at: 11.minutes.ago)
     failed = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user, board_task: @task,
                                             failure_reason: "unsatisfiable_dependencies")
 
