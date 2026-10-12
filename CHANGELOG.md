@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-13
+
 ### Changed
 - **Sessions & Runs**: a workflow step's agent starts with a shorter context,
   so every model call in the session costs fewer tokens. The context stops
@@ -454,7 +456,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.1...develop
+[1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/AixleHQ/flow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/AixleHQ/flow/releases/tag/v1.0.0
