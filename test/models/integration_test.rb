@@ -235,11 +235,53 @@ class IntegrationTest < ActiveSupport::TestCase
   # ====== Enumerize ======
 
   test "provider enumerize values" do
-    assert_equal %w[github gitlab linear coder slack teams azure_devops jira youtrack], Integration.provider.values.map(&:to_s)
+    assert_equal %w[github gitlab linear coder slack teams azure_devops jira youtrack aixle_insights],
+                 Integration.provider.values.map(&:to_s)
   end
 
   test "connectable providers are provider values" do
     assert_empty Integration::CONNECTABLE_PROVIDERS - Integration.provider.values
+  end
+
+  test "aixle_insights is an enumerized provider and connectable" do
+    assert_includes Integration.provider.values.map(&:to_s), "aixle_insights"
+    assert_includes Integration::CONNECTABLE_PROVIDERS, "aixle_insights"
+    integration = build(:integration, :aixle_insights, company: @company, connected_by: @user)
+    assert { integration.aixle_insights? }
+  end
+
+  test "insights_ingest_token round-trips through credentials_data" do
+    integration = build(:integration, :aixle_insights, :active, company: @company, connected_by: @user)
+    integration.credentials_data = { "ingest_token" => "aixle_otel_round_trip" }
+    integration.save!
+    integration.reload
+
+    assert_equal "aixle_otel_round_trip", integration.credentials_data["ingest_token"]
+    assert_equal "aixle_otel_round_trip", integration.insights_ingest_token
+  end
+
+  test "aixle_insights encrypts the ingest token at rest" do
+    integration = build(:integration, :aixle_insights, :active, company: @company, connected_by: @user)
+    integration.credentials_data = { "ingest_token" => "aixle_otel_SECRET_TOKEN" }
+    integration.save!
+
+    raw = integration.read_attribute(:credentials)
+    assert { raw.present? }
+    assert { !raw.include?("aixle_otel_SECRET_TOKEN") }
+  end
+
+  test "aixle_insights_for returns the active company-wide row" do
+    row = create(:integration, :aixle_insights, :active, company: @company, connected_by: @user, project_id: nil)
+
+    assert_equal row, Integration.aixle_insights_for(@company)
+  end
+
+  test "aixle_insights_for is nil when there is no active connection" do
+    assert_nil Integration.aixle_insights_for(@company)
+
+    # An inactive row does not count as a connection.
+    create(:integration, :aixle_insights, company: @company, connected_by: @user, project_id: nil, status: :inactive)
+    assert_nil Integration.aixle_insights_for(@company)
   end
 
   test "status enumerize values" do

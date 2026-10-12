@@ -168,29 +168,144 @@ may never connect Insights) and `base_url` has per-env defaults, so no boot-time
 
 ---
 
-### Task 1b — Per-company Insights connection (Integration provider) — OUTLINE
+### Task 1b — Per-company Insights connection (Integration provider)
 
 **Objective:** let a company admin link the company to its Insights org by entering the
-org ingest token, stored on an `Integration` row (`provider: aixle_insights`,
-company-wide), encrypted. Removable like the company-wide Slack install.
+org ingest token. Stored on a company-wide `Integration` row (`provider: aixle_insights`,
+`project_id: nil`), encrypted in `credentials`. Shown in the integrations list like the
+company-wide Slack install; removable only by a company admin. Decisions: [1b-1]=a
+accept-on-save (no probe), [1b-2]=a token only (base_url stays in Settings), [1b-3]=a
+minimal lifecycle, [1b-4]=a reconnect replaces the token on the one company-wide row,
+[1b-5]=a backend + a minimal React connect card.
 
-**Sketch**
-- `Integration`: add `aixle_insights` to the `provider` enum and to
-  `CONNECTABLE_PROVIDERS`; add `insights_ingest_token` reader over
-  `credentials_data["ingest_token"]` (never serialized to the browser); predicate
-  `aixle_insights?`. The row is company-wide (`project_id: nil`).
-- Connect/remove in `Web::Company::Projects::IntegrationsController` (`create` dispatch +
-  the existing company-admin gate on company-wide `destroy`); surface a card on
-  `Projects/Integrations/IntegrationsPage`. Verify the token on connect with a minimal
-  probe (a tiny OTLP batch, or accept-on-save with a note that validity is confirmed on
-  first real sweep — the collector returns 200 even for a bad token, so a probe can only
-  confirm reachability).
-- `IntegrationResource` must not expose the token.
-- Helper: `Integration.aixle_insights_for(company)` → the company's active connection or
-  nil (the exporter uses this per company).
-- Tests: provider enumerized; token encrypted and absent from the resource/props; connect
-  persists company-wide; only a company admin can remove; `aixle_insights_for` returns the
-  active row.
+**Why accept-on-save (no verification):** the collector returns `200` even for a bad
+token (`Api::V1::OtelController#logs`), so a connect-time probe can confirm reachability
+but never validity. A probe would give false assurance; instead the token is saved and
+real validity is observed when events start arriving (Task 8 on staging). The connect UI
+says as much.
+
+**Files**
+- `app/models/integration.rb` — provider + accessors + helper.
+- `app/controllers/web/company/projects/integrations_controller.rb` — connect dispatch.
+- `app/services/aixle_insights/integration_service.rb` — new, builds/persists the row
+  (mirrors the shape of `Coder::IntegrationService` but trivial).
+- `app/resources/integration_resource.rb` — a non-secret `insights_connected` flag only.
+- `app/frontend/shared/resources/integrations/IntegrationsContent.tsx` — connect menu
+  item (company-admin only) + a small token modal; `router.post(basePath, {provider:
+  'aixle_insights', ingest_token})`. (GitLab's single-field modal is the closest shape.)
+- `test/factories/integrations.rb` — `:aixle_insights` trait.
+- `test/models/integration_test.rb`, controller test, resource test, frontend test.
+
+**Model (`Integration`)**
+```ruby
+# add to the provider enum and CONNECTABLE_PROVIDERS
+enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack aixle_insights], ...
+CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack aixle_insights].freeze
+
+# accessor — read-only, never written into settings (settings is serialized whole)
+def insights_ingest_token
+  credentials_data["ingest_token"]
+end
+
+# the company's active Insights connection, or nil. company-wide (project_id: nil),
+# one per company (reconnect replaces the token on this row — decision [1b-4]).
+def self.aixle_insights_for(company)
+  active.company_wide.find_by(company_id: company.id, provider: :aixle_insights)
+end
+```
+Notes:
+- The row is company-wide, so `project_belongs_to_same_company` (only runs when
+  `project_id` is present) does not fire — no extra validation needed. No webhook/OAuth
+  callbacks, no `test_connection` wiring (decision [1b-3]).
+- Reconnect: the service does `find_or_initialize_by(company:, provider: :aixle_insights,
+  project_id: nil)` and overwrites `credentials_data`, so re-pasting a token replaces it
+  on the single row rather than stacking a second connection (mirrors GitHub PAT's
+  `find_or_build_github_for_pat`).
+
+**Service (`AixleInsights::IntegrationService`)**
+```ruby
+# connect(ingest_token:) -> Integration
+# - find_or_initialize_by(company:, provider: :aixle_insights, project_id: nil)
+# - integration.name = "Aixle Insights"
+# - integration.connected_by = user
+# - integration.credentials_data = { "ingest_token" => token }
+# - integration.status = :active   # accept-on-save; no probe (decision [1b-1])
+# - integration.save! ; return it
+# Raises/È returns an invalid record with a field error if the token is blank.
+```
+
+**Controller** — add to the `create` dispatch in
+`Web::Company::Projects::IntegrationsController#create`:
+```ruby
+when "aixle_insights" then create_aixle_insights
+```
+```ruby
+def create_aixle_insights
+  # company-wide ⇒ gated like the company-wide `destroy` below, with the SAME
+  # predicate (`current_project_membership&.admin?`) for consistency.
+  unless current_project_membership&.admin?
+    return redirect_to company_project_integrations_path(current_project),
+                       alert: "Only a company admin can connect Aixle Insights"
+  end
+  token = params[:ingest_token].to_s.strip
+  if token.blank?
+    return redirect_to company_project_integrations_path(current_project),
+                       inertia: { errors: { ingest_token: "Enter the ingest token from Aixle Insights" } }
+  end
+  AixleInsights::IntegrationService.new(company: current_company, connected_by: current_user).connect(ingest_token: token)
+  redirect_to company_project_integrations_path(current_project), notice: "Aixle Insights connected"
+end
+```
+Removal already works: the existing company-wide `destroy` gate (`integration.project_id
+.nil? && !current_project_membership&.admin?`) covers it. Use the same
+`current_project_membership&.admin?` predicate for connect (confirmed: this controller
+has no separate `current_company_admin?`; the company-wide `destroy` path uses exactly
+this check).
+
+**Resource (`IntegrationResource`)** — expose only a non-secret flag; never the token:
+```ruby
+typelize "boolean"
+attribute :insights_connected do |integration|
+  integration.aixle_insights? && integration.status == "active"
+end
+```
+The token lives in `credentials` (encrypted) and `credentials` is NOT a resource
+attribute, so it cannot leak; nothing is written into `settings`.
+
+**Frontend** — in `IntegrationsContent.tsx`, add (gated on `canManageCompany`, since the
+row is company-wide): a `Menu.Item` "Aixle Insights" and a modal with one
+`PasswordInput` (the token) that posts `{ provider: 'aixle_insights', ingestToken }` to
+`basePath`. A short helper text notes the token is validated on first sync. Add
+`aixle_insights` to `PROVIDER_LABELS`. Reuse `IntegrationLogo` fallback if no logo asset.
+
+**Tests (TDD)**
+- Model: `aixle_insights` is an enumerized provider and in `CONNECTABLE_PROVIDERS`
+  (extends the existing `connectable providers are provider values` test, which already
+  asserts `CONNECTABLE_PROVIDERS - provider.values` is empty); `insights_ingest_token`
+  round-trips through `credentials_data`; the token is encrypted at rest (raw
+  `credentials` column does not contain it — mirror the coder encryption test);
+  `aixle_insights_for` returns the active company-wide row and nil when absent.
+- Service: `connect` persists a company-wide active row with the token; reconnect
+  replaces the token on the same row (no second row); blank token ⇒ invalid.
+- Controller: a company admin connects (row created, redirect notice); a non-admin is
+  refused; blank token returns an inertia field error; a company admin can remove,
+  a non-admin cannot (existing gate).
+- Resource: `insights_connected` true for an active row; the serialized hash contains no
+  token/credentials.
+- Frontend: the connect item shows for a company admin; submitting the modal posts the
+  provider + token.
+
+**Demo:** as a company admin, Connect → Aixle Insights, paste a token, see an active
+"Aixle Insights" company-wide row in the integrations list; remove it; a non-admin sees
+neither the connect item nor a remove action.
+
+**Verification**
+- `bin/rubocop` on the changed Ruby files.
+- `bin/rails test test/models/integration_test.rb test/services/aixle_insights/integration_service_test.rb test/integration/web/company/projects/integrations_controller_test.rb test/resources/...`
+- `yarn vitest run app/frontend/shared/resources/integrations/IntegrationsContent.test.tsx`
+- `yarn tsc --noEmit`
+
+
 
 ---
 

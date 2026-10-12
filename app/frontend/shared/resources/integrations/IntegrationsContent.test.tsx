@@ -1482,4 +1482,55 @@ describe('IntegrationsContent', () => {
       screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
     ).toBeInTheDocument();
   });
+
+  // == Aixle Insights ==
+
+  describe('Aixle Insights', () => {
+    // The connection is company-wide, so the connect item is gated on
+    // canManageCompany rather than on being in a project.
+    const adminProps = {
+      ...settingsProps,
+      projectPermissions: { canExecute: true, canManage: true, canManageCompany: true },
+    };
+
+    it('offers Aixle Insights in the Connect menu for a company admin', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: adminProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      expect(await screen.findByRole('menuitem', { name: 'Aixle Insights' })).toBeInTheDocument();
+    });
+
+    it('hides the Aixle Insights connect item from someone who cannot manage the company', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      expect(screen.queryByRole('menuitem', { name: 'Aixle Insights' })).not.toBeInTheDocument();
+    });
+
+    it('posts the provider and token when the modal is submitted', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: adminProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Aixle Insights' }));
+
+      const dialog = await screen.findByRole('dialog', { name: /Connect Aixle Insights/i });
+      await userEvent.type(within(dialog).getByLabelText('Ingest token'), 'aixle_otel_secret');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/integrations',
+        expect.objectContaining({ provider: 'aixle_insights', ingestToken: 'aixle_otel_secret' }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+  });
 });

@@ -524,4 +524,47 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_response :not_found
     assert_equal 60, integration.reload.coder_lock_ttl_minutes
   end
+
+  # ====== Aixle Insights ======
+
+  test "a company admin connects Aixle Insights with an ingest token" do
+    assert_difference -> { @company.integrations.where(provider: :aixle_insights).count }, 1 do
+      post company_project_integrations_path(@project), params: {
+        provider: "aixle_insights", ingest_token: "aixle_otel_connect"
+      }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "Aixle Insights connected", flash[:notice]
+
+    row = Integration.aixle_insights_for(@company)
+    assert_not_nil row
+    assert_nil row.project_id
+    assert_equal "active", row.status.to_s
+    assert_equal "aixle_otel_connect", row.insights_ingest_token
+  end
+
+  test "a project owner who is not a company admin cannot connect Aixle Insights" do
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    sign_in_as(owner)
+
+    assert_no_difference -> { Integration.where(provider: :aixle_insights).count } do
+      post company_project_integrations_path(project), params: {
+        provider: "aixle_insights", ingest_token: "aixle_otel_denied"
+      }
+    end
+
+    assert_redirected_to company_project_integrations_path(project)
+    assert_equal "Only a company admin can connect Aixle Insights", flash[:alert]
+  end
+
+  test "connecting Aixle Insights with a blank token returns an inertia field error" do
+    assert_no_difference -> { Integration.where(provider: :aixle_insights).count } do
+      post company_project_integrations_path(@project), params: { provider: "aixle_insights", ingest_token: "  " }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/Enter the ingest token/, Array(session["inertia_errors"][:ingest_token]).to_sentence)
+  end
 end

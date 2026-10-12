@@ -109,6 +109,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   jira: 'Jira',
   linear: 'Linear',
   youtrack: 'YouTrack',
+  aixle_insights: 'Aixle Insights',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -196,6 +197,13 @@ export const IntegrationsContent = ({
     if (linearPending) setLinearTeamsTarget(linearPending);
   }, [integrations]);
 
+  // Aixle Insights is company-wide, so the connect item is gated on
+  // canManageCompany. One token field; accept-on-save (no probe).
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [insightsToken, setInsightsToken] = useState('');
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
   const [gitlabLoading, setGitlabLoading] = useState(false);
@@ -207,6 +215,13 @@ export const IntegrationsContent = ({
     setGitlabError(null);
   }, []);
   const requestCloseGitlab = useConfirmClose(gitlabPat !== '', closeGitlabModal);
+
+  const closeInsightsModal = useCallback(() => {
+    setInsightsOpen(false);
+    setInsightsToken('');
+    setInsightsError(null);
+  }, []);
+  const requestCloseInsights = useConfirmClose(insightsToken !== '', closeInsightsModal);
 
   const [tokenTarget, setTokenTarget] = useState<Integration | null>(null);
   const [replacementToken, setReplacementToken] = useState('');
@@ -348,6 +363,24 @@ export const IntegrationsContent = ({
       },
     );
   }, [basePath, closeGitlabModal, gitlabPat]);
+
+  const handleConnectInsights = useCallback(() => {
+    const token = insightsToken.trim();
+    if (!token) return;
+    setInsightsError(null);
+    setInsightsLoading(true);
+
+    router.post(
+      basePath,
+      { provider: 'aixle_insights', ingestToken: token },
+      {
+        preserveScroll: true,
+        onSuccess: closeInsightsModal,
+        onError: (errors) => setInsightsError(errorMessage(errors, 'Failed to connect Aixle Insights')),
+        onFinish: () => setInsightsLoading(false),
+      },
+    );
+  }, [basePath, closeInsightsModal, insightsToken]);
 
   const handleReplaceToken = useCallback(() => {
     const token = replacementToken.trim();
@@ -531,6 +564,14 @@ export const IntegrationsContent = ({
                 {teamsAvailable && (
                   <Menu.Item leftSection={<IntegrationLogo provider="teams" />} onClick={handleConnectTeams}>
                     Microsoft Teams
+                  </Menu.Item>
+                )}
+                {canManageCompany && (
+                  <Menu.Item
+                    leftSection={<IntegrationLogo provider="aixle_insights" fallback={<IconLink size={18} />} />}
+                    onClick={() => setInsightsOpen(true)}
+                  >
+                    Aixle Insights
                   </Menu.Item>
                 )}
               </Menu.Dropdown>
@@ -1261,6 +1302,39 @@ export const IntegrationsContent = ({
               Cancel
             </Button>
             <Button onClick={handleConnectGitlab} loading={gitlabLoading} disabled={!gitlabPat.trim()}>
+              Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={insightsOpen} onClose={requestCloseInsights} title="Connect Aixle Insights" centered size="sm">
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Paste your organization&rsquo;s ingest token from Aixle Insights to link this company. The token is saved as
+            entered and validated on the first usage sync — the collector accepts any token at connect time, so there is
+            no connect-time check.
+          </Text>
+          <PasswordInput
+            label="Ingest token"
+            placeholder="aixle_otel_..."
+            value={insightsToken}
+            onChange={(e) => setInsightsToken(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConnectInsights();
+            }}
+            autoFocus
+          />
+          {insightsError && (
+            <Text size="sm" c="var(--app-danger-fg)">
+              {insightsError}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={requestCloseInsights}>
+              Cancel
+            </Button>
+            <Button onClick={handleConnectInsights} loading={insightsLoading} disabled={!insightsToken.trim()}>
               Connect
             </Button>
           </Group>

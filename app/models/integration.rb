@@ -7,9 +7,10 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack].freeze
+  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack aixle_insights].freeze
 
-  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack aixle_insights],
+                       predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -70,6 +71,13 @@ class Integration < ApplicationRecord
     company.integrations.where(project_id: project.id, provider: :github)
            .find_by(github_installation_id: installation_id.to_i) ||
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
+  end
+
+  # The company's active Insights connection, or nil. Company-wide
+  # (project_id: nil), one per company — reconnecting replaces the token on this
+  # row rather than stacking a second connection (decision [1b-4]).
+  def self.aixle_insights_for(company)
+    active.company_wide.find_by(company_id: company.id, provider: :aixle_insights)
   end
 
   def credentials_data=(hash)
@@ -244,6 +252,14 @@ class Integration < ApplicationRecord
 
   def coder_lock_ttl_minutes
     settings&.dig("lock_ttl_minutes")&.to_i
+  end
+
+  # ----- Aixle Insights accessors -----
+
+  # The company's Insights org ingest token, read from the encrypted credentials.
+  # Read-only: the service writes the whole credentials hash on connect.
+  def insights_ingest_token
+    credentials_data["ingest_token"]
   end
 
   def self.ransackable_attributes(_auth_object = nil)
