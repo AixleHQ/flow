@@ -70,9 +70,8 @@ class BoardTaskResource < ApplicationResource
   attribute :recent_workflow_runs do |task|
     waiting = params[:waiting_runs] || WorkflowRun.waiting_for_slot_ids(task.workflow_runs.map(&:id))
     task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
-      duration = (run.completed_at - run.started_at).round if run.started_at && run.completed_at
       { id: run.id, state: waiting.include?(run.id) ? "queued" : run.state, created_at: run.created_at.iso8601,
-        duration_seconds: duration&.negative? ? nil : duration, error_message: run.failure_reason&.humanize }
+        duration_seconds: run.execution_seconds, error_message: run.failure_reason&.humanize }
     end
   end
 

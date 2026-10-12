@@ -72,6 +72,36 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     assert_not_nil @session.finished_at
   end
 
+  test "a run's execution clock starts when its first step session leaves the queue, not when the run started" do
+    run = @step_run.workflow_run
+    run.update_columns(started_at: 1.hour.ago, execution_started_at: nil)
+    first = queued_step_session(run)
+    second = queued_step_session(run)
+
+    freeze_time do
+      first.start!
+      assert_equal Time.current, run.reload.execution_started_at
+    end
+
+    travel 10.minutes do
+      second.start!
+    end
+    assert_equal first.reload.started_at, run.reload.execution_started_at
+  end
+
+  test "a step session's start that rolls back leaves its run's clock unset" do
+    run = @step_run.workflow_run
+    run.update_columns(execution_started_at: nil)
+    queued = queued_step_session(run)
+
+    TerminalSession.transaction do
+      queued.start!
+      raise ActiveRecord::Rollback
+    end
+
+    assert_nil run.reload.execution_started_at
+  end
+
   test "only a session that has not started can be queued" do
     fresh = create(:terminal_session, :agent_session, user: @user, project: @project)
 
@@ -80,5 +110,13 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     assert_equal "queued", fresh.reload.state
     assert_not_nil fresh.queued_at
     assert_raises(AASM::InvalidTransition) { @session.enqueue! }
+  end
+
+  private
+
+  def queued_step_session(run)
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: run.workflow))
+    create(:terminal_session, session_type: "workflow_step", state: "queued", user: @user, project: @project,
+                              step_run: step_run)
   end
 end

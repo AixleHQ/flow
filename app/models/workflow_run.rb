@@ -96,6 +96,12 @@ class WorkflowRun < ApplicationRecord
       AS total_cost_cents
     SQL
   }
+
+  # A finished run's duration, from its first step leaving the admission queue to
+  # its end — the SQL twin of #execution_seconds.
+  EXECUTION_SECONDS_SQL = "EXTRACT(EPOCH FROM (workflow_runs.completed_at - workflow_runs.execution_started_at))::bigint"
+
+  scope :timed, -> { where.not(execution_started_at: nil).where.not(completed_at: nil) }
   scope :for_project_in_period, ->(project, range) { where(project: project, created_at: range) }
   scope :for_user_in_project, ->(project, user, range) { where(project: project, user: user, created_at: range) }
   scope :for_user_in_period, ->(user, range) { where(user: user, created_at: range) }
@@ -130,13 +136,21 @@ class WorkflowRun < ApplicationRecord
     SQL
   end
 
-  # Start to completion; a live run counts up to now, as its list row does.
+  # First step leaving the queue to completion; a live run counts up to now, as
+  # its list row does.
   ransacker :duration_seconds, type: :integer do
     Arel.sql(<<~SQL.squish)
       EXTRACT(EPOCH FROM (COALESCE(workflow_runs.completed_at,
         CASE WHEN workflow_runs.state IN ('pending', 'running', 'paused') THEN NOW() END)
-        - workflow_runs.started_at))
+        - workflow_runs.execution_started_at))
     SQL
+  end
+
+  def execution_seconds
+    return unless execution_started_at && completed_at
+
+    seconds = (completed_at - execution_started_at).round
+    seconds unless seconds.negative?
   end
 
   def can_run_non_interactive?

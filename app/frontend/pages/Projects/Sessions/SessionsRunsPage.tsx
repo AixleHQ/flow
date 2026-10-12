@@ -46,6 +46,7 @@ export type ListEntry = (SessionListEntry | RunListEntry) & {
   finishedAt?: string | null;
   viewable?: boolean;
   completedAt?: string | null;
+  executionStartedAt?: string | null;
   stepsCompleted?: number;
   stepsTotal?: number;
   sessions?: SessionListEntry[];
@@ -460,6 +461,7 @@ function EntryRow({
   const openable = isRun || (entry.viewable !== false && OPENABLE_SESSION_STATES.has(entry.state));
   const childSessions = entry.sessions ?? [];
   const finishedAt = isRun ? entry.completedAt : entry.finishedAt;
+  const executionStartedAt = isRun ? entry.executionStartedAt : entry.startedAt;
 
   return (
     <>
@@ -530,7 +532,7 @@ function EntryRow({
           {formatCost(entry.costCents)}
         </span>
         <span className={`${classes.num} ${classes.right}`}>
-          {formatDuration(entry.startedAt, finishedAt, entry.state)}
+          {formatDuration(executionStartedAt, finishedAt, entry.state)}
         </span>
         <span className={classes.ago}>
           {formatDistanceToNow(new Date(entry.startedAt ?? entry.createdAt), { addSuffix: true })}

@@ -52,6 +52,7 @@ function buildRunEntry(overrides: Partial<ListEntry> = {}): ListEntry {
     totalTokens: 4_700_000,
     costCents: 478,
     startedAt: '2026-06-23T10:00:00Z',
+    executionStartedAt: '2026-06-23T10:00:00Z',
     completedAt: '2026-06-23T10:11:00Z',
     createdAt: '2026-06-23T09:59:00Z',
     userName: 'Artem Petrov',
@@ -266,6 +267,23 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.getByText('4.7M')).toBeInTheDocument();
     expect(screen.getByText('$4.78')).toBeInTheDocument();
     expect(screen.getByText('11m 0s')).toBeInTheDocument();
+  });
+
+  it("times a run from its first step leaving the queue, not from the run's start", () => {
+    renderWith(
+      seed({
+        entries: [
+          buildRunEntry({
+            startedAt: '2026-06-23T10:00:00Z',
+            executionStartedAt: '2026-06-23T10:10:00Z',
+            completedAt: '2026-06-23T10:15:00Z',
+          }),
+        ],
+      }),
+    );
+
+    expect(screen.getByText('5m 0s')).toBeInTheDocument();
+    expect(screen.queryByText('15m 0s')).not.toBeInTheDocument();
   });
 
   describe('live updates', () => {

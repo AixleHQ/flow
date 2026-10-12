@@ -264,7 +264,8 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
   test "sorting by duration puts rows without one last in both directions" do
     freeze_time do
       long_run = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user,
-                                                   started_at: 3.hours.ago, completed_at: 1.hour.ago)
+                                                   started_at: 3.hours.ago, execution_started_at: 3.hours.ago,
+                                                   completed_at: 1.hour.ago)
       short = standalone(state: "finished", started_at: 10.minutes.ago, finished_at: 5.minutes.ago)
       never_started = standalone(state: "cancelled", started_at: nil, finished_at: nil)
 
@@ -275,6 +276,20 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
       shortest = feed(query: { s: "duration_seconds asc" }).page(page: 1, limit: 10)
       assert_equal [ [ "session", short.id ], [ "run", long_run.id ], [ "session", never_started.id ] ],
                    kinds_and_ids(shortest)
+    end
+  end
+
+  test "a run's duration leaves out the time its first step waited in the queue" do
+    freeze_time do
+      run = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user,
+                                              started_at: 2.hours.ago, execution_started_at: 10.minutes.ago,
+                                              completed_at: Time.current)
+      session = standalone(state: "finished", started_at: 1.hour.ago, finished_at: 30.minutes.ago)
+      queued_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user,
+                                                   started_at: 3.hours.ago, execution_started_at: nil)
+
+      assert_equal [ [ "session", session.id ], [ "run", run.id ], [ "run", queued_run.id ] ],
+                   kinds_and_ids(feed(query: { s: "duration_seconds desc" }).page(page: 1, limit: 10))
     end
   end
 

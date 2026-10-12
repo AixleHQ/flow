@@ -42,6 +42,13 @@ class StepRunResource < ApplicationResource
     sr.terminal_session&.state
   end
 
+  # The step is marked running before its session is created, so `started_at`
+  # includes the wait for a slot; the card times the step from its session's start.
+  typelize "string | null"
+  attribute :execution_started_at do |sr|
+    sr.terminal_session&.started_at
+  end
+
   # The session card inside a run reports the same four numbers the list row
   # does, so a run reads as the sum of its sessions rather than as a black box.
   typelize :string?

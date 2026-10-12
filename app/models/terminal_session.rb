@@ -337,6 +337,7 @@ class TerminalSession < ApplicationRecord
 
   def on_started
     self.started_at = Time.current
+    start_workflow_run_execution
   end
 
   def on_ready
@@ -371,6 +372,18 @@ class TerminalSession < ApplicationRecord
     assign_usage_totals
     self.finished_at = Time.current
     ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
+  end
+
+  # A run starts the moment it is dispatched, while its first step may still sit
+  # in the admission queue for minutes; its duration counts from here instead.
+  # Written in the transition's transaction, so it rolls back with the state.
+  def start_workflow_run_execution
+    return unless session_type == "workflow_step"
+
+    run_id = step_run&.workflow_run_id
+    return unless run_id
+
+    WorkflowRun.where(id: run_id, execution_started_at: nil).update_all(execution_started_at: started_at)
   end
 
   def notify_workflow_execution_if_step_session

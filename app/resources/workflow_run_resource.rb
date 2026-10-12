@@ -2,7 +2,7 @@
 
 class WorkflowRunResource < ApplicationResource
   attributes :id, :workflow_id, :project_id, :user_id,
-             :state, :started_at, :completed_at,
+             :state, :started_at, :execution_started_at, :completed_at,
              :created_at, :updated_at,
              :failure_reason, :failed_agent_credential_id
 
