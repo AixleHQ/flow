@@ -39,4 +39,33 @@ class PositionsTest < ActiveSupport::TestCase
 
     assert_equal %w[B A C], @workflow.steps.reorder(:position).pluck(:name)
   end
+
+  test "compact! closes the gap a removed row leaves" do
+    @b.delete
+
+    Positions.compact!(@workflow.steps)
+
+    assert_equal [ [ "A", 1 ], [ "C", 2 ] ], @workflow.steps.reorder(:position).pluck(:name, :position)
+  end
+
+  test "compact! keeps the relative order across several gaps" do
+    @c.update_column(:position, 9)
+    @b.update_column(:position, 5)
+    @a.update_column(:position, 2)
+
+    Positions.compact!(@workflow.steps)
+
+    assert_equal [ [ "A", 1 ], [ "B", 2 ], [ "C", 3 ] ], @workflow.steps.reorder(:position).pluck(:name, :position)
+  end
+
+  test "compact! issues the same number of UPDATEs whatever the row count" do
+    4.times { |i| @workflow.steps.create!(name: "S#{i}", position: 10 + (i * 2)) }
+
+    assert_queries_match(/UPDATE/, count: 2) { Positions.compact!(@workflow.steps) }
+    assert_equal (1..7).to_a, @workflow.steps.reorder(:position).pluck(:position)
+  end
+
+  test "compact! on an empty scope does nothing" do
+    assert_equal [], Positions.compact!(@workflow.steps.none)
+  end
 end

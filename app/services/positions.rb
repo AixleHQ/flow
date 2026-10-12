@@ -23,4 +23,25 @@ module Positions
     end
     final
   end
+
+  # Closes the gaps a removed row leaves, keeping the order. Same park-then-settle
+  # as reorder!, but as two set-based UPDATEs so the query count stays constant.
+  def compact!(scope)
+    rows = scope.reorder(:position, :id).pluck(:id, :position)
+    return [] if rows.empty?
+
+    ids = rows.map(&:first)
+    offset = rows.filter_map(&:last).max.to_i
+    model = scope.model
+    relation = scope.unscope(:order).where(id: ids)
+    settled = ids.each_with_index.reduce(Arel::Nodes::Case.new(model.arel_table[:id])) do |node, (id, index)|
+      node.when(id).then(index + 1)
+    end
+
+    model.transaction do
+      relation.update_all([ "position = position + ?", offset ])
+      relation.update_all(position: settled)
+    end
+    ids
+  end
 end

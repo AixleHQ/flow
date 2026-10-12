@@ -21,6 +21,9 @@ governance, community health — carry none.
   plain value (`?user=x`) is answered normally instead of failing with a server
   error. The sign-in rate limiter read that parameter as a nested sign-in form
   on every request, including requests to addresses that do not exist.
+- **Tasks**: deleting a board column no longer runs one query per column
+  transition and per remaining column. The column's transitions are removed and
+  the remaining columns renumbered in a constant number of statements.
 
 ## [1.2.0] - 2026-10-09
 

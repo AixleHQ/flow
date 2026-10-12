@@ -59,9 +59,7 @@ module Api
           end
 
           def compact_positions(board)
-            board.board_columns.order(:position).each_with_index do |col, idx|
-              col.update_column(:position, idx + 1)
-            end
+            Positions.compact!(board.board_columns)
           end
         end
       end
