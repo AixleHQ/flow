@@ -92,6 +92,23 @@ class Project < ApplicationRecord
     %w[company owner]
   end
 
+  # ----- Aixle Insights usage export (project opt-in) -----
+  #
+  # Per-project switch deciding whether this project's completed agent-session
+  # usage is exported to the company's Aixle Insights org. Stored in the
+  # `settings` jsonb (default `{}`), so an unset project reads as off. The
+  # writer casts to a real boolean, so the jsonb holds `true`/`false` rather
+  # than the `"1"`/`"0"` a form submits. Meaningful only when the company has
+  # an active Insights connection — the controller refuses turning it on
+  # otherwise, and the exporter skips a company with no connection regardless.
+  def insights_sharing_enabled?
+    settings["insights_sharing_enabled"] == true
+  end
+
+  def insights_sharing_enabled=(value)
+    settings["insights_sharing_enabled"] = ActiveModel::Type::Boolean.new.cast(value)
+  end
+
   # Add a user as collaborator (idempotent)
   def add_collaborator(user)
     project_collaborators.find_or_create_by!(user: user)

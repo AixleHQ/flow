@@ -95,4 +95,64 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
 
     assert_equal 6, limit_for(@project).max_sessions
   end
+
+  # == Aixle Insights usage sharing (project opt-in) ==
+
+  def connect_insights
+    create(:integration, :aixle_insights, :active, company: @company, connected_by: @user, project_id: nil)
+  end
+
+  test "a company admin turns usage sharing on when Insights is connected" do
+    connect_insights
+
+    patch company_project_settings_path(@project), params: { insights_sharing_enabled: "1" }
+
+    assert_response :redirect
+    assert @project.reload.insights_sharing_enabled?
+  end
+
+  test "turning usage sharing on is refused when the company has no Insights connection" do
+    patch company_project_settings_path(@project), params: { insights_sharing_enabled: "1" }
+
+    assert_not @project.reload.insights_sharing_enabled?
+    assert_match(/Connect Aixle Insights/, Array(session["inertia_errors"][:insights_sharing_enabled]).to_sentence)
+  end
+
+  test "turning usage sharing off is always allowed, even with no connection" do
+    @project.update!(insights_sharing_enabled: true)
+
+    patch company_project_settings_path(@project), params: { insights_sharing_enabled: "0" }
+
+    assert_response :redirect
+    assert_not @project.reload.insights_sharing_enabled?
+  end
+
+  test "a member who is not a company admin cannot change usage sharing" do
+    connect_insights
+    member = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    create(:project_collaborator, project: @project, user: member)
+    sign_in_as(member)
+
+    patch company_project_settings_path(@project), params: { insights_sharing_enabled: "1" }
+
+    assert_not @project.reload.insights_sharing_enabled?
+    assert_match(/company admin/, Array(session["inertia_errors"][:insights_sharing_enabled]).to_sentence)
+  end
+
+  test "a save that carries no sharing key at all leaves the flag alone" do
+    @project.update!(insights_sharing_enabled: true)
+
+    patch company_project_settings_path(@project), params: { project: { name: "Renamed Project" } }
+
+    assert @project.reload.insights_sharing_enabled?
+  end
+
+  # A refused sharing change must not leave a sibling change committed behind it.
+  test "a refused sharing change rolls back the rest of the save" do
+    patch company_project_settings_path(@project), params: {
+      project: { name: "Renamed Project" }, insights_sharing_enabled: "1"
+    }
+
+    assert_equal @project.name, @project.reload.name, "the name must not survive a refused save"
+  end
 end

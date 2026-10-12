@@ -19,6 +19,9 @@ const project = {
   ownerName: 'Dana Owner',
   ownerEmail: 'dana@example.com',
   canDelete: true,
+  insightsSharingEnabled: false,
+  insightsConnected: true,
+  canManageInsightsSharing: true,
 };
 
 const concurrency = {
@@ -434,6 +437,71 @@ describe('Projects/Settings/SettingsPage', () => {
 
       expect(screen.queryByLabelText('Reserved workers')).not.toBeInTheDocument();
       expect(screen.getByText(/only a company admin can change this/)).toBeInTheDocument();
+    });
+  });
+
+  describe('usage sharing (Aixle Insights)', () => {
+    const switchName = /Share usage with Aixle Insights/i;
+
+    it('renders the Usage sharing card', () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+      expect(screen.getByText('Usage sharing')).toBeInTheDocument();
+    });
+
+    it('submits a patch when an admin toggles sharing on with a connection present', async () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+      await userEvent.click(screen.getByRole('switch', { name: switchName }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/projects/7/settings',
+        expect.objectContaining({ insights_sharing_enabled: true }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('reverts the switch and notifies when the patch is refused', async () => {
+      const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+      const toggle = screen.getByRole('switch', { name: switchName });
+      await userEvent.click(toggle);
+      expect(toggle).toBeChecked();
+
+      const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+      act(() => options.onError?.({ insightsSharingEnabled: 'Connect Aixle Insights for this company' }));
+
+      expect(toggle).not.toBeChecked();
+      expect(showSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Connect Aixle Insights for this company', color: 'red' }),
+      );
+    });
+
+    it('disables the switch and explains when the company has no connection', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { concurrency, project: { ...project, insightsConnected: false } },
+      });
+
+      expect(screen.getByRole('switch', { name: switchName })).toBeDisabled();
+      expect(screen.getByText(/Connect Aixle Insights for this company/)).toBeInTheDocument();
+    });
+
+    it('disables the switch and explains when the user is not a company admin', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { concurrency, project: { ...project, canManageInsightsSharing: false } },
+      });
+
+      expect(screen.getByRole('switch', { name: switchName })).toBeDisabled();
+      expect(screen.getByText('Only a company admin can change this.')).toBeInTheDocument();
+    });
+
+    it('reflects an already-enabled project as checked', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { concurrency, project: { ...project, insightsSharingEnabled: true } },
+      });
+
+      expect(screen.getByRole('switch', { name: switchName })).toBeChecked();
     });
   });
 

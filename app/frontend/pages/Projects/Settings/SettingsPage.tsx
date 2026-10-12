@@ -11,6 +11,7 @@ import {
   NumberInput,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   Textarea,
@@ -28,6 +29,7 @@ import {
   IconCrown,
   IconInfoCircle,
   IconLock,
+  IconChartBar,
   IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -84,6 +86,9 @@ interface ProjectSettings {
   ownerName: string;
   ownerEmail: string;
   canDelete: boolean;
+  insightsSharingEnabled: boolean;
+  insightsConnected: boolean;
+  canManageInsightsSharing: boolean;
 }
 
 interface ConcurrencyAllocation {
@@ -204,6 +209,32 @@ const SettingsPage = () => {
   const [transferOpen, setTransferOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const [insightsSharing, setInsightsSharing] = useState(project.insightsSharingEnabled);
+  const [insightsSaving, setInsightsSaving] = useState(false);
+
+  const handleInsightsToggle = (next: boolean) => {
+    const previous = insightsSharing;
+    setInsightsSharing(next);
+    setInsightsSaving(true);
+    router.patch(`${basePath}/settings`, { insights_sharing_enabled: next } as Record<string, FormDataConvertible>, {
+      preserveScroll: true,
+      onSuccess: () => {
+        notifications.show({
+          message: next ? 'Usage sharing enabled' : 'Usage sharing disabled',
+          color: 'green',
+        });
+      },
+      onError: (errors) => {
+        setInsightsSharing(previous);
+        notifications.show({
+          message: (errors as Record<string, string>).insightsSharingEnabled ?? 'Failed to update usage sharing',
+          color: 'red',
+        });
+      },
+      onFinish: () => setInsightsSaving(false),
+    });
+  };
 
   const handleDelete = () => setDeleteOpen(true);
 
@@ -427,6 +458,43 @@ const SettingsPage = () => {
                 </Group>
               </Box>
             </div>
+          </Card>
+
+          {/* Usage sharing (Aixle Insights opt-in) */}
+          <Card p={22} withBorder radius={8}>
+            <div className={classes.secLabel}>
+              <IconChartBar size={14} className={classes.secLabelIcon} />
+              Usage sharing
+            </div>
+
+            <Group justify="space-between" align="flex-start" wrap="nowrap" gap="md">
+              <Box>
+                <Text size="sm" fw={500}>
+                  Share usage with Aixle Insights
+                </Text>
+                <Text size="xs" c="dimmed">
+                  Export this project&rsquo;s completed agent-session usage to your company&rsquo;s Aixle Insights
+                  organization, alongside Copilot, Cursor and Claude.
+                </Text>
+                {!project.insightsConnected && (
+                  <Text size="xs" c="dimmed" mt={6}>
+                    Connect Aixle Insights for this company from the integrations list to enable this.
+                  </Text>
+                )}
+                {project.insightsConnected && !project.canManageInsightsSharing && (
+                  <Text size="xs" c="dimmed" mt={6}>
+                    Only a company admin can change this.
+                  </Text>
+                )}
+              </Box>
+              <Switch
+                checked={insightsSharing}
+                aria-label="Share usage with Aixle Insights"
+                disabled={!project.insightsConnected || !project.canManageInsightsSharing || insightsSaving}
+                onChange={(e) => handleInsightsToggle(e.currentTarget.checked)}
+                style={{ flexShrink: 0 }}
+              />
+            </Group>
           </Card>
 
           {/* Danger Zone */}

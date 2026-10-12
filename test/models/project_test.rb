@@ -194,6 +194,34 @@ class ProjectTest < ActiveSupport::TestCase
     assert_equal [ admin, employee ].sort_by(&:id), @project.ownership_candidates.order(:id).to_a
   end
 
+  # == Aixle Insights usage sharing (settings jsonb accessor) ==
+
+  test "insights_sharing_enabled? is false by default" do
+    assert_not @project.insights_sharing_enabled?
+    assert_equal({}, @project.settings)
+  end
+
+  test "the writer casts a truthy value and persists a real boolean in the jsonb" do
+    @project.insights_sharing_enabled = "1"
+    assert @project.insights_sharing_enabled?
+
+    @project.save!
+    assert_includes [ true, false ], @project.reload.settings["insights_sharing_enabled"]
+    assert @project.settings["insights_sharing_enabled"]
+  end
+
+  test "the writer casts a falsey value to false" do
+    @project.update!(insights_sharing_enabled: true)
+
+    @project.insights_sharing_enabled = "0"
+    assert_not @project.insights_sharing_enabled?
+
+    @project.save!
+    stored = @project.reload.settings["insights_sharing_enabled"]
+    assert_includes [ true, false ], stored, "the jsonb must hold a real boolean, not a string or nil"
+    assert_not stored
+  end
+
   private
 
   def create_named_projects(*names)
