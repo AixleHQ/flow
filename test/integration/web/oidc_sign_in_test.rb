@@ -46,11 +46,13 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     [ query["state"], query["nonce"] ]
   end
 
-  def build_token_stub(nonce, email: "person@oidc-acme.test", sub: "oidc-subject-1")
+  def build_token_stub(nonce, email: "person@oidc-acme.test", sub: "oidc-subject-1", **claims)
     jwt = JSON::JWT.new(
-      iss: ISSUER, aud: "our-client", sub: sub,
-      exp: 10.minutes.from_now.to_i, iat: Time.current.to_i, nonce: nonce,
-      email: email, email_verified: true, name: "OIDC Person"
+      {
+        iss: ISSUER, aud: "our-client", sub: sub,
+        exp: 10.minutes.from_now.to_i, iat: Time.current.to_i, nonce: nonce,
+        email: email, email_verified: true, name: "OIDC Person"
+      }.merge(claims)
     )
     jwt.kid = "test-kid"
     stub_request(:post, "#{ISSUER}/token").to_return(
@@ -155,6 +157,98 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     get oidc_callback_path(code: "the-code", state: state)
 
     assert_redirected_to company_settings_access_path
+  end
+
+  def sign_in_as_verifying_admin
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    admin = create(:user, :onboarding_completed, company: @company, membership_role: "admin",
+                          email: "admin@oidc-acme.test",
+                          password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(admin)
+    admin
+  end
+
+  # The shape Entra sends for an account with no mailbox: no email and no
+  # email_verified. Resolving that by address refused the admin as no_workspace,
+  # and with the address present it would refuse every existing account as
+  # link_required — so a connection to Entra could never be verified.
+  test "verifying attaches the connection to the admin who asked, whatever address it sends" do
+    admin = sign_in_as_verifying_admin
+    state, nonce = start_and_capture_state
+    build_token_stub(nonce, email: nil, email_verified: nil, preferred_username: "admin@oidc-acme.test", sub: "entra-oid")
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to company_settings_access_path
+    assert_equal "Acme SSO is verified as admin@oidc-acme.test. You can switch it on now.", flash[:notice]
+    assert_equal admin, UserIdentity.find_by!(identity_provider: @provider, subject: "entra-oid").user
+    assert_equal 1, UserSession.live.where(user: admin).count
+    follow_redirect!
+    assert_inertia_props { |props| assert props[:providers].find { |p| p[:id] == @provider.id }[:proved] }
+  end
+
+  test "a verification that fails says why on the screen that asked for it" do
+    sign_in_as_verifying_admin
+    state, = start_and_capture_state
+    stub_request(:post, "#{ISSUER}/token").to_return(status: 401, body: "nope")
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to company_settings_access_path
+    assert_not UserIdentity.exists?(identity_provider: @provider)
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/token endpoint returned 401/, props[:errors][:base]) }
+  end
+
+  test "the identity provider's own refusal reaches the admin verifying" do
+    sign_in_as_verifying_admin
+    state, = start_and_capture_state
+
+    get oidc_callback_path(state: state, error: "access_denied", error_description: "AADSTS65004: User declined")
+
+    assert_redirected_to company_settings_access_path
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/AADSTS65004: User declined/, props[:errors][:base]) }
+  end
+
+  test "an issuer that cannot be reached is reported to the admin verifying" do
+    sign_in_as_verifying_admin
+    stub_request(:get, "#{ISSUER}/.well-known/openid-configuration").to_raise(Errno::ECONNREFUSED)
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_redirected_to company_settings_access_path
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/unreachable/, props[:errors][:base]) }
+  end
+
+  test "verifying never moves a provider account that belongs to someone else" do
+    sign_in_as_verifying_admin
+    owner = create(:user, :onboarding_completed, company: @company)
+    create(:user_identity, user: owner, identity_provider: @provider, subject: "taken-subject")
+    state, nonce = start_and_capture_state
+    build_token_stub(nonce, sub: "taken-subject")
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to company_settings_access_path
+    assert_equal owner, UserIdentity.find_by!(identity_provider: @provider, subject: "taken-subject").user
+  end
+
+  test "an operator impersonating an admin cannot verify a connection onto them" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    admin = create(:user, :onboarding_completed, company: @company, membership_role: "admin")
+    operator = create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(operator)
+    post impersonate_admin_user_path(admin)
+    state, nonce = start_and_capture_state
+    build_token_stub(nonce, sub: "operator-at-the-idp")
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_not UserIdentity.exists?(identity_provider: @provider)
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/while impersonating/, props[:errors][:base]) }
   end
 
   test "a member who is not an admin cannot start a connection that is not enabled" do

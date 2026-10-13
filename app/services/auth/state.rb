@@ -25,7 +25,8 @@ module Auth
 
     module_function
 
-    def encode(identity_provider_id:, return_to:, code_verifier:, oidc_nonce:, state_nonce: SecureRandom.uuid)
+    def encode(identity_provider_id:, return_to:, code_verifier:, oidc_nonce:, state_nonce: SecureRandom.uuid,
+               verifier_id: nil)
       Rails.cache.write(
         cache_key(state_nonce),
         { "code_verifier" => code_verifier, "oidc_nonce" => oidc_nonce },
@@ -35,6 +36,7 @@ module Auth
         {
           "identity_provider_id" => identity_provider_id,
           "return_to" => return_to,
+          "verifier_id" => verifier_id,
           "nonce" => state_nonce
         },
         expires_in: TTL,

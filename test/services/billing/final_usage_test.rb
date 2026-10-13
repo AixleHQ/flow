@@ -5,9 +5,9 @@ require "test_helper"
 class Billing::FinalUsageTest < ActiveSupport::TestCase
   setup do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
-    @company = create(:company, :subscribed)
-    CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 2, occurred_at: 1.day.ago)
     @now = Time.utc(2026, 10, 12, 14, 20)
+    @company = create(:company, :subscribed)
+    CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 2, occurred_at: @now - 1.day)
   end
 
   def final_usage = Billing::FinalUsage.new(@company, until_time: @now)

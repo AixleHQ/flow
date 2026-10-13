@@ -96,6 +96,29 @@ module Auth
         refute_predicate complete, :email_verified?
       end
 
+      # Entra's id_token for an account with no mailbox: no `email`, and no
+      # `email_verified` to go with it.
+      test "an id_token without an email names the person by their username, unverified" do
+        stub_token(id_token(email: nil, email_verified: true, preferred_username: "person@oidc-acme.test"))
+
+        assertion = complete
+
+        assert_equal "person@oidc-acme.test", assertion.email
+        refute_predicate assertion, :email_verified?
+      end
+
+      test "a upn is preferred to the username when both stand in for the email" do
+        stub_token(id_token(email: nil, upn: "upn@oidc-acme.test", preferred_username: "alias@oidc-acme.test"))
+
+        assert_equal "upn@oidc-acme.test", complete.email
+      end
+
+      test "a username that is not an address is not taken for one" do
+        stub_token(id_token(email: nil, preferred_username: "jdoe"))
+
+        assert_nil complete.email
+      end
+
       test "an id_token minted for another client is refused" do
         stub_token(id_token(aud: "someone-elses-client"))
 

@@ -67,51 +67,65 @@ class Web::OidcSessionsController < Web::ApplicationController
   # GET /auth/oidc/callback — one deployment-wide callback for every connection;
   # which one is carried in the SIGNED state, never in the path.
   def callback
-    return redirect_to(login_path(error: "oauth_failed")) if params[:error].present?
-
     payload = Auth::State.decode(params[:state])
-    return redirect_to(login_path(error: "oauth_failed")) if payload.nil?
+    @verifier_id = payload["verifier_id"] if payload.is_a?(Hash)
+    return refuse("oauth_failed", "the identity provider answered #{idp_error.inspect}") if params[:error].present?
+    return refuse("oauth_failed", "the state is not one this app signed") if payload.nil?
     # A state is only good in the browser that began the flow; otherwise a
     # callback link from someone else's login signs this browser in as them.
-    return redirect_to(login_path(error: "oauth_failed")) unless started_here?(payload["nonce"])
+    unless started_here?(payload["nonce"])
+      return refuse("oauth_failed", "the sign-in finished in a browser that did not start it")
+    end
 
     side_data = Auth::State.consume(payload["nonce"])
     # nil means replayed or expired. Refusing to exchange the code is the whole
     # point of single-use state.
-    return redirect_to(login_path(error: "oauth_failed")) if side_data.nil?
+    return refuse("oauth_failed", "the sign-in was already used or expired") if side_data.nil?
 
     provider = IdentityProvider.find_by(id: payload["identity_provider_id"])
-    return redirect_to(login_path(error: "oauth_failed")) if provider.nil?
+    return refuse("oauth_failed", "the connection no longer exists") if provider.nil?
 
     assertion = Auth::Registry.for(provider).complete(
       code: params[:code], redirect_uri: callback_url,
       code_verifier: side_data["code_verifier"], nonce: side_data["oidc_nonce"]
     )
+    return verify(provider, assertion) if @verifier_id.present?
+
     user = Auth::IdentityResolver.new(assertion).resolve
     return redirect_to(login_path(error: "account_deleted")) if user.deleted?
 
     enter(user, provider, payload["return_to"])
   rescue Auth::IdentityResolver::NoWorkspaceError
-    redirect_to login_path(error: "no_workspace")
+    refuse("no_workspace", "no workspace claims the address the connection sent")
   rescue Auth::IdentityResolver::LinkRequiredError
-    redirect_to login_path(error: "link_required")
+    refuse("link_required", "an account already exists for the address the connection sent")
   rescue Auth::IdentityResolver::SuperAdminProviderError
-    redirect_to login_path(error: "super_admin_password_only")
-  rescue Auth::Method::Failure
-    redirect_to login_path(error: "oauth_failed")
+    refuse("super_admin_password_only", "a platform operator signs in by password only")
+  rescue Auth::IdentityResolver::IdentityTakenError
+    refuse("oauth_failed", "that account at the identity provider is linked to a different account here")
+  rescue Auth::Method::Failure => e
+    refuse("oauth_failed", e.message)
   end
 
   private
 
   # Sends the browser to the provider. Shared by #start and #identify so the two
   # ways of reaching a connection cannot drift apart.
+  #
+  # Takes the company rather than reading provider.company: in #identify the
+  # provider comes out of a multi-row fetch, and loading its company there is
+  # the N+1 Bullet refuses.
   def begin_authorization(provider, company:)
+    # Only a company admin can start a connection the company does not accept
+    # yet (#connectable_provider), and doing so is a verification.
+    @verifier_id = current_user&.id unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
     code_verifier = SecureRandom.urlsafe_base64(64)
     oidc_nonce = SecureRandom.uuid
     state_nonce = SecureRandom.uuid
     state = Auth::State.encode(
       identity_provider_id: provider.id,
-      return_to: return_to_for(provider, company),
+      return_to: params[:return_to].presence,
+      verifier_id: @verifier_id,
       code_verifier: code_verifier,
       oidc_nonce: oidc_nonce,
       state_nonce: state_nonce
@@ -124,8 +138,49 @@ class Web::OidcSessionsController < Web::ApplicationController
       code_challenge: pkce_challenge(code_verifier),
       nonce: oidc_nonce
     ), allow_other_host: true
-  rescue Auth::Method::Failure, Auth::Registry::UnsupportedKind
-    redirect_to login_path(error: "oauth_failed")
+  rescue Auth::Method::Failure, Auth::Registry::UnsupportedKind => e
+    refuse("oauth_failed", e.message)
+  end
+
+  # AD-7 wants a connection proved before it is enabled, and the proof is a real
+  # sign-in through it. The proof is attached to the admin who asked, matched on
+  # the subject alone (AD-25) — never resolved from the address the provider
+  # sends. Entra sends no email_verified and often no email at all, so resolving
+  # by address refused every admin who already had an account here.
+  #
+  # It stays a verification, not a way in: the company still does not accept the
+  # method, so the entry gate turns the session away exactly as before.
+  def verify(provider, assertion)
+    unless verifying? && verifying_own_connection?(provider)
+      return refuse("oauth_failed", "only the admin who pressed Verify can complete it")
+    end
+    # Linked during an impersonation, the connection would sign the operator in
+    # as this admin later, outside the impersonation's audit trail.
+    return refuse("oauth_failed", "a connection cannot be verified while impersonating") if impersonated?
+
+    Auth::IdentityResolver.new(assertion, auto_join: false).link_to(current_user)
+    prove_additional_method(provider)
+    as = assertion.email.present? ? " as #{assertion.email}" : ""
+    redirect_to company_settings_access_path,
+                notice: "#{provider.display_name} is verified#{as}. You can switch it on now."
+  end
+
+  # The admin verifying a connection is still signed in, and /login sends a
+  # signed-in browser straight on to its projects — so a reason given there
+  # would never be read. Theirs goes back to the screen that asked.
+  def refuse(error, reason)
+    Rails.logger.warn("OIDC sign-in refused (#{error}): #{reason}")
+    return redirect_to(login_path(error: error)) unless verifying?
+
+    redirect_to company_settings_access_path, inertia: { errors: { base: "Verification failed: #{reason}." } }
+  end
+
+  def verifying?
+    @verifier_id.present? && @verifier_id == current_user&.id
+  end
+
+  def idp_error
+    [ params[:error], params[:error_description] ].compact_blank.join(": ").squish.truncate(300)
   end
 
   # A connection is startable when its owning company has it enabled — a
@@ -141,30 +196,15 @@ class Web::OidcSessionsController < Web::ApplicationController
     nil
   end
 
-  # AD-7 requires a connection to be proved before it can be enabled, and the
-  # proof is a real sign-in through it. Refusing to START a disabled connection
-  # made that impossible: no sign-in without enabling, no enabling without a
-  # sign-in, and only a platform operator could break the cycle. An admin of the
-  # owning company may therefore start one that is still switched off.
-  #
-  # It stays a verification, not a way in: the company still does not accept the
-  # method, so the entry gate turns the resulting session away exactly as before.
-  # A verification lands back on the screen that asked for it, where the
-  # connection can now be switched on.
-  # Takes the company rather than reading provider.company: in #identify the
-  # provider comes out of a multi-row fetch, and loading its company there is
-  # the N+1 Bullet refuses.
-  def return_to_for(provider, company)
-    return company_settings_access_path unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
-
-    params[:return_to].presence
-  end
-
   def started_here?(state_nonce)
     expected = session.delete(:oidc_state_nonce).to_s
     expected.present? && ActiveSupport::SecurityUtils.secure_compare(expected, state_nonce.to_s)
   end
 
+  # Refusing to START a disabled connection made AD-7 impossible: no sign-in
+  # without enabling, no enabling without a sign-in, and only a platform
+  # operator could break the cycle. An admin of the owning company may therefore
+  # start one that is still switched off.
   def verifying_own_connection?(provider)
     return false unless signed_in?
 
