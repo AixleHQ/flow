@@ -654,22 +654,6 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_match(/ECONNRESET/, cred.refresh_error)
   end
 
-  test "renew! reports a refused add-on grant as a warning without condemning the credential" do
-    cred = create(:agent_credential, user: @user, agent_type: "claude_code", config_data: {
-      "designOauth" => { "accessToken" => "d-a", "refreshToken" => "d-r", "clientId" => "design-client",
-                         "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
-    })
-    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
-      .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
-                 headers: { "Content-Type" => "application/json" })
-
-    report = assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :sweep) }
-
-    assert_equal :warning, report.severity
-    assert_equal({ permanent: false, refused: true }, report.context.slice(:permanent, :refused))
-    assert_equal "active", cred.reload.status
-  end
-
   test "without_retired_grants drops a block whose refresh token was replaced and keeps a new one" do
     cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))

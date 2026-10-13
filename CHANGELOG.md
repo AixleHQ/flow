@@ -30,8 +30,7 @@ governance, community health — carry none.
   of failing with a server error. Names are saved without surrounding spaces.
 - **Profile**: a Claude Design login the vendor refused stays cleared until you
   reconnect it. A session that still held the old copy no longer writes it
-  back, so the server stops retrying the dead login, and the refusal is
-  reported as a warning rather than an error.
+  back, so the server stops retrying the dead login.
 
 ## [1.2.1] - 2026-10-13
 

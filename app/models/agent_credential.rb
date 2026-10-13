@@ -547,22 +547,21 @@ class AgentCredential < ApplicationRecord
       clear_refresh_error! if active? && expires_at.nil? && refresh_error.present?
     when :error
       permanent = self.class.permanent_failure?(result)
-      refused = permanent || result[:refused] == true
       mark_refresh_error!(result[:detail], permanent: permanent)
-      report_refresh_failure(result[:detail], source: source, permanent: permanent, refused: refused)
+      report_refresh_failure(result[:detail], source: source, permanent: permanent)
     end
   end
 
-  # A refusal is the vendor ending a login (the base one or an add-on such as designOauth),
-  # which only the user can renew; a transient failure may be ours.
-  def report_refresh_failure(detail, source:, permanent:, refused:)
+  # A permanent refusal is the vendor ending the login, which the user is mailed
+  # about and only they can renew; a transient one may be ours.
+  def report_refresh_failure(detail, source:, permanent:)
     Rails.error.report(
       RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
       handled: true,
-      severity: refused ? :warning : :error,
+      severity: permanent ? :warning : :error,
       source: REFRESH_ERROR_SOURCE,
       context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
-                 permanent: permanent, refused: refused, status: status.to_s, failure_count: refresh_failure_count }
+                 permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
     )
   end
 
