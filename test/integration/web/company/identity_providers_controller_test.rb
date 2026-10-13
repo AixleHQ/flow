@@ -113,6 +113,8 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
 
     assert_redirected_to company_settings_access_path
     assert_equal "Other SSO", other.reload.name
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/has already been taken/, Array(props.dig(:errors, :name)).join) }
   end
 
   test "removing a connection somebody depends on is refused, exactly as disabling it would be" do

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen } from 'test/renderPage';
+import { makeFormStub, renderAuthedPage, screen } from 'test/renderPage';
 
 import AccessPage from './AccessPage';
 
@@ -35,8 +35,14 @@ const joining = (over = {}) => ({
   ...over,
 });
 
-const renderPage = (providers: unknown[], isAdmin = true, joiningState: unknown = joining()) =>
+const renderPage = (
+  providers: unknown[],
+  isAdmin = true,
+  joiningState: unknown = joining(),
+  form?: ReturnType<typeof makeFormStub>,
+) =>
   renderAuthedPage(<AccessPage providers={providers as never} />, {
+    form,
     props: {
       providers,
       joining: joiningState,
@@ -67,6 +73,16 @@ describe('Company settings — Access', () => {
     expect(screen.queryByRole('button', { name: 'Add connection' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
     expect(screen.getByText(/Verify your email domain under Joining first/)).toBeInTheDocument();
+  });
+
+  it('shows a name the server refused next to the Display name field', () => {
+    const form = makeFormStub({ name: 'Acme Okta', issuer: '', clientId: '', client_secret: '', tenantId: '' });
+    form.errors = { name: 'has already been taken' };
+    renderPage([deployment(), connection()], true, joining(), form);
+
+    const name = screen.getByLabelText('Display name');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('has already been taken');
   });
 
   it('holds an unverified connection switched off', () => {
