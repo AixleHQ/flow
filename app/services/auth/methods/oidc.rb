@@ -34,14 +34,17 @@ module Auth
       def complete(code:, redirect_uri:, code_verifier:, nonce:)
         tokens = exchange_code(code: code, redirect_uri: redirect_uri, code_verifier: code_verifier)
         claims = verify_id_token!(tokens["id_token"], nonce: nonce)
+        email = claims["email"].presence
 
         Auth::Assertion.new(
           provider: provider,
           # `sub` is the binding claim for OIDC and is never substituted (AD-3).
           subject: claims["sub"].to_s,
-          email: claims["email"],
+          email: email || fallback_email(claims),
           # Absent is not true: an issuer that does not say so has not verified it.
-          email_verified: claims["email_verified"] == true || claims["email_verified"].to_s == "true",
+          # The claim speaks for `email` only, never for a fallback address.
+          email_verified: email.present? &&
+            (claims["email_verified"] == true || claims["email_verified"].to_s == "true"),
           name: claims["name"] || claims["preferred_username"]
         )
       end
@@ -58,6 +61,14 @@ module Auth
 
       def scopes
         Array(provider.config["scopes"]).presence || DEFAULT_SCOPES
+      end
+
+      # Entra leaves `email` out of the id_token for an account with no mailbox
+      # (an empty `mail` attribute) and names the person by `preferred_username`
+      # — the UPN, for a work account — or the optional `upn` claim. Without
+      # this such a sign-in carried no address and was refused as no_workspace.
+      def fallback_email(claims)
+        claims.values_at("upn", "preferred_username").find { |value| value.to_s.match?(URI::MailTo::EMAIL_REGEXP) }
       end
 
       def discovery_url

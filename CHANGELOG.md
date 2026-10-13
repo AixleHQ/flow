@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Company settings**: a workspace's own sign-in connection to Microsoft Entra
+  ID can be verified. **Verify** links the account you sign in with to yours,
+  takes the address from the username when Entra sends no email, and shows on the
+  Access screen why a sign-in failed. It used to fail silently and leave the
+  connection *Not verified yet*.
+
 ## [1.2.1] - 2026-10-13
 
 ### Changed

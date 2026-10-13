@@ -77,12 +77,24 @@ https://<your Flow host>/auth/oidc/callback
 connection a sign-in belongs to travels in a signed, single-use `state`, never in
 the URL. Adding a second or a tenth connection needs no new URL.
 
+For **Microsoft Entra ID**, the issuer is
+`https://login.microsoftonline.com/<your tenant id>/v2.0`. Entra leaves the
+`email` claim out for an account with no mailbox; Flow then takes the address
+from `upn` or `preferred_username`, which is the UPN for a work account.
+
 ### Verify before you enable
 
 A new connection arrives **switched off**, badged *Not verified yet*, with its
 switch held shut. Press **Verify**: Flow sends you through the connection exactly
 as a member would go, and only a sign-in that actually completed unlocks the
 switch.
+
+The account you sign in with at your provider is linked to **your** Flow
+account — the one that pressed Verify — whatever address the provider sends, and
+signs you in from then on. A provider account that is already linked to someone
+else here is never moved. When the sign-in does not complete, the reason shows at
+the top of the Access screen: an issuer that cannot be reached, a rejected
+secret, a refusal from your provider.
 
 This is deliberate. A typo in an issuer or a secret that was pasted with a
 trailing space is a connection that cannot admit anyone — and if it could be

@@ -84,7 +84,7 @@ Two properties of that model are load-bearing and easy to lose:
 
 A company can destroy itself with this feature in three ways, and each needs its own guard (AD-7):
 
-1. **Enable a connection that was never known to work.** Enabling a company-scoped provider requires a completed real sign-in through it, by an admin of that company, first.
+1. **Enable a connection that was never known to work.** Enabling a company-scoped provider requires a completed real sign-in through it, by an admin of that company, first. That sign-in (**Verify**) is linked to the admin who started it, matched on the subject as AD-25 links are — never resolved by address, which Entra cannot vouch for and often does not send.
 2. **Delete instead of disable.** Deleting a policy row or a provider is evaluated exactly as disabling it — the guard that only reads `enabled` is a hole.
 3. **Race two safe edits into one unsafe state.** The check and the write happen in one transaction holding a row lock on the company.
 
