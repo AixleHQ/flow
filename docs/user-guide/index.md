@@ -1,5 +1,7 @@
 # User Guide
 
+For the optional memory pilot, see [Project memory](project-memory.md).
+
 Aixle Flow turns AI coding agents into a team workflow. Every run, whatever
 started it, takes the same path:
 
@@ -20,6 +22,7 @@ Read in any order:
 
 - **[Board](board.md)** — projects, columns, cards, and column → workflow bindings.
 - **[Workflows](workflows.md)** — DAG steps, retries, approval gates, parallel runs.
+- **[Token-efficient workflows](token-efficient-workflows.md)** — proportional spec-first delivery, focused context and measuring cost per accepted task.
 - **[Triggers and gates](triggers-and-gates.md)** — every way a run starts, who it runs as, and the CI gates that hold one back.
 - **[Prompt guide](prompt-guide.md)** — writing session instructions an agent can run.
 - **[Agents](agents.md)** — personas, the container, and how session context is built.

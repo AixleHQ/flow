@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_12_143000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -787,6 +787,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
 
   add_check_constraint "mcp_servers", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "mcp_servers_tenant_columns", validate: false
 
+  create_table "memory_retrievals", force: :cascade do |t|
+    t.bigint "project_id", null: false
+    t.bigint "terminal_session_id", null: false
+    t.bigint "project_memory_id", null: false
+    t.uuid "revision", null: false
+    t.string "title", null: false
+    t.text "content", null: false
+    t.string "kind", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.index ["project_id"], name: "index_memory_retrievals_on_project_id"
+    t.index ["project_memory_id"], name: "index_memory_retrievals_on_project_memory_id"
+    t.index ["terminal_session_id"], name: "index_memory_retrievals_on_terminal_session_id"
+  end
+
   create_table "oauth_clients", force: :cascade do |t|
     t.string "authorization_endpoint"
     t.string "client_id", null: false
@@ -856,6 +872,34 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.index ["user_id"], name: "index_project_favorites_on_user_id"
   end
 
+  create_table "project_memories", force: :cascade do |t|
+    t.bigint "project_id", null: false
+    t.bigint "terminal_session_id"
+    t.string "title", null: false
+    t.text "content", null: false
+    t.string "topic_key", null: false
+    t.string "state", default: "pending", null: false
+    t.jsonb "sources", default: [], null: false
+    t.text "evidence"
+    t.datetime "validated_at"
+    t.datetime "review_at"
+    t.string "engram_id"
+    t.uuid "revision", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.uuid "base_revision"
+    t.bigint "validated_by_id"
+    t.string "language", default: "en", null: false
+    t.jsonb "tags", default: [], null: false
+    t.index ["project_id", "engram_id"], name: "index_project_memories_on_project_id_and_engram_id", unique: true
+    t.index ["project_id", "topic_key", "state"], name: "index_project_memories_on_project_id_and_topic_key_and_state"
+    t.index ["project_id"], name: "index_project_memories_on_project_id"
+    t.index ["revision"], name: "index_project_memories_on_revision", unique: true
+    t.index ["terminal_session_id"], name: "index_project_memories_on_terminal_session_id"
+    t.index ["validated_by_id"], name: "index_project_memories_on_validated_by_id"
+    t.check_constraint "state::text = ANY (ARRAY['pending'::character varying, 'validated'::character varying, 'obsolete'::character varying]::text[])", name: "project_memories_state"
+  end
+
   create_table "project_trackers", force: :cascade do |t|
     t.string "access", default: "read_write", null: false
     t.datetime "created_at", null: false
@@ -887,6 +931,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.string "slug", null: false
     t.string "state", null: false
     t.datetime "updated_at", null: false
+    t.boolean "memory_enabled", default: false, null: false
     t.index ["company_id", "name"], name: "index_projects_on_company_id_and_name", unique: true
     t.index ["company_id", "slug"], name: "index_projects_on_company_id_and_slug", unique: true
     t.index ["company_id"], name: "index_projects_on_company_id"
@@ -1923,6 +1968,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "memory_retrievals", "project_memories", on_delete: :cascade
+  add_foreign_key "memory_retrievals", "projects"
+  add_foreign_key "memory_retrievals", "terminal_sessions", on_delete: :cascade
   add_foreign_key "oauth_clients", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "oauth_clients"
@@ -1931,6 +1979,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "project_favorites", "projects", on_delete: :cascade
   add_foreign_key "project_favorites", "users"
+  add_foreign_key "project_memories", "projects"
+  add_foreign_key "project_memories", "terminal_sessions", on_delete: :nullify
+  add_foreign_key "project_memories", "users", column: "validated_by_id", on_delete: :nullify
   add_foreign_key "project_trackers", "integrations", on_delete: :cascade
   add_foreign_key "project_trackers", "projects", on_delete: :cascade
   add_foreign_key "projects", "companies"

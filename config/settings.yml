@@ -648,6 +648,10 @@ tool_results:
 context:
   token_budget: <%= ENV['CONTEXT_TOKEN_BUDGET'] || 6000 %>
 
+engram:
+  url: <%= ENV['ENGRAM_URL'] %>
+  http_token: <%= ENV['ENGRAM_HTTP_TOKEN'] %>
+
 
 # The public list price of one queue-hour, shown on /how-it-works. Nothing bills
 # from it: metering reports quantities and the invoice is priced by Stripe or AWS

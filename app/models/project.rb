@@ -16,6 +16,7 @@ class Project < ApplicationRecord
   has_many :project_favorites, dependent: :destroy
   has_many :favorited_by_users, through: :project_favorites, source: :user
   has_many :terminal_sessions, dependent: :nullify
+  has_many :project_memories, dependent: :destroy
   has_many :oauth_credentials, as: :owner, dependent: :destroy
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy

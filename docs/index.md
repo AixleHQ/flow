@@ -13,6 +13,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[project/overview.md](./project/overview.md)** — Executive summary, tech stack, architecture overview, data model, API structure
 - **[project/context.md](./project/context.md)** — LLM-optimized rules: tech stack, patterns, anti-patterns, key file locations
 - **[project/worktree-stack.md](./project/worktree-stack.md)** — Running a second, isolated Compose stack from a git worktree: the variables that keep its network, image, ports and database off the default stack's, and what still bites (Google sign-in, the test flock, two Traefiks on one socket)
+- **[implementation-artifacts/plan-token-efficient-context.md](./implementation-artifacts/plan-token-efficient-context.md)** — Context-efficiency and Engram pilot contracts, implementation, verification and pending rollout measurements
 
 ## Architecture
 
@@ -95,6 +96,8 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/index.md](./user-guide/index.md)** — Entry point: the event → trigger → workflow → agent session path and the mental model (company/project/profile, triggers and gates, whose credential a session runs on, the session queue, where results go)
 - **[user-guide/board.md](./user-guide/board.md)** — Projects, columns, cards, and column → workflow bindings
 - **[user-guide/workflows.md](./user-guide/workflows.md)** — DAG steps, retries, approval gates, parallel runs
+- **[user-guide/token-efficient-workflows.md](./user-guide/token-efficient-workflows.md)** — Spec-first delivery with focused resources, soft context-budget metrics and cost/quality measurement per accepted task
+- **[user-guide/project-memory.md](./user-guide/project-memory.md)** — Engram pilot setup, project opt-in, review, retrieval budgets, retention, backups and measurement
 - **[user-guide/triggers-and-gates.md](./user-guide/triggers-and-gates.md)** — Triggers start runs, gates defer them: every trigger source (column, manual, schedule, chat, webhook, tracker), the project's Triggers page, who a trigger runs as, `subject_policy`, and the CI gates that hold a card's column workflow
 - **[user-guide/prompt-guide.md](./user-guide/prompt-guide.md)** — Writing session instructions an agent can run: what it sees, where its files are, and what belongs on the step form
 - **[user-guide/agents.md](./user-guide/agents.md)** — Personas, the container, and how session context is built

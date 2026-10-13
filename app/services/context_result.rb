@@ -15,7 +15,7 @@ class ContextResult
   end
 
   def render
-    @rendered ||= ContextRenderer.render(@sections)
+    rendering[:content]
   end
   alias_method :to_s, :render
 
@@ -31,6 +31,7 @@ class ContextResult
       built_at: built_at.iso8601,
       build_time_ms: build_time_ms,
       total_content_length: total_content_length,
+      rendering: rendering.except(:content),
       applied_builders: applied_builders,
       skipped_builders: skipped_builders,
       sections: sections.map { |s| section_metadata(s) }
@@ -44,6 +45,10 @@ class ContextResult
   end
 
   private
+
+  def rendering
+    @rendering ||= ContextRenderer.render_with_metadata(sections)
+  end
 
   def detect_session_type
     if session.step_run&.workflow_run&.board_task.present?

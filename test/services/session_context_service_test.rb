@@ -657,11 +657,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      mode: "interactive")
 
-    runtime_mock = mock("runtime")
-    Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-    runtime_mock.stubs(:write_file).returns(true)
-    runtime_mock.stubs(:exec)
+    runtime = stub_container_runtime
 
     SessionContextService.inject_context_file("ctr1", session)
     session.reload
@@ -671,6 +667,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_kind_of Array, session.context_metadata["applied_builders"]
     assert_kind_of Array, session.context_metadata["sections"]
     assert_kind_of Numeric, session.context_metadata["build_time_ms"]
+    rendering = session.context_metadata.fetch("rendering")
+    injected = runtime.read_file("ctr1", "/home/claude/.claude/CLAUDE.md")
+    assert_equal injected.length, rendering["rendered_content_length"]
+    assert_equal (injected.length / 4.0).ceil, rendering["estimated_tokens_after"]
+    assert_not rendering.key?("content")
   end
 
   test "inject_context_file writes to correct path per agent type" do

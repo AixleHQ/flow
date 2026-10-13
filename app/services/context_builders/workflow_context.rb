@@ -236,12 +236,16 @@ module ContextBuilders
     end
 
     def completed_step_runs
-      @completed_step_runs ||= workflow_run.step_runs
-        .where.not(id: step_run.id)
-        .where(state: %w[completed skipped])
-        .joins(:step)
-        .order("steps.position ASC")
-        .includes(step: :sub_steps, sub_step_runs: :sub_step)
+      @completed_step_runs ||= begin
+        completed = workflow_run.step_runs
+          .where(step_id: step.upstream_step_ids, state: %w[completed skipped])
+        latest_ids = completed.group(:step_id).select("MAX(step_runs.id)")
+
+        completed.where(id: latest_ids)
+          .joins(:step)
+          .order("steps.position ASC", "step_runs.id ASC")
+          .includes(step: :sub_steps, sub_step_runs: :sub_step)
+      end
     end
 
     def non_interactive?

@@ -15,6 +15,7 @@ class SessionContextConstructor
     ContextBuilders::Resources,
     ContextBuilders::ConfigItems,
     ContextBuilders::BmadMethod,
+    ContextBuilders::ProjectMemory,
     ContextBuilders::OutputRules,
     # Last on purpose: ties in the renderer's sort are broken by this order, so
     # the completion mandate is the final thing the agent reads.

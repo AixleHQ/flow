@@ -11,6 +11,7 @@ import {
   NumberInput,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   Textarea,
@@ -64,6 +65,7 @@ const schema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500).optional(),
   preferredArtifactsLanguage: z.string(),
+  memoryEnabled: z.boolean(),
   // Empty means "no reservation of my own" — the project falls back to the
   // installation default. The budget arithmetic is the server's to judge.
   concurrency: z
@@ -72,7 +74,7 @@ const schema = z.object({
     .refine((v) => !v || /^[1-9]\d*$/.test(v), 'Must be a whole number greater than zero'),
 });
 
-interface ProjectSettings {
+export interface ProjectSettings {
   id: number;
   name: string;
   description: string | null;
@@ -84,6 +86,9 @@ interface ProjectSettings {
   ownerName: string;
   ownerEmail: string;
   canDelete: boolean;
+  memoryEnabled: boolean;
+  memoryAvailable: boolean;
+  memoryCanManage: boolean;
 }
 
 interface ConcurrencyAllocation {
@@ -132,6 +137,7 @@ const SettingsPage = () => {
       name: project.name,
       description: project.description || '',
       preferredArtifactsLanguage: project.preferredArtifactsLanguage || 'en',
+      memoryEnabled: project.memoryEnabled,
       concurrency: concurrency.maxSessions != null ? String(concurrency.maxSessions) : '',
     },
     validate: zodResolver(schema),
@@ -149,6 +155,7 @@ const SettingsPage = () => {
           name: values.name.trim(),
           description: values.description.trim(),
           preferredArtifactsLanguage: values.preferredArtifactsLanguage,
+          ...(project.memoryCanManage ? { memoryEnabled: values.memoryEnabled } : {}),
         },
         // Sent only when this person may set it: the key's presence is what tells
         // the server a limit was submitted at all, and an empty one clears it.
@@ -280,6 +287,35 @@ const SettingsPage = () => {
                     setSaved(false);
                   }}
                 />
+              </Box>
+
+              <Box>
+                <Switch
+                  role="switch"
+                  label="Project memory (pilot)"
+                  description="Reuse validated discoveries from earlier sessions in this project."
+                  disabled={!project.memoryCanManage || (!project.memoryAvailable && !project.memoryEnabled)}
+                  {...form.getInputProps('memoryEnabled', { type: 'checkbox' })}
+                  onChange={(event) => {
+                    form.setFieldValue('memoryEnabled', event.currentTarget.checked);
+                    setSaved(false);
+                  }}
+                />
+                {!project.memoryAvailable && (
+                  <Text size="xs" c="dimmed" mt={4}>
+                    The memory service is unavailable. Existing memory can still be disabled.
+                  </Text>
+                )}
+                {!project.memoryCanManage && (
+                  <Text size="xs" c="dimmed" mt={4}>
+                    Only the project owner or a company admin can change this.
+                  </Text>
+                )}
+                {pageErrors?.memoryEnabled && (
+                  <Text size="xs" c="red" mt={4}>
+                    {pageErrors.memoryEnabled}
+                  </Text>
+                )}
               </Box>
 
               <Box>

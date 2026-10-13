@@ -23,6 +23,7 @@ module Tools
     Entry = Struct.new(:tag, :label, :ui_visible, keyword_init: true)
 
     ENTRIES = [
+      Entry.new(tag: :project_memory, label: "Project memory", ui_visible: false),
       Entry.new(tag: :board, label: "Board management", ui_visible: true),
       Entry.new(tag: :tracker, label: "Task trackers", ui_visible: true),
       Entry.new(tag: :chat, label: "Chat (Slack and Teams)", ui_visible: true),

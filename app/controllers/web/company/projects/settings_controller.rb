@@ -13,9 +13,11 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   # must not leave the name change committed behind it: the person is told the
   # settings were not saved, and that has to be true of all of them.
   def update
-    errors = {}
+    errors = memory_settings_errors
 
     ActiveRecord::Base.transaction do
+      raise ActiveRecord::Rollback if errors.any?
+
       errors.merge!(current_project.errors.to_hash) unless current_project.update(project_params)
       errors.merge!(apply_concurrency_limit) if params.key?(:concurrency)
       raise ActiveRecord::Rollback if errors.any?
@@ -32,11 +34,26 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   private
 
   def project_params
-    params.require(:project).permit(:name, :description, :preferred_artifacts_language, :state)
+    params.require(:project).permit(:name, :description, :preferred_artifacts_language, :state, :memory_enabled)
   end
 
   def settings_policy
     @settings_policy ||= Web::Company::Projects::SettingsPolicy.new(policy_context, current_project)
+  end
+
+  def can_manage_memory?
+    settings_policy.update? && (settings_policy.manage_concurrency? || current_project.owner_id == current_user.id)
+  end
+
+  def memory_settings_errors
+    attributes = project_params
+    return {} unless attributes.key?(:memory_enabled)
+    return { memoryEnabled: "Only the project owner or a company admin can change memory" } unless can_manage_memory?
+
+    enabling = ActiveModel::Type::Boolean.new.cast(attributes[:memory_enabled]) && !current_project.memory_enabled?
+    return {} unless enabling && !Engram::Client.configured?
+
+    { memoryEnabled: "The memory service is unavailable" }
   end
 
   def concurrency_limit_record
@@ -92,6 +109,9 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
       slug: project.slug,
       state: project.state,
       preferred_artifacts_language: project.preferred_artifacts_language,
+      memory_enabled: project.memory_enabled,
+      memory_available: Engram::Client.configured?,
+      memory_can_manage: can_manage_memory?,
       created_at: project.created_at.iso8601,
       updated_at: project.updated_at.iso8601,
       owner_name: project.owner.name,

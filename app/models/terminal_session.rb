@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class TerminalSession < ApplicationRecord
+  has_many :memory_retrievals, dependent: :destroy
   class InvalidStateError < StandardError; end
 
   include TerminalSessionStateMachine

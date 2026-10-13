@@ -1,0 +1,31 @@
+services:
+  engram:
+    build:
+      context: ./docker/engram
+    image: flow-engram:3.4.0
+    restart: unless-stopped
+    volumes:
+      - engram_data:/data
+    networks: [default]
+    environment:
+      ENGRAM_CLOUD_AUTOSYNC: "0"
+      ENGRAM_CLOUD_SYNC: "false"
+      ENGRAM_HTTP_TOKEN: ${ENGRAM_HTTP_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:7437/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  web:
+    environment:
+      ENGRAM_URL: http://engram:7437
+      ENGRAM_HTTP_TOKEN: ${ENGRAM_HTTP_TOKEN:-}
+
+  worker:
+    environment:
+      ENGRAM_URL: http://engram:7437
+      ENGRAM_HTTP_TOKEN: ${ENGRAM_HTTP_TOKEN:-}
+
+volumes:
+  engram_data:

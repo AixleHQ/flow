@@ -365,7 +365,19 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `GITHUB_PUBLIC_READ_TOKEN`     | no       | unset                  | Raises the `api.github.com` limit from 60 to 5,000 requests/hour for the paths that read public repositories: the skills catalog, BMAD module tags, the template catalog, and checking a public repository you attach. The anonymous 60/hour is per source IP, so every agent container shares one budget. Needs no scopes; never use a tenant installation token. |
 | `URL_SAFETY_TRUSTED_HOSTS`     | no       | empty                  | Comma-separated public hostnames allowed to resolve to a private IP (split-horizon DNS for our own staging hosts). Only the Coder integration reads it — its URL check, API calls and `coder ssh`; every other URL check (MCP servers, OAuth endpoints, identity providers) ignores it. |
 | `TOOL_RESULTS_RETENTION_DAYS`  | no       | `30`                   | How long a tool result's stored payload is kept.               |
-| `CONTEXT_TOKEN_BUDGET`         | no       | `6000`                 | Token budget for rendered prompt context.                      |
+| `CONTEXT_TOKEN_BUDGET`         | no       | `6000`                 | Soft budget for the generated context file (estimated at 4 characters/token, including XML wrappers). Compresses optional history; preserves required instructions/resources and reports any remaining excess in session `context_metadata.rendering`. Not a session token cap. |
+
+## Project memory pilot
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `ENGRAM_URL` | no | unset | Private operator-controlled Engram REST origin. Enables deployment availability; project owners/admins must separately opt in under Project Settings. The optional Compose overlay sets `http://engram:7437`. |
+| `ENGRAM_HTTP_TOKEN` | no | unset | Optional bearer credential shared with the private Engram server, including hard deletion. Keep the service on a trusted network; upstream local API authentication is not tenant authorization. Never inject this credential into agent containers. |
+
+The pilot uses pinned Engram 3.4.0, PostgreSQL for Flow authorization/validation and
+revision snapshots, and a persistent SQLite volume for the search index. Its
+three MCP tools are served through Flow's authenticated endpoint. See the
+repository guide `docs/user-guide/project-memory.md` for setup, review and retention.
 
 ## Docs explorer
 

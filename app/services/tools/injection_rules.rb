@@ -6,6 +6,7 @@ module Tools
   # unknown rule names at class-load time.
   module InjectionRules
     RULES = {
+      project_memory_enabled: ->(ctx) { ProjectMemoryService.serves?(ctx.session) },
       # kind :workflow — board_*, list_sub_steps, mark_sub_step, chat_post_message
       workflow_step_session: ->(ctx) { ctx.session_type == "workflow_step" },
       # kind :internal — read_tool_result, needed to poll async container tools

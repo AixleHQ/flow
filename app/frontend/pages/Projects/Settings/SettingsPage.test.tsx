@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import SettingsPage from './SettingsPage';
+import SettingsPage, { type ProjectSettings } from './SettingsPage';
 
-const project = {
+const project: ProjectSettings = {
   id: 7,
   name: 'Gateway Service',
   description: 'Edge routing layer',
@@ -19,6 +19,9 @@ const project = {
   ownerName: 'Dana Owner',
   ownerEmail: 'dana@example.com',
   canDelete: true,
+  memoryEnabled: false,
+  memoryAvailable: true,
+  memoryCanManage: true,
 };
 
 const concurrency = {
@@ -31,6 +34,61 @@ const concurrency = {
 };
 
 describe('Projects/Settings/SettingsPage', () => {
+  it('saves the memory opt-in alongside general settings', async () => {
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+    const toggle = screen.getByRole('switch', { name: /^Project memory \(pilot\)/ });
+    expect(toggle).not.toBeChecked();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/settings',
+      expect.objectContaining({ project: expect.objectContaining({ memoryEnabled: true }) }),
+      expect.anything(),
+    );
+  });
+
+  it('disables memory opt-in when the service is unavailable', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { concurrency, project: { ...project, memoryAvailable: false } },
+    });
+
+    expect(screen.getByRole('switch', { name: /^Project memory \(pilot\)/ })).toBeDisabled();
+    expect(screen.getByText(/memory service is unavailable/i)).toBeInTheDocument();
+  });
+
+  it('allows memory to be disabled while the service is unavailable', async () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { concurrency, project: { ...project, memoryEnabled: true, memoryAvailable: false } },
+    });
+
+    const toggle = screen.getByRole('switch', { name: /^Project memory \(pilot\)/ });
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeEnabled();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/settings',
+      expect.objectContaining({ project: expect.objectContaining({ memoryEnabled: false }) }),
+      expect.anything(),
+    );
+  });
+
+  it('keeps memory read-only for collaborators', async () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { concurrency, project: { ...project, memoryCanManage: false } },
+    });
+
+    expect(screen.getByRole('switch', { name: /^Project memory \(pilot\)/ })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Description'), ' updated');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    const payload = vi.mocked(router.patch).mock.calls[0][1];
+    expect(payload).not.toHaveProperty('project.memoryEnabled');
+  });
+
   it('renders the page title and section headings', () => {
     renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 

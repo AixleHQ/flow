@@ -13,6 +13,19 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Settings**: owners and company admins can opt projects into an Engram
+  memory pilot. Sessions search reviewed findings within project boundaries and
+  propose new findings for review; operators control persistence and retention.
+  Owners and admins can export session usage and memory estimates for pilot comparisons.
+
+### Changed
+- **Sessions & Runs**: initial workflow context summarizes only dependency steps
+  and their latest completed/skipped attempts. Context metadata records the final
+  rendered size, estimated tokens, compressed sections and any soft-budget excess.
+- **Aixle Builder**: workflow guidance favors one canonical specification,
+  resources scoped to each step and reviews with distinct purposes.
+
 ## [1.2.1] - 2026-10-13
 
 ### Changed
