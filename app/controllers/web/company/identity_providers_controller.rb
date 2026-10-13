@@ -21,7 +21,7 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
     )
     provider.client_secret = provider_params[:client_secret]
 
-    if provider.save
+    if save_connection(provider)
       # Disabled on arrival: the policy row exists so the screen can show it, and
       # enabling it goes through the AD-7 prove-before-enforce guard.
       CompanyAuthPolicy.find_or_create_by!(company: current_company, identity_provider: provider) do |policy|
@@ -44,7 +44,7 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
     # erase a credential the admin did not retype.
     provider.client_secret = provider_params[:client_secret] if provider_params[:client_secret].present?
 
-    if provider.save
+    if save_connection(provider)
       redirect_to company_settings_access_path, notice: "#{provider.display_name} updated."
     else
       redirect_to company_settings_access_path, inertia: { errors: provider.errors }
@@ -65,6 +65,15 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
   # write.
   def company_connection!
     current_company.identity_providers.where(scope: "company").find(params[:id])
+  end
+
+  # The unique index catches the double-submit race the uniqueness validation
+  # cannot see; either way it is a form error, not a 500.
+  def save_connection(provider)
+    provider.save
+  rescue ActiveRecord::RecordNotUnique
+    provider.errors.add(:name, :taken)
+    false
   end
 
   def updater

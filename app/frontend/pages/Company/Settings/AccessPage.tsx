@@ -86,6 +86,7 @@ function ConnectionForm({ onDone }: { onDone: () => void }) {
           label="Display name"
           placeholder="Acme SSO"
           value={form.data.name}
+          error={form.errors.name}
           onChange={(e) => form.setData('name', e.currentTarget.value)}
         />
         <TextInput

@@ -58,6 +58,46 @@ class IdentityProviderTest < ActiveSupport::TestCase
     assert_raises(ActiveRecord::StatementInvalid) { provider.save!(validate: false) }
   end
 
+  test "a company cannot have two connections of one kind with the same name" do
+    company = create(:company)
+    create(:identity_provider, company: company, kind: "oidc", name: "Acme SSO")
+    duplicate = build(:identity_provider, company: company, kind: "oidc", name: "Acme SSO")
+
+    refute_predicate duplicate, :valid?
+    assert_includes duplicate.errors[:name], "has already been taken"
+  end
+
+  test "another company may reuse a connection name" do
+    create(:identity_provider, company: create(:company), kind: "oidc", name: "Acme SSO")
+
+    assert_predicate build(:identity_provider, company: create(:company), kind: "oidc", name: "Acme SSO"), :valid?
+  end
+
+  test "a connection name is stored without surrounding whitespace, so a padded copy is a duplicate" do
+    company = create(:company)
+    provider = create(:identity_provider, company: company, kind: "oidc", name: "  Acme SSO ")
+
+    assert_equal "Acme SSO", provider.reload.name
+    duplicate = build(:identity_provider, company: company, kind: "oidc", name: "Acme SSO ")
+    refute_predicate duplicate, :valid?
+    assert_includes duplicate.errors[:name], "has already been taken"
+  end
+
+  test "unnamed connections do not collide, matching the unique index" do
+    company = create(:company)
+    create(:identity_provider, company: company, kind: "oidc", name: nil)
+
+    assert_predicate build(:identity_provider, company: company, kind: "oidc", name: nil), :valid?
+  end
+
+  test "the database refuses a duplicate connection name even when validations are skipped" do
+    company = create(:company)
+    create(:identity_provider, company: company, kind: "oidc", name: "Acme SSO")
+    duplicate = build(:identity_provider, company: company, kind: "oidc", name: "Acme SSO")
+
+    assert_raises(ActiveRecord::RecordNotUnique) { duplicate.save!(validate: false) }
+  end
+
   test "destroying a company takes its connections and policies with it" do
     company = create(:company)
     connection = create(:identity_provider, company: company, kind: "oidc")
