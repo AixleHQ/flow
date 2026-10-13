@@ -450,6 +450,16 @@ class AgentCredential < ApplicationRecord
     retired_recently?(entry) ? entry["block"] : nil
   end
 
+  # A container's copy of a block whose refresh token we have since replaced (rotated here,
+  # or refused by the vendor and cleared) is stale: merging it back re-arms a dead grant.
+  def without_retired_grants(captured)
+    stale = adapter.refresh_tokens(captured).select { |_block, token| retired_refresh_token_block(token) }
+    return captured if stale.empty?
+
+    Rails.logger.info("[AgentCredential] credential=#{id} dropped stale write-back of #{stale.keys.join(', ')}")
+    captured.except(*stale.keys)
+  end
+
   private
 
   def retired_refresh_tokens
@@ -537,21 +547,22 @@ class AgentCredential < ApplicationRecord
       clear_refresh_error! if active? && expires_at.nil? && refresh_error.present?
     when :error
       permanent = self.class.permanent_failure?(result)
+      refused = permanent || result[:refused] == true
       mark_refresh_error!(result[:detail], permanent: permanent)
-      report_refresh_failure(result[:detail], source: source, permanent: permanent)
+      report_refresh_failure(result[:detail], source: source, permanent: permanent, refused: refused)
     end
   end
 
-  # A permanent refusal is the vendor ending the login, which the user is mailed
-  # about and only they can renew; a transient one may be ours.
-  def report_refresh_failure(detail, source:, permanent:)
+  # A refusal is the vendor ending a login (the base one or an add-on such as designOauth),
+  # which only the user can renew; a transient failure may be ours.
+  def report_refresh_failure(detail, source:, permanent:, refused:)
     Rails.error.report(
       RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
       handled: true,
-      severity: permanent ? :warning : :error,
+      severity: refused ? :warning : :error,
       source: REFRESH_ERROR_SOURCE,
       context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
-                 permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
+                 permanent: permanent, refused: refused, status: status.to_s, failure_count: refresh_failure_count }
     )
   end
 

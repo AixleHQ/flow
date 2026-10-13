@@ -796,6 +796,7 @@ module Agents
       result = @adapter.refresh!(cred)
 
       assert_equal :error, result[:status]
+      refute result[:refused], "a non-2xx that is not invalid_grant may be ours"
       assert_match(/claudeAiOauth refresh failed/, result[:detail])
       assert_equal "a", cred.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
@@ -876,6 +877,7 @@ module Agents
       assert_equal :error, result[:status]
       assert_match(/designOauth/, result[:detail])
       refute result[:permanent], "a dead add-on block must not condemn the whole credential"
+      assert result[:refused], "the vendor refused the grant, which is the user's to renew"
       block = cred.reload.config_data["designOauth"]
       refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
       refute_predicate block["refreshToken"], :present?,
@@ -902,6 +904,7 @@ module Agents
       result = @adapter.refresh!(cred)
 
       assert_not_equal :error, result[:status]
+      refute result[:refused]
       assert_equal winner, cred.reload.config_data["claudeAiOauth"]
     end
 

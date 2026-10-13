@@ -363,9 +363,10 @@ module Agents
     # (BaseAdapter#refresh!).
     # @param credential [AgentCredential]
     # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
-    #   permanent: Boolean, persisted: Boolean } — `permanent` is true only when the
-    #   BASE login is the block the server rejected; a dead add-on (designOauth)
-    #   leaves the credential usable.
+    #   permanent: Boolean, refused: Boolean, persisted: Boolean } — `permanent` is true
+    #   only when the BASE login is the block the server rejected; a dead add-on
+    #   (designOauth) leaves the credential usable. `refused`: the vendor rejected the
+    #   grant of at least one block (invalid_grant) — the user's to fix, not our failure.
     # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
     #   uses the default; a session launch passes its own, larger, threshold so the
     #   container starts with a token that outlives the session.
@@ -441,17 +442,18 @@ module Agents
       # flip it to `error`: a session runs on the base login alone, so a dead
       # designOauth must not take the user's whole Claude login down with it.
       permanent = invalidated_blocks.keys.intersect?(BASE_OAUTH_BLOCKS)
+      refused = invalidated_blocks.any?
 
-      return { status: :not_needed, detail: nil, permanent: false, persisted: written } if refreshed_blocks.empty? && invalidated_blocks.empty? && error.nil?
+      return { status: :not_needed, detail: nil, permanent: false, refused: false, persisted: written } if refreshed_blocks.empty? && invalidated_blocks.empty? && error.nil?
       # A rejected base login is a failure even when an add-on block rotated fine in
       # the same pass — reporting :refreshed there would clear the error the user
       # has to act on.
       if error && (permanent || refreshed_blocks.empty?)
-        return { status: :error, detail: error, permanent: permanent, persisted: written }
+        return { status: :error, detail: error, permanent: permanent, refused: refused, persisted: written }
       end
 
       # partial failure (add-on block failed, base rotated) still counts as refreshed
-      { status: :refreshed, detail: error, permanent: false, persisted: written }
+      { status: :refreshed, detail: error, permanent: false, refused: false, persisted: written }
     end
 
     # Extract only the credentials we need to persist
