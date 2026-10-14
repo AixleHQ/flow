@@ -8,6 +8,7 @@ export { PageShell } from './PageShell';
 export { EmptyState } from './EmptyState';
 export { Identicon } from './Identicon';
 export { StatusBadge } from './StatusBadge';
+export { InfoHint } from './InfoHint';
 export type {
   SharedProps,
   SharedTrial,

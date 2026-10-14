@@ -20,6 +20,7 @@ import { ReferenceEditor, type ReferenceItem } from 'shared/components/Reference
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
+import { InfoHint } from 'shared/ui/InfoHint';
 
 import classes from './BuilderPage.module.css';
 import { type IssueFix, normalizeSpecName, type WorkflowIssue } from './dataFlow';
@@ -294,12 +295,11 @@ export function SessionEditorPanel({
           <label className={classes.fieldLabel}>
             Instructions
             <span className={classes.instrDot} title="Required" />
-            <span
+            <InfoHint
+              label="The prompt the AI agent receives. Each @ reference becomes the real path or name."
+              size={12}
               className={classes.instrInfoIcon}
-              title="The prompt the AI agent receives. Each @ reference becomes the real path or name."
-            >
-              <IconInfoCircle size={12} />
-            </span>
+            />
           </label>
           <p className={classes.fieldHelp}>
             Type <code>@</code> to reference an asset, another session, an output, an MCP server, a tool, a skill or a
@@ -344,9 +344,7 @@ export function SessionEditorPanel({
           <div>
             <label className={classes.fieldLabel}>
               Agent&nbsp;
-              <span title="The AI model that executes this session" style={{ color: 'var(--text-3)', cursor: 'help' }}>
-                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              </span>
+              <InfoHint label="The AI model that executes this session" />
             </label>
             <Select
               data={[{ value: '', label: 'No agent' }, ...toSelectData(agents)]}
@@ -370,12 +368,7 @@ export function SessionEditorPanel({
           <div>
             <label className={classes.fieldLabel}>
               Execution Environment&nbsp;
-              <span
-                title="The CLI/runtime this session runs in. None uses the agent's default."
-                style={{ color: 'var(--text-3)', cursor: 'help' }}
-              >
-                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              </span>
+              <InfoHint label="The CLI/runtime this session runs in. None uses the agent's default." />
             </label>
             <Select
               data={[{ value: '', label: 'None (default)' }, ...AGENT_SELECT_OPTIONS]}
@@ -405,12 +398,7 @@ export function SessionEditorPanel({
             <div>
               <label className={classes.fieldLabel}>
                 Preferred Model&nbsp;
-                <span
-                  title="Overrides the runtime's default model for this session."
-                  style={{ color: 'var(--text-3)', cursor: 'help' }}
-                >
-                  <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-                </span>
+                <InfoHint label="Overrides the runtime's default model for this session." />
               </label>
               <Select
                 data={preferredModelOptions}
@@ -563,9 +551,7 @@ export function SessionEditorPanel({
         </div>
         <label className={classes.fieldLabel}>
           Run after&nbsp;
-          <span title="Waits for these sessions before starting" style={{ color: 'var(--text-3)', cursor: 'help' }}>
-            <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-          </span>
+          <InfoHint label="Waits for these sessions before starting" />
         </label>
         <MultiSelect
           data={dependencyOptions}
@@ -675,9 +661,7 @@ export function SessionEditorPanel({
           <div style={{ marginTop: 12 }}>
             <label className={classes.fieldLabel}>
               Skip Policy&nbsp;
-              <span title="When to bypass this session during a run" style={{ color: 'var(--text-3)', cursor: 'help' }}>
-                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              </span>
+              <InfoHint label="When to bypass this session during a run" />
             </label>
             <Select
               data={[
@@ -705,12 +689,7 @@ export function SessionEditorPanel({
           <div style={{ marginTop: 10 }}>
             <label className={classes.fieldLabel}>
               On Failure&nbsp;
-              <span
-                title="What happens when this session exits with an error"
-                style={{ color: 'var(--text-3)', cursor: 'help' }}
-              >
-                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
-              </span>
+              <InfoHint label="What happens when this session exits with an error" />
             </label>
             <Select
               data={[
