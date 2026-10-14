@@ -19,6 +19,9 @@ governance, community health — carry none.
   takes the address from the username when Entra sends no email, and shows on the
   Access screen why a sign-in failed. It used to fail silently and leave the
   connection *Not verified yet*.
+- **Company settings**: adding an SSO connection with a name another of the
+  company's connections already uses now shows an error on the name instead
+  of failing with a server error. Names are saved without surrounding spaces.
 
 ## [1.2.1] - 2026-10-13
 

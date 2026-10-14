@@ -90,6 +90,33 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
     assert_equal "acme-secret", provider.client_secret
   end
 
+  test "connecting a second provider under a name already in use is a form error, not a server error" do
+    sign_in_as(@admin)
+    post company_identity_providers_path, params: connection_params
+
+    [ "Acme SSO", "Acme SSO " ].each do |name|
+      assert_no_difference "IdentityProvider.count" do
+        post company_identity_providers_path, params: connection_params.merge(name: name)
+      end
+      assert_redirected_to company_settings_access_path
+      follow_redirect!
+      assert_inertia_props { |props| assert_match(/has already been taken/, Array(props.dig(:errors, :name)).join) }
+    end
+  end
+
+  test "renaming a connection to a name already in use is refused" do
+    create(:identity_provider, company: @company, kind: "oidc", name: "Acme SSO")
+    other = create(:identity_provider, company: @company, kind: "oidc", name: "Other SSO")
+    sign_in_as(@admin)
+
+    patch company_identity_provider_path(other), params: { name: "Acme SSO" }
+
+    assert_redirected_to company_settings_access_path
+    assert_equal "Other SSO", other.reload.name
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/has already been taken/, Array(props.dig(:errors, :name)).join) }
+  end
+
   test "removing a connection somebody depends on is refused, exactly as disabling it would be" do
     connection = create(:identity_provider, company: @company, kind: "oidc", name: "Acme SSO")
     create(:company_auth_policy, company: @company, identity_provider: connection, enabled: true)

@@ -33,8 +33,14 @@ class IdentityProvider < ApplicationRecord
   has_many :company_auth_policies, dependent: :destroy
   has_many :user_session_proofs, dependent: :destroy
 
+  # An untrimmed copy would slip past the unique index as a "different" name.
+  normalizes :name, with: ->(name) { name.strip }
+
   validates :kind, presence: true
   validates :scope, presence: true
+  # Mirrors index_identity_providers_unique_company_connection, which (like
+  # Postgres generally) does not treat NULL names as equal — hence allow_nil.
+  validates :name, uniqueness: { scope: %i[company_id kind] }, allow_nil: true, if: -> { scope == "company" }
   validate :company_matches_scope
   validate :issuer_is_safe, if: :issuer_changed?
 
