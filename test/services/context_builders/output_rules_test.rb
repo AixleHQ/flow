@@ -35,6 +35,18 @@ class ContextBuilders::OutputRulesTest < ActiveSupport::TestCase
     assert_includes content, "clean, production-quality"
   end
 
+  test "tells the agent to use only the MCP servers and tools the task needs" do
+    %w[interactive non_interactive].each do |mode|
+      session = create(:terminal_session, :agent_session, user: @user, project: @project,
+        mode: mode, initial_prompt: "do work")
+
+      content = ContextBuilders::OutputRules.new(session).build.first.content
+
+      assert_includes content, "- Use only the MCP servers and tools needed for the task"
+      assert_not_includes content, "all available MCP servers"
+    end
+  end
+
   test "includes session lifecycle instructions for non-interactive session" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "non_interactive", initial_prompt: "do work")

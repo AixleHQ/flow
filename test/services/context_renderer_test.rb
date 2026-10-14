@@ -92,6 +92,49 @@ class ContextRendererTest < ActiveSupport::TestCase
 
   # -- Story 28.1: Token Budget Compression --
 
+  test "token estimates include XML wrappers and round up" do
+    section = ContextSection.new(tag: "a", priority: :info, content: "x")
+
+    assert_equal "<a priority=\"info\">\n\nx\n\n</a>", ContextRenderer.render([ section ])
+    assert_equal 7, ContextRenderer.estimate_tokens([ section ])
+  end
+
+  test "over-budget history drops data lines before shortening long arrow notes" do
+    sections = [
+      ContextSection.new(tag: "spec", priority: :critical, content: "contract " + ("x" * 25_000)),
+      ContextSection.new(tag: "previous-steps", priority: :info,
+        content: "## Previous Steps\n### 1. Analyze [completed]\nKeep the authentication invariant.\n  → data: #{'d' * 200}\n")
+    ]
+
+    output = ContextRenderer.render(sections)
+
+    assert_includes output, "Keep the authentication invariant."
+    assert_not_includes output, "→ data:"
+    assert_includes output, sections.first.content
+  end
+
+  test "render report flags an uncompressible context without cutting required inputs" do
+    resources = "## Skills\n\n### Read the contract\n" + ("Specification rule.\n" * 1500)
+    sections = [ ContextSection.new(tag: "available-resources", priority: :info, content: resources) ]
+
+    report = ContextRenderer.render_with_metadata(sections)
+
+    assert_includes report[:content], resources.strip
+    assert report[:over_budget]
+    assert_empty report[:compressed_tags]
+    assert_equal ContextRenderer::TOKEN_BUDGET, report[:token_budget]
+    assert_equal report[:estimated_tokens_before], report[:estimated_tokens_after]
+  end
+
+  test "empty render report has zero estimates and no compression" do
+    report = ContextRenderer.render_with_metadata([])
+
+    assert_equal "", report[:content]
+    assert_equal 0, report[:estimated_tokens_after]
+    assert_equal false, report[:over_budget] # rubocop:disable Minitest/RefuteFalse
+    assert_empty report[:compressed_tags]
+  end
+
   test "no compression when under budget" do
     small_content = "x" * 100
     sections = [

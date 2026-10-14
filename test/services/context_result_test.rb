@@ -40,6 +40,29 @@ class ContextResultTest < ActiveSupport::TestCase
     assert_equal 15, result.total_content_length
   end
 
+  test "rendering metadata measures the compressed file and retains original section metadata" do
+    sections = [
+      ContextSection.new(tag: "previous-steps", priority: :info,
+        content: "## Previous Steps\n  → data: #{'x' * 25_000}\nKeep this decision.\n"),
+      ContextSection.new(tag: "spec", priority: :critical, content: "/workspace/assets/SPEC.md")
+    ]
+    result = ContextResult.new(session: @session, sections: sections,
+      applied_builders: [], skipped_builders: [], built_at: Time.current, build_time_ms: 0)
+
+    metadata = result.to_json_hash.fetch(:rendering)
+
+    assert_equal result.render.length, metadata[:rendered_content_length]
+    assert_operator metadata[:original_rendered_content_length], :>, metadata[:rendered_content_length]
+    assert_operator metadata[:estimated_tokens_before], :>, metadata[:estimated_tokens_after]
+    assert_equal false, metadata[:over_budget] # rubocop:disable Minitest/RefuteFalse
+    assert_equal [ "previous-steps" ], metadata[:compressed_tags]
+    assert_not metadata.key?(:content)
+    assert_equal sections.first.content.length, result.to_json_hash[:sections].first[:content_length]
+    assert_includes result.render, "Keep this decision."
+    assert_includes result.render, "/workspace/assets/SPEC.md"
+    assert_equal metadata, result.to_json_hash[:rendering]
+  end
+
   test "to_json_hash returns expected structure" do
     built_at = Time.current
     result = ContextResult.new(

@@ -108,6 +108,13 @@ The API endpoints behind those buttons:
 
 ## Assets in and out
 
+Previous-step summaries in the agent's initial context cover completed/skipped
+dependencies only, including transitive dependencies. Only the latest qualifying
+attempt of each dependency is summarized; independent branches are left out.
+Keep one canonical specification, pass its file path between steps, and attach
+only the resources each step needs. Add a separate review when it checks something
+the build's own review does not already cover.
+
 Three sources of input assets, all merged additively:
 
 1. **Workflow base assets** (`workflow.config.base_asset_ids`) — always.

@@ -10,7 +10,8 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "Product Planning", description: "End-to-end product planning workflow")
 
     @step1 = create(:step, workflow: @workflow, name: "Analyze", position: 1, instructions: "Run code analysis tools")
-    @step2 = create(:step, workflow: @workflow, name: "Implement", position: 2, instructions: "Write the code")
+    @step2 = create(:step, workflow: @workflow, name: "Implement", position: 2, instructions: "Write the code",
+      depends_on_step_ids: [ @step1.id ])
     @step3 = create(:step, workflow: @workflow, name: "Review", position: 3, instructions: "Check results")
 
     @workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, mode: "non_interactive")
@@ -200,6 +201,45 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
   end
 
   # -- Story 26.3: Previous Steps Summary --
+
+  test "history includes transitive dependencies but not completed independent branches" do
+    @step3.update!(depends_on_step_ids: [ @step2.id ])
+    create(:step_run, :completed, workflow_run: @workflow_run, step: @step1, step_note: "Canonical design")
+    @step_run.update!(state: "completed", step_note: "Implementation evidence")
+    independent = create(:step, workflow: @workflow, position: 4, name: "Independent audit")
+    create(:step_run, :completed, workflow_run: @workflow_run, step: independent, step_note: "Unrelated result")
+    review_run = create(:step_run, :running, workflow_run: @workflow_run, step: @step3)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: review_run)
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "previous-steps" }.content
+
+    assert_includes content, "Canonical design"
+    assert_includes content, "Implementation evidence"
+    assert_not_includes content, "Independent audit"
+    assert_not_includes content, "Unrelated result"
+  end
+
+  test "history is absent for a step with no dependencies even when another step has finished" do
+    @step2.update!(depends_on_step_ids: [])
+    create(:step_run, :completed, workflow_run: @workflow_run, step: @step1)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
+
+    assert_nil ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "previous-steps" }
+  end
+
+  test "history uses the latest completed or skipped attempt of each dependency" do
+    create(:step_run, :completed, workflow_run: @workflow_run, step: @step1, step_note: "Obsolete findings")
+    create(:step_run, :skipped, workflow_run: @workflow_run, step: @step1, step_note: "Already covered by spec")
+    create(:step_run, :failed, workflow_run: @workflow_run, step: @step1, step_note: "Unsuccessful attempt")
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
+
+    content = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "previous-steps" }.content
+
+    assert_includes content, "Already covered by spec"
+    assert_includes content, "⏭️"
+    assert_not_includes content, "Obsolete findings"
+    assert_not_includes content, "Unsuccessful attempt"
+  end
 
   test "previous-steps section produced when earlier steps completed" do
     create(:step_run, :completed, workflow_run: @workflow_run, step: @step1, step_note: "Analyzed the code thoroughly")

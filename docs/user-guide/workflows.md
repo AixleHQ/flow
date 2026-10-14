@@ -111,6 +111,12 @@ The API endpoints behind those buttons:
 
 ## Assets in and out
 
+Previous-step summaries in the agent's initial context cover completed/skipped
+dependencies only, including transitive dependencies. Only the latest qualifying
+attempt of each dependency is summarized; independent branches are left out.
+For spec-first workflow patterns and context-budget measurement, see
+[Token-efficient workflows](token-efficient-workflows.md).
+
 Three sources of input assets, all merged additively:
 
 1. **Workflow base assets** (`workflow.config.base_asset_ids`) — always.

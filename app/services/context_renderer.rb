@@ -7,13 +7,31 @@ class ContextRenderer
   PRIORITY_ORDER = { critical: 0, important: 1, info: 2 }.freeze
   POSITION_ORDER = { top: 0, middle: 1, bottom: 2, footer: 3 }.freeze
 
-  COMPRESSIBLE_TAGS = %w[previous-steps available-resources repositories].freeze
-
   def self.render(sections)
-    return "" if sections.empty?
+    render_with_metadata(sections)[:content]
+  end
 
-    sections = compress(sections) if over_budget?(sections)
+  def self.render_with_metadata(sections)
+    original = render_sections(sections)
+    prepared = over_budget?(sections) ? compress_previous_steps(sections) : sections
+    content = prepared.equal?(sections) ? original : render_sections(prepared)
+    compressed_tags = sections.zip(prepared).filter_map do |before, after|
+      before.tag if before.content != after.content
+    end.uniq
 
+    {
+      content: content,
+      original_rendered_content_length: original.length,
+      rendered_content_length: content.length,
+      estimated_tokens_before: estimate_text_tokens(original),
+      estimated_tokens_after: estimate_text_tokens(content),
+      token_budget: TOKEN_BUDGET,
+      over_budget: estimate_text_tokens(content) > TOKEN_BUDGET,
+      compressed_tags: compressed_tags
+    }
+  end
+
+  def self.render_sections(sections)
     # sort_by is not stable, so equal (position, priority) pairs would otherwise
     # render in an arbitrary order between runs — and the last critical section
     # is exactly the one whose placement matters (see ContextBuilders::
@@ -36,27 +54,15 @@ class ContextRenderer
   end
 
   def self.estimate_tokens(sections)
-    sections.sum { |s| s.content.length } / CHARS_PER_TOKEN
+    estimate_text_tokens(render_sections(sections))
+  end
+
+  def self.estimate_text_tokens(text)
+    (text.length + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN
   end
 
   def self.over_budget?(sections)
     estimate_tokens(sections) > TOKEN_BUDGET
-  end
-
-  def self.compress(sections)
-    compression_steps.each do |step|
-      sections = step.call(sections)
-      break unless over_budget?(sections)
-    end
-    sections
-  end
-
-  def self.compression_steps
-    [
-      method(:compress_previous_steps),
-      method(:compress_skills),
-      method(:compress_repositories)
-    ]
   end
 
   def self.replace_section(sections, tag, &block)
@@ -65,6 +71,8 @@ class ContextRenderer
       next s unless s.tag == tag
 
       new_content = block.call(s.content)
+      next s if new_content.blank? || new_content == s.content
+
       ContextSection.new(
         tag: s.tag, priority: s.priority, content: new_content,
         position_hint: s.position_hint, builder_name: s.builder_name
@@ -76,10 +84,10 @@ class ContextRenderer
     replace_section(sections, "previous-steps") do |content|
       lines = content.lines
       lines.map do |line|
-        if line.strip.start_with?("→") && line.strip.length > 100
-          "#{line.strip.truncate(100)}\n"
-        elsif line.strip.start_with?("→ data:")
+        if line.strip.start_with?("→ data:")
           next nil
+        elsif line.strip.start_with?("→") && line.strip.length > 100
+          "#{line.strip.truncate(100)}\n"
         else
           line
         end
@@ -87,30 +95,5 @@ class ContextRenderer
     end
   end
 
-  def self.compress_skills(sections)
-    replace_section(sections, "available-resources") do |content|
-      lines = content.lines
-      in_skill_detail = false
-      lines.select do |line|
-        if line.strip.start_with?("- **", "* **")
-          in_skill_detail = true
-        elsif in_skill_detail && line.strip.empty?
-          next false
-        else
-          in_skill_detail = false
-        end
-        true
-      end.join
-    end
-  end
-
-  def self.compress_repositories(sections)
-    replace_section(sections, "repositories") do |content|
-      lines = content.lines
-      lines.reject { |line| line.include?("Purpose:") || line.include?("purpose:") }.join
-    end
-  end
-
-  private_class_method :compress, :compression_steps, :replace_section,
-    :compress_previous_steps, :compress_skills, :compress_repositories
+  private_class_method :render_sections, :estimate_text_tokens, :replace_section, :compress_previous_steps
 end
