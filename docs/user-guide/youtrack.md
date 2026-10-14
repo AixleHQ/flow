@@ -33,7 +33,7 @@ Settings → Aixle Flow URL**).
 
 Start from either side; both end in the same place.
 
-**From Flow.** On the project's **Trackers** (or **Integrations**) page choose
+**From Flow.** On the project's **Integrations** page choose
 **Connect → YouTrack**, enter the instance URL (`https://acme.youtrack.cloud`,
 or your server's URL with its path, such as
 `https://tracker.example.com/youtrack`) and select **Continue in YouTrack**. In

@@ -14,6 +14,9 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Integrations**: the YouTrack guide and the Aixle Flow app in YouTrack now
+  send you to the project's **Integrations** page to connect YouTrack. They
+  pointed at the Trackers page, which has no Connect button.
 - **Connectors**: connecting a connector that signs in with OAuth now asks for
   offline access whenever its sign-in server offers it, so the connection renews
   itself instead of asking you to connect again once the first token expires.

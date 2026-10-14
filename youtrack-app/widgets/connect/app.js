@@ -247,7 +247,7 @@ function renderStatus(message) {
       h('div', { class: 'actions' },
         h('button', { class: 'primary', type: 'button', onclick: startPairing }, 'Connect to Aixle Flow')),
       h('p', { class: 'muted small' },
-        'You can also start in Aixle Flow: open a project’s Trackers page and choose Connect YouTrack.')),
+        'You can also start in Aixle Flow: open a project’s Integrations page and choose Connect → YouTrack.')),
     flowUrlCard()
   );
 }
