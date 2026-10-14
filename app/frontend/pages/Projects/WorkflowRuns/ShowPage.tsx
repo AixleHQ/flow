@@ -1,5 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { Alert, Anchor, Button, Group, Loader, Modal, Select, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import {
   IconAlertTriangle,
   IconDownload,
@@ -12,6 +12,8 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
+import { LlmCallsTable } from '@/shared/ui/llm-calls';
+import type LlmCall from 'types/generated/LlmCall';
 import type StepRun from 'types/generated/StepRun';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 import type WorkflowRunAsset from 'types/generated/WorkflowRunAsset';
@@ -47,6 +49,7 @@ interface Props {
   project: { id: number; name: string };
   run: WorkflowRun;
   assets: WorkflowRunAsset[];
+  llmCalls: LlmCall[];
   cableStream: string;
 }
 
@@ -108,7 +111,7 @@ function StepConsole({ step, label }: { step: StepRun; label: string }) {
 }
 
 const WorkflowRunShowPage = () => {
-  const { project, run, assets, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, run, assets, llmCalls, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
 
   const isActive = ACTIVE_STATES.has(run.state);
   const isTerminal = run.state === 'completed' || run.state === 'failed' || run.state === 'cancelled';
@@ -121,7 +124,9 @@ const WorkflowRunShowPage = () => {
   const now = useElapsedTimer(isActive);
   const canWrite = useCanWrite();
 
-  const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
+  const [tab, setTab] = useState<'sessions' | 'assets' | 'llm_calls'>('sessions');
+  const [llmModelFilter, setLlmModelFilter] = useState<string | null>(null);
+  const [llmStepFilter, setLlmStepFilter] = useState<string | null>(null);
   const [skipStepId, setSkipStepId] = useState<number | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -130,6 +135,25 @@ const WorkflowRunShowPage = () => {
   const [promoteLoading, setPromoteLoading] = useState(false);
 
   useInertiaCableStream(cableStream, { only: ['run', 'assets'], enabled: !isTerminal });
+
+  const llmModelOptions = useMemo(
+    () => [...new Set(llmCalls.map((c) => c.model))].sort().map((m) => ({ value: m, label: m })),
+    [llmCalls],
+  );
+  const llmStepOptions = useMemo(
+    () =>
+      [...new Set(llmCalls.map((c) => c.stepName).filter(Boolean) as string[])]
+        .sort()
+        .map((s) => ({ value: s, label: s })),
+    [llmCalls],
+  );
+  const filteredLlmCalls = useMemo(
+    () =>
+      llmCalls.filter(
+        (c) => (!llmModelFilter || c.model === llmModelFilter) && (!llmStepFilter || c.stepName === llmStepFilter),
+      ),
+    [llmCalls, llmModelFilter, llmStepFilter],
+  );
 
   const basePath = `/company/projects/${project.id}`;
   const workflowName = run.workflowName ?? 'Workflow run';
@@ -381,10 +405,11 @@ const WorkflowRunShowPage = () => {
               inline
               aria-label="Run detail"
               value={tab}
-              onChange={setTab}
+              onChange={(value) => setTab(value)}
               tabs={[
                 { value: 'sessions', label: 'Sessions', count: run.stepsTotal },
                 { value: 'assets', label: 'Assets', count: assets.length },
+                { value: 'llm_calls', label: 'LLM calls', count: llmCalls.length },
               ]}
             />
           }
@@ -464,7 +489,39 @@ const WorkflowRunShowPage = () => {
           className={isActive && tab === 'sessions' ? `${classes.body} ${classes.bodyWide}` : classes.body}
           role="tabpanel"
         >
-          {tab === 'assets' ? (
+          {tab === 'llm_calls' ? (
+            llmCalls.length === 0 ? (
+              <div className={classes.empty}>
+                No LLM calls recorded yet — they&apos;ll appear here as sessions finish.
+              </div>
+            ) : (
+              <Stack gap="md">
+                <Group>
+                  <Select
+                    label="Model"
+                    placeholder="All models"
+                    data={llmModelOptions}
+                    value={llmModelFilter}
+                    onChange={setLlmModelFilter}
+                    clearable
+                    size="xs"
+                  />
+                  {llmStepOptions.length > 1 && (
+                    <Select
+                      label="Session"
+                      placeholder="All sessions"
+                      data={llmStepOptions}
+                      value={llmStepFilter}
+                      onChange={setLlmStepFilter}
+                      clearable
+                      size="xs"
+                    />
+                  )}
+                </Group>
+                <LlmCallsTable calls={filteredLlmCalls} showSessionColumn />
+              </Stack>
+            )
+          ) : tab === 'assets' ? (
             renderAssets()
           ) : sortedSteps.length === 0 ? (
             <div className={classes.empty}>This run has no sessions yet.</div>
