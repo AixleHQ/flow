@@ -71,8 +71,9 @@ a setting the image relies on (Antigravity 1.3.1 no longer reads `enableTelemetr
 The Monday canary (`canary-YYYYMMDD` tags) builds the newest releases and keeps one issue
 labelled `agent-cli-updates` up to date: each pin against the vendor's newest release,
 the version the canary actually built and whether that build passed, and the vendor's
-release notes for every release in between. It closes the issue once every pin is
-current. `bin/agent-cli-report` prints the same report locally (needs `jq`, `curl` and an
+release notes for every release in between. A lookup of the newest release that fails
+shows as **lookup failed** and keeps the issue open; it closes once every pin is current.
+`bin/agent-cli-report` prints the same report locally (needs `jq`, `curl` and an
 authenticated `gh`). A green canary build for a runtime is the signal its pin can be
 raised.
 

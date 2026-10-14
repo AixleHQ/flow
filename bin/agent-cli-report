@@ -23,7 +23,7 @@ newest_version() {
   if [ "$(jq -r '.cli_latest != null' <<<"$runtime")" = "true" ]; then
     bin/agent-cli-latest "$(jq -r .id <<<"$runtime")"
   elif [ -n "$repo" ]; then
-    tag="$(gh api "repos/${repo}/releases/latest" --jq .tag_name)"
+    tag="$(gh api "repos/${repo}/releases/latest" --jq .tag_name)" || return 1
     echo "${tag#"$prefix"}"
   fi
 }
@@ -37,11 +37,13 @@ fi
 table=""
 notes=""
 outdated=0
+failed=0
 while IFS= read -r runtime; do
   label="$(jq -r .label <<<"$runtime")"
   image="$(jq -r .image <<<"$runtime")"
   pin="$(jq -r '.cli_version // empty' <<<"$runtime")"
-  newest="$(newest_version "$runtime" || true)"
+  lookup_failed=false
+  newest="$(newest_version "$runtime")" || lookup_failed=true
 
   shipped="—"
   [ -n "${SHIPPED_DIR:-}" ] && [ -f "${SHIPPED_DIR}/${image}" ] && shipped="\`$(head -1 "${SHIPPED_DIR}/${image}")\`"
@@ -56,6 +58,12 @@ while IFS= read -r runtime; do
 
   if [ -z "$pin" ]; then
     table+="| ${label} | unpinned (vendor newest) | — | ${shipped} | ${build} |"$'\n'
+    continue
+  fi
+  if [ "$lookup_failed" = true ]; then
+    failed=$((failed + 1))
+    echo "::warning::${label}: could not read the vendor's newest release" >&2
+    table+="| **${label}** | \`${pin}\` | **lookup failed** ⚠ | ${shipped} | ${build} |"$'\n'
     continue
   fi
   if [ -z "$newest" ]; then
@@ -104,6 +112,7 @@ done < <(jq -c '.runtimes[]' config/agent_runtimes.json)
 
 report="$(
   echo "<!-- outdated: ${outdated} -->"
+  echo "<!-- lookup-failed: ${failed} -->"
   echo "## Agent CLI pins${TITLE_TAG:+ — ${TITLE_TAG}}"
   echo
   echo "Each pin in \`config/agent_runtimes.json\` against the vendor's newest release, and what the"
