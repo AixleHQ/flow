@@ -359,7 +359,7 @@ jobs:
   # What the canary found, as one issue kept up to date: every pin against the vendor's
   # newest release, what the canary built and whether it built, and the vendor's release
   # notes in between (bin/agent-cli-report; run it locally for the same view). Closed
-  # once every pin is current.
+  # once every pin is current and every newest-release lookup answered.
   cli-report:
     name: Report CLI Updates
     if: ${{ always() && github.event_name == 'schedule' }}
@@ -376,6 +376,7 @@ jobs:
           sparse-checkout: |
             config/agent_runtimes.json
             bin/agent-cli-report
+            bin/agent-cli-latest
           sparse-checkout-cone-mode: false
 
       - name: Collect Shipped Versions
@@ -405,7 +406,8 @@ jobs:
           gh label create "$LABEL" --color 0e8a16 --description "Weekly canary: agent CLI pins behind the vendors" --force >/dev/null
           number="$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')"
           outdated="$(sed -n 's/^<!-- outdated: \([0-9]*\) -->$/\1/p' "$RUNNER_TEMP/report.md")"
-          if [ "${outdated:-0}" -eq 0 ]; then
+          failed="$(sed -n 's/^<!-- lookup-failed: \([0-9]*\) -->$/\1/p' "$RUNNER_TEMP/report.md")"
+          if [ "${outdated:-0}" -eq 0 ] && [ "${failed:-0}" -eq 0 ]; then
             if [ -n "$number" ]; then
               gh issue close "$number" --comment "Every pinned CLI is on the vendor's newest release."
             fi
