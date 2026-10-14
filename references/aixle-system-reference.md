@@ -189,10 +189,11 @@ Azure DevOps through an integration, or a public URL cloned read-only. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
+**Integrations**: `github`, `gitlab`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `aixle_insights`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 `jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
-projects (Linear: teams) in as task trackers.
+projects (Linear: teams) in as task trackers. `aixle_insights` is a company-wide
+connection that exports completed agent-session usage to an Aixle Insights org.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.

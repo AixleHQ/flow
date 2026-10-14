@@ -128,7 +128,8 @@
               "jira",
               "linear",
               "youtrack",
-              "tracker"
+              "tracker",
+              "aixle_insights"
             ]
           },
           "uniqueItems": true
@@ -675,7 +676,8 @@
                   "jira",
                   "linear",
                   "youtrack",
-                  "tracker"
+                  "tracker",
+                  "aixle_insights"
                 ]
               },
               "files": {
