@@ -14,6 +14,11 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Integrations**: the Aixle Flow app for YouTrack (1.0.1) no longer takes over
+  an existing `aixle-flow` account that can sign in or has its own tokens. It
+  reuses only the service user it created; any other account with that login
+  stops the setup with an error, so nobody who can sign in as it gains the
+  connected projects.
 - **Integrations**: the YouTrack guide and the Aixle Flow app in YouTrack now
   send you to the project's **Integrations** page to connect YouTrack. They
   pointed at the Trackers page, which has no Connect button.
