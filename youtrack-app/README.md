@@ -10,11 +10,18 @@ Requires YouTrack 2026.2 or later.
 
 ## What it does
 
-- **Connect.** Creates (or reuses) the password-less service user `aixle-flow` ("Aixle Flow")
-  through Hub, adds it to the chosen projects' teams, attaches the app to them, mints the user's
-  permanent token, and hands the token to Aixle. Aixle never sees an admin credential. Connecting
-  again revokes the token it replaces: a connection's token is named after its Aixle company and
-  project, so an earlier token of that name is the one Aixle has just stopped using.
+- **Connect.** Creates the password-less service user `aixle-flow` ("Aixle Flow") through Hub
+  and keeps its Hub id in the `serviceUserId` setting, adds it to the chosen projects' teams,
+  attaches the app to them, mints the user's permanent token, and hands the token to Aixle. Aixle
+  never sees an admin credential. Connecting again revokes the token it replaces: a connection's
+  token is named after its Aixle company and project, so an earlier token of that name is the one
+  Aixle has just stopped using.
+- **Which user it uses.** The user whose Hub id `serviceUserId` holds, as long as it still has
+  no way to sign in. Without one, an existing `aixle-flow` is taken over only when it has no Hub
+  login (no password, LDAP, OAuth or SAML detail) and no permanent token — what an interrupted
+  setup leaves behind. Any other `aixle-flow` (a person who self-registered with that login, an
+  LDAP account) stops the setup with an error: whoever can sign in as the service user would get
+  every connected project and could read its token.
 - **Events.** An on-change rule posts issue created, State, Assignee and comment events to the
   project's events URL with the project's secret.
 
@@ -23,12 +30,12 @@ Requires YouTrack 2026.2 or later.
 | Path | What |
 |---|---|
 | `manifest.json` | name `aixle-flow`, title "Aixle Flow", widgets |
-| `settings.json` | `flowUrl` (global); `eventsUrl`, `secret`, `statusField`, `assigneeField` (per project) |
+| `settings.json` | `flowUrl`, `serviceUserId` (global); `eventsUrl`, `secret`, `statusField`, `assigneeField` (per project) |
 | `aixle-flow-events.js` | the on-change rule |
 | `widgets/connect/` | `ADMINISTRATION_MENU_ITEM` (Administration → Integrations › Aixle Flow): status, consent, project choice, `flowUrl` |
 | `widgets/setup/` | `DASHBOARD_WIDGET`: the provisioning, which needs `host.fetchHub` — only dashboard widgets have it. `config-schema.json` declares its one config key, `handover` |
 | `icon.svg` | 40×40 Marketplace icon |
-| `bin/package` | builds `dist/aixle-flow-<version>.zip` |
+| `bin/package` | builds `dist/aixle-flow-<version>.zip` from the files above, and only those |
 
 No build step: plain JavaScript, loaded by the widget HTML as is. Both widgets require the
 `ADMIN_UPDATE_APP` permission (Low-level Admin Write), so only administrators see them.
@@ -182,7 +189,9 @@ then finds the comment by author and `created`.
 Releases go through JetBrains' manual review (3–4 working days per version), so iterate against a
 YouTrack instance of our own: `bin/package`, then upload the ZIP
 (`POST /api/admin/apps/import`, multipart field `file`) with an admin permanent token, and set
-`flowUrl` to the Aixle you test against. Customers only ever get the Marketplace build.
+`flowUrl` to the Aixle you test against. Customers only ever get the Marketplace build; how a
+version reaches Marketplace is in
+[`docs/operations/youtrack-app-publishing.md`](../docs/operations/youtrack-app-publishing.md).
 
 `flowUrl` must be an address the admin's browser may call from the YouTrack page. Chrome's Local
 Network Access blocks a page on a public YouTrack (Cloud) from calling `localhost` or a private

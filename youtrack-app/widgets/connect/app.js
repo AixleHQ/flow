@@ -270,7 +270,11 @@ function renderFlowUrlEditor(_event, message, draft) {
     if (problem) return renderFlowUrlEditor(null, problem, raw);
     loading('Saving…');
     try {
-      const settings = value === DEFAULT_FLOW_URL ? {} : { flowUrl: value };
+      // globalSettings replaces the whole object, and the setup keeps serviceUserId in it.
+      const app = await yt('admin/apps/' + state.app.id, { fields: 'globalConfig(globalSettings)' });
+      const settings = parseSettings(app.globalConfig && app.globalConfig.globalSettings);
+      if (value === DEFAULT_FLOW_URL) delete settings.flowUrl;
+      else settings.flowUrl = value;
       await yt('admin/apps/' + state.app.id + '/globalConfig', { fields: 'id' }, {
         method: 'POST',
         body: { globalSettings: JSON.stringify(settings) }
