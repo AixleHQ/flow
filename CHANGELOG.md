@@ -14,6 +14,12 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Connectors**: connecting a connector that signs in with OAuth now asks for
+  offline access whenever its sign-in server offers it, so the connection renews
+  itself instead of asking you to connect again once the first token expires.
+  Sign-in may show a consent screen it did not show before. A connector that names
+  the permissions it needs when it asks you to sign in now gets exactly those.
+  Existing connections change only when they are reconnected.
 - **Company settings**: a workspace's own sign-in connection to Microsoft Entra
   ID can be verified. **Verify** links the account you sign in with to yours,
   takes the address from the username when Entra sends no email, and shows on the

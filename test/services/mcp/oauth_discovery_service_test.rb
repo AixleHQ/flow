@@ -352,6 +352,50 @@ module MCP
       assert_equal "repo user", result.scopes
     end
 
+    test "asks for the scope the challenge names over the resource's scopes_supported" do
+      stub_probe(www_authenticate: %(Bearer resource_metadata="#{PRM_URL}", scope="files:read files:write"))
+      stub_prm
+      stub_asm
+      stub_registration
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal "files:read files:write", result.scopes
+    end
+
+    test "reads a bare challenge scope" do
+      stub_probe(www_authenticate: %(Bearer scope=mcp, resource_metadata="#{PRM_URL}"))
+      stub_prm
+      stub_asm
+      stub_registration
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal "mcp", result.scopes
+    end
+
+    test "adds offline_access when the authorization server offers it" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.merge("scopes_supported" => %w[read write offline_access]))
+      stub_registration
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal "read write offline_access", result.scopes
+    end
+
+    test "does not repeat offline_access the resource already asks for" do
+      stub_probe
+      stub_prm(body: default_prm_body.merge(scopes_supported: %w[offline_access read]))
+      stub_asm(body: default_asm_body.merge("scopes_supported" => %w[read offline_access]))
+      stub_registration
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal "offline_access read", result.scopes
+    end
+
     # ==================== SSRF REJECTION (per step) ====================
 
     test "rejects a private-IP MCP url before any request" do
