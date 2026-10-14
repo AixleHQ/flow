@@ -45,7 +45,7 @@ A pairing is a 15-minute, single-use handshake identified by `id` and authentica
 (sent as `Authorization: Bearer <secret>`). Aixle's public pairing endpoints answer CORS for any
 origin without credentials: a widget's origin is `null`.
 
-**Started in Aixle.** The user presses Connect YouTrack on a project's Trackers page and enters the
+**Started in Aixle.** The user chooses Connect → YouTrack on a project's Integrations page and enters the
 instance URL. Aixle creates a pairing bound to that project and user and sends the browser to
 
 ```
