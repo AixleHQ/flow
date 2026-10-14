@@ -54,7 +54,10 @@ scopes in code, `client_id`/`client_secret` from `Settings`). `client_for` recon
      `/oauth/client-metadata.json` as the client_id (no network registration). `source:cimd`.
    - **DCR otherwise** — POST `registration_endpoint` (`client_name: "Aixle Flow"`, single callback), persist
      `source:dcr`.
-4. Authorize with PKCE + `resource=<mcp url>` (RFC 8707).
+4. Authorize with PKCE + `resource=<mcp url>` (RFC 8707). The `scope` asked for is the challenge's
+   `scope` (RFC 6750 §3), else the protected resource's `scopes_supported`, else — unlike the spec, which
+   omits it — the authorization server's; `offline_access` is added whenever the authorization server
+   lists it, since an OIDC-style server issues no refresh token without it.
 
 ### SSRF doctrine (discovery only — every URL here is attacker-influenced)
 `#guard!` runs `UrlSafetyValidator.errors_for(url, require_https: true)` before **every** fetch (MCP URL,

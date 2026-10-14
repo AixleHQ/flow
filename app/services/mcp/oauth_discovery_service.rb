@@ -61,6 +61,7 @@ module MCP
 
     SOURCE_DCR = "dcr"
     SOURCE_CIMD = "cimd"
+    OFFLINE_ACCESS = "offline_access"
     CLIENT_NAME = "Aixle Flow"
     TIMEOUT = 5
     MAX_REDIRECTS = 3
@@ -123,7 +124,7 @@ module MCP
       Result.new(
         oauth_client: client,
         resource: canonical_resource,
-        scopes: prm[:scopes].presence || asm[:scopes].presence
+        scopes: requested_scopes(prm, asm)
       )
     end
 
@@ -133,6 +134,7 @@ module MCP
     def probe_protected_resource
       guard!(@mcp_url)
       probe = probe_challenge
+      @challenge_scopes = challenge_scopes(probe)
 
       prm = first_usable_prm(prm_candidates(probe))
       raise NoAuthServerError, "no protected-resource metadata" if prm.nil?
@@ -202,6 +204,15 @@ module MCP
 
       match = header.match(/resource_metadata\s*=\s*"?([^",\s]+)"?/i)
       match && match[1]
+    end
+
+    # The `scope` auth-param of the challenge (RFC 6750 §3), quoted or bare.
+    def challenge_scopes(response)
+      header = response.header("www-authenticate")
+      return nil if header.blank?
+
+      match = header.match(/(?:\A|[\s,])scope\s*=\s*(?:"([^"]*)"|([^\s,]+))/i)
+      match && scope_string((match[1] || match[2]).split)
     end
 
     # RFC 9728 §3.1 inserts the well-known segment BEFORE the resource path, so a
@@ -679,6 +690,22 @@ module MCP
     def scope_string(supported)
       scopes = Array(supported).map(&:to_s).reject(&:blank?)
       scopes.empty? ? nil : scopes.join(" ")
+    end
+
+    # MCP authorization, "Scope Selection Strategy": the challenge's scope, else the
+    # protected resource's scopes_supported, plus `offline_access` when the
+    # authorization server lists it — an OIDC-style server issues no refresh token
+    # without it, and the spec asks resources not to list it themselves.
+    #
+    # The spec omits `scope` when the resource lists none; falling back to the
+    # authorization server's scopes_supported instead is deliberate. Neon, Datadog,
+    # Buildkite, Pipedream and Semgrep (measured 2026-10-14) list no scopes on the
+    # resource, and that fallback is the only reason they get any.
+    def requested_scopes(prm, asm)
+      scopes = (@challenge_scopes || prm[:scopes] || asm[:scopes]).to_s.split
+      offered = asm[:scopes].to_s.split
+      scopes << OFFLINE_ACCESS if offered.include?(OFFLINE_ACCESS) && scopes.exclude?(OFFLINE_ACCESS)
+      scope_string(scopes)
     end
 
     # RFC 8707 resource indicator = the canonical MCP url (fragment stripped).
