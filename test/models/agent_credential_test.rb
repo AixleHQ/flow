@@ -654,6 +654,25 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_match(/ECONNRESET/, cred.refresh_error)
   end
 
+  test "without_retired_grants drops a block whose refresh token was replaced and keeps a new one" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-1", "rt-1"))
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_login("at-2", "rt-2"))
+    cred.reload
+
+    stale = claude_login("at-1", "rt-1").merge("oauthAccount" => { "emailAddress" => "a@example.com" })
+    assert_equal({ "oauthAccount" => { "emailAddress" => "a@example.com" } }, cred.without_retired_grants(stale))
+
+    rotated = claude_login("at-3", "rt-3")
+    assert_equal rotated, cred.without_retired_grants(rotated), "a token we never replaced is a real rotation"
+  end
+
+  test "without_retired_grants leaves agents without refresh tokens alone" do
+    cred = create(:agent_credential, user: @user, agent_type: "codex")
+    captured = { "tokens" => { "refresh_token" => "anything" } }
+
+    assert_equal captured, cred.without_retired_grants(captured)
+  end
+
   # The provider call runs outside any transaction: rolling back the write of a
   # refresh token the provider has already rotated would lose the only valid one.
   test "refresh_if_expiring! calls the provider with no transaction open" do

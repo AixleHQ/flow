@@ -223,6 +223,31 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_nil @credential.reload.config_data["designOauth"]
   end
 
+  test "a designOauth grant the vendor refused is not re-armed by the container's stale copy" do
+    @credential = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", @credential.config_data.merge(
+      "designOauth" => { "accessToken" => "d-a", "refreshToken" => "dead", "clientId" => "design-client",
+                         "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
+    ))
+    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+      .to_return(status: 400, body: { error: "invalid_grant" }.to_json, headers: { "Content-Type" => "application/json" })
+    @credential.renew!(source: :sweep, blocks: [ "designOauth" ])
+    refute @credential.reload.config_data["designOauth"].key?("refreshToken")
+
+    body = {
+      files: {
+        CREDENTIALS_FILE => {
+          designOauth: { accessToken: "d-a", refreshToken: "dead", clientId: "design-client",
+                         expiresAt: (1.hour.from_now.to_f * 1000).to_i }
+        }.to_json
+      }
+    }.to_json
+
+    post PATH, params: body, headers: headers
+
+    assert_response :no_content
+    assert_nil @credential.reload.config_data.dig("designOauth", "refreshToken")
+  end
+
   # A forged far-future expiry would win every "which copy is freshest" comparison and
   # discard the real refresh token.
   test "a rotation with an implausible expiry is refused" do

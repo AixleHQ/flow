@@ -106,7 +106,7 @@ class AgentCredentialSyncController < ActionController::API
     changed = AgentCredential.rotating_for_session(session.id) do
       credential.with_lock do
         current = credential.config_data
-        merged = credential.adapter.merge_container_credentials(current, captured)
+        merged = credential.adapter.merge_container_credentials(current, credential.without_retired_grants(captured))
         next false if merged == current
 
         AgentCredential.from_artifacts(credential.user_id, credential.company_id, credential.agent_type, merged)

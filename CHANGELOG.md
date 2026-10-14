@@ -28,6 +28,9 @@ governance, community health — carry none.
 - **Company settings**: adding an SSO connection with a name another of the
   company's connections already uses now shows an error on the name instead
   of failing with a server error. Names are saved without surrounding spaces.
+- **Profile**: a Claude Design login the vendor refused stays cleared until you
+  reconnect it. A session that still held the old copy no longer writes it
+  back, so the server stops retrying the dead login.
 
 ## [1.2.1] - 2026-10-13
 

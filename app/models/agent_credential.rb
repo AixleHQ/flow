@@ -450,6 +450,16 @@ class AgentCredential < ApplicationRecord
     retired_recently?(entry) ? entry["block"] : nil
   end
 
+  # A container's copy of a block whose refresh token we have since replaced (rotated here,
+  # or refused by the vendor and cleared) is stale: merging it back re-arms a dead grant.
+  def without_retired_grants(captured)
+    stale = adapter.refresh_tokens(captured).select { |_block, token| retired_refresh_token_block(token) }
+    return captured if stale.empty?
+
+    Rails.logger.info("[AgentCredential] credential=#{id} dropped stale write-back of #{stale.keys.join(', ')}")
+    captured.except(*stale.keys)
+  end
+
   private
 
   def retired_refresh_tokens

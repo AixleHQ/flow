@@ -917,6 +917,29 @@ module ContainerStrategies
       assert_equal "live", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
 
+    test "persist_refreshed_credentials does not re-arm a designOauth grant the vendor refused" do
+      refuse_design_login!
+      refute @credential.config_data["designOauth"].key?("refreshToken")
+      expires_at = @credential.expires_at
+
+      persist_container_design_block({ "accessToken" => "d-a", "refreshToken" => "dead", "clientId" => "design-client",
+                                       "expiresAt" => (1.hour.from_now.to_f * 1000).to_i })
+
+      design = @credential.config_data["designOauth"]
+      assert_nil design["refreshToken"], "the refused grant must not come back from the container's stale copy"
+      assert_nil design["accessToken"]
+      assert_equal expires_at, @credential.expires_at
+    end
+
+    test "persist_refreshed_credentials still takes a designOauth rotation the container made itself" do
+      refuse_design_login!
+
+      persist_container_design_block({ "accessToken" => "d-a2", "refreshToken" => "rotated", "clientId" => "design-client",
+                                       "expiresAt" => (1.hour.from_now.to_f * 1000).to_i })
+
+      assert_equal %w[d-a2 rotated], @credential.config_data["designOauth"].values_at("accessToken", "refreshToken")
+    end
+
     test "resolve_output_scope falls back to the user's active membership company" do
       strategy = build_strategy
       @session.update_columns(project_id: nil)
@@ -1032,6 +1055,33 @@ module ContainerStrategies
         .to_return(status: 200,
                    body: { access_token: access_token, refresh_token: refresh_token, expires_in: 28_800 }.to_json,
                    headers: { "Content-Type" => "application/json" })
+    end
+
+    def refuse_design_login!
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "base-a", "refreshToken" => "base-r",
+                             "expiresAt" => (8.hours.from_now.to_f * 1000).to_i },
+        "designOauth" => { "accessToken" => "d-a", "refreshToken" => "dead", "clientId" => "design-client",
+                           "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
+      })
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      @credential.renew!(source: :sweep)
+      @credential.reload
+    end
+
+    def persist_container_design_block(design_block)
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:read_file_from_container).returns(nil)
+      strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => @credential.config_data["claudeAiOauth"], "designOauth" => design_block }.to_json)
+
+      strategy.send(:persist_refreshed_credentials, container, @session, AgentCredentialsService.for("claude_code"))
+      @credential.reload
     end
 
     # Drive before_exec with the container plumbing stubbed out — these tests are
