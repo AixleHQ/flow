@@ -1482,4 +1482,77 @@ describe('IntegrationsContent', () => {
       screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
     ).toBeInTheDocument();
   });
+
+  // == Insights ==
+
+  describe('Insights', () => {
+    const managerProps = {
+      ...settingsProps,
+      projectPermissions: { canExecute: true, canManage: true, canManageCompany: false },
+    };
+    const writerProps = {
+      ...settingsProps,
+      projectPermissions: { canExecute: true, canManage: false, canManageCompany: false },
+    };
+
+    it('offers Insights to a project owner or company admin', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[]}
+        />,
+        { props: managerProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      expect(await screen.findByRole('menuitem', { name: 'Insights' })).toBeInTheDocument();
+    });
+
+    it('hides Insights connect and remove actions from an ordinary project writer', async () => {
+      const insights = makeIntegration({
+        id: 42,
+        provider: 'insights',
+        name: 'Insights',
+        projectId: 1,
+        scopeIndicator: 'project',
+      });
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[insights]}
+        />,
+        { props: writerProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      expect(screen.queryByRole('menuitem', { name: 'Insights' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    });
+
+    it('posts the project-scoped provider and token', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[]}
+        />,
+        { props: managerProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Insights' }));
+
+      const dialog = await screen.findByRole('dialog', { name: /Connect Insights/i });
+      await userEvent.type(within(dialog).getByLabelText('Ingest token'), 'aixle_otel_secret');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/1/integrations',
+        expect.objectContaining({ provider: 'insights', ingestToken: 'aixle_otel_secret' }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+  });
 });

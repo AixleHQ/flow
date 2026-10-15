@@ -16,7 +16,11 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
     errors = {}
 
     ActiveRecord::Base.transaction do
-      errors.merge!(current_project.errors.to_hash) unless current_project.update(project_params)
+      # The General form sends `project`; concurrency is submitted with it only
+      # for company administrators. Touch attributes only when present.
+      if params.key?(:project)
+        errors.merge!(current_project.errors.to_hash) unless current_project.update(project_params)
+      end
       errors.merge!(apply_concurrency_limit) if params.key?(:concurrency)
       raise ActiveRecord::Rollback if errors.any?
     end

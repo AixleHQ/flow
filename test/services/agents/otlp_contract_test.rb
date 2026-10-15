@@ -14,11 +14,56 @@ module Agents
     OUTPUT = 7
     CACHE_READ = 30
 
+    SUPPORTED_INSIGHTS_METADATA = {
+      "claude_code" => ClaudeCodeAdapter,
+      "codex" => CodexAdapter,
+      "gemini_cli" => GeminiCliAdapter,
+      "kiro_cli" => KiroCliAdapter
+    }.freeze
+    EXCLUDED_INSIGHTS_METADATA = {
+      "cursor_cli" => CursorCliAdapter,
+      "antigravity_cli" => AntigravityCliAdapter,
+      "grok" => GrokAdapter
+    }.freeze
+
     setup do
       company = create(:company)
       user = create(:user, :admin, company: company)
       project = create(:project, company: company, owner: user)
       @session = create(:terminal_session, :running, user: user, project: project)
+      @insights = create(:integration, :insights, :active, company: company,
+                                                           project: project, connected_by: user)
+    end
+
+    test "only the four supported runtimes receive active Insights resource metadata" do
+      SUPPORTED_INSIGHTS_METADATA.each do |runtime_id, adapter_class|
+        @session.update!(agent_type: runtime_id)
+        raw = adapter_class.new.default_env_vars(@session)["OTEL_RESOURCE_ATTRIBUTES"]
+        attributes = decode_resource_attributes(raw)
+
+        assert_equal "true", attributes["proxy_enabled"], runtime_id
+        assert_equal @session.user.email, attributes["user_email"], runtime_id
+        assert_equal @session.project.name, attributes["project_name"], runtime_id
+        refute_includes attributes.keys, "project_id", runtime_id
+        refute_includes raw, @insights.insights_ingest_token, runtime_id
+      end
+    end
+
+    test "Cursor Antigravity and Grok never receive Insights resource metadata" do
+      EXCLUDED_INSIGHTS_METADATA.each do |runtime_id, adapter_class|
+        @session.update!(agent_type: runtime_id)
+        raw = adapter_class.new.default_env_vars(@session)["OTEL_RESOURCE_ATTRIBUTES"]
+        attributes = decode_resource_attributes(raw)
+
+        Insights::RuntimeResourceAttributes::INSIGHTS_KEYS.each do |key|
+          refute_includes attributes.keys, key, "#{runtime_id} unexpectedly received #{key}"
+        end
+      end
+
+      @session.update!(agent_type: "grok")
+      grok_attributes = decode_resource_attributes(GrokAdapter.new.default_env_vars(@session)["OTEL_RESOURCE_ATTRIBUTES"])
+      assert_equal @session.route_token, grok_attributes["terminal_session_token"],
+                   "Grok keeps Rails internal usage routing only"
     end
 
     test "Claude Code's token and cost metrics" do
@@ -51,6 +96,15 @@ module Agents
     end
 
     private
+
+    def decode_resource_attributes(raw)
+      return {} if raw.blank?
+
+      raw.split(",").to_h do |pair|
+        key, value = pair.split("=", 2)
+        [ key, URI.decode_uri_component(value) ]
+      end
+    end
 
     def ingest(adapter, runtime_id)
       version = AgentRuntime.fetch(runtime_id).cli_version

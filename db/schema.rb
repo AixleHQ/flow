@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -261,7 +261,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.bigint "board_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
-    t.integer "number", null: false
     t.bigint "parent_task_id"
     t.integer "position", null: false
     t.string "priority"
@@ -269,6 +268,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.string "task_type", default: "not_specified", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.integer "number", null: false
     t.index ["assignee_id"], name: "index_board_tasks_on_assignee_id"
     t.index ["board_column_id"], name: "index_board_tasks_on_board_column_id"
     t.index ["board_id", "archived_at"], name: "index_board_tasks_on_board_id_and_archived_at"
@@ -294,11 +294,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
 
   create_table "boards", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.integer "last_task_number", default: 0, null: false
     t.string "name", null: false
     t.string "preset_origin"
     t.bigint "project_id", null: false
     t.datetime "updated_at", null: false
+    t.integer "last_task_number", default: 0, null: false
     t.index ["project_id"], name: "index_boards_on_project_id", unique: true
   end
 
@@ -397,34 +397,34 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
   end
 
   create_table "chat_conversations", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "external_id", null: false
-    t.boolean "installed", default: true, null: false
     t.bigint "integration_id", null: false
-    t.string "kind", null: false
-    t.datetime "last_activity_at"
-    t.string "name"
     t.string "provider", null: false
-    t.string "service_url"
-    t.string "team_aad_group_id"
-    t.string "team_external_id"
-    t.string "team_name"
+    t.string "external_id", null: false
+    t.string "kind", null: false
+    t.string "name"
     t.string "tenant_id"
-    t.datetime "updated_at", null: false
+    t.string "team_external_id"
+    t.string "team_aad_group_id"
+    t.string "team_name"
+    t.string "service_url"
+    t.boolean "installed", default: true, null: false
     t.datetime "welcomed_at"
+    t.datetime "last_activity_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
     t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
   end
 
   create_table "chat_identities", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "external_user_id", null: false
-    t.datetime "linked_at", null: false
-    t.string "proof", null: false
     t.string "provider", null: false
-    t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
     t.string "workspace_id", null: false
+    t.string "external_user_id", null: false
+    t.bigint "user_id", null: false
+    t.string "proof", null: false
+    t.datetime "linked_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["provider", "workspace_id", "external_user_id"], name: "index_chat_identities_on_sender", unique: true
     t.index ["user_id"], name: "index_chat_identities_on_user_id"
   end
@@ -731,24 +731,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
     t.index ["id", "company_id"], name: "index_integrations_on_id_and_company_id", unique: true
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
+    t.index ["project_id", "provider"], name: "index_integrations_on_project_insights", unique: true, where: "((provider)::text = 'insights'::text)"
     t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
   end
 
   create_table "llm_calls", force: :cascade do |t|
-    t.integer "cache_read_tokens", default: 0, null: false
-    t.integer "cache_write_tokens", default: 0, null: false
-    t.datetime "created_at", null: false
-    t.integer "input_tokens", default: 0, null: false
-    t.string "model", null: false
-    t.datetime "occurred_at", null: false
-    t.integer "output_tokens", default: 0, null: false
-    t.string "source", null: false
+    t.bigint "workflow_run_id"
     t.bigint "step_run_id"
     t.bigint "terminal_session_id", null: false
+    t.string "model", null: false
+    t.integer "input_tokens", default: 0, null: false
+    t.integer "output_tokens", default: 0, null: false
+    t.integer "cache_read_tokens", default: 0, null: false
+    t.integer "cache_write_tokens", default: 0, null: false
     t.decimal "total_cents_precise", precision: 12, scale: 8, default: "0.0", null: false
+    t.string "source", null: false
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "workflow_run_id"
     t.index ["terminal_session_id", "occurred_at"], name: "index_llm_calls_on_terminal_session_id_and_occurred_at"
     t.index ["workflow_run_id", "occurred_at"], name: "index_llm_calls_on_workflow_run_id_and_occurred_at"
     t.index ["workflow_run_id", "step_run_id"], name: "index_llm_calls_on_workflow_run_id_and_step_run_id"
@@ -1583,13 +1584,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.bigint "project_id", null: false
     t.bigint "project_tracker_id"
     t.jsonb "schedule_config", default: {}, null: false
-    t.string "status_reporting", default: "failures", null: false
     t.bigint "subject_column_id"
     t.string "subject_policy", default: "none", null: false
     t.string "subject_title_template"
     t.string "trigger_mode", default: "auto", null: false
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
+    t.string "status_reporting", default: "failures", null: false
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"

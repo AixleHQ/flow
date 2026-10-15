@@ -356,6 +356,7 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `SENTRY_TEMPORAL_DSN`         | no       | unset                        | Sentry DSN for the Temporal worker.                        |
 | `SENTRY_TRACES_SAMPLE_RATE`   | no       | `1.0`                        | Share of requests (web) and activities (worker) traced; the OTLP ingest route is never traced. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no       | `http://otlp-ingest:4318`    | Base OTLP endpoint handed to agent containers, which append their own signal paths. No OpenTelemetry SDK runs in this app. |
+| `OTLP_INGEST_PROXY_URL`      | no       | unset                        | Proxy collector base URL or full `/v1/logs` endpoint (currently the Insights collector). The ingest service appends `/v1/logs` unless already present and forwards only `ResourceLogs` whose `proxy_enabled` resource attribute is OTLP `boolValue: true` or `stringValue: "true"`. Metrics are never forwarded. Requests are OTLP JSON without `Authorization`; unset disables forwarding. |
 
 ## Catalogs & limits
 

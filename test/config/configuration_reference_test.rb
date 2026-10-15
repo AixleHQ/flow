@@ -17,13 +17,14 @@ class ConfigurationReferenceTest < ActiveSupport::TestCase
   NOT_CONFIGURATION = %w[HOME].freeze
 
   # Documented on purpose, read outside the settings files: the web servers'
-  # own knobs (they boot before the settings gem), the boot switches, and the
-  # development/test/seed inputs. Extend this list only for a variable that is
-  # genuinely read somewhere — its point is to keep the reference from growing
-  # rows for variables nothing consults.
+  # own knobs (they boot before the settings gem), the boot switches, the
+  # otlp-ingest relay (docker/otlp-ingest reads it through docker-compose.yml),
+  # and the development/test/seed inputs. Extend this list only for a variable
+  # that is genuinely read somewhere — its point is to keep the reference from
+  # growing rows for variables nothing consults.
   READ_OUTSIDE_SETTINGS = %w[
     ACTION_CABLE_URL AIXLE_TOOLS_RECONCILE_ON_BOOT CHROMIUM_PATH CI COVERAGE_MIN
-    MCP_MAX_THREADS MCP_MIN_THREADS MCP_PIDFILE MCP_PORT PARALLEL_WORKERS PIDFILE PORT
+    MCP_MAX_THREADS MCP_MIN_THREADS MCP_PIDFILE MCP_PORT OTLP_INGEST_PROXY_URL PARALLEL_WORKERS PIDFILE PORT
     RAILS_ENV RAILS_LOG_LEVEL RAILS_LOG_TO_STDOUT RAILS_MIN_THREADS
     SEED_COMPANY_ADMIN_EMAIL SEED_COMPANY_EMAIL_DOMAIN SEED_COMPANY_NAME SEED_COMPANY_SLUG
     SKIP_COVERAGE SOLID_QUEUE_IN_PUMA VITE_RUBY_PORT WORKER_BOOT_CHECK_TIMEOUT

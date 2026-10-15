@@ -209,6 +209,9 @@ module Agents
         "OTEL_LOG_ASSISTANT_RESPONSES" => "1",
         "OTEL_LOG_TOOL_DETAILS" => "1",
         "OTEL_LOG_TOOL_CONTENT" => "1",
+        # Grok ignores custom resource attributes, but keep the internal Rails usage
+        # routing contract here. It is outside Insights::RuntimeResourceAttributes'
+        # SUPPORTED_AGENT_TYPES, so it never receives Insights metadata.
         "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
 

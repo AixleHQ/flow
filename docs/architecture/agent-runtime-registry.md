@@ -42,6 +42,38 @@ overrides plus both launch command maps cover every runtime. The Dependabot dire
 list is not checked — the test image is built without `.github/` — so step 1 below is
 on the reviewer.
 
+## Telemetry and Insights metadata capabilities
+
+An active project-level `Integration(provider: "insights")` is the only switch that
+adds Insights business metadata. Every runtime gets its `OTEL_RESOURCE_ATTRIBUTES` from
+`UsageStatistics::SessionKey.resource_attributes`, which appends what
+`Insights::RuntimeResourceAttributes.for` returns — the fixed allowlist
+`user_email`, `project_name`, and `proxy_enabled=true`, only for the agent types in its
+`SUPPORTED_AGENT_TYPES`; it never reads
+or emits the Integration ingest token, credentials, or runtime API keys. Rails' internal
+`terminal_session_token` and `terminal_session_key` remain in resource attributes only
+for local usage-ingest routing and authentication.
+
+| Runtime | Usage over OTLP | Preserves custom resource attributes | Insights metadata |
+| --- | --- | --- | --- |
+| Claude Code | Metrics and logs | Yes | Yes, with an active project Insights integration |
+| Codex | Logs (with MITM fallback) | Yes | Yes, with an active project Insights integration |
+| Gemini CLI | Logs (cumulative metrics are ignored) | Yes | Yes, with an active project Insights integration |
+| Kiro CLI | Delta credit metrics (with cleanup fallbacks) | Yes | Yes, with an active project Insights integration |
+| Cursor CLI | No; usage API plus MITM windows | No supported path | Never |
+| Antigravity CLI | No; terminal stream-json result | No supported path | Never |
+| Grok | No usable correlated OTLP; MITM usage | No — the CLI ignores `OTEL_RESOURCE_ATTRIBUTES` | Never; its env contains internal Rails routing attributes only |
+
+The builder percent-encodes only what the
+[OpenTelemetry resource environment contract](https://opentelemetry.io/docs/specs/otel/resource/sdk/#specifying-resource-information-via-an-environment-variable)
+requires — bytes outside the baggage-octet range (UTF-8, whitespace, commas,
+backslashes) plus `=` and `%`. Everything else, including `@`, `.`, `+` and `-`,
+stays literal: the Rust SDK behind Codex and Kiro CLI does not percent-decode, so
+plain emails and ASCII project names must reach the collector unchanged. Values with
+non-ASCII or reserved characters arrive percent-encoded from those two runtimes.
+Do not add a runtime to the Insights column until its pinned CLI has been verified to
+preserve custom resource attributes.
+
 ## Raising a CLI pin
 
 Edit `cli_version`. The Dockerfiles carry no default, so the registry is the only pin; a
@@ -54,13 +86,19 @@ accepts a version without a pair while it is the channel's latest, checked again
 manifest; that is how the canary builds Kiro's newest. Cursor publishes no checksums, so
 its pin is the versioned package URL alone.
 
-For the runtimes whose usage arrives over OTLP (Claude Code, Codex, Gemini CLI), re-capture
-what the new CLI exports: `make build-agents`, then `bin/capture-agent-otlp <id>` writes
-`test/fixtures/files/otlp/<id>-<version>.json` (the CLI answers one prompt against a mock
-model API, its telemetry relayed through `docker/otlp-ingest`).
-`test/services/agents/otlp_contract_test.rb` parses that fixture with the real adapter and
-fails while the pinned version has none — so a renamed metric or attribute is caught in CI,
-not in production usage numbers.
+For the fixture-backed runtimes whose usage arrives over OTLP (Claude Code, Codex,
+Gemini CLI), re-capture what the new CLI exports: `make build-agents`, then
+`bin/capture-agent-otlp <id>` writes `test/fixtures/files/otlp/<id>-<version>.json`
+(the CLI answers one prompt against a mock model API, its telemetry relayed through
+`docker/otlp-ingest`). `test/services/agents/otlp_contract_test.rb` parses that fixture
+with the real adapter and fails while the pinned version has none — so a renamed metric
+or attribute is caught in CI, not in production usage numbers.
+
+Kiro CLI usage also arrives over OTLP, as delta credit metrics. Its verified live payload
+shape and fallback chain are covered in `test/services/agents/kiro_cli_adapter_test.rb`;
+it is not yet produced by the mock-model capture harness. The OTLP contract test still
+checks Kiro's shared Insights resource metadata alongside the other three supported
+runtimes.
 
 Read the vendor's release notes between the two versions against the adapter too, for more
 than credentials: a CLI can keep its login files and telemetry and still change a default

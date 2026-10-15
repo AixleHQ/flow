@@ -461,7 +461,7 @@ module Agents
 
     # The CLI's OTLP export goes wherever it is pointed, so it is pointed here — and
     # `OTEL_RESOURCE_ATTRIBUTES` is what lets UsageStatisticsService route a batch back
-    # to the session that produced it (honoured by the CLI's SDK, verified on 2.21.3).
+    # to the session that produced it; the shared contract covers the pinned CLI.
     test "default_env_vars redirects the CLI's telemetry at the platform collector" do
       session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-123")
 

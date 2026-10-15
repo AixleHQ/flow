@@ -14,15 +14,20 @@ import (
 
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collector "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	logs "go.opentelemetry.io/proto/otlp/logs/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 type server struct {
-	webBaseURL string
-	proxyURL   string
-	client     *http.Client
+	webBaseURL   string
+	proxyLogsURL string
+	client       *http.Client
 }
+
+// proxyMarkerKey is the resource attribute that opts a ResourceLogs entry into
+// forwarding to OTLP_INGEST_PROXY_URL (boolValue true or stringValue "true").
+const proxyMarkerKey = "proxy_enabled"
 
 func main() {
 	port := envOrDefault("OTLP_INGEST_PORT", "4318")
@@ -33,17 +38,14 @@ func main() {
 		log.Fatalf("invalid OTLP_INGEST_WEB_BASE_URL: %v", err)
 	}
 
-	proxyURL := strings.TrimSpace(os.Getenv("OTLP_INGEST_PROXY_URL"))
-	if proxyURL != "" {
-		if _, err := url.ParseRequestURI(proxyURL); err != nil {
-			log.Fatalf("invalid OTLP_INGEST_PROXY_URL: %v", err)
-		}
-		proxyURL = strings.TrimRight(proxyURL, "/")
+	proxyLogsURL, err := logsEndpoint(os.Getenv("OTLP_INGEST_PROXY_URL"))
+	if err != nil {
+		log.Fatalf("invalid OTLP_INGEST_PROXY_URL: %v", err)
 	}
 
 	srv := &server{
-		webBaseURL: strings.TrimRight(webBaseURL, "/"),
-		proxyURL:   proxyURL,
+		webBaseURL:   strings.TrimRight(webBaseURL, "/"),
+		proxyLogsURL: proxyLogsURL,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -109,12 +111,6 @@ func (s *server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.proxyURL != "" {
-		if err := s.postJSON(r.Context(), s.proxyURL, jsonBody); err != nil {
-			log.Printf("proxy error (metrics): %v", err)
-		}
-	}
-
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -163,13 +159,69 @@ func (s *server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.proxyURL != "" {
-		if err := s.postJSON(r.Context(), s.proxyURL, jsonBody); err != nil {
-			log.Printf("proxy error (logs): %v", err)
+	if s.proxyLogsURL != "" {
+		proxyRequest := proxyEnabledLogs(&req)
+		if len(proxyRequest.ResourceLogs) > 0 {
+			proxyBody, err := protojson.Marshal(proxyRequest)
+			if err != nil {
+				log.Printf("proxy logs json marshal error: %v", err)
+			} else if err := s.postJSON(r.Context(), s.proxyLogsURL, proxyBody); err != nil {
+				log.Printf("proxy forward error (logs): %v", err)
+			}
 		}
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func proxyEnabledLogs(req *collectorlogs.ExportLogsServiceRequest) *collectorlogs.ExportLogsServiceRequest {
+	filtered := &collectorlogs.ExportLogsServiceRequest{}
+	for _, resourceLogs := range req.ResourceLogs {
+		if proxyEnabled(resourceLogs) {
+			filtered.ResourceLogs = append(filtered.ResourceLogs, resourceLogs)
+		}
+	}
+	return filtered
+}
+
+func proxyEnabled(resourceLogs *logs.ResourceLogs) bool {
+	for _, attribute := range resourceLogs.GetResource().GetAttributes() {
+		if attribute.GetKey() != proxyMarkerKey {
+			continue
+		}
+
+		value := attribute.GetValue()
+		if value.GetBoolValue() || value.GetStringValue() == "true" {
+			return true
+		}
+	}
+	return false
+}
+
+func logsEndpoint(rawURL string) (string, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return "", nil
+	}
+
+	endpoint, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return "", err
+	}
+	if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
+		return "", fmt.Errorf("URL scheme must be http or https")
+	}
+	if endpoint.Host == "" {
+		return "", fmt.Errorf("URL must include a host")
+	}
+
+	path := strings.TrimRight(endpoint.Path, "/")
+	if !strings.HasSuffix(path, "/v1/logs") {
+		path += "/v1/logs"
+	}
+	endpoint.Path = path
+	endpoint.RawPath = ""
+	return endpoint.String(), nil
 }
 
 func (s *server) postUsage(ctx context.Context, body []byte) error {

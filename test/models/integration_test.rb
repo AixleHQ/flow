@@ -235,11 +235,61 @@ class IntegrationTest < ActiveSupport::TestCase
   # ====== Enumerize ======
 
   test "provider enumerize values" do
-    assert_equal %w[github gitlab linear coder slack teams azure_devops jira youtrack], Integration.provider.values.map(&:to_s)
+    assert_equal %w[github gitlab linear coder slack teams azure_devops jira youtrack insights],
+                 Integration.provider.values.map(&:to_s)
   end
 
   test "connectable providers are provider values" do
     assert_empty Integration::CONNECTABLE_PROVIDERS - Integration.provider.values
+  end
+
+  test "insights is an enumerized provider and connectable" do
+    assert_includes Integration.provider.values.map(&:to_s), "insights"
+    assert_includes Integration::CONNECTABLE_PROVIDERS, "insights"
+    integration = build(:integration, :insights, company: @company, connected_by: @user)
+    assert { integration.insights? }
+  end
+
+  test "insights requires a project" do
+    integration = build(:integration, :insights, company: @company, connected_by: @user, project: nil)
+
+    assert_not integration.valid?
+    assert_includes integration.errors[:project], "is required for an Insights integration"
+  end
+
+  test "insights token is encrypted and round-trips through credentials_data" do
+    integration = build(:integration, :insights, :active, company: @company, connected_by: @user)
+    integration.credentials_data = { "ingest_token" => "aixle_otel_SECRET_TOKEN" }
+    integration.save!
+    integration.reload
+
+    assert_equal "aixle_otel_SECRET_TOKEN", integration.insights_ingest_token
+    refute_includes integration.read_attribute(:credentials), "aixle_otel_SECRET_TOKEN"
+  end
+
+  test "insights_for returns only the active row for the requested project" do
+    project = create(:project, company: @company, owner: @user)
+    row = create(:integration, :insights, :active, company: @company, project: project, connected_by: @user)
+    other_project = create(:project, company: @company, owner: @user)
+    create(:integration, :insights, :active, company: @company, project: other_project, connected_by: @user)
+
+    assert_equal row, Integration.insights_for(project)
+  end
+
+  test "insights_for is nil when the project has no active connection" do
+    project = create(:project, company: @company, owner: @user)
+    create(:integration, :insights, company: @company, project: project, connected_by: @user, status: :inactive)
+
+    assert_nil Integration.insights_for(project)
+  end
+
+  test "database permits only one Insights integration per project" do
+    project = create(:project, company: @company, owner: @user)
+    create(:integration, :insights, company: @company, project: project, connected_by: @user)
+
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      create(:integration, :insights, company: @company, project: project, connected_by: @user)
+    end
   end
 
   test "status enumerize values" do
