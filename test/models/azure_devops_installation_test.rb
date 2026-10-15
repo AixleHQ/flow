@@ -107,4 +107,43 @@ class AzureDevopsInstallationTest < ActiveSupport::TestCase
     assert_includes installation.errors[:base].to_sentence, "integrations"
     assert AzureDevopsInstallation.exists?(installation.id)
   end
+  test "a federated installation needs no operator app configuration" do
+    installation = build(:azure_devops_installation, :federated, company: @company)
+
+    assert_predicate installation, :valid?
+    assert_predicate installation, :federated?
+    assert_not_predicate build(:azure_devops_installation, company: @company, app_config_key: nil), :valid?
+  end
+
+  test "a federated installation can move to a new app, and a shared one cannot" do
+    federated = create(:azure_devops_installation, :federated, company: @company, service_principal_object_id: SecureRandom.uuid)
+    federated.update!(client_id: SecureRandom.uuid, service_principal_object_id: SecureRandom.uuid)
+    assert_predicate federated, :persisted?
+
+    shared = create(:azure_devops_installation, company: @company)
+    shared.client_id = SecureRandom.uuid
+
+    refute_predicate shared, :valid?
+    assert_includes shared.errors[:client_id].to_sentence, "cannot change"
+  end
+
+  test "the object id of a federated app is only rewritten together with its client id" do
+    federated = create(:azure_devops_installation, :federated, company: @company, service_principal_object_id: SecureRandom.uuid)
+    federated.service_principal_object_id = SecureRandom.uuid
+
+    refute_predicate federated, :valid?
+  end
+
+  test "the kind of an existing installation cannot change" do
+    installation = create(:azure_devops_installation, company: @company)
+    installation.credential_kind = :federated
+
+    refute_predicate installation, :valid?
+  end
+
+  test "names the company in the subject the customer must trust" do
+    installation = create(:azure_devops_installation, :federated, company: @company)
+
+    assert_equal "aixle:company:#{@company.public_id}", installation.federated_subject
+  end
 end

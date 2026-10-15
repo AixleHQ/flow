@@ -17,6 +17,9 @@ module Web
         def azure_devops_inspect? = manage_integrations?
         def azure_devops_connect? = manage_integrations?
         def azure_devops_sign_in? = manage_integrations?
+        def azure_devops_federated_inspect? = manage_integrations?
+        def azure_devops_federated_connect? = manage_integrations?
+        def azure_devops_federated_script? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def teams_connect? = manage_integrations?
         def teams_package? = manage_integrations?

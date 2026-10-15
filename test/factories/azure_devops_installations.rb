@@ -22,6 +22,12 @@ FactoryBot.define do
       approved_at { Time.current }
     end
 
+    # The customer's own Entra app, trusting this deployment as an OIDC issuer.
+    trait :federated do
+      credential_kind { :federated }
+      app_config_key { nil }
+    end
+
     transient do
       azure_project_id { nil }
     end

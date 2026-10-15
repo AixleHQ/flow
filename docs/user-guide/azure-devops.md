@@ -148,6 +148,77 @@ organization administrator can call, and a sign-in also has to come from the
 organization's own directory. What survives is the binding it justified, not the
 credential.
 
+## Or: your own Entra app (nothing of Aixle's in your directory)
+
+For a directory whose policy forbids third-party apps, or an organization that will
+not hand a vendor an administrator token. You register an app in **your** Entra
+directory and tell it to trust Flow; Flow then signs in as your app. No client
+secret, certificate or personal access token is created, stored or rotated, and
+you can end Aixle's access at any moment by deleting the federated credential or
+the app. Flow can then no longer sign in; a token it already holds stays valid until
+it expires, about an hour, and cannot be recalled.
+
+It is offered where the deployment publishes an OIDC issuer for it. On Aixle SaaS
+that is always the case; a self-hosted deployment does not offer it.
+
+This does not remove the need for an Azure DevOps administrator: Azure DevOps lets
+only a **Project Collection Administrator** add any identity to an organization,
+once. It removes two other things: approving a third-party app in your directory,
+and giving Aixle an administrator credential.
+
+**1. Register the app in Entra.** App registrations → New registration, *Accounts
+in this organizational directory only*. If your directory has *Register
+applications* turned off, someone with the Application Developer role does this.
+
+**2. Trust Flow.** On the app: Certificates & secrets → Federated credentials →
+Add credential → scenario **Other issuer**. Copy the **Issuer**, **Subject
+identifier** and **Audience** from the connect dialog (*Your own Entra app*). The
+subject names your company and is matched exactly, case included. Entra accepts a
+mistyped subject when it is saved and only refuses the sign-in later, so copy it
+rather than type it.
+
+**3. Let the app into Azure DevOps.** In the dialog enter your organization and the
+app's *Application (client) ID*, choose a permission set and press **Show setup
+script**. A Project Collection Administrator reads it and runs it once after
+`az login`, naming the projects agents work in:
+
+```bash
+./aixle-azure-devops.sh "Project A" "Project B"
+```
+
+It adds the app's service principal to the organization with a **Basic** access
+level (a paid license in that organization) and grants one of two permission sets
+in each project:
+
+| | Contributors (default) | Only what Aixle needs |
+| --- | --- | --- |
+| Access | Basic, plus the project's **Contributors** group (the Azure DevOps security group, not the Azure RBAC role) | Basic only; the permissions below are granted to the app directly |
+| Repos | what Contributors holds | Read, Contribute, Create branch, Contribute to pull requests |
+| Boards | what Contributors holds | View and edit work items on the project's root area path |
+| Pipelines | what Contributors holds | View builds |
+| Service Hooks | View and edit subscriptions (optional) | View and edit subscriptions (optional) |
+
+Service Hooks are needed only for instant CI gates and Boards triggers. The app is
+**never** made a Project or Collection administrator and is never given bypass
+policies, force push, policy editing, pipelines or releases, service connections,
+any organization-level permission, or any Azure subscription or resource-group role.
+
+**4. Verify and connect.** Press **Verify access**: Flow signs in as your app, lists
+the projects it can see and, once you pick some, asks Azure what the app can
+**actually** do in each, not which group it belongs to. A missing Repos permission
+stops the connection and is named; Boards, Pipelines and Service Hooks are reported
+but do not block, because they only matter to a project that uses them. Re-running
+**Test connection** later repeats that check, so a permission an administrator removes
+shows up as a warning on the connection instead of as a failed tool call.
+
+Operations run as your app's identity. Pushing a branch can start your pipelines:
+your branch policies and environment approvals apply to Flow exactly as they do to
+any developer.
+
+If you recreate the app, connect again with the new client ID; the same organization
+moves to the new app once it has been verified, and only the projects it can reach
+stay approved.
+
 ## Capabilities
 
 The checkboxes are Flow's own operation profile, not Azure's permissions.
@@ -244,6 +315,10 @@ subscription, report it healthy, and fail every delivery in silence.
   optional personal-access-token mode, which acts as the token's owner and
   carries that person's permissions.
 - Submodules and Git LFS are untested.
+- **Your own Entra app** needs a directory where you may register an app and an
+  Azure DevOps administrator who adds it once. An organization backed by a personal
+  Microsoft account cannot register one at all. It is not available on a
+  self-hosted deployment.
 
 ## When something goes wrong
 
@@ -255,5 +330,10 @@ subscription, report it healthy, and fail every delivery in silence.
 | *"cannot list its projects"* | The token has no project scope | Add **Project and team (read)** — it is behind *Show all scopes* |
 | *"The Git repository … does not exist or you do not have permissions"* | Almost always a **Stakeholder** license, not a missing repository | Raise the identity to Basic |
 | *"cannot read the chosen projects yet"* | Entitlement is not always instant | Try again shortly; nothing is recorded until the application can actually read them |
+| *"Microsoft Entra did not accept Flow's identity for this app"* (`AADSTS700213`) | No federated credential on your app matches the subject Flow sends. A mistyped subject is accepted when saved and refused only here | Copy the subject from the dialog again; it is case-sensitive |
+| The same message with another `AADSTS` code | Issuer, subject or audience differs from the dialog, or the client ID belongs to another directory | Compare all three, and the client ID, with the dialog |
+| *"The app cannot see N of the chosen projects"* | The app is not in the organization or not in those projects | Run the setup script, naming those projects |
+| *"The app is missing permissions it needs"* | A Repos permission is not granted | Run the setup script, or grant the named permissions in Azure DevOps |
+| A connection on your own app turns red after working | The federated credential or the app was deleted, or the app was removed from the organization | Restore it, or connect again |
 | CI gates always close about ten minutes late | Service Hooks were never provisioned | **Test connection**, which is the retry path |
 | A Boards trigger never fires | Its `workitem.*` Service Hooks are missing, refused or on probation | **Test connection** recreates them, or names the ones Azure still refuses |

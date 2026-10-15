@@ -12,13 +12,17 @@
 module AzureDevopsTestHelper
   AZURE_TOKEN_HOST = "https://login.microsoftonline.com"
   AZURE_API_HOST = "https://dev.azure.com"
+  FEDERATION_ISSUER = "https://flow.example.com"
+  # One key for the whole suite: generating 2048 bits per test would dominate it.
+  FEDERATION_KEY = OpenSSL::PKey::RSA.generate(2048)
 
   # `webhook_base_url` is what switches Service Hooks on: absent, the feature
   # is off and nothing is provisioned, which is the default here because most
   # tests are about the on-demand path.
-  def with_azure_devops_enabled(pat_mode: false, credential_generation: "v1", webhook_base_url: nil)
+  def with_azure_devops_enabled(pat_mode: false, credential_generation: "v1", webhook_base_url: nil, federation: nil)
     Settings.stubs(:azure_devops).returns(
       Hashie::Mash.new(
+        federation: federation,
         pat_mode_enabled: pat_mode,
         webhook_base_url: webhook_base_url,
         resource: "https://app.vssps.visualstudio.com/.default",
@@ -39,6 +43,24 @@ module AzureDevopsTestHelper
             "credential_generation" => credential_generation
           }
         }
+      )
+    )
+  end
+
+  # The deployment as an OIDC issuer for customer-owned Entra apps. Passed to
+  # `with_azure_devops_enabled(federation: ...)`, or alone for a deployment with no
+  # shared app at all.
+  def federation_settings(issuer_url: FEDERATION_ISSUER, key: FEDERATION_KEY, previous_public_keys: [])
+    { issuer_url: issuer_url, signing_key: key&.to_pem, previous_public_keys: previous_public_keys, audience: "" }
+  end
+
+  def with_azure_devops_federation_only(**overrides)
+    Settings.stubs(:azure_devops).returns(
+      Hashie::Mash.new(
+        pat_mode_enabled: false, resource: "https://app.vssps.visualstudio.com/.default",
+        login_host: AZURE_TOKEN_HOST, api_host: AZURE_API_HOST, token_refresh_skew: 300,
+        open_timeout: 1, read_timeout: 2, completion_poll_interval: 0,
+        federation: federation_settings(**overrides), apps: { "default" => { "client_id" => nil } }
       )
     )
   end

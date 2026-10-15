@@ -23,9 +23,10 @@ module AzureDevops
 
     def initialize(installation)
       @installation = installation
-      @app = AppConfig.fetch(installation.app_config_key)
+      @app = AppConfig.fetch(installation.app_config_key) unless installation.federated?
     end
 
+    # nil for a federated installation, which has no operator app configuration.
     attr_reader :installation, :app
 
     # Returns a usable Token, from cache when one is live.
@@ -34,7 +35,7 @@ module AzureDevops
     # value is dead, which the expiry alone does not show (a revoked principal
     # or a rotated credential both look fresh until Azure refuses them).
     def access_token(force: false)
-      app.validate!
+      validate_credential!
 
       unless force
         cached = read_cache
@@ -60,10 +61,23 @@ module AzureDevops
 
     private
 
+    def validate_credential!
+      return app.validate! unless installation.federated?
+
+      FederationConfig.signing_key!
+    end
+
+    # A cached token is only valid for the credential it was minted under. For a
+    # federated installation that is the customer's app: a new client id (the
+    # customer recreated the app) must not be served the old app's token.
+    def credential_generation
+      installation.federated? ? "federated:#{installation.client_id}" : app.credential_generation
+    end
+
     def read_cache
       installation.reload if installation.persisted?
       return nil unless installation.token_usable?(
-        generation: app.credential_generation,
+        generation: credential_generation,
         resource: AppConfig.resource,
         skew: AppConfig.token_refresh_skew
       )
@@ -81,7 +95,7 @@ module AzureDevops
       installation.cached_access_token = payload.fetch("access_token")
       installation.assign_attributes(
         token_expires_at: expires_at,
-        token_credential_generation: app.credential_generation,
+        token_credential_generation: credential_generation,
         token_resource: AppConfig.resource
       )
       installation.save!(validate: false)
@@ -90,6 +104,8 @@ module AzureDevops
     end
 
     def request_token!
+      return federated_token! if installation.federated?
+
       tenant = installation.tenant_id.to_s
       raise NotAuthorized, "Installation tenant is not a GUID" unless tenant.match?(GUID)
 
@@ -104,6 +120,11 @@ module AzureDevops
       # credential_action_required here would send an operator rotating a
       # perfectly good certificate because a DNS lookup blipped.
       raise Error.new("Azure token endpoint unreachable: #{e.class}", code: "token_endpoint_unreachable")
+    end
+
+    def federated_token!
+      FederatedTokenExchange.call(tenant_id: installation.tenant_id, client_id: installation.client_id,
+                                  company: installation.company)
     end
 
     def token_params
