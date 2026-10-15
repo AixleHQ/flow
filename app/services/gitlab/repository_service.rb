@@ -2,6 +2,11 @@
 
 module Gitlab
   class RepositoryService
+    # GitLab answers 20 rows a page unless asked for more. Branches are walked
+    # 100 a page up to this many — the whole listing for any real repository,
+    # but never an unbounded walk inside a web request.
+    MAX_BRANCHES = 1000
+
     def initialize(integration)
       @integration = integration
     end
@@ -26,7 +31,7 @@ module Gitlab
 
     def list_branches(full_name)
       client = token_service.client
-      client.branches(full_name).map(&:name)
+      client.branches(full_name, per_page: 100).paginate_with_limit(MAX_BRANCHES).map(&:name)
     rescue ::Gitlab::Error::Error => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
       []
