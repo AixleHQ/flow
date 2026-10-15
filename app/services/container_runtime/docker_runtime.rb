@@ -112,7 +112,7 @@ module ContainerRuntime
       container.archive_in_stream("/", overwrite: true) { tar_io.read(Excon.defaults[:chunk_size]).to_s }
       true
     rescue StandardError => e
-      Rails.logger.warn("[DockerRuntime] write_file failed for #{path}: #{e.message}")
+      Rails.logger.warn("[DockerRuntime] write_file failed for #{path}: #{e.message}#{socket_hint(e)}")
       false
     ensure
       tar_io&.close
@@ -294,6 +294,17 @@ module ContainerRuntime
     end
 
     private
+
+    # A socket the process cannot reach is an environment fault, not a container
+    # one, and the bare Errno message does not say how to fix it. Only the two
+    # socket errnos get a hint, so unrelated failures stay as terse as before.
+    def socket_hint(error)
+      return "" unless error.is_a?(Errno::ENOENT) || error.is_a?(Errno::EACCES)
+      return "" unless error.message.include?("docker.sock")
+
+      " — the Docker socket is unreachable from this process; check that " \
+        "/var/run/docker.sock is mounted and that DOCKER_GID is the socket's gid (see .env.example)"
+    end
 
     def build_session_resource(container)
       info = container.info || {}

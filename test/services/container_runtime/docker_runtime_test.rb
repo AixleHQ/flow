@@ -81,6 +81,20 @@ module ContainerRuntime
       @runtime.create_container(spec)
     end
 
+    test "write_file returns false and points at the socket when it is not reachable" do
+      @runtime.stubs(:resolve_container).raises(Errno::EACCES, "Permission denied - connect(2) for /var/run/docker.sock")
+      Rails.logger.expects(:warn).with(all_of(includes("write_file failed"), includes("DOCKER_GID")))
+
+      refute @runtime.write_file("abc123", "/var/log/mitm/redact.list", "x")
+    end
+
+    test "write_file adds no socket hint to an unrelated failure" do
+      @runtime.stubs(:resolve_container).raises(Errno::EACCES, "Permission denied - some other path")
+      Rails.logger.expects(:warn).with(Not(includes("DOCKER_GID")))
+
+      refute @runtime.write_file("abc123", "/tmp/x", "x")
+    end
+
     test "resolve_container returns container when given Docker::Container" do
       container = mock("Docker::Container")
       container.stubs(:is_a?).with(Docker::Container).returns(true)
