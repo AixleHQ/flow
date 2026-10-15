@@ -2,20 +2,28 @@
 # everything they write into these bind-mounts is owned by that user on a Linux
 # host — no root, no chown. The caches are bind-mounts rather than named volumes
 # for the same reason: a named volume is created root-owned.
-x-web-volumes: &web-volumes
-  - .:/app:cached
-  - ./.docker-cache/bundle:/bundle_cache
-  - ./.docker-cache/home:/home/app
-  - ./docker/remote/db_dumps:/db_dumps:cached
-
-# Worker needs Docker socket access for container lifecycle management (docker-api gem).
-# Web does not — it uses kubeclient for k8s in production.
-x-worker-volumes: &worker-volumes
+#
+# Both web and worker mount the Docker socket (local DockerRuntime only):
+#   - worker drives container lifecycle (docker-api gem);
+#   - web hosts the MCP process, whose get_config_item arms log redaction
+#     (Sessions::SecretRegistry writes /var/log/mitm/redact.list into the agent
+#     container) before it hands out a secret. Without the socket every secret
+#     read fails closed with "log redaction could not be armed".
+# The socket is root-equivalent on the host: this is a local-development
+# trade-off. In k8s production web uses kubeclient and has no such mount.
+x-docker-volumes: &docker-volumes
   - .:/app:cached
   - ./.docker-cache/bundle:/bundle_cache
   - ./.docker-cache/home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
+
+# The socket is root:docker 0660 and the containers run as the host UID with no
+# supplementary group, so they must join the socket's group to open it.
+# DOCKER_GID is the socket's gid: `make` exports it; for a plain `docker compose`
+# set it in .env (see .env.example) — the fallback 0 does not grant access on Linux.
+x-docker-group: &docker-group
+  - "${DOCKER_GID:-0}"
 
 x-db-environment: &db-environment
   DB_HOST: db
@@ -100,7 +108,8 @@ services:
     # they are shell variables, not environment ones — and lands on 1000:1000;
     # set them in .env to make both paths agree (see .env.example).
     user: "${UID:-1000}:${GID:-1000}"
-    volumes: *web-volumes
+    group_add: *docker-group
+    volumes: *docker-volumes
     ports:
       - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-4000}:${PORT:-4000}'
       - '${BIND_ADDRESS:-127.0.0.1}:${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
@@ -133,9 +142,8 @@ services:
   worker:
     image: ${WEB_IMAGE:-web}
     user: "${UID:-1000}:${GID:-1000}"
-    group_add:
-      - "${DOCKER_GID:-0}"
-    volumes: *worker-volumes
+    group_add: *docker-group
+    volumes: *docker-volumes
     environment:
       <<: *web-environment
       TEMPORAL_ENABLED: 'true'
