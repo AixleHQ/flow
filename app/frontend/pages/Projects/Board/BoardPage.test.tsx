@@ -167,7 +167,7 @@ describe('Projects/Board/BoardPage', () => {
     // than filtering the pages the board happens to hold.
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=dashboard'),
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=dashboard'),
         expect.anything(),
       ),
     );
@@ -198,7 +198,7 @@ describe('Projects/Board/BoardPage', () => {
     // The raw term still drives the title predicate.
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=%2342'),
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=%2342'),
         expect.anything(),
       ),
     );
@@ -2289,7 +2289,7 @@ describe('Projects/Board/BoardPage', () => {
     // it: left pending, it could land after mockRestore() below and fail the test as unanswered.
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=auth'),
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=auth'),
         expect.anything(),
       ),
     );

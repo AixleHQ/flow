@@ -208,7 +208,7 @@ gem "aws-sdk-bedrock", "~> 1.95"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
-gem "aws-sdk-marketplacemetering", "~> 1.77"
+gem "aws-sdk-marketplacemetering", "~> 1.106"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 

@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Tasks**: in the board tasks API (`GET …/board/tasks`), `q[title_cont]` and the
+  other `_cont`, `_start` and `_end` predicates now match case exactly. Use
+  `q[title_i_cont]` (or `_i_start`, `_i_end`) to ignore case, as the board's search
+  box does.
+
 ### Fixed
 - **Integrations**: the Aixle Flow app for YouTrack (1.0.1) no longer takes over
   an existing `aixle-flow` account that can sign in or has its own tokens. It

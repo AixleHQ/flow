@@ -145,7 +145,7 @@ rest from here as it is scrolled:
 | -------------------------------------- | ------------------------------------------------------------------- |
 | `board_column_id`                      | Restrict to one column.                                             |
 | `limit` / `offset`                     | Page window, ordered by `position` then `id`.                       |
-| `q[title_cont]`, `q[assignee_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`.         |
+| `q[title_i_cont]`, `q[assignee_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`. `_cont`, `_start` and `_end` match case; `_i_cont`, `_i_start` and `_i_end` ignore it. |
 | `tags[]` + `tags_match=all`            | Tag filter. Default matches any listed tag; `all` requires them all. |
 | `archived`                             | `archived` for archived only, `all` for both; default active only.   |
 
