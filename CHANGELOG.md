@@ -20,6 +20,9 @@ governance, community health — carry none.
   box does.
 
 ### Fixed
+- **Repositories**: the branch picker for a GitLab repository lists all of its
+  branches. It showed only the first 20 by name, so a branch further down the
+  alphabet, such as `develop`, could not be picked or found by search.
 - **Integrations**: the Aixle Flow app for YouTrack (1.0.1) no longer takes over
   an existing `aixle-flow` account that can sign in or has its own tokens. It
   reuses only the service user it created; any other account with that login

@@ -16,6 +16,7 @@ module Gitlab
     # in case the HTTP stack normalizes the encoded slash.
     ENCODED_APP = %r{group(?:%2F|/)app}
     HOOKS = %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z}
+    BRANCHES = %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/repository/branches(?:\z|\?)}
 
     setup do
       @company = create(:company)
@@ -86,6 +87,31 @@ module Gitlab
       result = Gitlab::RepositoryService.new(@integration).list_branches("group/app")
 
       assert_equal %w[main develop], result
+    end
+
+    # GitLab pages branches 20 at a time by default, sorted by name: a repository
+    # with more lost every branch past the 20th, `develop` among them.
+    test "list_branches asks for 100 a page and follows GitLab's next link to the end" do
+      stub_request(:get, BRANCHES).with(query: { "per_page" => "100" })
+        .to_return(status: 200, headers: json_headers.merge("Link" => next_link(page: 2)),
+          body: [ gl_branch("1069-quotation-fix"), gl_branch("248-profile") ].to_json)
+      stub_request(:get, BRANCHES).with(query: { "page" => "2", "per_page" => "100" })
+        .to_return(status: 200, headers: json_headers, body: [ gl_branch("develop") ].to_json)
+
+      result = Gitlab::RepositoryService.new(@integration).list_branches("group/app")
+
+      assert_equal %w[1069-quotation-fix 248-profile develop], result
+    end
+
+    test "list_branches stops at MAX_BRANCHES however many pages GitLab links" do
+      full_page = Array.new(100) { |i| gl_branch("branch-#{i}") }.to_json
+      endless = stub_request(:get, BRANCHES)
+        .to_return(status: 200, headers: json_headers.merge("Link" => next_link(page: 2)), body: full_page)
+
+      result = Gitlab::RepositoryService.new(@integration).list_branches("group/app")
+
+      assert_equal Gitlab::RepositoryService::MAX_BRANCHES, result.length
+      assert_requested endless, times: Gitlab::RepositoryService::MAX_BRANCHES / 100
     end
 
     test "configure registers a pipeline hook and keeps its id and secret on the repository" do
@@ -227,6 +253,14 @@ module Gitlab
     end
 
     private
+
+    def json_headers
+      { "Content-Type" => "application/json" }
+    end
+
+    def next_link(page:)
+      %(<#{GITLAB_API}/projects/group%2Fapp/repository/branches?page=#{page}&per_page=100>; rel="next")
+    end
 
     def hook_url(id)
       %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/#{id}\z}
