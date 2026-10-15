@@ -76,7 +76,7 @@ describe('boardFilterParams', () => {
       showArchived: true,
     });
 
-    expect(params.get('q[g][0][title_cont]')).toBe('auth');
+    expect(params.get('q[g][0][title_i_cont]')).toBe('auth');
     expect(params.get('q[g][0][m]')).toBe('or');
     // A non-numeric term emits no number_eq predicate.
     expect(params.get('q[g][0][number_eq]')).toBeNull();
@@ -149,7 +149,7 @@ describe('useBoardTaskPages', () => {
 
     const urls = fetchSpy.mock.calls.map(urlOf);
     expect(urls).toHaveLength(2);
-    for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=auth');
+    for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=auth');
   });
 
   it('falls back to the props payload when the filters are cleared', async () => {

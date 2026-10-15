@@ -59,7 +59,7 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { title_cont: "login", task_type_eq: "bug", priority_eq: "high", assignee_id_eq: assignee.id }
+            q: { title_i_cont: "login", task_type_eq: "bug", priority_eq: "high", assignee_id_eq: assignee.id }
           }
 
           assert_response :success
@@ -75,7 +75,7 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: by_number.number.to_s, number_eq: by_number.number } } }
+            q: { g: { "0" => { m: "or", title_i_cont: by_number.number.to_s, number_eq: by_number.number } } }
           }
 
           assert_response :success
@@ -90,7 +90,7 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: by_number.number.to_s, number_eq: by_number.number } } }
+            q: { g: { "0" => { m: "or", title_i_cont: by_number.number.to_s, number_eq: by_number.number } } }
           }
 
           assert_response :success
@@ -122,7 +122,7 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: "login" } }, assignee_id_eq: @user.id }
+            q: { g: { "0" => { m: "or", title_i_cont: "login" } }, assignee_id_eq: @user.id }
           }
 
           assert_response :success
@@ -135,7 +135,20 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { m: "or", title_cont: "billing" } } }
+            q: { g: { "0" => { m: "or", title_i_cont: "billing" } } }
+          }
+
+          assert_response :success
+          assert_equal [ match.id ], JSON.parse(response.body).map { |t| t["id"] }
+        end
+
+        test "index title search ignores case" do
+          match = create(:board_task, board: @board, board_column: @col1, title: "Fix Login crash")
+          create(:board_task, board: @board, board_column: @col1, title: "Something else")
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_i_cont: "LOGIN" } } }
           }
 
           assert_response :success
