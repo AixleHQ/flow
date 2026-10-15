@@ -29,7 +29,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when "azure_devops" then create_azure_devops
     when "jira" then create_jira
     when "linear" then create_linear
-    when "aixle_insights" then create_aixle_insights
+    when "insights" then create_insights
     else
       redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{params[:provider]}"
     end
@@ -68,6 +68,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # own, so a company admin removes it from any of them.
   def destroy
     integration = Integration.visible_for_project(current_project).find(params[:id])
+    if integration.insights? && !can_manage_insights?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "Only the project owner or a company admin can remove Insights"
+    end
     if integration.project_id.nil? && !current_project_membership&.admin?
       return redirect_to company_project_integrations_path(current_project),
                          alert: "Only a company admin can remove a company-wide integration"
@@ -517,26 +521,28 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     Array(params[:project_ids]).map(&:to_s).compact_blank.uniq
   end
 
-  # Aixle Insights is a company-wide connection (project_id: nil), so it is
-  # gated with the SAME predicate as the company-wide `destroy`: only a company
-  # admin may connect it. Accept-on-save — no connect-time probe (decision
-  # [1b-1]); a blank token answers with an Inertia field error so the dialog can
-  # stay open and say why.
-  def create_aixle_insights
-    unless current_project_membership&.admin?
+  # Insights is a project connection. Only the project owner or a company
+  # admin can opt a project in by connecting it; ordinary writers cannot.
+  # Accept-on-save: the collector cannot validate a token at connect time.
+  def create_insights
+    unless can_manage_insights?
       return redirect_to company_project_integrations_path(current_project),
-                         alert: "Only a company admin can connect Aixle Insights"
+                         alert: "Only the project owner or a company admin can connect Insights"
     end
 
     token = params[:ingest_token].to_s.strip
     if token.blank?
       return redirect_to company_project_integrations_path(current_project),
-                         inertia: { errors: { ingest_token: "Enter the ingest token from Aixle Insights" } }
+                         inertia: { errors: { ingest_token: "Enter the ingest token from Insights" } }
     end
 
-    AixleInsights::IntegrationService.new(company: current_company, connected_by: current_user)
-                                     .connect(ingest_token: token)
-    redirect_to company_project_integrations_path(current_project), notice: "Aixle Insights connected"
+    Insights::IntegrationService.new(project: current_project, connected_by: current_user)
+                                .connect(ingest_token: token)
+    redirect_to company_project_integrations_path(current_project), notice: "Insights connected"
+  end
+
+  def can_manage_insights?
+    current_project.admin?(current_user) || current_project_membership&.admin? || false
   end
 
   def azure_admin_credential

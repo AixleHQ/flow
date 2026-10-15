@@ -32,15 +32,47 @@ module UsageStatistics
       ActiveSupport::SecurityUtils.secure_compare(generate(route_token), candidate.to_s)
     end
 
+    INTERNAL_KEYS = [ "terminal_session_token", ATTRIBUTE, "agent_type" ].freeze
+
+    # The session's OTEL_RESOURCE_ATTRIBUTES: the internal routing pair every
+    # usage batch must carry, plus Insights business attributes when the runtime
+    # and the project's active Insights integration allow them.
     def resource_attributes(session)
       token = session&.route_token
       return if token.blank?
 
-      attributes = "terminal_session_token=#{token},#{ATTRIBUTE}=#{generate(token)}"
-      agent_type = session&.agent_type
-      attributes += ",agent_type=#{agent_type}" if agent_type.present?
-      attributes
+      attributes = {
+        "terminal_session_token" => token,
+        ATTRIBUTE => generate(token),
+        "agent_type" => session.agent_type
+      }.merge(Insights::RuntimeResourceAttributes.for(session))
+
+      serialize(attributes)
     end
+
+    def serialize(attributes)
+      (INTERNAL_KEYS + Insights::RuntimeResourceAttributes::INSIGHTS_KEYS).filter_map do |key|
+        value = attributes[key]
+        "#{key}=#{escape(value)}" unless value.blank?
+      end.join(",")
+    end
+    private_class_method :serialize
+
+    # Bytes allowed unencoded: the W3C baggage-octet range the OTel resource
+    # spec references (printable ASCII minus space, `"`, `,`, `;`, `\`), minus
+    # `=` and `%` so values round-trip. Everything else — Unicode, comma, equals,
+    # backslash, whitespace — is percent-encoded per UTF-8 byte.
+    #
+    # Encoding stays minimal on purpose: the Rust SDK used by Codex and Kiro CLI
+    # does not percent-decode, so plain values (emails, ASCII project names) must
+    # reach the collector byte-for-byte.
+    UNENCODED_BYTES = "\\x21\\x23\\x24\\x26-\\x2B\\x2D-\\x3A\\x3C\\x3E-\\x5B\\x5D-\\x7E"
+    ENCODED_BYTE = Regexp.new("[^#{UNENCODED_BYTES}]".b, Regexp::NOENCODING)
+
+    def escape(value)
+      value.to_s.b.gsub(ENCODED_BYTE) { |byte| format("%%%02X", byte.ord) }.force_encoding(Encoding::UTF_8)
+    end
+    private_class_method :escape
 
     # Every usage batch must prove it came from the session it names — no
     # exception. A pre-key "grandfather" clause once trusted sessions launched

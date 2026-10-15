@@ -43,5 +43,40 @@ module UsageStatistics
       assert_equal "terminal_session_token=tok-a,terminal_session_key=#{SessionKey.generate('tok-a')}",
                    SessionKey.resource_attributes(session)
     end
+
+    test "resource attributes append Insights metadata after the internal pair when the integration is active" do
+      session, integration = insights_session
+
+      assert_equal "terminal_session_token=tok-a,terminal_session_key=#{SessionKey.generate('tok-a')}," \
+                   "agent_type=claude_code,user_email=dev.ops+ci@example.com,project_name=Backend-API_v2," \
+                   "proxy_enabled=true",
+                   SessionKey.resource_attributes(session)
+      refute_includes SessionKey.resource_attributes(session), integration.insights_ingest_token
+    end
+
+    test "resource attributes percent-encode Unicode, comma, equals, backslash and percent losslessly" do
+      session, = insights_session(email: "üser+meta@example.com", project_name: "Проект, alpha=beta\\gamma%")
+
+      raw = SessionKey.resource_attributes(session)
+      pairs = raw.split(",").to_h { |pair| pair.split("=", 2) }
+
+      assert_equal "%C3%BCser+meta@example.com", pairs.fetch("user_email")
+      assert_equal "%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82%2C%20alpha%3Dbeta%5Cgamma%25", pairs.fetch("project_name")
+      assert_equal session.user.email, URI.decode_uri_component(pairs.fetch("user_email"))
+      assert_equal session.project.name, URI.decode_uri_component(pairs.fetch("project_name"))
+    end
+
+    private
+
+    def insights_session(email: "dev.ops+ci@example.com", project_name: "Backend-API_v2")
+      company = create(:company)
+      user = create(:user, company: company)
+      project = create(:project, company: company, owner: user)
+      user.update_column(:email, email)
+      project.update_column(:name, project_name)
+      integration = create(:integration, :insights, :active, company: company, project: project, connected_by: user)
+      session = create(:terminal_session, user: user, project: project, agent_type: "claude_code", route_token: "tok-a")
+      [ session, integration ]
+    end
   end
 end

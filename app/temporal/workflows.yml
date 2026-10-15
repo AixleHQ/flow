@@ -189,12 +189,6 @@ workflows:
       - name: session_reconcile_admissions_activity
         task_queue: aixle_ruby
 
-  - name: insights_usage_export_workflow
-    owner: aixle_ruby
-    activities:
-      - name: aixle_insights_export_usage_activity
-        task_queue: aixle_ruby
-
   - name: workflow_execution_workflow_v2
     owner: aixle_ruby
     activities:

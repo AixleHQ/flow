@@ -1,9 +1,6 @@
 temporal:
   enabled: true
 
-aixle_insights:
-  base_url: <%= ENV['AIXLE_INSIGHTS_BASE_URL'] || 'https://otel.insights.aixle.com:4318' %>
-
 agents:
   # The whole built-in set lives in one registry, so one prefix names all seven
   # runtime images. The default is where

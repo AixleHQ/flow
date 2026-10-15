@@ -232,22 +232,3 @@ schedules:
     cron: "5 * * * *"
     overlap: skip
     enabled: true
-
-  # Aixle Insights usage export. Every 15 minutes, sends completed agent-session
-  # usage to each connected company's Insights org (per-project opt-in) and
-  # replays the ledger.
-  #
-  # The schedule always ticks; whether anything is SENT is decided inside the
-  # exporter by Settings.aixle_insights.enabled (the deployment-wide kill switch),
-  # so a disabled deployment runs a cheap no-op rather than needing the schedule
-  # torn down. Recovery is the ledger: a failed send is replayed by the next run
-  # within the 7-day attribution window, which is why the activity runs with a
-  # single attempt (see the workflow).
-  #
-  # SKIP overlap: the ledger makes a double-send impossible, but a slow sweep
-  # joined by the next one would still waste outbound requests re-sending the
-  # same batches.
-  - workflow: insights_usage_export_workflow
-    cron: "*/15 * * * *"
-    overlap: skip
-    enabled: true

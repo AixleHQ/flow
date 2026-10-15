@@ -12,12 +12,6 @@ module Web
         # shared with every other project, including ones in companies this user
         # cannot see. Company admins only.
         def manage_concurrency? = project_accessible? && admin?
-
-        # Turning Aixle Insights usage sharing on or off exports the project's
-        # session usage to an external org. That is a company-admin decision,
-        # like connecting the integration itself — not ordinary project write
-        # access.
-        def manage_insights_sharing? = project_accessible? && admin?
       end
     end
   end

@@ -235,12 +235,13 @@ FactoryBot.define do
       status { :active }
     end
 
-    # A company-wide Insights connection: the org ingest token lives in
-    # credentials, nothing in settings. Combine with :active for a live row.
-    trait :aixle_insights do
-      provider { :aixle_insights }
-      name { "Aixle Insights" }
-      project_id { nil }
+    # A project-scoped Insights connection. The ingest token lives in encrypted
+    # credentials, never settings. Combine with :active for a live row.
+    trait :insights do
+      provider { :insights }
+      name { "Insights" }
+      connected_by { association(:user, company: company) }
+      project { association(:project, company: company, owner: connected_by) }
 
       after(:build) do |integration|
         integration.credentials_data = { "ingest_token" => "aixle_otel_#{SecureRandom.hex}" }

@@ -4,9 +4,6 @@
 temporal:
   enabled: true
 
-aixle_insights:
-  base_url: <%= ENV['AIXLE_INSIGHTS_BASE_URL'] || 'https://otel-staging.insights.aixle.com:4318' %>
-
 agents:
   # See config/settings/production.yml — one registry prefix instead of seven
   # per-runtime entries.

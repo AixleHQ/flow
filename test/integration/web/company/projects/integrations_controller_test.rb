@@ -135,6 +135,53 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_not_includes response.location.to_s, Slack::Oauth::AUTHORIZE_URL
   end
 
+  test "company admin connects Insights to the current project" do
+    post company_project_integrations_path(@project), params: {
+      provider: "insights", ingest_token: "aixle_otel_admin"
+    }
+
+    assert_redirected_to company_project_integrations_path(@project)
+    integration = Integration.find_by!(project: @project, provider: :insights)
+    assert_equal @company, integration.company
+    assert_equal "aixle_otel_admin", integration.insights_ingest_token
+  end
+
+  test "project owner can connect and remove Insights" do
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    sign_in_as(owner)
+
+    post company_project_integrations_path(project), params: {
+      provider: "insights", ingest_token: "aixle_otel_owner"
+    }
+    integration = Integration.find_by!(project: project, provider: :insights)
+
+    delete company_project_integration_path(project, integration)
+
+    assert_redirected_to company_project_integrations_path(project)
+    assert_not Integration.exists?(integration.id)
+  end
+
+  test "ordinary project writer cannot connect or remove Insights" do
+    owner = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    member = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    create(:project_collaborator, project: project, user: member)
+    existing = create(:integration, :insights, :active, company: @company, project: project, connected_by: owner)
+    sign_in_as(member)
+
+    assert_no_difference -> { Integration.where(project: project, provider: :insights).count } do
+      post company_project_integrations_path(project), params: {
+        provider: "insights", ingest_token: "aixle_otel_writer"
+      }
+    end
+    assert_match(/project owner or a company admin/, flash[:alert])
+
+    delete company_project_integration_path(project, existing)
+    assert_match(/project owner or a company admin/, flash[:alert])
+    assert Integration.exists?(existing.id)
+  end
+
   def stub_github_app(app_slug: "aixle-app", app_id: "999", private_key: "-----BEGIN RSA PRIVATE KEY-----")
     Settings.github.stubs(:app_slug).returns(app_slug)
     Settings.github.stubs(:app_id).returns(app_id)
@@ -525,43 +572,11 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal 60, integration.reload.coder_lock_ttl_minutes
   end
 
-  # ====== Aixle Insights ======
+  # ====== Insights ======
 
-  test "a company admin connects Aixle Insights with an ingest token" do
-    assert_difference -> { @company.integrations.where(provider: :aixle_insights).count }, 1 do
-      post company_project_integrations_path(@project), params: {
-        provider: "aixle_insights", ingest_token: "aixle_otel_connect"
-      }
-    end
-
-    assert_redirected_to company_project_integrations_path(@project)
-    assert_equal "Aixle Insights connected", flash[:notice]
-
-    row = Integration.aixle_insights_for(@company)
-    assert_not_nil row
-    assert_nil row.project_id
-    assert_equal "active", row.status.to_s
-    assert_equal "aixle_otel_connect", row.insights_ingest_token
-  end
-
-  test "a project owner who is not a company admin cannot connect Aixle Insights" do
-    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
-    project = create(:project, company: @company, owner: owner)
-    sign_in_as(owner)
-
-    assert_no_difference -> { Integration.where(provider: :aixle_insights).count } do
-      post company_project_integrations_path(project), params: {
-        provider: "aixle_insights", ingest_token: "aixle_otel_denied"
-      }
-    end
-
-    assert_redirected_to company_project_integrations_path(project)
-    assert_equal "Only a company admin can connect Aixle Insights", flash[:alert]
-  end
-
-  test "connecting Aixle Insights with a blank token returns an inertia field error" do
-    assert_no_difference -> { Integration.where(provider: :aixle_insights).count } do
-      post company_project_integrations_path(@project), params: { provider: "aixle_insights", ingest_token: "  " }
+  test "connecting Insights with a blank token returns an inertia field error" do
+    assert_no_difference -> { Integration.where(provider: :insights).count } do
+      post company_project_integrations_path(@project), params: { provider: "insights", ingest_token: "  " }
     end
 
     assert_redirected_to company_project_integrations_path(@project)

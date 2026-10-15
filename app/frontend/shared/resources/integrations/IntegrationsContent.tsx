@@ -109,7 +109,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   jira: 'Jira',
   linear: 'Linear',
   youtrack: 'YouTrack',
-  aixle_insights: 'Aixle Insights',
+  insights: 'Insights',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -142,7 +142,7 @@ export const IntegrationsContent = ({
   slack,
   teams,
 }: IntegrationsContentProps) => {
-  const { canExecute, canManageCompany } = useProjectPermissions();
+  const { canExecute, canManage, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState('all');
@@ -197,8 +197,8 @@ export const IntegrationsContent = ({
     if (linearPending) setLinearTeamsTarget(linearPending);
   }, [integrations]);
 
-  // Aixle Insights is company-wide, so the connect item is gated on
-  // canManageCompany. One token field; accept-on-save (no probe).
+  // Insights is project-scoped and connecting it is restricted to the project
+  // owner or a company admin. One token field; accept-on-save (no probe).
   const [insightsOpen, setInsightsOpen] = useState(false);
   const [insightsToken, setInsightsToken] = useState('');
   const [insightsLoading, setInsightsLoading] = useState(false);
@@ -372,11 +372,11 @@ export const IntegrationsContent = ({
 
     router.post(
       basePath,
-      { provider: 'aixle_insights', ingestToken: token },
+      { provider: 'insights', ingestToken: token },
       {
         preserveScroll: true,
         onSuccess: closeInsightsModal,
-        onError: (errors) => setInsightsError(errorMessage(errors, 'Failed to connect Aixle Insights')),
+        onError: (errors) => setInsightsError(errorMessage(errors, 'Failed to connect Insights')),
         onFinish: () => setInsightsLoading(false),
       },
     );
@@ -566,12 +566,12 @@ export const IntegrationsContent = ({
                     Microsoft Teams
                   </Menu.Item>
                 )}
-                {canManageCompany && (
+                {isProjectContext && canManage && (
                   <Menu.Item
-                    leftSection={<IntegrationLogo provider="aixle_insights" fallback={<IconLink size={18} />} />}
+                    leftSection={<IntegrationLogo provider="insights" fallback={<IconLink size={18} />} />}
                     onClick={() => setInsightsOpen(true)}
                   >
-                    Aixle Insights
+                    Insights
                   </Menu.Item>
                 )}
               </Menu.Dropdown>
@@ -1187,19 +1187,21 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canExecute && (!readOnly || canManageCompany) && (
-                          <Tooltip label="Remove">
-                            <ActionIcon
-                              aria-label="Remove"
-                              variant="subtle"
-                              size="sm"
-                              color="red"
-                              onClick={() => handleDelete(integration)}
-                            >
-                              <IconTrash size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                        )}
+                        {canExecute &&
+                          (!readOnly || canManageCompany) &&
+                          (integration.provider !== 'insights' || canManage) && (
+                            <Tooltip label="Remove">
+                              <ActionIcon
+                                aria-label="Remove"
+                                variant="subtle"
+                                size="sm"
+                                color="red"
+                                onClick={() => handleDelete(integration)}
+                              >
+                                <IconTrash size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
                       </Group>
                     </Table.Td>
                   </Table.Tr>
@@ -1308,12 +1310,11 @@ export const IntegrationsContent = ({
         </Stack>
       </Modal>
 
-      <Modal opened={insightsOpen} onClose={requestCloseInsights} title="Connect Aixle Insights" centered size="sm">
+      <Modal opened={insightsOpen} onClose={requestCloseInsights} title="Connect Insights" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Paste your organization&rsquo;s ingest token from Aixle Insights to link this company. The token is saved as
-            entered and validated on the first usage sync — the collector accepts any token at connect time, so there is
-            no connect-time check.
+            Paste this project&rsquo;s Insights ingest token. It is stored encrypted and is not shown again. The token
+            is accepted as entered because the collector cannot validate it at connect time.
           </Text>
           <PasswordInput
             label="Ingest token"

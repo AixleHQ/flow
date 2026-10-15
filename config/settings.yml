@@ -158,21 +158,6 @@ cloud:
 otel:
   endpoint: <%= otel_base %>
 
-# Aixle Insights (DB90) usage export. Flow pushes completed agent-session usage to the
-# Insights OTLP/JSON logs collector so Flow spend shows up next to Copilot/Cursor/Claude.
-# Multitenant: each company connects its own Insights org (token lives on an
-# Integration row, not here). This block holds only deployment-level config: the
-# collector origin (the client appends `/v1/logs`), timeouts, batch size, and a global
-# kill switch. `enabled:false` disables the sweep for the whole deployment regardless of
-# any company connection.
-aixle_insights:
-  enabled: <%= ENV['AIXLE_INSIGHTS_ENABLED'] == 'true' %>
-  base_url: <%= ENV['AIXLE_INSIGHTS_BASE_URL'] %>
-  open_timeout: <%= (ENV['AIXLE_INSIGHTS_OPEN_TIMEOUT'] || 5).to_i %>
-  read_timeout: <%= (ENV['AIXLE_INSIGHTS_READ_TIMEOUT'] || 30).to_i %>
-  # Sessions sent per sweep, bounding outbound requests per scheduled run.
-  batch_size: <%= (ENV['AIXLE_INSIGHTS_BATCH_SIZE'] || 200).to_i %>
-
 temporal:
   enabled: <%= ENV['TEMPORAL_ENABLED'] %>
   host: <%= ENV['TEMPORAL_HOST'] || 'temporal' %>

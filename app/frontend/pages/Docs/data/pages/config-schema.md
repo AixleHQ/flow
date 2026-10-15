@@ -356,22 +356,7 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `SENTRY_TEMPORAL_DSN`         | no       | unset                        | Sentry DSN for the Temporal worker.                        |
 | `SENTRY_TRACES_SAMPLE_RATE`   | no       | `1.0`                        | Share of requests (web) and activities (worker) traced; the OTLP ingest route is never traced. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no       | `http://otlp-ingest:4318`    | Base OTLP endpoint handed to agent containers, which append their own signal paths. No OpenTelemetry SDK runs in this app. |
-
-## Aixle Insights
-
-Deployment-level config for the usage export that pushes completed agent-session
-usage to the Aixle Insights OTLP/JSON logs collector. Multitenant: each company
-connects its own Insights org (the ingest token lives on an `Integration` row,
-not here) — these variables hold only the collector origin, timeouts, batch size
-and a global kill switch.
-
-| Variable                    | Required | Default | Purpose                                                       |
-| --------------------------- | -------- | ------- | ------------------------------------------------------------- |
-| `AIXLE_INSIGHTS_ENABLED`      | no       | `false` | Global switch for the whole deployment. `false` disables the usage-export sweep regardless of any company connection. |
-| `AIXLE_INSIGHTS_BASE_URL`     | no       | unset   | Collector origin; the client appends `/v1/logs`. Defaults per environment. |
-| `AIXLE_INSIGHTS_OPEN_TIMEOUT` | no       | `5`     | Connection open timeout for the Insights client, in seconds.  |
-| `AIXLE_INSIGHTS_READ_TIMEOUT` | no       | `30`    | Response read timeout for the Insights client, in seconds.    |
-| `AIXLE_INSIGHTS_BATCH_SIZE`   | no       | `200`   | Sessions sent per sweep, bounding outbound requests per scheduled run. |
+| `OTLP_INGEST_PROXY_URL`      | no       | unset                        | Proxy collector base URL or full `/v1/logs` endpoint (currently the Insights collector). The ingest service appends `/v1/logs` unless already present and forwards only `ResourceLogs` whose `proxy_enabled` resource attribute is OTLP `boolValue: true` or `stringValue: "true"`. Metrics are never forwarded. Requests are OTLP JSON without `Authorization`; unset disables forwarding. |
 
 ## Catalogs & limits
 

@@ -7,9 +7,9 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack aixle_insights].freeze
+  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack insights].freeze
 
-  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack aixle_insights],
+  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack insights],
                        predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
@@ -45,6 +45,7 @@ class Integration < ApplicationRecord
   validates :name, presence: true
   validates :provider, presence: true
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
+  validate :insights_connection_is_scoped, if: :insights?
   validate :azure_devops_connection_is_scoped, if: :azure_devops?
   before_validation :record_github_installation_id, if: :github?
   validate :github_installation_held_by_this_company, if: -> { github_installation_id.present? && active? }
@@ -73,11 +74,10 @@ class Integration < ApplicationRecord
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
   end
 
-  # The company's active Insights connection, or nil. Company-wide
-  # (project_id: nil), one per company — reconnecting replaces the token on this
-  # row rather than stacking a second connection (decision [1b-4]).
-  def self.aixle_insights_for(company)
-    active.company_wide.find_by(company_id: company.id, provider: :aixle_insights)
+  # The project's active Insights connection, or nil. Reconnecting replaces the
+  # token on this row rather than creating a second project connection.
+  def self.insights_for(project)
+    active.for_project(project).find_by(company_id: project.company_id, provider: :insights)
   end
 
   def credentials_data=(hash)
@@ -254,9 +254,9 @@ class Integration < ApplicationRecord
     settings&.dig("lock_ttl_minutes")&.to_i
   end
 
-  # ----- Aixle Insights accessors -----
+  # ----- Insights accessors -----
 
-  # The company's Insights org ingest token, read from the encrypted credentials.
+  # The project's Insights ingest token, read from encrypted credentials.
   # Read-only: the service writes the whole credentials hash on connect.
   def insights_ingest_token
     credentials_data["ingest_token"]
@@ -299,6 +299,10 @@ class Integration < ApplicationRecord
     return if project.company_id == company_id
 
     errors.add(:project, "must belong to the same company")
+  end
+
+  def insights_connection_is_scoped
+    errors.add(:project, "is required for an Insights integration") if project.blank?
   end
 
   # An Azure connection names exactly one Azure project, so it cannot be

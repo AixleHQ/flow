@@ -57,8 +57,5 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   // Always present, empty unless this is a GitHub connection on a classic
   // personal access token — the only case GitHub reports scopes for.
   githubTokenScopes: [],
-  // Non-secret flag: true only on an active aixle_insights connection; the
-  // ingest token is never serialized.
-  insightsConnected: false,
   ...overrides,
 });

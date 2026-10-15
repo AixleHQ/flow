@@ -129,7 +129,7 @@
               "linear",
               "youtrack",
               "tracker",
-              "aixle_insights"
+              "insights"
             ]
           },
           "uniqueItems": true
@@ -677,7 +677,7 @@
                   "linear",
                   "youtrack",
                   "tracker",
-                  "aixle_insights"
+                  "insights"
                 ]
               },
               "files": {

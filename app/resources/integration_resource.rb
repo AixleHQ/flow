@@ -312,14 +312,4 @@ class IntegrationResource < ApplicationResource
     integration.tracker_subscriptions.select { |s| s.status == "pending" && keys.key?(s.external_scope_id.to_s) }
                .map { |s| keys[s.external_scope_id.to_s] }.compact.sort
   end
-
-  # ----- Aixle Insights -----
-
-  # Whether this company's Insights connection is live. A non-secret flag only;
-  # the ingest token lives in `credentials` (encrypted) and is never a resource
-  # attribute, so it cannot leak.
-  typelize "boolean"
-  attribute :insights_connected do |integration|
-    integration.aixle_insights? && integration.status == "active"
-  end
 end

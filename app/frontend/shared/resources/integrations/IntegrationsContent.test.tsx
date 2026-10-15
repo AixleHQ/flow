@@ -1483,52 +1483,74 @@ describe('IntegrationsContent', () => {
     ).toBeInTheDocument();
   });
 
-  // == Aixle Insights ==
+  // == Insights ==
 
-  describe('Aixle Insights', () => {
-    // The connection is company-wide, so the connect item is gated on
-    // canManageCompany rather than on being in a project.
-    const adminProps = {
+  describe('Insights', () => {
+    const managerProps = {
       ...settingsProps,
-      projectPermissions: { canExecute: true, canManage: true, canManageCompany: true },
+      projectPermissions: { canExecute: true, canManage: true, canManageCompany: false },
+    };
+    const writerProps = {
+      ...settingsProps,
+      projectPermissions: { canExecute: true, canManage: false, canManageCompany: false },
     };
 
-    it('offers Aixle Insights in the Connect menu for a company admin', async () => {
+    it('offers Insights to a project owner or company admin', async () => {
       renderPage(
-        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
-        { props: adminProps },
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[]}
+        />,
+        { props: managerProps },
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-      expect(await screen.findByRole('menuitem', { name: 'Aixle Insights' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'Insights' })).toBeInTheDocument();
     });
 
-    it('hides the Aixle Insights connect item from someone who cannot manage the company', async () => {
+    it('hides Insights connect and remove actions from an ordinary project writer', async () => {
+      const insights = makeIntegration({
+        id: 42,
+        provider: 'insights',
+        name: 'Insights',
+        projectId: 1,
+        scopeIndicator: 'project',
+      });
       renderPage(
-        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
-        { props: settingsProps },
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[insights]}
+        />,
+        { props: writerProps },
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-      expect(screen.queryByRole('menuitem', { name: 'Aixle Insights' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Insights' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     });
 
-    it('posts the provider and token when the modal is submitted', async () => {
+    it('posts the project-scoped provider and token', async () => {
       renderPage(
-        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
-        { props: adminProps },
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/company/projects/1/integrations"
+          integrations={[]}
+        />,
+        { props: managerProps },
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-      await userEvent.click(await screen.findByRole('menuitem', { name: 'Aixle Insights' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Insights' }));
 
-      const dialog = await screen.findByRole('dialog', { name: /Connect Aixle Insights/i });
+      const dialog = await screen.findByRole('dialog', { name: /Connect Insights/i });
       await userEvent.type(within(dialog).getByLabelText('Ingest token'), 'aixle_otel_secret');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
 
       expect(router.post).toHaveBeenCalledWith(
-        '/company/integrations',
-        expect.objectContaining({ provider: 'aixle_insights', ingestToken: 'aixle_otel_secret' }),
+        '/company/projects/1/integrations',
+        expect.objectContaining({ provider: 'insights', ingestToken: 'aixle_otel_secret' }),
         expect.objectContaining({ preserveScroll: true }),
       );
     });

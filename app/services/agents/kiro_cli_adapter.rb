@@ -739,8 +739,9 @@ module Agents
     # SendTelemetryEvent can be read from real traffic before any parser is written.
     # Kiro's CLI exports OpenTelemetry, and where it exports to is configurable — so the
     # platform points it at its own collector, the same one Claude Code reports into.
-    # `OTEL_RESOURCE_ATTRIBUTES` is honoured by its SDK (verified against 2.21.3), which
-    # is what lets UsageStatisticsService route a batch back to this session.
+    # `OTEL_RESOURCE_ATTRIBUTES` is honoured by the pinned CLI SDK (covered by
+    # the runtime metadata contract), which lets UsageStatisticsService route a batch
+    # back to this session.
     #
     # Redirecting it is also what keeps a customer's session out of Kiro's analytics:
     # the export's default target is the vendor's own collector, so pointing it here

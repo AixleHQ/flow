@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_15_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -699,21 +699,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
   end
 
-  create_table "insights_usage_exports", force: :cascade do |t|
-    t.bigint "terminal_session_id", null: false
-    t.bigint "company_id"
-    t.string "state", default: "pending", null: false
-    t.integer "attempts", default: 0, null: false
-    t.integer "records_sent", default: 0, null: false
-    t.text "error"
-    t.datetime "exported_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["company_id"], name: "index_insights_usage_exports_on_company_id"
-    t.index ["state", "created_at"], name: "index_insights_usage_exports_on_state_and_created_at"
-    t.index ["terminal_session_id"], name: "index_insights_usage_exports_on_terminal_session_id", unique: true
-  end
-
   create_table "integration_data", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at"
@@ -746,6 +731,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
     t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
     t.index ["id", "company_id"], name: "index_integrations_on_id_and_company_id", unique: true
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
+    t.index ["project_id", "provider"], name: "index_integrations_on_project_insights", unique: true, where: "((provider)::text = 'insights'::text)"
     t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
   end
@@ -1948,8 +1934,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_130000) do
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "identity_providers", "companies"
-  add_foreign_key "insights_usage_exports", "companies", on_delete: :nullify
-  add_foreign_key "insights_usage_exports", "terminal_sessions", on_delete: :cascade
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
