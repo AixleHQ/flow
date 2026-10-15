@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-15
+
 ### Changed
 - **Tasks**: in the board tasks API (`GET …/board/tasks`), `q[title_cont]` and the
   other `_cont`, `_start` and `_end` predicates now match case exactly. Use
@@ -492,7 +494,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.1...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.2...develop
+[1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/AixleHQ/flow/compare/v1.0.0...v1.1.0
