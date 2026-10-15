@@ -148,7 +148,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
 
   create_table "azure_devops_installations", force: :cascade do |t|
     t.jsonb "allowed_project_ids", default: [], null: false
-    t.string "app_config_key", default: "default", null: false
+    t.string "app_config_key", default: "default"
     t.datetime "approved_at"
     t.bigint "approved_by_id"
     t.string "client_id", null: false
@@ -166,6 +166,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
     t.datetime "token_expires_at"
     t.string "token_resource"
     t.datetime "updated_at", null: false
+    t.string "credential_kind", default: "shared_app", null: false
     t.index ["company_id", "tenant_id", "organization_slug"], name: "idx_ado_installations_identity", unique: true
     t.index ["company_id"], name: "index_azure_devops_installations_on_company_id"
     t.index ["token_expires_at"], name: "idx_ado_installations_token_expiry"
@@ -583,9 +584,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
     t.datetime "billing_event_at"
     t.boolean "managed_by_aixle", default: false, null: false
     t.datetime "trial_started_at"
+    t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
+    t.index ["public_id"], name: "index_companies_on_public_id", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
     t.index ["stripe_customer_id"], name: "index_companies_on_stripe_customer_id", unique: true, where: "(stripe_customer_id IS NOT NULL)"
