@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: Azure DevOps can be connected through your own Microsoft Entra app.
+  Register an app in your directory, add a federated credential that trusts Flow, and
+  an Azure DevOps administrator runs a generated script once. No secret, certificate or
+  personal access token is stored, Aixle never receives an administrator credential,
+  and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
+  setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
+
 ### Changed
 - **Tasks**: in the board tasks API (`GET …/board/tasks`), `q[title_cont]` and the
   other `_cont`, `_start` and `_end` predicates now match case exactly. Use

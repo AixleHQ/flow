@@ -157,6 +157,53 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     render json: { error: e.code, message: e.message }, status: :unprocessable_content
   end
 
+  # Connecting with the customer's OWN Entra app (workload identity federation),
+  # in place of the three actions above. No administrator credential is involved:
+  # the token exchange itself proves the customer trusted this company's subject.
+  # Inspect changes nothing; with project_ids it also reports the app's actual
+  # permissions in those projects.
+  def azure_devops_federated_inspect
+    result = federated_onboarding.inspect!(
+      organization: params[:organization].to_s, client_id: params[:client_id].to_s,
+      project_ids: params[:project_ids].presence && federated_project_id_params
+    )
+
+    render json: {
+      organization: result.organization,
+      tenantId: result.tenant_id,
+      alreadyBound: result.already_bound,
+      projects: result.projects,
+      permissions: result.permissions&.to_h
+    }
+  rescue AzureDevops::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
+  def azure_devops_federated_connect
+    installation = federated_onboarding.complete!(
+      organization: params[:organization].to_s, client_id: params[:client_id].to_s,
+      project_ids: federated_project_id_params
+    )
+
+    render json: { installationId: installation.id, organization: installation.organization_slug,
+                   projects: installation.allowed_project_ids }
+  rescue AzureDevops::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
+  # The script the customer's Azure DevOps administrator runs once.
+  def azure_devops_federated_script
+    tenant = AzureDevops::TenantDiscovery.call(params[:organization].to_s)
+    script = AzureDevops::SetupScript.new(
+      organization: tenant.organization, tenant_id: tenant.tenant_id, client_id: params[:client_id].to_s,
+      flavor: params[:flavor].presence || "contributors", service_hooks: params[:service_hooks].to_s != "false"
+    )
+
+    render json: { script: script.to_s }
+  rescue AzureDevops::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
   # A pending Teams connection and the link a Microsoft 365 administrator opens
   # to approve it. The link is shown once, here.
   def teams_connect
@@ -379,9 +426,20 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   def azure_devops_props
     return { enabled: false } unless AzureDevops::AppConfig.enabled?
 
-    { enabled: true,
-      pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
-      client_id: AzureDevops::AppConfig.fetch("default")&.client_id }
+    shared_app = AzureDevops::AppConfig.default_app_usable?
+    props = { enabled: true,
+              pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
+              shared_app_enabled: shared_app,
+              client_id: shared_app ? AzureDevops::AppConfig.fetch("default").client_id : nil }
+    return props unless AzureDevops::FederationConfig.enabled?
+
+    # What the customer enters in the federated credential of their own app. The
+    # subject names THIS company; none of it is secret.
+    props.merge(federation: {
+                  issuer_url: AzureDevops::FederationConfig.issuer_url,
+                  audience: AzureDevops::FederationConfig.audience,
+                  subject: AzureDevops::FederatedSubject.for(current_company)
+                })
   end
 
   # Array of strings, whatever shape the parameter arrives in. An
@@ -525,6 +583,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   def azure_onboarding
     AzureDevops::Onboarding.new(company: current_company, actor: current_user)
+  end
+
+  def federated_onboarding
+    AzureDevops::FederatedOnboarding.new(company: current_company, actor: current_user)
+  end
+
+  def federated_project_id_params
+    Array(params[:project_ids]).map(&:to_s).compact_blank.uniq
   end
 
   def create_azure_devops

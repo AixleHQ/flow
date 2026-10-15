@@ -564,7 +564,123 @@ These are bounded follow-ups, not missing definitions of the core feature:
 - **Pilot PAT availability:** enable only where organization policy permits it; never make PAT the automatic fallback for failed service-principal setup. The one case where PAT is not a pilot but the only option is an MSA-backed organization with no connected Entra tenant (§1); detect it and say so, rather than presenting it as a service-principal error the customer can fix.
 - **Git bearer transport:** the core release ships the Microsoft-documented header-injection path. Promote `authtype` negotiation only after a live spike shows Azure Repos accepting it on an image whose Git advertises the capability (§7).
 - **Submodules/LFS and custom images:** extend support after the standard Git helper works; capability-test custom images and document the fallback launcher when necessary.
-- **Stronger isolation / credential hosting:** customer-owned app registrations, workload federation/managed identity, and a Git proxy can be added when a customer needs narrower token reach or a different key-management model. Service principal remains the default, not a deferred feature.
+- **Stronger isolation / credential hosting:** customer-owned app registrations through workload identity federation are built (§15). A Git proxy, managed identity and KMS-held signing keys can be added when a customer needs narrower token reach or a different key-management model. Service principal remains the default, not a deferred feature.
 - **Events and CI:** choose the exact initial event/gate set from existing Aixle workflow requirements during the parity extension.
 
 The architectural default is a separate Azure integration backed by a service principal, approved organization installation, explicit project identity, Rails-hosted tools, and session Git support. These follow-ups should not change repository ownership or require agents to handle credentials in conversation.
+
+## 15. Customer-owned Entra app (workload identity federation)
+
+**Status:** implemented; not verified against a live tenant (see "Known compromises").
+
+A third way to connect, next to "Sign in with Microsoft" and the administrator PAT. The
+customer registers a single-tenant app in **their** Entra directory and adds a federated
+identity credential ("Other issuer") that trusts this deployment. Flow signs a short-lived
+JWT, Entra exchanges it for an access token of the customer's app, and everything after
+that is the existing service-principal path. No secret, certificate or PAT is stored on
+either side, and no administrator credential reaches Aixle.
+
+It does not remove the Azure DevOps administrator: only a Project Collection Administrator
+can add an identity to an organization. It removes consenting to a third-party app in the
+customer's directory, and handing the vendor an administrator token.
+
+### 15.1 Trust
+
+| | |
+|---|---|
+| Issuer | This deployment: `FederationConfig.issuer_url`, default `protocol://domain`. Public HTTPS origin, no path |
+| Documents | `GET /.well-known/openid-configuration` and `/.well-known/jwks.json` (`OidcIssuerController`), anonymous, 404 unless configured |
+| Subject | `aixle:company:<companies.public_id>` (`FederatedSubject`). One per company; built only from an immutable uuid, never a name or slug. Entra matches it exactly and case-sensitively |
+| Audience | `api://AzureADTokenExchange` (a setting, for sovereign clouds) |
+| Assertion | RS256, `kid` = RFC 7638 thumbprint, five minutes, `jti` per assertion (`Entra::FederatedAssertion`) |
+| Ownership proof | The exchange itself: it succeeds only if someone who controls an app in the organization's directory trusted exactly this company's subject. Company B's assertion carries B's subject |
+
+The feature is offered exactly when a signing key is configured and the issuer is usable,
+with no flag (the rule of §5). `AppConfig.enabled?` includes it, so a deployment may have
+federation and no shared app at all.
+
+### 15.2 Flow
+
+1. `FederatedOnboarding#inspect!`: discover the tenant from the organization, exchange a
+   token for the entered client id, list the projects the app can see. Writes nothing. With
+   `project_ids` it also runs `PermissionCheck`.
+2. `FederatedOnboarding#complete!`: in one transaction, bind or rebind the installation
+   (`credential_kind: federated`, `app_config_key: nil`), exchange through `AppTokenService`,
+   require the chosen projects to be visible, require the Repos permissions, record the
+   service principal's `oid`, activate. A failure at any point leaves nothing behind.
+3. The project connection is then made with `IntegrationService#create_with_installation`
+   exactly as for the shared app. `CredentialProvider`, `Client` and every tool are
+   unchanged: a federated installation still yields a service-principal token.
+
+`AppTokenService` caches under the generation `federated:<client_id>`, so a recreated app
+is never served the old app's token. `client_id` is the one installation field that may
+change for a federated installation, only together with re-verification; moving to a new
+app keeps just the previously approved projects the new app can reach, plus the ones chosen.
+
+### 15.3 Permissions
+
+`PermissionCheck` asks Azure what the connected identity can do, by permission evaluation
+(`_apis/permissions`), not by group membership. Bits are never written down: each namespace
+is asked for its own action list (`_apis/securitynamespaces`) and actions are found by name.
+
+| Group | Checks | Blocks a connection |
+|---|---|---|
+| Repos | Read, Contribute, Create branch, Contribute to pull requests | yes, when Azure says no |
+| Boards | View and edit work items (root area path) | no |
+| Pipelines | View builds | no |
+| Service Hooks | View and edit subscriptions | no |
+
+An answer that cannot be obtained is `unknown` and never blocks. `IntegrationService#test`
+repeats the check for a federated connection and reports removed permissions as a warning.
+
+`SetupScript` generates what the Project Collection Administrator runs: Contributors
+(default) or only the permissions above, granted directly to the app's identity. Project
+names are arguments, never part of the generated text; every interpolated value is a
+validated organization name or GUID.
+
+### 15.4 Known compromises
+
+Recorded so nobody mistakes them for properties of the design.
+
+1. **Not run against a live Azure DevOps or Entra.** Every request is covered by WebMock
+   stubs written from Microsoft's documentation, which is the failure mode §13 warns about:
+   the contract tests match payloads we wrote. Unverified: the token exchange, the
+   `_apis/permissions` and `_apis/securitynamespaces` shapes, the namespace ids and action
+   names, the area-path root lookup, `serviceprincipalentitlements` for an app with no
+   project entitlement, and the generated script end to end.
+2. **Entra errors.** Only `AADSTS700213` (subject), `AADSTS700016` (app not found) and
+   `AADSTS7000112` (app disabled) carry a specific hint. Any other `invalid_client` shows
+   Entra's code and a checklist. Codes were taken from documentation, not observed.
+3. **The permission check fails open.** `unknown` never blocks, and only a missing Repos
+   permission does. A wrong action name or a changed response shape therefore degrades to
+   "could not be checked" rather than refusing a working connection, at the price of
+   letting a broken one through.
+4. **The setup script differs from the task text.** It uses `az rest` against the same REST
+   endpoints as the rest of the integration, not `az devops`. The "custom group" is
+   delivered as permissions granted directly to the app's identity: putting a service
+   principal in a group needs a Graph descriptor that cannot be derived without a live
+   organization. A customer who wants a group does it in the portal and the check still
+   passes. The project-visibility ACE and the identity descriptor shape are assumptions
+   (the descriptor is the fallback `ServiceHookGrant` already uses).
+5. **Revoking is not instant.** Deleting the federated credential or the app stops new
+   exchanges at once, but an access token already issued (about an hour) keeps working until
+   it expires, and Flow cannot recall it. The connection shows red on the next rejected call
+   or test.
+6. **The issuer is the application's domain.** Changing it breaks every federated connection
+   at once. `AZURE_DEVOPS_FEDERATION_ISSUER_URL` exists to pin it, but a customer has to
+   edit their credential for any change.
+7. **The signing key is a PEM in the environment.** No KMS. A leaked key can mint a token
+   for any app that trusts this issuer, the same blast radius as the shared app's
+   certificate. Rotation is by `PREVIOUS_PUBLIC_KEYS`; how long Entra caches the key set is
+   not measured.
+8. **Self-hosted is not supported.** A deployment behind a VPN cannot be reached by Entra,
+   and nothing here publishes the documents elsewhere. Such a deployment leaves the key
+   unset and the option is not offered.
+9. **The administrator PAT, PAT mode and Sign in with Microsoft are unchanged.** Nothing was
+   retired.
+10. **Visibility is not access.** By default any organization member sees every project, so
+    the app may list projects it was never granted. Only the permission check tells them
+    apart, and only for the projects chosen (a handful of requests each).
+11. **Federation is per company.** One credential serves every organization an app reaches,
+    and every project of the company can use an approved installation, as with the shared
+    app.

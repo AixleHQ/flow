@@ -315,6 +315,24 @@ azure_devops:
   completion_poll_interval: <%= (ENV['AZURE_DEVOPS_COMPLETION_POLL_INTERVAL'] || 1.0).to_f %>
   open_timeout: <%= (ENV['AZURE_DEVOPS_OPEN_TIMEOUT'] || 5).to_i %>
   read_timeout: <%= (ENV['AZURE_DEVOPS_READ_TIMEOUT'] || 30).to_i %>
+  # This deployment as an OIDC issuer, for customers who connect with their OWN
+  # Entra app through a federated credential instead of Aixle's multi-tenant app.
+  # Offered exactly when `signing_key` is set and `issuer_url` is a public HTTPS
+  # origin: Entra fetches /.well-known/openid-configuration and jwks.json itself.
+  #
+  # `issuer_url` is pinned by every customer's federated credential, so changing
+  # it breaks all of those connections at once. It defaults to this deployment's
+  # own origin; set it only to keep an issuer stable across a domain move.
+  federation:
+    issuer_url: "<%= ENV['AZURE_DEVOPS_FEDERATION_ISSUER_URL'] %>"
+    # RSA private key (2048 bits or more), PEM. `to_json` for the folded-newline
+    # reason given under apps.default.private_key.
+    signing_key: <%= ENV['AZURE_DEVOPS_FEDERATION_SIGNING_KEY'].to_json %>
+    # JSON array of PEM public keys kept published while tokens signed with them
+    # may still be in flight. Publish a new key here before switching to it.
+    previous_public_keys: <%= ENV['AZURE_DEVOPS_FEDERATION_PREVIOUS_PUBLIC_KEYS'].presence || '[]' %>
+    # Only a sovereign cloud uses a different audience.
+    audience: "<%= ENV['AZURE_DEVOPS_FEDERATION_AUDIENCE'] %>"
   # Named app configurations. An installation stores the KEY, never a secret and
   # never a path — a project administrator cannot point a binding at arbitrary
   # credential material by submitting a string.

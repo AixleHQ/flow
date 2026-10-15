@@ -32,7 +32,7 @@ module AzureDevops
       # stays an explicit setting because it is a policy decision (those
       # connections act as the token's owner), not a redundant copy of one.
       def enabled?
-        pat_mode_enabled? || default_app_usable?
+        pat_mode_enabled? || default_app_usable? || FederationConfig.enabled?
       end
 
       def default_app_usable?

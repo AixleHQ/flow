@@ -1752,6 +1752,21 @@ export function azureDevopsSignInCompanyProjectIntegrationsPath(project_id: Scal
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_sign_in" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/azure_devops_federated_inspect(.:format) */
+export function azureDevopsFederatedInspectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_federated_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/azure_devops_federated_connect(.:format) */
+export function azureDevopsFederatedConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_federated_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/azure_devops_federated_script(.:format) */
+export function azureDevopsFederatedScriptCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_federated_script" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/integrations/jira_oauth_start(.:format) */
 export function jiraOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "jira_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
