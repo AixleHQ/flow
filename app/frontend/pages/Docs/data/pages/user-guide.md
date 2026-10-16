@@ -30,7 +30,7 @@ Read in any order:
 - **[Runtimes](/docs/runtimes)** — the seven LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials, and cost tracking.
 - **[Tools](/docs/tools)** — tool kinds, execution modes, the built-in board tools, and resource resolution.
 - **[MCP servers](/docs/mcp)** — transports, the internal `aixle-tools` server, Config Items credentials, and the personal token that turns Aixle itself into an MCP server.
-- **[Integrations](/docs/integrations)** — GitHub, GitLab, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder and the trackers they provide, and webhooks.
+- **[Integrations](/docs/integrations)** — GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder and the trackers they provide, and webhooks.
 - **[Session queues](/docs/session-queues)** — why a session waits before its container starts, and the limits behind it.
 - **[Configuration](/docs/configuration)** — env vars, OAuth, agent credentials, and other knobs.
 - **[Configuring sign-in methods](/docs/configuring-sso)** — Google, Microsoft Entra and per-company OpenID Connect on your installation.

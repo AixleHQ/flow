@@ -49,7 +49,7 @@ gates.
 **Gate**: blocks a column's automatic trigger until an external check finishes.
 Types: `github_checks_completed`, `github_workflow_completed`,
 `gitlab_pipeline_completed`, `azure_devops_build_completed`,
-`azure_devops_pr_policies_satisfied`. Status: pending → resolved, or stale when
+`azure_devops_pr_policies_satisfied`, `bitbucket_pr_statuses_completed`. Status: pending → resolved, or stale when
 the provider never reported (stale stops blocking). Step agents open gates with
 `board_create_gate`; CI webhooks resolve them.
 
@@ -182,14 +182,16 @@ external.
 their connector and version. Header and env values reference secrets as
 `config_item:NAME`.
 
-**Repositories**: GitHub (App installation or personal access token), GitLab or
-Azure DevOps through an integration, or a public URL cloned read-only. Fields:
+**Repositories**: GitHub (App installation or personal access token), GitLab,
+Azure DevOps or Bitbucket Cloud (the Aixle Flow app or an access token) through
+an integration, or a public URL cloned read-only. Sessions holding a GitLab or
+Bitbucket repository get the `pull_request_*` tools. Fields:
 `full_name`, `source_branch`, `purpose`, `description`, `is_private`.
 
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
+**Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 `jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
 projects (Linear: teams) in as task trackers.

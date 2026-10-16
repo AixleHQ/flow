@@ -7,12 +7,14 @@ connection acts as the person the token belongs to. From then on:
   **repositories**;
 - agents clone, fetch and push them in their sessions, without the token ever
   sitting in the checkout;
+- agents open, review, comment on and merge merge requests with the
+  `pull_request_*` tools;
 - Flow registers a pipeline hook on each attached project, so a CI gate on a
   board task resolves as soon as its pipeline finishes.
 
-That is the whole integration. There are no GitLab tools for merge requests or
-issues and no GitLab triggers. There is no OAuth app either, so you register
-nothing in GitLab and set no `GITLAB_APP_*` variable.
+There are no GitLab triggers, and GitLab issues are not a tracker. There is no
+OAuth app either, so you register nothing in GitLab and set no `GITLAB_APP_*`
+variable.
 
 ## Who does what
 
@@ -32,15 +34,18 @@ scope the connect dialog asks for. Flow uses the token to:
 - list the projects that user is a member of, and their branches, for the
   repository picker;
 - clone, fetch and push over HTTPS as that user;
+- open, update, comment on, approve and merge merge requests;
 - add and remove a pipeline hook on each attached project. This needs the
   **Maintainer** role on that project. Without it the repository is still
   added, but its gates resolve later (see [CI gates](#ci-gates)).
 
 The token cannot be narrowed per call. Every session that works on one of these
-repositories gets the token itself, with everything it can reach. Pushes are
-made as the token's owner, with that person's permissions. Prefer a token from
-an account kept for Flow, with access to the projects you mean to attach and
-nothing else.
+repositories gets the token itself, with everything it can reach. Pushes,
+merge requests, comments, approvals and merges are made as the token's owner,
+with that person's permissions. Prefer a **project or group access token**:
+GitLab makes it a bot user, so agents' work never appears under a colleague's
+name, and it reaches only that project or group. A personal token from an
+account kept for Flow works too.
 
 Flow checks the token when you connect, when you replace it, and when you
 select **Test connection** on the row. In between, a token that expires or is
@@ -93,8 +98,38 @@ A session gets a repository when its step lists one
   clean remote and a credential helper, so every later `git fetch` and
   `git push` asks Flow for the credential. Nothing goes into `.git/config` or
   the remote URL, and agents are told not to put credentials there.
-- No GitLab CLI is authenticated. GitHub sessions get a `gh` that is signed in,
-  but GitLab sessions get only git. Flow has no merge-request tools.
+- No GitLab CLI is authenticated. GitHub sessions get a `gh` that is signed in;
+  GitLab sessions get git and the `pull_request_*` tools instead.
+
+## Merge-request tools
+
+Sessions that hold a GitLab repository get these tools automatically. They are
+the same tools Bitbucket repositories get, so a workflow written for one host
+runs on the other.
+
+| Tool | What it does |
+| --- | --- |
+| `pull_request_list` | Merge requests of a repository, by state or source branch |
+| `pull_request_get` | One merge request: branches, head commit, reviewers, mergeability |
+| `pull_request_changes` | The files it changes |
+| `pull_request_checks` | The head pipeline and the commit statuses on its head commit |
+| `pull_request_create` | Opens a merge request, as a draft unless told otherwise; returns the open one if the same branches already have one |
+| `pull_request_update` | Title, description, target branch, draft, close or reopen |
+| `pull_request_list_comments` | Notes and discussions, with inline positions |
+| `pull_request_add_comment` | A note, a reply in a discussion, or an inline comment on a file and line |
+| `pull_request_review` | Approve or withdraw an approval. *Request changes* is not offered on GitLab yet |
+| `pull_request_merge` | Merges, only if the head commit is still the one the agent names |
+
+`pull_request` takes the merge request's number (its `iid`, `!123`) or its URL.
+`target_branch` defaults to the repository's source branch in Flow. A run
+started from a tracker issue gets the issue key at the start of the title.
+
+Each write is recorded, so an agent repeating a call after a timeout gets the
+first result instead of a second merge request or comment.
+`pull_request_merge` refuses when the merge request moved past the commit the
+agent reviewed — Flow checks, and GitLab checks the same commit again — and
+never bypasses approval rules or protected branches. GitLab merges with the
+project's own merge method; `fast_forward` cannot be asked for.
 
 ---
 
@@ -212,9 +247,9 @@ because each request carries a key for that session. See
 - A repository attached before Flow kept track of each hook can leave its
   hook in GitLab when it is removed: Flow cannot tell that hook apart while
   another such repository attaches the same GitLab project.
-- There are no merge-request tools, no GitLab CLI and no GitLab triggers.
-  GitLab issues cannot be used as a tracker: [Trackers](/docs/trackers)
-  supports Jira, Azure Boards, GitHub Projects and Linear.
+- There is no GitLab CLI and there are no GitLab triggers. GitLab issues
+  cannot be used as a tracker: [Trackers](/docs/trackers) supports Jira, Azure
+  Boards, GitHub Projects, Linear and YouTrack.
 
 ## When something goes wrong
 

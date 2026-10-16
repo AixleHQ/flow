@@ -14,6 +14,11 @@ Add `bitbucket` as the fourth code host next to GitHub, GitLab and Azure DevOps.
 2. **Agents get pull-request tools, and GitLab gets them too.** Today a GitLab session can push a branch and nothing else: there are no merge-request tools and no `glab` in the image ([user-guide/gitlab.md](../user-guide/gitlab.md) says so). This design adds one provider-neutral `pull_request_*` tool set behind a port, implemented for GitLab and Bitbucket.
 3. **The primary connection is an app, the way GitHub's is.** Customers install an **Aixle Flow Forge app** on their Bitbucket workspace. The app gives Aixle a bot identity and short-lived tokens, and delivers Bitbucket events. A token mode — a Bitbucket access token or API token pasted once — exists alongside it, as GitHub's PAT mode does: for self-hosted deployments that have not registered their own app, for development, and as a fallback.
 
+Two more decisions followed on 2026-10-16:
+
+4. **One "Atlassian" entry, two integrations.** Jira and Bitbucket cannot share a connection the way GitHub's code hosting and GitHub Projects do: they are separate tenants (a Jira site, a Bitbucket workspace) with separate auth (Jira's Atlassian OAuth app or a service account; Bitbucket's Forge app or tokens), a Forge app cannot span Jira and Bitbucket (cross-product apps exclude Bitbucket, and mixing their scopes fails `forge deploy`, ECO-329), and a scoped API token is created for one product. So the Connect menu offers one **Atlassian** item that opens a chooser — **Jira** (issues as trackers) or **Bitbucket** (repositories, pull requests, CI gates) — and each choice runs its own flow and creates its own integration.
+5. **Issue keys link the two.** A run started from a tracker issue starts branch names with the issue key and prefixes pull-request titles with it (`pull_request_create` adds it when the agent did not). Jira's development panel then lists the branches, commits and pull requests by itself when the customer's Atlassian organization links Jira with Bitbucket — and the same holds for GitHub and GitLab with Jira's apps for them. No integration of ours carries that link.
+
 | User outcome | GitLab today | GitLab after | Bitbucket |
 |---|---|---|---|
 | Connect a code host | Personal access token | Unchanged | Forge app (primary); access token or API token |
@@ -122,7 +127,7 @@ All `tags :pull_requests` (hidden, like `:azure_devops`), `inject_when :pull_req
 | `pull_request_review` | `pull_request`*, `verdict`*, `body`, `operation_key` | yes |
 | `pull_request_merge` | `pull_request`*, `expected_head_sha`*, `strategy`, `delete_source_branch`, `message`, `operation_key` | yes |
 
-`target_branch` defaults to the repository's default branch. `pull_request_create` first looks for an open pull request from the same source to the same target and returns it (`existing: true`) rather than creating a second one; both hosts refuse or confuse duplicates, and an agent retrying after a timeout should get the one it made.
+`target_branch` defaults to the repository's `source_branch` in Aixle — the branch sessions check out, chosen when the repository was attached — rather than the host's default branch. `pull_request_create` first looks for an open pull request from the same source to the same target and returns it (`existing: true`) rather than creating a second one; both hosts refuse or confuse duplicates, and an agent retrying after a timeout should get the one it made.
 
 ### 4.6 Availability and injection
 
@@ -175,7 +180,7 @@ On GitLab the token's owner is the author of everything the tools do. The user g
 
 ### 4.12 What agents are told
 
-`resources.rb` gains a paragraph for sessions holding GitLab or Bitbucket repositories: pull requests go through the `pull_request_*` tools; there is no `glab` or Bitbucket CLI; use `pull_request_checks` or a gate to wait for CI; merge only with the head commit you reviewed.
+`resources.rb` gains a paragraph for sessions holding GitLab or Bitbucket repositories: pull requests go through the `pull_request_*` tools; there is no `glab` or Bitbucket CLI; use `pull_request_checks` or a gate to wait for CI; merge only with the head commit you reviewed. When the run came from a tracker issue and the session holds any code-host repository, the agent is also told to start branch names with the issue key and put it at the start of pull-request titles and commit messages (decision 5, §1); `pull_request_create` prefixes the title itself when the key is missing.
 
 ## 5. Bitbucket connection model
 
@@ -425,7 +430,7 @@ The existing helper path (`GitCredentials::SessionGitSetup`) is reused unchanged
 
 ## 10. UI and documentation
 
-- **Integrations page:** a Bitbucket item in the Connect menu. Its modal, modelled on `GithubConnectModal`, has two paths: **Install the app** (recommended, shown when app mode is configured: type the workspace; a workspace the company already bound connects at once, any other gets the install link and the Bitbucket-side steps) and **Use a token** (workspace + token). Test connection and Replace token for token mode, as GitLab has.
+- **Integrations page:** an **Atlassian** item in the Connect menu replaces the separate Jira item and opens a chooser between Jira and Bitbucket (decision 4, §1); each card says whether the project already has that connection, and a user can run both flows in one sitting. Integration rows keep their own provider labels. The Bitbucket modal, modelled on `GithubConnectModal`, has two paths: **Install the app** (recommended, shown when app mode is configured: type the workspace; a workspace the company already bound connects at once, any other gets the install link and the Bitbucket-side steps) and **Use a token** (workspace + token). Test connection and Replace token for token mode, as GitLab has.
 - **`/integrations/bitbucket/connect`:** the consent page of §5.5.
 - **Elsewhere:** Bitbucket logo in `IntegrationLogo`; labels in `IntegrationsContent` and `AddRepositoryModal`; copy in `RepositoriesContent` and the public-repository hint; integration health ("app silent for 20 min") on the integration row.
 - **Documentation:**
