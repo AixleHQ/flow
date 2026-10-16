@@ -10,6 +10,12 @@
       "type": "string",
       "x-scope": "GLOBAL"
     },
+    "serviceUserId": {
+      "title": "Service user",
+      "description": "The Hub id of the aixle-flow user this app created. Set by Connect, which uses no other user.",
+      "type": "string",
+      "x-scope": "GLOBAL"
+    },
     "eventsUrl": {
       "title": "Events URL",
       "description": "Where this project's issue events are sent. Set by Connect.",

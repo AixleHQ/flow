@@ -32,7 +32,26 @@ governance, community health — carry none.
 - **Aixle Builder**: workflow guidance favors one canonical specification,
   resources scoped to each step and reviews with distinct purposes.
 
+## [1.2.2] - 2026-10-15
+
+### Changed
+- **Tasks**: in the board tasks API (`GET …/board/tasks`), `q[title_cont]` and the
+  other `_cont`, `_start` and `_end` predicates now match case exactly. Use
+  `q[title_i_cont]` (or `_i_start`, `_i_end`) to ignore case, as the board's search
+  box does.
+
 ### Fixed
+- **Repositories**: the branch picker for a GitLab repository lists all of its
+  branches. It showed only the first 20 by name, so a branch further down the
+  alphabet, such as `develop`, could not be picked or found by search.
+- **Integrations**: the Aixle Flow app for YouTrack (1.0.1) no longer takes over
+  an existing `aixle-flow` account that can sign in or has its own tokens. It
+  reuses only the service user it created; any other account with that login
+  stops the setup with an error, so nobody who can sign in as it gains the
+  connected projects.
+- **Integrations**: the YouTrack guide and the Aixle Flow app in YouTrack now
+  send you to the project's **Integrations** page to connect YouTrack. They
+  pointed at the Trackers page, which has no Connect button.
 - **Connectors**: connecting a connector that signs in with OAuth now asks for
   offline access whenever its sign-in server offers it, so the connection renews
   itself instead of asking you to connect again once the first token expires.
@@ -494,7 +513,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.1...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.2...develop
+[1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/AixleHQ/flow/compare/v1.0.0...v1.1.0

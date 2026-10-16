@@ -33,7 +33,7 @@ Settings → Aixle Flow URL**).
 
 Start from either side; both end in the same place.
 
-**From Flow.** On the project's **Trackers** (or **Integrations**) page choose
+**From Flow.** On the project's **Integrations** page choose
 **Connect → YouTrack**, enter the instance URL (`https://acme.youtrack.cloud`,
 or your server's URL with its path, such as
 `https://tracker.example.com/youtrack`) and select **Continue in YouTrack**. In
@@ -50,7 +50,10 @@ After **Approve** the app does the rest by itself, as the administrator who
 approved:
 
 - it creates the service user **Aixle Flow** (`aixle-flow`) — no password, so
-  nobody can sign in as it — or reuses it when it already exists;
+  nobody can sign in as it — and remembers it in the app's settings; connecting
+  again reuses that user. If a user named `aixle-flow` already exists that can
+  sign in (a password, LDAP or an SSO login) or has tokens, the setup stops:
+  rename that user and retry;
 - it adds the service user to the chosen projects' teams and attaches the app
   to them;
 - it creates a permanent token for the service user and hands it to Flow, which

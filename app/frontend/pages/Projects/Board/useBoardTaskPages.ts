@@ -73,7 +73,7 @@ export function boardFilterParams(filters: BoardTaskFilters): URLSearchParams {
   // matching always uses the raw term.
   if (filters.search) {
     params.set('q[g][0][m]', 'or');
-    params.set('q[g][0][title_cont]', filters.search);
+    params.set('q[g][0][title_i_cont]', filters.search);
     const numberTerm = filters.search.trim().replace(/^#/, '');
     if (/^\d+$/.test(numberTerm)) params.set('q[g][0][number_eq]', numberTerm);
   }

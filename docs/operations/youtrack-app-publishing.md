@@ -18,7 +18,9 @@ days, and YouTrack never updates an installed app by itself. Plan releases accor
 5. **Package:** `youtrack-app/bin/package` → `youtrack-app/dist/aixle-flow-<version>.zip`.
    Check `manifest.json`: `name` `aixle-flow` (never change it — it is the app's identity in every
    installed instance), `title` "Aixle Flow" (at most 30 characters), `version`, `vendor`,
-   `minYouTrackVersion`, the 40×40 SVG `icon`.
+   `minYouTrackVersion`, the 40×40 SVG `icon`. `bin/package` zips only the files the app is made
+   of; check with `unzip -l` before uploading — JetBrains reviews every file in the ZIP, and a
+   document such as this one does not belong there.
 
 ## Vendor profile (once)
 
@@ -51,7 +53,7 @@ own URL.
 
 ## New versions
 
-1. Bump `version` in `manifest.json`, run `bin/package`.
+1. Bump `version` in `manifest.json`, run `youtrack-app/bin/package`.
 2. Plugin page → **Upload update** (reviewed again).
 3. Admins update from **Administration → Apps → Aixle Flow → Check for updates**, whenever they
    get to it. Aixle therefore keeps accepting every event payload `version` an installed app may

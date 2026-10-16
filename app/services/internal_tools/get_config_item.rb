@@ -86,7 +86,9 @@ module InternalTools
     def unarmed_message(item)
       "#{item.name} was not returned: this session's log redaction could not be armed, and " \
         "handing out a secret the container's log filters do not yet know about would write it " \
-        "into the session logs verbatim. Retry — if it keeps failing, the container is unreachable."
+        "into the session logs verbatim. Retry — if it keeps failing, the container or the Docker " \
+        "daemon behind it is unreachable from the platform (an environment fault, not a problem " \
+        "with this secret)."
     end
 
     # The attached set, resolved through the same cascade the session was

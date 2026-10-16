@@ -146,7 +146,7 @@ module Api
           # paginated column has to ask the server instead.
           #
           # The plain attribute filters (title/assignee/type/priority) go through
-          # ransack — `q[title_cont]`, `q[assignee_id_eq]`, … — against
+          # ransack — `q[title_i_cont]`, `q[assignee_id_eq]`, … — against
           # BoardTask.ransackable_attributes. Column, tags and archived stay explicit
           # params: they are an existing contract, and neither array containment nor
           # the archived tri-state is a ransack predicate.
