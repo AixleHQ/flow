@@ -78,21 +78,13 @@ class Web::OnboardingController < Web::ApplicationController
   end
 
   def build_viewer_workflow_preview(company)
-    return nil if company.nil?
-
-    workflow = company.projects.flat_map(&:workflows).first
+    workflow = Workflow.belonging_to_company(company).order(:id).first
     return nil if workflow.nil?
-
-    steps_assoc = workflow.respond_to?(:steps) ? workflow.steps : []
-    limited_steps = steps_assoc.respond_to?(:limit) ? steps_assoc.limit(4) : steps_assoc.first(4)
 
     {
       workflow_name: workflow.name,
       workflow_description: workflow.description.presence || "An automated workflow",
-      steps: limited_steps.map { |s| { name: s.name, description: s.description } }
+      steps: workflow.steps.not_deleted.limit(4).map { |s| { name: s.name } }
     }
-  rescue ActiveRecord::ActiveRecordError, NoMethodError => e
-    Rails.logger.warn("viewer workflow preview failed: #{e.message}")
-    nil
   end
 end

@@ -20,6 +20,9 @@ governance, community health — carry none.
   reservation is held for this phase". The BMAD install now gives up after three
   minutes and the session goes on without it. If setup still runs out of time,
   the error says that an earlier attempt timed out or lost its worker.
+- **Sign-in & onboarding**: a viewer's onboarding shows a preview of one of the
+  company's workflows and its first steps. It showed the generic text whenever
+  that workflow had steps, and could pick an archived workflow.
 
 ## [1.2.2] - 2026-10-15
 
