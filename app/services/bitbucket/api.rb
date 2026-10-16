@@ -40,6 +40,13 @@ module Bitbucket
       values.first && repository_hash(values.first)
     end
 
+    # Up to `count` repositories the credential reaches — enough to tell a token
+    # scoped to one repository from one that reaches more.
+    def repository_sample(workspace, count: 2)
+      values, = @client.page("repositories", workspace, params: { pagelen: count })
+      values.map { |repo| repository_hash(repo) }
+    end
+
     def repositories(workspace, limit: 1000)
       values, = @client.paginate("repositories", workspace, params: { pagelen: REPOSITORY_PAGE, role: "member" },
                                                             limit: limit)

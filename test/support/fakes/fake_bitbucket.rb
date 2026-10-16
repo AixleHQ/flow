@@ -84,6 +84,11 @@ module FakeBitbucket
       in_workspace(workspace).first
     end
 
+    def repository_sample(workspace, count: 2)
+      record(:repository_sample, workspace: workspace)
+      in_workspace(workspace).first(count)
+    end
+
     def repositories(workspace, limit: 1000)
       record(:repositories, workspace: workspace)
       in_workspace(workspace).first(limit)

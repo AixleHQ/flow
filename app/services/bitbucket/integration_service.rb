@@ -138,13 +138,20 @@ module Bitbucket
         workspace_name: workspace[:name], account_uuid: user[:uuid], account_name: user[:display_name] }
     end
 
+    # An access token has no identity to tell two of them apart by, so they are
+    # told apart by what they reach: a repository access token sees one
+    # repository, a workspace or project token more. Pasting a token with the
+    # same reach again renews that connection; a token for another repository is
+    # another connection, and replacing one must not cut the other off.
     def access_token_info(api, slug)
-      repository = api.first_repository(slug)
-      workspace_uuid = repository&.dig(:workspace_uuid) || api.workspace(slug)[:uuid]
+      sample = api.repository_sample(slug)
+      workspace_uuid = sample.first&.dig(:workspace_uuid) || api.workspace(slug)[:uuid]
       raise Error::NotFound if workspace_uuid.blank?
 
+      single = sample.one? ? sample.first : nil
       { kind: "access_token", workspace_uuid: workspace_uuid, workspace_slug: slug, workspace_name: slug,
-        account_uuid: nil, account_name: nil }
+        account_uuid: nil, account_name: nil, reach: single ? single[:uuid] : "workspace",
+        reach_name: single&.dig(:full_name) }
     end
 
     def apply(integration, token, info)
@@ -154,24 +161,27 @@ module Bitbucket
     end
 
     def display_name(info)
-      info[:account_name].present? ? "#{info[:workspace_slug]} (#{info[:account_name]})" : info[:workspace_slug]
+      return "#{info[:workspace_slug]} (#{info[:account_name]})" if info[:account_name].present?
+
+      info[:reach_name].presence || info[:workspace_slug]
     end
 
     def identity(integration, info)
       integration.settings.to_h.except("error").merge(
         "auth_mode" => "token", "token_kind" => info[:kind], "workspace_uuid" => info[:workspace_uuid],
-        "workspace_slug" => info[:workspace_slug], "account_uuid" => info[:account_uuid]
+        "workspace_slug" => info[:workspace_slug], "account_uuid" => info[:account_uuid], "token_reach" => info[:reach]
       ).compact
     end
 
     # The row this identity already has in this scope: one access-token row per
-    # workspace, one API-token row per workspace and account.
+    # workspace and reach, one API-token row per workspace and account.
     def existing_for(info, except: nil)
       rows = @company.integrations.where(provider: :bitbucket, project_id: @project&.id)
                      .where("settings ->> 'auth_mode' = 'token'")
                      .where("settings ->> 'workspace_uuid' = ?", info[:workspace_uuid])
                      .where("settings ->> 'token_kind' = ?", info[:kind])
       rows = rows.where("settings ->> 'account_uuid' = ?", info[:account_uuid]) if info[:account_uuid]
+      rows = rows.where("settings ->> 'token_reach' = ?", info[:reach]) if info[:reach]
       rows = rows.where.not(id: except.id) if except
       rows.first
     end

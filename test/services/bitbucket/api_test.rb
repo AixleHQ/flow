@@ -76,6 +76,14 @@ module Bitbucket
       assert_requested stub
     end
 
+    test "a repository sample asks for one small page" do
+      stub = stub_request(:get, "#{BITBUCKET_API}/repositories/acme").with(query: { "pagelen" => "2" })
+                                                                    .to_return(json({ "values" => [ REPOSITORY ] }))
+
+      assert_equal [ "acme/api" ], @api.repository_sample("acme").map { |r| r[:full_name] }
+      assert_requested stub
+    end
+
     test "the current user, for a token that has one" do
       stub_request(:get, "#{BITBUCKET_API}/user")
         .to_return(json({ "uuid" => "{4A5B6C7D-0000-4000-8000-0000000000AA}", "account_id" => "557058:ada",

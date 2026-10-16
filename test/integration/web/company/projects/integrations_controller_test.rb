@@ -383,7 +383,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
       post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "acme", token: "bb-1" }
     end
 
-    assert_equal "Bitbucket connected to acme", flash[:notice]
+    assert_equal "Bitbucket connected to acme/api", flash[:notice]
     integration = Integration.last
     assert integration.bitbucket_token?
     assert_equal @project.id, integration.project_id
@@ -396,7 +396,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "", token: "t" }
     assert_match(/Enter the Bitbucket workspace/, Array(session["inertia_errors"][:workspace]).to_sentence)
 
-    bitbucket.fail_on(:first_repository, Bitbucket::Error::NotAuthorized.new("no"))
+    bitbucket.fail_on(:repository_sample, Bitbucket::Error::NotAuthorized.new("no"))
     assert_no_difference("Integration.count") do
       post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "acme", token: "bad" }
     end
@@ -410,7 +410,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
 
     patch company_project_integration_path(@project, integration), params: { token: "bb-new" }
 
-    assert_equal "Token replaced on acme", flash[:notice]
+    assert_equal "Token replaced on acme/api", flash[:notice]
     integration.reload
     assert integration.active?
     assert_equal "bb-new", integration.credentials_data["token"]

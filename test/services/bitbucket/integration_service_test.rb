@@ -28,11 +28,32 @@ module Bitbucket
 
       assert integration.bitbucket_token?
       assert integration.status.active?
-      assert_equal "acme", integration.name
+      assert_equal "acme/api", integration.name
       assert_equal "bb-token", integration.credentials_data["token"]
       assert_equal({ "auth_mode" => "token", "token_kind" => "access_token", "workspace_uuid" => FakeBitbucket::Api::WORKSPACE_UUID,
-                     "workspace_slug" => "acme" }, integration.settings)
+                     "workspace_slug" => "acme", "token_reach" => FakeBitbucket::Api::REPOSITORY_UUID }, integration.settings)
       assert_equal @project, integration.project
+    end
+
+    test "repository access tokens for two repositories are two connections" do
+      first = service.create(workspace: "acme", token: "token-for-api")
+      @bitbucket.repository_list.replace([])
+      @bitbucket.add_repository(full_name: "acme/web", uuid: "{0d0e0f00-0000-4000-8000-0000000000b2}")
+
+      second = service.create(workspace: "acme", token: "token-for-web")
+
+      assert_not_equal first.id, second.id
+      assert_equal "token-for-api", first.reload.credentials_data["token"]
+      assert_equal %w[acme/api acme/web], [ first.name, second.name ]
+    end
+
+    test "a token reaching more than one repository is the workspace's connection" do
+      @bitbucket.add_repository(full_name: "acme/web")
+
+      integration = service.create(workspace: "acme", token: "workspace-token")
+
+      assert_equal "acme", integration.name
+      assert_equal "workspace", integration.settings["token_reach"]
     end
 
     test "an API token is a person: named after them, its account recorded" do
@@ -60,7 +81,7 @@ module Bitbucket
     end
 
     test "a token Bitbucket refuses is never saved" do
-      @bitbucket.fail_on(:first_repository, Error::NotAuthorized.new("nope"))
+      @bitbucket.fail_on(:repository_sample, Error::NotAuthorized.new("nope"))
 
       error = assert_no_difference(-> { Integration.count }) do
         assert_raises(IntegrationService::ConnectionError) { service.create(workspace: "acme", token: "bad") }
