@@ -30,16 +30,23 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
     colleague = create(:user, :employee, company: @owner.companies.first)
 
     step = WorkflowRunResource.new(@run.reload, params: { viewer: colleague }).to_h["stepRuns"].first
+    own = WorkflowRunResource.new(@run.reload, params: { viewer: @owner }).to_h["stepRuns"].first
 
     assert_nil step["websocketUrl"]
+    assert step["liveViewPrivate"]
+    assert_equal false, own["liveViewPrivate"] # rubocop:disable Minitest/RefuteFalse
   end
 
   test "a step whose container is not up yet has no terminal socket" do
     @session.update!(state: "running")
+    @owner.update!(share_active_sessions: false)
+    colleague = create(:user, :employee, company: @owner.companies.first)
 
     step = WorkflowRunResource.new(@run.reload, params: { viewer: @owner }).to_h["stepRuns"].first
+    unshared = WorkflowRunResource.new(@run.reload, params: { viewer: colleague }).to_h["stepRuns"].first
 
     assert_nil step["websocketUrl"]
+    assert_equal false, unshared["liveViewPrivate"] # rubocop:disable Minitest/RefuteFalse
   end
 
   test "a chat-started run names where its request came from; any other run, nothing" do
