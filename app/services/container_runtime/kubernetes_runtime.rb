@@ -883,6 +883,8 @@ module ContainerRuntime
       begin
         ws.close if !websocket_closed?(ws, ws_state)
       rescue StandardError => e
+        raise if Temporalio::Error.canceled?(e)
+
         Rails.logger.warn("[KubernetesRuntime] Failed to close WebSocket: #{e.message}")
       end
 
@@ -903,6 +905,11 @@ module ContainerRuntime
 
       [ stdout, stderr, exit_code ]
     rescue StandardError => e
+      # Temporal cancels an activity by raising into its thread wherever it stands.
+      # Answering that with a failed exec let a timed-out attempt carry on against a
+      # container its workflow had already torn down.
+      raise if Temporalio::Error.canceled?(e)
+
       # Tearing the connection down from the reader thread can also break a
       # write still in flight on this one (IOError: stream closed in another
       # thread). The callback already recorded — and logged — the real cause, so

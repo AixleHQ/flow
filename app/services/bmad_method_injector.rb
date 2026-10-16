@@ -60,7 +60,9 @@ class BmadMethodInjector
   # still installs when named explicitly via --modules, which is how we drive it.
   BMAD_METHOD_VERSION = "6.11.0"
 
-  INSTALL_TIMEOUT = 300
+  # A healthy install takes 35–70s in production. The ceiling has to leave the
+  # rest of the exec phase room inside its own budget (AgentSessionStrategy).
+  INSTALL_TIMEOUT = 180
 
   # How much of each captured stream survives into the recorded failure reason.
   # `bmad_install_error` is itself truncated to 500 chars when stored, so this
@@ -86,6 +88,10 @@ class BmadMethodInjector
     Rails.logger.warn("[BmadMethodInjector] Install timed out after #{INSTALL_TIMEOUT}s, proceeding without BMAD")
     record_install_status("failed", error: "Installation timed out after #{INSTALL_TIMEOUT}s")
   rescue StandardError => e
+    # The activity was given up on, not the install: recording a failure would blame
+    # BMAD, and proceeding keeps working on a container its workflow has abandoned.
+    raise if Temporalio::Error.canceled?(e)
+
     Rails.logger.warn("[BmadMethodInjector] Install failed: #{e.message}, proceeding without BMAD")
     record_install_status("failed", error: e.message)
   end

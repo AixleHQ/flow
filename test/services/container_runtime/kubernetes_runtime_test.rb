@@ -180,6 +180,30 @@ module ContainerRuntime
       assert_no_match(/closed before its exit status/, logs)
     end
 
+    # Temporal cancels an activity by raising into its thread, so the cancellation can
+    # land in the connect or in the close — production saw both on 2026-10-15.
+    test "exec lets the activity's cancellation through instead of reporting a failed command" do
+      handle = OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+      @runtime.stubs(:build_exec_url).returns(URI("wss://example.test/exec"))
+      @runtime.stubs(:websocket_headers).returns({})
+
+      cancelled_in_connect = ->(_url, **_options, &_block) { raise Temporalio::Error::CanceledError, "Activity canceled" }
+      WebSocket::Client::Simple.stub(:connect, cancelled_in_connect) do
+        assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
+      end
+
+      client = FakeExecWebsocket.new
+      def client.close = raise(Temporalio::Error::CanceledError, "Activity canceled")
+      cancelled_in_close = lambda do |_url, **_options, &block|
+        block.call(client)
+        client.trigger(:message, [ 3 ].pack("C") + { status: "Success" }.to_json)
+        client
+      end
+      WebSocket::Client::Simple.stub(:connect, cancelled_in_close) do
+        assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
+      end
+    end
+
     test "read_file returns nil when path blank" do
       assert_nil @runtime.read_file("id", "")
       assert_nil @runtime.read_file("id", nil)
