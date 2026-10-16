@@ -149,7 +149,9 @@ class SessionAdmissionService
             # can stop guessing: `exec` holds no reservation (MATERIALIZING_PHASES
             # excludes it), and saying otherwise sent operators after a leak that
             # does not exist.
-            raise UncertainOperation, "Unresolved #{phase}; #{operation.reservation_note}"
+            raise UncertainOperation,
+              "Unresolved #{phase}: an earlier attempt never reported back (it timed out or its worker " \
+              "was lost), and repeating it could run it twice; #{operation.reservation_note}"
           end
           operation.update!(state: initial_state, error: nil)
         else

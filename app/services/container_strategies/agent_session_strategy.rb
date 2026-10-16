@@ -31,6 +31,10 @@ module ContainerStrategies
       end
     end
 
+    # `exec` assembles the session before launching the agent — skills, repositories
+    # and the BMAD install, which alone may take BmadMethodInjector::INSTALL_TIMEOUT
+    # — so its budget has to cover all of them. An attempt that outruns it before
+    # the launch is retried; after the launch it cannot be (#replayable?).
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }

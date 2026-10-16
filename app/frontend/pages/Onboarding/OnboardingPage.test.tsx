@@ -552,7 +552,7 @@ describe('Onboarding/OnboardingPage', () => {
       const preview = {
         workflowName: 'CI Pipeline',
         workflowDescription: 'Automated CI workflow',
-        steps: [{ name: 'Lint', description: 'Run linter' }],
+        steps: [{ name: 'Lint' }],
       };
       renderAuthedPage(<OnboardingPage />, {
         props: {

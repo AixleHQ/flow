@@ -54,6 +54,14 @@ module ContainerStrategies
       assert_equal({ timeout: 300 }, strategy.phase_config(:something_else))
     end
 
+    # 2026-10-15: BMAD's own ceiling equalled the whole exec budget, so a slow npm
+    # registry timed the phase out and the step failed on the retry exec cannot make.
+    test "the exec budget keeps five minutes for setup beyond the BMAD install's ceiling" do
+      exec_timeout = minimal_strategy.phase_config(:exec)[:timeout]
+
+      assert_operator exec_timeout - BmadMethodInjector::INSTALL_TIMEOUT, :>=, 300
+    end
+
     # == build_env_vars ==
 
     test "build_env_vars carries neither the step's instructions nor its agent's persona" do

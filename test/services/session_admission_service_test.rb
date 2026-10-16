@@ -192,6 +192,21 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert admission.reload.released_at
   end
 
+  # This message is what the failed step shows, so it has to say what went wrong.
+  test "the refusal to replay an exec says an earlier attempt never reported back" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec")
+
+    error = assert_raises(SessionAdmissionService::UncertainOperation) do
+      SessionAdmissionService.begin_operation!(admission.id, token, "exec")
+    end
+
+    assert_match(/^Unresolved exec: an earlier attempt never reported back \(it timed out or its worker was lost\)/,
+      error.message)
+  end
+
   # == permit reasons ==
 
   test "a permit closed by somebody stopping their own work is an ordinary stop" do

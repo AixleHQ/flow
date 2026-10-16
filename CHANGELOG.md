@@ -14,10 +14,16 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
-- **Sessions & Runs**: an agent session or workflow step whose setup (skills,
-  repositories, credentials) takes more than five minutes is no longer failed
-  with "Unresolved exec". Setup is retried safely, and the agent is never
-  launched twice.
+- **Sessions & Runs**: an agent session or workflow step gets up to ten minutes to
+  set itself up (skills, repositories, BMAD) before the agent starts, up from five.
+  A slow package registry used to fail the step with "Unresolved exec; no
+  reservation is held for this phase". The BMAD install now gives up after three
+  minutes and the session goes on without it. If setup still runs out of time,
+  it is retried instead of failing the step, and the agent is never launched
+  twice.
+- **Sign-in & onboarding**: a viewer's onboarding shows a preview of one of the
+  company's workflows and its first steps. It showed the generic text whenever
+  that workflow had steps, and could pick an archived workflow.
 
 ## [1.2.2] - 2026-10-15
 
