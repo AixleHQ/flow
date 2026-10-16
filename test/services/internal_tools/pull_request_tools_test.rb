@@ -51,11 +51,12 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
     assert_match "another project", json(result)["message"]
   end
 
-  test "a repository on a host without pull_request tools is refused" do
-    github = create(:repository, scope: @project, integration: create(:integration, :active, company: @company))
-    @session.repositories << github
+  test "a public repository, which has no connection to act as, is refused" do
+    public_repo = create(:repository, :public_source, scope: @project, full_name: "torvalds/linux",
+                                                      clone_url: "https://github.com/torvalds/linux.git")
+    @session.repositories << public_repo
 
-    result = run_tool(InternalTools::PullRequestList, { repository_id: github.id })
+    result = run_tool(InternalTools::PullRequestList, { repository_id: public_repo.id })
 
     assert_equal "validation_failed", json(result)["error"]
   end
@@ -265,7 +266,7 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
 
   # == injection ==
 
-  test "the tools come with a GitLab or Bitbucket repository, and not with GitHub or Azure ones" do
+  test "the tools come with a GitHub, GitLab or Bitbucket repository, and not with an Azure or public one" do
     definition = Tools::Registry.fetch("pull_request_merge")
     bitbucket = create(:repository, :bitbucket)
     bitbucket_session = create(:terminal_session, :running, user: @user, project: bitbucket.scope)
@@ -274,9 +275,18 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
     github_session.repositories << create(:repository, scope: @project,
                                                        integration: create(:integration, :active, company: @company))
 
+    public_session = create(:terminal_session, :running, user: @user, project: @project)
+    public_session.repositories << create(:repository, :public_source, scope: @project, full_name: "torvalds/linux",
+                                                                       clone_url: "https://github.com/torvalds/linux.git")
+    azure = create(:repository, :azure_devops)
+    azure_session = create(:terminal_session, :running, user: @user, project: azure.scope)
+    azure_session.repositories << azure
+
     assert definition.inject?(Tools::Context.for_session(@session))
     assert definition.inject?(Tools::Context.for_session(bitbucket_session))
-    assert_not definition.inject?(Tools::Context.for_session(github_session))
+    assert definition.inject?(Tools::Context.for_session(github_session))
+    assert_not definition.inject?(Tools::Context.for_session(public_session))
+    assert_not definition.inject?(Tools::Context.for_session(azure_session))
     assert definition.available?(Tools::Context.for_session(@session))
     assert_not definition.user_attachable
     assert_includes @session.available_tools.map(&:name), "pull_request_create"

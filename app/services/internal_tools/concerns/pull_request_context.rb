@@ -6,7 +6,7 @@ module InternalTools
     # pull_request_* tool (docs/design/bitbucket-integration.md §4.7–4.10).
     # Provider specifics stay behind PullRequests::Provider.
     #
-    # `requires_integration :pull_requests` only says some GitLab or Bitbucket
+    # `requires_integration :pull_requests` only says some GitHub, GitLab or Bitbucket
     # connection exists in the project. Whether THIS call may touch THIS
     # repository is decided here: the repository must be attached to the
     # session, and its connection must belong to the session's project.
@@ -14,12 +14,12 @@ module InternalTools
       extend ActiveSupport::Concern
 
       REPOSITORY_PARAM = "Aixle repository id (the ID column of the repositories table in your context). " \
-                         "Optional when this session holds a single GitLab or Bitbucket repository, or when " \
+                         "Optional when this session holds a single GitHub, GitLab or Bitbucket repository, or when " \
                          "`pull_request` is a URL."
       PULL_REQUEST_PARAM = "The pull request (a GitLab merge request): its number or browser URL."
       OPERATION_KEY_PARAM = "Optional idempotency key. Reusing it for the same request replays the first result " \
                             "instead of writing twice; an identical retry in this session is recognised without one."
-      UNAVAILABLE = "No GitLab or Bitbucket connection in this project. Connect one under Project Settings → " \
+      UNAVAILABLE = "No GitHub, GitLab or Bitbucket connection in this project. Connect one under Project Settings → " \
                     "Integrations and attach its repository."
       LIMIT_PARAM = "Page size, 1–100."
       CURSOR_PARAM = "`next_cursor` from the previous page."
@@ -53,7 +53,7 @@ module InternalTools
         return candidates.first if candidates.one?
 
         raise PullRequests::Error.new(
-          candidates.empty? ? "This session has no GitLab or Bitbucket repository attached" :
+          candidates.empty? ? "This session has no GitHub, GitLab or Bitbucket repository attached" :
                               "repository_id is required — this session holds #{candidates.size} repositories with pull requests",
           code: "repository_required",
           details: { candidates: candidates.map { |repo| { repository_id: repo.id, full_name: repo.full_name } } }
@@ -66,7 +66,7 @@ module InternalTools
         raise PullRequests::Error.new("Repository #{id} is not attached to this session", code: "not_authorized") unless repository
         unless capable?(repository)
           raise PullRequests::Error.new("Repository #{id} is not on a host with pull_request_* tools " \
-                                        "(GitLab or Bitbucket)", code: "validation_failed")
+                                        "(GitHub, GitLab or Bitbucket)", code: "validation_failed")
         end
 
         repository

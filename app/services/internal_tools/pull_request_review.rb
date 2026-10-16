@@ -7,7 +7,8 @@ module InternalTools
     tool do
       display_name "Pull Requests: Review"
       description "Approve a pull request, withdraw an approval, or request changes, with an optional comment. " \
-                  "GitLab takes approve and unapprove only; ask for changes there with pull_request_add_comment. " \
+                  "GitLab takes approve and unapprove only; ask for changes there with pull_request_add_comment. On GitHub, " \
+                  "unapprove dismisses this connection's latest approval. " \
                   "Returns JSON: {reviewer, verdict, submitted_at, operation_key}."
       tags :pull_requests
       inject_when :pull_request_repositories_attached

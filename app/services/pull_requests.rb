@@ -5,6 +5,7 @@ module PullRequests
   # Integration provider => adapter class. Names, so this file never forces a
   # provider class to load.
   PROVIDERS = {
+    "github" => "PullRequests::Github::Provider",
     "gitlab" => "PullRequests::Gitlab::Provider",
     "bitbucket" => "PullRequests::Bitbucket::Provider"
   }.freeze

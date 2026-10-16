@@ -6,7 +6,7 @@ module InternalTools
 
     tool do
       display_name "Pull Requests: List"
-      description "List pull requests (GitLab merge requests) of a GitLab or Bitbucket repository attached to this " \
+      description "List pull requests (GitLab merge requests) of a GitHub, GitLab or Bitbucket repository attached to this " \
                   "session, most recently updated first. Returns JSON: {repository_id, pull_requests: [{number, url, " \
                   "title, state, draft, source_branch, target_branch, head_sha, author, …}], next_cursor}."
       tags :pull_requests

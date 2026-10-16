@@ -26,7 +26,8 @@ module InternalTools
       param :pull_request, type: :string, required: true, description: Concerns::PullRequestContext::PULL_REQUEST_PARAM
       param :expected_head_sha, type: :string, required: true, description: "The head commit you reviewed."
       param :strategy, type: :string, enum: %w[merge_commit squash fast_forward],
-                       description: "How to merge. Defaults to the repository's own setting."
+                       description: "How to merge. Defaults to the repository's own setting. On GitHub, fast_forward " \
+                                     "rebases the commits onto the target (linear history, new commit ids)."
       param :delete_source_branch, type: :boolean, default: false, description: "Delete the source branch after merging."
       param :message, type: :string, description: "Merge (or squash) commit message."
       param :operation_key, type: :string, description: Concerns::PullRequestContext::OPERATION_KEY_PARAM

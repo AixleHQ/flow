@@ -101,7 +101,7 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_not_includes gitlab_content, "`gh`"
   end
 
-  test "build sends GitLab and Bitbucket pull requests to the pull_request tools, not to a CLI" do
+  test "build sends GitHub, GitLab and Bitbucket pull requests to the pull_request tools" do
     gitlab = create(:integration, :gitlab, company: @company, connected_by: @user)
     gitlab_session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
     gitlab_session.repositories << create(:repository, scope: @project, integration: gitlab, full_name: "team/service")
@@ -120,7 +120,11 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_includes bitbucket_content, "Bitbucket repositories authenticate through a credential helper"
     assert_includes bitbucket_content, "Pull requests on Bitbucket repositories"
     assert_includes bitbucket_content, "`expected_head_sha`"
-    assert_not_includes github_content, "pull_request_"
+    assert_includes gitlab_content, "There is no `glab` in this session."
+    assert_includes bitbucket_content, "There is no Bitbucket CLI in this session."
+    assert_includes github_content, "Pull requests on GitHub repositories"
+    assert_includes github_content, "open, review and merge pull requests with the `pull_request_*` tools"
+    assert_not_includes github_content, "glab"
     assert_includes github_content, "GitHub repositories authenticate through a credential helper"
   end
 
