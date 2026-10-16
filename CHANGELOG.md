@@ -53,6 +53,9 @@ governance, community health — carry none.
 - **Sessions & Runs**: a running step whose owner does not share active sessions
   now says its live view is private, and how the owner can share it, instead of
   showing "Session starting…" until the step ends.
+- **Workflows**: step, sub-step, workflow and task names that an agent wrote
+  HTML-escaped ("Plan &amp; release next batch") are stored and shown as plain
+  text. Existing step, sub-step and task names are decoded by a migration.
 - **Triggers & gates**: a GitLab pipeline webhook no longer fails with a server
   error on the first delivery each web server receives, so a CI gate on that
   pipeline resolves when the pipeline ends instead of at the next reconcile sweep.
