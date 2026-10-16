@@ -13,7 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
+  `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
+
 ### Changed
+- **Tasks**: any project member who is not a viewer can set up a board and add,
+  rename, reorder or delete its columns from the personal MCP server, and a board
+  template installs its columns for them. Until now only the project owner could,
+  although the board screen already let every member edit columns.
 - **Sessions & Runs**: a workflow step's initial context summarizes only the
   steps it depends on, directly or through others, and only the latest completed
   or skipped attempt of each. Finished steps on independent branches no longer
@@ -31,6 +39,20 @@ governance, community health — carry none.
   tools". This is in the context of every session except the Aixle Builder's.
 - **Aixle Builder**: workflow guidance favors one canonical specification,
   resources scoped to each step and reviews with distinct purposes.
+
+### Fixed
+- **Sessions & Runs**: an agent session or workflow step gets up to ten minutes to
+  set itself up (skills, repositories, BMAD) before the agent starts, up from five.
+  A slow package registry used to fail the step with "Unresolved exec; no
+  reservation is held for this phase". The BMAD install now gives up after three
+  minutes and the session goes on without it. If setup still runs out of time,
+  the error says that an earlier attempt timed out or lost its worker.
+- **Sign-in & onboarding**: a viewer's onboarding shows a preview of one of the
+  company's workflows and its first steps. It showed the generic text whenever
+  that workflow had steps, and could pick an archived workflow.
+- **Tasks**: `board_get_comments` filtered by human author returns people's
+  comments. The only human value it offered, `user`, matched nothing; it now
+  accepts `human` (and `system`), and `user` still works as an alias.
 
 ## [1.2.2] - 2026-10-15
 

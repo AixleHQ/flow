@@ -8,7 +8,7 @@ the company* and *who works on this project*.
 | Role | Can |
 | --- | --- |
 | **Admin** | Everything an employee can, plus members, integrations, settings, and the company-wide analytics, sessions, and assets |
-| **Employee** | Work inside the projects they are on: cards, workflows, runs, resources |
+| **Employee** | Work inside the projects they are on: the board and its cards, workflows, runs, resources |
 | **Viewer** | Read. Boards, runs and results are visible; nothing is started or changed |
 
 A role is per company. Being a viewer in one workspace and an employee in

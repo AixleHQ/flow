@@ -28,6 +28,7 @@ module ContextBuilders
       board = task.board
       column = task.board_column
       columns = board.board_columns.order(:position)
+      epic = parent_epic(task)
 
       lines = []
       lines << "## Board Task Context"
@@ -36,6 +37,7 @@ module ContextBuilders
       lines << ""
       lines << "- **Board:** #{board.name}"
       lines << "- **Task:** ##{task.number} #{task.title} (id: #{task.id})"
+      lines << "- **Epic:** ##{epic.number} #{epic.title} (id: #{epic.id})" if epic
       lines << "- **Column:** #{column.name}" if column
       lines << "- **Priority:** #{task.priority}" if task.priority.present?
       lines << "- **Description:** #{task.description}" if inline_description?(task)
@@ -56,6 +58,12 @@ module ContextBuilders
 
     def inline_description?(task)
       task.description.present? && task.description.length <= DESCRIPTION_INLINE_LIMIT
+    end
+
+    def parent_epic(task)
+      return if task.parent_task_id.blank?
+
+      task.board.board_tasks.find_by(id: task.parent_task_id, task_type: :epic)
     end
 
     def fetch_hint(task)

@@ -8,9 +8,8 @@ require "test_helper"
 # Policy (Api::V1::Projects::Board::ColumnsPolicy):
 #   reads  (index/show)                    => project_accessible?
 #   writes (create/update/destroy/reorder) => project_writable?
-# The API policy overrides the web policy's project_admin? writes down to plain
-# project_writable?, so an employee collaborator (not just the owner/admin) may
-# mutate columns — the standard project write matrix. The read-only viewer is
+# An employee collaborator (not just the owner/admin) may mutate columns — the
+# standard project write matrix. The read-only viewer is
 # denied (403) and inaccessible-project users (stranger / foreign admin) are
 # scoped out to 404 by Project.for_user(...).find before the policy runs.
 #

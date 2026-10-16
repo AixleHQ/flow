@@ -7,7 +7,7 @@ require "test_helper"
 #
 # Policy (Web::Company::Projects::BoardsPolicy < Web::Company::ApplicationPolicy):
 #   show?                        => project_accessible?                        (read)
-#   create? / update? / destroy? => project_admin? (project_writable? && admin) (write)
+#   create? / update? / destroy? => project_writable?                          (write)
 #
 # The controller exposes exactly ONE routed action (confirmed via
 # `rails routes -c Web::Company::Projects::BoardsController`):

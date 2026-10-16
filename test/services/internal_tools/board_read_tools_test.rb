@@ -101,6 +101,73 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal [ "Test task" ], data["tasks"].map { |t| t["title"] }
   end
 
+  test "board_list_tasks advertises the epic filter to agents" do
+    properties = InternalTools::BoardListTasks.tool_definition.input_schema["properties"]
+
+    assert_equal "integer", properties.dig("parent_task_id", "type")
+  end
+
+  test "board_list_tasks pages only the selected epic's children and combines filters" do
+    epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic)
+    first = create(:board_task, board: @board, board_column: @col1, parent_task: epic)
+    second = create(:board_task, board: @board, board_column: @col2, parent_task: epic)
+    other_epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic)
+    create(:board_task, board: @board, board_column: @col1, parent_task: other_epic)
+
+    data = list_tasks(parent_task_id: epic.id, limit: 1)
+    assert_equal 2, data["total"]
+    assert_equal [ first.id ], data["tasks"].map { |task| task["id"] }
+    assert data["has_more"]
+
+    next_page = list_tasks(parent_task_id: epic.id, limit: 1, offset: 1)
+    assert_equal [ second.id ], next_page["tasks"].map { |task| task["id"] }
+    assert_equal false, next_page["has_more"] # rubocop:disable Minitest/RefuteFalse
+
+    filtered = list_tasks(parent_task_id: epic.id, column_name: "In Dev")
+    assert_equal 1, filtered["total"]
+    assert_equal [ second.id ], filtered["tasks"].map { |task| task["id"] }
+  end
+
+  test "board_list_tasks cannot discover children from another board's epic" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    epic = create(:board_task, board: other_board, board_column: other_column, task_type: :epic)
+    create(:board_task, board: other_board, board_column: other_column, parent_task: epic)
+
+    data = list_tasks(parent_task_id: epic.id)
+
+    assert_equal 0, data["total"]
+    assert_empty data["tasks"]
+  end
+
+  test "a child session can follow its context to the epic's current decision and sibling evidence" do
+    epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic,
+      title: "Billing contract", description: "Keep the existing public endpoint")
+    @task.update!(parent_task: epic)
+    sibling = create(:board_task, board: @board, board_column: @col2, parent_task: epic,
+      title: "Implement billing migration")
+    create(:task_comment, board_task: epic, author: @user, body: "Initial proposal: rename the endpoint",
+      created_at: 2.hours.ago)
+    decision = "Approved: preserve /billing. " + ("Keep backwards compatibility. " * 30)
+    create(:task_comment, board_task: epic, author: @user, body: decision, created_at: 1.hour.ago)
+    create(:task_comment, board_task: sibling, author: @user, body: "Migration implemented in PR #123")
+
+    context = ContextBuilders::BoardContext.new(@session).build.first.content
+    assert_includes context, "##{epic.number} Billing contract (id: #{epic.id})"
+
+    task = InternalTools::BoardGetTask.new(params: {}, session: @session).execute
+    parent_id = JSON.parse(task[:stdout]).fetch("parent_task_id")
+    parent = InternalTools::BoardGetTask.new(params: { task_id: parent_id }, session: @session).execute
+    assert_equal "Keep the existing public endpoint", JSON.parse(parent[:stdout]).fetch("description")
+
+    comments = InternalTools::BoardGetComments.new(params: { task_id: parent_id }, session: @session).execute
+    assert_equal decision, JSON.parse(comments[:stdout]).first.fetch("body")
+    assert_includes list_tasks(parent_task_id: parent_id)["tasks"].map { |row| row["id"] }, sibling.id
+
+    evidence = InternalTools::BoardGetComments.new(params: { task_id: sibling.id }, session: @session).execute
+    assert_equal "Migration implemented in PR #123", JSON.parse(evidence[:stdout]).first.fetch("body")
+  end
+
   # The budget is what makes this a guard rather than a snapshot: it must stay
   # flat as tasks are added, and each raise needs a reason.
   #
@@ -203,6 +270,26 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     assert_equal 1, data.size
     assert_equal "Agent comment", data.first["body"]
+  end
+
+  test "board_get_comments advertises every persisted author type and the legacy user alias" do
+    types = InternalTools::BoardGetComments.tool_definition.input_schema.dig("properties", "author_type", "enum")
+
+    assert_equal TaskComment.author_type.values + [ "user" ], types
+  end
+
+  test "board_get_comments human and legacy user filters both return human decisions" do
+    create(:task_comment, board_task: @task, author: @user, body: "Approved decision", author_type: :human)
+    create(:task_comment, board_task: @task, author: @user, body: "Agent proposal", author_type: :agent)
+
+    %w[human user].each do |author_type|
+      result = InternalTools::BoardGetComments.new(
+        params: { task_id: @task.id, author_type: author_type }, session: @session
+      ).execute
+
+      assert_equal 0, result[:exit_code]
+      assert_equal [ "Approved decision" ], JSON.parse(result[:stdout]).map { |comment| comment["body"] }
+    end
   end
 
   test "board_get_comments limit returns only the newest comments" do

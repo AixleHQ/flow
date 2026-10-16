@@ -4,7 +4,7 @@ module PersonalTools
   class DeleteBoardColumn < Base
     tool do
       display_name "Delete Board Column"
-      description "Delete a board column. Requires project-admin (owner). Rejected if the column has tasks."
+      description "Delete a board column. Rejected if the column has tasks."
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true

@@ -20,11 +20,11 @@ Your instructions are not the whole prompt. Before a session starts, Flow writes
 | **Sub-steps checklist** | Each sub-step's name, id, state and instructions, and a note to mark them with `mark_sub_step`. | A good way to make a long step checkable. See [Sub-steps](#sub-steps). |
 | **Previous steps** | For steps that already finished: their **note** (up to 500 characters) and their sub-step notes. | Notes are for "what happened". For the work itself, see [Passing work between sessions](#passing-work-between-sessions). |
 | **Files from earlier steps** | Every file the steps this one runs after wrote to `/workspace/outputs/`, with its path in `/workspace/assets/`. | The agent knows what it was handed. You still say which file to use for what. |
-| **Board** (board-triggered runs) | The card's title, id, column, priority, tags, assignee, **description (first 500 characters)**, the **last 5 comments (first 200 characters each)**, all columns, and the board tools. | The agent sees only the start of a long description, and only a glimpse of the thread. If the full thread matters, tell it to read the comments with `board_get_comments`. |
+| **Board** (board-triggered runs) | The card's title, number, id, column, priority, tags, assignee and complete description up to 1,500 characters; longer descriptions get a `board_get_task` pointer. For a subtask, its epic's number, title and id. | Comments, the epic's description and other subtasks are not in the context. If the step depends on them, tell it to read them with `board_get_comments`, `board_get_task` and `board_list_tasks`. |
 | **Tools and resources** | Shell and MCP tools (always including `aixle-tools`), attached tools, repositories, input assets **with their paths**, skills. | Attached resources are listed for the agent, but nothing tells it *which one to use for this step*. The instructions do. |
 | **Config items** | Names, types and descriptions of secrets and variables. **Never their values.** | Tell the agent which item to read, by name, with `get_config_item`. Never paste a secret into instructions. |
 
-The whole context has a budget of roughly 6,000 tokens. Over that, previous steps, board comments, tools, skills and repositories are compressed first. Your instructions and the rules are kept.
+Flow's generated context file has a soft budget of roughly 6,000 estimated tokens. Over that, previous-step summaries, skills and repository descriptions may be shortened. Your instructions and the rules are kept. This budget does not cover comments returned by tools, file reads or the rest of the session, and the generated file can still exceed it.
 
 ---
 
@@ -76,7 +76,7 @@ findings) or Merge and deploy (clean).
 
 ## Inputs
 - The card: read the full description and all comments with `board_get_task` and `board_get_comments`
-  (the context shows only the first 500 characters).
+  (descriptions over 1,500 characters must be read with the tool).
 - The repository at `/workspace/repo/`.
 - If the card has no PR link, stop: post a `blocked` comment saying so, move the card to Blocked,
   and finish.
@@ -188,7 +188,7 @@ These come from running a large board of agent workflows day to day. Each one is
 
 **Define the one word the decision turns on.** If a step routes on "blocked", say what a blocker is and what is *not* one. An agent will otherwise hold work on anything described as "still open".
 
-**The agent trusts the text it's given, not the history behind it.** A card whose description still says "blocked on a product decision" stays blocked in the agent's eyes, even after the answer is in the comments. Keep descriptions current, or tell the agent to read the latest decision comment first.
+**The agent trusts the text it's given, not the history behind it.** A card whose description still says "blocked on a product decision" stays blocked in the agent's eyes, even after the answer is in the comments. Keep descriptions current, or tell the agent to read the latest decision comment first. The same holds for an epic: its decisions reach a subtask's agent only if the step tells it to read them.
 
 **Exactly one step moves the card.** In a workflow with several steps, name the one that moves the card and forbid the others. Have earlier steps end with an explicit routing line ("routing: implementation"), so the mover doesn't guess.
 
@@ -198,7 +198,7 @@ These come from running a large board of agent workflows day to day. Each one is
 
 **Don't let the agent trust a success it didn't check.** Some calls return success without doing what was asked. Tell the agent to read the result back ("re-read the card and confirm its column"), not to trust the response.
 
-**Keep what matters in the first lines.** Card descriptions are cut at 500 characters in the context. Put the decision, the acceptance criteria or the link first.
+**Make prerequisites explicit.** Name the related task, accepted decision and prerequisite PR or commit. Epic/subtask relationships help the agent discover context; they do not schedule tasks or merge their branches.
 
 **Keep a copy before you edit a long step.** Save the old text somewhere before replacing it, so a bad edit can be undone in one paste.
 
@@ -274,7 +274,7 @@ Decide whether the card that triggered this run is ready for Tech Design.
 
 ## Inputs
 - The card: read the full description and all comments with `board_get_task` / `board_get_comments`.
-  The context shows only the start.
+  Descriptions over 1,500 characters are fetched separately.
 
 ## Ready means
 Acceptance criteria present (Given / When / Then), no open question addressed to the client, and a
@@ -310,6 +310,6 @@ Then re-read the card, confirm its column, and call `finish_session`.
 | "Output validation failed" after the step | The agent didn't write a required output, or wrote it under another name | Put the exact path in "Done when" and in the steps |
 | The agent says a file isn't there | It looked outside `/workspace/assets/`, or the file is a card attachment (not mounted) | Give the full path. For card files, tell it to use `board_get_task_assets`. |
 | A later step "doesn't know" what an earlier one did | Only the earlier step's note (500 characters) is shared. Its files need Run after. | Write the result to an output, and `@` it in the later step. |
-| The agent acts on an outdated decision | It read the card description (cut at 500 characters), not the latest comment | Put the current decision at the top of the description, or tell it to read comments first |
+| The agent acts on an outdated decision | A relevant decision was not read, conflicts with the specification, or depends on code absent from the working branch | Put the current decision in the description, or tell the agent which comments (the card's, the epic's) to read first; name prerequisite PRs |
 | The step "finished" but skipped a required checklist item | Required sub-steps aren't enforced | Add "don't finish until every sub-step is marked" to the instructions |
 | The agent uses the wrong server or tool | Several are attached and the prompt doesn't say which | Name the one to use for this step |

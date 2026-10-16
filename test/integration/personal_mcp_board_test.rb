@@ -338,16 +338,23 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_nil fresh.reload.board
   end
 
-  test "setup_board requires project admin (owner)" do
+  test "setup_board works for a collaborator and is refused to a viewer" do
     fresh = create(:project, company: @company, owner: @user)
+    viewer = create(:user, :viewer, company: @company)
+    fresh.add_collaborator(viewer)
+
+    refused = call_tool("setup_board", { project_id: fresh.id, preset: "simple_kanban" },
+                        token: viewer.regenerate_mcp_token!)
+    assert tool_error?(refused)
+    assert_match(/not allowed/i, refused.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_nil fresh.reload.board
+
     member = create(:user, company: @company)
     fresh.add_collaborator(member)
-
-    body = call_tool("setup_board", { project_id: fresh.id, preset: "simple_kanban" },
-                     token: member.regenerate_mcp_token!)
-    assert tool_error?(body)
-    assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
-    assert_nil fresh.reload.board
+    created = call_tool("setup_board", { project_id: fresh.id, preset: "simple_kanban" },
+                        token: member.regenerate_mcp_token!)
+    assert_not tool_error?(created)
+    assert_not_nil fresh.reload.board
   end
 
   test "board column create / update / reorder / delete" do
@@ -391,14 +398,21 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_match(/has tasks/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
   end
 
-  test "column management requires project admin (owner)" do
+  test "a collaborator manages columns; a viewer cannot" do
     member = create(:user, company: @company)
     @project.add_collaborator(member)
-    mtoken = member.regenerate_mcp_token!
+    created = call_tool("create_board_column", { project_id: @project.id, name: "X" },
+                        token: member.regenerate_mcp_token!)
+    assert_not tool_error?(created)
+    assert BoardColumn.exists?(payload(created)["id"])
 
-    body = call_tool("create_board_column", { project_id: @project.id, name: "X" }, token: mtoken)
-    assert tool_error?(body)
-    assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    viewer = create(:user, :viewer, company: @company)
+    @project.add_collaborator(viewer)
+    refused = call_tool("create_board_column", { project_id: @project.id, name: "Y" },
+                        token: viewer.regenerate_mcp_token!)
+    assert tool_error?(refused)
+    assert_match(/not allowed/i, refused.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_not @board.board_columns.exists?(name: "Y")
   end
 
   test "list_gates exposes a task's gates and delete_gate clears one" do
