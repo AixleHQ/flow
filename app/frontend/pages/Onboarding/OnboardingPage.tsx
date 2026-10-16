@@ -98,7 +98,7 @@ const AGENT_COLORS = AGENT_BRAND_COLORS;
 interface ViewerWorkflowPreview {
   workflowName: string;
   workflowDescription: string;
-  steps: Array<{ name: string; description: string }>;
+  steps: Array<{ name: string }>;
 }
 
 // Server state → visual step index. Two steps only: step1 (0, Profile) and
@@ -738,11 +738,6 @@ const OnboardingPage = () => {
                         <Text size="sm" fw={500}>
                           {i + 1}. {step.name}
                         </Text>
-                        {step.description && (
-                          <Text size="xs" c="dimmed">
-                            {step.description}
-                          </Text>
-                        )}
                       </Card>
                     ))}
                   </Stack>

@@ -531,8 +531,20 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   # INSTALL_TIMEOUT constant
   # ====================================================================
 
-  test "INSTALL_TIMEOUT is 300 seconds" do
-    assert_equal 300, BmadMethodInjector::INSTALL_TIMEOUT
+  test "INSTALL_TIMEOUT is 180 seconds" do
+    assert_equal 180, BmadMethodInjector::INSTALL_TIMEOUT
+  end
+
+  test "a cancelled activity propagates instead of being recorded as a failed install" do
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    @runtime.stubs(:exec).raises(Temporalio::Error::CanceledError, "Activity canceled")
+
+    assert_raises(Temporalio::Error::CanceledError) do
+      BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+    end
+
+    assert_nil session.reload.context_metadata.to_h["bmad_install_status"]
   end
 
   # ====================================================================
