@@ -107,9 +107,9 @@ module Workflows
       kwargs[:retry_policy] = retry_policy if retry_policy
       # Only tool executions heartbeat during exec (ToolStrategy waits for the
       # container in heartbeat slices, which is also what makes cancellation
-      # deliverable). Agent-session exec phases are quick and don't heartbeat,
-      # and a heartbeat timeout on a non-heartbeating activity would kill
-      # healthy work — so scope it to tool runs.
+      # deliverable). Agent-session exec phases don't heartbeat: their setup can
+      # take minutes and AdmittedPhaseActivity's dispatch fence prevents a double
+      # launch. A heartbeat timeout there would kill healthy work.
       kwargs[:heartbeat_timeout] = 60 if phase.to_s == "exec" && tool_execution?
 
       execute_activity(

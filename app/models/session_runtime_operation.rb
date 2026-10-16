@@ -13,6 +13,11 @@ class SessionRuntimeOperation < ApplicationRecord
   # rests on — no workload existed for the whole confirmation window.
   ABANDONED = "abandoned"
 
+  # The permit was checked and the record exists, but nothing has reached the
+  # runtime yet, so a crash or a timeout here is safe to retry. Not unresolved:
+  # it holds no slot and blocks no release.
+  PREPARING = "preparing"
+
   # Phases that can bring a workload into existence. AD-5 retains the slot for an
   # unprovable operation so a late Pod never finds its seat handed to someone
   # else — and only a create or a start can produce that Pod. `exec` runs a

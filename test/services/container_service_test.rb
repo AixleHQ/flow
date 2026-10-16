@@ -109,6 +109,28 @@ class ContainerServiceTest < ActiveSupport::TestCase
     assert_equal "abc", state[:container_id]
   end
 
+  test "run_phase calls before_dispatch between the before hook and the phase" do
+    strategy = MockStrategy.new
+    service = ContainerService.new(strategy: strategy, state: { container_id: "abc" })
+
+    service.run_phase(:exec, before_dispatch: -> { strategy.phases_called << :dispatch })
+
+    assert_equal [ :before_exec, :dispatch, :exec ], strategy.phases_called
+  end
+
+  test "a failing before_dispatch stops the phase and is wrapped in PhaseError" do
+    strategy = MockStrategy.new
+    service = ContainerService.new(strategy: strategy, state: { container_id: "abc" })
+    fence = SessionAdmissionService::UncertainOperation.new("Unresolved exec")
+
+    error = assert_raises(ContainerService::PhaseError) do
+      service.run_phase(:exec, before_dispatch: -> { raise fence })
+    end
+
+    assert_same fence, error.original_error
+    assert_equal [ :before_exec ], strategy.phases_called
+  end
+
   test "run_phase skips hooks strategy does not implement" do
     strategy = PartialStrategy.new
     service = ContainerService.new(strategy: strategy, state: {})

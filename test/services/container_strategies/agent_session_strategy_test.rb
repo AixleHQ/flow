@@ -516,6 +516,13 @@ module ContainerStrategies
       assert_equal "agent_session", strategy.send(:session_type)
     end
 
+    test "exec allows ten minutes for setup before the agent launches" do
+      assert_equal(
+        { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 },
+        build_strategy.phase_config(:exec)
+      )
+    end
+
     test "services_ports returns ttyd and OpenVSCode Server ports without file watcher" do
       strategy = build_strategy
 

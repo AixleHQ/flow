@@ -7,6 +7,16 @@ module Activities
       # durable operation record written before the request goes out (AD-5).
       RUNTIME_PHASES = %w[create_container start_container exec].freeze
 
+      # Phases whose before_ hook only prepares: their record stays `preparing`
+      # until dispatch, so an attempt that timed out while preparing is retryable.
+      DEFERRED_DISPATCH_PHASES = %w[exec].freeze
+
+      # How close to its start_to_close deadline an attempt may still dispatch.
+      # Past it, Temporal may already have started the next attempt.
+      DISPATCH_MARGIN = 30
+
+      class AttemptExpired < StandardError; end
+
       # Phases worth re-checking authorization for: everything that either
       # dials out on the user's behalf or hands them a shell.
       REVALIDATED_PHASES = %w[pull_image create_container exec].freeze
@@ -40,9 +50,24 @@ module Activities
         session.start! if session.may_start?
 
         operation = nil
+        dispatched = true
+        before_dispatch = nil
         if RUNTIME_PHASES.include?(phase)
-          operation = SessionAdmissionService.begin_operation!(admission.id, input.permit_token, phase)
+          deferred = DEFERRED_DISPATCH_PHASES.include?(phase)
+          operation = SessionAdmissionService.begin_operation!(
+            admission.id, input.permit_token, phase,
+            initial_state: deferred ? SessionRuntimeOperation::PREPARING : "in_flight"
+          )
           return operation.result.deep_symbolize_keys if operation.state == "completed"
+
+          if deferred
+            dispatched = false
+            before_dispatch = lambda do
+              ensure_attempt_alive!
+              operation = SessionAdmissionService.dispatch_operation!(operation, input.permit_token)
+              dispatched = true
+            end
+          end
 
           if phase == "create_container"
             runtime = ContainerRuntime.build
@@ -53,7 +78,8 @@ module Activities
           end
         end
 
-        result = ContainerService.new(strategy: session.strategy, state: strategy_state(state)).run_phase(phase)
+        result = ContainerService.new(strategy: session.strategy, state: strategy_state(state))
+                                 .run_phase(phase, before_dispatch: before_dispatch)
         ActiveRecord::Base.transaction do
           operation&.update!(state: "completed", result: result)
           admission.update!(phase_state: result, runtime_id: result[:container_id] || admission.runtime_id, wait_reason: nil)
@@ -65,8 +91,14 @@ module Activities
           admission.update!(wait_reason: e.original_error.reason, last_error: e.message)
           return { "capacity_wait" => true }
         end
-        record_failed_operation(operation, e)
-        raise TemporalExceptions.non_retryable(e, benign: expected_phase_failure?(admission, e.original_error))
+        cause = e.original_error
+        record_failed_operation(operation, e, dispatched: dispatched)
+        raise TemporalExceptions.wrap(cause, retryable: true, benign: true) if cause.is_a?(AttemptExpired)
+        if !dispatched && fence_error?(cause)
+          raise TemporalExceptions.non_retryable(cause, benign: deliberate_stop?(cause))
+        end
+
+        raise TemporalExceptions.non_retryable(e, benign: expected_phase_failure?(admission, cause))
       rescue SessionAdmissionService::Stopped, SessionAdmissionService::UncertainOperation => e
         # A stop somebody asked for is expected control flow, not a fault: they
         # closed the dialog or cancelled the run while a phase was in flight, and
@@ -75,7 +107,7 @@ module Activities
         # that — something else restarted this launch — so it keeps its report.
         raise TemporalExceptions.non_retryable(e, benign: deliberate_stop?(e))
       rescue StandardError => e
-        record_failed_operation(operation, e)
+        record_failed_operation(operation, e, dispatched: dispatched)
         # Wrapping hides a cancellation from the Sentry interceptor's own check.
         raise TemporalExceptions.non_retryable(e, benign: Temporalio::Error.canceled?(e))
       end
@@ -99,13 +131,42 @@ module Activities
       # strategies take the phase state and would choke on an unknown keyword.
       def strategy_state(state) = state.except(:cleanup_collected)
 
-      def record_failed_operation(operation, error)
+      def fence_error?(error)
+        error.is_a?(SessionAdmissionService::Stopped) || error.is_a?(SessionAdmissionService::UncertainOperation)
+      end
+
+      def ensure_attempt_alive!
+        info = activity_info
+        return if info.nil? || info.started_time.nil? || info.start_to_close_timeout.nil?
+
+        deadline = info.started_time + info.start_to_close_timeout - DISPATCH_MARGIN
+        return if Time.current < deadline
+
+        raise AttemptExpired, "Attempt #{info.attempt} ran out of time before dispatch; nothing was sent to the runtime"
+      end
+
+      def activity_info
+        return nil unless defined?(Temporalio::Activity::Context)
+
+        Temporalio::Activity::Context.current_or_nil&.info
+      end
+
+      def record_failed_operation(operation, error, dispatched: true)
         return unless operation
 
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
+        message = "#{cause.class}: #{error.message}"
+        # Conditional on `preparing`: another attempt may own the record by now,
+        # and a dispatched one must not be rewritten from here.
+        unless dispatched
+          SessionRuntimeOperation.where(id: operation.id, state: SessionRuntimeOperation::PREPARING)
+                                 .update_all(state: "retryable", error: message, updated_at: Time.current)
+          return
+        end
+
         resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) } ||
           cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError)
-        operation.update!(state: resolved ? "retryable" : "uncertain", error: "#{cause.class}: #{error.message}")
+        operation.update!(state: resolved ? "retryable" : "uncertain", error: message)
       end
 
       def cleanup(admission, session, state)

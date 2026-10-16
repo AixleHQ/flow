@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Sessions & Runs**: an agent session or workflow step whose setup (skills,
+  repositories, credentials) takes more than five minutes is no longer failed
+  with "Unresolved exec". Setup is retried safely, and the agent is never
+  launched twice.
+
 ## [1.2.2] - 2026-10-15
 
 ### Changed

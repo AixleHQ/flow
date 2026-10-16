@@ -137,24 +137,41 @@ class SessionAdmissionService
     # The fencing point for anything that may reach the runtime. Locks the
     # admission — not the installation-wide policy row — because the operation
     # ledger is per-admission and this runs on every create/start/exec phase.
-    def begin_operation!(admission_id, token, phase)
+    def begin_operation!(admission_id, token, phase, initial_state: "in_flight")
       SessionAdmission.transaction do
         admission = SessionAdmission.lock.find(admission_id)
         permit!(admission.id, token)
         operation = admission.session_runtime_operations.find_by(phase: phase)
         if operation
           return operation if operation.state == "completed"
-          unless operation.state == "retryable" || operation.replayable?
+          unless operation.state.in?([ "retryable", SessionRuntimeOperation::PREPARING ]) || operation.replayable?
             # Only the phases that cannot be repeated get here now, so the message
             # can stop guessing: `exec` holds no reservation (MATERIALIZING_PHASES
             # excludes it), and saying otherwise sent operators after a leak that
             # does not exist.
             raise UncertainOperation, "Unresolved #{phase}; #{operation.reservation_note}"
           end
-          operation.update!(state: "in_flight", error: nil)
+          operation.update!(state: initial_state, error: nil)
         else
-          operation = admission.session_runtime_operations.create!(phase: phase)
+          operation = admission.session_runtime_operations.create!(phase: phase, state: initial_state)
         end
+        operation
+      end
+    end
+
+    # The fencing point for the irreversible part of a phase begun as
+    # `preparing`. Only one attempt can move it to `in_flight`, and a stop that
+    # landed during preparation is caught here by #permit!. `retryable` is
+    # accepted too: an expired sibling attempt may have written it mid-preparation.
+    def dispatch_operation!(operation, token)
+      SessionAdmission.transaction do
+        admission = SessionAdmission.lock.find(operation.session_admission_id)
+        permit!(admission.id, token)
+        operation.lock!
+        unless operation.state.in?([ SessionRuntimeOperation::PREPARING, "retryable" ])
+          raise UncertainOperation, "Unresolved #{operation.phase}; #{operation.reservation_note}"
+        end
+        operation.update!(state: "in_flight", error: nil)
         operation
       end
     end

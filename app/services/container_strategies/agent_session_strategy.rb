@@ -34,7 +34,7 @@ module ContainerStrategies
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
-      when :exec        then { timeout: 300, await_signal: :container_finished, signal_timeout: 82_800 }
+      when :exec        then { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 }
       when :cleanup     then { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } }
       else                   { timeout: 300 }
       end

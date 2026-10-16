@@ -126,6 +126,72 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_no_match(/reservation retained/, error.message)
   end
 
+  # == deferred dispatch ==
+
+  test "an exec begun as preparing can be begun again" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+
+    first = SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+    assert_equal "preparing", first.state
+
+    again = SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+    assert_equal first.id, again.id
+    assert_equal "preparing", again.state
+  end
+
+  test "dispatching a preparing exec puts it in flight, once" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    operation = SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+
+    assert_equal "in_flight", SessionAdmissionService.dispatch_operation!(operation, token).reload.state
+    error = assert_raises(SessionAdmissionService::UncertainOperation) do
+      SessionAdmissionService.dispatch_operation!(operation, token)
+    end
+    assert_match(/Unresolved exec/, error.message)
+  end
+
+  test "an exec that may have launched is never dispatched again" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    operation = SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+    operation.update!(state: "uncertain")
+
+    assert_raises(SessionAdmissionService::UncertainOperation) do
+      SessionAdmissionService.dispatch_operation!(operation, token)
+    end
+    assert_equal "uncertain", operation.reload.state
+  end
+
+  test "a stop that landed during preparation is caught at dispatch" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    operation = SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+    admission.update!(stop_requested_at: Time.current)
+
+    assert_raises(SessionAdmissionService::Stopped) { SessionAdmissionService.dispatch_operation!(operation, token) }
+    assert_raises(SessionAdmissionService::StalePermit) do
+      SessionAdmissionService.dispatch_operation!(operation, "a-token-from-another-launch")
+    end
+    assert_equal "preparing", operation.reload.state
+  end
+
+  test "a preparing exec holds no slot and does not block release" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
+
+    refute admission.session_runtime_operations.pinning.exists?
+    SessionAdmissionService.release!(admission)
+    assert admission.reload.released_at
+  end
+
   # == permit reasons ==
 
   test "a permit closed by somebody stopping their own work is an ordinary stop" do

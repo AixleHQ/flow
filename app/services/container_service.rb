@@ -43,13 +43,15 @@ class ContainerService
 
   # Run a single lifecycle phase with before/after hooks.
   # Returns accumulated state (serializable for passing between activities).
-  def run_phase(phase)
+  # `before_dispatch` runs between the before_ hook and the phase itself.
+  def run_phase(phase, before_dispatch: nil)
     phase = phase.to_sym
 
     Rails.logger.info("[ContainerService] Phase #{phase} starting")
     start_time = Time.current
 
     @state.merge!(invoke(:"before_#{phase}"))
+    before_dispatch&.call
     @state.merge!(invoke(phase))
     @state.merge!(invoke(:"after_#{phase}"))
     @state.except!(*CREATE_ONLY_KEYS)

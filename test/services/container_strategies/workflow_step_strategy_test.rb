@@ -44,7 +44,7 @@ module ContainerStrategies
 
       assert_equal({ timeout: 600 }, strategy.phase_config(:pull_image))
       assert_equal(
-        { timeout: 300, await_signal: :container_finished, signal_timeout: 82_800 },
+        { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 },
         strategy.phase_config(:exec)
       )
       assert_equal(
