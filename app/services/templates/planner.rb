@@ -266,7 +266,7 @@ module Templates
 
     # ---- board ------------------------------------------------------------
 
-    # board_action: create | merge | skip (not the owner) | none (no board in the template).
+    # board_action: create | merge | skip (board not writable) | none (no board in the template).
     # column_map: column key → an existing column id, "create", or nil (unavailable).
     def plan_board(plan)
       columns = Array(plan.package.board&.dig("columns"))
@@ -279,7 +279,7 @@ module Templates
         elsif board then "merge"
         else "create"
         end
-      plan.warnings << "Only the project owner can change its board, so the board part of this template is skipped." if plan.board_action == "skip"
+      plan.warnings << "You cannot change this project's board, so the board part of this template is skipped." if plan.board_action == "skip"
 
       columns.each do |column|
         existing = board&.board_columns&.find_by(id: @resolutions["columns.#{column['key']}"]) if @resolutions["columns.#{column['key']}"].present?

@@ -8,8 +8,7 @@ module Web
     #
     # With a company context this answers "may install into this company at
     # all" (and so create a new project there); with a project context it
-    # answers "may add resources to this project". Changing a project's board
-    # additionally needs the project owner — see Projects::BoardsPolicy.
+    # answers "may add resources to this project".
     class TemplateInstallsPolicy < ApplicationPolicy
       def new? = company_writer?
       def create? = company_writer?
