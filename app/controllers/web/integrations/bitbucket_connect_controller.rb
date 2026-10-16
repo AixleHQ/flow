@@ -12,15 +12,25 @@ class Web::Integrations::BitbucketConnectController < Web::ApplicationController
 
   layout "inertia"
 
-  before_action :require_auth
+  before_action :require_auth, except: :show
   skip_before_action :redirect_super_admin_to_admin_panel, raise: false
 
   rate_limit to: 30, within: 10.minutes, only: %i[preview create], by: -> { current_user.id }
 
+  # A guest gets the page too: it keeps the pairing from the link's fragment in
+  # the tab and sends them to sign in, and the sign-in comes back here. A
+  # redirect would lose the pairing — the fragment does not survive sign-in.
   def show
+    unless signed_in?
+      remember_pending_bitbucket_connect
+      return render inertia: "Integrations/BitbucketConnect",
+                    props: { signed_in: false, login_url: login_path, projects: [], preselected_project_id: nil }
+    end
+
     projects = connectable_projects
     remembered = session[PROJECT_SESSION_KEY].to_i
     render inertia: "Integrations/BitbucketConnect", props: {
+      signed_in: true, login_url: login_path,
       projects: projects.map { |p| { id: p.id, name: p.name, company_name: p.company.name } },
       preselected_project_id: projects.any? { |p| p.id == remembered } ? remembered : nil
     }

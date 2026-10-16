@@ -88,7 +88,7 @@ class Web::SessionsController < Web::ApplicationController
     # the user with no identities at all (see Auth::LocalCredential).
     provider = Auth::LocalCredential.link!(user)
     sign_in(user, provider: provider)
-    target = onboarding_done?(user) ? (take_pending_template_install_path || company_projects_path) : onboarding_path
+    target = onboarding_done?(user) ? (take_pending_sign_in_path || company_projects_path) : onboarding_path
     redirect_to target
   end
 

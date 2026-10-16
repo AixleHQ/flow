@@ -6,7 +6,8 @@ module AuthConcern
   IMPERSONATION_KEY = "true_user_id"
   # Carried across the session reset at sign-in: what the flow signing the person
   # in has just set up for them (the company of an invitation it accepted).
-  CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token pending_template_install].freeze
+  CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token pending_template_install
+                              pending_bitbucket_connect].freeze
 
   # Login continuation for a template install started as a guest (design §7.1).
   # Only the template and the version the guest saw are kept; the route back is
@@ -16,6 +17,22 @@ module AuthConcern
 
   def remember_pending_template_install(namespace:, slug:, version:)
     session[PENDING_TEMPLATE_INSTALL_KEY] = { "namespace" => namespace.to_s, "slug" => slug.to_s, "version" => version.to_i }
+  end
+
+  # Login continuation for a Bitbucket Connect opened as a guest. The pairing
+  # itself never reaches the server — it rides in the link's fragment and waits
+  # in the tab's sessionStorage — so only the way back is kept here.
+  PENDING_BITBUCKET_CONNECT_KEY = :pending_bitbucket_connect
+
+  def remember_pending_bitbucket_connect
+    session[PENDING_BITBUCKET_CONNECT_KEY] = true
+  end
+
+  # Where a sign-in continues when a guest started something that needed one.
+  def take_pending_sign_in_path
+    template = take_pending_template_install_path
+    bitbucket = bitbucket_connect_path if session.delete(PENDING_BITBUCKET_CONNECT_KEY)
+    template || bitbucket
   end
 
   def take_pending_template_install_path

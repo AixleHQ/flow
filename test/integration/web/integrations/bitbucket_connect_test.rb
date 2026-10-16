@@ -18,8 +18,28 @@ class Web::Integrations::BitbucketConnectTest < ActionDispatch::IntegrationTest
 
   def pairing_params = { pairing_id: @pairing.public_id, pairing_secret: @secret }
 
-  test "signing in comes first" do
+  test "a guest gets the page, which sends them to sign in and back here" do
     get bitbucket_connect_path
+
+    assert_inertia_page "Integrations/BitbucketConnect"
+    assert_inertia_props do |props|
+      assert props.key?(:signedIn)
+      refute props[:signedIn]
+      assert_equal login_path, props[:loginUrl]
+      assert_empty props[:projects]
+    end
+  end
+
+  test "signing in after opening the link as a guest comes back to the connect page" do
+    get bitbucket_connect_path
+
+    sign_in_as(@user)
+
+    assert_redirected_to bitbucket_connect_path
+  end
+
+  test "a guest cannot preview or confirm a pairing" do
+    post bitbucket_connect_preview_path, params: pairing_params, as: :json
 
     assert_redirected_to login_path
   end

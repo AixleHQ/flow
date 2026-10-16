@@ -13,6 +13,8 @@ interface ConnectableProject {
 }
 
 interface PageProps {
+  signedIn: boolean;
+  loginUrl: string;
   projects: ConnectableProject[];
   preselectedProjectId: number | null;
   [key: string]: unknown;
@@ -30,11 +32,34 @@ interface Pairing {
 
 const CONNECT_PATH = '/integrations/bitbucket/connect';
 
+const STORED_PAIRING = 'aixle.bitbucketPairing';
+
 // The Aixle Flow page in Bitbucket opens this with `#pairing=<id>.<secret>`.
 // The fragment never reaches a server; it is read once and dropped from the URL.
 const readPairing = (): Pairing | null => {
   const match = /pairing=([^.&]+)\.([^&]+)/.exec(window.location.hash);
   return match ? { id: match[1], secret: match[2] } : null;
+};
+
+// Signing in loses the fragment, so a guest's pairing waits in this tab's
+// sessionStorage and is taken back, once, when the sign-in returns here.
+const storePairing = (pairing: Pairing) => {
+  try {
+    window.sessionStorage.setItem(STORED_PAIRING, JSON.stringify(pairing));
+  } catch {
+    // Storage refused: the administrator presses Connect again after signing in.
+  }
+};
+
+const takeStoredPairing = (): Pairing | null => {
+  try {
+    const raw = window.sessionStorage.getItem(STORED_PAIRING);
+    window.sessionStorage.removeItem(STORED_PAIRING);
+    const parsed = raw ? (JSON.parse(raw) as Partial<Pairing>) : null;
+    return parsed?.id && parsed.secret ? { id: parsed.id, secret: parsed.secret } : null;
+  } catch {
+    return null;
+  }
 };
 
 const projectOptions = (projects: ConnectableProject[]) => {
@@ -48,8 +73,8 @@ const projectOptions = (projects: ConnectableProject[]) => {
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export default function BitbucketConnect() {
-  const { projects, preselectedProjectId } = usePage<PageProps>().props;
-  const [pairing] = useState<Pairing | null>(readPairing);
+  const { signedIn, loginUrl, projects, preselectedProjectId } = usePage<PageProps>().props;
+  const [pairing] = useState<Pairing | null>(() => readPairing() ?? (signedIn ? takeStoredPairing() : null));
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -59,7 +84,13 @@ export default function BitbucketConnect() {
   });
 
   useEffect(() => {
-    if (!pairing) return;
+    if (signedIn || !pairing) return;
+    storePairing(pairing);
+    window.location.assign(loginUrl);
+  }, [signedIn, pairing, loginUrl]);
+
+  useEffect(() => {
+    if (!signedIn || !pairing) return;
     window.history.replaceState(null, '', CONNECT_PATH);
     requestJson(
       `${CONNECT_PATH}/preview`,
@@ -68,7 +99,7 @@ export default function BitbucketConnect() {
     )
       .then((result) => setPreview(result as Preview))
       .catch((e: unknown) => setError(message(e, 'This link is unknown or has expired')));
-  }, [pairing]);
+  }, [signedIn, pairing]);
 
   const confirm = async () => {
     if (!pairing || !projectId) return;
@@ -104,7 +135,9 @@ export default function BitbucketConnect() {
           <Logo />
           <Title order={3}>Connect Bitbucket</Title>
 
-          {!pairing ? (
+          {!signedIn ? (
+            <Loader size="sm" aria-label="Taking you to sign in" />
+          ) : !pairing ? (
             <Text size="sm">
               This page opens from Bitbucket: a workspace administrator presses Connect in Workspace settings → Aixle
               Flow.

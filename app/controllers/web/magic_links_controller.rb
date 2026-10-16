@@ -46,7 +46,7 @@ class Web::MagicLinksController < Web::ApplicationController
     return redirect_to(login_path(error: "pending_approval")) if no_active_membership?(user)
 
     sign_in_or_prove(user, provider: provider)
-    redirect_to company_projects_path
+    redirect_to take_pending_sign_in_path || company_projects_path
   rescue Auth::IdentityResolver::SuperAdminProviderError
     redirect_to login_path(error: "super_admin_password_only")
   end

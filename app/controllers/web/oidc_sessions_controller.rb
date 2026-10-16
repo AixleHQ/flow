@@ -215,7 +215,7 @@ class Web::OidcSessionsController < Web::ApplicationController
     sign_in_or_prove(user, provider: provider)
 
     session[:current_company_id] = provider.company_id if member_of?(user, provider.company_id)
-    redirect_to(safe_return_to(return_to) || company_projects_path)
+    redirect_to(safe_return_to(return_to) || take_pending_sign_in_path || company_projects_path)
   end
 
   def member_of?(user, company_id)
