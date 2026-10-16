@@ -91,9 +91,7 @@ class WorkflowCostAnalyticsService
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS total_cost_cents",
         "COALESCE(SUM(usage_statistics.input_tokens), 0) AS input_tokens",
         "COALESCE(SUM(usage_statistics.output_tokens), 0) AS output_tokens",
-        "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
-        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens"
+        "#{UsageStatistic::TOTAL_TOKENS_SUM_SQL} AS total_tokens"
       )
       .order("total_cost_cents DESC")
 
@@ -135,9 +133,7 @@ class WorkflowCostAnalyticsService
       .select(
         DATE_TRUNC_SELECT_SQL.fetch(trunc_key, DATE_TRUNC_SELECT_SQL["day"]),
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS cost_cents",
-        "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
-        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens"
+        "#{UsageStatistic::TOTAL_TOKENS_SUM_SQL} AS total_tokens"
       )
 
     points.map do |point|

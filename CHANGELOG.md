@@ -50,6 +50,9 @@ governance, community health — carry none.
   resources scoped to each step and reviews with distinct purposes.
 
 ### Fixed
+- **Analytics**: token totals now include sessions that only report an aggregate
+  count when grouped with sessions that report input, output and cache tokens.
+  Summaries, charts and task statistics use the same per-session fallback.
 - **Triggers & gates**: a GitLab pipeline webhook no longer fails with a server
   error on the first delivery each web server receives, so a CI gate on that
   pipeline resolves when the pipeline ends instead of at the next reconcile sweep.
