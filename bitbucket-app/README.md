@@ -89,12 +89,22 @@ docker run --rm -it -v "$PWD":/app -w /app \
 (`environment.variables`): the CLI substitutes them from the shell, and `AIXLE_BASE_URL` defaults
 to `https://flow.aixle.com`.
 
-1. **Register** your own app once: `forge register "Aixle Flow (dev)"`. It prints the app id
-   (`ari:cloud:ecosystem::app/<uuid>`); export it as `FORGE_APP_ID`.
+1. **Register** your own app once. The CLI validates the manifest first, so it needs some
+   `FORGE_APP_ID` to substitute, and it then writes the new id over `app.id`:
+
+   ```sh
+   FORGE_APP_ID=ari:cloud:ecosystem::app/00000000-0000-4000-8000-000000000000 \
+     forge register "Aixle Flow for Bitbucket" --developer-space-id <id> --accept-terms
+   ```
+
+   `forge developer-spaces list` names the spaces you can register in. Read the new id from the
+   rewritten `app.id`, put `${FORGE_APP_ID}` back, and export the id as `FORGE_APP_ID`. Forge
+   creates the `development`, `staging` and `production` environments with it.
 2. **Point it at a reachable Aixle.** Forge calls the remote from Atlassian's cloud, so a local
    stack needs a public tunnel: `export AIXLE_BASE_URL=https://<tunnel-host>`.
-3. **Lint and deploy:** `forge lint`, then `forge deploy -e development` (or `staging`,
-   `production`). Changing a scope, a remote or an endpoint makes a major version, which every
+3. **Lint and deploy:** `forge lint`, then `forge deploy -e development --non-interactive` (or
+   `staging`, `production`). Module keys are one namespace across `modules`, triggers and endpoints
+   included — `forge lint` refuses a key used twice. Changing a scope, a remote or an endpoint makes a major version, which every
    installation has to approve again; changing the scheduled trigger resets it, and the first
    tick comes about five minutes after deploy.
 4. **Install:** `forge install -e development` and choose Bitbucket and the workspace when asked,
