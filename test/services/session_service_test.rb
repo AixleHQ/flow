@@ -16,6 +16,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   # that can occupy a slot.
 
   test "create_and_start refuses a session for a suspended company" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     @company.update_column(:state, "suspended")
 
     error = assert_raises(SessionAdmissionService::Stopped) do
@@ -29,6 +30,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   test "create_and_start refuses a session for an archived company" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     @company.update_column(:state, "archived")
 
     assert_raises(SessionAdmissionService::Stopped) do
@@ -102,6 +104,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   test "create_and_start passes extra params" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     mock_temporal_start
 
     session = SessionService.create_and_start(
@@ -258,6 +261,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   # The preflight checks the connection of the company being billed — the project's.
   # A consultant's rotten connection in another company is that company's problem.
   test "create_and_start ignores a rotten AWS connection in another company" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     mock_temporal_start
     other_company = create(:company)
     create(:company_membership, user: @user, company: other_company)
@@ -282,6 +286,7 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # Not using Bedrock must never be treated as a broken connection.
   test "create_and_start launches for a user with no cloud connection at all" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     mock_temporal_start
 
     session = SessionService.create_and_start(
@@ -374,18 +379,66 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.persisted?
   end
 
-  test "create_and_start proceeds when no agent credential exists" do
+  test "create_and_start refuses a member with no agent credentials and asks them to connect one" do
+    error = assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: {}
+      )
+    end
+
+    assert_equal "No agent credentials. Connect an agent in Profile settings to run workflows.", error.message
+    assert_equal 0, @user.terminal_sessions.count
+  end
+
+  test "create_and_start names the one agent missing when the member has another" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "codex")
+
+    error = assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+      )
+    end
+
+    assert_equal "No Claude Code login. Connect it in Profile settings to run this.", error.message
+  end
+
+  test "create_and_start counts only this company's credentials" do
+    other = create(:company_membership, user: @user)
+    create(:agent_credential, user: @user, company: other.company, agent_type: "claude_code")
+
+    error = assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+      )
+    end
+
+    assert_equal AgentCredential::PreflightError::NO_CREDENTIALS, error.message
+  end
+
+  test "an auth_setup session starts with no agent credentials, since it is how one gets connected" do
     mock_temporal_start
 
     session = SessionService.create_and_start(
-      user: @user, project: @project, session_type: "agent_session",
-      agent_type: "claude_code", params: {}
+      user: @user, company: @company, session_type: "auth_setup", agent_type: "claude_code"
     )
 
     assert session.persisted?
   end
 
+  test "a workflow step without any agent credential fails before a session is built" do
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
+
+    error = assert_raises(AgentCredential::PreflightError) { SessionService.build_for_workflow_step(step_run: step_run) }
+
+    assert_equal AgentCredential::PreflightError::NO_CREDENTIALS, error.message
+    assert_equal 0, TerminalSession.count
+  end
+
   test "create_and_start launches when the OAuth MCP server is connected for the user" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     mock_temporal_start
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,
                     auth_type: :oauth, credential_scope: :per_user)
@@ -406,6 +459,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   test "create_and_start blocks launch when a selected MCP server URL is unsafe at launch time (F34)" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     # Server was valid at creation; simulate its URL becoming unsafe since then
     # (DNS rebinding / edited row) by saving past validation, then failing the
     # launch-time re-check.
@@ -660,6 +714,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   test "create_for_workflow_step attaches step assets to session input_assets" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     mock_temporal_start
 
     asset = create(:asset, scope: @project, created_by: @user, name: "step-doc.md")
@@ -754,6 +809,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   private
 
   def workflow_step_run
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow, instructions: "Do the thing")
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)

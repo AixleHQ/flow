@@ -22,7 +22,7 @@ import type { Project, TerminalSession } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { AGENT_RUNTIMES, AGENT_SELECT_OPTIONS, isAgentType } from 'shared/ui/agentRuntimes';
+import { AGENT_RUNTIMES, AGENT_SELECT_OPTIONS, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -127,11 +127,11 @@ const LandingPage = () => {
           <Stack gap="sm" mt="md" w="100%" maw={420}>
             {configuredAgents.length === 0 && (
               <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
-                No agent runtimes configured. Go to{' '}
+                No agent credentials. Connect an agent in{' '}
                 <Text component="a" href="/profile" size="sm" c="var(--app-warning-fg)" td="underline" span>
-                  Profile
+                  Profile settings
                 </Text>{' '}
-                to set up an agent credential.
+                to run workflows.
               </Alert>
             )}
             <Group gap="sm" grow>
@@ -178,7 +178,7 @@ const LandingPage = () => {
                   Continue Active Session
                 </Button>
               ) : (
-                <Tooltip label="No agent runtime configured" disabled={!!runtime}>
+                <Tooltip label={NO_AGENT_CREDENTIALS} disabled={!!runtime}>
                   <Button
                     size="md"
                     leftSection={<IconSparkles size={16} />}

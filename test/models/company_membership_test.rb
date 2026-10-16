@@ -397,6 +397,68 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_empty project.collaborators
   end
 
+  # === skipping the agent step (admins only) ===
+
+  def membership_at_agent_step(role)
+    create(:company_membership, role: role, user: create(:user), company: @company,
+                                onboarding_state: "step2", position: "cto", preferred_agent_language: "en")
+  end
+
+  test "an admin without an agent finishes onboarding by skipping, and the skip is recorded" do
+    membership = membership_at_agent_step("admin")
+    assert_not membership.can_complete_onboarding?
+
+    assert membership.update(onboarding_state_event: "skip_agent_setup"), membership.errors.full_messages.to_sentence
+
+    membership.reload
+    assert_equal "completed", membership.onboarding_state
+    assert membership.onboarding_completed_at.present?
+    assert_equal membership.onboarding_completed_at, membership.agent_setup_skipped_at
+    assert membership.needs_agent_setup?
+  end
+
+  test "only an admin may skip the agent step" do
+    %w[employee viewer].each do |role|
+      membership = membership_at_agent_step(role)
+
+      assert_not membership.aasm(:onboarding_state).may_fire_event?(:skip_agent_setup), "#{role} must not skip"
+      membership.update!(onboarding_state_event: "skip_agent_setup")
+      assert_equal "step2", membership.reload.onboarding_state
+      assert_nil membership.agent_setup_skipped_at
+    end
+  end
+
+  test "an admin who connected an agent finishes the normal way, not as a skip" do
+    membership = membership_at_agent_step("admin")
+    create(:agent_credential, user: membership.user, company: @company)
+
+    assert_not membership.aasm(:onboarding_state).may_fire_event?(:skip_agent_setup)
+    membership.update!(onboarding_state_event: "complete")
+
+    assert_equal "completed", membership.reload.onboarding_state
+    assert_nil membership.agent_setup_skipped_at
+  end
+
+  test "an admin cannot skip before answering the profile step" do
+    membership = membership_at_agent_step("admin")
+    membership.update!(position: nil)
+
+    assert_not membership.aasm(:onboarding_state).may_fire_event?(:skip_agent_setup)
+  end
+
+  test "reopening onboarding clears a recorded skip" do
+    membership = membership_at_agent_step("admin")
+    membership.update!(onboarding_state_event: "skip_agent_setup")
+
+    membership.aasm(:onboarding_state).fire(:reopen)
+    membership.save!
+
+    membership.reload
+    assert_equal "step2", membership.onboarding_state
+    assert_nil membership.onboarding_completed_at
+    assert_nil membership.agent_setup_skipped_at
+  end
+
   # === viewer promotion (flow-dev #2025) ===
 
   def onboarded_viewer(**attrs)

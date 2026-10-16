@@ -141,6 +141,15 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_match(/Claude Code login has expired/, flash[:alert])
   end
 
+  test "start without any agent credential redirects back with the connect-an-agent message" do
+    assert_no_difference -> { TerminalSession.count } do
+      post company_project_aixle_builder_start_path(@project), params: { agent_runtime: "claude_code" }
+    end
+
+    assert_redirected_to company_project_aixle_builder_path(@project)
+    assert_equal "No agent credentials. Connect an agent in Profile settings to run workflows.", flash[:alert]
+  end
+
   # ── session ───────────────────────────────────────
 
   test "session renders session page for own session" do

@@ -238,9 +238,17 @@ class CompanyMembership < ApplicationRecord
   end
 
   def can_complete_onboarding?
-    position.present? &&
-      preferred_agent_language.present? &&
-      (viewer? || has_configured_agents?)
+    onboarding_profile_complete? && (viewer? || has_configured_agents?)
+  end
+
+  # Administering the tenant needs no agent; running anything still does, and
+  # SessionService refuses those launches until one is connected.
+  def can_skip_agent_setup?
+    admin? && onboarding_profile_complete? && !has_configured_agents?
+  end
+
+  def onboarding_profile_complete?
+    position.present? && preferred_agent_language.present?
   end
 
   # Finished onboarding here, but now needs an agent this company has none for —
@@ -397,8 +405,13 @@ class CompanyMembership < ApplicationRecord
     self.onboarding_completed_at = Time.current
   end
 
-  def clear_onboarding_completed_at
+  def mark_agent_setup_skipped
+    self.onboarding_completed_at = self.agent_setup_skipped_at = Time.current
+  end
+
+  def clear_onboarding_completion
     self.onboarding_completed_at = nil
+    self.agent_setup_skipped_at = nil
   end
 
   def reopen_onboarding_after_promotion

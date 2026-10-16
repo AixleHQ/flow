@@ -175,7 +175,7 @@ function DefaultAgentSelector({ profile }: { profile: CurrentUser }) {
   if (credentials.length === 0) {
     return (
       <Text size="sm" c="dimmed">
-        No agent credentials configured. Complete onboarding to set up agents.
+        No agent credentials configured. Authenticate an agent under Agent Runtimes to run workflows.
       </Text>
     );
   }
