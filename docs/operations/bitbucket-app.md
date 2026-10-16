@@ -40,18 +40,18 @@ production customer.
 
 ## Shipping a new version of the app
 
-From `bitbucket-app/`, in a container, as described in its README:
+In a container with the repository mounted and the Forge CLI logged in, as the app's README describes:
 
 ```sh
-bin/deploy staging      # first; check a staging workspace
-bin/deploy production
+bitbucket-app/bin/forge-deploy staging      # first; check a staging workspace
+bitbucket-app/bin/forge-deploy production
 ```
 
-`bin/deploy` sets each environment's URLs, lints and deploys. Two things to plan for:
+`bitbucket-app/bin/forge-deploy` sets each environment's URLs, lints and deploys. Two things to plan for:
 
 - **A major version waits for every admin.** A changed scope, remote or egress address makes one;
   each installation keeps running the old version — heartbeats included — until a workspace admin
-  approves the update in Bitbucket. `bin/deploy` refuses it unless given
+  approves the update in Bitbucket. `bitbucket-app/bin/forge-deploy` refuses it unless given
   `--approve MAJOR_VERSION_RULE`. Ask for read scopes before they are needed.
 - **A deploy resets the heartbeat.** The next one comes about five minutes later; tokens already
   held last two hours or more.
@@ -90,7 +90,7 @@ BitbucketInstallation.live.order(:last_invocation_at)
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Every Forge request is 401 in the log, with *issued for another app* or *another environment* | `BITBUCKET_FORGE_APP_ID` or `_ENVIRONMENT_ID` names another app or environment | Set both from the table above |
-| No Forge request reaches the deployment | The environment was deployed with another `AIXLE_BASE_URL`, or the host is not public | `bin/deploy <environment>` again |
+| No Forge request reaches the deployment | The environment was deployed with another `AIXLE_BASE_URL`, or the host is not public | `bitbucket-app/bin/forge-deploy <environment>` again |
 | An install never shows up | The lifecycle event is still on its way | Wait a few minutes; any later invocation — a heartbeat, opening the settings page — records it too |
 | Heartbeats stopped for one workspace | The app was uninstalled, or a major version waits for the admin's approval | Ask the workspace admin |
 | The admin's Connect says *Only a Bitbucket workspace administrator can connect…* | The account is a member, not an admin, of the workspace | A workspace admin connects |

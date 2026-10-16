@@ -30,7 +30,7 @@ nothing the app does is metered as Forge compute, and all logic lives in Aixle.
 | `manifest.yml` | modules, endpoints, the `aixle` remote, scopes, environment variables |
 | `src/frontend/connect.jsx` | the settings page (UI Kit, `render: native`); Forge bundles it at deploy |
 | `package.json`, `package-lock.json` | the page's dependencies, pinned |
-| `bin/deploy` | deploys one Forge environment with that environment's Aixle URLs |
+| `bin/forge-deploy` | deploys one Forge environment with that environment's Aixle URLs |
 
 ## Protocol with Aixle
 
@@ -100,10 +100,10 @@ machine's global install — use a container:
 ```sh
 docker run --rm -it -v "$PWD":/app -w /app \
   -e FORGE_EMAIL -e FORGE_API_TOKEN -e FORGE_APP_ID=ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2 \
-  node:22 sh -c 'npm ci && npm install -g @forge/cli@14.2.0 && bin/deploy staging'
+  node:22 sh -c 'npm ci && npm install -g @forge/cli@14.2.0 && bin/forge-deploy staging'
 ```
 
-`bin/deploy <environment>` sets the two URLs for that environment, runs `forge lint` and deploys.
+`bin/forge-deploy <environment>` sets the two URLs for that environment, runs `forge lint` and deploys.
 `AIXLE_BASE_URL`, `AIXLE_APP_URL` and `FORGE_APP_ID` are manifest environment variables
 (`environment.variables`) the CLI substitutes at deploy time, which is why the script exists: a
 production deploy pointed at a tunnel is one forgotten `export` away otherwise. For `development`
@@ -112,7 +112,7 @@ it takes your tunnel from `AIXLE_BASE_URL`.
 - **Major versions.** Changing a scope, a remote or an egress address is a major version: every
   installation keeps the old one — heartbeats included — until a workspace admin approves the new
   one. `forge deploy` refuses it until asked explicitly; pass `--approve MAJOR_VERSION_RULE` to
-  `bin/deploy` only when that is intended.
+  `bin/forge-deploy` only when that is intended.
 - Module keys are one namespace across triggers, endpoints and UI modules; `forge lint` refuses a
   key used twice.
 - A deploy resets the five-minute scheduled trigger: the next heartbeat comes about five minutes
@@ -138,7 +138,7 @@ Self-hosted deployments and forks register their own app — one app serves one 
    rewritten `app.id`, put `${FORGE_APP_ID}` back, and keep the id. Forge creates the
    `development`, `staging` and `production` environments.
 2. Deploy with your own URLs: `AIXLE_BASE_URL=… AIXLE_APP_URL=… forge deploy -e production`
-   (`bin/deploy` carries Aixle's URLs).
+   (`bin/forge-deploy` carries Aixle's URLs).
 3. Developer console → the app → **Distribution** → enable sharing, and copy the install link.
 4. Configure the deployment: `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID`
    (`forge environments list`) and `BITBUCKET_FORGE_INSTALL_URL`

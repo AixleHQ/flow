@@ -7,8 +7,9 @@
 # Staging's own host is private (VPN), so Forge reaches it through the public
 # webhooks host, which routes /webhooks/* only — every endpoint lives there.
 set -eu
+cd "$(dirname "$0")/.."
 
-environment="${1:?usage: bin/deploy <development|staging|production> [forge deploy options]}"
+environment="${1:?usage: bin/forge-deploy <development|staging|production> [forge deploy options]}"
 shift
 case "$environment" in
   production)
