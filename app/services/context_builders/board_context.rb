@@ -61,9 +61,11 @@ module ContextBuilders
     def fetch_hint(task)
       if task.description.present? && !inline_description?(task)
         "The task's description and comments are not repeated here: read them with " \
-          "`board_get_task` and `board_get_comments`."
+          "`board_get_task` and `board_list_comments`. Read shortened comments in full with `board_get_comment`; " \
+          "follow `has_more` and `offset` to check older decisions."
       else
-        "The task's comments are not repeated here: read them with `board_get_comments`."
+        "The task's comments are not repeated here: use `board_list_comments` and follow `has_more` and `offset` " \
+          "to check older decisions. Read shortened comments in full with `board_get_comment`."
       end
     end
   end

@@ -30,6 +30,7 @@ module PersonalTools
               base_config_item_ids: workflow.base_config_item_ids,
               base_asset_ids: workflow.base_asset_ids,
               inherit_all_project_resources: workflow.inherit_all_project_resources,
+              completion_evidence_required: workflow.config.to_h["completion_evidence_required"] == true,
               steps_count: steps.size, steps: steps)
     end
 

@@ -63,6 +63,20 @@ class ContextBuilders::CriticalRulesTest < ActiveSupport::TestCase
     assert_not_includes content, "Partial work"
   end
 
+  test "essential missing or contradictory requirements are blockers rather than unconditional assumptions" do
+    session = create(:terminal_session, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
+
+    content = ContextBuilders::CriticalRules.new(session).build.first.content
+
+    assert_includes content, "minor, reversible"
+    assert_includes content, "essential requirement"
+    assert_includes content, "unresolved conflict"
+    assert_includes content, "`fail_session`"
+    assert_not_includes content, "NEVER stop mid-task saying you need more information"
+    assert_not_includes content, "choose the most sensible interpretation and proceed"
+  end
+
   test "non_interactive rules include key backward-compatible phrases" do
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")

@@ -29,9 +29,10 @@ module ContextBuilders
         **Strict rules:**
         - NEVER ask questions, request clarifications, or wait for input
         - NEVER present options and ask the user to choose
-        - NEVER stop mid-task saying you need more information
-        - Make reasonable assumptions when details are missing and document them
-        - If a task is ambiguous, choose the most sensible interpretation and proceed
+        - Make only minor, reversible assumptions when details are missing, and document them
+        - Consult available sources before deciding that an essential requirement is missing
+        - If an essential requirement cannot be verified, or an unresolved conflict prevents completion,
+          record the blocker and call `fail_session`; do not invent a decision or report partial work as success
 
         **How to operate:**
         1. Analyze the prompt and all available context (MCP tools, project files, skills)

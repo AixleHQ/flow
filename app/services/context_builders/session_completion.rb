@@ -20,12 +20,21 @@ module ContextBuilders
       [ section(
         tag: "session-completion",
         priority: :critical,
-        content: mandate,
+        content: [ mandate, evidence_guidance ].compact.join("\n\n"),
         position_hint: :footer
       ) ]
     end
 
     private
+
+    def evidence_guidance
+      return unless CompletionEvidence.new(session).required?
+
+      "Completion evidence is required: pass `evidence_execution_ids` to `finish_session`. " \
+        "Use successful completed recorded tool executions from the current session to verify files, " \
+        "commits or tests. Read the results with `read_tool_result`; prose claiming that tests passed " \
+        "does not create evidence. If required verification cannot be performed, call `fail_session`."
+    end
 
     def mandate
       <<~RULES.strip
@@ -51,6 +60,7 @@ module ContextBuilders
         - a required resource is missing (repository, file, credential, API, tool),
         - you produced only part of the deliverables,
         - a critical error blocked the task.
+        - an essential requirement cannot be verified or requirements have an unresolved conflict.
 
         Partial work is a `fail_session` whose `reason` says what is missing. Reporting
         partial work as success is worse than reporting the failure.

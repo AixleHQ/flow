@@ -145,7 +145,8 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     content = ContextBuilders::BoardContext.new(session).build.first.content
     assert_includes content, "- **Description:** Rename the settings tab to Billing"
     assert_not_includes content, "Reviewed: needs a migration"
-    assert_includes content, "`board_get_comments`"
+    assert_includes content, "`board_list_comments`"
+    assert_includes content, "`board_get_comment`"
     assert_not_includes content, "`board_get_task`"
   end
 
@@ -161,7 +162,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_operator long_spec.length, :>, ContextBuilders::BoardContext::DESCRIPTION_INLINE_LIMIT
     assert_not_includes content, "Acceptance criteria."
     assert_includes content, "`board_get_task`"
-    assert_includes content, "`board_get_comments`"
+    assert_includes content, "`board_list_comments`"
   end
 
   # -- AC #5: BUILDERS registration position --

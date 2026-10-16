@@ -76,10 +76,10 @@ class ContextRenderer
     replace_section(sections, "previous-steps") do |content|
       lines = content.lines
       lines.map do |line|
-        if line.strip.start_with?("→") && line.strip.length > 100
-          "#{line.strip.truncate(100)}\n"
-        elsif line.strip.start_with?("→ data:")
+        if line.strip.start_with?("→ data:")
           next nil
+        elsif line.strip.start_with?("→") && line.strip.length > 100
+          "#{line.strip.truncate(100)}\n"
         else
           line
         end

@@ -45,6 +45,8 @@ module PersonalTools
                          "lists stop being the limit. Convenient for a workflow you trust, and the " \
                          "opposite of least privilege for one that installs or runs third-party code."
       param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
+      param :completion_evidence_required, type: :boolean,
+            description: "Require successful recorded tool execution receipts before each unattended session can finish. Default false."
     end
 
     ATTRS = %i[name description].freeze
@@ -54,7 +56,7 @@ module PersonalTools
                       base_config_item_ids base_asset_ids].freeze
     # Same store, but a flag rather than a list: JSON config does no
     # ActiveRecord casting, so "false" would land as a truthy string.
-    CONFIG_FLAGS = %i[inherit_all_project_resources].freeze
+    CONFIG_FLAGS = %i[inherit_all_project_resources completion_evidence_required].freeze
 
     def execute
       project = find_project!
@@ -78,6 +80,7 @@ module PersonalTools
               base_config_item_ids: workflow.base_config_item_ids,
               base_asset_ids: workflow.base_asset_ids,
               inherit_all_project_resources: workflow.inherit_all_project_resources,
+              completion_evidence_required: workflow.config.to_h["completion_evidence_required"] == true,
               updated_fields: (attrs.keys + config.keys).map(&:to_s))
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update workflow: #{e.message}")

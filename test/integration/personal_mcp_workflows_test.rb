@@ -30,6 +30,17 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_includes names, @workflow.name
   end
 
+  test "completion evidence requirement can be enabled read and disabled through workflow tools" do
+    %w[true false].each do |value|
+      body = call_tool("update_workflow", { project_id: @project.id, workflow_id: @workflow.id,
+                                           completion_evidence_required: value == "true" })
+      assert_not error?(body), text(body)
+      assert_equal value == "true", @workflow.reload.config["completion_evidence_required"]
+      detail = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: @workflow.id }))
+      assert_equal value == "true", detail["completion_evidence_required"]
+    end
+  end
+
   test "create_workflow then get_workflow and create_workflow_step" do
     created = payload(call_tool("create_workflow", { project_id: @project.id, name: "Built by MCP" }))
     wf_id = created["id"]

@@ -4,8 +4,8 @@ module InternalTools
   class BoardGetComments < Base
     tool do
       display_name "Board Get Comments"
-      description "List comments for a task on the current board, newest first, with optional tag or " \
-                  "author-type filters and a limit."
+      description "Legacy full comment list for a task, newest first, with optional filters and a limit. " \
+                  "Prefer board_list_comments for paginated previews and board_get_comment for a full selected comment."
       tags :board
       inject_when :workflow_step_session
       input_schema({

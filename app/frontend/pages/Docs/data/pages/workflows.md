@@ -187,3 +187,16 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
   `output_asset_specs` to hand artifacts forward.
 
 Writing the instructions themselves: see the [Prompt guide](/docs/prompt-guide).
+
+## Completion evidence
+
+The personal MCP tools support a workflow-level `completion_evidence_required`
+flag, off by default. Set it with `update_workflow` and read it with `get_workflow`.
+When enabled, unattended sessions must pass successful recorded verification-tool
+execution IDs to `finish_session` as `evidence_execution_ids`. Missing, failed or
+other-session evidence cannot complete the session. Supply verification tools
+before enabling the flag; direct CLI commands do not automatically create these
+receipts. The agent must report failure if required verification is unavailable.
+
+Receipts record execution provenance and success, not semantic acceptance of every
+claim. Continue using output specifications and reviews for the task's contract.

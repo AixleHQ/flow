@@ -56,9 +56,8 @@ a project created there has no board until it runs.
 When a board-triggered workflow run starts, the agent receives:
 
 - Task title, description, type, priority, tags.
-- The five most recent comments (first 200 characters each); the full thread through `board_get_comments`.
+- A pointer to `board_list_comments`: paginated previews, with `has_more` and an offset to reach older decisions. Read a complete comment with `board_get_comment`. Comments are not copied into the initial context.
 - The task's attachments, through `board_get_task_assets` (they are not mounted in the container).
-- Task transitions (movement history).
 - Column purpose (so the agent knows the stage it's working in).
 
 This is the **BoardContext** builder — one of the layers in the agent

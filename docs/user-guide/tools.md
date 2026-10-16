@@ -45,6 +45,9 @@ internal `aixle-tools` MCP server:
 | `board_update_task`    | Update title, description, priority, tags, or type.           |
 | `board_move_task`      | Move a task to another column by name.                        |
 | `board_add_comment` / `board_get_comments` | Add or read agent comments (Markdown). |
+| `board_list_comments` | Paginated comment previews with total, offset and `has_more`. |
+| `board_get_comment` | Read one complete comment by task ID and comment ID. |
+| `get_step_result` | Recover a full step note or one sub-step note/data from the current workflow run. |
 | `board_attach_asset` / `board_get_task_assets` | Attach or list task files.        |
 | `board_manage_tags`    | Add or remove a tag on a task or comment.                     |
 | `board_create_wait`    | Create a Wait so a column's auto-workflow won't fire until it resolves (e.g. `github_checks_completed`). |

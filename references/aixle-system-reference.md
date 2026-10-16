@@ -68,6 +68,7 @@ the provider never reported (stale stops blocking). Step agents open gates with
 | `base_repository_ids` | repositories every step gets |
 | `base_config_item_ids` | secrets/variables every step may read |
 | `inherit_all_project_resources` | fall back to every project tool, skill, MCP server and repository |
+| `completion_evidence_required` | default false; require successful recorded tool executions from the current session before unattended completion |
 
 Unknown config keys are rejected.
 
@@ -242,7 +243,13 @@ task, so tagged comments carry structured hand-offs.
 
 ## 8. Step-agent tools (inside a running step)
 
-- Lifecycle: `finish_session(note)`, `fail_session(reason)`
+- Lifecycle: `finish_session(note, evidence_execution_ids)`, `fail_session(reason)`.
+  When `completion_evidence_required` is true, success needs recorded current-session
+  executions completed with exit code zero; a prose claim is not a receipt.
+- Full workflow notes/data: `get_step_result(step_run_id, sub_step_run_id?)` reads
+  originals behind shortened context previews, within the current workflow run.
+- Comment discovery: `board_list_comments(task_id, limit?, offset?)` returns bounded
+  previews and `has_more`; `board_get_comment(task_id, comment_id)` reads the original.
 - Sub-steps: `list_sub_steps`, `mark_sub_step`
 - Board: `board_get_board_info`, `board_list_tasks`, `board_get_task`,
   `board_create_task`, `board_update_task`, `board_move_task`,

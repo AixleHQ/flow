@@ -151,6 +151,20 @@ class ContextRendererTest < ActiveSupport::TestCase
     assert_includes output, "small board content"
   end
 
+  test "over-budget data is removed intact while its recovery call survives" do
+    recovery = "Full result: `get_step_result(step_run_id: 12, sub_step_run_id: 34)`"
+    sections = [
+      ContextSection.new(tag: "contract", priority: :critical, content: "x" * 25_000),
+      ContextSection.new(tag: "previous-steps", priority: :info,
+        content: "Previous result\n  → data: #{ { detail: 'x' * 130 }.to_json }\n#{recovery}")
+    ]
+
+    rendered = ContextRenderer.render(sections)
+
+    assert_not_includes rendered, "→ data:"
+    assert_includes rendered, recovery
+  end
+
   private
 
   def build_previous_steps_content(filler)

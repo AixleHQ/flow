@@ -18,7 +18,7 @@ class Workflow < ApplicationRecord
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
     base_asset_ids base_repository_ids base_config_item_ids
-    inherit_all_project_resources
+    inherit_all_project_resources completion_evidence_required
   ].freeze
 
   validates :name, presence: true

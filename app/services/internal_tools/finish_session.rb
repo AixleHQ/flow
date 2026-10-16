@@ -12,6 +12,12 @@ module InternalTools
         type: "object",
         required: [],
         properties: {
+          evidence_execution_ids: {
+            type: "array",
+            items: { type: "string", maxLength: 128 },
+            maxItems: 20,
+            description: "Successful recorded tool execution IDs from this session. Required when completion_evidence_required is enabled."
+          },
           note: {
             type: "string",
             description: "Optional final note (saved to step if in workflow context)"
@@ -27,6 +33,15 @@ module InternalTools
 
       unless session.may_start_finishing? || session.finishing?
         return error("Session cannot be finished in current state: #{session.state}")
+      end
+
+      evidence = CompletionEvidence.new(session).validate(params[:evidence_execution_ids])
+      return error(evidence.errors.join("; ")) unless evidence.valid?
+
+      if evidence.receipts.any?
+        session.with_lock do
+          session.update!(metadata: session.metadata.to_h.merge("completion_evidence" => evidence.receipts))
+        end
       end
 
       if params[:note].present? && step_run.present?

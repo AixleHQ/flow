@@ -188,7 +188,10 @@ module ContextBuilders
           lines << "   → #{ssr.note.truncate(200)}"
         end
         if ssr&.data.present?
-          lines << "   → data: #{ssr.data.to_json.truncate(300)}"
+          append_data_preview(lines, ssr.data, 300)
+        end
+        if ssr && (ssr.note.present? || ssr.data.present?)
+          lines << result_reference(step_run, ssr)
         end
       end
 
@@ -200,6 +203,8 @@ module ContextBuilders
 
     def build_previous_steps
       lines = [ "## Previous Steps", "" ]
+      lines << "Notes and data here are previews. Read the full result before relying on a shortened note or omitted data."
+      lines << ""
 
       completed_step_runs.each do |sr|
         prev_step = sr.step
@@ -209,6 +214,7 @@ module ContextBuilders
         if sr.step_note.present?
           lines << ""
           lines << sr.step_note.truncate(500)
+          lines << result_reference(sr)
         end
 
         completed_sub_runs = sr.sub_step_runs.select { |ssr| ssr.state.in?(%w[completed skipped]) }
@@ -220,7 +226,10 @@ module ContextBuilders
             line += " — #{ssr.note.truncate(150)}" if ssr.note.present?
             lines << line
             if ssr.data.present?
-              lines << "  → data: #{ssr.data.to_json.truncate(200)}"
+              append_data_preview(lines, ssr.data, 200)
+            end
+            if ssr.note.present? || ssr.data.present?
+              lines << result_reference(sr, ssr)
             end
           end
         end
@@ -229,6 +238,21 @@ module ContextBuilders
       end
 
       lines.join("\n")
+    end
+
+    def result_reference(run, sub_run = nil)
+      args = "step_run_id: #{run.id}"
+      args += ", sub_step_run_id: #{sub_run.id}" if sub_run
+      "Full result: `get_step_result(#{args})`."
+    end
+
+    def append_data_preview(lines, data, limit)
+      json = data.to_json
+      if json.length <= limit
+        lines << "  → data: #{json}"
+      else
+        lines << "Structured data omitted from preview (#{json.length} characters)."
+      end
     end
 
     def sub_steps

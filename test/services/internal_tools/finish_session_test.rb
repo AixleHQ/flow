@@ -64,4 +64,72 @@ class InternalTools::FinishSessionTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "non-interactive"
   end
+
+  test "required evidence cannot be replaced by a success note" do
+    @session.update!(metadata: @session.metadata.to_h.merge("completion_evidence_required" => true))
+
+    result = InternalTools::FinishSession.new(params: { note: "All tests passed" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "evidence"
+    assert_equal "running", @session.reload.state
+    assert_nil @step_run.reload.step_note
+  end
+
+  test "successful current-session executions are saved as completion receipts" do
+    @session.update!(metadata: @session.metadata.to_h.merge("completion_evidence_required" => true, "keep" => "value"))
+    execution = create(:tool_result, :completed, terminal_session: @session, step_run: @step_run)
+
+    result = InternalTools::FinishSession.new(
+      params: { evidence_execution_ids: [ execution.execution_id ] }, session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    receipt = @session.reload.metadata.fetch("completion_evidence").first
+    assert_equal execution.execution_id, receipt["execution_id"]
+    assert_equal 0, receipt["exit_code"]
+    assert_equal "value", @session.metadata["keep"]
+    assert_not receipt.key?("stdout")
+  end
+
+  test "supplied evidence rejects failed pending unknown and foreign executions without side effects" do
+    foreign = create(:terminal_session, :agent_session, user: @user, project: @project)
+    tool = create(:tool, :internal)
+    executions = [
+      create(:tool_result, :completed, tool: tool, terminal_session: foreign),
+      create(:tool_result, :failed, tool: tool, terminal_session: @session),
+      create(:tool_result, :completed, tool: tool, terminal_session: @session, exit_code: 1),
+      create(:tool_result, :expired, tool: tool, terminal_session: @session),
+      create(:tool_result, tool: tool, terminal_session: @session)
+    ]
+
+    (executions.map(&:execution_id) + [ "tr-does-not-exist" ]).each do |id|
+      result = InternalTools::FinishSession.new(
+        params: { evidence_execution_ids: [ id ], note: "Should not persist" }, session: @session
+      ).execute
+      assert_equal 1, result[:exit_code]
+      assert_equal "running", @session.reload.state
+      assert_nil @step_run.reload.step_note
+      assert_nil @session.metadata.to_h["completion_evidence"]
+    end
+  end
+
+  test "malformed or excessive evidence is rejected" do
+    [ "tr-string", [ nil ], [ "" ], Array.new(21) { |i| "tr-#{i}" } ].each do |ids|
+      result = InternalTools::FinishSession.new(params: { evidence_execution_ids: ids }, session: @session).execute
+
+      assert_equal 1, result[:exit_code]
+      assert_equal "running", @session.reload.state
+    end
+  end
+
+  test "workflow config can require completion evidence" do
+    @step_run.workflow_run.workflow.update!(config: { "completion_evidence_required" => true })
+    @session.update!(metadata: @session.metadata.to_h.merge("completion_evidence_required" => false))
+
+    result = InternalTools::FinishSession.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_equal "running", @session.reload.state
+  end
 end

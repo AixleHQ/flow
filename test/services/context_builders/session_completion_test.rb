@@ -43,6 +43,18 @@ class ContextBuilders::SessionCompletionTest < ActiveSupport::TestCase
     assert_not ContextBuilders::SessionCompletion.new(session).applicable?
   end
 
+  test "required completion evidence is made visible to the unattended session" do
+    session = create(:terminal_session, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work",
+      metadata: { "completion_evidence_required" => true })
+
+    content = ContextBuilders::SessionCompletion.new(session).build.first.content
+
+    assert_includes content, "evidence_execution_ids"
+    assert_includes content, "required"
+    assert_includes content, "current session"
+  end
+
   test "constructor renders the mandate as the last section of a non_interactive context" do
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")

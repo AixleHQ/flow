@@ -18,13 +18,13 @@ Your instructions are not the whole prompt. Before a session starts, Flow writes
 | **Your role** | The agent's persona: title, persona, communication style, principles. | Put *who the agent is* here once, on the agent. Put *what this step does* in the instructions. |
 | **Workflow and step** | Workflow name and description, "Step N of M", the Slack message that triggered the run (if any), then **your instructions**, verbatim. | The instructions sit under the step heading. Write them as the task for this step, not the whole workflow. |
 | **Sub-steps checklist** | Each sub-step's name, id, state and instructions, and a note to mark them with `mark_sub_step`. | A good way to make a long step checkable. See [Sub-steps](#sub-steps). |
-| **Previous steps** | For steps that already finished: their **note** (up to 500 characters) and their sub-step notes. | Notes are for "what happened". For the work itself, see [Passing work between sessions](#passing-work-between-sessions). |
+| **Previous steps** | For steps that already finished: their **note** (up to 500 characters) and their sub-step notes, with `get_step_result` references for shortened notes or omitted structured data. | Notes are for "what happened". For the work itself, see [Passing work between sessions](#passing-work-between-sessions). |
 | **Files from earlier steps** | Every file the steps this one runs after wrote to `/workspace/outputs/`, with its path in `/workspace/assets/`. | The agent knows what it was handed. You still say which file to use for what. |
-| **Board** (board-triggered runs) | The card's title, id, column, priority, tags, assignee, **description (first 500 characters)**, the **last 5 comments (first 200 characters each)**, all columns, and the board tools. | The agent sees only the start of a long description, and only a glimpse of the thread. If the full thread matters, tell it to read the comments with `board_get_comments`. |
+| **Board** (board-triggered runs) | The card's title, id, column, priority, tags, assignee, **complete description up to 1,500 characters** (otherwise a `board_get_task` pointer), and a `board_list_comments` pointer, all columns, and the board tools. | Follow comment pages using `has_more` and `offset`; read shortened bodies in full with `board_get_comment`. Older decisions may still be binding. |
 | **Tools and resources** | Shell and MCP tools (always including `aixle-tools`), attached tools, repositories, input assets **with their paths**, skills. | Attached resources are listed for the agent, but nothing tells it *which one to use for this step*. The instructions do. |
 | **Config items** | Names, types and descriptions of secrets and variables. **Never their values.** | Tell the agent which item to read, by name, with `get_config_item`. Never paste a secret into instructions. |
 
-The whole context has a budget of roughly 6,000 tokens. Over that, previous steps, board comments, tools, skills and repositories are compressed first. Your instructions and the rules are kept.
+Flow's generated context has a soft budget of roughly 6,000 estimated tokens. Over that, previous-step data may be omitted and other summaries shortened. Full-read references remain available. Tool responses, file reads and the rest of the session are outside that budget.
 
 ---
 
@@ -76,7 +76,7 @@ findings) or Merge and deploy (clean).
 
 ## Inputs
 - The card: read the full description and all comments with `board_get_task` and `board_get_comments`
-  (the context shows only the first 500 characters).
+  (descriptions over 1,500 characters are fetched separately).
 - The repository at `/workspace/repo/`.
 - If the card has no PR link, stop: post a `blocked` comment saying so, move the card to Blocked,
   and finish.
@@ -198,7 +198,7 @@ These come from running a large board of agent workflows day to day. Each one is
 
 **Don't let the agent trust a success it didn't check.** Some calls return success without doing what was asked. Tell the agent to read the result back ("re-read the card and confirm its column"), not to trust the response.
 
-**Keep what matters in the first lines.** Card descriptions are cut at 500 characters in the context. Put the decision, the acceptance criteria or the link first.
+**Keep what matters in the first lines.** Card descriptions over 1,500 characters are fetched separately. Put the decision, the acceptance criteria or the link first.
 
 **Keep a copy before you edit a long step.** Save the old text somewhere before replacing it, so a bad edit can be undone in one paste.
 
@@ -310,6 +310,6 @@ Then re-read the card, confirm its column, and call `finish_session`.
 | "Output validation failed" after the step | The agent didn't write a required output, or wrote it under another name | Put the exact path in "Done when" and in the steps |
 | The agent says a file isn't there | It looked outside `/workspace/assets/`, or the file is a card attachment (not mounted) | Give the full path. For card files, tell it to use `board_get_task_assets`. |
 | A later step "doesn't know" what an earlier one did | Only the earlier step's note (500 characters) is shared. Its files need Run after. | Write the result to an output, and `@` it in the later step. |
-| The agent acts on an outdated decision | It read the card description (cut at 500 characters), not the latest comment | Put the current decision at the top of the description, or tell it to read comments first |
+| The agent acts on an outdated decision | It did not read the relevant decision comment or a shortened workflow result | Put the current decision at the top of the description, or tell it to read comments first |
 | The step "finished" but skipped a required checklist item | Required sub-steps aren't enforced | Add "don't finish until every sub-step is marked" to the instructions |
 | The agent uses the wrong server or tool | Several are attached and the prompt doesn't say which | Name the one to use for this step |

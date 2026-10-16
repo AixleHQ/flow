@@ -13,6 +13,18 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: agents can page through comment previews and retrieve any comment
+  in full, including decisions on older pages.
+- **Workflows**: workflow owners can require receipts from successful recorded
+  tool executions before unattended sessions report completion.
+
+### Fixed
+- **Sessions & Runs**: shortened workflow notes and structured data include a
+  full-read reference; JSON previews are kept whole or omitted with a reference.
+- **Agents**: unattended instructions distinguish minor assumptions from missing
+  essential requirements or unresolved conflicts, which must report failure.
+
 ## [1.2.2] - 2026-10-15
 
 ### Changed
