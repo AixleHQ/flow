@@ -4,7 +4,7 @@ module PersonalTools
   class ReorderBoardColumns < Base
     tool do
       display_name "Reorder Board Columns"
-      description "Set board column order by passing column ids in the desired order. Requires project-admin (owner)."
+      description "Set board column order by passing column ids in the desired order."
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true

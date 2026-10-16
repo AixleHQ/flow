@@ -402,7 +402,7 @@ module Templates
       end
       if @plan.board_action == "skip"
         install.setup_items.create!(kind: "board", ref: "board", position: @plan.checklist.size,
-                                    detail: { "reason" => "Only the project owner can apply the template's board." })
+                                    detail: { "reason" => "You cannot change this project's board." })
       end
     end
 

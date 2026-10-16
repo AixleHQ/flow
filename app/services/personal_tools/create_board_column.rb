@@ -4,7 +4,7 @@ module PersonalTools
   class CreateBoardColumn < Base
     tool do
       display_name "Create Board Column"
-      description "Add a column to a project's board. Requires project-admin (owner). " \
+      description "Add a column to a project's board. " \
                   "A given position inserts there, pushing the columns at and after it one " \
                   "place right; omitting it appends."
       audience :user

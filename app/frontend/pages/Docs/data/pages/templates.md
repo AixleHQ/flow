@@ -37,8 +37,8 @@ are not). Then:
   copy** (it gets a `(2)` or `_2` suffix) or **Use existing**.
 
 Installing the same template twice with nothing changed reuses what is already
-there instead of duplicating it. Adding columns to an existing board needs the
-project owner; for anyone else the board part is skipped and noted.
+there instead of duplicating it. A board template adds its missing columns to
+the project's existing board.
 
 ## After installing: the setup checklist
 

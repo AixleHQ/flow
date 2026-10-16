@@ -12,8 +12,8 @@ module PersonalTools
       description "Create a project's board from a preset — required before any other board tool works, " \
                   "since a project starts without one. Presets: simple_kanban (Backlog / In Progress / Done), " \
                   "dev_team (7 columns: backlog through tech design, implementation, code review, QA, release), " \
-                  "full_sdlc (19 columns: design, tech design, dev, QA, UAT, release). Requires project-admin " \
-                  "(owner). Rejected if the project already has a board — edit that one with the column tools."
+                  "full_sdlc (19 columns: design, tech design, dev, QA, UAT, release). Rejected if the " \
+                  "project already has a board — edit that one with the column tools."
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id (from list_projects).", required: true

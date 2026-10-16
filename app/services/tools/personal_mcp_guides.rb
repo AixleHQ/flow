@@ -275,8 +275,8 @@ module Tools
             it exists. `setup_board` creates one from a preset:
             `simple_kanban` (3 columns), `dev_team` (7), `full_sdlc` (19).
           - `list_board_columns`, `create_board_column`, `update_board_column`,
-            `reorder_board_columns`, `delete_board_column` shape it (all
-            project-admin). A column with tasks cannot be deleted.
+            `reorder_board_columns`, `delete_board_column` shape it. A column
+            with tasks cannot be deleted.
           - `create_board_task` puts work on it; `move_board_task` between
             columns is what a column trigger reacts to.
           - Files on a card: `create_task_asset_upload` returns an upload URL,
