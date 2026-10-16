@@ -164,6 +164,46 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_includes content, "`board_get_comments`"
   end
 
+  test "a child task identifies its epic without copying the epic or sibling history" do
+    epic = create(:board_task, board: @board, board_column: @column, task_type: :epic,
+      title: "Preserve the billing contract", description: "Parent specification. " * 2000)
+    create(:task_comment, board_task: epic, author: @user, body: "Do not change /billing")
+    create_list(:board_task, 3, board: @board, board_column: @column, parent_task: epic,
+      title: "Unrelated sibling detail")
+    task = create(:board_task, board: @board, board_column: @column, parent_task: epic)
+
+    content = context_for(task)
+
+    assert_includes content, "- **Epic:** ##{epic.number} Preserve the billing contract (id: #{epic.id})"
+    assert_not_includes content, "Parent specification."
+    assert_not_includes content, "Do not change /billing"
+    assert_not_includes content, "Unrelated sibling detail"
+  end
+
+  test "a task without an epic names none" do
+    create(:board_task, board: @board, board_column: @column, task_type: :epic, title: "Other epic")
+    task = create(:board_task, board: @board, board_column: @column)
+
+    content = context_for(task)
+
+    assert_not_includes content, "**Epic:**"
+    assert_not_includes content, "Other epic"
+  end
+
+  test "a parent reference outside the board does not expose its epic" do
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    other_column = create(:board_column, board: other_board)
+    epic = create(:board_task, board: other_board, board_column: other_column, task_type: :epic,
+      title: "Private foreign epic")
+    task = create(:board_task, board: @board, board_column: @column)
+    task.update_column(:parent_task_id, epic.id)
+
+    content = context_for(task)
+
+    assert_not_includes content, "Private foreign epic"
+    assert_not_includes content, "**Epic:**"
+  end
+
   # -- AC #5: BUILDERS registration position --
 
   test "BoardContext is in BUILDERS after WorkflowContext and before Tools" do
@@ -175,5 +215,14 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_not_nil bc_idx, "BoardContext must be in BUILDERS"
     assert_operator bc_idx, :>, wf_idx, "BoardContext must be after WorkflowContext"
     assert_operator bc_idx, :<, tools_idx, "BoardContext must be before Tools"
+  end
+
+  private
+
+  def context_for(task)
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
+    step_run = create(:step_run, :running, workflow_run: run, step: @step)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
+    ContextBuilders::BoardContext.new(session).build.first.content
   end
 end

@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
+  `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
+
 ### Changed
 - **Tasks**: any project member who is not a viewer can set up a board and add,
   rename, reorder or delete its columns from the personal MCP server, and a board
@@ -29,6 +33,9 @@ governance, community health — carry none.
 - **Sign-in & onboarding**: a viewer's onboarding shows a preview of one of the
   company's workflows and its first steps. It showed the generic text whenever
   that workflow had steps, and could pick an archived workflow.
+- **Tasks**: `board_get_comments` filtered by human author returns people's
+  comments. The only human value it offered, `user`, matched nothing; it now
+  accepts `human` (and `system`), and `user` still works as an alias.
 
 ## [1.2.2] - 2026-10-15
 

@@ -57,11 +57,24 @@ a project created there has no board until it runs.
 
 When a board-triggered workflow run starts, the agent receives:
 
-- Task title, description, type, priority, tags.
-- The five most recent comments (first 200 characters each); the full thread through `board_get_comments`.
-- The task's attachments, through `board_get_task_assets` (they are not mounted in the container).
-- Task transitions (movement history).
-- Column purpose (so the agent knows the stage it's working in).
+- Task title, number, internal id, column, priority, tags and assignee.
+- For a subtask, its parent epic's number, title and internal id.
+- The complete description when it is at most 1,500 characters; otherwise a
+  pointer to read it with `board_get_task`, without a truncated copy.
+- A pointer to the task's comments. They are not copied into the context; the
+  agent reads them with `board_get_comments` (`author_type: "human"` for people's
+  comments).
+- Board column names, with the current column marked.
+
+The epic's description and comments, its other subtasks and their comments are
+not in the context. When a step depends on them, say so in its instructions:
+`board_get_task` and `board_get_comments` read the epic, and
+`board_list_tasks(parent_task_id: …)` lists its subtasks. Linking a task to an
+epic does not order their runs or share their branches: if a subtask builds on
+another one's PR, name that PR.
+
+The task's attachments are available through `board_get_task_assets` (they are
+not mounted in the container).
 
 This is the **BoardContext** builder — one of the layers in the agent
 context stack. See the Agents page (How context is built) for the full
