@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Sign-in & onboarding**: the onboarding page for a viewer looks up the
+  workflow it previews in one query instead of one per project, and no longer
+  shows an archived workflow.
+
 ## [1.2.2] - 2026-10-15
 
 ### Changed

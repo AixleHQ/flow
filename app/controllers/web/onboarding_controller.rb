@@ -80,7 +80,7 @@ class Web::OnboardingController < Web::ApplicationController
   def build_viewer_workflow_preview(company)
     return nil if company.nil?
 
-    workflow = company.projects.flat_map(&:workflows).first
+    workflow = company.workflows.active.order(:id).first
     return nil if workflow.nil?
 
     steps_assoc = workflow.respond_to?(:steps) ? workflow.steps : []

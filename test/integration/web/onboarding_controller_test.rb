@@ -45,6 +45,46 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     assert_equal "completed", viewer.company_memberships.sole.reload.onboarding_state
   end
 
+  test "viewer workflow preview loads workflows in one query whatever the project count" do
+    sign_in_as(create_viewer)
+    workflows = Array.new(3) { create(:workflow, scope: create(:project, company: @company, owner: @user)) }
+
+    queries = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+      queries << payload[:sql]
+    end
+
+    begin
+      get onboarding_path
+    ensure
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+    end
+
+    assert_inertia_page "Onboarding/OnboardingPage"
+    assert_equal 1, queries.count { |sql| sql.match?(/FROM "workflows"/) }, queries.grep(/FROM "workflows"/).inspect
+    assert_inertia_props { |props| assert_equal workflows.first.name, props[:viewerWorkflowPreview][:workflowName] }
+  end
+
+  test "viewer workflow preview skips archived workflows" do
+    sign_in_as(create_viewer)
+    project = create(:project, company: @company, owner: @user)
+    create(:workflow, scope: project, deleted_at: Time.current)
+    live = create(:workflow, scope: project)
+
+    get onboarding_path
+
+    assert_inertia_props { |props| assert_equal live.name, props[:viewerWorkflowPreview][:workflowName] }
+  end
+
+  test "viewer workflow preview is nil when every workflow is archived" do
+    sign_in_as(create_viewer)
+    create(:workflow, scope: create(:project, company: @company, owner: @user), deleted_at: Time.current)
+
+    get onboarding_path
+
+    assert_inertia_props { |props| assert_nil props[:viewerWorkflowPreview] }
+  end
+
   test "non-viewer cannot complete at step2 without agent credentials (silent no-op)" do
     membership = @user.company_memberships.sole
     membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
@@ -60,5 +100,14 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
     assert_equal "completed", membership.reload.onboarding_state
+  end
+
+  private
+
+  def create_viewer
+    create(:user, :viewer, company: @company, onboarding_state: "step2",
+                           position: "dev", preferred_agent_language: "en",
+                           email: "viewer-preview@ext.com",
+                           password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
   end
 end
