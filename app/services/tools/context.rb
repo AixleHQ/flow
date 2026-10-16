@@ -53,6 +53,7 @@ module Tools
           providers = Set.new(scope.distinct.pluck(:provider).map(&:to_s))
           providers << Trackers::CAPABILITY if project && ProjectTracker.usable.for_project(project).exists?
           providers << Chat::CAPABILITY if providers.intersect?(Chat::PROVIDERS.keys.to_set)
+          providers << PullRequests::CAPABILITY if providers.intersect?(PullRequests::PROVIDERS.keys.to_set)
           providers
         end
       end

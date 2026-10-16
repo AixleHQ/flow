@@ -251,6 +251,14 @@ class Integration < ApplicationRecord
     bitbucket_installation&.workspace_slug.presence || settings&.dig("workspace_slug")
   end
 
+  # ----- Pull-request tools (GitLab, Bitbucket) -----
+
+  # Merging is on unless a connection turns it off — the same default Azure
+  # connections have (docs/design/bitbucket-integration.md §4.9).
+  def pull_request_merge_enabled?
+    settings.to_h["pull_request_merge"] != false
+  end
+
   # ----- Coder accessors -----
 
   def coder_url
