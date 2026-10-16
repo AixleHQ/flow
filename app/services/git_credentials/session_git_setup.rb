@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module GitCredentials
-  # Everything a container needs to clone, fetch and push its GitHub and GitLab
+  # Everything a container needs to clone, fetch and push its GitHub, GitLab and Bitbucket
   # repositories without a token ever sitting in the checkout — the design
-  # AzureDevops::SessionGitSetup established, for the other two hosts:
+  # AzureDevops::SessionGitSetup established, for the other hosts:
   #
   # - the CLONE authenticates with an `http.extraheader` read from the process
   #   environment through `--config-env`, filled from a 0600 file that is deleted

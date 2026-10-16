@@ -101,6 +101,33 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_not_includes gitlab_content, "`gh`"
   end
 
+  test "build sends GitHub, GitLab and Bitbucket pull requests to the pull_request tools" do
+    gitlab = create(:integration, :gitlab, company: @company, connected_by: @user)
+    gitlab_session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
+    gitlab_session.repositories << create(:repository, scope: @project, integration: gitlab, full_name: "team/service")
+    bitbucket = create(:repository, :bitbucket)
+    bitbucket_session = create(:terminal_session, :agent_session, user: @user, project: bitbucket.scope, mode: "interactive")
+    bitbucket_session.repositories << bitbucket
+    github_session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
+    github_session.repositories << create(:repository, scope: @project, integration: @integration, full_name: "acme/api")
+
+    gitlab_content = ContextBuilders::Resources.new(gitlab_session.reload).build.first.content
+    bitbucket_content = ContextBuilders::Resources.new(bitbucket_session.reload).build.first.content
+    github_content = ContextBuilders::Resources.new(github_session.reload).build.first.content
+
+    assert_includes gitlab_content, "Pull requests on GitLab repositories"
+    assert_includes gitlab_content, "`pull_request_*` tools"
+    assert_includes bitbucket_content, "Bitbucket repositories authenticate through a credential helper"
+    assert_includes bitbucket_content, "Pull requests on Bitbucket repositories"
+    assert_includes bitbucket_content, "`expected_head_sha`"
+    assert_includes gitlab_content, "There is no `glab` in this session."
+    assert_includes bitbucket_content, "There is no Bitbucket CLI in this session."
+    assert_includes github_content, "Pull requests on GitHub repositories"
+    assert_includes github_content, "open, review and merge pull requests with the `pull_request_*` tools"
+    assert_not_includes github_content, "glab"
+    assert_includes github_content, "GitHub repositories authenticate through a credential helper"
+  end
+
   test "build shows an em dash for repositories without a purpose" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive")

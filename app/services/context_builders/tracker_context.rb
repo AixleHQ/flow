@@ -35,7 +35,23 @@ module ContextBuilders
         "this tracker unless you pass another `tracker`; read the issue in full with `tracker_get_issue`."
       ]
       lines += [ "", "Comment:", "", "> #{tracker.dig('comment', 'text').to_s.gsub("\n", "\n> ")}" ] if tracker.dig("comment", "text").present?
+      lines += [ "", code_linking(issue) ] if code_linking?(issue)
       lines.join("\n")
+    end
+
+    # Jira (and the hosts' own issue links) attach branches, commits and pull
+    # requests to an issue by finding its key in their names — no integration
+    # of ours is involved, so the names are the whole mechanism.
+    def code_linking(issue)
+      key = (issue["key"].presence || issue["id"]).to_s
+      branch = key.gsub(/[^A-Za-z0-9._-]+/, "-").delete_prefix("-")
+      "When you change code for this issue, start branch names with `#{branch}` (`#{branch}-short-description`) " \
+        "and begin pull-request titles and commit messages with `#{key}` (`#{key}: …`), so the issue links to the work."
+    end
+
+    def code_linking?(issue)
+      (issue["key"].presence || issue["id"]).present? &&
+        session.repositories.joins(:integration).where(integrations: { provider: Repository::CODE_HOST_PROVIDERS }).exists?
     end
 
     def issue_label(issue)

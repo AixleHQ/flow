@@ -41,6 +41,48 @@ FactoryBot.define do
       end
     end
 
+    # Token mode with a workspace access token (a bot, so no account uuid).
+    # `:bitbucket_api_token` is a user's scoped API token instead.
+    trait :bitbucket do
+      provider { :bitbucket }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+
+      after(:build) do |integration|
+        integration.credentials_data = { "token" => "bb-access-token-#{SecureRandom.hex(8)}" }
+        integration.settings = {
+          "auth_mode" => "token", "token_kind" => "access_token",
+          "workspace_uuid" => "{8f1d6b2a-0000-4000-8000-00000000b17b}", "workspace_slug" => "acme"
+        }
+      end
+    end
+
+    trait :bitbucket_api_token do
+      bitbucket
+
+      after(:build) do |integration|
+        integration.settings = integration.settings.merge(
+          "token_kind" => "api_token", "account_uuid" => "{4a5b6c7d-0000-4000-8000-0000000000aa}"
+        )
+      end
+    end
+
+    # App mode: draws on an installation bound to the integration's company.
+    trait :bitbucket_app do
+      provider { :bitbucket }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+      bitbucket_installation { association(:bitbucket_installation, :bound, :with_token, company: company) }
+
+      after(:build) do |integration|
+        installation = integration.bitbucket_installation
+        integration.credentials_data = {}
+        integration.settings = {
+          "auth_mode" => "app",
+          "workspace_uuid" => installation&.workspace_uuid,
+          "workspace_slug" => installation&.workspace_slug
+        }.compact
+      end
+    end
+
     # A Linear connection with an API key, covering the ENG and OPS teams of
     # FakeLinear::Api's workspace.
     trait :linear do

@@ -29,6 +29,12 @@ module Tools
       # only thing they need. Mirrors the Coder gating exactly. Azure Boards work
       # items go through the tracker_* tools instead.
       azure_integration_connected: ->(ctx) { ctx.connected?(:azure_devops) },
+      # pull_request_* tools — like the Azure repository tools, each acts on a
+      # repository attached to the session, so attaching a GitLab or Bitbucket
+      # repository is the opt-in.
+      pull_request_repositories_attached: lambda { |ctx|
+        ctx.repository_providers.intersect?(PullRequests::PROVIDERS.keys.to_set)
+      },
       # tracker_* tools — a run a tracker event started has its tracker's tools
       # without anyone attaching them (docs/design/task-tracker-integrations.md §7.3).
       tracker_run: lambda { |ctx|

@@ -1482,4 +1482,192 @@ describe('IntegrationsContent', () => {
       screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
     ).toBeInTheDocument();
   });
+
+  describe('Atlassian entry and Bitbucket', () => {
+    const bitbucketIntegration = (overrides: Partial<Integration> = {}) =>
+      makeIntegration({
+        id: 21,
+        name: 'acme',
+        provider: 'bitbucket',
+        scopeIndicator: 'project',
+        bitbucketAuthMode: 'token',
+        bitbucketWorkspace: 'acme',
+        bitbucketTokenKind: 'access_token',
+        ...overrides,
+      });
+
+    const renderProject = (integrations: Integration[] = [], appModeEnabled = false) =>
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={integrations}
+          jira={{ oauthEnabled: false }}
+          bitbucket={{ appModeEnabled, installUrl: appModeEnabled ? 'https://developer.atlassian.com/install' : null }}
+        />,
+        { props: settingsProps },
+      );
+
+    const openChooser = async () => {
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Atlassian' }));
+      return screen.findByRole('dialog', { name: 'Connect Atlassian' });
+    };
+
+    it('offers one Atlassian entry instead of separate Jira and Bitbucket ones', async () => {
+      renderProject([makeIntegration()]);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+      expect(await screen.findByRole('menuitem', { name: 'Atlassian' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Jira' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Bitbucket' })).not.toBeInTheDocument();
+    });
+
+    it('offers Atlassian in the empty state of a project', () => {
+      renderProject();
+
+      expect(screen.getByRole('button', { name: 'Atlassian' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Jira' })).not.toBeInTheDocument();
+    });
+
+    it('does not offer Atlassian on the company page', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Company Integrations"
+          basePath="/company/integrations"
+          integrations={[makeIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      expect(await screen.findByRole('menuitem', { name: 'GitHub' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Atlassian' })).not.toBeInTheDocument();
+    });
+
+    it('the chooser shows both products and which this project already connected', async () => {
+      renderProject([bitbucketIntegration()]);
+
+      const chooser = await openChooser();
+
+      const bitbucketCard = within(chooser).getByRole('button', { name: 'Connect Bitbucket' });
+      expect(within(bitbucketCard).getByText('Connected')).toBeInTheDocument();
+      expect(within(bitbucketCard).getByText('Repositories, pull requests and CI gates')).toBeInTheDocument();
+      const jiraCard = within(chooser).getByRole('button', { name: 'Connect Jira' });
+      expect(within(jiraCard).queryByText('Connected')).not.toBeInTheDocument();
+      expect(
+        within(jiraCard).getByText('Issues as trackers: tracker triggers and the tracker_* tools'),
+      ).toBeInTheDocument();
+    });
+
+    it('the Jira card opens the Jira flow, and closing it comes back to the chooser', async () => {
+      renderProject();
+
+      const chooser = await openChooser();
+      await userEvent.click(within(chooser).getByRole('button', { name: 'Connect Jira' }));
+
+      const jira = await screen.findByRole('dialog', { name: 'Connect Jira' });
+      expect(within(jira).getByRole('textbox', { name: 'Jira site' })).toBeInTheDocument();
+      await userEvent.click(within(jira).getByRole('button', { name: 'Cancel' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Connect Atlassian' })).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Connect Jira' })).not.toBeInTheDocument());
+    });
+
+    it('the Bitbucket card opens the Bitbucket flow on the token path when the deployment has no app', async () => {
+      renderProject();
+
+      const chooser = await openChooser();
+      await userEvent.click(within(chooser).getByRole('button', { name: 'Connect Bitbucket' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Bitbucket' });
+
+      expect(within(dialog).getByRole('radio', { name: /Install the Aixle Flow app/ })).toBeDisabled();
+      expect(within(dialog).getByRole('radio', { name: /Paste an access token or API token/ })).toBeChecked();
+      expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Workspace' }), 'acme');
+      await userEvent.type(within(dialog).getByLabelText('Token'), 'bb-secret');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/projects/42/integrations',
+        { provider: 'bitbucket', workspace: 'acme', token: 'bb-secret' },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('keeps the Bitbucket dialog open with each field’s reason when Bitbucket refuses', async () => {
+      renderProject();
+
+      const chooser = await openChooser();
+      await userEvent.click(within(chooser).getByRole('button', { name: 'Connect Bitbucket' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Bitbucket' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Workspace' }), 'acme');
+      await userEvent.type(within(dialog).getByLabelText('Token'), 'bb-bad{Enter}');
+
+      const options = vi.mocked(router.post).mock.lastCall?.[2] as
+        { onError?: (errors: Record<string, string>) => void } | undefined;
+      act(() => options?.onError?.({ token: 'Bitbucket rejected this token.' }));
+
+      expect(within(dialog).getAllByText('Bitbucket rejected this token.').length).toBeGreaterThan(0);
+      expect(screen.getByRole('dialog', { name: 'Connect Bitbucket' })).toBeInTheDocument();
+    });
+
+    it('opens on the app path when the deployment registered the Forge app', async () => {
+      renderProject([], true);
+
+      const chooser = await openChooser();
+      await userEvent.click(within(chooser).getByRole('button', { name: 'Connect Bitbucket' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Bitbucket' });
+
+      expect(within(dialog).getByRole('radio', { name: /Install the Aixle Flow app/ })).toBeChecked();
+      expect(within(dialog).queryByLabelText('Token')).not.toBeInTheDocument();
+    });
+
+    it('a token connection names its workspace and kind, and replaces its token with the Bitbucket payload', async () => {
+      renderProject([bitbucketIntegration()]);
+
+      expect(screen.getByText('acme · access token')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for acme' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+      expect(within(dialog).getByText(/Bitbucket access token or API token for acme/)).toBeInTheDocument();
+      await userEvent.type(within(dialog).getByLabelText('Token'), 'bb-new');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Replace' }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/42/integrations/21',
+        { token: 'bb-new' },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('an app connection can be tested but has no token to replace, and says when the app went silent', async () => {
+      renderProject([
+        bitbucketIntegration({
+          bitbucketAuthMode: 'app',
+          bitbucketTokenKind: null,
+          bitbucketInstallationStatus: 'active',
+          bitbucketLastHeardAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+        }),
+      ]);
+
+      expect(screen.getByText('acme · Aixle Flow app')).toBeInTheDocument();
+      expect(screen.getByText('Aixle Flow app silent for 40 min')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Replace token for acme' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Test connection for acme' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/projects/42/integrations/21/test_connection',
+        {},
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('an app connection whose app was removed says so', () => {
+      renderProject([bitbucketIntegration({ bitbucketAuthMode: 'app', bitbucketInstallationStatus: 'uninstalled' })]);
+
+      expect(screen.getByText('The Aixle Flow app was removed from this workspace')).toBeInTheDocument();
+    });
+  });
 });

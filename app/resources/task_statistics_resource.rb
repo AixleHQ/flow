@@ -19,7 +19,7 @@ class TaskStatisticsResource < ApplicationResource
   # `stale` is the third terminal state a CI gate can end in (reconciliation gave up
   # without a provider verdict) — the Analytics Waits panel counts it, so the
   # generated type has to be able to express it.
-  typelize "Array<{ id: number; gateType: \"github_checks_completed\" | \"github_workflow_completed\" | \"gitlab_pipeline_completed\"; status: \"pending\" | \"resolved\" | \"stale\"; createdAt: string; resolvedAt: string | null; durationSeconds: number | null }>"
+  typelize "Array<{ id: number; gateType: \"github_checks_completed\" | \"github_workflow_completed\" | \"gitlab_pipeline_completed\" | \"azure_devops_build_completed\" | \"azure_devops_pr_policies_satisfied\" | \"bitbucket_pr_statuses_completed\"; status: \"pending\" | \"resolved\" | \"stale\"; createdAt: string; resolvedAt: string | null; durationSeconds: number | null }>"
   attribute :gate_stats do |result|
     result.gate_stats.map do |w|
       {

@@ -40,6 +40,7 @@ class PublicRepositoryService
 
   GITHUB_API = "https://api.github.com"
   GITLAB_API = "https://gitlab.com/api/v4"
+  BITBUCKET_API = "https://api.bitbucket.org/2.0"
   TIMEOUT = 10
   MAX_BYTES = 256 * 1024
   # Paths GitHub and GitLab hang off a repository url (".../tree/main",
@@ -61,7 +62,8 @@ class PublicRepositoryService
   end
 
   # @param input [String] "https://github.com/rails/rails", "github.com/rails/rails",
-  #   "https://gitlab.com/group/sub/app", or a bare "owner/repo" (assumed GitHub).
+  #   "https://gitlab.com/group/sub/app", "https://bitbucket.org/workspace/repo",
+  #   or a bare "owner/repo" (assumed GitHub).
   # @return [Result]
   # @raise [Error] one of the subclasses above; every message is user-facing.
   def self.resolve(input)
@@ -74,6 +76,7 @@ class PublicRepositoryService
     case provider
     when "github" then resolve_github(full_name)
     when "gitlab" then resolve_gitlab(full_name)
+    when "bitbucket" then resolve_bitbucket(full_name)
     end
   end
 
@@ -84,13 +87,15 @@ class PublicRepositoryService
   # decides which API is asked and which host the clone dials.
   def parse(input)
     raw = input.to_s.strip
-    raise UnsupportedHost, "Enter a GitHub or GitLab repository url" if raw.blank?
+    raise UnsupportedHost, "Enter a GitHub, GitLab or Bitbucket repository url" if raw.blank?
 
-    return parse_bare(raw) unless raw.include?("/") && raw.match?(%r{\A(?:[a-z][a-z0-9+.-]*://|(?:www\.)?(?:github|gitlab)\.com/)}i)
+    unless raw.include?("/") && raw.match?(%r{\A(?:[a-z][a-z0-9+.-]*://|(?:www\.)?(?:(?:github|gitlab)\.com|bitbucket\.org)/)}i)
+      return parse_bare(raw)
+    end
 
     uri = parse_uri(raw)
     provider = Repository::PUBLIC_HOSTS[uri.host.to_s.downcase.delete_prefix("www.")]
-    raise UnsupportedHost, "Only github.com and gitlab.com repositories can be added by url" if provider.blank?
+    raise UnsupportedHost, "Only github.com, gitlab.com and bitbucket.org repositories can be added by url" if provider.blank?
     raise UnsupportedHost, "Repository url must use https" unless uri.scheme.nil? || uri.scheme == "https"
 
     [ provider, full_name_from_path(provider, uri.path) ]
@@ -104,7 +109,7 @@ class PublicRepositoryService
 
   def parse_bare(raw)
     segments = raw.split("/").reject(&:blank?)
-    raise UnsupportedHost, "Enter a GitHub or GitLab repository url" unless segments.size == 2
+    raise UnsupportedHost, "Enter a GitHub, GitLab or Bitbucket repository url" unless segments.size == 2
 
     [ "github", validated_full_name(segments.join("/")) ]
   end
@@ -119,8 +124,9 @@ class PublicRepositoryService
     validated_full_name(segments.join("/"))
   end
 
-  # GitHub deep links are always owner/repo/<verb>/…; GitLab puts everything past
-  # the project behind a "/-/" separator, which also makes subgroups safe to keep.
+  # GitHub and Bitbucket deep links are always owner/repo/<verb>/… (Bitbucket has
+  # no nesting at all); GitLab puts everything past the project behind a "/-/"
+  # separator, which also makes subgroups safe to keep.
   def truncate_subpath(provider, segments)
     if provider == "gitlab"
       dash = segments.index("-")
@@ -172,6 +178,24 @@ class PublicRepositoryService
     )
   end
 
+  # Anonymous, so it answers only for a public repository: a private one is a
+  # 403 or 404 here, which are reported as "not found or not public" alike.
+  def resolve_bitbucket(full_name)
+    workspace, slug = full_name.split("/", 2)
+    uri = URI.parse("#{BITBUCKET_API}/repositories/#{ERB::Util.url_encode(workspace)}/#{ERB::Util.url_encode(slug)}")
+    data = get_json(uri, { "Accept" => "application/json" }, "Bitbucket")
+    raise NotPublic, "#{full_name} is a private repository — connect a Bitbucket integration instead" unless data["is_private"] == false
+
+    canonical = data["full_name"].presence || full_name
+    Result.new(
+      provider: "bitbucket",
+      full_name: canonical,
+      default_branch: data.dig("mainbranch", "name").presence || "main",
+      clone_url: "https://bitbucket.org/#{canonical}.git",
+      description: data["description"].presence
+    )
+  end
+
   def github_headers
     headers = {
       "Accept" => "application/vnd.github+json",
@@ -195,6 +219,8 @@ class PublicRepositoryService
     when Net::HTTPTooManyRequests
       raise TransportError, "#{label} rate limit reached — try again in a few minutes"
     when Net::HTTPForbidden
+      raise NotFound, "Repository not found on Bitbucket, or it is not public" if label == "Bitbucket"
+
       raise TransportError, forbidden_message(response, label)
     else
       raise TransportError, "#{label} returned #{response.code} for this repository"

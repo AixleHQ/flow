@@ -157,6 +157,41 @@ export function completeYoutrackPairingPath(id: ScalarType, options?: object): s
   return "/" + "integrations" + "/" + "youtrack" + "/" + "pairings" + "/" + id + "/" + "complete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /webhooks/bitbucket/forge/lifecycle(.:format) */
+export function bitbucketForgeLifecyclePath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "lifecycle" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/events(.:format) */
+export function bitbucketForgeEventsPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/heartbeat(.:format) */
+export function bitbucketForgeHeartbeatPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "heartbeat" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/uninstall(.:format) */
+export function bitbucketForgeUninstallPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "uninstall" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/ui/status(.:format) */
+export function bitbucketForgeStatusPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "ui" + "/" + "status" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/ui/connect(.:format) */
+export function bitbucketForgeConnectPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "ui" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/bitbucket/forge/ui/disconnect(.:format) */
+export function bitbucketForgeDisconnectPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "bitbucket" + "/" + "forge" + "/" + "ui" + "/" + "disconnect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /webhooks/slack/events(.:format) */
 export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1387,6 +1422,21 @@ export function integrationsYoutrackConnectPath(options?: object): string {
   return "/" + "integrations" + "/" + "youtrack" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/bitbucket/connect(.:format) */
+export function bitbucketConnectPath(options?: object): string {
+  return "/" + "integrations" + "/" + "bitbucket" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/bitbucket/connect/preview(.:format) */
+export function bitbucketConnectPreviewPath(options?: object): string {
+  return "/" + "integrations" + "/" + "bitbucket" + "/" + "connect" + "/" + "preview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /integrations/bitbucket/connect(.:format) */
+export function integrationsBitbucketConnectPath(options?: object): string {
+  return "/" + "integrations" + "/" + "bitbucket" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /integrations/azure_devops/oauth/callback(.:format) */
 export function azureDevopsOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "azure_devops" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1725,6 +1775,11 @@ export function companyProjectTrackersPath(project_id: ScalarType, options?: obj
 /** /company/projects/:project_id/trackers/:id(.:format) */
 export function companyProjectTrackerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "trackers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/bitbucket_attach(.:format) */
+export function companyProjectBitbucketAttachPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "bitbucket_attach" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/integrations/slack_oauth_start(.:format) */

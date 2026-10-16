@@ -58,7 +58,7 @@ they name a flow users would recognize.
 | **Skills** | Reusable know-how installed from a catalog or written by hand |
 | **Connectors** | External tool servers agents can call, from a catalog or added by hand |
 | **Repositories** | Linked Git repos the agent can work in and push to |
-| **Integrations** | Connected accounts: GitHub, GitLab, Linear, Slack, Coder |
+| **Integrations** | Connected accounts: GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder |
 
 ### Project — Admin
 

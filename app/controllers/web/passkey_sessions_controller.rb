@@ -31,7 +31,7 @@ class Web::PasskeySessionsController < Web::ApplicationController
     return render(json: { error: "account_deleted" }, status: :forbidden) if user.deleted?
 
     sign_in_or_prove(user, provider: provider)
-    render json: { ok: true, redirect_to: company_projects_path }
+    render json: { ok: true, redirect_to: take_pending_sign_in_path || company_projects_path }
   rescue Auth::IdentityResolver::SuperAdminProviderError
     render json: { error: "super_admin_password_only" }, status: :forbidden
   rescue Auth::Method::Failure

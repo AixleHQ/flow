@@ -332,7 +332,7 @@ describe('AddRepositoryModal', () => {
     expect(screen.queryByRole('heading', { name: 'Add Repository' })).not.toBeInTheDocument();
   });
 
-  it('labels GitHub vs GitLab integrations in the dropdown options', async () => {
+  it('labels GitHub, GitLab and Bitbucket integrations in the dropdown options', async () => {
     renderPage(
       <AddRepositoryModal
         opened
@@ -342,7 +342,11 @@ describe('AddRepositoryModal', () => {
       />,
       {
         props: {
-          integrations: [integration, { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' }],
+          integrations: [
+            integration,
+            { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' },
+            { id: 10, name: 'acme', provider: 'bitbucket', status: 'active' },
+          ],
         },
       },
     );
@@ -351,6 +355,7 @@ describe('AddRepositoryModal', () => {
 
     expect(await screen.findByRole('option', { name: 'Acme Org (GitHub)' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Other Org (GitLab)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'acme (Bitbucket)' })).toBeInTheDocument();
   });
 
   it('selecting an integration enables the repo field and reloads its repos', async () => {

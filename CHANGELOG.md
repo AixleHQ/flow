@@ -14,6 +14,29 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: connect Bitbucket Cloud. A workspace admin installs the Aixle
+  Flow app on the workspace and connects it from **Workspace settings → Aixle
+  Flow**; agents then act as the app's bot with short-lived tokens, and
+  Bitbucket reports CI as it finishes. A workspace, project or repository access
+  token, or a personal API token, connects without the app. Jira and Bitbucket
+  are now under one **Atlassian** entry in the Connect menu.
+- **Repositories**: attach Bitbucket repositories, and public repositories from
+  bitbucket.org, and clone and push them in sessions. They stay attached when the
+  repository or the workspace is renamed in Bitbucket.
+- **Repositories**: agents open, update, comment on, review and merge pull
+  requests on GitHub, GitLab and Bitbucket with the same `pull_request_*` tools.
+  A merge goes ahead only if the pull request is still at the commit the agent
+  reviewed, a call repeated after a timeout never opens a second pull request or
+  comment, and merging can be turned off per connection. A run started from a
+  tracker issue puts the issue key in its branch names and pull-request titles,
+  so Jira links them to the issue.
+- **Triggers & gates**: a `bitbucket_pr_statuses_completed` gate waits for every
+  build status on a Bitbucket pull request's head commit — Pipelines or any
+  other CI.
+- **Integrations**: operators who run their own Bitbucket app set
+  `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID` and
+  `BITBUCKET_FORGE_INSTALL_URL` (see `docs/reference/configuration.md` and
+  `bitbucket-app/README.md`). Without them Bitbucket connects with tokens only.
 - **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
   `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
 - **Sign-in & onboarding**: an admin can skip connecting an agent during

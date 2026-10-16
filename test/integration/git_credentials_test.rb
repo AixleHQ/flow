@@ -70,4 +70,52 @@ class GitCredentialsTest < ActionDispatch::IntegrationTest
     ask
     assert_response :unauthorized
   end
+
+  def attach_bitbucket(trait)
+    integration = create(:integration, trait, :active, company: @company, project: @project)
+    repo = create(:repository, :bitbucket, integration: integration, scope: @project, full_name: "acme/web")
+    @session.repositories << repo
+    [ integration, repo ]
+  end
+
+  test "vends a Bitbucket access token under the access-token username" do
+    with_bitbucket_settings
+    integration, repo = attach_bitbucket(:bitbucket)
+
+    ask(repository_id: repo.id, url: "https://bitbucket.org/acme/web.git")
+
+    assert_response :success
+    assert_equal({ "username" => "x-token-auth", "password" => integration.credentials_data["token"] }, response.parsed_body)
+  end
+
+  test "vends a Bitbucket API token under its own username" do
+    with_bitbucket_settings
+    _integration, repo = attach_bitbucket(:bitbucket_api_token)
+
+    ask(repository_id: repo.id, url: "https://bitbucket.org/acme/web.git")
+
+    assert_equal "x-bitbucket-api-token-auth", response.parsed_body["username"]
+  end
+
+  test "vends the app's pushed token, and refuses once the app has gone silent" do
+    with_bitbucket_settings(app_mode: true)
+    integration, repo = attach_bitbucket(:bitbucket_app)
+    integration.bitbucket_installation.store_token!("forge-pushed", expires_at: 3.hours.from_now)
+
+    ask(repository_id: repo.id, url: "https://bitbucket.org/acme/web.git")
+    assert_equal({ "username" => "x-token-auth", "password" => "forge-pushed" }, response.parsed_body)
+
+    integration.bitbucket_installation.clear_token!
+    ask(repository_id: repo.id, url: "https://bitbucket.org/acme/web.git")
+    assert_response :forbidden
+  end
+
+  test "a Bitbucket repository's credential is not handed to another host" do
+    with_bitbucket_settings
+    _integration, repo = attach_bitbucket(:bitbucket)
+
+    ask(repository_id: repo.id, url: "https://github.com/acme/web.git")
+
+    assert_response :forbidden
+  end
 end

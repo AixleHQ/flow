@@ -8,12 +8,13 @@ class Repository < ApplicationRecord
   # dialled from there. Keep it to hosts PublicRepositoryService can verify.
   PUBLIC_HOSTS = {
     "github.com" => "github",
-    "gitlab.com" => "gitlab"
+    "gitlab.com" => "gitlab",
+    "bitbucket.org" => "bitbucket"
   }.freeze
 
   # Providers a repository can be cloned from. Integrations also cover Coder,
   # Slack and Jira, none of which host git.
-  CODE_HOST_PROVIDERS = %w[github gitlab azure_devops].freeze
+  CODE_HOST_PROVIDERS = %w[github gitlab azure_devops bitbucket].freeze
 
   # Azure project and repository names may contain spaces and other characters
   # the owner/repo format below rejects, and Azure identity is a triple of GUIDs
@@ -57,6 +58,7 @@ class Repository < ApplicationRecord
   validate :public_clone_url_is_anonymous, if: -> { public_source? && clone_url.present? && full_name.present? }
   validate :owner_matches_installation_account, if: -> { integration.present? && integration.github_app? }
   validate :azure_identity_is_complete, if: :azure_devops?
+  validate :bitbucket_identity_is_complete, if: :bitbucket?
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
   scope :for_integration, ->(integration) { where(integration: integration) }
@@ -97,6 +99,10 @@ class Repository < ApplicationRecord
     integration.present? && integration.provider.to_s == "azure_devops"
   end
 
+  def bitbucket?
+    integration.present? && integration.provider.to_s == "bitbucket"
+  end
+
   # Display halves of the Azure `full_name`. Never used to address the API —
   # that is external_organization_id / external_project_id / external_id.
   def azure_display_parts
@@ -112,7 +118,7 @@ class Repository < ApplicationRecord
     integration_id.nil? && integration.nil?
   end
 
-  # "github" / "gitlab" / nil. Integration-backed repositories take it from the
+  # "github" / "gitlab" / "bitbucket" / nil. Integration-backed repositories take it from the
   # integration; public ones from the clone host, which is allowlisted.
   def provider
     return integration.provider.to_s if integration.present?
@@ -135,6 +141,7 @@ class Repository < ApplicationRecord
     when "github" then self.clone_url = "https://github.com/#{full_name}.git"
     when "gitlab" then self.clone_url = "#{Gitlab::Host.web_base}/#{full_name}.git"
     when "azure_devops" then self.clone_url = azure_clone_url
+    when "bitbucket" then self.clone_url = "#{Bitbucket::AppConfig::WEB_HOST}/#{full_name}.git"
     end
   end
 
@@ -167,7 +174,7 @@ class Repository < ApplicationRecord
   def integration_hosts_code
     return if CODE_HOST_PROVIDERS.include?(integration.provider.to_s)
 
-    errors.add(:integration, "must be a GitHub, GitLab or Azure DevOps integration")
+    errors.add(:integration, "must be a GitHub, GitLab, Azure DevOps or Bitbucket integration")
   end
 
   # An Azure row is addressed by organization + project + repository GUID. A row
@@ -184,6 +191,16 @@ class Repository < ApplicationRecord
     return if integration.azure_project_selected?(external_project_id)
 
     errors.add(:external_project_id, "does not belong to any Azure project this connection covers")
+  end
+
+  # Bitbucket rows are addressed by workspace, project and repository UUID:
+  # `full_name` changes when either is renamed, the UUIDs do not. Every Bitbucket
+  # repository belongs to a project, and a null would defeat the unique index on
+  # the external identity.
+  def bitbucket_identity_is_complete
+    %i[external_organization_id external_project_id external_id].each do |attr|
+      errors.add(attr, "is required for a Bitbucket repository") if public_send(attr).blank?
+    end
   end
 
   # A public repository is cloned by running `git clone <clone_url>` in the

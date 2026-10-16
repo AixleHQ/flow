@@ -6,6 +6,7 @@ class RepositoryService
     when :github then Github::RepositoryService.new(integration)
     when :gitlab then Gitlab::RepositoryService.new(integration)
     when :azure_devops then AzureDevops::RepositoryService.new(integration)
+    when :bitbucket then Bitbucket::RepositoryService.new(integration)
     else raise "Unsupported provider: #{integration.provider}"
     end
   end

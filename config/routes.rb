@@ -70,6 +70,18 @@ Rails.application.routes.draw do
 
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
+  # The Aixle Flow Forge app's remote endpoints (bitbucket-app/manifest.yml).
+  # Every call carries a Forge Invocation Token; the UI ones come from the
+  # app's page in Bitbucket workspace settings.
+  scope "/webhooks/bitbucket/forge", controller: "webhooks/bitbucket_forge", as: :bitbucket_forge do
+    post :lifecycle
+    post :events
+    post :heartbeat
+    post :uninstall
+    post "ui/status", action: :status, as: :status
+    post "ui/connect", action: :connect, as: :connect
+    post "ui/disconnect", action: :disconnect, as: :disconnect
+  end
   post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
   post "/webhooks/slack/interactions", to: "webhooks/slack#interactions", as: :slack_interactions_webhook
   post "/webhooks/slack/commands", to: "webhooks/slack#commands", as: :slack_commands_webhook
@@ -450,6 +462,12 @@ Rails.application.routes.draw do
     # YouTrack app started.
     get "integrations/youtrack/connect", to: "integrations/youtrack_connect#show", as: :youtrack_connect
     post "integrations/youtrack/connect", to: "integrations/youtrack_connect#create"
+    # Where a signed-in user confirms the Connect a Bitbucket workspace
+    # administrator started in the Aixle Flow app; the pairing rides in the
+    # link's fragment and reaches these two in request bodies.
+    get "integrations/bitbucket/connect", to: "integrations/bitbucket_connect#show", as: :bitbucket_connect
+    post "integrations/bitbucket/connect/preview", to: "integrations/bitbucket_connect#preview", as: :bitbucket_connect_preview
+    post "integrations/bitbucket/connect", to: "integrations/bitbucket_connect#create"
     # Redirect URI on Aixle's Entra application for an administrator's sign-in.
     get "integrations/azure_devops/oauth/callback", to: "integrations/azure_devops_oauth#callback",
                                                     as: :azure_devops_oauth_callback
@@ -585,6 +603,9 @@ Rails.application.routes.draw do
           # `update` edits what a provider allows in place (Coder's pool
           # settings, a replacement GitLab/Coder/Azure token, Jira's projects);
           # a replacement token is verified against the provider first.
+          # Bitbucket app mode: connect to a workspace the company bound, or learn
+          # that the app has to be installed first.
+          post "integrations/bitbucket_attach", to: "bitbucket_installations#create", as: :bitbucket_attach
           resources :integrations, only: %i[index create update destroy] do
             collection do
               get :slack_oauth_start

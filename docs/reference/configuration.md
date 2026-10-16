@@ -221,7 +221,7 @@ stored on the integration row, not environment variables.
 | `GITHUB_APP_CLIENT_SECRET`     | no       | unset                         | The App's OAuth client secret, paired with `GITHUB_APP_CLIENT_ID`. |
 | `GITLAB_ENDPOINT`              | no       | `https://gitlab.com/api/v4`   | GitLab API base URL. Repositories clone from the same host. |
 | `GITLAB_WEBHOOK_BASE_URL`      | no       | `<protocol>://<domain>`       | Where GitLab posts pipeline events (`/webhooks/gitlab` is appended). Set it only when the deployment's own domain is not reachable from GitLab (a tunnel in development). A loopback host registers no hooks, and neither does a private one unless `GITLAB_ENDPOINT` is itself on a private host. |
-| `GIT_CREDENTIALS_URL`                   | no       | `<internal base>/agents/git/credentials`       | Where the in-container git credential helper asks for a short-lived GitHub or GitLab token. Never a public host: the request carries a per-session vending key. |
+| `GIT_CREDENTIALS_URL`                   | no       | `<internal base>/agents/git/credentials`       | Where the in-container git credential helper asks for a short-lived GitHub, GitLab or Bitbucket token. Never a public host: the request carries a per-session vending key. |
 
 None of the `GITHUB_APP_*` variables is needed to connect GitHub: a project can
 connect with a personal access token instead (stored encrypted per integration,
@@ -258,6 +258,27 @@ client id and one credential are present, or PAT mode is on.
 | `AZURE_DEVOPS_COMPLETION_POLL_INTERVAL` | no       | `1.0`                                          | Seconds between re-reads while confirming a pull-request completion (Azure merges asynchronously). |
 | `AZURE_DEVOPS_OPEN_TIMEOUT`             | no       | `5`                                            | Connection open timeout, in seconds.                       |
 | `AZURE_DEVOPS_READ_TIMEOUT`             | no       | `30`                                           | Response read timeout, in seconds.                         |
+
+### Bitbucket Cloud
+
+Bitbucket connects through the Aixle Flow Forge app installed on a workspace, or
+with a workspace/project/repository access token or a scoped API token pasted
+once (see `docs/user-guide/bitbucket.md` and `docs/operations/bitbucket-app.md`).
+Token mode needs nothing here. App mode is offered exactly when the three
+`BITBUCKET_FORGE_*` identity values are set — there is no enable flag. Each
+deployment registers its own Forge app: the app's remote endpoints point at one
+deployment, and invocations are verified against its app id and environment.
+
+| Variable                         | Required | Default | Purpose |
+| -------------------------------- | -------- | ------- | ------- |
+| `BITBUCKET_FORGE_APP_ID`         | no       | unset   | The Forge app id (`ari:cloud:ecosystem::app/<uuid>`). Invocations whose token is issued for another app are refused. |
+| `BITBUCKET_FORGE_ENVIRONMENT_ID` | no       | unset   | The Forge environment whose installations this deployment serves. Invocations from any other environment of the same app are refused. |
+| `BITBUCKET_FORGE_INSTALL_URL`    | no       | unset   | The app's sharing link from the Forge developer console, shown in the connect dialog. |
+| `BITBUCKET_FORGE_JWKS_URL`       | no       | `https://forge.cdn.prod.atlassian-dev.net/.well-known/jwks.json` | Keys that sign Forge invocation tokens. |
+| `BITBUCKET_TOKEN_MIN_REMAINING`  | no       | `300`   | Seconds of life an app token must have left to be handed out. Forge pushes tokens and cannot be asked for one, so a token closer to expiry fails fast instead. |
+| `BITBUCKET_MERGE_POLL_INTERVAL`  | no       | `1.0`   | Seconds between re-reads while confirming a merge Bitbucket accepted asynchronously. |
+| `BITBUCKET_OPEN_TIMEOUT`         | no       | `5`     | Connection open timeout, in seconds. |
+| `BITBUCKET_READ_TIMEOUT`         | no       | `30`    | Response read timeout, in seconds. |
 
 ### Jira
 

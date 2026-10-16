@@ -5,7 +5,8 @@ module PersonalTools
     tool do
       display_name "List Gates"
       description "List the gates on a board task — what a task reported as `pending_gates` " \
-                  "actually is. Gates are CI gates (GitHub checks/workflow, GitLab pipeline) " \
+                  "actually is. Gates are CI gates (GitHub checks/workflow, GitLab pipeline, Azure DevOps " \
+                  "build/policies, Bitbucket pull-request statuses) " \
                   "created and resolved by incoming CI webhooks, so there is deliberately no " \
                   "tool to create or resolve one by hand. A gate whose webhook never arrives is " \
                   "reconciled against the CI provider and, once past its TTL or unreadable, ends " \
