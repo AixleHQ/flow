@@ -7,9 +7,9 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  CONNECTABLE_PROVIDERS = %w[github gitlab coder slack azure_devops jira linear youtrack].freeze
+  CONNECTABLE_PROVIDERS = %w[github gitlab bitbucket coder slack azure_devops jira linear youtrack].freeze
 
-  enumerize :provider, in: %i[github gitlab linear coder slack teams azure_devops jira youtrack], predicates: true
+  enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -18,6 +18,8 @@ class Integration < ApplicationRecord
   # Service-principal mode only: the approved company→organization binding this
   # project connection draws its credentials from. Null in PAT mode.
   belongs_to :azure_devops_installation, optional: true
+  # App mode only: the Forge installation whose pushed token this connection uses.
+  belongs_to :bitbucket_installation, optional: true
   has_many :repositories, dependent: :destroy
   # Each GitLab repository has a hook in GitLab that would outlive it. Collected
   # before the repositories go, removed once the removal has committed.
@@ -32,6 +34,7 @@ class Integration < ApplicationRecord
   after_destroy_commit :remove_azure_service_hooks, if: :azure_devops?
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
+  has_many :pull_request_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
   has_many :tracker_subscriptions, dependent: :destroy
@@ -45,6 +48,7 @@ class Integration < ApplicationRecord
   validates :provider, presence: true
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :azure_devops_connection_is_scoped, if: :azure_devops?
+  validate :bitbucket_connection_is_scoped, if: :bitbucket?
   before_validation :record_github_installation_id, if: :github?
   validate :github_installation_held_by_this_company, if: -> { github_installation_id.present? && active? }
 
@@ -224,6 +228,29 @@ class Integration < ApplicationRecord
     credentials_data["personal_access_token"]
   end
 
+  # ----- Bitbucket accessors -----
+
+  # "app" (the Forge installation) or "token" (a pasted access or API token).
+  def bitbucket_auth_mode
+    return nil unless bitbucket?
+
+    settings&.dig("auth_mode").presence || (bitbucket_installation_id ? "app" : "token")
+  end
+
+  def bitbucket_app? = bitbucket? && bitbucket_auth_mode == "app"
+  def bitbucket_token? = bitbucket? && bitbucket_auth_mode == "token"
+
+  # "access_token" (workspace, project or repository — a bot) or "api_token" (a user's).
+  def bitbucket_token_kind = settings&.dig("token_kind")
+
+  def bitbucket_workspace_uuid
+    bitbucket_installation&.workspace_uuid || settings&.dig("workspace_uuid")
+  end
+
+  def bitbucket_workspace_slug
+    bitbucket_installation&.workspace_slug.presence || settings&.dig("workspace_slug")
+  end
+
   # ----- Coder accessors -----
 
   def coder_url
@@ -306,6 +333,22 @@ class Integration < ApplicationRecord
       end
     elsif installation.present?
       errors.add(:azure_devops_installation, "must be absent in PAT mode")
+    end
+  end
+
+  # A Bitbucket connection is a project's, like Azure's: a company-wide row would
+  # hand every project the same workspace credential. App mode draws on an
+  # installation this company has bound; token mode carries its own token.
+  def bitbucket_connection_is_scoped
+    errors.add(:project, "is required for a Bitbucket integration") if project_id.blank?
+
+    installation = bitbucket_installation
+    if bitbucket_auth_mode == "app"
+      return errors.add(:bitbucket_installation, "is required in app mode") if installation.nil?
+
+      errors.add(:bitbucket_installation, "is not connected to this company") if installation.company_id != company_id
+    elsif installation.present?
+      errors.add(:bitbucket_installation, "must be absent in token mode")
     end
   end
 

@@ -25,6 +25,18 @@ FactoryBot.define do
       integration { nil }
     end
 
+    # Bitbucket identity is the workspace + project + repository UUID triple;
+    # `full_name` is the readable workspace/slug.
+    trait :bitbucket do
+      integration factory: %i[integration bitbucket active]
+      scope { integration.project }
+      sequence(:full_name) { |n| "acme/service-#{n}" }
+      clone_url { nil }
+      external_organization_id { integration&.bitbucket_workspace_uuid || "{#{SecureRandom.uuid}}" }
+      external_project_id { "{#{SecureRandom.uuid}}" }
+      external_id { "{#{SecureRandom.uuid}}" }
+    end
+
     # Azure identity is the organization + project + repository GUID triple;
     # `full_name` is a display value carrying the provider discriminator, and the
     # project GUID has to match the integration's selected project.
