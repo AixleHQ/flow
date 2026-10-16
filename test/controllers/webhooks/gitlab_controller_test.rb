@@ -134,6 +134,13 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     assert_response :ok
   end
 
+  test "does not wrap a JSON delivery under the gitlab gem's module" do
+    post_json(pipeline_payload(status: "success"), token: @webhook_secret)
+
+    assert_response :ok
+    assert_not @controller.params.key?("gitlab")
+  end
+
   test "returns ok for unknown event type" do
     post_json({ "project" => { "path_with_namespace" => "group/app" } },
       token: @webhook_secret,
