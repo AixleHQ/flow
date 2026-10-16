@@ -324,9 +324,10 @@ class SessionService
       raise CloudAuth::PreflightError, broken if broken.any?
     end
 
-    # Block a launch whose agent credential the refresh sweep has marked broken, so
-    # the user gets "sign in again" instead of a container that fails on an expired
-    # token.
+    # Block a launch whose agent credential is missing, or that the refresh sweep
+    # has marked broken, so the user gets "connect an agent" / "sign in again"
+    # instead of a session revalidate_admission! cancels or a container that fails
+    # on an expired token.
     #
     # An auth_setup session is exempt: it exists to REPLACE the broken credential,
     # so gating it on that credential locks the user out of the only flow that can
@@ -338,8 +339,11 @@ class SessionService
       return if session_type == "auth_setup"
       return unless agent_type.present? && company.present?
 
-      credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
-      return if credential.nil?
+      credentials = AgentCredential.where(user_id: user.id, company_id: company.id)
+      credential = credentials.find_by(agent_type: agent_type)
+      if credential.nil?
+        raise AgentCredential::PreflightError.new(agent_type: (agent_type if credentials.exists?))
+      end
 
       raise AgentCredential::PreflightError, credential unless credential.active?
       # An `active` row is not the same as a usable login: a credential whose token died

@@ -265,10 +265,22 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
-    ).returns(build(:workflow_run))
+    ).returns(create(:workflow_run, workflow: workflow, project: @project, user: @user))
+    mock_workflow_execution_start
 
     result = TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
-    assert_not result.is_a?(Hash)
+    assert_kind_of WorkflowRun, result
+  end
+
+  test "trigger_workflow hands back why a run was refused, not the unsaved run" do
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column)
+
+    result = TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+
+    assert_equal({ error: "No agent credentials. Connect an agent in Profile settings to run workflows." }, result)
+    assert_equal 0, WorkflowRun.count
   end
 
   # == who a launched run belongs to ==

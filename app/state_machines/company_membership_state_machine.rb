@@ -62,10 +62,17 @@ module CompanyMembershipStateMachine
         transitions from: :step2, to: :completed
       end
 
+      # An admin who only administers the tenant may have no CLI agent at all.
+      # Kept apart from `complete` so its guard stays the only way past step2
+      # without an agent, and the skip stays on record.
+      event :skip_agent_setup, guard: :can_skip_agent_setup?, after: :mark_agent_setup_skipped do
+        transitions from: :step2, to: :completed
+      end
+
       # A role change within a company can newly require an agent this membership
       # never connected (a viewer promoted to employee). Back to agent selection,
       # not step1 — the profile answers for this company still stand.
-      event :reopen, after: :clear_onboarding_completed_at do
+      event :reopen, after: :clear_onboarding_completion do
         transitions from: :completed, to: :step2
       end
     end

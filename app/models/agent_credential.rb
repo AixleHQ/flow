@@ -180,14 +180,30 @@ class AgentCredential < ApplicationRecord
   REFRESH_ERROR_SOURCE = "agent_credential.refresh"
 
   class PreflightError < StandardError
+    NO_CREDENTIALS = "No agent credentials. Connect an agent in Profile settings to run workflows."
+
     attr_reader :credential
 
     # `reason: :unreadable` — the stored login cannot be decrypted with this
     # server's keys; signing in again stores a fresh one.
-    def initialize(credential, reason: :expired)
+    # No credential means no row at all; `agent_type:` then names the one agent
+    # missing for a member who holds a login for some other agent here.
+    def initialize(credential = nil, reason: :expired, agent_type: nil)
       @credential = credential
+      super(credential ? broken_message(credential, reason) : missing_message(agent_type))
+    end
+
+    private
+
+    def broken_message(credential, reason)
       problem = reason == :unreadable ? "can't be read on this server" : "has expired"
-      super("Your #{credential.agent_type.titleize} login #{problem}. Go to profile settings and sign in again.")
+      "Your #{credential.agent_type.titleize} login #{problem}. Go to profile settings and sign in again."
+    end
+
+    def missing_message(agent_type)
+      return NO_CREDENTIALS if agent_type.nil?
+
+      "No #{agent_type.titleize} login. Connect it in Profile settings to run this."
     end
   end
 

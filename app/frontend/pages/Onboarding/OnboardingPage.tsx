@@ -16,6 +16,7 @@ import {
   ThemeIcon,
   UnstyledButton,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconBrandAws,
@@ -347,17 +348,36 @@ function ConnectAgentsStep({
   configuredAgents,
   authSessions,
   loading,
+  isAdmin,
   onBack,
   onNext,
+  onSkip,
 }: {
   configuredAgents: AgentType[];
   authSessions: TerminalSession[];
   loading: boolean;
+  isAdmin: boolean;
   onBack: () => void;
   onNext: () => void;
+  onSkip: () => void;
 }) {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const configuredCount = AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)).length;
+  const canSkip = isAdmin && configuredCount === 0;
+
+  const confirmSkip = useCallback(() => {
+    modals.openConfirmModal({
+      title: 'Skip connecting an agent?',
+      children: (
+        <Text size="sm">
+          Without a connected agent you won&apos;t be able to run workflows, sessions or use the Builder until you
+          connect one. Are you sure you want to skip this step?
+        </Text>
+      ),
+      labels: { confirm: 'Skip anyway', cancel: 'Cancel' },
+      onConfirm: onSkip,
+    });
+  }, [onSkip]);
 
   const handleConnect = useCallback((agentType: string) => {
     setExpandedAgent((prev) => (prev === agentType ? null : agentType));
@@ -480,6 +500,11 @@ function ConnectAgentsStep({
           <Text size="xs" c="dimmed">
             {configuredCount} of {AVAILABLE_AGENTS.length} connected
           </Text>
+          {canSkip && (
+            <Button variant="subtle" color="gray" size="sm" onClick={confirmSkip} loading={loading}>
+              Skip for now
+            </Button>
+          )}
           <Button
             size="sm"
             rightSection={<IconChevronRight size={16} />}
@@ -599,6 +624,10 @@ const OnboardingPage = () => {
     submitStep({ onboardingStateEvent: 'complete' });
   }, [submitStep]);
 
+  const handleSkipAgentSetup = useCallback(() => {
+    submitStep({ onboardingStateEvent: 'skip_agent_setup' });
+  }, [submitStep]);
+
   if (!currentUser) return null;
 
   const inviteSubtitle = company?.name
@@ -707,8 +736,10 @@ const OnboardingPage = () => {
             configuredAgents={configuredAgents}
             authSessions={authSessions}
             loading={loading}
+            isAdmin={currentUser.currentRole === 'admin'}
             onBack={handleBack}
             onNext={handleFinish}
+            onSkip={handleSkipAgentSetup}
           />
         </Box>
       )}

@@ -31,7 +31,7 @@ describe('Projects/AixleBuilder/LandingPage', () => {
     renderAuthedPage(<LandingPage />, { props: { ...baseProps } });
 
     expect(screen.getByText('Aixle Builder')).toBeInTheDocument();
-    expect(screen.getByText(/No agent runtimes configured/i)).toBeInTheDocument();
+    expect(screen.getByText(/No agent credentials. Connect an agent in/i)).toBeInTheDocument();
 
     // With no runtime configured, the Start Builder button is disabled.
     expect(screen.getByRole('button', { name: /Start Builder/i })).toBeDisabled();

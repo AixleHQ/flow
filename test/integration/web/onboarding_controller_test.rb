@@ -75,6 +75,31 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     assert_equal "step2", membership.reload.onboarding_state
   end
 
+  test "an admin skips the agent step and lands in the app" do
+    admin = create(:user, :admin, company: @company, onboarding_state: "step2",
+                                  position: "cto", preferred_agent_language: "en", email: "admin2@example.com",
+                                  password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(admin)
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "skip_agent_setup" } }
+    follow_redirect!
+
+    membership = admin.company_memberships.sole.reload
+    assert_equal "completed", membership.onboarding_state
+    assert membership.agent_setup_skipped_at.present?
+    assert_redirected_to company_projects_path
+  end
+
+  test "an employee cannot skip the agent step" do
+    membership = @user.company_memberships.sole
+    membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "skip_agent_setup" } }
+
+    assert_equal "step2", membership.reload.onboarding_state
+    assert_nil membership.agent_setup_skipped_at
+  end
+
   test "non-viewer completes onboarding at step2 with an agent credential" do
     membership = @user.company_memberships.sole
     membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")

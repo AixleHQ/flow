@@ -16,12 +16,22 @@ governance, community health — carry none.
 ### Added
 - **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
   `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
+- **Sign-in & onboarding**: an admin can skip connecting an agent during
+  onboarding ("Skip for now", then confirm) and still invite members and manage
+  the company. Until they connect an agent in Profile settings, they cannot start
+  workflows, sessions or the Builder.
 
 ### Changed
 - **Tasks**: any project member who is not a viewer can set up a board and add,
   rename, reorder or delete its columns from the personal MCP server, and a board
   template installs its columns for them. Until now only the project owner could,
   although the board screen already let every member edit columns.
+- **Sessions & Runs**: a workflow run, session or Builder launch by someone with
+  no agent login in the company is refused up front with "No agent credentials.
+  Connect an agent in Profile settings to run workflows." It used to start and
+  then end as cancelled with "Agent credential unavailable". A triggered run is
+  skipped with the same reason, and a step whose agent is not connected fails
+  with a message naming that agent.
 - **Sessions & Runs**: a workflow step's initial context summarizes only the
   steps it depends on, directly or through others, and only the latest completed
   or skipped attempt of each. Finished steps on independent branches no longer

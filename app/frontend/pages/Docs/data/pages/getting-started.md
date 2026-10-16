@@ -24,6 +24,11 @@ in it, and Flow keeps the resulting credential for you.
 You need at least one connected agent to finish onboarding — nothing can run on
 your behalf until then.
 
+> info An **admin** who only sets up the company can choose **Skip for now** and
+> confirm. You can invite members and manage the company right away. Workflows,
+> sessions and the Builder stay blocked with "No agent credentials" until you
+> connect an agent in **Profile**.
+
 > info Invited as a **viewer**? The connect step is replaced by a short tour.
 > Viewers read boards, runs and results; they do not start work, so they do not
 > need a credential.

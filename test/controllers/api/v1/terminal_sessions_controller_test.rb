@@ -97,6 +97,18 @@ module Api
         assert_equal "/oauth/mcp/5/connect", body["reauth_required"].first["connect_url"]
       end
 
+      test "create refuses a member with no agent credentials and says to connect one" do
+        assert_no_difference -> { TerminalSession.count } do
+          post :create, params: {
+            terminal_session: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id }
+          }
+        end
+
+        assert_response :unprocessable_entity
+        assert_equal "No agent credentials. Connect an agent in Profile settings to run workflows.",
+                     JSON.parse(response.body)["error"]
+      end
+
       test "destroy removes finished session" do
         ts = create(:terminal_session, user: @user, project: @project, state: "finished")
 

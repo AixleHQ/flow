@@ -117,7 +117,7 @@ describe('Profile/Show', () => {
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(
-      screen.getByText('No agent credentials configured. Complete onboarding to set up agents.'),
+      screen.getByText('No agent credentials configured. Authenticate an agent under Agent Runtimes to run workflows.'),
     ).toBeInTheDocument();
     // Each available agent renders an Authenticate CTA when not yet connected.
     expect(screen.getAllByRole('button', { name: 'Authenticate' }).length).toBeGreaterThan(0);
@@ -382,7 +382,9 @@ describe('Profile/Show', () => {
     expect(screen.getByRole('heading', { name: 'Agent Defaults' })).toBeInTheDocument();
     expect(screen.getByText('Default Runtime')).toBeInTheDocument();
     expect(
-      screen.queryByText('No agent credentials configured. Complete onboarding to set up agents.'),
+      screen.queryByText(
+        'No agent credentials configured. Authenticate an agent under Agent Runtimes to run workflows.',
+      ),
     ).not.toBeInTheDocument();
 
     // Default Models renders with one labelled row per credential.
