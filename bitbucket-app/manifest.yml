@@ -97,12 +97,14 @@ permissions:
   external:
     fetch:
       client:
-        - address: ${AIXLE_BASE_URL}
+        - address: ${AIXLE_APP_URL}
 
 environment:
   variables:
     - FORGE_APP_ID
     - key: AIXLE_BASE_URL
+      default: https://flow.aixle.com
+    - key: AIXLE_APP_URL
       default: https://flow.aixle.com
 
 app:

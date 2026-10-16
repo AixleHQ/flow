@@ -1,0 +1,39 @@
+#!/bin/sh
+# Deploys the app to one Forge environment, pointed at that environment's Aixle.
+#
+#   AIXLE_BASE_URL  where Forge sends every call: a host reachable from the internet
+#   AIXLE_APP_URL   where the Connect link opens in the administrator's browser
+#
+# Staging's own host is private (VPN), so Forge reaches it through the public
+# webhooks host, which routes /webhooks/* only — every endpoint lives there.
+set -eu
+
+environment="${1:?usage: bin/deploy <development|staging|production> [forge deploy options]}"
+shift
+case "$environment" in
+  production)
+    AIXLE_BASE_URL=https://flow.aixle.com
+    AIXLE_APP_URL=https://flow.aixle.com
+    ;;
+  staging)
+    AIXLE_BASE_URL=https://webhooks-staging.flow.aixle.com
+    AIXLE_APP_URL=https://staging.flow.aixle.com
+    ;;
+  development)
+    : "${AIXLE_BASE_URL:?set AIXLE_BASE_URL to your tunnel, e.g. https://<name>.ngrok-free.dev}"
+    AIXLE_APP_URL="${AIXLE_APP_URL:-$AIXLE_BASE_URL}"
+    ;;
+  *)
+    echo "unknown Forge environment: $environment" >&2
+    exit 64
+    ;;
+esac
+: "${FORGE_APP_ID:?set FORGE_APP_ID to the app id (ari:cloud:ecosystem::app/<uuid>)}"
+
+export AIXLE_BASE_URL AIXLE_APP_URL FORGE_APP_ID
+echo "Deploying to $environment: calls go to $AIXLE_BASE_URL, Connect opens $AIXLE_APP_URL"
+forge lint
+# A changed scope, remote or egress is a major version every installation has to
+# approve again; forge deploy refuses it until called with
+# `--approve MAJOR_VERSION_RULE`, which is passed through here on purpose only.
+forge deploy -e "$environment" --non-interactive "$@"
