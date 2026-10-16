@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Analytics**: token totals now include sessions that only report an aggregate
+  count when grouped with sessions that report input, output and cache tokens.
+  Summaries, charts and task statistics use the same per-session fallback.
+
 ## [1.3.0] - 2026-10-17
 
 ### Added
