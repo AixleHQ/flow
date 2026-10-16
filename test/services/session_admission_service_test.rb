@@ -187,7 +187,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     token = admission.reload.permit_token
     SessionAdmissionService.begin_operation!(admission.id, token, "exec", initial_state: "preparing")
 
-    refute admission.session_runtime_operations.pinning.exists?
+    refute_predicate admission.session_runtime_operations.pinning, :exists?
     SessionAdmissionService.release!(admission)
     assert admission.reload.released_at
   end
