@@ -51,6 +51,9 @@ class WorkflowService
       run.errors.add(:workflow, "has been deleted") if workflow.deleted?
       return run if run.errors.any?
 
+      validate_agent_credentials!(run, project, user)
+      return run if run.errors.any?
+
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
 
@@ -259,6 +262,15 @@ class WorkflowService
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to send signal #{signal_name} for run ##{run.id}: #{e.message}")
       { ok: false, error: e.message }
+    end
+
+    # Every step runs an agent, so a run whose owner has no login in this company
+    # would only be cancelled at admission. Which agent each step needs is
+    # resolved per step at launch (SessionService.preflight_agent_credential!).
+    def validate_agent_credentials!(run, project, user)
+      return if user.nil? || AgentCredential.exists?(user_id: user.id, company_id: project.company_id)
+
+      run.errors.add(:base, AgentCredential::PreflightError::NO_CREDENTIALS)
     end
 
     def validate_mode!(run, workflow, overrides)

@@ -45,6 +45,9 @@ export const AGENT_RUNTIMES = Object.fromEntries(
 
 export const AGENT_TYPES = Object.keys(AGENT_RUNTIMES) as AgentType[];
 
+/** The words AgentCredential::PreflightError::NO_CREDENTIALS refuses the launch with server-side. */
+export const NO_AGENT_CREDENTIALS = 'No agent credentials. Connect an agent in Profile settings to run workflows.';
+
 export const AGENT_SELECT_OPTIONS = AGENT_TYPES.map((type) => ({ value: type, label: AGENT_RUNTIMES[type].label }));
 
 export function isAgentType(value: string | null | undefined): value is AgentType {

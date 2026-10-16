@@ -65,6 +65,7 @@ module Api
       # (and the token spend) belongs to, regardless of which company the browser shows.
       test "a project-bound session takes the project's company" do
         project = create(:project, company: @other_company, owner: @user)
+        create(:agent_credential, user: @user, company: @other_company)
 
         post api_v1_terminal_sessions_path,
              params: { terminal_session: { agent_type: "claude_code", session_type: "agent_session",

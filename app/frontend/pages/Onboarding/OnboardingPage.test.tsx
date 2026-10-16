@@ -6,7 +6,7 @@ import type { CurrentUser } from '@/types/generated';
 import { buildSharedUser } from 'test/factories/sharedProps';
 import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { answerFetch } from 'test/fetchStub';
-import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import type { AgentType } from 'shared/ui';
@@ -253,6 +253,67 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
+  });
+
+  it('lets an admin with no agent skip the step only after confirming the warning', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'admin' }), authSessions: [] },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(
+        "Without a connected agent you won't be able to run workflows, sessions or use the Builder until you connect one. Are you sure you want to skip this step?",
+      ),
+    ).toBeInTheDocument();
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Skip anyway' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/onboarding',
+      expect.objectContaining({ onboarding: { onboardingStateEvent: 'skip_agent_setup' } }),
+      expect.anything(),
+    );
+  });
+
+  it('keeps the admin on the step when the skip warning is cancelled', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'admin' }), authSessions: [] },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(router.patch).not.toHaveBeenCalled();
+    expect(screen.getByText('Connect your agents')).toBeInTheDocument();
+  });
+
+  it('offers no skip to an employee', () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'employee' }), authSessions: [] },
+    });
+
+    expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();
+  });
+
+  it('offers no skip to an admin who already connected an agent', () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({
+          onboardingState: 'step2',
+          currentRole: 'admin',
+          configuredAgents: ['claude_code'] as AgentType[],
+        }),
+        authSessions: [],
+      },
+    });
+
+    expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 
   it('shows the "Connecting" badge when an agent has an active auth session but is not configured', () => {

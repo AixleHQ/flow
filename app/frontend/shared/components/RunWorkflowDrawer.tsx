@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
 
@@ -207,7 +208,7 @@ export function RunWorkflowDrawer({
           <RuntimeTiles value={agentRuntime} configured={configuredAgents} onChange={setAgentRuntime} />
           {configuredAgents.length === 0 && (
             <Text size="xs" c="dimmed" mt={8}>
-              No connected runtimes — connect one in your profile before running a workflow.
+              {NO_AGENT_CREDENTIALS}
             </Text>
           )}
         </Box>

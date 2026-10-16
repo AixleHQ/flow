@@ -8,6 +8,7 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
     @workflow = create(:workflow, scope: @project)
+    @credential = create(:agent_credential, user: @user, company: @company)
     sign_in_as(@user)
   end
 
@@ -153,6 +154,17 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     }
     assert_response :redirect
     assert_equal 0, WorkflowRun.where(project: @project).count
+  end
+
+  test "create without any agent credential starts nothing and says to connect an agent" do
+    @credential.destroy!
+    create(:step, workflow: @workflow, position: 1)
+
+    post company_project_workflow_runs_path(@project), params: { workflow_run: { workflow_id: @workflow.id } }
+
+    assert_redirected_to company_project_workflow_runs_path(@project)
+    assert_equal "No agent credentials. Connect an agent in Profile settings to run workflows.", flash[:alert]
+    assert_equal 0, WorkflowRun.count
   end
 
   test "create normalizes camelCase step_overrides keys to snake_case" do

@@ -209,7 +209,9 @@ class TaskService
       )
 
       run = TriggerEngine.dispatch_pending(event).first
-      run || { error: "Workflow could not be started" }
+      return run if run&.persisted?
+
+      { error: run&.errors&.full_messages&.to_sentence.presence || "Workflow could not be started" }
     end
 
     # Returns true if THIS call performed the transition, false if the gate was

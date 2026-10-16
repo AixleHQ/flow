@@ -13,7 +13,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
-import { AGENT_RUNTIMES, isAgentType } from 'shared/ui/agentRuntimes';
+import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
@@ -333,6 +333,11 @@ export const SessionNewForm = ({
             setSelectedModel(null);
           }}
         />
+        {configuredAgents.length === 0 && (
+          <Text size="xs" c="dimmed" mt={8}>
+            {NO_AGENT_CREDENTIALS}
+          </Text>
+        )}
       </Box>
 
       <Box>

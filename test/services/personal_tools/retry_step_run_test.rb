@@ -68,6 +68,7 @@ module PersonalTools
     test "starts a new run and reports its id when the original run's execution has already closed" do
       TemporalService.stubs(:workflow_open?).returns(false)
       TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+      create(:agent_credential, user: @user, company: @company)
       @run.update!(state: "failed")
       failed_step_run = create(:step_run, :failed, workflow_run: @run, step: @step)
 

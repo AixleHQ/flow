@@ -10,9 +10,23 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project)
     @step1 = create(:step, workflow: @workflow, position: 1, name: "Step 1")
     @step2 = create(:step, workflow: @workflow, position: 2, name: "Step 2")
+    @credential = create(:agent_credential, user: @user, company: @company)
   end
 
   # == start ==
+
+  test "start refuses a run whose owner has no agent credential in this company" do
+    @credential.destroy!
+    create(:agent_credential, user: @user, company: create(:company_membership, user: @user).company)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).never
+
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+
+    assert_not run.persisted?
+    assert_equal [ "No agent credentials. Connect an agent in Profile settings to run workflows." ],
+                 run.errors.full_messages
+    assert_equal 0, WorkflowRun.count
+  end
 
   test "start creates workflow run with step runs and starts temporal" do
     TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
