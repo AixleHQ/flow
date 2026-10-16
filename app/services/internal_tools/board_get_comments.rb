@@ -21,9 +21,9 @@ module InternalTools
             description: "Board task ID"
           },
           author_type: {
-            enum: %w[user agent],
+            enum: %w[human user agent],
             type: "string",
-            description: "Optional author type filter"
+            description: "Optional author type filter; user is a legacy alias for human"
           },
           limit: {
             type: "integer",
@@ -43,7 +43,8 @@ module InternalTools
 
       comments = task.task_comments.includes(:author).order(created_at: :desc)
       comments = comments.with_tag(params[:tag]) if params[:tag].present?
-      comments = comments.by_author_type(params[:author_type]) if params[:author_type].present?
+      author_type = params[:author_type] == "user" ? "human" : params[:author_type]
+      comments = comments.by_author_type(author_type) if author_type.present?
       comments = comments.limit(params[:limit].to_i) if params[:limit].to_i.positive?
 
       result = comments.map { |c| TaskCommentResource.new(c, params: { snake_keys: true }).to_h }

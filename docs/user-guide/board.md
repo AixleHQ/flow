@@ -55,11 +55,29 @@ a project created there has no board until it runs.
 
 When a board-triggered workflow run starts, the agent receives:
 
-- Task title, description, type, priority, tags.
-- The five most recent comments (first 200 characters each); the full thread through `board_get_comments`.
-- The task's attachments, through `board_get_task_assets` (they are not mounted in the container).
-- Task transitions (movement history).
-- Column purpose (so the agent knows the stage it's working in).
+- Task title, number, internal id, column, priority, tags and assignee.
+- The complete description when it is at most 1,500 characters; otherwise a
+  pointer to read it with `board_get_task`, without a truncated copy.
+- Instructions to read the task's comments before changing code. Comments are
+  fetched with `board_get_comments`; they are not copied into the initial context. Use
+  `author_type: "human"` for human comments (`"user"` remains a compatible alias).
+- For a subtask, its parent epic's title, number and internal id, with instructions
+  to read the epic's full description and comments.
+- A `board_list_tasks(parent_task_id: …)` pointer to discover subtasks of the
+  current epic, or siblings of the current subtask. The response is paginated;
+  follow `has_more` and `offset` when further tasks are relevant.
+- Board column names, with the current column marked.
+
+Read referenced or relevant related tasks and their comments before implementing.
+Keep the task and epic requirements consistent with agreed decisions; report
+unresolved conflicts instead of silently choosing one. A relationship does not
+impose execution order or merge another task's branch: verify that prerequisite
+PRs or commits are present on the working branch.
+
+The task's attachments are available through `board_get_task_assets` (they are
+not mounted in the container). Other tasks' descriptions, comments and run
+transcripts are not automatically inherited. Arbitrary links in external trackers
+are not traversed by this epic/subtask mechanism.
 
 This is the **BoardContext** builder — one of the layers in the agent
 context stack. See [agents.md](agents.md#how-context-is-built) for the

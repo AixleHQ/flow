@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: agents can find a task's parent epic and its subtasks, and are
+  instructed to read relevant requirements and decisions before changing code.
+
+### Fixed
+- **Tasks**: filtering comments by human author returns human decisions; the
+  previously offered `user` filter works as an alias for `human`.
+
 ## [1.2.2] - 2026-10-15
 
 ### Changed
