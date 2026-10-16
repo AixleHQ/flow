@@ -40,18 +40,24 @@ production customer.
 
 ## Shipping a new version of the app
 
-In a container with the repository mounted and the Forge CLI logged in, as the app's README describes:
+From `bitbucket-app/`, in a container with the Forge CLI logged in (the app's README has the
+`docker run` line), with `FORGE_APP_ID` set to the app id:
 
 ```sh
-bitbucket-app/bin/forge-deploy staging      # first; check a staging workspace
-bitbucket-app/bin/forge-deploy production
+# staging first; check a staging workspace
+AIXLE_BASE_URL=https://webhooks-staging.flow.aixle.com AIXLE_APP_URL=https://staging.flow.aixle.com \
+  forge deploy -e staging --non-interactive
+AIXLE_BASE_URL=https://flow.aixle.com AIXLE_APP_URL=https://flow.aixle.com \
+  forge deploy -e production --non-interactive
 ```
 
-`bitbucket-app/bin/forge-deploy` sets each environment's URLs, lints and deploys. Two things to plan for:
+Give both URLs on the command line every time. They are substituted into the manifest at deploy,
+and one left over in the shell — a developer's tunnel — would send every production installation's
+calls and tokens there. Two things to plan for:
 
 - **A major version waits for every admin.** A changed scope, remote or egress address makes one;
   each installation keeps running the old version — heartbeats included — until a workspace admin
-  approves the update in Bitbucket. `bitbucket-app/bin/forge-deploy` refuses it unless given
+  approves the update in Bitbucket. `forge deploy` refuses it unless given
   `--approve MAJOR_VERSION_RULE`. Ask for read scopes before they are needed.
 - **A deploy resets the heartbeat.** The next one comes about five minutes later; tokens already
   held last two hours or more.
@@ -90,7 +96,7 @@ BitbucketInstallation.live.order(:last_invocation_at)
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Every Forge request is 401 in the log, with *issued for another app* or *another environment* | `BITBUCKET_FORGE_APP_ID` or `_ENVIRONMENT_ID` names another app or environment | Set both from the table above |
-| No Forge request reaches the deployment | The environment was deployed with another `AIXLE_BASE_URL`, or the host is not public | `bitbucket-app/bin/forge-deploy <environment>` again |
+| No Forge request reaches the deployment | The environment was deployed with another `AIXLE_BASE_URL`, or the host is not public | Deploy that environment again with its URLs |
 | An install never shows up | The lifecycle event is still on its way | Wait a few minutes; any later invocation — a heartbeat, opening the settings page — records it too |
 | Heartbeats stopped for one workspace | The app was uninstalled, or a major version waits for the admin's approval | Ask the workspace admin |
 | The admin's Connect says *Only a Bitbucket workspace administrator can connect…* | The account is a member, not an admin, of the workspace | A workspace admin connects |
