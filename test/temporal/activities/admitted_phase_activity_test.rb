@@ -121,9 +121,6 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   end
 
   # == deferred dispatch of exec ==
-  #
-  # Production, 2026-10-15: exec setup outlived its attempt, and the retry failed
-  # the session as an unresolved exec although no agent had been launched.
 
   def exec_operation = @admission.session_runtime_operations.find_by(phase: "exec")
 
@@ -131,12 +128,13 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     Struct.new(:attempt, :started_time, :start_to_close_timeout).new(1, started_time, start_to_close_timeout)
   end
 
-  test "a failure while preparing leaves the exec retryable, and the retry runs it" do
+  test "a failure while preparing leaves the exec preparing, and the retry runs it" do
     calls = 0
     stub_exec(before_exec: -> { (calls += 1) == 1 ? raise(Errno::ECONNRESET, "npx registry") : {} }) { { launched: true } }
 
     assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
-    assert_equal "retryable", exec_operation.state
+    assert_equal SessionRuntimeOperation::PREPARING, exec_operation.state
+    assert_match(/npx registry/, exec_operation.error)
 
     exec_phase
     assert_equal "completed", exec_operation.state
@@ -175,7 +173,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     refute error.non_retryable
     assert_equal TemporalExceptions::BENIGN, error.category
     refute launched
-    assert_equal "retryable", exec_operation.state
+    assert_equal SessionRuntimeOperation::PREPARING, exec_operation.state
   end
 
   test "an attempt with time left launches the agent" do
@@ -196,7 +194,49 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
 
     assert_equal TemporalExceptions::BENIGN, error.category
     refute launched
-    assert_equal "retryable", exec_operation.state
+    assert_equal SessionRuntimeOperation::PREPARING, exec_operation.state
+  end
+
+  test "an exec a sibling attempt dispatched during this one's preparation is left to the sibling" do
+    operations = @admission.session_runtime_operations
+    launched = false
+    stub_exec(before_exec: -> { operations.find_by!(phase: "exec").update!(state: "in_flight") && {} }) do
+      launched = true
+    end
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert error.non_retryable
+    assert_equal TemporalExceptions::UNSPECIFIED, error.category
+    assert_match(/Unresolved exec/, error.message)
+    refute launched
+    assert_equal "in_flight", exec_operation.state
+  end
+
+  test "an expired attempt leaves a sibling's preparing exec for the sibling to launch" do
+    admission = @admission
+    @activity.stubs(:activity_info).returns(attempt_info(started_time: 299.seconds.ago))
+    launches = 0
+    sibling_began = false
+    sibling_begins = lambda do
+      unless sibling_began
+        sibling_began = true
+        SessionAdmissionService.begin_operation!(admission.id, admission.permit_token, "exec",
+          initial_state: SessionRuntimeOperation::PREPARING)
+      end
+      {}
+    end
+    stub_exec(before_exec: sibling_begins) { (launches += 1) && { launched: true } }
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+    refute error.non_retryable
+    assert_equal SessionRuntimeOperation::PREPARING, exec_operation.state
+
+    @activity.stubs(:activity_info).returns(attempt_info(started_time: 10.seconds.ago))
+    exec_phase
+
+    assert_equal 1, launches
+    assert_equal "completed", exec_operation.state
   end
 
   test "an absent runtime finalizes session and releases its slot" do

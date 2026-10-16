@@ -156,11 +156,11 @@ module Activities
 
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
         message = "#{cause.class}: #{error.message}"
-        # Conditional on `preparing`: another attempt may own the record by now,
-        # and a dispatched one must not be rewritten from here.
+        # Nothing reached the runtime, so the record stays `preparing`. Conditional:
+        # another attempt may own it by now, and a dispatched one must not be touched.
         unless dispatched
           SessionRuntimeOperation.where(id: operation.id, state: SessionRuntimeOperation::PREPARING)
-                                 .update_all(state: "retryable", error: message, updated_at: Time.current)
+                                 .update_all(error: message, updated_at: Time.current)
           return
         end
 

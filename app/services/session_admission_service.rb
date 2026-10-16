@@ -163,14 +163,13 @@ class SessionAdmissionService
 
     # The fencing point for the irreversible part of a phase begun as
     # `preparing`. Only one attempt can move it to `in_flight`, and a stop that
-    # landed during preparation is caught here by #permit!. `retryable` is
-    # accepted too: an expired sibling attempt may have written it mid-preparation.
+    # landed during preparation is caught here by #permit!.
     def dispatch_operation!(operation, token)
       SessionAdmission.transaction do
         admission = SessionAdmission.lock.find(operation.session_admission_id)
         permit!(admission.id, token)
         operation.lock!
-        unless operation.state.in?([ SessionRuntimeOperation::PREPARING, "retryable" ])
+        unless operation.state == SessionRuntimeOperation::PREPARING
           raise UncertainOperation, "Unresolved #{operation.phase}; #{operation.reservation_note}"
         end
         operation.update!(state: "in_flight", error: nil)
