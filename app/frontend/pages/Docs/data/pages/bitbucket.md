@@ -141,7 +141,7 @@ automatically — the same set on every host:
 | `pull_request_update` | Title, description, target branch, draft, close or reopen |
 | `pull_request_list_comments` | Comments, with threads and inline positions |
 | `pull_request_add_comment` | A comment, a reply, or an inline comment on a file and line |
-| `pull_request_review` | Approve, withdraw an approval, or request changes |
+| `pull_request_review` | Approve, withdraw an approval, or request changes — never approve a pull request the same connection opened |
 | `pull_request_merge` | Merges, only if the head commit is still the one the agent names |
 
 Each write is recorded, so an agent repeating a call after a timeout gets the

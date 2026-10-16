@@ -117,7 +117,7 @@ one host runs on the others.
 | `pull_request_update` | Title, description, target branch, draft, close or reopen |
 | `pull_request_list_comments` | Notes and discussions, with inline positions |
 | `pull_request_add_comment` | A note, a reply in a discussion, or an inline comment on a file and line |
-| `pull_request_review` | Approve or withdraw an approval. *Request changes* is not offered on GitLab yet |
+| `pull_request_review` | Approve or withdraw an approval, never on a merge request the same connection opened. *Request changes* is not offered on GitLab yet |
 | `pull_request_merge` | Merges, only if the head commit is still the one the agent names |
 
 `pull_request` takes the merge request's number (its `iid`, `!123`) or its URL.

@@ -212,6 +212,27 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
     assert_equal %w[6 6], PullRequestOperation.order(:id).pluck(:pull_request_number)
   end
 
+  test "a pull request this connection opened cannot be approved by it" do
+    created = json(run_tool(InternalTools::PullRequestCreate, { source_branch: "feature/x", title: "Change" }))
+
+    refused = json(run_tool(InternalTools::PullRequestReview, { pull_request: created.dig("pull_request", "number").to_s, verdict: "approve" }))
+    changes = json(run_tool(InternalTools::PullRequestReview, { pull_request: created.dig("pull_request", "number").to_s,
+                                                                verdict: "request_changes", body: "Not yet" }))
+
+    assert_equal "permission_denied", refused["error"]
+    assert_equal "request_changes", changes["verdict"]
+  end
+
+  test "a pull request found already open was not opened here, and may be approved" do
+    @fake.add_pull_request(@repository, number: 9, source_branch: "feature/y", target_branch: @repository.source_branch)
+
+    found = json(run_tool(InternalTools::PullRequestCreate, { source_branch: "feature/y", title: "Change" }))
+    review = json(run_tool(InternalTools::PullRequestReview, { pull_request: "9", verdict: "approve" }))
+
+    assert found["existing"]
+    assert_equal "approve", review["verdict"]
+  end
+
   test "read tools answer the provider's values" do
     @fake.add_pull_request(@repository, number: 6)
     @fake.set_checks(@repository, 6, state: "passed", items: [ { name: "rspec", status: "passed", url: nil } ])

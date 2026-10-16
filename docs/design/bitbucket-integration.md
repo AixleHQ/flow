@@ -159,6 +159,8 @@ Taken from the Azure implementation (`pull_request_service.rb:226-300`), where A
 6. Bitbucket may answer 202: poll `merge/task-status/{id}` up to a configured number of times, then report `pending: true` rather than wait.
 7. Merging is a per-connection capability, on by default — the Azure decision of 2026-09-13 — and can be turned off per integration.
 
+`pull_request_review` refuses to approve a pull request the same connection opened (found in the ledger: a succeeded `create` that did not return an existing one). Bitbucket and GitLab accept such an approval — verified live for the Bitbucket app's bot on 2026-10-16 — so without the check an agent could open a pull request and meet a required approval itself; GitHub refuses it on its own.
+
 ### 4.10 Errors
 
 `PullRequests::Error(code, message, details)` with the Azure codes — `not_found_or_inaccessible`, `not_authorized`, `permission_denied`, `validation_failed`, `conflict`, `rate_limited` (with `retry_after`), `outcome_unknown`, `integration_unavailable` — plus `unsupported` for an operation a provider cannot do (§4.11). Tool results are `error(e.to_h.to_json)`, as in the Azure and tracker tools.
