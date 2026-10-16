@@ -60,6 +60,20 @@ class Tools::ContextTest < ActiveSupport::TestCase
     end
   end
 
+  test "a code-host connection with pull-request tools adds the capability, others do not" do
+    create(:integration, :gitlab, :active, company: @company, project: @project, connected_by: @user)
+
+    assert Tools::Context.new(project: @project, company: @company).connected?(PullRequests::CAPABILITY)
+
+    other = create(:project, owner: @user, company: @company)
+    create(:integration, :coder, :active, company: @company, project: other, connected_by: @user)
+    assert_not Tools::Context.new(project: other, company: @company).connected?(PullRequests::CAPABILITY)
+
+    github = create(:project, owner: @user, company: @company)
+    create(:integration, :github, :active, company: @company, project: github, connected_by: @user)
+    assert Tools::Context.new(project: github, company: @company).connected?(PullRequests::CAPABILITY)
+  end
+
   test "no company yields an empty provider set without querying" do
     ctx = Tools::Context.new(project: nil, company: nil)
 

@@ -6,6 +6,7 @@ import apiGuide from './api-guide.md?raw';
 import assets from './assets.md?raw';
 import awsMarketplaceBilling from './aws-marketplace-billing.md?raw';
 import azureDevops from './azure-devops.md?raw';
+import bitbucket from './bitbucket.md?raw';
 import board from './board.md?raw';
 import changelogProductAreas from './changelog-product-areas.md?raw';
 import cliRef from './cli-ref.md?raw';
@@ -297,6 +298,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: gitlab,
     toc: extractToc(gitlab),
+  },
+  bitbucket: {
+    title: 'Bitbucket',
+    section: 'User guide',
+    content: bitbucket,
+    toc: extractToc(bitbucket),
   },
   'azure-devops': {
     title: 'Azure DevOps',

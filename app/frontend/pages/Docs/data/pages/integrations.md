@@ -9,8 +9,9 @@ Each integration has its own page:
 
 | Integration | What it gives a project | Page |
 | --- | --- | --- |
-| **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, CI gates on checks and workflow runs, GitHub Projects as trackers | [GitHub](/docs/github) |
-| **GitLab** | Repositories cloned in sessions, CI gates on pipelines | [GitLab](/docs/gitlab) |
+| **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, the `pull_request_*` tools, CI gates on checks and workflow runs, GitHub Projects as trackers | [GitHub](/docs/github) |
+| **GitLab** | Repositories cloned in sessions, the `pull_request_*` tools for merge requests, CI gates on pipelines | [GitLab](/docs/gitlab) |
+| **Bitbucket** | Repositories cloned in sessions, the `pull_request_*` tools, CI gates on pull-request builds — through the Aixle Flow app or an access token | [Bitbucket](/docs/bitbucket) |
 | **Azure DevOps** | Repositories and pull requests, Azure Boards as a tracker, Service Hooks | [Azure DevOps](/docs/azure-devops) |
 | **Jira** | Jira Cloud projects as trackers: tracker triggers and the `tracker_*` tools | [Jira](/docs/jira) |
 | **Linear** | Linear teams as trackers: tracker triggers and the `tracker_*` tools | [Linear](/docs/linear) |
@@ -18,6 +19,8 @@ Each integration has its own page:
 | **Slack** | Workflows started by mentioning the app, a status card in the thread, the `chat_*` tools | [Slack](/docs/slack) |
 | **Microsoft Teams** | Workflows started from channels, group chats and 1:1 chats, a status card in the thread, files both ways, the `chat_*` tools | [Microsoft Teams](/docs/teams) |
 | **Coder** | Remote workspaces an agent can allocate, run commands on and release | [Coder](/docs/coder) |
+
+Jira and Bitbucket are both under **Connect → Atlassian**: pick Jira for issues as trackers, Bitbucket for repositories. They stay two integrations — a Jira site and a Bitbucket workspace are connected separately — and a run started from a Jira issue puts the issue key in its branch and pull-request names, so Jira links them when your Atlassian organization connects the two products.
 
 Azure Boards, Jira, GitHub Projects, Linear and YouTrack are all **trackers**. What a
 tracker is, the project's **Trackers** page, the one-column intake and tracker
@@ -41,6 +44,7 @@ each verifies the caller its own way.
 | --- | --- | --- |
 | GitHub | `POST /webhooks/github` (CI gates and GitHub Projects trackers) | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
 | GitLab | `POST /webhooks/gitlab` | A secret per repository hook |
+| Bitbucket (the Aixle Flow app) | `POST /webhooks/bitbucket/forge/<lifecycle, heartbeat, events, uninstall, ui/…>` | The Forge invocation token: Atlassian's keys, the app id and the Forge environment the deployment serves |
 | Azure DevOps | `POST /webhooks/azure_devops/<endpoint id>` | HTTP Basic, one password per subscription |
 | Jira | `POST /webhooks/trackers/<endpoint token>`, or `POST /webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
 | Linear | `POST /webhooks/trackers/<endpoint token>` for an API-key connection, or `POST /webhooks/trackers/app/linear` for the Linear app | `Linear-Signature` HMAC with the subscription's secret, or with `LINEAR_WEBHOOK_SECRET`, and a timestamp within a minute |

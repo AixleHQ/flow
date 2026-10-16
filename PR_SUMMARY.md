@@ -37,7 +37,7 @@ No issue linked.
 
 - Before the fix, the regression suite had 12 failures reporting 100 instead of
   300 tokens. After the fix: **22 tests, 58 assertions**, no failures or errors.
-- Final isolated run, including the regressions and the three GitHub test files
+- Isolated run before the develop merge, including the regressions and the three GitHub test files
   affected by local credential configuration: **64 tests, 159 assertions**, no
   failures, errors or skips. `GITHUB_APP_PRIVATE_KEY` was cleared only for that
   process so GitHub tests could use their temporary PEM fixtures.
@@ -50,8 +50,14 @@ No issue linked.
   during frontend tests. It was restarted; the full gate still needs a complete
   passing run before submission.
 - Independent code review found no actionable issues; `git diff --check` passed.
+- After merging `origin/develop` at `3f13b930` (1.3.0), the regression suite,
+  existing analytics and task-statistics suites, and analytics controller tests
+  passed: **72 tests, 165 assertions**, no failures, errors or skips. The only
+  merge conflict was in the changelog; the token fix remains under `[Unreleased]`.
+  The schema matches develop, and the fix's diff against develop passes
+  `git diff origin/develop --check`. The complete gate remains pending.
 
-Final isolated command:
+Isolated command before the develop merge:
 
 ```sh
 docker compose exec -T web env GITHUB_APP_PRIVATE_KEY= SKIP_COVERAGE=1 PARALLEL_WORKERS=1 bin/rails test test/services/analytics_token_totals_test.rb test/services/github/repository_service_test.rb test/services/github/check_status_service_test.rb test/services/github/token_service_test.rb

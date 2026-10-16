@@ -56,7 +56,7 @@ module ContextBuilders
         - Secrets and variables (config items): the user adds them in Project
           Settings → Secrets & Variables. You can list their keys and attach them to
           steps; you never see or set a value, so never ask the user to paste one.
-        - Integrations (GitHub, GitLab, Slack, Azure DevOps, Coder):
+        - Integrations (GitHub, GitLab, Bitbucket, Slack, Azure DevOps, Coder):
           `get_integration_setup_url` returns the page where the user connects one.
         - Custom docker-image tools and project settings. Prefer an MCP server from
           the connector catalog; if a custom tool is really needed, describe it and

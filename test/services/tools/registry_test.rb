@@ -33,7 +33,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
 
     assert_equal %i[azure_integration_connected azure_repositories_attached coder_integration_connected
                     config_items_attached container_tools_present github_repositories_attached
-                    non_interactive_session tracker_run workflow_step_session], rules
+                    non_interactive_session pull_request_repositories_attached tracker_run workflow_step_session], rules
   end
 
   test "grouping axes cover every definition" do
@@ -49,6 +49,14 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert_equal 17, azure.size
     assert azure.none?(&:user_attachable), "Azure tools must not be offered in the picker"
     assert azure.all? { |d| d.inject_rules.intersect?(%i[azure_repositories_attached azure_integration_connected]) }
+
+    # The same holds for the pull_request_* tools: injected with a GitLab or
+    # Bitbucket repository, never picked.
+    pull_requests = defs.select { |d| d.tags.include?(:pull_requests) }
+    assert_equal 10, pull_requests.size
+    assert pull_requests.none?(&:user_attachable)
+    assert pull_requests.all? { |d| d.inject_rules == %i[pull_request_repositories_attached] }
+    assert pull_requests.all? { |d| d.requires_integration.to_s == PullRequests::CAPABILITY }
   end
 
   test "ui_groups offer one entry per visible tag, session tools only" do

@@ -261,6 +261,19 @@ gitlab:
   # (a tunnel in development). A host GitLab cannot reach registers no hooks.
   webhook_base_url: "<%= ENV['GITLAB_WEBHOOK_BASE_URL'] %>"
 
+# Bitbucket Cloud (docs/design/bitbucket-integration.md). App mode is offered
+# exactly when the three forge values are set; token mode needs nothing here.
+bitbucket:
+  forge:
+    app_id: "<%= ENV['BITBUCKET_FORGE_APP_ID'] %>"
+    environment_id: "<%= ENV['BITBUCKET_FORGE_ENVIRONMENT_ID'] %>"
+    install_url: "<%= ENV['BITBUCKET_FORGE_INSTALL_URL'] %>"
+    jwks_url: <%= ENV['BITBUCKET_FORGE_JWKS_URL'] || 'https://forge.cdn.prod.atlassian-dev.net/.well-known/jwks.json' %>
+  token_min_remaining: <%= (ENV['BITBUCKET_TOKEN_MIN_REMAINING'] || 300).to_i %>
+  merge_poll_interval: <%= (ENV['BITBUCKET_MERGE_POLL_INTERVAL'] || 1.0).to_f %>
+  open_timeout: <%= (ENV['BITBUCKET_OPEN_TIMEOUT'] || 5).to_i %>
+  read_timeout: <%= (ENV['BITBUCKET_READ_TIMEOUT'] || 30).to_i %>
+
 # Credential vending for the in-container git helper (GitHub and GitLab
 # repositories). Reached over the internal network, like cloud.credentials_url.
 git:

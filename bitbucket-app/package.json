@@ -1,0 +1,11 @@
+{
+  "name": "aixle-flow-bitbucket",
+  "private": true,
+  "description": "Aixle Flow Forge app for Bitbucket Cloud: the settings page and the remote wiring. See README.md.",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@forge/bridge": "4.5.3",
+    "@forge/react": "12.3.0",
+    "react": "18.3.1"
+  }
+}

@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 class SubStep < ApplicationRecord
+  include DecodesHtmlEntities
+
   belongs_to :step
   has_many :sub_step_runs
+
+  decodes_html_entities :name
 
   validates :name, presence: true
   validates :position, presence: true

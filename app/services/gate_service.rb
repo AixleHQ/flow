@@ -91,6 +91,21 @@ class GateService
       end
     end
 
+    # A build status landed on a Bitbucket commit. Like a GitHub check suite it
+    # is a cue to ask, never the verdict: the first status to finish may be a
+    # lint while the tests still run, so each matching gate is reconciled
+    # against every status on its pull request's head.
+    def resolve_bitbucket_build_status(repository_uuid:, commit:)
+      uuid = Bitbucket::Identifiers.uuid(repository_uuid)
+      return if uuid.nil?
+
+      Gate.pending.for_bitbucket_repository(uuid).find_each do |gate|
+        next if gate.expected_commit.present? && commit.present? && !Bitbucket::Identifiers.same_commit?(gate.expected_commit, commit)
+
+        GateReconciler.reconcile(gate)
+      end
+    end
+
     private
 
     # A gate created without an expected commit accepts any verdict — that is the

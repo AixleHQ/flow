@@ -2,6 +2,9 @@
 
 module ContextBuilders
   class Resources < Base
+    HELPER_HOSTS = { "github" => "GitHub", "gitlab" => "GitLab", "bitbucket" => "Bitbucket" }.freeze
+    PULL_REQUEST_HOSTS = HELPER_HOSTS.slice(*PullRequests::PROVIDERS.keys).freeze
+
     def applicable?
       session.repository_ids.present? ||
         session.input_asset_ids.present? ||
@@ -51,16 +54,27 @@ module ContextBuilders
       end
       lines << ""
       lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
-      if cloned.any? { |repo| repo.integration&.github? || repo.integration&.gitlab? }
+      helper_hosts = hosts_among(cloned, HELPER_HOSTS)
+      if helper_hosts.any?
         lines << ""
-        lines << "GitHub and GitLab repositories authenticate through a credential helper configured in " \
+        lines << "#{helper_hosts.to_sentence} repositories authenticate through a credential helper configured in " \
                  "each checkout, which fetches a fresh token for every `git fetch` and `git push`. Do not " \
                  "add credentials to the remote URL."
       end
       if cloned.any? { |repo| repo.integration&.github? }
         lines << ""
         lines << "`gh` authenticates the same way, per call, for the repository it targets: run it inside the " \
-                 "checkout or pass `-R <owner>/<repo>`. Do not run `gh auth login` or export a token."
+                 "checkout or pass `-R <owner>/<repo>`. Do not run `gh auth login` or export a token. Use it to " \
+                 "read; open, review and merge pull requests with the `pull_request_*` tools below."
+      end
+      pull_request_hosts = hosts_among(cloned, PULL_REQUEST_HOSTS)
+      if pull_request_hosts.any?
+        lines << ""
+        lines << "Pull requests on #{pull_request_hosts.to_sentence} repositories (merge requests, on GitLab) go " \
+                 "through the `pull_request_*` tools — the same tools on every host, and the only path that " \
+                 "records each write so a retry does not open a second pull request.#{cli_note(pull_request_hosts)} " \
+                 "Wait for CI with `pull_request_checks` or a board gate, and merge with `expected_head_sha` set to " \
+                 "the head commit you reviewed — if the branch has moved since, the merge is refused."
       end
       if cloned.any?(&:azure_devops?)
         lines << ""
@@ -82,6 +96,16 @@ module ContextBuilders
                  "or call tools that write to them."
       end
       lines.join("\n")
+    end
+
+    def cli_note(hosts)
+      missing = [ ("`glab`" if hosts.include?("GitLab")), ("Bitbucket CLI" if hosts.include?("Bitbucket")) ].compact
+      missing.any? ? " There is no #{missing.to_sentence(two_words_connector: ' or ', last_word_connector: ', or ')} in this session." : ""
+    end
+
+    def hosts_among(repositories, hosts)
+      present = repositories.filter_map { |repo| repo.integration&.provider&.to_s }.to_set
+      hosts.select { |provider, _| present.include?(provider) }.values
     end
 
     def build_assets

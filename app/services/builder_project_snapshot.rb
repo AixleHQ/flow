@@ -20,7 +20,7 @@ class BuilderProjectSnapshot
       "## Project: #{@project.name} (id #{@project.id})",
       @project.description.presence,
       block("Agent runtimes you can run", runtimes),
-      block("Integrations", integrations, empty: "none connected — steps get no GitHub/GitLab/Slack/Azure DevOps access"),
+      block("Integrations", integrations, empty: "none connected — steps get no GitHub/GitLab/Bitbucket/Slack/Azure DevOps access"),
       block("Board columns", board_columns, empty: "no board yet — `setup_board` creates one"),
       block("Workflows", workflows, empty: "none yet"),
       block("Agents", agents, empty: "none yet"),

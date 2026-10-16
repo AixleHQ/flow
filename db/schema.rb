@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -225,6 +225,43 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
     t.text "settlement_error"
     t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
     t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
+  end
+
+  create_table "bitbucket_installations", force: :cascade do |t|
+    t.string "forge_installation_id", null: false
+    t.string "forge_environment_id", null: false
+    t.string "workspace_uuid", null: false
+    t.string "workspace_slug"
+    t.string "workspace_name"
+    t.bigint "company_id"
+    t.bigint "bound_by_id"
+    t.datetime "bound_at"
+    t.string "status", default: "active", null: false
+    t.string "error_code"
+    t.text "encrypted_access_token"
+    t.datetime "token_expires_at"
+    t.datetime "last_invocation_at"
+    t.string "app_version"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_bitbucket_installations_on_company_id"
+    t.index ["forge_environment_id", "workspace_uuid"], name: "idx_bitbucket_installations_live_workspace", unique: true, where: "((status)::text <> 'uninstalled'::text)"
+    t.index ["forge_installation_id"], name: "index_bitbucket_installations_on_forge_installation_id", unique: true
+    t.index ["token_expires_at"], name: "index_bitbucket_installations_on_token_expires_at"
+  end
+
+  create_table "bitbucket_pairings", force: :cascade do |t|
+    t.bigint "bitbucket_installation_id", null: false
+    t.string "public_id", null: false
+    t.string "secret_digest", null: false
+    t.string "account_id", null: false
+    t.string "workspace_uuid", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bitbucket_installation_id"], name: "index_bitbucket_pairings_on_bitbucket_installation_id"
+    t.index ["expires_at"], name: "index_bitbucket_pairings_on_expires_at"
+    t.index ["public_id"], name: "index_bitbucket_pairings_on_public_id", unique: true
   end
 
   create_table "board_activities", force: :cascade do |t|
@@ -726,7 +763,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
     t.jsonb "settings", default: {}
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
+    t.bigint "bitbucket_installation_id"
     t.index ["azure_devops_installation_id"], name: "index_integrations_on_azure_devops_installation_id"
+    t.index ["bitbucket_installation_id"], name: "index_integrations_on_bitbucket_installation_id"
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
     t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
@@ -894,6 +933,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
     t.index ["id", "company_id"], name: "index_projects_on_id_and_company_id", unique: true
     t.index ["owner_id"], name: "index_projects_on_owner_id"
     t.index ["state"], name: "index_projects_on_state"
+  end
+
+  create_table "pull_request_operations", force: :cascade do |t|
+    t.bigint "integration_id", null: false
+    t.bigint "repository_id", null: false
+    t.string "operation", null: false
+    t.string "operation_key", null: false
+    t.string "request_digest", null: false
+    t.string "state", default: "pending", null: false
+    t.jsonb "result", default: {}, null: false
+    t.string "error_code"
+    t.string "pull_request_number"
+    t.bigint "terminal_session_id"
+    t.bigint "workflow_run_id"
+    t.bigint "workflow_id"
+    t.bigint "user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id", "operation_key"], name: "idx_pull_request_operations_key", unique: true
+    t.index ["repository_id", "pull_request_number"], name: "idx_on_repository_id_pull_request_number_59fcb5ad05"
   end
 
   create_table "received_webhooks", force: :cascade do |t|
@@ -1870,6 +1929,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
   add_foreign_key "azure_devops_subscriptions", "integrations", on_delete: :cascade
   add_foreign_key "billing_cancellations", "companies", on_delete: :cascade
   add_foreign_key "billing_cancellations", "users", on_delete: :nullify
+  add_foreign_key "bitbucket_installations", "companies", on_delete: :nullify
+  add_foreign_key "bitbucket_installations", "users", column: "bound_by_id", on_delete: :nullify
+  add_foreign_key "bitbucket_pairings", "bitbucket_installations", on_delete: :cascade
   add_foreign_key "board_activities", "board_tasks", on_delete: :cascade
   add_foreign_key "board_activities", "boards", on_delete: :cascade
   add_foreign_key "board_activities", "users", column: "actor_id", on_delete: :nullify
@@ -1917,6 +1979,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
   add_foreign_key "identity_providers", "companies"
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
+  add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
@@ -1936,6 +1999,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_120000) do
   add_foreign_key "project_trackers", "projects", on_delete: :cascade
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "pull_request_operations", "integrations", on_delete: :cascade
+  add_foreign_key "pull_request_operations", "repositories", on_delete: :cascade
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
   add_foreign_key "repositories", "companies", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_integration_company", validate: false

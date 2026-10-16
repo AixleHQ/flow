@@ -3,6 +3,7 @@ import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, Tex
 import {
   IconAlertTriangle,
   IconDownload,
+  IconEyeOff,
   IconFile,
   IconPlayerStop,
   IconUpload,
@@ -90,13 +91,24 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
 }
 
 /** One live step's terminal; it shows its own "connecting…" state, so several load independently. */
-function StepConsole({ step, label }: { step: StepRun; label: string }) {
+function StepConsole({ step, label, ownerName }: { step: StepRun; label: string; ownerName: string | null }) {
   return (
     <ConsoleFrame className={classes.console} label={label} live>
       {step.websocketUrl ? (
         <LiveTerminal url={step.websocketUrl} uploadUrl={step.uploadUrl} />
+      ) : step.liveViewPrivate ? (
+        <div className={classes.terminalPlaceholder}>
+          <IconEyeOff size={28} />
+          <Text size="sm" fw={500}>
+            Live view is private
+          </Text>
+          <Text size="sm" c="dimmed" ta="center" maw={360}>
+            {ownerName ?? 'The owner of this session'} doesn&apos;t show running sessions to project members. They can
+            turn on &ldquo;Show my active sessions&rdquo; in their profile.
+          </Text>
+        </div>
       ) : (
-        <div className={classes.terminalLoading}>
+        <div className={classes.terminalPlaceholder}>
           <Loader size="md" />
           <Text size="sm" c="dimmed">
             Session starting…
@@ -252,6 +264,7 @@ const WorkflowRunShowPage = () => {
             key={step.id}
             step={step}
             label={`Session ${sortedSteps.indexOf(step) + 1} · ${step.stepName ?? 'Step'}`}
+            ownerName={run.userName ?? null}
           />
         ))}
       </div>

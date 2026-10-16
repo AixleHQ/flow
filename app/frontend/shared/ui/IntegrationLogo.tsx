@@ -1,7 +1,9 @@
 import { useComputedColorScheme } from '@mantine/core';
 import type { ReactNode } from 'react';
 
+import atlassianLogo from './integration-logos/atlassian.svg';
 import azureDevopsLogo from './integration-logos/azure-devops.svg';
+import bitbucketLogo from './integration-logos/bitbucket.svg';
 import coderDarkLogo from './integration-logos/coder-dark.svg';
 import coderLogo from './integration-logos/coder.svg';
 import githubDarkLogo from './integration-logos/github-dark.svg';
@@ -18,9 +20,12 @@ import youtrackLogo from './integration-logos/youtrack.svg';
 const LOGOS: Record<string, { light: string; dark?: string }> = {
   github: { light: githubLogo, dark: githubDarkLogo },
   gitlab: { light: gitlabLogo },
+  bitbucket: { light: bitbucketLogo },
   coder: { light: coderLogo, dark: coderDarkLogo },
   azure_devops: { light: azureDevopsLogo },
   jira: { light: jiraLogo },
+  // Not an integration provider: the Connect menu's single entry for Jira and Bitbucket.
+  atlassian: { light: atlassianLogo },
   linear: { light: linearLogo },
   youtrack: { light: youtrackLogo },
   slack: { light: slackLogo },

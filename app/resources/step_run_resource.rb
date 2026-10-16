@@ -86,6 +86,14 @@ class StepRunResource < ApplicationResource
                            user: params[:viewer], session: ts)
   end
 
+  # The terminal is up but its owner keeps live sessions to themselves, so
+  # `websocket_url` stays nil for good — not just until the container is ready.
+  typelize :boolean
+  attribute :live_view_private do |sr|
+    ts = sr.terminal_session
+    ts&.route_token.present? && ts.ready? && !ts.visible_to?(params[:viewer])
+  end
+
   typelize :string?
   attribute :upload_url do |sr|
     ts = sr.terminal_session

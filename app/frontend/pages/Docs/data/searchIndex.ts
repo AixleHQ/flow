@@ -214,7 +214,13 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'gitlab',
     title: 'GitLab',
     section: 'User guide',
-    desc: 'Connect GitLab with a personal access token: repositories, cloning in sessions, pipeline gates and their hook, self-managed GitLab.',
+    desc: 'Connect GitLab with a personal access token: repositories, cloning in sessions, merge-request tools, pipeline gates and their hook, self-managed GitLab.',
+  },
+  {
+    slug: 'bitbucket',
+    title: 'Bitbucket',
+    section: 'User guide',
+    desc: 'Connect Bitbucket Cloud with the Aixle Flow app or an access token: repositories, cloning in sessions, pull-request tools, CI gates on pull-request builds.',
   },
   {
     slug: 'azure-devops',

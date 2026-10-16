@@ -7,17 +7,18 @@ class Gate < ApplicationRecord
   # and can therefore be reconciled against that provider's API.
   CI_GATE_TYPES = %w[
     github_checks_completed github_workflow_completed gitlab_pipeline_completed
-    azure_devops_build_completed azure_devops_pr_policies_satisfied
+    azure_devops_build_completed azure_devops_pr_policies_satisfied bitbucket_pr_statuses_completed
   ].freeze
 
   # Provider conclusions that mean "the checks passed" — GitHub's `success` /
   # `neutral` / `skipped` and GitLab's `success` / `skipped`. Anything else a
   # provider reports for a COMPLETED run is a failure, including `nil`: a
   # completed run without a conclusion is not evidence of success.
-  # Azure adds `succeeded` (a build) and `approved` (branch policies): its own
-  # vocabulary, not a translation into GitHub's, so a provider that grows a new
-  # terminal state cannot be silently read as a pass.
-  PASSING_CONCLUSIONS = %w[success neutral skipped succeeded approved].freeze
+  # Azure adds `succeeded` (a build) and `approved` (branch policies), Bitbucket
+  # `successful` (every commit status passed): each provider's own vocabulary,
+  # not a translation into GitHub's, so a provider that grows a new terminal
+  # state cannot be silently read as a pass.
+  PASSING_CONCLUSIONS = %w[success neutral skipped succeeded approved successful].freeze
 
   # Newest-first entries kept in `reconciliation_log`. A gate is reconciled every
   # few minutes for at most its TTL, so this is enough to see the whole story of
@@ -34,7 +35,7 @@ class Gate < ApplicationRecord
   # and carries `diagnostic_reason` so the board can say why.
   enumerize :gate_type,
             in: %i[github_checks_completed github_workflow_completed gitlab_pipeline_completed
-                   azure_devops_build_completed azure_devops_pr_policies_satisfied],
+                   azure_devops_build_completed azure_devops_pr_policies_satisfied bitbucket_pr_statuses_completed],
             predicates: true
   enumerize :status, in: %i[pending resolved stale], default: :pending, predicates: true, scope: true
 
@@ -103,6 +104,18 @@ class Gate < ApplicationRecord
   scope :for_azure_pull_request_id, ->(pull_request_id) {
     where(gate_type: "azure_devops_pr_policies_satisfied")
       .where("(metadata->>'pull_request_id')::bigint = ?", pull_request_id.to_i)
+  }
+
+  # Bitbucket gates route on the repository UUID, like Azure's on the GUID: a
+  # workspace or repository rename changes `full_name`, never the UUID.
+  scope :for_bitbucket_repository, ->(repository_uuid) {
+    project_ids = Repository.joins(:integration)
+                            .where(external_id: repository_uuid, scope_type: "Project", integrations: { provider: "bitbucket" })
+                            .pluck(:scope_id).uniq
+    where(gate_type: "bitbucket_pr_statuses_completed")
+      .joins(board_task: { board_column: { board: :project } })
+      .where(projects: { id: project_ids })
+      .where("metadata->>'external_repository_id' = ?", repository_uuid.to_s)
   }
 
   scope :for_projects, ->(project_ids) {
@@ -198,6 +211,7 @@ class Gate < ApplicationRecord
     when "github_checks_completed", "github_workflow_completed" then "github"
     when "gitlab_pipeline_completed" then "gitlab"
     when "azure_devops_build_completed", "azure_devops_pr_policies_satisfied" then "azure_devops"
+    when "bitbucket_pr_statuses_completed" then "bitbucket"
     end
   end
 
@@ -208,13 +222,19 @@ class Gate < ApplicationRecord
     when "gitlab_pipeline_completed"         then "pipeline_id"
     when "azure_devops_build_completed"      then "build_id"
     when "azure_devops_pr_policies_satisfied" then "pull_request_id"
+    when "bitbucket_pr_statuses_completed"    then "pull_request_id"
     end
   end
 
-  # Azure gates route on the repository GUID rather than on a display name.
+  # Azure and Bitbucket gates route on the repository's provider id rather than
+  # on a display name.
   def azure_repository_id
     metadata["external_repository_id"].presence
   end
+
+  alias external_repository_id azure_repository_id
+
+  def routes_by_external_id? = provider.in?(%w[azure_devops bitbucket])
 
   # How this gate's repository is named to a person. GitHub and GitLab gates
   # store `repo_full_name`; Azure gates store only the repository GUID, because

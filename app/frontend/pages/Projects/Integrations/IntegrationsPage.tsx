@@ -5,6 +5,7 @@ import type { Integration, Project } from '@/types/generated';
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
 import {
+  type BitbucketProps,
   IntegrationsContent,
   type SlackProps,
   type TeamsProps,
@@ -20,6 +21,7 @@ interface Props {
   integrations: Integration[];
   azureDevops?: AzureDevopsProps;
   github?: GithubProps;
+  bitbucket?: BitbucketProps;
   jira?: JiraProps;
   linear?: LinearProps;
   youtrack?: YoutrackProps;
@@ -28,7 +30,7 @@ interface Props {
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, jira, linear, youtrack, slack, teams } = usePage<{
+  const { project, integrations, azureDevops, github, bitbucket, jira, linear, youtrack, slack, teams } = usePage<{
     props: Props;
   }>().props as unknown as Props;
 
@@ -41,6 +43,7 @@ const IntegrationsPage = () => {
         title="Integrations"
         azureDevops={azureDevops}
         github={github}
+        bitbucket={bitbucket}
         jira={jira}
         linear={linear}
         youtrack={youtrack}

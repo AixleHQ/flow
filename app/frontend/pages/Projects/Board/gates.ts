@@ -79,7 +79,8 @@ export function gateTooltip(gate: Gate): string {
 }
 
 // The provider page a gate row links to: the pull request for a checks gate, the run page for a
-// workflow gate. Null when the metadata a link needs was never recorded.
+// workflow gate. Null when the metadata a link needs was never recorded. A Bitbucket gate's name is
+// recorded for display only, so a renamed repository's link goes stale while its gate keeps routing.
 export function gateLink(gate: Gate): { href: string; label: string; kind: 'pr' | 'run' } | null {
   const repo = gate.metadata.repoFullName;
   if (!repo) return null;
@@ -96,6 +97,14 @@ export function gateLink(gate: Gate): { href: string; label: string; kind: 'pr' 
       href: `https://github.com/${repo}/actions/runs/${gate.metadata.runId}`,
       label: `${repo} #${gate.metadata.runId}`,
       kind: 'run',
+    };
+  }
+  const pullRequestId = gate.metadata.pullRequestId;
+  if (gate.gateType === 'bitbucket_pr_statuses_completed' && typeof pullRequestId === 'number') {
+    return {
+      href: `https://bitbucket.org/${repo}/pull-requests/${pullRequestId}`,
+      label: `${repo} #${pullRequestId}`,
+      kind: 'pr',
     };
   }
   return null;

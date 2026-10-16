@@ -361,6 +361,73 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert integration.reload.error?
   end
 
+  # ====== Bitbucket (token mode) ======
+
+  test "index offers the Bitbucket app only when the deployment registered one" do
+    with_bitbucket_settings
+    get company_project_integrations_path(@project)
+    assert_inertia_props { |props| props[:bitbucket][:appModeEnabled] == false && props[:bitbucket][:installUrl].nil? }
+
+    with_bitbucket_settings(app_mode: true)
+    get company_project_integrations_path(@project)
+    assert_inertia_props do |props|
+      props[:bitbucket][:appModeEnabled] == true && props[:bitbucket][:installUrl] == BitbucketTestHelper::FORGE_INSTALL_URL
+    end
+  end
+
+  test "create bitbucket connects a workspace with an access token" do
+    with_bitbucket_settings
+    stub_bitbucket!
+
+    assert_difference("Integration.count", 1) do
+      post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "acme", token: "bb-1" }
+    end
+
+    assert_equal "Bitbucket connected to acme/api", flash[:notice]
+    integration = Integration.last
+    assert integration.bitbucket_token?
+    assert_equal @project.id, integration.project_id
+  end
+
+  test "create bitbucket puts a bad workspace on the workspace field and a refused token on the token" do
+    with_bitbucket_settings
+    bitbucket = stub_bitbucket!
+
+    post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "", token: "t" }
+    assert_match(/Enter the Bitbucket workspace/, Array(session["inertia_errors"][:workspace]).to_sentence)
+
+    bitbucket.fail_on(:repository_sample, Bitbucket::Error::NotAuthorized.new("no"))
+    assert_no_difference("Integration.count") do
+      post company_project_integrations_path(@project), params: { provider: "bitbucket", workspace: "acme", token: "bad" }
+    end
+    assert_match(/Bitbucket rejected this token/, Array(session["inertia_errors"][:token]).to_sentence)
+  end
+
+  test "update replaces a bitbucket token in place, never falling through to another provider" do
+    with_bitbucket_settings
+    stub_bitbucket!
+    integration = create(:integration, :bitbucket, :error, company: @company, project: @project)
+
+    patch company_project_integration_path(@project, integration), params: { token: "bb-new" }
+
+    assert_equal "Token replaced on acme/api", flash[:notice]
+    integration.reload
+    assert integration.active?
+    assert_equal "bb-new", integration.credentials_data["token"]
+  end
+
+  test "test_connection marks a bitbucket connection whose token Bitbucket refuses" do
+    with_bitbucket_settings
+    bitbucket = stub_bitbucket!
+    integration = create(:integration, :bitbucket, :active, company: @company, project: @project)
+    bitbucket.fail_on(:first_repository, Bitbucket::Error::NotAuthorized.new("Bitbucket rejected this connection's credential"))
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_equal "Connection failed: Bitbucket rejected this connection's credential", flash[:alert]
+    assert integration.reload.error?
+  end
+
   test "test_connection verifies a coder connection" do
     integration = create_coder_integration
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(

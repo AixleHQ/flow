@@ -13,7 +13,38 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Analytics**: token totals now include sessions that only report an aggregate
+  count when grouped with sessions that report input, output and cache tokens.
+  Summaries, charts and task statistics use the same per-session fallback.
+
+## [1.3.0] - 2026-10-17
+
 ### Added
+- **Integrations**: connect Bitbucket Cloud. A workspace admin installs the Aixle
+  Flow app on the workspace and connects it from **Workspace settings → Aixle
+  Flow**; agents then act as the app's bot with short-lived tokens, and
+  Bitbucket reports CI as it finishes. A workspace, project or repository access
+  token, or a personal API token, connects without the app. Jira and Bitbucket
+  are now under one **Atlassian** entry in the Connect menu.
+- **Repositories**: attach Bitbucket repositories, and public repositories from
+  bitbucket.org, and clone and push them in sessions. They stay attached when the
+  repository or the workspace is renamed in Bitbucket.
+- **Repositories**: agents open, update, comment on, review and merge pull
+  requests on GitHub, GitLab and Bitbucket with the same `pull_request_*` tools.
+  A merge goes ahead only if the pull request is still at the commit the agent
+  reviewed, a call repeated after a timeout never opens a second pull request or
+  comment, and merging can be turned off per connection. A run started from a
+  tracker issue puts the issue key in its branch names and pull-request titles,
+  so Jira links them to the issue.
+- **Triggers & gates**: a `bitbucket_pr_statuses_completed` gate waits for every
+  build status on a Bitbucket pull request's head commit — Pipelines or any
+  other CI.
+- **Integrations**: operators who run their own Bitbucket app set
+  `BITBUCKET_FORGE_APP_ID` and `BITBUCKET_FORGE_ENVIRONMENT_ID`, and
+  `BITBUCKET_FORGE_INSTALL_URL` for the install button (see
+  `docs/reference/configuration.md` and `bitbucket-app/README.md`). Without the
+  first two Bitbucket connects with tokens only.
 - **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
   `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
 - **Sign-in & onboarding**: an admin can skip connecting an agent during
@@ -50,9 +81,16 @@ governance, community health — carry none.
   resources scoped to each step and reviews with distinct purposes.
 
 ### Fixed
-- **Analytics**: token totals now include sessions that only report an aggregate
-  count when grouped with sessions that report input, output and cache tokens.
-  Summaries, charts and task statistics use the same per-session fallback.
+- **Repositories**: picking the chosen integration, repository or branch again in
+  **Add Repository** keeps it instead of clearing it and the fields below. When the
+  integration has nothing left to add, the repository field says why: every
+  repository it reaches is already in the project, or it reaches none.
+- **Sessions & Runs**: a running step whose owner does not share active sessions
+  now says its live view is private, and how the owner can share it, instead of
+  showing "Session starting…" until the step ends.
+- **Workflows**: step, sub-step, workflow and task names that an agent wrote
+  HTML-escaped ("Plan &amp; release next batch") are stored and shown as plain
+  text. Existing step, sub-step and task names are decoded by a migration.
 - **Triggers & gates**: a GitLab pipeline webhook no longer fails with a server
   error on the first delivery each web server receives, so a CI gate on that
   pipeline resolves when the pipeline ends instead of at the next reconcile sweep.
@@ -550,7 +588,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.2...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.3.0...develop
+[1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0

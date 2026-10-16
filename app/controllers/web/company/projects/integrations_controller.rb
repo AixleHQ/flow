@@ -1,16 +1,22 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
+  PROVIDER_ASSOCIATIONS = {
+    azure_devops_installation: :azure_devops?,
+    bitbucket_installation: :bitbucket?,
+    tracker_subscriptions: ->(integration) { integration.linear? || integration.youtrack? }
+  }.freeze
+
   def index
-    integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by, :azure_devops_installation, :tracker_subscriptions)
-                              .order(created_at: :desc)
+    integrations = Integration.visible_for_project(current_project).includes(:connected_by).order(created_at: :desc).to_a
+    preload_provider_associations(integrations)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
       project: project_props,
       integrations: integrations.map { |i| IntegrationResource.new(i).to_h },
       azure_devops: azure_devops_props,
       github: github_props,
+      bitbucket: bitbucket_props,
       jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       youtrack: { enabled: true, marketplace_url: Youtrack::Config::MARKETPLACE_URL },
@@ -25,6 +31,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     case params[:provider].to_s
     when "github" then create_github
     when "gitlab" then create_gitlab
+    when "bitbucket" then create_bitbucket
     when "coder" then create_coder
     when "azure_devops" then create_azure_devops
     when "jira" then create_jira
@@ -49,6 +56,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     return update_youtrack if integration.youtrack?
     return update_github_projects(integration) if integration.github? && params.key?(:github_project_ids)
     return replace_gitlab_token(integration) if integration.gitlab?
+    return replace_bitbucket_token(integration) if integration.bitbucket?
     return replace_coder_token(integration) if params.key?(:session_token)
 
     coder_service.update_settings(
@@ -85,7 +93,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
       "linear" => Linear::IntegrationService, "youtrack" => Youtrack::IntegrationService,
       "github" => Github::IntegrationService, "gitlab" => Gitlab::IntegrationService,
-      "coder" => Coder::IntegrationService
+      "bitbucket" => Bitbucket::IntegrationService, "coder" => Coder::IntegrationService
     }[integration.provider.to_s]
     unless service_class
       return redirect_to company_project_integrations_path(current_project),
@@ -321,6 +329,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   private
 
+  # Only some providers' rows read each association; preloading it for every row
+  # is an unused eager load (Bullet) on a page without those providers.
+  def preload_provider_associations(integrations)
+    PROVIDER_ASSOCIATIONS.each do |association, reads|
+      records = integrations.select(&reads)
+      ActiveRecord::Associations::Preloader.new(records: records, associations: association).call if records.any?
+    end
+  end
+
   # GitHub connects two ways. The App path arrives on GitHub's post-install
   # redirect (GithubSetupController); the PAT path posts a token pasted into the
   # dialog. Which credential is read is decided by the declared mode, never by
@@ -413,6 +430,35 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   rescue Gitlab::IntegrationService::ConnectionError => e
     redirect_to company_project_integrations_path(current_project),
                 inertia: { errors: { personal_access_token: e.message } }
+  end
+
+  # The workspace error goes on the workspace field, everything else on the
+  # token, so the dialog stays open and points at what to fix.
+  def create_bitbucket
+    integration = bitbucket_service.create(workspace: params[:workspace].to_s, token: params[:token].to_s)
+    redirect_to company_project_integrations_path(current_project), notice: "Bitbucket connected to #{integration.name}"
+  rescue Bitbucket::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project), inertia: { errors: { bitbucket_field(e) => e.message } }
+  end
+
+  def replace_bitbucket_token(integration)
+    integration = bitbucket_service.replace_token(integration, token: params[:token].to_s)
+    redirect_to company_project_integrations_path(current_project), notice: "Token replaced on #{integration.name}"
+  rescue Bitbucket::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project), inertia: { errors: { token: e.message } }
+  end
+
+  def bitbucket_field(error) = error.code == "invalid_workspace" ? :workspace : :token
+
+  def bitbucket_service
+    Bitbucket::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  # The install link is shown only where it leads somewhere: a deployment with
+  # no registered Forge app offers the token path alone.
+  def bitbucket_props
+    enabled = Bitbucket::AppConfig.app_mode_enabled?
+    { app_mode_enabled: enabled, install_url: (Bitbucket::AppConfig.forge_install_url if enabled) }
   end
 
   def create_coder

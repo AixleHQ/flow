@@ -226,7 +226,7 @@ module Tools
             what a board task's assignee takes.
 
           ## 2. Integrations, before anything that depends on them
-          - `list_integrations` — GitHub / GitLab / Slack / Coder and whether
+          - `list_integrations` — GitHub / GitLab / Bitbucket / Slack / Coder and whether
             each is connected.
           - Missing one? `get_integration_setup_url` returns the settings page;
             the user connects it in the browser. Credentials never come through
