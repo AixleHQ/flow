@@ -79,7 +79,7 @@ Checked against Atlassian documentation in October 2026. Each one changed the de
 
 ### 4.2 Scope of the port
 
-Implemented for **GitLab and Bitbucket**. **GitHub keeps `gh`** — it works, and agents know it; a GitHub adapter (Octokit) can be added later if workflows need to be host-neutral, at which point `resources.rb` must tell agents which path to use. **Azure DevOps keeps its own tools**: they carry policies, votes and work-item links the port does not model, and moving them is churn with no user gain.
+Implemented for **GitLab, Bitbucket and GitHub** (the GitHub adapter was added on 2026-10-16 so every host works the same way). GitHub sessions keep a signed-in `gh` for reading; `resources.rb` tells agents to open, review and merge through the tools, the only path with the merge guard and the ledger. **Azure DevOps keeps its own tools**: they carry policies, votes and work-item links the port does not model, and moving them is churn with no user gain.
 
 ### 4.3 Port
 
@@ -131,7 +131,7 @@ All `tags :pull_requests` (hidden, like `:azure_devops`), `inject_when :pull_req
 
 ### 4.6 Availability and injection
 
-- `PullRequests::CAPABILITY = "pull_requests"`, added to `Tools::Context#connected_providers` when the project has an active GitLab or Bitbucket integration — the way `Trackers::CAPABILITY` is (`context.rb:54`). `requires_integration` takes one provider, which is why a capability is needed.
+- `PullRequests::CAPABILITY = "pull_requests"`, added to `Tools::Context#connected_providers` when the project has an active GitHub, GitLab or Bitbucket integration — the way `Trackers::CAPABILITY` is (`context.rb:54`). `requires_integration` takes one provider, which is why a capability is needed.
 - `pull_request_repositories_attached: ->(ctx) { ctx.repository_providers.intersect?(PullRequests::PROVIDERS.keys) }`. A session with only GitHub or Azure repositories does not see these tools.
 
 ### 4.7 Target resolution
@@ -494,7 +494,7 @@ Contract tests pin an adapter to payloads we wrote. Four Azure defects passed a 
 ## 14. Open decisions
 
 1. **Tool names:** `pull_request_*`, following `tracker_*`. Recommended.
-2. **GitHub on the port:** later and optional; `gh` stays the GitHub path. Recommended.
+2. **GitHub on the port:** done (2026-10-16). `gh` stays signed in for reading. Moving Azure DevOps onto the port is a separate change.
 3. **Merging on by default**, per-integration off switch — consistent with Azure. Recommended.
 4. **`draft` defaults to true** on create — consistent with Azure. Recommended.
 5. **One installation, one company.** Recommended: no multi-company proof exists on Bitbucket.

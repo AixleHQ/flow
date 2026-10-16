@@ -165,9 +165,40 @@ field. When the session starts, each one is cloned under `/workspace/repo/`:
 The credential allows what the connection allows: the app's permissions narrowed
 to that one repository, or everything the personal access token reaches.
 
-There are no server-side GitHub pull-request tools. An agent opens and answers
-pull requests itself, with `gh` or the GitHub API — which is why the
-**Pull requests** permission matters.
+## Pull-request tools
+
+Sessions that hold a GitHub repository connected through the App or a personal
+access token get the `pull_request_*` tools — the same ones GitLab and Bitbucket
+repositories get, so a workflow written for one host runs on the others.
+`pull_request_list`, `_get`, `_changes`, `_checks` and `_list_comments` read;
+`_create`, `_update`, `_add_comment`, `_review` and `_merge` write. Agents read
+with `gh` as they like, but open, review and merge through the tools: only
+they check the head commit before a merge and record each write, so a call
+repeated after a timeout returns the first result instead of a second pull
+request or comment. A public repository attached without a connection gets no
+tools.
+
+What differs on GitHub:
+
+- `pull_request_merge` sends GitHub the head commit it checked, and GitHub
+  refuses the merge if the branch moved in between. `fast_forward` means
+  *rebase and merge*: a linear history with new commit ids. Branch protection
+  (required reviews and checks) is never bypassed.
+- `pull_request_checks` reads the check runs on the head commit, and its commit
+  statuses where the connection may read them. The App does not ask for
+  **Commit statuses**, so an App connection sees check runs only.
+- The App cannot approve or request changes on a pull request it opened itself.
+  Withdrawing an approval dismisses the connection's latest one, and GitHub may
+  require dismissal rights on the branch for that.
+- A reply to a conversation comment is posted as a new conversation comment;
+  only inline review comments have threads. GitHub does not report whether a
+  thread is resolved.
+- Lists of merged or closed pull requests are filtered after GitHub returns
+  them, so a page can hold fewer than `limit`.
+
+The tools use the permissions the clone already needs: **Pull requests** read
+and write, **Contents** read and write (to merge and delete the source branch),
+**Checks** read.
 
 ## CI gates
 

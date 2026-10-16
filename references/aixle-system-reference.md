@@ -184,7 +184,7 @@ their connector and version. Header and env values reference secrets as
 
 **Repositories**: GitHub (App installation or personal access token), GitLab,
 Azure DevOps or Bitbucket Cloud (the Aixle Flow app or an access token) through
-an integration, or a public URL cloned read-only. Sessions holding a GitLab or
+an integration, or a public URL cloned read-only. Sessions holding a GitHub, GitLab or
 Bitbucket repository get the `pull_request_*` tools. Fields:
 `full_name`, `source_branch`, `purpose`, `description`, `is_private`.
 

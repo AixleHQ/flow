@@ -9,7 +9,7 @@ Each integration has its own page:
 
 | Integration | What it gives a project | Page |
 | --- | --- | --- |
-| **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, CI gates on checks and workflow runs, GitHub Projects as trackers | [GitHub](/docs/github) |
+| **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, the `pull_request_*` tools, CI gates on checks and workflow runs, GitHub Projects as trackers | [GitHub](/docs/github) |
 | **GitLab** | Repositories cloned in sessions, the `pull_request_*` tools for merge requests, CI gates on pipelines | [GitLab](/docs/gitlab) |
 | **Bitbucket** | Repositories cloned in sessions, the `pull_request_*` tools, CI gates on pull-request builds — through the Aixle Flow app or an access token | [Bitbucket](/docs/bitbucket) |
 | **Azure DevOps** | Repositories and pull requests, Azure Boards as a tracker, Service Hooks | [Azure DevOps](/docs/azure-devops) |

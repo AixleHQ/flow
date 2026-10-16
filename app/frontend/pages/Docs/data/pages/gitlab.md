@@ -104,8 +104,8 @@ A session gets a repository when its step lists one
 ## Merge-request tools
 
 Sessions that hold a GitLab repository get these tools automatically. They are
-the same tools Bitbucket repositories get, so a workflow written for one host
-runs on the other.
+the same tools GitHub and Bitbucket repositories get, so a workflow written for
+one host runs on the others.
 
 | Tool | What it does |
 | --- | --- |

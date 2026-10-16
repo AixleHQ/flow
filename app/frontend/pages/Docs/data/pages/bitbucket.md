@@ -128,8 +128,8 @@ anonymously, so agents can read it but cannot push or open pull requests.
 
 ## Pull-request tools
 
-Sessions that hold a Bitbucket or GitLab repository get these tools
-automatically:
+Sessions that hold a Bitbucket, GitHub or GitLab repository get these tools
+automatically — the same set on every host:
 
 | Tool | What it does |
 | --- | --- |
