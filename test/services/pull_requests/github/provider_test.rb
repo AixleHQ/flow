@@ -172,6 +172,18 @@ module PullRequests
         assert_equal [ %w[ci/jenkins passed], %w[lint passed], %w[tests pending] ], checks.items.map { |i| [ i[:name], i[:status] ] }
       end
 
+      test "checks fall back to check runs when the connection may not read commit statuses" do
+        stub_request(:get, "#{REPO}/pulls/7").to_return(json(pr(7)))
+        stub_request(:get, "#{REPO}/commits/#{HEAD}/status")
+          .to_return(json({ message: "Resource not accessible by integration" }, status: 403))
+        stub_request(:get, "#{REPO}/commits/#{HEAD}/check-runs").with(query: hash_including({}))
+          .to_return(json({ total_count: 1, check_runs: [
+            { name: "tests", status: "completed", conclusion: "success", html_url: "https://github.com/acme/app/runs/2" }
+          ] }))
+
+        assert_equal "passed", @provider.checks(@repository, 7).state
+      end
+
       test "checks report none when nothing has reported on the head, not a pass" do
         stub_request(:get, "#{REPO}/pulls/7").to_return(json(pr(7)))
         stub_request(:get, "#{REPO}/commits/#{HEAD}/status").to_return(json({ state: "pending", statuses: [] }))

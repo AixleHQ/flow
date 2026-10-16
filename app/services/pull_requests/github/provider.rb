@@ -135,7 +135,7 @@ module PullRequests
 
       def checks(repository, ref)
         head = fetch(repository, number_of(repository, ref)).dig(:head, :sha)
-        statuses = read { client(repository).combined_status(repository.full_name, head) }
+        statuses = commit_statuses(repository, head)
         runs = read { client(repository).check_runs_for_ref(repository.full_name, head, per_page: 100) }
 
         items = Array(statuses[:statuses]).map do |status|
@@ -162,6 +162,16 @@ module PullRequests
       end
 
       private
+
+      # The Aixle App does not ask for the Commit statuses permission, so an App
+      # connection cannot read them; its check runs still say what CI did.
+      def commit_statuses(repository, head)
+        read { client(repository).combined_status(repository.full_name, head) }
+      rescue Error => e
+        raise unless %w[permission_denied not_found_or_inaccessible].include?(e.code)
+
+        {}
+      end
 
       # One client per repository: an App connection's token is narrowed to it.
       def client(repository)
