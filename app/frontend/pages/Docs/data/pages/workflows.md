@@ -58,6 +58,10 @@ Step A ┤                   ├── Step D (merge)
        └── Step C (test)  ─┘
 ```
 
+A step's starting context summarizes only the steps it depends on, directly or
+through others, each from its latest completed or skipped attempt. In the diagram,
+Step D gets A, B and C; Step B gets only A, never C, which runs beside it.
+
 Aixle Flow uses **Temporal** to orchestrate this — runs survive process
 restarts, retries are durable, and you can attach to a long-running
 workflow from a fresh page reload.
@@ -107,13 +111,6 @@ The API endpoints behind those buttons:
 - `POST /company/projects/:id/workflow_runs/:run_id/skip_step`
 
 ## Assets in and out
-
-Previous-step summaries in the agent's initial context cover completed/skipped
-dependencies only, including transitive dependencies. Only the latest qualifying
-attempt of each dependency is summarized; independent branches are left out.
-Keep one canonical specification, pass its file path between steps, and attach
-only the resources each step needs. Add a separate review when it checks something
-the build's own review does not already cover.
 
 Three sources of input assets, all merged additively:
 

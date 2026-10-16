@@ -13,20 +13,22 @@ class ContextRenderer
 
   def self.render_with_metadata(sections)
     original = render_sections(sections)
-    prepared = over_budget?(sections) ? compress_previous_steps(sections) : sections
-    content = prepared.equal?(sections) ? original : render_sections(prepared)
+    tokens_before = estimate_text_tokens(original)
+    prepared = tokens_before > TOKEN_BUDGET ? compress_previous_steps(sections) : sections
     compressed_tags = sections.zip(prepared).filter_map do |before, after|
       before.tag if before.content != after.content
     end.uniq
+    content = compressed_tags.empty? ? original : render_sections(prepared)
+    tokens_after = estimate_text_tokens(content)
 
     {
       content: content,
       original_rendered_content_length: original.length,
       rendered_content_length: content.length,
-      estimated_tokens_before: estimate_text_tokens(original),
-      estimated_tokens_after: estimate_text_tokens(content),
+      estimated_tokens_before: tokens_before,
+      estimated_tokens_after: tokens_after,
       token_budget: TOKEN_BUDGET,
-      over_budget: estimate_text_tokens(content) > TOKEN_BUDGET,
+      over_budget: tokens_after > TOKEN_BUDGET,
       compressed_tags: compressed_tags
     }
   end
@@ -59,10 +61,6 @@ class ContextRenderer
 
   def self.estimate_text_tokens(text)
     (text.length + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN
-  end
-
-  def self.over_budget?(sections)
-    estimate_tokens(sections) > TOKEN_BUDGET
   end
 
   def self.replace_section(sections, tag, &block)

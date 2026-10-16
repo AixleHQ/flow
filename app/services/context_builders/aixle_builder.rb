@@ -145,10 +145,10 @@ module ContextBuilders
           workflow (`base_config_item_ids`); the step agent reads them at run time.
           MCP server headers reference a secret as `config_item:NAME` instead of
           carrying it.
-        - **Between steps**: dependency steps' latest completed/skipped closing notes
-          and sub-step notes reach their downstream steps; files in `/workspace/outputs/` become run assets; on
-          board-triggered runs every step shares the task, so a tagged board comment
-          is the clearest hand-off.
+        - **Between steps**: a step's closing note and sub-step notes reach the steps
+          that depend on it, directly or through others; files in `/workspace/outputs/`
+          become run assets; on board-triggered runs every step shares the task, so a
+          tagged board comment is the clearest hand-off.
         - `preferred_model` and `required_agent_runtime`
           (#{Step::SUPPORTED_AGENT_RUNTIMES.join(', ')}) pin a step when it needs a
           particular model or runtime. The project snapshot lists the runtimes this

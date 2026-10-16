@@ -30,10 +30,9 @@ governance, community health — carry none.
 - **Sessions & Runs**: when the generated context exceeds `CONTEXT_TOKEN_BUDGET`,
   every sub-step `→ data:` line in the previous-steps summary is dropped, whatever
   its length (before, a long one was only shortened), and other notes over 100
-  characters are cut. The skills and repositories sections are no longer trimmed:
-  an over-budget context keeps them and reports the excess. A session's
-  `context_metadata` gains a `rendering` object with the final size, estimated
-  tokens, compressed sections and whether it is still over budget.
+  characters are cut. A session's `context_metadata` gains a `rendering` object
+  with the final size, estimated tokens, compressed sections and whether it is
+  still over budget.
 - **Sessions & Runs**: the Output Rules now say "Use only the MCP servers and
   tools needed for the task" instead of "Use all available MCP servers and
   tools". This is in the context of every session except the Aixle Builder's.
