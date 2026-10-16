@@ -174,30 +174,19 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
 
     content = context_for(task)
 
-    assert_includes content, "##{epic.number} Preserve the billing contract (id: #{epic.id})"
-    assert_includes content, "board_get_task(task_id: #{epic.id})"
-    assert_includes content, "board_get_comments(task_id: #{epic.id})"
-    assert_includes content, "board_list_tasks(parent_task_id: #{epic.id})"
+    assert_includes content, "- **Epic:** ##{epic.number} Preserve the billing contract (id: #{epic.id})"
     assert_not_includes content, "Parent specification."
     assert_not_includes content, "Do not change /billing"
     assert_not_includes content, "Unrelated sibling detail"
   end
 
-  test "an epic tells its agent how to discover its subtasks" do
-    epic = create(:board_task, board: @board, board_column: @column, task_type: :epic)
-
-    assert_includes context_for(epic), "board_list_tasks(parent_task_id: #{epic.id})"
-  end
-
-  test "a task without an epic still reads its own decisions without unrelated task pointers" do
+  test "a task without an epic names none" do
     create(:board_task, board: @board, board_column: @column, task_type: :epic, title: "Other epic")
     task = create(:board_task, board: @board, board_column: @column)
 
     content = context_for(task)
 
-    assert_includes content, "board_get_comments(task_id: #{task.id})"
-    assert_not_includes content, "Parent epic:"
-    assert_not_includes content, "board_list_tasks(parent_task_id:"
+    assert_not_includes content, "**Epic:**"
     assert_not_includes content, "Other epic"
   end
 
@@ -212,8 +201,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     content = context_for(task)
 
     assert_not_includes content, "Private foreign epic"
-    assert_not_includes content, "board_get_task(task_id: #{epic.id})"
-    assert_not_includes content, "board_list_tasks(parent_task_id: #{epic.id})"
+    assert_not_includes content, "**Epic:**"
   end
 
   # -- AC #5: BUILDERS registration position --

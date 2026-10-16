@@ -28,6 +28,7 @@ module ContextBuilders
       board = task.board
       column = task.board_column
       columns = board.board_columns.order(:position)
+      epic = parent_epic(task)
 
       lines = []
       lines << "## Board Task Context"
@@ -36,6 +37,7 @@ module ContextBuilders
       lines << ""
       lines << "- **Board:** #{board.name}"
       lines << "- **Task:** ##{task.number} #{task.title} (id: #{task.id})"
+      lines << "- **Epic:** ##{epic.number} #{epic.title} (id: #{epic.id})" if epic
       lines << "- **Column:** #{column.name}" if column
       lines << "- **Priority:** #{task.priority}" if task.priority.present?
       lines << "- **Description:** #{task.description}" if inline_description?(task)
@@ -43,8 +45,6 @@ module ContextBuilders
       lines << "- **Assignee:** #{task.assignee.name} (id: #{task.assignee_id})" if task.assignee
       lines << ""
       lines << fetch_hint(task)
-      lines << ""
-      lines.concat(continuity_lines(task))
 
       lines << ""
       lines << "### Board Columns"
@@ -60,28 +60,10 @@ module ContextBuilders
       task.description.present? && task.description.length <= DESCRIPTION_INLINE_LIMIT
     end
 
-    def continuity_lines(task)
-      lines = [
-        "### Decisions and related tasks",
-        "Before changing code, read this task's comments with `board_get_comments(task_id: #{task.id})`."
-      ]
-      parent = task.board.board_tasks.find_by(id: task.parent_task_id, task_type: :epic) if task.parent_task_id.present?
-      if parent
-        lines << "Parent epic: ##{parent.number} #{parent.title} (id: #{parent.id}). " \
-          "Read its full requirements and decisions with `board_get_task(task_id: #{parent.id})` " \
-          "and `board_get_comments(task_id: #{parent.id})` before implementing."
-      end
+    def parent_epic(task)
+      return if task.parent_task_id.blank?
 
-      epic_id = parent&.id || (task.id if task.task_type.epic?)
-      if epic_id
-        lines << "Find related subtasks with `board_list_tasks(parent_task_id: #{epic_id})` " \
-          "(paginated: follow `has_more` and `offset`). Read referenced or relevant tasks " \
-          "and their comments with `board_get_task` and `board_get_comments`."
-      end
-      lines << "Reconcile agreed decisions with the task and epic requirements; report unresolved " \
-        "conflicts instead of silently overriding them. Task relationships do not imply execution " \
-        "order or shared code: verify prerequisite PRs or commits on the working branch."
-      lines
+      task.board.board_tasks.find_by(id: task.parent_task_id, task_type: :epic)
     end
 
     def fetch_hint(task)

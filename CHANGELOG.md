@@ -14,8 +14,8 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
-- **Tasks**: agents can find a task's parent epic and its subtasks, and are
-  instructed to read relevant requirements and decisions before changing code.
+- **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
+  `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
 
 ### Fixed
 - **Sessions & Runs**: an agent session or workflow step gets up to ten minutes to
@@ -27,8 +27,9 @@ governance, community health — carry none.
 - **Sign-in & onboarding**: a viewer's onboarding shows a preview of one of the
   company's workflows and its first steps. It showed the generic text whenever
   that workflow had steps, and could pick an archived workflow.
-- **Tasks**: filtering comments by human author returns human decisions; the
-  previously offered `user` filter works as an alias for `human`.
+- **Tasks**: `board_get_comments` filtered by human author returns people's
+  comments. The only human value it offered, `user`, matched nothing; it now
+  accepts `human` (and `system`), and `user` still works as an alias.
 
 ## [1.2.2] - 2026-10-15
 

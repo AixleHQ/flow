@@ -272,11 +272,10 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal "Agent comment", data.first["body"]
   end
 
-  test "board_get_comments advertises the persisted human author type" do
+  test "board_get_comments advertises every persisted author type and the legacy user alias" do
     types = InternalTools::BoardGetComments.tool_definition.input_schema.dig("properties", "author_type", "enum")
 
-    assert_includes types, "human"
-    assert_includes types, "user"
+    assert_equal TaskComment.author_type.values + [ "user" ], types
   end
 
   test "board_get_comments human and legacy user filters both return human decisions" do

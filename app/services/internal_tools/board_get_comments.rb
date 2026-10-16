@@ -21,7 +21,7 @@ module InternalTools
             description: "Board task ID"
           },
           author_type: {
-            enum: %w[human user agent],
+            enum: %w[human agent system user],
             type: "string",
             description: "Optional author type filter; user is a legacy alias for human"
           },

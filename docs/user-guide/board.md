@@ -56,28 +56,23 @@ a project created there has no board until it runs.
 When a board-triggered workflow run starts, the agent receives:
 
 - Task title, number, internal id, column, priority, tags and assignee.
+- For a subtask, its parent epic's number, title and internal id.
 - The complete description when it is at most 1,500 characters; otherwise a
   pointer to read it with `board_get_task`, without a truncated copy.
-- Instructions to read the task's comments before changing code. Comments are
-  fetched with `board_get_comments`; they are not copied into the initial context. Use
-  `author_type: "human"` for human comments (`"user"` remains a compatible alias).
-- For a subtask, its parent epic's title, number and internal id, with instructions
-  to read the epic's full description and comments.
-- A `board_list_tasks(parent_task_id: …)` pointer to discover subtasks of the
-  current epic, or siblings of the current subtask. The response is paginated;
-  follow `has_more` and `offset` when further tasks are relevant.
+- A pointer to the task's comments. They are not copied into the context; the
+  agent reads them with `board_get_comments` (`author_type: "human"` for people's
+  comments).
 - Board column names, with the current column marked.
 
-Read referenced or relevant related tasks and their comments before implementing.
-Keep the task and epic requirements consistent with agreed decisions; report
-unresolved conflicts instead of silently choosing one. A relationship does not
-impose execution order or merge another task's branch: verify that prerequisite
-PRs or commits are present on the working branch.
+The epic's description and comments, its other subtasks and their comments are
+not in the context. When a step depends on them, say so in its instructions:
+`board_get_task` and `board_get_comments` read the epic, and
+`board_list_tasks(parent_task_id: …)` lists its subtasks. Linking a task to an
+epic does not order their runs or share their branches: if a subtask builds on
+another one's PR, name that PR.
 
 The task's attachments are available through `board_get_task_assets` (they are
-not mounted in the container). Other tasks' descriptions, comments and run
-transcripts are not automatically inherited. Arbitrary links in external trackers
-are not traversed by this epic/subtask mechanism.
+not mounted in the container).
 
 This is the **BoardContext** builder — one of the layers in the agent
 context stack. See [agents.md](agents.md#how-context-is-built) for the
