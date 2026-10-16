@@ -1,96 +1,102 @@
 # Operating the Aixle Flow app for Bitbucket
 
-The Bitbucket integration's primary connection is a Forge app, **Aixle Flow for Bitbucket**,
-that a workspace admin installs on a Bitbucket Cloud workspace. The app has no Forge functions:
-every module calls this deployment's remote endpoints, so the deployment has to be reachable from
-Atlassian's cloud. Design: [`docs/design/bitbucket-integration.md`](../design/bitbucket-integration.md);
-the app's own protocol and build steps: [`bitbucket-app/README.md`](../../bitbucket-app/README.md).
+Bitbucket Cloud connects to Aixle primarily through **Aixle Flow for Bitbucket**, a Forge app a
+workspace admin installs on a Bitbucket workspace. The app has no Forge functions: every module
+calls the deployment's remote endpoints under `/webhooks/bitbucket/forge/`, so the deployment
+has to be reachable from Atlassian's cloud. Design:
+[`docs/design/bitbucket-integration.md`](../design/bitbucket-integration.md); the app's
+protocol, environments and deploy script: [`bitbucket-app/README.md`](../../bitbucket-app/README.md).
 
-A deployment without the app still connects Bitbucket with tokens (Connect → Atlassian → Bitbucket
-→ Use a token); nothing below is needed for that.
+A deployment without the app still connects Bitbucket with tokens (Connect → Atlassian →
+Bitbucket → Use a token); nothing below is needed for that.
 
-## One registration, three environments
+## What is live
 
-Aixle's deployments share one registration in the **Dualboot Partners** developer space, with the
-three environments `forge register` creates:
-
-| Forge environment | Remote (`AIXLE_BASE_URL`) | Installs |
+| | Production | Staging |
 | --- | --- | --- |
-| `production` | `https://flow.aixle.com` | customers' workspaces, through the sharing link |
-| `staging` | the staging host | our test workspaces |
-| `development` | a developer's tunnel | a developer's test workspace |
+| Forge environment | `production` | `staging` |
+| Forge calls go to | `https://flow.aixle.com/webhooks/bitbucket/forge/…` | `https://webhooks-staging.flow.aixle.com/webhooks/bitbucket/forge/…` |
+| Connect opens | `https://flow.aixle.com/integrations/bitbucket/connect` | `https://staging.flow.aixle.com/integrations/bitbucket/connect` (VPN) |
+| Installed from | the sharing link in the Connect dialog | the staging sharing link, or `forge install -e staging` |
 
-Each environment has its own installations and its own environment id, and each deployment
-accepts invocations for exactly one: `BITBUCKET_FORGE_APP_ID` + `BITBUCKET_FORGE_ENVIRONMENT_ID`.
-A staging deployment never receives a token for a workspace installed on production.
+Both run the one registration in the *Dualboot Partners* developer space
+(`ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2`). Sharing is enabled for both
+environments under **Distribution** in the developer console; the app is not on Marketplace,
+which is what keeps install links usable. Installing needs a Bitbucket workspace admin and a team
+workspace — Forge does not install on personal workspaces.
 
-A self-hosted deployment registers its own app the same way, with its own base URL, or uses
-tokens only.
+Each deployment accepts invocations for exactly one environment of that app:
 
-## Deploying a version
+| Variable | Production | Staging |
+| --- | --- | --- |
+| `BITBUCKET_FORGE_APP_ID` | `ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2` | same |
+| `BITBUCKET_FORGE_ENVIRONMENT_ID` | `d2cae4d1-9389-4f0d-8315-80b45451ab9e` | `b4abdfa3-53b4-4eb1-a5e5-8d247c87055b` |
+| `BITBUCKET_FORGE_INSTALL_URL` | the production sharing link | the staging sharing link |
 
-From `bitbucket-app/`, in a container (never a host-global Forge CLI), logged in through
-`FORGE_EMAIL` / `FORGE_API_TOKEN` (an Atlassian API token *without* scopes):
+App mode appears in the connect dialog exactly when all three are set. Staging gets the
+integration like production does: unlike Azure DevOps's single app registration, Forge keeps each
+environment's installations and tokens apart, so staging never holds a credential for a
+production customer.
+
+## Shipping a new version of the app
+
+From `bitbucket-app/`, in a container, as described in its README:
 
 ```sh
-export FORGE_APP_ID=ari:cloud:ecosystem::app/<uuid> AIXLE_BASE_URL=https://flow.aixle.com
-npm ci
-forge lint
-forge deploy -e production --non-interactive
+bin/deploy staging      # first; check a staging workspace
+bin/deploy production
 ```
 
-- `forge lint` must be clean. Module keys are one namespace across triggers, endpoints and UI
-  modules.
-- **Changing a scope, a remote or an endpoint is a major version.** Every installation keeps
-  running the old version — heartbeats included — until a workspace admin approves the new one.
-  Plan scope changes; add read scopes before they are needed.
-- A deploy resets the scheduled trigger: the next heartbeat comes about five minutes later. Tokens
-  already held last two hours or more, so nothing notices.
+`bin/deploy` sets each environment's URLs, lints and deploys. Two things to plan for:
 
-Then set or check the deployment's variables (`docs/reference/configuration.md`):
+- **A major version waits for every admin.** A changed scope, remote or egress address makes one;
+  each installation keeps running the old version — heartbeats included — until a workspace admin
+  approves the update in Bitbucket. `bin/deploy` refuses it unless given
+  `--approve MAJOR_VERSION_RULE`. Ask for read scopes before they are needed.
+- **A deploy resets the heartbeat.** The next one comes about five minutes later; tokens already
+  held last two hours or more.
 
-| Variable | Where it comes from |
-| --- | --- |
-| `BITBUCKET_FORGE_APP_ID` | `app.id` after `forge register` |
-| `BITBUCKET_FORGE_ENVIRONMENT_ID` | `forge environments list` |
-| `BITBUCKET_FORGE_INSTALL_URL` | Developer console → the app → **Distribution** → enable sharing → install link |
-
-App mode is offered in the connect dialog only when all three are set.
+A change to the Rails side ships with the normal release; the app needs a deploy only when
+`bitbucket-app/` changes.
 
 ## What a healthy installation looks like
 
-Observed against a live workspace (2026-10-16):
+Measured against a live workspace (2026-10-16):
 
-- **Install → lifecycle event:** about 3–4 minutes after the install, `POST
-  /webhooks/bitbucket/forge/lifecycle` creates the installation, unbound, with a token good for
-  four hours.
-- **Heartbeat:** `POST /webhooks/bitbucket/forge/heartbeat` every five minutes. Forge reuses a
-  token until it has about two hours left, so the stored expiry moves forward in steps rather than
-  on every tick.
-- **Build status:** a status written to a commit reaches `POST /webhooks/bitbucket/forge/events`
-  within about a second, and the gate waiting on it resolves within seconds.
-- **Settings page:** `POST /webhooks/bitbucket/forge/ui/<action>` when a workspace admin opens
-  **Workspace settings → Aixle Flow**.
+- **Install → lifecycle:** 3–4 minutes after an install, `POST …/lifecycle` creates the
+  installation, unbound, with a token good for four hours.
+- **Heartbeat:** `POST …/heartbeat` every five minutes. Forge reuses a token until it has about two
+  hours left, so the stored expiry moves forward in steps.
+- **Connect:** the admin's **Connect** on Workspace settings → Aixle Flow calls `…/ui/connect`;
+  confirming in Aixle binds the workspace to the company and creates the project's connection.
+- **Build status:** a status written to a commit reaches `POST …/events` within about a second,
+  and the gate waiting on it resolves within seconds.
+- **Uninstall:** `POST …/uninstall` arrives within seconds; the installation is marked
+  uninstalled, its token dropped, and its connections go into **Error**.
 
-In the Rails console:
+In a Rails console on the deployment:
 
 ```ruby
-BitbucketInstallation.live.order(:last_invocation_at).pluck(:workspace_slug, :company_id, :last_invocation_at, :token_expires_at)
+BitbucketInstallation.live.order(:last_invocation_at)
+                     .pluck(:workspace_slug, :company_id, :last_invocation_at, :token_expires_at)
 ```
 
-`last_invocation_at` older than ten minutes means the heartbeats stopped. `token_expires_at`
-within thirty minutes means new clones of that workspace are about to fail with *has not
-delivered a usable token*.
+`last_invocation_at` older than ten minutes means that installation's heartbeats stopped.
+`token_expires_at` within thirty minutes means new clones of that workspace are about to fail with
+*has not delivered a usable token*.
 
 ## When something goes wrong
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Every Forge request is 401 in the log | `BITBUCKET_FORGE_APP_ID` or `_ENVIRONMENT_ID` names another app or environment, or is unset | Set both from `forge environments list` |
-| No Forge request reaches the deployment at all | `AIXLE_BASE_URL` at deploy time pointed elsewhere, or the host is not reachable from the internet | Redeploy with the right base URL |
-| An install never shows up | The lifecycle event is still on its way (minutes) | Wait; any later invocation — a heartbeat, opening the settings page — records it too |
-| Heartbeats stopped for one workspace | The app was uninstalled, or a major version waits for approval | Ask the workspace admin |
-| `forge deploy` says the manifest is invalid after an upgrade of the CLI | Forge CLI changes manifest rules | `forge lint --fix`, then review the diff — it substitutes `${…}` variables with literal values |
+| Every Forge request is 401 in the log, with *issued for another app* or *another environment* | `BITBUCKET_FORGE_APP_ID` or `_ENVIRONMENT_ID` names another app or environment | Set both from the table above |
+| No Forge request reaches the deployment | The environment was deployed with another `AIXLE_BASE_URL`, or the host is not public | `bin/deploy <environment>` again |
+| An install never shows up | The lifecycle event is still on its way | Wait a few minutes; any later invocation — a heartbeat, opening the settings page — records it too |
+| Heartbeats stopped for one workspace | The app was uninstalled, or a major version waits for the admin's approval | Ask the workspace admin |
+| The admin's Connect says *Only a Bitbucket workspace administrator can connect…* | The account is a member, not an admin, of the workspace | A workspace admin connects |
+| The Connect page says the link expired or was used | Links work once, for ten minutes | Press Connect in Bitbucket again |
+| `forge deploy` refuses with `MAJOR_VERSION_RULE` | The change is a major version | Decide whether it should be; deploy with `--approve MAJOR_VERSION_RULE` if so |
+| `forge lint --fix` "fixed" the manifest | It writes `${…}` variables back as literal values | Review the diff; keep the variables |
 
 ## Uninstalling and reinstalling
 

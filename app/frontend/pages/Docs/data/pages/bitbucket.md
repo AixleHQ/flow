@@ -38,17 +38,19 @@ connect Jira for that ([Jira](/docs/jira)).
 
 ## Connect with the app
 
-1. On the project's **Integrations** page choose **Connect → Bitbucket**, keep
-   **Install the app**, and type the workspace (the part after
-   `bitbucket.org/`).
+1. On the project's **Integrations** page choose **Connect → Atlassian →
+   Bitbucket**, keep **Install the app**, and type the workspace (the part
+   after `bitbucket.org/`).
 2. If the company has already connected that workspace, the project is
-   connected and you are done. Otherwise Flow shows the install link.
-3. A workspace admin opens the link, picks the workspace and approves what the
-   app asks for.
+   connected and you are done. Otherwise Flow shows **Install the app**.
+3. A workspace admin opens it, picks the workspace and approves what the app
+   asks for: reading the workspace and its projects, reading and writing its
+   repositories and pull requests, and reading its pipelines. The app appears
+   in the workspace within a few minutes.
 4. In Bitbucket, the admin opens **Workspace settings → Aixle Flow** and selects
-   **Connect**. Bitbucket opens Flow.
-5. Flow shows the workspace, who started the connection and the project to
-   connect it to. Sign in if asked, check them and select **Connect**.
+   **Connect**. Flow opens in a new tab.
+5. Sign in if Flow asks — it brings you back to this page. Flow shows the
+   workspace; pick the project to connect it to and select **Connect**.
 
 The workspace is now connected to the Flow company. Further projects in that
 company connect by typing the workspace on their own **Integrations** page —
@@ -59,6 +61,9 @@ projects the workspace is connected to, and by whom. **Disconnect** there
 unbinds it: every Flow project using it stops reaching the workspace until it
 is connected again. The connect link Flow hands out works once, for ten
 minutes; never send it to anyone.
+
+When the app needs new permissions, Bitbucket asks a workspace admin to
+approve its update. Until someone does, the app keeps working as it did.
 
 ### What the app can reach
 
@@ -94,13 +99,18 @@ connection that used it into **Error**.
    **read** and **write**, pipelines **read**. An API token also needs account
    **read** and workspace **read**. Repository write does not include read in
    Bitbucket; select both.
-3. On **Integrations** choose **Connect → Bitbucket → Use a token**, type the
-   workspace, paste the token and select **Connect**.
+3. On **Integrations** choose **Connect → Atlassian → Bitbucket → Use a token**,
+   type the workspace, paste the token and select **Connect**.
 
 Flow works out which kind of token it is and checks it before saving anything.
-Connecting again with a token for the same identity replaces the old token and
-keeps the repositories attached. **Test connection** on the row asks Bitbucket
-about the stored token; **Replace token** swaps it.
+An API token's connection is named after its owner; a repository access token's
+after its repository (`workspace/repo`); a workspace or project access token's
+after the workspace. Connecting again with a token for the same owner — or,
+for an access token, reaching the same repository or the same workspace —
+replaces the old token and keeps the repositories attached. Repository access
+tokens for different repositories are separate connections. **Test
+connection** on the row asks Bitbucket about the stored token; **Replace
+token** swaps it.
 
 A token connection gets no events from Bitbucket, so its CI gates resolve on
 the reconciliation sweep (see [CI gates](#ci-gates)).
@@ -183,6 +193,9 @@ default) is marked **stale**.
   repository access tokens.
 - No Bitbucket triggers: push and pull-request events do not start workflows.
 - Coder workspaces cannot clone Bitbucket repositories yet.
+- A repository renamed in Bitbucket while a session is running keeps its old
+  address in that session's checkout, and its fetches and pushes stop
+  authenticating. The next session clones it under the new name.
 
 ## When something goes wrong
 
@@ -193,5 +206,7 @@ default) is marked **stale**.
 | *The Aixle Flow app was removed from this workspace* | A workspace admin uninstalled the app | Install it again and connect from **Workspace settings → Aixle Flow** |
 | *This Bitbucket workspace is no longer connected to this company* | Someone disconnected it in Bitbucket | Connect it again |
 | The connect page says the link expired or was used | Links work once, for ten minutes | Select **Connect** in Bitbucket again |
+| After signing in, the connect page says it opens from Bitbucket | The browser refused to keep the link while you signed in | Select **Connect** in Bitbucket again; you are signed in now |
+| Clones and gates stopped after an app update | The update needs new permissions and waits for a workspace admin | A workspace admin approves the app's update in Bitbucket |
 | A push is refused | Branch restrictions do not allow the app's bot or the token's identity | Allow it on that branch, or push to another branch and open a pull request |
 | Gates resolve only after ten minutes or more | A token connection (no events), or the app has gone quiet | Use the app; check the integration row's last-heard time |

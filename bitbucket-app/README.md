@@ -30,6 +30,7 @@ nothing the app does is metered as Forge compute, and all logic lives in Aixle.
 | `manifest.yml` | modules, endpoints, the `aixle` remote, scopes, environment variables |
 | `src/frontend/connect.jsx` | the settings page (UI Kit, `render: native`); Forge bundles it at deploy |
 | `package.json`, `package-lock.json` | the page's dependencies, pinned |
+| `bin/deploy` | deploys one Forge environment with that environment's Aixle URLs |
 
 ## Protocol with Aixle
 
@@ -74,23 +75,59 @@ user's company — one company per workspace. A workspace bound to another compa
 until its administrator disconnects it here. Further projects of the same company connect from
 their Integrations page by naming the workspace, with no trip to Bitbucket.
 
-## Developing
+## Environments
 
-Forge commands run with the Forge CLI, logged in as an Atlassian account that administers a test
-workspace. Never on a shared machine's global install — use a container:
+Aixle runs one registration, **Aixle Flow for Bitbucket** (`ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2`,
+developer space *Dualboot Partners*), in three Forge environments. Each has its own installations,
+so a staging deployment never sees a token for a workspace installed on production.
+
+| Forge environment | Environment id | `AIXLE_BASE_URL` (Forge calls) | `AIXLE_APP_URL` (Connect opens) | Installed by |
+| --- | --- | --- | --- | --- |
+| `production` | `d2cae4d1-9389-4f0d-8315-80b45451ab9e` | `https://flow.aixle.com` | `https://flow.aixle.com` | customers, from the sharing link in the Connect dialog |
+| `staging` | `b4abdfa3-53b4-4eb1-a5e5-8d247c87055b` | `https://webhooks-staging.flow.aixle.com` | `https://staging.flow.aixle.com` | our test workspaces |
+| `development` | `174ab1f9-d2e2-4134-8b68-d14be8770572` | a developer's tunnel | the same tunnel | a developer's test workspace |
+
+Staging's own host is private (VPN), so Forge reaches it through the public webhooks host, whose
+ingress routes `/webhooks/*` — where every endpoint of this app lives. The Connect link still
+opens `staging.flow.aixle.com`, so the person confirming it needs the VPN.
+
+## Deploying
+
+Forge commands run with the Forge CLI, logged in through `FORGE_EMAIL` and `FORGE_API_TOKEN` (an
+Atlassian API token *without* scopes) of an account in the developer space. Never from a shared
+machine's global install — use a container:
 
 ```sh
 docker run --rm -it -v "$PWD":/app -w /app \
-  -e FORGE_EMAIL -e FORGE_API_TOKEN -e FORGE_APP_ID -e AIXLE_BASE_URL \
-  node:22 sh -c 'npm ci && npx @forge/cli@latest <command>'
+  -e FORGE_EMAIL -e FORGE_API_TOKEN -e FORGE_APP_ID=ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2 \
+  node:22 sh -c 'npm ci && npm install -g @forge/cli@14.2.0 && bin/deploy staging'
 ```
 
-`FORGE_APP_ID` and `AIXLE_BASE_URL` are manifest environment variables
-(`environment.variables`): the CLI substitutes them from the shell, and `AIXLE_BASE_URL` defaults
-to `https://flow.aixle.com`.
+`bin/deploy <environment>` sets the two URLs for that environment, runs `forge lint` and deploys.
+`AIXLE_BASE_URL`, `AIXLE_APP_URL` and `FORGE_APP_ID` are manifest environment variables
+(`environment.variables`) the CLI substitutes at deploy time, which is why the script exists: a
+production deploy pointed at a tunnel is one forgotten `export` away otherwise. For `development`
+it takes your tunnel from `AIXLE_BASE_URL`.
 
-1. **Register** your own app once. The CLI validates the manifest first, so it needs some
-   `FORGE_APP_ID` to substitute, and it then writes the new id over `app.id`:
+- **Major versions.** Changing a scope, a remote or an egress address is a major version: every
+  installation keeps the old one — heartbeats included — until a workspace admin approves the new
+  one. `forge deploy` refuses it until asked explicitly; pass `--approve MAJOR_VERSION_RULE` to
+  `bin/deploy` only when that is intended.
+- Module keys are one namespace across triggers, endpoints and UI modules; `forge lint` refuses a
+  key used twice.
+- A deploy resets the five-minute scheduled trigger: the next heartbeat comes about five minutes
+  later. Tokens already held last two hours or more, so nothing notices.
+
+Install on a test workspace with `forge install -e <environment> -p Bitbucket -s
+https://bitbucket.org/<workspace>`, or open the environment's sharing link. Production's link is
+the one Aixle shows in the Connect dialog (`BITBUCKET_FORGE_INSTALL_URL`).
+
+## Registering an app of your own
+
+Self-hosted deployments and forks register their own app — one app serves one set of deployments:
+
+1. The CLI validates the manifest before it registers, so it needs some `FORGE_APP_ID` to
+   substitute, and it then writes the new id over `app.id`:
 
    ```sh
    FORGE_APP_ID=ari:cloud:ecosystem::app/00000000-0000-4000-8000-000000000000 \
@@ -98,33 +135,20 @@ to `https://flow.aixle.com`.
    ```
 
    `forge developer-spaces list` names the spaces you can register in. Read the new id from the
-   rewritten `app.id`, put `${FORGE_APP_ID}` back, and export the id as `FORGE_APP_ID`. Forge
-   creates the `development`, `staging` and `production` environments with it.
-2. **Point it at a reachable Aixle.** Forge calls the remote from Atlassian's cloud, so a local
-   stack needs a public tunnel: `export AIXLE_BASE_URL=https://<tunnel-host>`.
-3. **Lint and deploy:** `forge lint`, then `forge deploy -e development --non-interactive` (or
-   `staging`, `production`). Module keys are one namespace across `modules`, triggers and endpoints
-   included — `forge lint` refuses a key used twice. Changing a scope, a remote or an endpoint makes a major version, which every
-   installation has to approve again; changing the scheduled trigger resets it, and the first
-   tick comes about five minutes after deploy.
-4. **Install:** `forge install -e development` and choose Bitbucket and the workspace when asked,
-   or share the install link from the developer console (Distribution → Sharing) for another
-   workspace.
-5. **Configure Aixle** with the app id, the environment id (`forge environments list`, or the
-   `app.environment.id` of the first invocation Aixle refuses in its log) and the install link:
-   `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID`, `BITBUCKET_FORGE_INSTALL_URL`
+   rewritten `app.id`, put `${FORGE_APP_ID}` back, and keep the id. Forge creates the
+   `development`, `staging` and `production` environments.
+2. Deploy with your own URLs: `AIXLE_BASE_URL=… AIXLE_APP_URL=… forge deploy -e production`
+   (`bin/deploy` carries Aixle's URLs).
+3. Developer console → the app → **Distribution** → enable sharing, and copy the install link.
+4. Configure the deployment: `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID`
+   (`forge environments list`) and `BITBUCKET_FORGE_INSTALL_URL`
    (docs/reference/configuration.md).
-
-Our deployments use one registration with three Forge environments — `production` →
-`https://flow.aixle.com`, `staging` → the staging host, `development` → a developer's tunnel —
-each with its own installations. A staging deployment never sees a token for a workspace
-installed on production.
 
 ## Self-hosting
 
-A self-hosted Aixle either connects Bitbucket with a token (Integrations → Connect → Bitbucket →
-Use a token; nothing to register) or runs its own app: steps 1–5 above with `AIXLE_BASE_URL` set
-to the deployment, which must be reachable from the internet. One app serves one deployment: the
+A self-hosted Aixle either connects Bitbucket with a token (Integrations → Connect → Atlassian →
+Bitbucket → Use a token; nothing to register) or runs its own app, registered as above, with
+`AIXLE_BASE_URL` reachable from the internet. One app serves one deployment: the
 remote's base URL is fixed at deploy, and the deployment refuses invocations issued for any other
 app or environment.
 
