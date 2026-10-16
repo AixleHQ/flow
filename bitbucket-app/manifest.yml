@@ -1,0 +1,113 @@
+# Aixle Flow for Bitbucket Cloud — see README.md and
+# docs/design/bitbucket-integration.md §5.
+#
+# Every module routes to the Aixle deployment named by AIXLE_BASE_URL; the app
+# has no Forge functions, so nothing it does is metered as Forge compute. The
+# heartbeat calls the remote directly: only then does the system token it
+# brings come with at least two hours of life. Never route it through a
+# function.
+modules:
+  trigger:
+    - key: lifecycle
+      endpoint: lifecycle
+      events:
+        - avi:forge:installed:app
+        - avi:forge:upgraded:app
+    - key: repository-events
+      endpoint: events
+      events:
+        - avi:bitbucket:created:build-status
+        - avi:bitbucket:updated:build-status
+        - avi:bitbucket:updated:repository
+        - avi:bitbucket:deleted:repository
+  scheduledTrigger:
+    - key: token-heartbeat
+      endpoint: heartbeat
+      interval: fiveMinute
+  preUninstall:
+    - key: uninstall
+      endpoint: uninstall
+  bitbucket:workspaceSettingsMenuPage:
+    - key: connect
+      title: Aixle Flow
+      resource: connect
+      render: native
+      resolver:
+        endpoint: ui
+  endpoint:
+    - key: lifecycle
+      remote: aixle
+      route:
+        path: /webhooks/bitbucket/forge/lifecycle
+      auth:
+        appSystemToken:
+          enabled: true
+    - key: events
+      remote: aixle
+      route:
+        path: /webhooks/bitbucket/forge/events
+      auth:
+        appSystemToken:
+          enabled: true
+    - key: heartbeat
+      remote: aixle
+      route:
+        path: /webhooks/bitbucket/forge/heartbeat
+      auth:
+        appSystemToken:
+          enabled: true
+    - key: uninstall
+      remote: aixle
+      route:
+        path: /webhooks/bitbucket/forge/uninstall
+      auth:
+        appSystemToken:
+          enabled: true
+    # The settings page's resolver. Its calls name their own path under
+    # /webhooks/bitbucket/forge/ui/ (src/frontend/connect.jsx).
+    - key: ui
+      remote: aixle
+      auth:
+        appSystemToken:
+          enabled: true
+
+remotes:
+  - key: aixle
+    baseUrl: ${AIXLE_BASE_URL}
+    operations:
+      - storage
+      - other
+    storage:
+      inScopeEUD: true
+
+resources:
+  - key: connect
+    path: src/frontend/connect.jsx
+
+permissions:
+  scopes:
+    - read:app-system-token
+    - read:workspace:bitbucket
+    - read:project:bitbucket
+    - read:repository:bitbucket
+    - write:repository:bitbucket
+    - read:pullrequest:bitbucket
+    - write:pullrequest:bitbucket
+    - read:pipeline:bitbucket
+  external:
+    fetch:
+      client:
+        - ${AIXLE_BASE_URL}
+
+environment:
+  variables:
+    - FORGE_APP_ID
+    - key: AIXLE_BASE_URL
+      default: https://flow.aixle.com
+
+app:
+  id: ${FORGE_APP_ID}
+  runtime:
+    name: nodejs22.x
+  licensing:
+    enabled: false

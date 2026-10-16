@@ -42,4 +42,14 @@ class SentryConfigurationTest < ActiveSupport::TestCase
     assert_empty request.cookies
     assert_equal({ "Accept" => "json" }, request.headers)
   end
+
+  test "the app tokens Forge sends with every Bitbucket invocation are dropped" do
+    request = Struct.new(:data, :cookies, :headers).new(
+      {}, {}, { "X-Forge-Oauth-System" => "app-token", "x-forge-oauth-user" => "user-token", "X-B3-Traceid" => "t" }
+    )
+
+    SentryConfiguration.scrub_request(Struct.new(:request).new(request))
+
+    assert_equal({ "X-B3-Traceid" => "t" }, request.headers)
+  end
 end

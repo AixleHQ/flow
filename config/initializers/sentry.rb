@@ -13,7 +13,10 @@ module SentryConfiguration
   USAGE_INGEST_CONTROLLER = "Api::V1::Internal::UsageStatisticsController"
 
   # Request headers that authenticate someone; never sent.
-  SENSITIVE_HEADERS = %w[Authorization Cookie X-Session-Key X-Agent-Key X-Cloud-Key X-Azure-Git-Key X-Git-Key].freeze
+  SENSITIVE_HEADERS = %w[
+    Authorization Cookie X-Session-Key X-Agent-Key X-Cloud-Key X-Azure-Git-Key X-Git-Key
+    X-Forge-Oauth-System X-Forge-Oauth-User
+  ].freeze
 
   module_function
 
