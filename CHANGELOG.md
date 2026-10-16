@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-17
+
 ### Added
 - **Integrations**: connect Bitbucket Cloud. A workspace admin installs the Aixle
   Flow app on the workspace and connects it from **Workspace settings → Aixle
@@ -581,7 +583,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.2.2...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.3.0...develop
+[1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/AixleHQ/flow/compare/v1.1.0...v1.2.0
