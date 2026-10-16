@@ -11,16 +11,15 @@ class BitbucketPairing < ApplicationRecord
   ACCOUNT_ID = /\A[A-Za-z0-9:_-]{1,128}\z/
 
   belongs_to :bitbucket_installation
-  belongs_to :project, optional: true
-  belongs_to :consumed_by, class_name: "User", optional: true
 
   validates :public_id, :secret_digest, :account_id, :workspace_uuid, :expires_at, presence: true
   validates :account_id, format: { with: ACCOUNT_ID }
 
-  scope :live, -> { where(consumed_at: nil).where(expires_at: Time.current..) }
+  scope :live, -> { where(expires_at: Time.current..) }
 
   # The new pairing and its secret, which exists nowhere else afterwards.
   def self.start!(installation:, account_id:)
+    where(expires_at: ...Time.current).delete_all
     secret = SecureRandom.urlsafe_base64(32)
     pairing = create!(bitbucket_installation: installation, public_id: SecureRandom.urlsafe_base64(12),
                       secret_digest: digest(secret), account_id: account_id, workspace_uuid: installation.workspace_uuid,
@@ -39,9 +38,5 @@ class BitbucketPairing < ApplicationRecord
 
   def authentic?(secret)
     secret.present? && ActiveSupport::SecurityUtils.secure_compare(secret_digest, self.class.digest(secret))
-  end
-
-  def consume!(user:, project:)
-    update!(consumed_at: Time.current, consumed_by: user, project: project)
   end
 end

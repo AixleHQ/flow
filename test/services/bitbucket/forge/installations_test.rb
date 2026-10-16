@@ -22,14 +22,12 @@ module Bitbucket
 
         installation = nil
         assert_enqueued_with(job: RefreshBitbucketInstallationJob) do
-          installation = Installations.record!(invocation(installation_id), system_token: forge_system_token,
-                                                                            installer_account_id: "acct-9")
+          installation = Installations.record!(invocation(installation_id), system_token: forge_system_token)
         end
 
         assert_not installation.bound?
         assert_equal ForgeTestHelper::FORGE_WORKSPACE_UUID, installation.workspace_uuid
         assert_equal BitbucketTestHelper::FORGE_ENVIRONMENT_ID, installation.forge_environment_id
-        assert_equal "acct-9", installation.installer_account_id
         assert installation.usable_token(min_remaining: 300)
       end
 

@@ -16,8 +16,8 @@ module BitbucketTestHelper
     fake
   end
 
-  def with_bitbucket_settings(app_mode: false, token_min_remaining: 300)
-    identity = { app_id: FORGE_APP_ID, environment_id: FORGE_ENVIRONMENT_ID, install_url: FORGE_INSTALL_URL }
+  def with_bitbucket_settings(app_mode: false, token_min_remaining: 300, install_url: FORGE_INSTALL_URL)
+    identity = { app_id: FORGE_APP_ID, environment_id: FORGE_ENVIRONMENT_ID, install_url: install_url.to_s }
     identity = identity.transform_values { "" } unless app_mode
     forge = identity.merge(jwks_url: Bitbucket::AppConfig::DEFAULT_JWKS_URL)
     # Zero, so merge confirmation spends no real seconds (docs/testing.md R7).

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_16_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -236,7 +236,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_150000) do
     t.bigint "company_id"
     t.bigint "bound_by_id"
     t.datetime "bound_at"
-    t.string "installer_account_id"
     t.string "status", default: "active", null: false
     t.string "error_code"
     t.text "encrypted_access_token"
@@ -258,12 +257,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_150000) do
     t.string "account_id", null: false
     t.string "workspace_uuid", null: false
     t.datetime "expires_at", null: false
-    t.datetime "consumed_at"
-    t.bigint "consumed_by_id"
-    t.bigint "project_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["bitbucket_installation_id"], name: "index_bitbucket_pairings_on_bitbucket_installation_id"
+    t.index ["expires_at"], name: "index_bitbucket_pairings_on_expires_at"
     t.index ["public_id"], name: "index_bitbucket_pairings_on_public_id", unique: true
   end
 
@@ -1935,8 +1932,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_16_150000) do
   add_foreign_key "bitbucket_installations", "companies", on_delete: :nullify
   add_foreign_key "bitbucket_installations", "users", column: "bound_by_id", on_delete: :nullify
   add_foreign_key "bitbucket_pairings", "bitbucket_installations", on_delete: :cascade
-  add_foreign_key "bitbucket_pairings", "projects", on_delete: :nullify
-  add_foreign_key "bitbucket_pairings", "users", column: "consumed_by_id", on_delete: :nullify
   add_foreign_key "board_activities", "board_tasks", on_delete: :cascade
   add_foreign_key "board_activities", "boards", on_delete: :cascade
   add_foreign_key "board_activities", "users", column: "actor_id", on_delete: :nullify

@@ -26,10 +26,11 @@ class Webhooks::BitbucketForgeControllerTest < ActionDispatch::IntegrationTest
     assert_in_delta Time.current, installation.last_invocation_at, 5
   end
 
-  test "the install event keeps who installed the app" do
+  test "the install event records the installation, not the account that installed it" do
     invoke(bitbucket_forge_lifecycle_path, body: { id: "x", installerAccountId: "acct-7", app: { id: "a" } })
 
-    assert_equal "acct-7", BitbucketInstallation.find_by!(forge_installation_id: @installation_id).installer_account_id
+    installation = BitbucketInstallation.find_by!(forge_installation_id: @installation_id)
+    assert_not installation.attributes.values.include?("acct-7")
   end
 
   test "an invocation without a valid token is refused and records nothing" do

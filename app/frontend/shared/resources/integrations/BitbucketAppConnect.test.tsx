@@ -48,6 +48,18 @@ describe('BitbucketAppConnect', () => {
     expect(router.reload).not.toHaveBeenCalled();
   });
 
+  it('says who installs the app when the deployment has no install link', async () => {
+    const user = userEvent.setup();
+    answerFetch({ [`POST ${BASE}/bitbucket_attach`]: { install_required: true, install_url: null } });
+    renderPage(<BitbucketAppConnect basePath={BASE} installUrl={null} />);
+
+    await user.type(screen.getByLabelText(/Bitbucket workspace/), 'globex');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+
+    expect(await screen.findByText(/ask the people who run it to install Aixle Flow/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Aixle Flow' })).not.toBeInTheDocument();
+  });
+
   it('shows why the server refused', async () => {
     const user = userEvent.setup();
     answerFetch({

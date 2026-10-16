@@ -34,9 +34,10 @@ governance, community health — carry none.
   build status on a Bitbucket pull request's head commit — Pipelines or any
   other CI.
 - **Integrations**: operators who run their own Bitbucket app set
-  `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID` and
-  `BITBUCKET_FORGE_INSTALL_URL` (see `docs/reference/configuration.md` and
-  `bitbucket-app/README.md`). Without them Bitbucket connects with tokens only.
+  `BITBUCKET_FORGE_APP_ID` and `BITBUCKET_FORGE_ENVIRONMENT_ID`, and
+  `BITBUCKET_FORGE_INSTALL_URL` for the install button (see
+  `docs/reference/configuration.md` and `bitbucket-app/README.md`). Without the
+  first two Bitbucket connects with tokens only.
 - **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
   `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
 - **Sign-in & onboarding**: an admin can skip connecting an agent during

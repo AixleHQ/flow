@@ -16,6 +16,7 @@ module Bitbucket
       end
 
       NOT_ADMIN = "Only a Bitbucket workspace administrator can connect this workspace to Aixle."
+      SPENT = "This link was already used or has expired. Start again in Bitbucket."
 
       module_function
 
@@ -33,20 +34,28 @@ module Bitbucket
       # manage the project's integrations.
       def confirm!(pairing:, user:, project:)
         BitbucketPairing.transaction do
-          pairing.lock!
-          raise Refused.new("This link was already used or has expired. Start again in Bitbucket.", code: "expired") unless live?(pairing)
+          lock_live!(pairing)
 
           installation = pairing.bitbucket_installation
           installation.lock!
           bind!(installation, project, user)
           Connection.restore!(installation)
           integration = Connection.connect!(installation: installation, project: project, user: user)
-          pairing.consume!(user: user, project: project)
+          pairing.destroy!
           integration
         end
       end
 
-      def live?(pairing) = pairing.consumed_at.nil? && pairing.expires_at > Time.current
+      # A confirmed pairing is deleted, so a second confirmation racing the first
+      # finds no row to lock.
+      def lock_live!(pairing)
+        raise Refused.new(SPENT, code: "expired") if pairing.destroyed?
+
+        pairing.lock!
+        raise Refused.new(SPENT, code: "expired") if pairing.expires_at <= Time.current
+      rescue ActiveRecord::RecordNotFound
+        raise Refused.new(SPENT, code: "expired")
+      end
 
       def bind!(installation, project, user)
         raise Refused.new(Installations::REMOVED, code: "uninstalled") unless installation.status.active?

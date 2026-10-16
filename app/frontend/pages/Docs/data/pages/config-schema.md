@@ -264,8 +264,8 @@ client id and one credential are present, or PAT mode is on.
 Bitbucket connects through the Aixle Flow Forge app installed on a workspace, or
 with a workspace/project/repository access token or a scoped API token pasted
 once (see `docs/user-guide/bitbucket.md` and `docs/operations/bitbucket-app.md`).
-Token mode needs nothing here. App mode is offered exactly when the three
-`BITBUCKET_FORGE_*` identity values are set — there is no enable flag. Each
+Token mode needs nothing here. App mode is offered exactly when the app id and
+the environment id are set — there is no enable flag. Each
 deployment registers its own Forge app: the app's remote endpoints point at one
 deployment, and invocations are verified against its app id and environment.
 
@@ -273,7 +273,7 @@ deployment, and invocations are verified against its app id and environment.
 | -------------------------------- | -------- | ------- | ------- |
 | `BITBUCKET_FORGE_APP_ID`         | no       | unset   | The Forge app id (`ari:cloud:ecosystem::app/<uuid>`). Invocations whose token is issued for another app are refused. |
 | `BITBUCKET_FORGE_ENVIRONMENT_ID` | no       | unset   | The Forge environment whose installations this deployment serves. Invocations from any other environment of the same app are refused. |
-| `BITBUCKET_FORGE_INSTALL_URL`    | no       | unset   | The app's sharing link from the Forge developer console, shown in the connect dialog. |
+| `BITBUCKET_FORGE_INSTALL_URL`    | no       | unset   | The app's sharing link from the Forge developer console, shown in the connect dialog. Optional: Forge shares only an app's production environment, so a staging deployment has none and its workspaces are installed with `forge install`; the dialog then tells people to ask the operator. |
 | `BITBUCKET_FORGE_JWKS_URL`       | no       | `https://forge.cdn.prod.atlassian-dev.net/.well-known/jwks.json` | Keys that sign Forge invocation tokens. |
 | `BITBUCKET_TOKEN_MIN_REMAINING`  | no       | `300`   | Seconds of life an app token must have left to be handed out. Forge pushes tokens and cannot be asked for one, so a token closer to expiry fails fast instead. |
 | `BITBUCKET_MERGE_POLL_INTERVAL`  | no       | `1.0`   | Seconds between re-reads while confirming a merge Bitbucket accepted asynchronously. |
