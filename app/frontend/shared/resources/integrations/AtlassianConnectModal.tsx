@@ -3,9 +3,11 @@ import { IconChevronRight } from '@tabler/icons-react';
 
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
+export type AtlassianConnectionState = 'none' | 'connected' | 'attention';
+
 interface Product {
   available: boolean;
-  connected: boolean;
+  state: AtlassianConnectionState;
   onChoose: () => void;
 }
 
@@ -47,18 +49,28 @@ export const AtlassianConnectModal = ({ opened, onClose, jira, bitbucket }: Prop
                 <Stack gap={2}>
                   <Group gap="xs">
                     <Text fw={600}>{name}</Text>
-                    {products[key].connected && (
+                    {products[key].state === 'connected' && (
                       <Badge size="xs" variant="light" color="green">
                         Connected
+                      </Badge>
+                    )}
+                    {products[key].state === 'attention' && (
+                      <Badge size="xs" variant="light" color="orange">
+                        Needs attention
                       </Badge>
                     )}
                   </Group>
                   <Text size="sm" c="dimmed">
                     {detail}
                   </Text>
-                  {products[key].connected && (
+                  {products[key].state === 'connected' && (
                     <Text size="xs" c="dimmed">
                       {`This project already has a ${name} connection — connecting again adds another.`}
+                    </Text>
+                  )}
+                  {products[key].state === 'attention' && (
+                    <Text size="xs" c="dimmed">
+                      {`This project's ${name} connection is not working — its row on this page says why.`}
                     </Text>
                   )}
                 </Stack>

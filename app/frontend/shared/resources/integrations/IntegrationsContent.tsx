@@ -53,7 +53,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { AtlassianConnectModal } from './AtlassianConnectModal';
+import { AtlassianConnectModal, type AtlassianConnectionState } from './AtlassianConnectModal';
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
@@ -145,6 +145,12 @@ const youtrackManageUrl = (baseUrl: string) => `${baseUrl.replace(/\/+$/, '')}/a
 
 const errorMessage = (errors: unknown, fallback: string) =>
   (typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '') || fallback;
+
+const atlassianConnectionState = (integrations: Integration[], provider: string): AtlassianConnectionState => {
+  const own = integrations.filter((integration) => integration.provider === provider);
+  if (own.length === 0) return 'none';
+  return own.some((integration) => integration.status === 'active') ? 'connected' : 'attention';
+};
 
 export const IntegrationsContent = ({
   integrations,
@@ -1248,12 +1254,12 @@ export const IntegrationsContent = ({
           onClose={() => setAtlassianOpen(false)}
           jira={{
             available: jiraAvailable,
-            connected: integrations.some((i) => i.provider === 'jira'),
+            state: atlassianConnectionState(integrations, 'jira'),
             onChoose: () => chooseAtlassianProduct(setJiraOpen),
           }}
           bitbucket={{
             available: bitbucketAvailable,
-            connected: integrations.some((i) => i.provider === 'bitbucket'),
+            state: atlassianConnectionState(integrations, 'bitbucket'),
             onChoose: () => chooseAtlassianProduct(setBitbucketOpen),
           }}
         />

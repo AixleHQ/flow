@@ -9,6 +9,7 @@ interface Props {
   basePath: string;
   installUrl: string | null;
   onConnected?: () => void;
+  onCancel?: () => void;
 }
 
 interface AttachResult {
@@ -26,7 +27,7 @@ const workspaceSlug = (value: string) =>
 // The project names the workspace; the server answers either "connected" (the
 // company already bound it) or "install the app first". It never says which
 // workspaces the company has bound.
-export function BitbucketAppConnect({ basePath, installUrl, onConnected }: Props) {
+export function BitbucketAppConnect({ basePath, installUrl, onConnected, onCancel }: Props) {
   const [workspace, setWorkspace] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,11 @@ export function BitbucketAppConnect({ basePath, installUrl, onConnected }: Props
         </Alert>
       )}
       <Group justify="flex-end">
+        {onCancel && (
+          <Button variant="default" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
         <Button onClick={() => void connect()} loading={submitting} disabled={!slug}>
           Connect
         </Button>

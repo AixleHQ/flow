@@ -81,4 +81,14 @@ describe('BitbucketAppConnect', () => {
 
     expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled();
   });
+
+  it('cancels from beside Connect', async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    renderPage(<BitbucketAppConnect basePath={BASE} installUrl={INSTALL_URL} onCancel={onCancel} />);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onCancel).toHaveBeenCalled();
+  });
 });
