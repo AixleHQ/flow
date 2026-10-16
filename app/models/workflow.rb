@@ -5,6 +5,7 @@ class Workflow < ApplicationRecord
   belongs_to :scope, polymorphic: true, optional: true
   include TenantColumns
   include Versioned
+  include DecodesHtmlEntities
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -20,6 +21,8 @@ class Workflow < ApplicationRecord
     base_asset_ids base_repository_ids base_config_item_ids
     inherit_all_project_resources
   ].freeze
+
+  decodes_html_entities :name
 
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },

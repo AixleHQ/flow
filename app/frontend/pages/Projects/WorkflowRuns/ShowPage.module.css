@@ -130,7 +130,7 @@
   margin-right: auto;
 }
 
-.terminalLoading {
+.terminalPlaceholder {
   position: absolute;
   inset: 0;
   z-index: 2;

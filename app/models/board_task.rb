@@ -2,6 +2,7 @@
 
 class BoardTask < ApplicationRecord
   extend Enumerize
+  include DecodesHtmlEntities
 
   belongs_to :board
   belongs_to :board_column
@@ -19,6 +20,8 @@ class BoardTask < ApplicationRecord
 
   enumerize :task_type, in: %i[epic story bug not_specified], default: :not_specified, predicates: true
   enumerize :priority, in: %i[low medium high critical]
+
+  decodes_html_entities :title
 
   validates :title, presence: true
   validate :column_belongs_to_board

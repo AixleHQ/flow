@@ -419,6 +419,26 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/t/abc/tty/ws'));
   });
 
+  it('says the live view is private, instead of starting forever, when the owner does not share it', () => {
+    const running = buildStepRun({ id: 703, stepName: 'Collect data', state: 'running', liveViewPrivate: true });
+    renderAuthedPage(<ShowPage />, {
+      props: seed({ run: makeRun({ userName: 'gamma.flow@aixle.com', stepRuns: [running] }) }),
+    });
+
+    expect(screen.getByText('Live view is private')).toBeInTheDocument();
+    expect(screen.getByText(/gamma\.flow@aixle\.com doesn.t show running sessions/)).toBeInTheDocument();
+    expect(screen.queryByText('Session starting…')).not.toBeInTheDocument();
+    expect(FakeWebSocket.latest()).toBeUndefined();
+  });
+
+  it('says a step is starting while its terminal is not up yet', () => {
+    const running = buildStepRun({ id: 704, stepName: 'Collect data', state: 'running' });
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
+
+    expect(screen.getByText('Session starting…')).toBeInTheDocument();
+    expect(screen.queryByText('Live view is private')).not.toBeInTheDocument();
+  });
+
   it('shows a console and action bar for every concurrently active step in a parallel run', async () => {
     const runningA = buildStepRun({
       id: 711,

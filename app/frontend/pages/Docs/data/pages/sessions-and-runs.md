@@ -38,7 +38,9 @@ id, and totals in the header.
 
 - A **running step shows its terminal live**, embedded in the page. Before the
   container is ready it reads *Session starting…*, then *Connecting to
-  terminal…*, then you are watching the agent work.
+  terminal…*, then you are watching the agent work. Someone else's step reads
+  *Live view is private* when its owner has turned off *Show my active
+  sessions* in their profile.
 - A **parallel run shows every active step at once**, each with its own console
   and its own action bar.
 - **Only the person who started a session can type into it.** Everyone else it

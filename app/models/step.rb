@@ -3,6 +3,7 @@
 class Step < ApplicationRecord
   extend Enumerize
   include ProjectOwnedReferences
+  include DecodesHtmlEntities
 
   SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
 
@@ -16,6 +17,8 @@ class Step < ApplicationRecord
 
   enumerize :skip_policy, in: %i[never if_outputs_exist manual], default: :never
   enumerize :on_failure, in: %i[retry skip fail], default: :fail
+
+  decodes_html_entities :name
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
