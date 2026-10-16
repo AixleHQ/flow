@@ -32,6 +32,22 @@ governance, community health — carry none.
   then end as cancelled with "Agent credential unavailable". A triggered run is
   skipped with the same reason, and a step whose agent is not connected fails
   with a message naming that agent.
+- **Sessions & Runs**: a workflow step's initial context summarizes only the
+  steps it depends on, directly or through others, and only the latest completed
+  or skipped attempt of each. Finished steps on independent branches no longer
+  appear, and a step with no dependencies gets no previous-steps summary. Files
+  from earlier steps are unaffected.
+- **Sessions & Runs**: when the generated context exceeds `CONTEXT_TOKEN_BUDGET`,
+  every sub-step `→ data:` line in the previous-steps summary is dropped, whatever
+  its length (before, a long one was only shortened), and other notes over 100
+  characters are cut. A session's `context_metadata` gains a `rendering` object
+  with the final size, estimated tokens, compressed sections and whether it is
+  still over budget.
+- **Sessions & Runs**: the Output Rules now say "Use only the MCP servers and
+  tools needed for the task" instead of "Use all available MCP servers and
+  tools". This is in the context of every session except the Aixle Builder's.
+- **Aixle Builder**: workflow guidance favors one canonical specification,
+  resources scoped to each step and reviews with distinct purposes.
 
 ### Fixed
 - **Sessions & Runs**: an agent session or workflow step gets up to ten minutes to

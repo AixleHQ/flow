@@ -58,6 +58,12 @@ Step A ┤                   ├── Step D (merge)
        └── Step C (test)  ─┘
 ```
 
+A step's starting context summarizes only the steps it depends on, directly or
+through others, each from its latest completed or skipped attempt. In the diagram,
+Step D gets A, B and C; Step B gets only A, never C, which runs beside it.
+For spec-first workflows and the context budget, see
+[Token-efficient workflows](token-efficient-workflows.md).
+
 Aixle Flow uses **Temporal** to orchestrate this — runs survive process
 restarts, retries are durable, and you can attach to a long-running
 workflow from a fresh page reload.

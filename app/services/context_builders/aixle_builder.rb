@@ -110,6 +110,15 @@ module ContextBuilders
         and files it has. Never restate any of that, and never add availability
         probes or "never fail" boilerplate.
 
+        **Plan in proportion to the change.** A small, clear fix needs a mini-spec,
+        implementation and tests in one session. A medium feature needs one canonical
+        spec, build/tests and acceptance review; large or sensitive work may also need
+        architecture and specialized review. Pass the spec's file path instead of
+        copying its contents into every prompt. Read the BMAD guide before choosing
+        skills: build skills already include review, so an extra review needs a
+        distinct purpose. Keep base resources minimal, attach only what each step
+        needs and leave `inherit_all_project_resources` off unless all are needed.
+
         ## How a step gets what it needs
 
         - **Files** land in `/workspace/assets/` from the workflow's `base_asset_ids`,
@@ -136,10 +145,10 @@ module ContextBuilders
           workflow (`base_config_item_ids`); the step agent reads them at run time.
           MCP server headers reference a secret as `config_item:NAME` instead of
           carrying it.
-        - **Between steps**: each step's closing note and sub-step notes reach the
-          steps after it; files in `/workspace/outputs/` become run assets; on
-          board-triggered runs every step shares the task, so a tagged board comment
-          is the clearest hand-off.
+        - **Between steps**: a step's closing note and sub-step notes reach the steps
+          that depend on it, directly or through others; files in `/workspace/outputs/`
+          become run assets; on board-triggered runs every step shares the task, so a
+          tagged board comment is the clearest hand-off.
         - `preferred_model` and `required_agent_runtime`
           (#{Step::SUPPORTED_AGENT_RUNTIMES.join(', ')}) pin a step when it needs a
           particular model or runtime. The project snapshot lists the runtimes this

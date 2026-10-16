@@ -22,7 +22,7 @@ module ContextBuilders
       lines = [ "## Output Rules" ]
       lines << ""
       lines << "- Files in `/workspace/assets/` are READ-ONLY — copy to outputs before editing"
-      lines << "- Use all available MCP servers and tools"
+      lines << "- Use only the MCP servers and tools needed for the task"
       lines << "- Write clean, production-quality code following project conventions"
 
       if session.mode == "non_interactive"

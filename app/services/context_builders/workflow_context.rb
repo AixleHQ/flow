@@ -152,12 +152,11 @@ module ContextBuilders
     # Name => the nearest step that wrote it, matching which copy wins on disk.
     def earlier_files
       @earlier_files ||= begin
-        upstream_ids = step.upstream_step_ids
-        names = upstream_ids.each_with_index.to_h
+        names = upstream_step_ids.each_with_index.to_h
         rows = workflow_run.workflow_run_assets
           .joins("JOIN step_runs ON step_runs.id = workflow_run_assets.produced_by_step_run_id")
           .joins("JOIN steps ON steps.id = step_runs.step_id")
-          .where(step_runs: { step_id: upstream_ids })
+          .where(step_runs: { step_id: upstream_step_ids })
           .pluck("workflow_run_assets.name", "step_runs.step_id", "steps.name")
         rows.sort_by { |_, step_id, _| -names.fetch(step_id) }
             .to_h { |name, _, step_name| [ name, step_name ] }
@@ -235,13 +234,21 @@ module ContextBuilders
       @sub_steps ||= step&.sub_steps&.active || SubStep.none
     end
 
+    def upstream_step_ids
+      @upstream_step_ids ||= step.upstream_step_ids
+    end
+
     def completed_step_runs
-      @completed_step_runs ||= workflow_run.step_runs
-        .where.not(id: step_run.id)
-        .where(state: %w[completed skipped])
-        .joins(:step)
-        .order("steps.position ASC")
-        .includes(step: :sub_steps, sub_step_runs: :sub_step)
+      @completed_step_runs ||= begin
+        completed = workflow_run.step_runs
+          .where(step_id: upstream_step_ids, state: %w[completed skipped])
+        latest_ids = completed.group(:step_id).select("MAX(step_runs.id)")
+
+        completed.where(id: latest_ids)
+          .joins(:step)
+          .order("steps.position ASC", "step_runs.id ASC")
+          .includes(step: :sub_steps, sub_step_runs: :sub_step)
+      end
     end
 
     def non_interactive?
