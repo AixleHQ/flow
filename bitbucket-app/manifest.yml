@@ -8,7 +8,7 @@
 # function.
 modules:
   trigger:
-    - key: lifecycle
+    - key: installation-lifecycle
       endpoint: lifecycle
       events:
         - avi:forge:installed:app
@@ -25,7 +25,7 @@ modules:
       endpoint: heartbeat
       interval: fiveMinute
   preUninstall:
-    - key: uninstall
+    - key: pre-uninstall
       endpoint: uninstall
   bitbucket:workspaceSettingsMenuPage:
     - key: connect
@@ -97,7 +97,7 @@ permissions:
   external:
     fetch:
       client:
-        - ${AIXLE_BASE_URL}
+        - address: ${AIXLE_BASE_URL}
 
 environment:
   variables:
