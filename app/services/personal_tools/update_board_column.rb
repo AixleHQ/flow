@@ -4,7 +4,7 @@ module PersonalTools
   class UpdateBoardColumn < Base
     tool do
       display_name "Update Board Column"
-      description "Update a board column's name or purpose. Requires project-admin (owner)."
+      description "Update a board column's name or purpose."
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true

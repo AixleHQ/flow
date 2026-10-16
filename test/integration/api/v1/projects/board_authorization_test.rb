@@ -13,10 +13,8 @@ require "test_helper"
 #
 # Policy (Api::V1::Projects::BoardPolicy):
 #   create? / update? / destroy? => project_writable?
-# The API policy OVERRIDES its web base (Web::Company::Projects::BoardsPolicy),
-# which gates writes on project_admin? (owner-only); the API relaxes them to
-# project_writable?, so the company admin (non-owner) and the employee
-# collaborator are permitted — exactly the harness's project-write preset:
+# The company admin (non-owner) and the employee collaborator are permitted —
+# exactly the harness's project-write preset:
 # owner/admin/collaborator allowed, viewer denied (403), stranger/foreign 404
 # (Project.for_user(...).find raises RecordNotFound before the policy).
 # (create_from_preset? is defined on the policy but is not a routed action.)

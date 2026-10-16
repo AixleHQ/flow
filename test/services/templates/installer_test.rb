@@ -221,7 +221,7 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     assert_equal 1, project.agents.count, "the identical agent is reused, not copied"
   end
 
-  test "a board template merges columns into the owner's board and is skipped for anyone else" do
+  test "a board template merges columns into the board for a collaborator, not just the owner" do
     project = create(:project, company: @company, owner: @user)
     Board.create_from_columns(project: project, name: "Main", columns: [ { name: "Backlog" } ])
     board_template = catalog_template(Templates::Package.new(definition: {
@@ -229,14 +229,11 @@ class Templates::InstallerTest < ActiveSupport::TestCase
       "board" => { "columns" => [ { "key" => "backlog", "name" => "Backlog" }, { "key" => "qa", "name" => "QA" } ] }
     }))
 
-    installer(template: board_template, target: { project: project }).apply
-    assert_equal %w[Backlog QA], project.board.board_columns.map(&:name)
-
     collaborator = create(:user, :employee, :onboarding_completed, company: @company)
     project.add_collaborator(collaborator)
     result = Templates::Installer.new(catalog_template: board_template, user: collaborator, target: { project: project },
                                       idempotency_key: "c1").apply
     assert_equal %w[Backlog QA], project.board.reload.board_columns.map(&:name)
-    assert result.install.setup_items.exists?(kind: "board")
+    assert_not result.install.setup_items.exists?(kind: "board")
   end
 end

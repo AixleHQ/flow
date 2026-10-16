@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Tasks**: any project member who is not a viewer can set up a board and add,
+  rename, reorder or delete its columns from the personal MCP server, and a board
+  template installs its columns for them. Until now only the project owner could,
+  although the board screen already let every member edit columns.
+
 ### Fixed
 - **Sessions & Runs**: an agent session or workflow step gets up to ten minutes to
   set itself up (skills, repositories, BMAD) before the agent starts, up from five.
