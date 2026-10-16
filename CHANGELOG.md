@@ -34,9 +34,10 @@ governance, community health — carry none.
   build status on a Bitbucket pull request's head commit — Pipelines or any
   other CI.
 - **Integrations**: operators who run their own Bitbucket app set
-  `BITBUCKET_FORGE_APP_ID`, `BITBUCKET_FORGE_ENVIRONMENT_ID` and
-  `BITBUCKET_FORGE_INSTALL_URL` (see `docs/reference/configuration.md` and
-  `bitbucket-app/README.md`). Without them Bitbucket connects with tokens only.
+  `BITBUCKET_FORGE_APP_ID` and `BITBUCKET_FORGE_ENVIRONMENT_ID`, and
+  `BITBUCKET_FORGE_INSTALL_URL` for the install button (see
+  `docs/reference/configuration.md` and `bitbucket-app/README.md`). Without the
+  first two Bitbucket connects with tokens only.
 - **Tasks**: a subtask's agent sees its parent epic's number, title and id, and
   `board_list_tasks` can list an epic's subtasks (`parent_task_id`).
 - **Sign-in & onboarding**: an admin can skip connecting an agent during
@@ -73,6 +74,10 @@ governance, community health — carry none.
   resources scoped to each step and reviews with distinct purposes.
 
 ### Fixed
+- **Repositories**: picking the chosen integration, repository or branch again in
+  **Add Repository** keeps it instead of clearing it and the fields below. When the
+  integration has nothing left to add, the repository field says why: every
+  repository it reaches is already in the project, or it reaches none.
 - **Sessions & Runs**: a running step whose owner does not share active sessions
   now says its live view is private, and how the owner can share it, instead of
   showing "Session starting…" until the step ends.

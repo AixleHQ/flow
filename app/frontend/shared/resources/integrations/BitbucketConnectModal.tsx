@@ -92,7 +92,7 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
               description={
                 appModeEnabled
                   ? 'Aixle acts as the app, not as a person: short-lived tokens it holds itself, and Bitbucket events that close CI gates the moment a build finishes.'
-                  : 'Unavailable on this deployment — no Forge app is registered (BITBUCKET_FORGE_APP_ID, BITBUCKET_FORGE_ENVIRONMENT_ID and BITBUCKET_FORGE_INSTALL_URL).'
+                  : 'Unavailable on this deployment — no Forge app is registered (BITBUCKET_FORGE_APP_ID and BITBUCKET_FORGE_ENVIRONMENT_ID).'
               }
             />
             <Radio
@@ -104,7 +104,12 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
         </Radio.Group>
 
         {authMode === 'app' ? (
-          <BitbucketAppConnect basePath={basePath} installUrl={bitbucket?.installUrl ?? null} onConnected={close} />
+          <BitbucketAppConnect
+            basePath={basePath}
+            installUrl={bitbucket?.installUrl ?? null}
+            onConnected={close}
+            onCancel={requestClose}
+          />
         ) : (
           <>
             <TextInput
@@ -142,19 +147,16 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
                 {[errors.workspace, errors.token].filter(Boolean).join(' ')}
               </Alert>
             )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={requestClose}>
+                Cancel
+              </Button>
+              <Button onClick={connectToken} loading={loading} disabled={!workspace.trim() || !token.trim()}>
+                Connect
+              </Button>
+            </Group>
           </>
         )}
-
-        <Group justify="flex-end">
-          <Button variant="default" onClick={requestClose}>
-            Cancel
-          </Button>
-          {authMode === 'token' && (
-            <Button onClick={connectToken} loading={loading} disabled={!workspace.trim() || !token.trim()}>
-              Connect
-            </Button>
-          )}
-        </Group>
       </Stack>
     </Modal>
   );

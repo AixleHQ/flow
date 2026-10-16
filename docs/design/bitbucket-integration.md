@@ -374,7 +374,7 @@ Modelled on `azure_devops_installations` (db/schema.rb:149-172), with one differ
 
 ### 6.2 `bitbucket_pairings`
 
-As `youtrack_pairings`: `installation_id`, `account_id`, `workspace_uuid`, `secret_digest`, `expires_at`, `consumed_at`, `consumed_by_id`, `project_id`. Unknown pairing and wrong secret both answer 404.
+As `youtrack_pairings`: `installation_id`, `account_id`, `workspace_uuid`, `secret_digest`, `expires_at`. A confirmed pairing is deleted and expired ones are swept when the next one starts, so an Atlassian account id lives only as long as its link (ten minutes). Unknown pairing and wrong secret both answer 404.
 
 ### 6.3 `integrations`
 

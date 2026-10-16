@@ -17,9 +17,11 @@ module Bitbucket
     def forge_jwks_url = forge&.jwks_url.presence || DEFAULT_JWKS_URL
 
     # No enable flag: the app is offered exactly when an operator has registered
-    # one and told this deployment which app and environment it serves.
+    # one and told this deployment which app and environment it serves. The
+    # install link is optional — Forge shares only an app's production
+    # environment, so staging installs through `forge install` and has none.
     def app_mode_enabled?
-      [ forge_app_id, forge_environment_id, forge_install_url ].all?(&:present?)
+      [ forge_app_id, forge_environment_id ].all?(&:present?)
     end
 
     def token_min_remaining = (settings&.token_min_remaining || 300).to_i

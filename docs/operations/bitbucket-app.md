@@ -17,12 +17,14 @@ Bitbucket → Use a token); nothing below is needed for that.
 | Forge environment | `production` | `staging` |
 | Forge calls go to | `https://flow.aixle.com/webhooks/bitbucket/forge/…` | `https://webhooks-staging.flow.aixle.com/webhooks/bitbucket/forge/…` |
 | Connect opens | `https://flow.aixle.com/integrations/bitbucket/connect` | `https://staging.flow.aixle.com/integrations/bitbucket/connect` (VPN) |
-| Installed from | the sharing link in the Connect dialog | the staging sharing link, or `forge install -e staging` |
+| Installed from | the sharing link in the Connect dialog | `forge install -e staging -p Bitbucket -s https://bitbucket.org/<workspace>`, by someone in the developer space who administers the workspace |
 
 Both run the one registration in the *Dualboot Partners* developer space
-(`ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2`). Sharing is enabled for both
-environments under **Distribution** in the developer console; the app is not on Marketplace,
-which is what keeps install links usable. Installing needs a Bitbucket workspace admin and a team
+(`ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2`). Sharing is enabled under
+**Distribution** in the developer console; the app is not on Marketplace, which is what keeps the
+install link usable. Forge shares only the production environment, so staging has no install link:
+its connect dialog tells people to ask whoever runs it, and test workspaces are installed with the
+CLI. Installing needs a Bitbucket workspace admin and a team
 workspace — Forge does not install on personal workspaces.
 
 Each deployment accepts invocations for exactly one environment of that app:
@@ -31,9 +33,12 @@ Each deployment accepts invocations for exactly one environment of that app:
 | --- | --- | --- |
 | `BITBUCKET_FORGE_APP_ID` | `ari:cloud:ecosystem::app/9fd780dc-506d-4f8a-b1b4-931a8a8231a2` | same |
 | `BITBUCKET_FORGE_ENVIRONMENT_ID` | `d2cae4d1-9389-4f0d-8315-80b45451ab9e` | `b4abdfa3-53b4-4eb1-a5e5-8d247c87055b` |
-| `BITBUCKET_FORGE_INSTALL_URL` | the production sharing link | the staging sharing link |
+| `BITBUCKET_FORGE_INSTALL_URL` | the production sharing link | unset (none exists) |
 
-App mode appears in the connect dialog exactly when all three are set. Staging gets the
+App mode appears in the connect dialog when the app id and the environment id are set; the
+install link only adds the **Install the app** button. Atlassian account ids are kept no longer
+than a Connect link lives (ten minutes): a confirmed pairing is deleted, expired ones are swept,
+and the account that installed the app is not recorded. Staging gets the
 integration like production does: unlike Azure DevOps's single app registration, Forge keeps each
 environment's installations and tokens apart, so staging never holds a credential for a
 production customer.

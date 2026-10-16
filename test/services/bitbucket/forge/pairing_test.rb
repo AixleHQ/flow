@@ -52,7 +52,7 @@ module Bitbucket
         assert_equal [ @company.id, @user.id ], @installation.reload.then { |i| [ i.company_id, i.bound_by_id ] }
         assert_equal [ "bitbucket", "app", "active", "Acme" ],
                      [ integration.provider, integration.bitbucket_auth_mode, integration.status, integration.name ]
-        assert pairing.reload.consumed_at
+        assert_not BitbucketPairing.exists?(pairing.id), "a confirmed pairing, and its account id, are gone"
       end
 
       test "a link works once" do
@@ -62,6 +62,15 @@ module Bitbucket
 
         error = assert_raises(Pairing::Refused) { Pairing.confirm!(pairing: pairing, user: @user, project: @project) }
         assert_equal "expired", error.code
+      end
+
+      test "starting a pairing sweeps the expired ones" do
+        _, old = start
+
+        travel 11.minutes do
+          start
+          assert_not BitbucketPairing.exists?(old.id)
+        end
       end
 
       test "an expired link connects nothing" do
@@ -89,7 +98,7 @@ module Bitbucket
         error = assert_raises(Pairing::Refused) { Pairing.confirm!(pairing: pairing, user: @user, project: @project) }
         assert_equal "bound_elsewhere", error.code
         assert_equal other.id, @installation.reload.company_id
-        assert_nil pairing.reload.consumed_at
+        assert BitbucketPairing.exists?(pairing.id)
       end
 
       test "nothing is bound when the app cannot reach the workspace's repositories" do

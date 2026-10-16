@@ -94,7 +94,7 @@ class Web::Integrations::BitbucketConnectTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_not @installation.reload.bound?
-    assert_nil @pairing.reload.consumed_at
+    assert BitbucketPairing.exists?(@pairing.id)
   end
 
   test "a workspace bound to another company is refused with the reason" do

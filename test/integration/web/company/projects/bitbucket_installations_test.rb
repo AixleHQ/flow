@@ -28,6 +28,14 @@ class Web::Company::Projects::BitbucketInstallationsTest < ActionDispatch::Integ
                  [ integration.project_id, integration.bitbucket_installation_id, integration.bitbucket_auth_mode ]
   end
 
+  test "a deployment with no install link still offers the app, and says so" do
+    with_bitbucket_settings(app_mode: true, install_url: nil)
+
+    post company_project_bitbucket_attach_path(@project), params: { workspace: "staging-ws" }, as: :json
+
+    assert_equal({ "install_required" => true, "install_url" => nil }, response.parsed_body)
+  end
+
   test "any other workspace answers with the install link and remembers the project for the consent page" do
     create(:bitbucket_installation, :bound, :with_token, company: create(:company), workspace_slug: "elsewhere")
 

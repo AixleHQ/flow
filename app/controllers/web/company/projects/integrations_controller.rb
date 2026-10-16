@@ -1,10 +1,15 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
+  PROVIDER_ASSOCIATIONS = {
+    azure_devops_installation: :azure_devops?,
+    bitbucket_installation: :bitbucket?,
+    tracker_subscriptions: ->(integration) { integration.linear? || integration.youtrack? }
+  }.freeze
+
   def index
-    integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by, :azure_devops_installation, :bitbucket_installation, :tracker_subscriptions)
-                              .order(created_at: :desc)
+    integrations = Integration.visible_for_project(current_project).includes(:connected_by).order(created_at: :desc).to_a
+    preload_provider_associations(integrations)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
       project: project_props,
@@ -323,6 +328,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # Only some providers' rows read each association; preloading it for every row
+  # is an unused eager load (Bullet) on a page without those providers.
+  def preload_provider_associations(integrations)
+    PROVIDER_ASSOCIATIONS.each do |association, reads|
+      records = integrations.select(&reads)
+      ActiveRecord::Associations::Preloader.new(records: records, associations: association).call if records.any?
+    end
+  end
 
   # GitHub connects two ways. The App path arrives on GitHub's post-install
   # redirect (GithubSetupController); the PAT path posts a token pasted into the

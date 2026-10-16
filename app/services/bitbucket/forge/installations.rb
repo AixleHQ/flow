@@ -14,9 +14,9 @@ module Bitbucket
       # The installation, with the pushed token stored by the expiry rule — or
       # nil for one already uninstalled: a delivery that arrives late must not
       # bring a removed installation back.
-      def record!(invocation, system_token:, installer_account_id: nil)
+      def record!(invocation, system_token:)
         installation = BitbucketInstallation.find_by(forge_installation_id: invocation.installation_id) ||
-                       create_for(invocation, installer_account_id)
+                       create_for(invocation)
         return if installation.uninstalled?
 
         installation.store_token!(system_token, expires_at: SystemToken.expires_at(system_token))
@@ -42,7 +42,7 @@ module Bitbucket
       # A reinstall arrives under a new installation id while the old row may
       # still look live — preUninstall is best effort — and only one live row per
       # workspace may exist.
-      def create_for(invocation, installer_account_id)
+      def create_for(invocation)
         BitbucketInstallation.transaction do
           BitbucketInstallation.live
                                .where(forge_environment_id: invocation.environment_id, workspace_uuid: invocation.workspace_uuid)
@@ -51,7 +51,6 @@ module Bitbucket
           BitbucketInstallation.create!(forge_installation_id: invocation.installation_id,
                                         forge_environment_id: invocation.environment_id,
                                         workspace_uuid: invocation.workspace_uuid,
-                                        installer_account_id: installer_account_id.presence,
                                         app_version: invocation.app_version)
         end
       rescue ActiveRecord::RecordNotUnique

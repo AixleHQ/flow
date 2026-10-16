@@ -9,6 +9,7 @@ interface Props {
   basePath: string;
   installUrl: string | null;
   onConnected?: () => void;
+  onCancel?: () => void;
 }
 
 interface AttachResult {
@@ -26,7 +27,7 @@ const workspaceSlug = (value: string) =>
 // The project names the workspace; the server answers either "connected" (the
 // company already bound it) or "install the app first". It never says which
 // workspaces the company has bound.
-export function BitbucketAppConnect({ basePath, installUrl, onConnected }: Props) {
+export function BitbucketAppConnect({ basePath, installUrl, onConnected, onCancel }: Props) {
   const [workspace, setWorkspace] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,15 +89,20 @@ export function BitbucketAppConnect({ basePath, installUrl, onConnected }: Props
         <Alert color="blue" title="Install the app on the workspace first">
           <List type="ordered" size="sm" spacing={4}>
             <List.Item>
-              A workspace administrator installs{' '}
               {installLink ? (
-                <Anchor href={installLink} target="_blank" rel="noopener noreferrer">
-                  Aixle Flow
-                </Anchor>
+                <>
+                  A workspace administrator installs{' '}
+                  <Anchor href={installLink} target="_blank" rel="noopener noreferrer">
+                    Aixle Flow
+                  </Anchor>{' '}
+                  on <strong>{slug}</strong>.
+                </>
               ) : (
-                'Aixle Flow'
-              )}{' '}
-              on <strong>{slug}</strong>.
+                <>
+                  This Aixle has no install link: ask the people who run it to install Aixle Flow on{' '}
+                  <strong>{slug}</strong>.
+                </>
+              )}
             </List.Item>
             <List.Item>In Bitbucket, they open Workspace settings → Aixle Flow and press Connect.</List.Item>
             <List.Item>Aixle opens a page to confirm this project. The connection then appears here.</List.Item>
@@ -104,6 +110,11 @@ export function BitbucketAppConnect({ basePath, installUrl, onConnected }: Props
         </Alert>
       )}
       <Group justify="flex-end">
+        {onCancel && (
+          <Button variant="default" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
         <Button onClick={() => void connect()} loading={submitting} disabled={!slug}>
           Connect
         </Button>

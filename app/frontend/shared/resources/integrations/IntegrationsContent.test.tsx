@@ -1561,6 +1561,16 @@ describe('IntegrationsContent', () => {
       ).toBeInTheDocument();
     });
 
+    it('the chooser does not call a connection that is in error connected', async () => {
+      renderProject([bitbucketIntegration({ status: 'error' })]);
+
+      const chooser = await openChooser();
+
+      const bitbucketCard = within(chooser).getByRole('button', { name: 'Connect Bitbucket' });
+      expect(within(bitbucketCard).getByText('Needs attention')).toBeInTheDocument();
+      expect(within(bitbucketCard).queryByText('Connected')).not.toBeInTheDocument();
+    });
+
     it('the Jira card opens the Jira flow, and closing it comes back to the chooser', async () => {
       renderProject();
 

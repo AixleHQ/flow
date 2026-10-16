@@ -76,9 +76,7 @@ class Webhooks::BitbucketForgeController < ActionController::API
   end
 
   def record_installation
-    @installation = Bitbucket::Forge::Installations.record!(
-      @invocation, system_token: request.headers["x-forge-oauth-system"], installer_account_id: event["installerAccountId"]
-    )
+    @installation = Bitbucket::Forge::Installations.record!(@invocation, system_token: request.headers["x-forge-oauth-system"])
     return if @installation
 
     action_name.in?(%w[status connect disconnect]) ? refuse("uninstalled", Bitbucket::Forge::Installations::REMOVED) : acknowledge
