@@ -59,6 +59,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
   azure_devops: 'Azure DevOps',
+  bitbucket: 'Bitbucket',
 };
 
 interface Props {
@@ -262,7 +263,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
               <TextInput
                 label="Repository URL"
                 placeholder="https://github.com/owner/repo"
-                description="Any public github.com or gitlab.com repository. Cloned without credentials — agents can read it, but cannot push."
+                description="Any public github.com, gitlab.com or bitbucket.org repository. Cloned without credentials — agents can read it, but cannot push."
                 withAsterisk
                 {...form.getInputProps('publicUrl')}
               />

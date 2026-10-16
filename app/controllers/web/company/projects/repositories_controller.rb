@@ -20,16 +20,20 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
     if params[:integration_id].present?
       integration = integrations.find { |i| i.id == params[:integration_id].to_i }
       if integration
-        # Azure repositories are addressed by GUID, not by name: a name lookup
-        # would reach a same-named repository in another project, and a rename
-        # would break every stored reference. So the picker carries an
-        # `externalId` for those and the attach path resolves on it.
+        # Azure and Bitbucket repositories are addressed by GUID/UUID, not by
+        # name: a name lookup would reach a same-named repository in another
+        # project, and a rename would break every stored reference. So the
+        # picker carries an `externalId` for those and the attach path resolves
+        # on it.
         props[:available_repos] = RepositoryService.for(integration).list_available.map do |r|
           { fullName: r[:full_name], defaultBranch: r[:default_branch], externalId: r[:external_id] }.compact
         end
 
         if params[:repo].present?
-          lookup = integration.azure_devops? ? params[:external_id].presence : params[:repo]
+          lookup = if integration.azure_devops? then params[:external_id].presence
+          elsif integration.bitbucket? then params[:external_id].presence || params[:repo]
+          else params[:repo]
+          end
           props[:available_branches] = lookup.present? ? RepositoryService.for(integration).list_branches(lookup) : []
         end
       end
@@ -51,6 +55,8 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
         build_public_repository
       elsif azure_integration
         build_azure_repository(azure_integration)
+      elsif bitbucket_integration
+        build_bitbucket_repository(bitbucket_integration)
       else
         build_code_host_repository
       end
@@ -65,6 +71,8 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
     redirect_to company_project_repositories_path(current_project), inertia: { errors: { public_url: e.message } }
   rescue AzureDevops::Error => e
     redirect_to company_project_repositories_path(current_project), inertia: { errors: { external_id: e.message } }
+  rescue Bitbucket::Error => e
+    redirect_to company_project_repositories_path(current_project), inertia: { errors: { full_name: e.message } }
   end
 
   def update
@@ -94,6 +102,8 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
     service = RepositoryService.for(integration)
     if integration.azure_devops?
       service.list_branches(repo.external_id, project_id: repo.external_project_id)
+    elsif integration.bitbucket?
+      service.list_branches(repo)
     else
       service.list_branches(repo.full_name)
     end
@@ -161,6 +171,25 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
       source_branch: create_params[:source_branch].presence,
       purpose: create_params[:purpose]
     )
+  end
+
+  def bitbucket_integration
+    id = create_params[:integration_id]
+    return nil if id.blank?
+
+    Integration.where(project_id: current_project.id, provider: "bitbucket").find_by(id: id)
+  end
+
+  # Identity, name, privacy and default branch come from Bitbucket's answer;
+  # the request only says which repository (by UUID from the picker, or by
+  # name) and optionally the branch.
+  def build_bitbucket_repository(integration)
+    found = Bitbucket::RepositoryService.new(integration)
+                                        .find_repo!(create_params[:external_id].presence || create_params[:full_name])
+    Repository.new(found.except(:default_branch, :clone_url).merge(
+      integration: integration, scope: current_project, purpose: create_params[:purpose],
+      source_branch: create_params[:source_branch].presence || found[:default_branch]
+    ))
   end
 
   def public_params

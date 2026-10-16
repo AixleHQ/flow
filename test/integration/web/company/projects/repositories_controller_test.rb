@@ -77,6 +77,51 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
     assert_nil Repository.find_by(full_name: "acme/infra")
   end
 
+  test "a Bitbucket repository takes its name, privacy and UUIDs from Bitbucket, not from the request" do
+    with_bitbucket_settings
+    stub_bitbucket!
+    integration = create(:integration, :bitbucket, :active, company: @company, project: @project)
+
+    post company_project_repositories_path(@project), params: {
+      repository: { full_name: "acme/forged", integration_id: integration.id, external_id: FakeBitbucket::Api::REPOSITORY_UUID,
+                    is_private: false }
+    }
+
+    repo = Repository.find_by!(full_name: "acme/api")
+    assert_equal FakeBitbucket::Api::REPOSITORY_UUID, repo.external_id
+    assert_equal FakeBitbucket::Api::WORKSPACE_UUID, repo.external_organization_id
+    assert_equal FakeBitbucket::Api::PROJECT_UUID, repo.external_project_id
+    assert_equal "https://bitbucket.org/acme/api.git", repo.clone_url
+    assert_equal "main", repo.source_branch
+    assert repo.is_private
+  end
+
+  test "a Bitbucket repository the connection cannot see is refused with the reason" do
+    with_bitbucket_settings
+    stub_bitbucket!
+    integration = create(:integration, :bitbucket, :active, company: @company, project: @project)
+
+    assert_no_difference("Repository.count") do
+      post company_project_repositories_path(@project), params: {
+        repository: { full_name: "acme/missing", integration_id: integration.id }
+      }
+    end
+    assert_match(/no such resource/, Array(session["inertia_errors"][:full_name]).to_sentence)
+  end
+
+  test "the Bitbucket picker carries each repository's UUID" do
+    with_bitbucket_settings
+    stub_bitbucket!
+    integration = create(:integration, :bitbucket, :active, company: @company, project: @project)
+
+    get company_project_repositories_path(@project, integration_id: integration.id),
+        headers: { "X-Inertia" => "true", "X-Inertia-Partial-Component" => "Projects/Repositories/RepositoriesPage",
+                   "X-Inertia-Partial-Data" => "availableRepos" }
+
+    assert_equal [ { "fullName" => "acme/api", "defaultBranch" => "main", "externalId" => FakeBitbucket::Api::REPOSITORY_UUID } ],
+                 response.parsed_body.dig("props", "availableRepos")
+  end
+
   test "create attaches a verified public repository without an integration" do
     fake = FakePublicRepositoryService.new
     PublicRepositoryService.stubs(:new).returns(fake)

@@ -123,6 +123,43 @@ class IntegrationResource < ApplicationResource
     end
   end
 
+  # ----- Bitbucket -----
+
+  # "app" (the Forge installation) or "token". Null for every other provider.
+  typelize "string | null"
+  attribute :bitbucket_auth_mode do |integration|
+    integration.bitbucket_auth_mode
+  end
+
+  typelize "string | null"
+  attribute :bitbucket_workspace do |integration|
+    integration.bitbucket? ? integration.bitbucket_workspace_slug : nil
+  end
+
+  # "access_token" or "api_token" in token mode.
+  typelize "string | null"
+  attribute :bitbucket_token_kind do |integration|
+    integration.bitbucket_token? ? integration.bitbucket_token_kind : nil
+  end
+
+  # App mode only: what the installation is doing and when the app last
+  # reported, so a card can say the app has gone silent before a clone fails.
+  typelize "string | null"
+  attribute :bitbucket_installation_status do |integration|
+    integration.bitbucket_app? ? integration.bitbucket_installation&.status.to_s.presence : nil
+  end
+
+  typelize "string | null"
+  attribute :bitbucket_last_heard_at do |integration|
+    integration.bitbucket_app? ? integration.bitbucket_installation&.last_invocation_at&.iso8601 : nil
+  end
+
+  typelize "string | null"
+  attribute :bitbucket_url do |integration|
+    slug = integration.bitbucket? ? integration.bitbucket_workspace_slug : nil
+    slug.present? ? "#{Bitbucket::AppConfig::WEB_HOST}/#{slug}" : nil
+  end
+
   typelize "{ id: number | null; name: string }"
   attribute :connected_by do |integration|
     user = integration.connected_by

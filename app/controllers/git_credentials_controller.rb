@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Credential-vending endpoint for the in-container git credential helper, for
-# GitHub and GitLab repositories (Azure has its own, AzureGitCredentialsController,
+# GitHub, GitLab and Bitbucket repositories (Azure has its own, AzureGitCredentialsController,
 # which this mirrors). Nothing is stored in the checkout — a token in the remote URL
 # would sit in .git/config, in `ps` and in the session log — so each git operation
 # asks here.

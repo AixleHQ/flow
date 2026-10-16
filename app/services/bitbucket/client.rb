@@ -11,7 +11,7 @@ module Bitbucket
     MAX_RETRIES = 2
     BASE_PATH = "/2.0"
 
-    Response = Data.define(:status, :body)
+    Response = Data.define(:status, :body, :headers)
 
     attr_reader :credential
 
@@ -64,10 +64,11 @@ module Bitbucket
       log(method, path, response, started)
 
       case response.status
-      when 200..299 then raw ? Response.new(status: response.status, body: parse(response)) : parse(response)
+      when 200..299
+        raw ? Response.new(status: response.status, body: parse(response), headers: response.headers.to_h) : parse(response)
       when 401 then retry_unauthorized(method, segments, params, body, raw, attempt)
       when 403 then raise Error::PermissionDenied, message_of(response, "Bitbucket denied this operation")
-      when 404 then raise Error::NotFound, "Bitbucket has no such resource, or this connection cannot see it"
+      when 404 then raise Error::NotFound
       when 409 then raise Error::Conflict, message_of(response)
       when 429 then retry_throttled(response, method, segments, params, body, raw, attempt)
       when 400, 422 then raise Error::ValidationFailed.new(message_of(response), details: fields_of(response))
@@ -160,6 +161,9 @@ module Bitbucket
       @connection ||= Faraday.new(url: AppConfig::API_HOST) do |f|
         f.options.open_timeout = AppConfig.open_timeout
         f.options.timeout = AppConfig.read_timeout
+        # Bitbucket repeats a parameter for several values (`state=OPEN&state=MERGED`)
+        # and ignores Rails' `state[]=` form.
+        f.options.params_encoder = Faraday::FlatParamsEncoder
         # No redirect middleware: a followed redirect would resend the token to
         # whatever host Bitbucket named.
         f.adapter Faraday.default_adapter

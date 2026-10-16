@@ -53,7 +53,9 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
+import { AtlassianConnectModal } from './AtlassianConnectModal';
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
+import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
@@ -62,6 +64,7 @@ import { TeamsApprovalModal } from './TeamsApprovalModal';
 import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
+export type { BitbucketProps } from './BitbucketConnectModal';
 export type { GithubProps } from './GithubConnectModal';
 export type { JiraProps } from './JiraConnectModal';
 export type { LinearProps } from './LinearConnectModal';
@@ -87,6 +90,8 @@ interface IntegrationsContentProps {
   // Absent on the company page. `appConfigured: false` is a deployment with no
   // GitHub App — the connect dialog then opens on the token path.
   github?: GithubProps;
+  // Absent on the company page: Bitbucket connects to a project.
+  bitbucket?: BitbucketProps;
   // Absent on the company page: Jira connects to a project.
   jira?: JiraProps;
   // Absent on the company page: Linear connects to a project.
@@ -102,6 +107,7 @@ interface IntegrationsContentProps {
 const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
+  bitbucket: 'Bitbucket',
   coder: 'Coder',
   slack: 'Slack',
   teams: 'Microsoft Teams',
@@ -121,6 +127,17 @@ const DEFAULT_CODER_LOCK_TTL = 120;
 
 const TOKEN_PROVIDERS = new Set(['gitlab', 'coder']);
 
+// A Bitbucket app connection has no token of its own, but it can still be re-checked.
+const holdsToken = (integration: Integration) =>
+  TOKEN_PROVIDERS.has(integration.provider) ||
+  (integration.provider === 'bitbucket' && integration.bitbucketAuthMode === 'token');
+const testable = (integration: Integration) => holdsToken(integration) || integration.provider === 'bitbucket';
+
+// Forge delivers the app's token every five minutes; a quarter hour without one
+// is worth saying before a clone fails on it.
+const APP_SILENCE_MINUTES = 15;
+const minutesSince = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+
 const youtrackPendingNotice = (keys: string[]) =>
   `No event yet from ${keys.join(', ')} — check that the Aixle Flow app is attached to those projects in YouTrack`;
 
@@ -135,6 +152,7 @@ export const IntegrationsContent = ({
   title,
   azureDevops,
   github,
+  bitbucket,
   jira,
   linear,
   youtrack,
@@ -175,6 +193,30 @@ export const IntegrationsContent = ({
   const jiraAvailable = isProjectContext && !!jira;
   const slackAvailable = isProjectContext && !!slack?.enabled;
   const teamsAvailable = isProjectContext && !!teams?.enabled;
+
+  const [bitbucketOpen, setBitbucketOpen] = useState(false);
+  const bitbucketAvailable = isProjectContext && !!bitbucket;
+
+  // Jira and Bitbucket share one Connect entry. A product's flow replaces the
+  // chooser and hands back to it when it closes, so both fit in one sitting.
+  const [atlassianOpen, setAtlassianOpen] = useState(false);
+  const [returnToAtlassian, setReturnToAtlassian] = useState(false);
+  const atlassianAvailable = jiraAvailable || bitbucketAvailable;
+  const chooseAtlassianProduct = useCallback((open: (value: boolean) => void) => {
+    setAtlassianOpen(false);
+    setReturnToAtlassian(true);
+    open(true);
+  }, []);
+  const closeAtlassianProduct = useCallback(
+    (close: (value: boolean) => void) => {
+      close(false);
+      if (returnToAtlassian) {
+        setReturnToAtlassian(false);
+        setAtlassianOpen(true);
+      }
+    },
+    [returnToAtlassian],
+  );
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
@@ -357,7 +399,11 @@ export const IntegrationsContent = ({
 
     router.patch(
       `${basePath}/${tokenTarget.id}`,
-      tokenTarget.provider === 'coder' ? { sessionToken: token } : { personalAccessToken: token },
+      tokenTarget.provider === 'coder'
+        ? { sessionToken: token }
+        : tokenTarget.provider === 'bitbucket'
+          ? { token }
+          : { personalAccessToken: token },
       {
         preserveScroll: true,
         onSuccess: closeTokenModal,
@@ -465,7 +511,7 @@ export const IntegrationsContent = ({
         title={title}
         subtitle={
           isProjectContext
-            ? 'Connect GitHub, GitLab, Coder, Slack or Microsoft Teams for this project, or use company-wide integrations'
+            ? 'Connect GitHub, GitLab, Bitbucket, Coder, Slack or Microsoft Teams for this project, or use company-wide integrations'
             : 'Connect external services to your company'
         }
         actions={
@@ -505,9 +551,12 @@ export const IntegrationsContent = ({
                     Azure DevOps
                   </Menu.Item>
                 )}
-                {jiraAvailable && (
-                  <Menu.Item leftSection={<IntegrationLogo provider="jira" />} onClick={() => setJiraOpen(true)}>
-                    Jira
+                {atlassianAvailable && (
+                  <Menu.Item
+                    leftSection={<IntegrationLogo provider="atlassian" />}
+                    onClick={() => setAtlassianOpen(true)}
+                  >
+                    Atlassian
                   </Menu.Item>
                 )}
                 {linearAvailable && (
@@ -585,7 +634,7 @@ export const IntegrationsContent = ({
             <EmptyState
               icon={<IconLink size={22} />}
               title="No integrations connected"
-              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack or Microsoft Teams to trigger workflows from messages."
+              description="Connect GitHub, GitLab or Bitbucket for repositories, Coder for workspaces, or Slack or Microsoft Teams to trigger workflows from messages."
               action={
                 canExecute && (
                   <Group gap="sm" justify="center" wrap="wrap">
@@ -619,13 +668,13 @@ export const IntegrationsContent = ({
                         Azure DevOps
                       </Button>
                     )}
-                    {jiraAvailable && (
+                    {atlassianAvailable && (
                       <Button
                         variant="outline"
-                        leftSection={<IntegrationLogo provider="jira" />}
-                        onClick={() => setJiraOpen(true)}
+                        leftSection={<IntegrationLogo provider="atlassian" />}
+                        onClick={() => setAtlassianOpen(true)}
                       >
-                        Jira
+                        Atlassian
                       </Button>
                     )}
                     {linearAvailable && (
@@ -831,7 +880,29 @@ export const IntegrationsContent = ({
                               </Text>
                             </Tooltip>
                           )}
-                          {TOKEN_PROVIDERS.has(integration.provider) &&
+                          {integration.provider === 'bitbucket' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.bitbucketAuthMode === 'app'
+                                ? `${integration.bitbucketWorkspace ?? 'workspace'} · Aixle Flow app`
+                                : `${integration.bitbucketWorkspace ?? 'workspace'} · ${
+                                    integration.bitbucketTokenKind === 'api_token' ? 'API token' : 'access token'
+                                  }`}
+                            </Text>
+                          )}
+                          {integration.bitbucketAuthMode === 'app' &&
+                            (integration.bitbucketInstallationStatus === 'uninstalled' ? (
+                              <Text fz={11} c="var(--app-danger-fg)" truncate maw={260}>
+                                The Aixle Flow app was removed from this workspace
+                              </Text>
+                            ) : (
+                              integration.bitbucketLastHeardAt &&
+                              minutesSince(integration.bitbucketLastHeardAt) >= APP_SILENCE_MINUTES && (
+                                <Text fz={11} c="yellow.7" truncate maw={260}>
+                                  {`Aixle Flow app silent for ${minutesSince(integration.bitbucketLastHeardAt)} min`}
+                                </Text>
+                              )
+                            ))}
+                          {holdsToken(integration) &&
                             integration.status === 'error' &&
                             typeof integration.settings.error === 'string' && (
                               <Text fz={11} c="var(--app-danger-fg)" truncate maw={260}>
@@ -1110,7 +1181,7 @@ export const IntegrationsContent = ({
                             </Tooltip>
                           </>
                         )}
-                        {TOKEN_PROVIDERS.has(integration.provider) && canExecute && !readOnly && (
+                        {testable(integration) && canExecute && !readOnly && (
                           <>
                             <Tooltip label="Test connection">
                               <ActionIcon
@@ -1122,16 +1193,18 @@ export const IntegrationsContent = ({
                                 <IconRefresh size={16} />
                               </ActionIcon>
                             </Tooltip>
-                            <Tooltip label="Replace token">
-                              <ActionIcon
-                                aria-label={`Replace token for ${integration.name}`}
-                                variant="subtle"
-                                size="sm"
-                                onClick={() => setTokenTarget(integration)}
-                              >
-                                <IconKey size={16} />
-                              </ActionIcon>
-                            </Tooltip>
+                            {holdsToken(integration) && (
+                              <Tooltip label="Replace token">
+                                <ActionIcon
+                                  aria-label={`Replace token for ${integration.name}`}
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => setTokenTarget(integration)}
+                                >
+                                  <IconKey size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
                           </>
                         )}
                         {integration.provider === 'coder' && canExecute && !readOnly && (
@@ -1169,9 +1242,40 @@ export const IntegrationsContent = ({
         </ResourceTableShell>
       )}
 
+      {atlassianAvailable && (
+        <AtlassianConnectModal
+          opened={atlassianOpen}
+          onClose={() => setAtlassianOpen(false)}
+          jira={{
+            available: jiraAvailable,
+            connected: integrations.some((i) => i.provider === 'jira'),
+            onChoose: () => chooseAtlassianProduct(setJiraOpen),
+          }}
+          bitbucket={{
+            available: bitbucketAvailable,
+            connected: integrations.some((i) => i.provider === 'bitbucket'),
+            onChoose: () => chooseAtlassianProduct(setBitbucketOpen),
+          }}
+        />
+      )}
+
+      {bitbucketAvailable && (
+        <BitbucketConnectModal
+          opened={bitbucketOpen}
+          onClose={() => closeAtlassianProduct(setBitbucketOpen)}
+          basePath={basePath}
+          bitbucket={bitbucket}
+        />
+      )}
+
       {jira && (
         <>
-          <JiraConnectModal opened={jiraOpen} onClose={() => setJiraOpen(false)} basePath={basePath} jira={jira} />
+          <JiraConnectModal
+            opened={jiraOpen}
+            onClose={() => closeAtlassianProduct(setJiraOpen)}
+            basePath={basePath}
+            jira={jira}
+          />
           <JiraProjectsModal
             integration={jiraProjectsTarget}
             onClose={() => setJiraProjectsTarget(null)}
@@ -1352,11 +1456,19 @@ export const IntegrationsContent = ({
           <Text size="sm" c="dimmed">
             {tokenTarget?.provider === 'coder'
               ? 'Paste a new Coder session token. It is checked against Coder before it replaces the current one.'
-              : 'Paste a new GitLab personal access token with the api scope. It is checked against GitLab before it replaces the current one.'}{' '}
+              : tokenTarget?.provider === 'bitbucket'
+                ? `Paste a new Bitbucket access token or API token for ${tokenTarget.bitbucketWorkspace ?? 'this workspace'}. It is checked against Bitbucket before it replaces the current one.`
+                : 'Paste a new GitLab personal access token with the api scope. It is checked against GitLab before it replaces the current one.'}{' '}
             Repositories and settings stay as they are.
           </Text>
           <PasswordInput
-            label={tokenTarget?.provider === 'coder' ? 'Session Token' : 'Personal Access Token'}
+            label={
+              tokenTarget?.provider === 'coder'
+                ? 'Session Token'
+                : tokenTarget?.provider === 'bitbucket'
+                  ? 'Token'
+                  : 'Personal Access Token'
+            }
             value={replacementToken}
             onChange={(e) => setReplacementToken(e.currentTarget.value)}
             onKeyDown={(e) => {

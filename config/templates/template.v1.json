@@ -120,6 +120,7 @@
             "enum": [
               "github",
               "gitlab",
+              "bitbucket",
               "slack",
               "teams",
               "chat",
@@ -667,6 +668,7 @@
                 "enum": [
                   "github",
                   "gitlab",
+                  "bitbucket",
                   "slack",
                   "teams",
                   "chat",

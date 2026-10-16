@@ -21,7 +21,8 @@ module Bitbucket
     # never confirms that something hidden exists.
     class NotFound < Error
       def initialize(message = nil, details: nil)
-        super(message, code: "not_found_or_inaccessible", status: 404, details: details)
+        super(message || "Bitbucket has no such resource, or this connection cannot see it",
+              code: "not_found_or_inaccessible", status: 404, details: details)
       end
     end
 

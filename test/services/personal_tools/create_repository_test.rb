@@ -30,6 +30,21 @@ module PersonalTools
       assert_equal false, payload["public_source"] # rubocop:disable Minitest/RefuteFalse
     end
 
+    test "a Bitbucket repository is looked up for the identity only Bitbucket can supply" do
+      with_bitbucket_settings
+      stub_bitbucket!
+      integration = create(:integration, :bitbucket, :active, company: @company, project: @project, connected_by: @user)
+
+      result = execute("full_name" => "acme/api", "integration_id" => integration.id)
+
+      assert_equal 0, result[:exit_code], result[:stdout]
+      repo = Repository.find(JSON.parse(result[:stdout])["id"])
+      assert_equal FakeBitbucket::Api::REPOSITORY_UUID, repo.external_id
+      assert_equal "main", repo.source_branch
+
+      assert_match(/no such resource/, execute("full_name" => "acme/missing", "integration_id" => integration.id)[:stderr])
+    end
+
     # The agent-side half of the public-repository path: an agent can attach the
     # OSS repository it was asked to read without anybody installing an App on it.
     test "attaches a verified public repository when given a url" do
@@ -70,7 +85,7 @@ module PersonalTools
         result = execute("full_name" => "acme/app", "integration_id" => linear.id)
 
         assert_not_equal 0, result[:exit_code]
-        assert_match(/GitHub, GitLab or Azure DevOps/, result[:stderr])
+        assert_match(/GitHub, GitLab, Azure DevOps or Bitbucket/, result[:stderr])
       end
     end
   end

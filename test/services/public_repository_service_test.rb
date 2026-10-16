@@ -134,12 +134,58 @@ class PublicRepositoryServiceTest < ActiveSupport::TestCase
     end
   end
 
+  # ====== Bitbucket ======
+
+  def stub_bitbucket_repository(path, status: 200, body: nil)
+    stub_request(:get, "https://api.bitbucket.org/2.0/repositories/#{path}")
+      .to_return(status: status, headers: { "Content-Type" => "application/json" },
+                 body: (body || { type: "error", error: { message: "Repository acme/app not found" } }).to_json)
+  end
+
+  test "resolves a public bitbucket repository, even from a /src/ deep link" do
+    stub_bitbucket_repository("atlassian/python-bitbucket", body: {
+      type: "repository", full_name: "atlassian/python-bitbucket", is_private: false,
+      mainbranch: { type: "branch", name: "master" }, description: "Bitbucket API client"
+    })
+
+    result = PublicRepositoryService.resolve("https://bitbucket.org/atlassian/python-bitbucket/src/master/README.md")
+
+    assert_equal "bitbucket", result.provider
+    assert_equal "atlassian/python-bitbucket", result.full_name
+    assert_equal "master", result.default_branch
+    assert_equal "https://bitbucket.org/atlassian/python-bitbucket.git", result.clone_url
+    assert_equal "Bitbucket API client", result.description
+  end
+
+  test "a private bitbucket repository answers anonymously with a refusal, reported as not found or not public" do
+    stub_bitbucket_repository("acme/app", status: 403)
+
+    assert_raises(PublicRepositoryService::NotFound) { PublicRepositoryService.resolve("bitbucket.org/acme/app") }
+  end
+
+  test "a bitbucket repository flagged private is refused" do
+    stub_bitbucket_repository("acme/app", body: { full_name: "acme/app", is_private: true })
+
+    assert_raises(PublicRepositoryService::NotPublic) { PublicRepositoryService.resolve("https://bitbucket.org/acme/app") }
+  end
+
+  test "the resolved bitbucket repository attaches as an anonymous public source" do
+    stub_bitbucket_repository("acme/app", body: { full_name: "acme/app", is_private: false, mainbranch: { name: "main" } })
+    attributes = PublicRepositoryService.resolve("https://bitbucket.org/acme/app").to_repository_attributes
+
+    repository = Repository.new(attributes.merge(scope: create(:project, :standalone)))
+
+    assert repository.valid?, repository.errors.full_messages.to_sentence
+    assert_equal "bitbucket", repository.provider
+  end
+
   # ====== Host allowlist ======
 
   test "refuses hosts that are neither github.com nor gitlab.com" do
     [
       "https://github.evil.com/rails/rails",
       "https://git.internal/acme/app",
+      "https://bitbucket.org.evil.com/acme/app",
       "http://169.254.169.254/latest/meta-data",
       "ssh://github.com/rails/rails"
     ].each do |input|

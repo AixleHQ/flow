@@ -160,7 +160,7 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
             description={
               hasFilters
                 ? undefined
-                : 'Add repositories to use as code context in agent sessions. Connect a GitHub or GitLab integration first.'
+                : 'Add repositories to use as code context in agent sessions. Connect a GitHub, GitLab, Azure DevOps or Bitbucket integration first.'
             }
             action={
               !hasFilters &&

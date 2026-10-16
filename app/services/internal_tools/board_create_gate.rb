@@ -26,9 +26,10 @@ module InternalTools
             type: "string",
             description: "Gate type. Supported: github_checks_completed, github_workflow_completed, " \
                          "gitlab_pipeline_completed, azure_devops_build_completed, " \
-                         "azure_devops_pr_policies_satisfied",
+                         "azure_devops_pr_policies_satisfied, bitbucket_pr_statuses_completed",
             enum: %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed
-                     azure_devops_build_completed azure_devops_pr_policies_satisfied]
+                     azure_devops_build_completed azure_devops_pr_policies_satisfied
+                     bitbucket_pr_statuses_completed]
           },
           build_id: {
             type: "integer",
@@ -36,17 +37,17 @@ module InternalTools
           },
           pull_request_id: {
             type: "integer",
-            description: "(azure_devops_pr_policies_satisfied) Azure pull request id"
+            description: "(azure_devops_pr_policies_satisfied, bitbucket_pr_statuses_completed) Pull request id"
           },
           repository_id: {
             type: "integer",
-            description: "(azure_devops_*) Aixle repository id. Azure repositories are addressed by id, " \
-                         "not by name — a name would reach a same-named repository in another project."
+            description: "(azure_devops_*, bitbucket_*) Aixle repository id. These repositories are addressed by " \
+                         "id, not by name — a name would reach a same-named repository in another project."
           },
           expected_commit: {
             type: "string",
-            description: "(azure_devops_*) The commit this gate is waiting on. A verdict about a different " \
-                         "commit leaves the gate pending, because the branch has moved on."
+            description: "(azure_devops_*, bitbucket_*) The commit this gate is waiting on. A verdict about a " \
+                         "different commit leaves the gate pending, because the branch has moved on."
           },
           pr_number: {
             type: "integer",
@@ -70,7 +71,7 @@ module InternalTools
 
     SUPPORTED_GATE_TYPES = %w[
       github_checks_completed github_workflow_completed gitlab_pipeline_completed
-      azure_devops_build_completed azure_devops_pr_policies_satisfied
+      azure_devops_build_completed azure_devops_pr_policies_satisfied bitbucket_pr_statuses_completed
     ].freeze
 
     def execute
@@ -122,6 +123,27 @@ module InternalTools
       }.compact
     end
 
+    # Waits on every commit status of the pull request's head, keyed by the
+    # repository UUID for the same reason Azure gates are keyed by GUID.
+    def bitbucket_metadata(task)
+      pull_request_id = params[:pull_request_id].to_i
+      return error("pull_request_id must be a positive integer") unless pull_request_id > 0
+      return error("repository_id is required for a Bitbucket gate") if params[:repository_id].blank?
+
+      repository = Repository.visible_for_project(task.board.project).find_by(id: params[:repository_id])
+      return error("Repository #{params[:repository_id]} is not linked to this task's project") if repository.nil?
+      return error("Repository #{repository.id} is not a Bitbucket repository") unless repository.bitbucket?
+
+      # `repo_full_name` is for people (the board's link and labels); routing
+      # never reads it.
+      {
+        external_repository_id: repository.external_id,
+        repo_full_name: repository.full_name,
+        pull_request_id: pull_request_id,
+        expected_commit: params[:expected_commit].presence
+      }.compact
+    end
+
     def build_metadata(gate_type, task)
       case gate_type
       when "github_checks_completed"
@@ -157,6 +179,9 @@ module InternalTools
 
       when "azure_devops_pr_policies_satisfied"
         azure_metadata(task, reference_key: :pull_request_id, reference: params[:pull_request_id].to_i)
+
+      when "bitbucket_pr_statuses_completed"
+        bitbucket_metadata(task)
 
       when "gitlab_pipeline_completed"
         repo_full_name = params[:repo_full_name]

@@ -9,6 +9,13 @@ module BitbucketTestHelper
   FORGE_ENVIRONMENT_ID = "6f7e8d9c-0000-4000-8000-0000000000e1"
   FORGE_INSTALL_URL = "https://developer.atlassian.com/console/install/0b1c2d3e?signature=test&product=bitbucket"
 
+  # Replaces the Bitbucket::Api seam with FakeBitbucket::Api. The credential
+  # chain in front of it (CredentialProvider) stays real.
+  def stub_bitbucket!(fake = FakeBitbucket::Api.new)
+    Bitbucket::Api.stubs(:new).returns(fake)
+    fake
+  end
+
   def with_bitbucket_settings(app_mode: false, token_min_remaining: 300)
     identity = { app_id: FORGE_APP_ID, environment_id: FORGE_ENVIRONMENT_ID, install_url: FORGE_INSTALL_URL }
     identity = identity.transform_values { "" } unless app_mode

@@ -8,7 +8,8 @@ class Repository < ApplicationRecord
   # dialled from there. Keep it to hosts PublicRepositoryService can verify.
   PUBLIC_HOSTS = {
     "github.com" => "github",
-    "gitlab.com" => "gitlab"
+    "gitlab.com" => "gitlab",
+    "bitbucket.org" => "bitbucket"
   }.freeze
 
   # Providers a repository can be cloned from. Integrations also cover Coder,
@@ -117,7 +118,7 @@ class Repository < ApplicationRecord
     integration_id.nil? && integration.nil?
   end
 
-  # "github" / "gitlab" / nil. Integration-backed repositories take it from the
+  # "github" / "gitlab" / "bitbucket" / nil. Integration-backed repositories take it from the
   # integration; public ones from the clone host, which is allowlisted.
   def provider
     return integration.provider.to_s if integration.present?

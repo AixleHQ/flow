@@ -21,9 +21,9 @@ module Ci
 
     def call
       return ProbeResult.unresolvable("#{gate.gate_type} is not a CI gate type") unless gate.ci?
-      # Azure gates name the repository by GUID; the others by display name.
-      if gate.provider == "azure_devops"
-        return ProbeResult.unresolvable("gate metadata has no external_repository_id") if gate.azure_repository_id.blank?
+      # Azure and Bitbucket gates name the repository by its provider id; the others by display name.
+      if gate.routes_by_external_id?
+        return ProbeResult.unresolvable("gate metadata has no external_repository_id") if gate.external_repository_id.blank?
       elsif repo_full_name.blank?
         return ProbeResult.unresolvable("gate metadata has no repo_full_name")
       end
@@ -76,6 +76,10 @@ module Ci
         AzureDevops::CheckStatusService.new(integration)
                                        .pull_request_policies(linked_repository, gate.reference,
                                                               expected_commit: gate.expected_commit)
+      when "bitbucket_pr_statuses_completed"
+        Bitbucket::CheckStatusService.new(integration)
+                                     .pull_request_statuses(linked_repository, gate.reference,
+                                                            expected_commit: gate.expected_commit)
       end
     end
 
@@ -91,8 +95,8 @@ module Ci
       return nil if project.nil?
 
       @linked_repository ||=
-        if gate.provider == "azure_devops"
-          Repository.visible_for_project(project).find_by(external_id: gate.azure_repository_id)
+        if gate.routes_by_external_id?
+          Repository.visible_for_project(project).find_by(external_id: gate.external_repository_id)
         else
           Repository.visible_for_project(project).find_by(full_name: repo_full_name)
         end
