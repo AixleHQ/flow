@@ -417,6 +417,54 @@ describe('AddRepositoryModal', () => {
     expect(screen.queryByRole('option', { name: 'acme/already-here' })).not.toBeInTheDocument();
   });
 
+  it('says why the repository picker is empty when every repository is already in the project', async () => {
+    vi.mocked(router.reload).mockImplementation((opts) => {
+      (opts as { onFinish?: () => void } | undefined)?.onFinish?.();
+    });
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set(['acme/already-here'])}
+      />,
+      {
+        props: {
+          integrations: [integration],
+          availableRepos: [{ fullName: 'acme/already-here', defaultBranch: 'main' }],
+        },
+      },
+    );
+
+    expect(
+      await screen.findByPlaceholderText('Every repository this integration reaches is already in this project'),
+    ).toBeDisabled();
+  });
+
+  it('keeps the chosen integration when it is picked again', async () => {
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      {
+        props: {
+          integrations: [integration, { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' }],
+        },
+      },
+    );
+    const field = screen.getByRole('combobox', { name: /integration/i });
+
+    await userEvent.click(field);
+    await userEvent.click(await screen.findByRole('option', { name: 'Acme Org (GitHub)' }));
+    await userEvent.click(field);
+    await userEvent.click(await screen.findByRole('option', { name: 'Acme Org (GitHub)' }));
+
+    expect(field).toHaveValue('Acme Org (GitHub)');
+  });
+
   it('selecting a repository prefills its default branch and reloads branches', async () => {
     vi.mocked(router.reload).mockImplementation((opts) => {
       (opts as { onFinish?: () => void } | undefined)?.onFinish?.();

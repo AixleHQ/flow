@@ -74,6 +74,10 @@ governance, community health — carry none.
   resources scoped to each step and reviews with distinct purposes.
 
 ### Fixed
+- **Repositories**: picking the chosen integration, repository or branch again in
+  **Add Repository** keeps it instead of clearing it and the fields below. When the
+  integration has nothing left to add, the repository field says why: every
+  repository it reaches is already in the project, or it reaches none.
 - **Sessions & Runs**: a running step whose owner does not share active sessions
   now says its live view is private, and how the owner can share it, instead of
   showing "Session starting…" until the step ends.

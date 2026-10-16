@@ -117,6 +117,12 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
         .map((r) => ({ value: r.fullName, label: r.fullName })),
     [availableRepos, existingRepoNames],
   );
+  const noRepoReason =
+    !form.values.integrationId || loadingRepos || availableRepos === undefined || repoOptions.length > 0
+      ? null
+      : availableRepos.length > 0
+        ? 'Every repository this integration reaches is already in this project'
+        : 'This integration reaches no repositories';
 
   const loadRepos = (integrationId: string) => {
     setLoadingRepos(true);
@@ -284,6 +290,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
                 data={integrationOptions}
                 value={form.values.integrationId}
                 onChange={handleIntegrationChange}
+                allowDeselect={false}
                 error={form.errors.integrationId}
                 required
                 placeholder={
@@ -299,11 +306,12 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
                 searchable
                 value={form.values.fullName}
                 onChange={handleRepoChange}
+                allowDeselect={false}
                 error={form.errors.fullName}
                 rightSection={loadingRepos ? <Loader size={16} /> : undefined}
                 required
-                placeholder={loadingRepos ? 'Loading repositories...' : 'Select repository...'}
-                disabled={!form.values.integrationId || loadingRepos}
+                placeholder={noRepoReason ?? (loadingRepos ? 'Loading repositories...' : 'Select repository...')}
+                disabled={!form.values.integrationId || loadingRepos || noRepoReason !== null}
               />
               {isAzure && (
                 <Text size="xs" c="dimmed">
@@ -317,6 +325,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
                 data={availableBranches ?? []}
                 searchable
                 {...form.getInputProps('sourceBranch')}
+                allowDeselect={false}
                 rightSection={loadingBranches ? <Loader size={16} /> : undefined}
                 required
                 placeholder={loadingBranches ? 'Loading branches...' : 'Select branch...'}
