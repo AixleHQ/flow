@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 class Webhooks::GitlabController < ActionController::API
+  # Wrapping derives its model from the controller name, so it resolves the gitlab
+  # gem's `Gitlab` module, whose `respond_to?` builds a default client and raises
+  # MissingCredentials: nothing configures a global endpoint.
+  wrap_parameters false
+
   before_action :authenticate_by_repository
 
   def receive
