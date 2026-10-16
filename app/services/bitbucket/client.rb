@@ -11,6 +11,7 @@ module Bitbucket
     MAX_RETRIES = 2
     BASE_PATH = "/2.0"
 
+    Redirected = Data.define(:path)
     Response = Data.define(:status, :body, :headers)
 
     attr_reader :credential
@@ -66,6 +67,7 @@ module Bitbucket
       case response.status
       when 200..299
         raw ? Response.new(status: response.status, body: parse(response), headers: response.headers.to_h) : parse(response)
+      when 301, 302, 303, 307, 308 then follow_redirect(response, method, raw, attempt)
       when 401 then retry_unauthorized(method, segments, params, body, raw, attempt)
       when 403 then raise Error::PermissionDenied, message_of(response, "Bitbucket denied this operation")
       when 404 then raise Error::NotFound
@@ -81,6 +83,22 @@ module Bitbucket
       raise Error::OutcomeUnknown, "Bitbucket did not answer (#{e.class.name.demodulize})" unless method == :get
 
       raise Error.new("Bitbucket could not be reached (#{e.class.name.demodulize})", code: "timeout")
+    end
+
+    # Bitbucket answers some reads with a redirect to another path on its own API
+    # host — a pull request's diffstat and diff do. Such a read is followed; a
+    # redirect anywhere else is refused, because the request carries the token.
+    def follow_redirect(response, method, raw, attempt)
+      location = URI.parse(response.headers["location"].to_s)
+      on_api = "#{location.scheme}://#{location.host}" == AppConfig::API_HOST && location.path.start_with?("#{BASE_PATH}/")
+      unless method == :get && on_api && attempt < MAX_RETRIES
+        raise Error.new("Bitbucket redirected this request away from its API", code: "provider_error", status: response.status)
+      end
+
+      request(:get, Redirected.new(path: location.path), params: Rack::Utils.parse_query(location.query.to_s),
+                                                         raw: raw, attempt: attempt + 1)
+    rescue URI::InvalidURIError
+      raise Error.new("Bitbucket redirected this request to an unreadable address", code: "provider_error", status: response.status)
     end
 
     # One retry, and only with a different credential: a second 401 is Bitbucket
@@ -113,6 +131,8 @@ module Bitbucket
     end
 
     def build_path(segments)
+      return segments.path if segments.is_a?(Redirected)
+
       parts = Array(segments).flatten.compact.map { |segment| ERB::Util.url_encode(segment.to_s) }
       raise ArgumentError, "a Bitbucket path needs at least one segment" if parts.empty?
 

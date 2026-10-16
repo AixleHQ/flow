@@ -52,6 +52,27 @@ module Bitbucket
       assert more
     end
 
+    # Found live: a pull request's diffstat answers 302 to a diffstat path on the
+    # same API host.
+    test "follows a read's redirect to another path on the API host" do
+      stub_request(:get, "#{BITBUCKET_API}/repositories/ws/repo/pullrequests/1/diffstat")
+        .to_return(status: 302, headers: { "Location" => "#{BITBUCKET_API}/repositories/ws/repo/diffstat/ws/repo:aaa%0Dbbb?from_pullrequest_id=1&topic=true" })
+      target = stub_request(:get, "#{BITBUCKET_API}/repositories/ws/repo/diffstat/ws/repo:aaa%0Dbbb")
+               .with(query: { "from_pullrequest_id" => "1", "topic" => "true" }, headers: { "Authorization" => "Bearer tok-1" })
+               .to_return(json({ "values" => [ { "status" => "added" } ] }))
+
+      assert_equal [ { "status" => "added" } ], @client.get("repositories", "ws", "repo", "pullrequests", 1, "diffstat")["values"]
+      assert_requested target
+    end
+
+    test "refuses a redirect to another host, which would receive the token" do
+      stub_request(:get, "#{BITBUCKET_API}/repositories/ws/repo/pullrequests/1/diffstat")
+        .to_return(status: 302, headers: { "Location" => "https://evil.example/2.0/steal" })
+
+      error = assert_raises(Error) { @client.get("repositories", "ws", "repo", "pullrequests", 1, "diffstat") }
+      assert_equal "provider_error", error.code
+    end
+
     test "a 401 is retried once with the credential's refresh, and never again" do
       fresh = Credential.new(token: "tok-2", kind: :app)
       client = Client.new(credential: Credential.new(token: "tok-1", kind: :app, refresher: -> { fresh }))
