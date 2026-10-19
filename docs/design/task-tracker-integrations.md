@@ -28,7 +28,8 @@ to another does not change its workflows (§8).
 Out of scope for this design: importing or mirroring issues into the Aixle board; keeping Aixle
 board columns and tracker statuses in sync; the platform moving tickets because of a run's outcome
 (the agent does that with its tools, §6.8); polling or gap reconciliation; provider-specific
-tools; attachments, issue links and deletions. §12 says where each would attach later.
+tools; attachments, issue links and deletions. §12 says where each would attach later; attachments
+have their own design, [`tracker-attachments.md`](./tracker-attachments.md).
 
 ## 2. Decisions
 
