@@ -74,6 +74,7 @@ module WorkflowTriggers
         status_reporting: binding.status_reporting.to_s,
         project_tracker_id: binding.project_tracker_id,
         aixle_changes: binding.aixle_changes,
+        copy_attachments: binding.copy_attachments,
         verification_strategy: endpoint&.verification_strategy&.to_s,
         webhook_url: endpoint && self.class.webhook_url(endpoint.slug),
         created_by: creator(binding.created_by),

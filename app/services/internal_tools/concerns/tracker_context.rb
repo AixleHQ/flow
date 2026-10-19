@@ -55,8 +55,8 @@ module InternalTools
         return replayed(record) if state == :replayed && !record.failed?
 
         record.retry! if record.failed?
-        value = yield
-        record.succeed!(value, result_ref: value.id, issue_id: value.is_a?(Trackers::Comment) ? value.issue_id : value.id)
+        value = yield(record)
+        record.succeed!(value, result_ref: value.id, issue_id: value.respond_to?(:issue_id) ? value.issue_id : value.id)
         success(value.as_json.merge("operation_key" => key).to_json)
       rescue Trackers::Error::OutcomeUnknown => e
         record&.unknown!
@@ -100,6 +100,17 @@ module InternalTools
         return unless task
 
         link_task(task, tracker, issue)
+      end
+
+      # The board task of this project the issue is linked to: the run's own
+      # task when it is one of them, else the oldest active one.
+      def issue_task(tracker, issue)
+        tasks = ExternalResource.identifying(provider: tracker.provider, instance: tracker.tracker_provider.instance,
+                                             external_id: issue.id)
+                                .joins(board_task: :board).where(boards: { project_id: project&.id })
+                                .merge(BoardTask.active).order(:created_at, :id).map(&:board_task)
+        own = workflow_run&.board_task
+        tasks.include?(own) ? own : tasks.first
       end
 
       def link_task(task, tracker, issue)

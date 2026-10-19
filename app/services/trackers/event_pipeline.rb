@@ -162,7 +162,7 @@ module Trackers
     # is not known to be someone else. A person's comment right after one of
     # Aixle's is theirs. A provider that names no comment keeps the recent write.
     def comment_operation(recent, notification)
-      writes = recent.where(operation: "add_comment")
+      writes = recent.where(operation: %w[add_comment attach_files])
       return writes.first if notification.comment_id.blank?
 
       writes.find_by(result_ref: notification.comment_id.to_s) ||

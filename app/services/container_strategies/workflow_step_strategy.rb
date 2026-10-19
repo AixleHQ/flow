@@ -147,6 +147,7 @@ module ContainerStrategies
       end
 
       inject_workflow_run_assets(container, workflow_run, injected_names)
+      inject_tracker_files(container, workflow_run)
       # Last, so an asset of the same name cannot stand in for the request body.
       inject_webhook_payload(container, workflow_run, injected_names)
 
@@ -166,6 +167,23 @@ module ContainerStrategies
         injected_names << asset.name
       rescue StandardError => e
         Rails.logger.warn("[WorkflowStepStrategy] Failed to inject run asset #{asset.name}: #{e.message}")
+      end
+    end
+
+    # Files copied from the task's tracker issue, where tracker_download_attachments puts them.
+    def inject_tracker_files(container, workflow_run)
+      copies = workflow_run.board_task&.task_assets&.with_source(:tracker)&.includes(:tracker_attachment)
+      return if copies.blank?
+
+      uid = AgentCredentialsService.for(input[:agent_type]).adapter.container_uid
+      workspace = Trackers::Workspace.new(runtime: runtime, container: container, uid: uid)
+      copies.each do |copy|
+        path = Trackers::Workspace.path_for(copy.tracker_attachment&.issue_key || "issue", copy.name)
+        next unless path && copy.file
+
+        Rails.logger.warn("[WorkflowStepStrategy] Failed to place tracker file #{path}") unless workspace.fetch(copy.file.url, path)
+      rescue StandardError => e
+        Rails.logger.warn("[WorkflowStepStrategy] Failed to place tracker file #{copy.name}: #{e.message}")
       end
     end
 

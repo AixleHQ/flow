@@ -83,7 +83,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       task_assets: -> {
         next [] unless task
-        task.task_assets.order(created_at: :desc).map { |a| TaskAssetResource.new(a).to_h }
+        task.task_assets.includes(:tracker_attachment).order(created_at: :desc).map { |a| TaskAssetResource.new(a).to_h }
       },
       task_activities: -> {
         next [] unless task

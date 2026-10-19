@@ -27,6 +27,24 @@ module Youtrack
     def post(path, body, params = {}) = request(:post, path, params: params, body: body)
     def delete(path) = request(:delete, path)
 
+    # A file's signed `url` (relative, and carrying its own credential): fetched
+    # from the instance's origin with no token, since the signature is one.
+    def download(url, io:, max_bytes:)
+      origin = URI.parse(@base_url)
+      files.download(URI.join("#{origin.scheme}://#{origin.host}:#{origin.port}", url.to_s).to_s, io: io, max_bytes: max_bytes)
+    rescue URI::InvalidURIError
+      raise Trackers::Error.new("YouTrack gave a file address that is not a URL", code: "provider_error")
+    end
+
+    # Multipart POST of one Trackers::UploadFile; YouTrack answers with the created entities.
+    def upload(path, file, params = {})
+      uri = uri_for(path, params)
+      parts = [ [ "file", file.io, { filename: file.filename, content_type: file.content_type.presence || "application/octet-stream" } ] ]
+      response = files.send_request(:post, uri.to_s, headers: { "Authorization" => "Bearer #{@token}", "Accept" => "application/json" },
+                                                     parts: parts)
+      response.json
+    end
+
     private
 
     def request(method, path, params: {}, body: nil, attempt: 0)
@@ -49,6 +67,12 @@ module Youtrack
       raise Trackers::Error.new("YouTrack did not answer (#{e.class.name.demodulize})", code: "timeout")
     rescue SafeHttp::UnsafeUrl => e
       raise Trackers::Error.new("The YouTrack URL #{e.message}", code: "validation_failed")
+    end
+
+    def files
+      host = URI.parse(@base_url).host
+      @files ||= Trackers::FileTransfer.new(name: "YouTrack", hosts: [ host ], open_timeout: Config.open_timeout,
+                                            trusted_hosts: Config.trusted_hosts, logger: @logger)
     end
 
     def uri_for(path, params)

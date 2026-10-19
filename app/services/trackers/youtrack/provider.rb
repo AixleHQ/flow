@@ -212,7 +212,51 @@ module Trackers
         comment(api.add_comment(current[:id], body), current[:id])
       end
 
+      def attachments? = true
+
+      def list_attachments(scope_id, ref)
+        current = scoped!(fetch(issue_ref!(ref)), scope_id)
+        files(current).map { |raw| attachment(raw, current) }
+      end
+
+      def download_attachment(scope_id, ref, attachment_id, io:, max_bytes:)
+        current = scoped!(fetch(issue_ref!(ref)), scope_id)
+        raw = files(current).find { |f| f[:id] == attachment_id.to_s }
+        raise Error.new("#{current[:key]} has no file #{attachment_id}", code: "not_found") unless raw
+        raise Error.new("#{raw[:name]} is visible to only some people in YouTrack", code: "restricted") if raw[:restricted]
+
+        fetched = api.download(raw[:url], io: io, max_bytes: max_bytes)
+        attachment(raw, current).with(content_type: raw[:content_type] || fetched[:content_type])
+      end
+
+      def upload_attachment(scope_id, ref, file)
+        current = scoped!(fetch(issue_ref!(ref)), scope_id)
+        @files&.delete(current[:id])
+        attachment(api.upload_attachment(current[:id], file), current)
+      end
+
+      # YouTrack resolves a bare file name in an issue's markdown to its attachment.
+      def attachment_markup(attachment)
+        target = attachment.name.to_s.match?(/[\s()<>]/) ? "<#{attachment.name}>" : attachment.name
+        attachment.image? ? "![](#{target})" : "[#{attachment.name}](#{target})"
+      end
+
       private
+
+      # Read once per issue for as long as this provider lives: a download right
+      # after the listing uses the URLs the listing signed.
+      def files(current)
+        (@files ||= {})[current[:id]] ||= api.attachments(current[:id])
+      end
+
+      def attachment(raw, current)
+        Attachment.new(
+          id: raw[:id], issue_id: current[:id], name: raw[:name], size: raw[:size], content_type: raw[:content_type],
+          created_at: raw[:created_at], restricted: raw[:restricted] == true,
+          location: raw[:comment_id] ? { "kind" => "comment", "id" => raw[:comment_id] } : nil,
+          url: browse_url(current[:key])
+        )
+      end
 
       def api
         @api ||= ::Youtrack::Api.for(integration)

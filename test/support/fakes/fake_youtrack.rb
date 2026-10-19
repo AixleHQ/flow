@@ -37,7 +37,7 @@ module FakeYoutrack
       "Priority" => "SingleEnumIssueCustomField", "Assignee" => "SingleUserIssueCustomField"
     }.freeze
 
-    attr_reader :calls, :comments_by_issue, :activities
+    attr_reader :calls, :comments_by_issue, :activities, :files_by_issue, :uploads
     attr_writer :me
 
     def initialize
@@ -46,6 +46,9 @@ module FakeYoutrack
       @issues = {}
       @comments_by_issue = Hash.new { |h, k| h[k] = [] }
       @activities = Hash.new { |h, k| h[k] = [] }
+      @files_by_issue = Hash.new { |h, k| h[k] = [] }
+      @file_bytes = {}
+      @uploads = []
       @next = 100
       @failures = {}
       add_issue(id: ISSUE_1, key: "APP-1", title: "It breaks", state: "Ready for AI", project: PROJECTS[0])
@@ -76,6 +79,17 @@ module FakeYoutrack
       comment = { id: "4-#{@next += 1}", text: text, created_at: created_at, author: author.dup }
       @comments_by_issue[issue_id] << comment
       comment.dup
+    end
+
+    # A file someone attached in YouTrack. `restricted` limits it to a group.
+    def add_file(issue_id, name:, bytes:, content_type: "application/octet-stream", comment_id: nil, restricted: false)
+      id = "7-#{@next += 1}"
+      @file_bytes[id] = bytes.b
+      @files_by_issue[issue_id] << {
+        id: id, name: name, size: bytes.bytesize, content_type: content_type, created_at: Time.current.iso8601(3),
+        comment_id: comment_id, url: "/api/files/#{id}?sign=signed-for-aixle", restricted: restricted
+      }
+      id
     end
 
     def set_field(issue_id, name, value)
@@ -157,6 +171,30 @@ module FakeYoutrack
 
     def add_comment(issue_id, text)
       record(:add_comment, issue_id: issue_id, text: text) { add_comment_by(issue_id, text: text, author: BOT) }
+    end
+
+    def attachments(issue_id)
+      record(:attachments, issue_id: issue_id) { @files_by_issue[issue_id].map(&:dup) }
+    end
+
+    def download(url, io:, max_bytes:)
+      record(:download, url: url) do
+        bytes = @file_bytes.fetch(url[%r{/api/files/([^?]+)}, 1])
+        raise Trackers::Error.new("The file is larger than allowed", code: "too_large") if bytes.bytesize > max_bytes
+
+        io.write(bytes)
+        io.rewind
+        { content_type: "application/octet-stream", size: bytes.bytesize }
+      end
+    end
+
+    def upload_attachment(issue_id, file)
+      record(:upload_attachment, issue_id: issue_id, name: file.filename) do
+        bytes = file.io.read
+        @uploads << { issue_id: issue_id, name: file.filename, bytes: bytes }
+        id = add_file(issue_id, name: file.filename, bytes: bytes, content_type: file.content_type)
+        @files_by_issue[issue_id].find { |f| f[:id] == id }.dup
+      end
     end
 
     def field_activities(issue_id, top: 50)

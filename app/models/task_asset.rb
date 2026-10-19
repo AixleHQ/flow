@@ -7,8 +7,10 @@ class TaskAsset < ApplicationRecord
 
   belongs_to :board_task, touch: true
   belongs_to :author, class_name: "User", optional: true
+  has_one :tracker_attachment, -> { where(direction: "imported") }, inverse_of: :task_asset
 
   enumerize :author_type, in: %i[human agent system], default: :human
+  enumerize :source, in: %i[upload agent tracker], default: :upload, predicates: true, scope: true
 
   validates :name, presence: true
 

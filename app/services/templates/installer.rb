@@ -374,7 +374,7 @@ module Templates
       else
         attributes = entry.slice("name", "event_type", "trigger_mode", "subject_policy", "filter_predicate",
                                  "cooldown_seconds", "status_reporting", "chat_provider",
-                                 "verification_strategy", "aixle_changes").symbolize_keys
+                                 "verification_strategy", "aixle_changes", "copy_attachments").symbolize_keys
         attributes[:enabled] = false
         attributes[:subject_title_template] = substitute(entry["subject_title_template"]) if entry["subject_title_template"]
         attributes[:subject_column_id] = @ids["columns"][entry["subject_column"]] if entry["subject_column"]

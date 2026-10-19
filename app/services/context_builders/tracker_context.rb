@@ -35,8 +35,22 @@ module ContextBuilders
         "this tracker unless you pass another `tracker`; read the issue in full with `tracker_get_issue`."
       ]
       lines += [ "", "Comment:", "", "> #{tracker.dig('comment', 'text').to_s.gsub("\n", "\n> ")}" ] if tracker.dig("comment", "text").present?
+      lines += [ "", files_note ]
       lines += [ "", code_linking(issue) ] if code_linking?(issue)
       lines.join("\n")
+    end
+
+    def files_note
+      copies = workflow_run&.board_task&.task_assets&.with_source(:tracker)&.includes(:tracker_attachment).to_a
+      skipped = Array(tracker.dig("files", "skipped"))
+      note = +"Files on the issue: `tracker_list_attachments` lists them and `tracker_download_attachments` puts them " \
+              "in `#{Trackers::Workspace::ROOT}/`; `tracker_attach_files` puts files onto an issue."
+      if copies.any?
+        paths = copies.map { |c| Trackers::Workspace.path_for(c.tracker_attachment&.issue_key || "issue", c.name) }.compact
+        note << " Already in your workspace: #{paths.first(20).map { |p| "`#{p}`" }.join(', ')}."
+      end
+      note << " Not copied: #{skipped.first(10).map { |s| "#{s['name']} (#{s['reason']})" }.join(', ')}." if skipped.any?
+      note
     end
 
     # Jira (and the hosts' own issue links) attach branches, commits and pull

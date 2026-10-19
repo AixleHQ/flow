@@ -7,7 +7,7 @@ module Api
         module Task
           class AssetsController < Task::ApplicationController
             def index
-              assets = current_task.task_assets.order(created_at: :desc)
+              assets = current_task.task_assets.includes(:tracker_attachment).order(created_at: :desc)
               assets = assets.with_tag(params[:tag]) if params[:tag].present?
               render json: assets.map { |a| TaskAssetResource.new(a).to_h }
             end

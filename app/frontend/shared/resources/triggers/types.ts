@@ -25,6 +25,8 @@ export interface Trigger {
   // Aixle itself made does.
   project_tracker_id?: number | null;
   aixle_changes?: string;
+  // Copy the issue's files onto the run's task when a run starts.
+  copy_attachments?: boolean;
   verification_strategy?: string | null;
   webhook_url?: string | null;
   workflow_id?: number | null;
