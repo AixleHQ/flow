@@ -10,18 +10,21 @@ Requires YouTrack 2026.2 or later.
 
 ## What it does
 
-- **Connect.** Creates the password-less service user `aixle-flow` ("Aixle Flow") through Hub
-  and keeps its Hub id in the `serviceUserId` setting, adds it to the chosen projects' teams,
-  attaches the app to them, mints the user's permanent token, and hands the token to Aixle. Aixle
+- **Connect.** Creates the service user `aixle-flow` ("Aixle Flow") with a random password that
+  is never stored or shown, keeps its YouTrack id in the `serviceUserId` setting, adds it to the
+  chosen projects' teams, attaches the app to them, mints the user's permanent token, and hands
+  the token to Aixle. Aixle
   never sees an admin credential. Connecting again revokes the token it replaces: a connection's
   token is named after its Aixle company and project, so an earlier token of that name is the one
   Aixle has just stopped using.
-- **Which user it uses.** The user whose Hub id `serviceUserId` holds, as long as it still has
-  no way to sign in. Without one, an existing `aixle-flow` is taken over only when it has no Hub
-  login (no password, LDAP, OAuth or SAML detail) and no permanent token — what an interrupted
-  setup leaves behind. Any other `aixle-flow` (a person who self-registered with that login, an
-  LDAP account) stops the setup with an error: whoever can sign in as the service user would get
-  every connected project and could read its token.
+- **Which user it uses.** Only the user whose id `serviceUserId` holds (1.0.1 recorded a Hub id,
+  which YouTrack also resolves; the next Connect rewrites it). Any other `aixle-flow` (a person who
+  self-registered with that login, an LDAP account) stops the setup with an error: whoever can sign
+  in as the service user would get every connected project and could read its token.
+- **YouTrack API first.** Every call goes through YouTrack's `/api` except the service user's
+  permanent tokens (create, list, revoke): YouTrack 2026.2 manages another user's tokens only
+  through Hub. YouTrack 2026.3 adds `/api/users/{id}/profiles/permanentTokens/tokens`; JetBrains
+  asked for the setup to move to it, and into the admin page, once 2026.3 is released.
 - **Events.** An on-change rule posts issue created, State, Assignee and comment events to the
   project's events URL with the project's secret.
 
@@ -33,7 +36,7 @@ Requires YouTrack 2026.2 or later.
 | `settings.json` | `flowUrl`, `serviceUserId` (global); `eventsUrl`, `secret`, `statusField`, `assigneeField` (per project) |
 | `aixle-flow-events.js` | the on-change rule |
 | `widgets/connect/` | `ADMINISTRATION_MENU_ITEM` (Administration → Integrations › Aixle Flow): status, consent, project choice, `flowUrl` |
-| `widgets/setup/` | `DASHBOARD_WIDGET`: the provisioning, which needs `host.fetchHub` — only dashboard widgets have it. `config-schema.json` declares its one config key, `handover` |
+| `widgets/setup/` | `DASHBOARD_WIDGET`: the provisioning. Its token calls need `host.fetchHub`, which only dashboard widgets have. `config-schema.json` declares its one config key, `handover` |
 | `icon.svg` | 40×40 Marketplace icon |
 | `bin/package` | builds `dist/aixle-flow-<version>.zip` from the files above, and only those |
 

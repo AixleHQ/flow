@@ -12,7 +12,7 @@
     },
     "serviceUserId": {
       "title": "Service user",
-      "description": "The Hub id of the aixle-flow user this app created. Set by Connect, which uses no other user.",
+      "description": "The YouTrack id of the aixle-flow user this app created. Set by Connect, which uses no other user.",
       "type": "string",
       "x-scope": "GLOBAL"
     },
