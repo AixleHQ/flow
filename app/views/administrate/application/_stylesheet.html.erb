@@ -4,7 +4,25 @@
 Administrate's own stylesheets, then the Aixle Flow skin over them
 (app/frontend/entrypoints/admin.css) and the brand fonts, on every admin page.
 A page adds its own through `content_for(:stylesheet)`.
+
+The color scheme is applied before first paint, from the key and with the
+default the app uses (app/views/layouts/inertia.html.haml), so a person's choice
+follows them between the app and the admin.
 %>
+
+<%= javascript_tag nonce: true do %>
+  (function () {
+    try {
+      var scheme = localStorage.getItem('mantine-color-scheme-value') || 'dark';
+      if (scheme === 'auto') {
+        scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+    } catch (e) {
+      document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
+    }
+  })();
+<% end %>
 
 <% Administrate::Engine.stylesheets.each do |css_path| %>
   <%= stylesheet_link_tag css_path %>

@@ -4,14 +4,14 @@
 The page itself is a React island (app/frontend/entrypoints/admin_dashboard.tsx)
 reading its data from the data attribute below. Administrate's layout yields
 `:javascript` into its head, which is how the island's bundle gets onto this one
-page; the theme and fonts every admin page shares come from _stylesheet.
+page; the theme, fonts and Vite client every admin page shares come from the
+_stylesheet and _javascript partials.
 %>
 
 <% content_for(:title) { "Dashboard" } %>
 
 <% content_for :javascript do %>
   <%= vite_react_refresh_tag %>
-  <%= vite_client_tag %>
   <%= vite_javascript_tag "admin_dashboard.tsx" %>
 <% end %>
 

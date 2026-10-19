@@ -2,17 +2,20 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
-    ACTIVE_WITHOUT_A_CUSTOMER = "cannot be active without a Stripe customer — the company pays through Checkout, " \
-                                "or tick Managed by Aixle for one we carry"
-
+    # Saved here rather than through Administrate's update, which would assign
+    # the form again over a trial started below.
     def update
       company = requested_resource
       company.assign_attributes(resource_params)
-      return super unless active_without_a_customer?(company)
+      new_trial = restarted_without_a_customer?(company)
+      start_new_trial(company) if new_trial
 
-      company.validate
-      company.errors.add(:billing_state, ACTIVE_WITHOUT_A_CUSTOMER)
-      render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      if company.save
+        notice = new_trial ? new_trial_notice(company) : translate_with_resource("update.success")
+        redirect_to after_resource_updated_path(company), notice: notice, status: :see_other
+      else
+        render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      end
     end
 
     def create
@@ -74,14 +77,24 @@ module Admin
       end
     end
 
-    # Where we host, a company is paid for through Stripe or carried by us. Made
-    # `active` by hand with no Stripe customer, it would run with nothing to bill
-    # through: free, without being ours. A rule of this form rather than of
-    # Company, because the Stripe webhook and the tests move companies to
-    # `active` on their own terms.
-    def active_without_a_customer?(company)
-      Deployment.saas? && company.billing_active? && company.billing_state_changed? &&
+    # Where we host, a company is paid for through Stripe or carried by us. Set
+    # running by hand with no Stripe customer — typically a blocked one an
+    # operator wants to let back in — it would run with nothing to bill through:
+    # free, without being ours. It gets a new free allowance instead, and needs a
+    # card once that is spent. A rule of this form rather than of Company, because
+    # the Stripe webhook moves companies to `active` on its own terms.
+    def restarted_without_a_customer?(company)
+      Deployment.saas? && company.billing_state_changed? && !company.billing_blocked? &&
         !company.managed_by_aixle? && company.stripe_customer_id.blank?
+    end
+
+    def start_new_trial(company)
+      company.billing_state = "trialing"
+      company.trial_started_at = Time.current
+    end
+
+    def new_trial_notice(company)
+      "#{company.name} is on a new trial: #{Billing::Trial.queue_hours} worker-hours, then it needs a card."
     end
 
     # Override this method to specify custom lookup behavior.

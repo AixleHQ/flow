@@ -26,10 +26,12 @@ governance, community health — carry none.
 ### Changed
 - **Admin**: the admin uses the Aixle Flow theme.
 - **Admin**: where Aixle hosts, a company runs free only when it is ticked
-  Managed by Aixle. A worker limit can no longer be cleared, and a company can no
-  longer be made active by hand without a Stripe customer, unless it is managed.
-  On upgrade, active companies that already ran free (no limit, or no Stripe
-  customer) are ticked Managed by Aixle; untick one to put it on the trial.
+  Managed by Aixle. A worker limit can no longer be cleared unless the company is
+  managed. Setting a company running by hand when it has no Stripe customer, such
+  as letting a blocked one back in, now starts a new trial instead of running it
+  free; it needs a card once that trial is spent. On upgrade, active companies
+  that already ran free (no limit, or no Stripe customer) are ticked Managed by
+  Aixle; untick one to put it on the trial.
 
 ## [1.3.0] - 2026-10-17
 

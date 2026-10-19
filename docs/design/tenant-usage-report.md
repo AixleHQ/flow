@@ -114,7 +114,7 @@ A period shows the class of its last measured hour. `unlimited` and `no_customer
 Where we host, a company is paying, on a trial, blocked, or carried by Aixle (`managed_by_aixle`). Before this change it could also run free in two other ways, both through the admin:
 
 - **Without a worker limit.** Unlimited is never metered. The admin required a limit when a company was created but not when it was edited, and a limit row could be deleted from the admin's list of limits.
-- **`active` without a Stripe customer.** The admin form moved a company to `active` by hand, a path kept from before Stripe was wired up. The Stripe meter skips a company with no customer.
+- **`active` without a Stripe customer.** The admin form moved a company to `active` by hand, a path kept from before Stripe was wired up. The Stripe meter skips a company with no customer, so it ran free from then on.
 
 Now:
 
@@ -122,11 +122,15 @@ Now:
 | --- | --- | --- |
 | Clearing the limit of a company that is not managed (company admin form, settings, console) | Refused: `is required for a company that pays — tick Managed by Aixle for one that does not` | `Company#session_concurrency_limit_is_a_positive_integer`, when the limit is assigned |
 | Deleting a company's limit row (admin list of limits, console) | Refused | `SessionConcurrencyLimit#refuse_to_unbound_a_metered_company`, which already refused it on AWS Marketplace |
-| Making a company that is not managed `active` by hand with no Stripe customer | Refused: it pays through Checkout, or is ticked Managed by Aixle | `Admin::CompaniesController#update`. A form rule, not a model one: the Stripe webhook moves companies to `active` on its own terms. |
+| Setting a company that is not managed running by hand (`active` or `trialing`) with no Stripe customer — typically letting a blocked one back in | Starts a new trial instead: `trialing`, `trial_started_at` now, and `Billing::Trial` counts the allowance from then, so the company runs again and needs a card once it is spent | `Admin::CompaniesController#update`. A form rule, not a model one: the Stripe webhook moves companies to `active` on its own terms. |
 
 `db/migrate/20261019100200_mark_free_active_companies_managed.rb` flags, where we host, every `active` company that is not managed but has no limit or no Stripe customer. Such a company already runs free; the flag makes that deliberate, and nothing it can run changes. Trialing and blocked companies are left alone. An operator who would rather bill one unticks the flag, which starts it on the trial (#456).
 
+`trial_started_at` is null for every existing company, so the allowance it is spending is still counted over everything it ever used. Only an operator's restart starts a count of its own; unticking Managed by Aixle still does not (#456).
+
 Elsewhere nothing changes: self-hosted installations bill nobody, and AWS Marketplace already required a limit for every company.
+
+**Checked against production on 2026-10-19** (read-only `psql`): the deployment is `saas`, every one of its six companies is managed, so the migration flags none; no company is trialing or blocked without a limit; the first rollup run reaches back to the first admission on 2026-09-05, about 6,200 rows from 24,800 admissions; the two new indexes go on tables of 25 MB and 242 MB, built concurrently.
 
 ## 9. Verification
 

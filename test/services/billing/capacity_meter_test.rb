@@ -218,7 +218,7 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     meter.call
 
     assert_equal 1, CompanyCapacityUsage.where(company_id: @company.id).count
-    assert_equal 12 * 3600, CompanyCapacityUsage.total_seconds_for(@company.id)
+    assert_equal 12 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
   end
 
   test "the allowance is spent from those rows, and spending it stops the company" do

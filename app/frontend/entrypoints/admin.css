@@ -2,9 +2,11 @@
  * The Aixle Flow skin over Administrate, loaded on every admin page after
  * Administrate's own stylesheet (app/views/administrate/application/_stylesheet).
  *
- * The admin renders no Mantine, so the light-scheme --app-* tokens it needs are
- * declared here. They are the theme's values, not a second palette:
- * shared/theme/adminTokens.test.ts fails when one drifts from mantineTheme.ts.
+ * The admin renders no Mantine, so the --app-* tokens it needs are declared here,
+ * for the light scheme and, under the same data-mantine-color-scheme attribute
+ * the app uses, for the dark one. They are the theme's values, not a second
+ * palette: test/config/admin_skin_tokens_test.rb fails when one drifts from
+ * mantineTheme.ts.
  *
  * Rules are written as `:root <selector>` so they outrank Administrate's
  * element and single-class selectors, and wrap form fields in :where() so they
@@ -16,6 +18,7 @@
   --app-font-heading: 'Hanken Grotesk', sans-serif;
   --app-font-mono-label: 'Spline Sans Mono', monospace;
 
+  --app-bg-default: #ffffff;
   --app-bg-paper: #ffffff;
   --app-bg-elevated: #f6f8fa;
   --app-bg-hover: rgba(208,215,222,0.32);
@@ -43,7 +46,45 @@
   --app-info-bg: rgba(9,105,218,0.10);
   --app-info-border: rgba(9,105,218,0.30);
 
-  background-color: var(--app-bg-elevated);
+  /* The page behind the content card: tinted in light, the deepest black in dark. */
+  --admin-canvas: var(--app-bg-elevated);
+
+  color-scheme: light;
+  background-color: var(--admin-canvas);
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --app-bg-default: #0a0908;
+  --app-bg-paper: #191817;
+  --app-bg-elevated: #1c1a18;
+  --app-bg-hover: rgba(209,207,205,0.05);
+  --app-border-default: #292726;
+  --app-border-subtle: #1c1a18;
+  --app-border-strong: #393837;
+  --app-text-primary: #d1cfcd;
+  --app-text-secondary: #9f9d9c;
+  --app-text-tertiary: #8b8987;
+  --app-action-selected: rgba(207,107,74,0.12);
+  --app-primary: #cf6b4a;
+  --app-primary-strong: #e08a6c;
+  --app-on-primary: #0a0908;
+  --app-accent: #cf6b4a;
+  --app-success-fg: #52c478;
+  --app-success-bg: rgba(82,196,120,0.15);
+  --app-success-border: rgba(82,196,120,0.35);
+  --app-warning-fg: #ffb35c;
+  --app-warning-bg: rgba(255,160,64,0.15);
+  --app-warning-border: rgba(255,160,64,0.35);
+  --app-danger-fg: #ff6b6b;
+  --app-danger-bg: rgba(255,100,100,0.15);
+  --app-danger-border: rgba(255,100,100,0.35);
+  --app-info-fg: #4dabf7;
+  --app-info-bg: rgba(77,171,247,0.15);
+  --app-info-border: rgba(77,171,247,0.35);
+
+  --admin-canvas: var(--app-bg-default);
+
+  color-scheme: dark;
 }
 
 /* ── Type ────────────────────────────────────────── */
@@ -83,6 +124,7 @@
 :root .main-content {
   border: 1px solid var(--app-border-default);
   border-radius: 12px;
+  background-color: var(--app-bg-paper);
   box-shadow: none;
 }
 
@@ -115,6 +157,36 @@
 :root .navigation__brand img {
   width: 64px;
   height: auto;
+}
+
+/* The wordmark is drawn black; the app inverts it the same way on dark. */
+:root[data-mantine-color-scheme='dark'] .navigation__brand img {
+  filter: brightness(0) invert(1);
+}
+
+:root .navigation__scheme {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background-color: transparent;
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+:root .navigation__scheme[hidden] {
+  display: none;
+}
+
+:root .navigation__scheme:not(.link):hover,
+:root .navigation__scheme:not(.link):focus {
+  background-color: var(--app-bg-hover);
+  color: var(--app-text-primary);
 }
 
 :root .navigation__brand span {
@@ -214,8 +286,29 @@
 :root :where(input:not([type='checkbox'], [type='radio'], [type='submit'], [type='button']), textarea, select) {
   border: 1px solid var(--app-border-default);
   border-radius: 6px;
+  background-color: var(--app-bg-default);
   color: var(--app-text-primary);
   font-family: var(--app-font-body);
+}
+
+/* Administrate's select boxes are Selectize widgets with their own light colors. */
+:root .selectize-control .selectize-input,
+:root .selectize-control.single .selectize-input.input-active,
+:root .selectize-control .selectize-input.full,
+:root .selectize-dropdown {
+  border-color: var(--app-border-default);
+  background: var(--app-bg-default);
+  box-shadow: none;
+  color: var(--app-text-primary);
+}
+
+:root .selectize-dropdown .active {
+  background-color: var(--app-bg-hover);
+  color: var(--app-text-primary);
+}
+
+:root .selectize-control .selectize-input input {
+  color: var(--app-text-primary);
 }
 
 :root :where(input, textarea):hover {

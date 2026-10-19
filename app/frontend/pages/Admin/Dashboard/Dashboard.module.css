@@ -337,7 +337,7 @@
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
-  background: var(--app-border-subtle);
+  background: var(--app-border-default);
 }
 
 .root .fill {

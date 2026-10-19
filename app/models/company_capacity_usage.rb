@@ -17,10 +17,6 @@ class CompanyCapacityUsage < ApplicationRecord
 
   scope :since, ->(time) { where(period_start: time...) }
 
-  def self.total_seconds_for(company_id)
-    where(company_id: company_id).sum(:quantity_seconds)
-  end
-
   # One statement, so an hour that is measured twice keeps the first answer
   # rather than raising — the meter claims its report row the same way.
   def self.record!(company_id:, period_start:, quantity_seconds:)

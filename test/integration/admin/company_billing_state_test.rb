@@ -4,8 +4,9 @@ require "test_helper"
 
 # Blocking a company for spending its free allowance is a one-way door unless
 # somebody can open it again. A company with a Stripe customer can be moved back
-# to `active` from here; one without would then run with nothing to bill through,
-# which is only for a company we carry.
+# to `active` from here. One without would then run with nothing to bill
+# through, so it is given a new free allowance instead, and needs a card once
+# that is spent.
 class Admin::CompanyBillingStateTest < ActionDispatch::IntegrationTest
   setup do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
@@ -28,14 +29,21 @@ class Admin::CompanyBillingStateTest < ActionDispatch::IntegrationTest
     assert @company.reload.billing_active?
   end
 
-  test "a company with no Stripe customer cannot be made active by hand" do
+  test "a company with no Stripe customer made active by hand starts a new trial" do
     @company.update!(stripe_customer_id: nil)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: 2.days.ago.beginning_of_hour,
+                                 quantity_seconds: Billing::Trial.seconds)
 
-    update!("active")
+    freeze_time do
+      update!("active")
 
-    assert_response :unprocessable_entity
-    assert_match(/cannot be active without a Stripe customer/, response.body)
-    assert @company.reload.billing_blocked?
+      assert_redirected_to admin_company_path(@company)
+      assert_match(/new trial/, flash[:notice])
+      @company.reload
+      assert @company.billing_trialing?
+      assert_equal Time.current, @company.trial_started_at
+      assert_equal 0, Billing::Trial.used_seconds(@company)
+    end
   end
 
   test "and can put one back on the allowance" do

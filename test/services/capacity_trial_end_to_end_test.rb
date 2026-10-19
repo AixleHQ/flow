@@ -40,7 +40,7 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
 
     # Ours to read, and the sum the allowance is spent from: an hour at ten is
     # ten queue-hours, which is the whole of a ten-hour allowance.
-    assert_equal 10 * 3600, CompanyCapacityUsage.total_seconds_for(@company.id)
+    assert_equal 10 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
     assert @company.reload.billing_blocked?
 
     # And now the drain grants nothing, including what was already queued.
@@ -73,6 +73,6 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
     report = CapacityMeterReport.find_by(provider: Billing::Meter::Null.provider, period_start: hour)
     assert_equal 0, report.quantity_seconds, "a trialing company is invoiced for nothing"
     assert_empty report.breakdown
-    assert_equal 10 * 3600, CompanyCapacityUsage.total_seconds_for(@company.id)
+    assert_equal 10 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
   end
 end

@@ -12,6 +12,9 @@ controller (e.g. catalog syncs) would otherwise be unreachable without knowing i
     <span>Flow admin</span>
   <% end %>
 
+  <%# Labelled and shown by app/frontend/entrypoints/admin.ts; without it the switch would do nothing. %>
+  <button type="button" class="navigation__scheme" data-color-scheme-toggle hidden></button>
+
   <%= link_to(t("administrate.navigation.back_to_app"), root_url, class: "button button--alt button--nav") if defined?(root_url) %>
 
   <%= link_to(

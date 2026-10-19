@@ -1,0 +1,23 @@
+<%#
+# Javascript
+
+Administrate's own scripts, then the admin's (app/frontend/entrypoints/admin.ts:
+the light/dark switch) on every admin page. A page adds its own through
+`content_for(:javascript)`.
+%>
+
+<% Administrate::Engine.javascripts.each do |js_path| %>
+  <%= javascript_include_tag js_path, "data-turbo-track": "reload", defer: true %>
+<% end %>
+
+<%= vite_client_tag %>
+<%= vite_javascript_tag "admin.ts" %>
+
+<%= yield :javascript %>
+
+<% if Rails.env.test? %>
+  <%= javascript_tag do %>
+    $.fx.off = true;
+    $.ajaxSetup({ async: false });
+  <% end %>
+<% end %>
