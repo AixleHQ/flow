@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 module Usage
-  # The tenant report's data: one row per company per UTC day, summed from
-  # company_usage_hours. The page sums days into weeks, months and custom ranges
-  # itself, and compares each with the period before.
+  # The admin dashboard's data: one row per company per UTC day, summed from
+  # company_usage_hours, and the platform's size as it stands. The page sums days
+  # into weeks, months and custom ranges itself, and compares each with the
+  # period before.
   class TenantReport
     # What one page load carries: a little over a year of days.
     HISTORY = 400.days
@@ -38,7 +39,8 @@ module Usage
       {
         tenants: tenants(days.pluck(:company_id).uniq),
         days: days,
-        measured_through: CompanyUsageHour.maximum(:period_start)&.then { |last| (last + 1.hour).utc.iso8601 }
+        measured_through: CompanyUsageHour.maximum(:period_start)&.then { |last| (last + 1.hour).utc.iso8601 },
+        snapshot: snapshot
       }
     end
 
@@ -52,6 +54,15 @@ module Usage
                       .map do |company_id, day, *values|
                         { company_id: company_id, day: day.iso8601, **AGGREGATES.keys.zip(values).to_h }
                       end
+    end
+
+    def snapshot
+      {
+        companies: Company.active.count,
+        members: CompanyMembership.active.where(company_id: Company.active.select(:id))
+                                  .joins(:user).merge(User.not_deleted).distinct.count(:user_id),
+        projects: Project.where(company_id: Company.active.select(:id)).where(state: "active").count
+      }
     end
 
     def tenants(company_ids)

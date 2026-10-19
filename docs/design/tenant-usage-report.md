@@ -1,9 +1,9 @@
-# Tenant usage report — technical design
+# Admin dashboard and tenant usage — technical design
 
 **Status:** Implemented.
 **Date:** 2026-10-19
 **Code baseline:** `3f13b930`
-**Audience:** Engineers changing the report or the rollup behind it; platform operators who read it.
+**Audience:** Engineers changing the admin dashboard, the rollup behind it or the billing rules it reports on; platform operators who read it.
 **Related:** [session-admission-queue/](./session-admission-queue/) (what a worker is, admission and release), [operations/stripe-setup.md](../operations/stripe-setup.md) (the meter that bills worker-minutes).
 
 ## 1. Request and decisions
@@ -12,11 +12,12 @@ Leadership asked for a report of usage across tenants, **to track adoption and t
 
 Decisions taken on 2026-10-19:
 
-1. **The report is the mock-up.** One table, the same periods, the same comparison with the previous period. Two columns are added to it: the billing status of each tenant, and its peak workers.
+1. **The report is the mock-up**, as the admin's home page: one table, the same periods, the same comparison with the previous period. Two columns are added to it: the billing status of each tenant, and its peak workers. Above it, tiles give the platform at a glance (§7).
 2. **Usage is measured for every company**, including companies with no worker limit and companies flagged `managed_by_aixle`. What reaches a provider is unchanged: Stripe in `saas`, AWS Marketplace metering in `aws_marketplace`, nothing in `self_hosted`. The report says for each tenant whether its usage is billed and, if not, why. Free usage made visible is what lets us move a demo tenant onto a paid plan.
 3. **Measure by the hour; days, weeks and months are sums.** No daily table.
-4. **The report lives in the superadmin area**, as the home page of `/admin`, in the Aixle Flow theme.
-5. **One pull request.** Not in it: tracking active people (adoption beyond sessions), recording who changed a worker limit, a CSV export, an agent breakdown. §9 lists them.
+4. **The dashboard lives in the superadmin area**, as the home page of `/admin`, and the whole admin takes on the Aixle Flow theme (§7).
+5. **Free means managed.** Where we host, a company runs without paying only when it is flagged `managed_by_aixle`. Every other company is paying, on a trial, or blocked; there is no other way to run free or unlimited (§8).
+6. **One pull request.** Not in it: tracking active people (adoption beyond sessions), recording who changed a worker limit, a CSV export, an agent breakdown. §10 lists them.
 
 ## 2. What existed before
 
@@ -26,7 +27,7 @@ Decisions taken on 2026-10-19:
 | Workers actually busy | Nothing aggregated. `session_admissions.admitted_at → released_at` holds every slot held, since #325 (2026-09-25). | Needs a rollup. |
 | Queue wait | `session_admissions.created_at → admitted_at`. | Needs a rollup. |
 | Session outcomes | `terminal_sessions.state` and `finished_at`, set for `finished`, `failed` and `cancelled` alike. | None. |
-| Limit history | `company_capacity_changes`: `company_id`, `max_sessions` (null means cleared), `occurred_at`. | No actor and no source (§9). |
+| Limit history | `company_capacity_changes`: `company_id`, `max_sessions` (null means cleared), `occurred_at`. | No actor and no source (§10). |
 | Superadmin UI | Administrate 1.0 (ERB) under `namespace :admin`, rooted at `users#index`. | No overview page. The theme and React live in the Inertia app. |
 
 ## 3. Definitions
@@ -85,20 +86,20 @@ Computed when a row is written; the first rule that matches wins.
 | `managed` | `managed_by_aixle` | Free · managed |
 | `blocked` | `billing_state = blocked` | Blocked |
 | `trial` | `billing_state = trialing` | Trial |
-| `unlimited` | No limit for the whole hour | Free · unlimited |
-| `no_customer` | Billable, but no `stripe_customer_id` (`Meter::Stripe` skips it) | No Stripe customer |
+| `unlimited` | No limit for the whole hour | Not billed · no limit |
+| `no_customer` | Billable, but no `stripe_customer_id` (`Meter::Stripe` skips it) | Not billed · no Stripe customer |
 | `paying` | Anything else | Paying |
 
-A period shows the class of its last measured hour.
+A period shows the class of its last measured hour. `unlimited` and `no_customer` are a company running free without being managed, which §8 makes impossible from here on; they stay in the report, in red, so that a company that gets there anyway is seen.
 
-## 7. The page
+## 7. The dashboard
 
-`Admin::TenantUsagesController#show` is the root of `namespace :admin` and the first link in Administrate's navigation, so the report sits inside the superadmin area with its layout and navigation.
+`Admin::DashboardsController#show` is the root of `namespace :admin` and the first link in its navigation, so the dashboard sits inside the superadmin area with Administrate's layout.
 
-- The ERB view renders one mount point carrying the data, and adds the island's bundle and the Aixle fonts through Administrate's `content_for(:javascript)` and `content_for(:stylesheet)` hooks.
-- **The data is the daily rows.** `Usage::TenantReport` sums hours into one row per company per UTC day for the last 400 days, and the browser sums days into weeks, months and custom ranges and compares each with the period before, the way the mock-up does. A period still in progress is compared with the same number of days of the one before.
-- **The island renders no Mantine.** `entrypoints/admin_tenant_usage.tsx` mounts React without `MantineProvider` and without Mantine's global CSS, which would restyle Administrate's chrome. It sets the light-scheme `--app-*` tokens from `cssVariablesResolver` on the mount point, so the colors are the theme's own. Administrate styles bare elements, and colors every hovered button with `[type=button]:not(.link):hover`; the CSS module scopes every rule under `.root`, a class above those.
-- The code lives in `app/frontend/pages/Admin/TenantUsage/`: the aggregation and comparison in `aggregate.ts`, the table in `TenantUsageReport.tsx`.
+- **Tiles.** Six of them sit above the table. Three describe the platform as it stands: active companies with their split by billing class, active members, and active projects. Three describe the selected period, each with its change from the period before: worker hours, busy hours with the share of them not on a paid plan, and successful sessions with how many failed.
+- **The data.** The ERB view renders one mount point carrying it. `Usage::TenantReport` sums hours into one row per company per UTC day for the last 400 days, and counts the platform's size. The browser sums days into weeks, months and custom ranges and compares each with the period before, the way the mock-up does. A period still in progress is compared with the same number of days of the one before.
+- **The island renders no Mantine.** `entrypoints/admin_dashboard.tsx` mounts React without `MantineProvider` and without Mantine's global CSS, which would restyle Administrate's chrome. The code lives in `app/frontend/pages/Admin/Dashboard/`: the aggregation and comparison in `aggregate.ts`, the tiles in `Tiles.tsx`, the table in `Dashboard.tsx`. Its CSS module scopes every rule under `.root`, a class above Administrate's element selectors and its `[type=button]:not(.link):hover`.
+- **The admin's theme.** `app/views/administrate/application/_stylesheet.html.erb` loads `entrypoints/admin.css` and the brand fonts after Administrate's own stylesheet on every admin page. That skin gives the admin the Aixle Flow light theme: Figtree and Hanken Grotesk, the orange accent for links, buttons and the active navigation entry, Primer-like neutrals, rounded cards, and the logo at the top of the navigation. With no Mantine to inject them, the skin declares the light-scheme `--app-*` tokens it and the dashboard use. `test/config/admin_skin_tokens_test.rb` fails when one of them differs from `mantineTheme.ts`, or when either file uses a token the skin does not declare.
 
 | Mock-up column | Here | Note |
 | --- | --- | --- |
@@ -108,13 +109,32 @@ A period shows the class of its last measured hour.
 | Average / max wait | Admission wait | |
 | Successful / failed sessions | `finished` / `failed` | |
 
-## 8. Verification
+## 8. Free means managed
 
-Model, service and activity tests cover occupancy and peak, waits, agent logins, outcomes, limits, every billing class, idempotency, the closed-hours rule and catching up on unmeasured hours. The workflow is run through the time-skipping test server. A request test covers the admin page. Vitest covers the period and comparison arithmetic and the table's behavior.
+Where we host, a company is paying, on a trial, blocked, or carried by Aixle (`managed_by_aixle`). Before this change it could also run free in two other ways, both through the admin:
 
-On a local stack seeded with nine companies, one per class the hosted product can have, and seven weeks of queued sessions run through the real meter and the real rollup, the page was checked in a browser by day, week, month and sort.
+- **Without a worker limit.** Unlimited is never metered. The admin required a limit when a company was created but not when it was edited, and a limit row could be deleted from the admin's list of limits.
+- **`active` without a Stripe customer.** The admin form moved a company to `active` by hand, a path kept from before Stripe was wired up. The Stripe meter skips a company with no customer.
 
-## 9. Not in this change
+Now:
+
+| Path | Rule | Where |
+| --- | --- | --- |
+| Clearing the limit of a company that is not managed (company admin form, settings, console) | Refused: `is required for a company that pays — tick Managed by Aixle for one that does not` | `Company#session_concurrency_limit_is_a_positive_integer`, when the limit is assigned |
+| Deleting a company's limit row (admin list of limits, console) | Refused | `SessionConcurrencyLimit#refuse_to_unbound_a_metered_company`, which already refused it on AWS Marketplace |
+| Making a company that is not managed `active` by hand with no Stripe customer | Refused: it pays through Checkout, or is ticked Managed by Aixle | `Admin::CompaniesController#update`. A form rule, not a model one: the Stripe webhook moves companies to `active` on its own terms. |
+
+`db/migrate/20261019100200_mark_free_active_companies_managed.rb` flags, where we host, every `active` company that is not managed but has no limit or no Stripe customer. Such a company already runs free; the flag makes that deliberate, and nothing it can run changes. Trialing and blocked companies are left alone. An operator who would rather bill one unticks the flag, which starts it on the trial (#456).
+
+Elsewhere nothing changes: self-hosted installations bill nobody, and AWS Marketplace already required a limit for every company.
+
+## 9. Verification
+
+Model, service and activity tests cover occupancy and peak, waits, agent logins, outcomes, limits, every billing class, idempotency, the closed-hours rule and catching up on unmeasured hours. The workflow is run through the time-skipping test server. Request and model tests cover the dashboard and the rules of §8. Vitest covers the period and comparison arithmetic, the tiles and the table's behavior.
+
+On a local stack seeded with nine companies across the billing classes and seven weeks of queued sessions run through the real meter and the real rollup, the dashboard and the restyled admin were checked in a browser.
+
+## 10. Not in this change
 
 1. **Active people.** Adoption beyond sessions needs a record of who used the product on which day. Sessions cannot stand in for it: a run a schedule or a webhook started carries its trigger owner's `user_id` with nobody present, and `workflow_runs` does not record what started a run. The cheap way to record it is a `(user_id, company_id, day)` row written from the existing five-minute `UserSession#touch_if_stale!`, at most one write per person per company per day.
 2. **Who changed a worker limit.** `company_capacity_changes` records when and the new value, but no actor and no source. Adding `actor_id`, `impersonator_id` and `source`, filled from `Current`, would make the history answerable.

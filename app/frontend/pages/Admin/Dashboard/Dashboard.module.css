@@ -1,5 +1,5 @@
 /*
- * The report renders inside Administrate's layout, whose stylesheet styles bare
+ * The dashboard renders inside Administrate's layout, whose stylesheet styles bare
  * elements (table, th, td, button, input, select) and attribute selectors such
  * as [type="search"]. Every rule here is scoped under .root, so it outranks them
  * on specificity instead of depending on load order.
@@ -151,6 +151,63 @@
   font-size: 13px;
 }
 
+/* ── Tiles ───────────────────────────────────────── */
+
+.root .tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+
+.root .tile {
+  padding: 14px 16px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 10px;
+  background: var(--app-bg-paper);
+}
+
+.root .tileLabel {
+  margin: 0 0 8px;
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-mono-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.root .tileValue {
+  margin: 0;
+  font-family: var(--app-font-heading);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.root .tile .delta {
+  margin: 4px 0 0;
+}
+
+.root .tileNote {
+  margin: 6px 0 0;
+  color: var(--app-text-tertiary);
+  font-size: 12.5px;
+}
+
+.root .tileNote .bad {
+  color: var(--app-danger-fg);
+  font-weight: 500;
+}
+
+.root .sectionTitle {
+  margin: 24px 0 0;
+  font-family: var(--app-font-heading);
+  font-size: 18px;
+  font-weight: 500;
+}
+
 /* ── Table ───────────────────────────────────────── */
 
 .root .tableWrap {
@@ -170,12 +227,12 @@
 
 .root .table th,
 .root .table td {
-  padding: 9px 10px;
+  padding: 8px 8px;
   border: 0;
   border-bottom: 1px solid var(--app-border-subtle);
   background: transparent;
   color: var(--app-text-primary);
-  font-size: 14px;
+  font-size: 13.5px;
   text-align: left;
   vertical-align: top;
   white-space: nowrap;

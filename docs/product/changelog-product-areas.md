@@ -93,7 +93,7 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
-| **Tenant usage** | The superadmin's report across companies: worker hours, busy hours, peak workers, queue wait and session outcomes per period, and whether each company's usage is billed |
+| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with whether each company is billed) and the administration of companies, users and the rest |
 
 ### Help
 

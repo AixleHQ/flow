@@ -19,6 +19,10 @@ class CompanyUsageHour < ApplicationRecord
   #   unlimited    no limit for the whole hour, so there is nothing to meter
   #   no_customer  billable, but no Stripe customer to send the minutes to
   #   paying       billed through Stripe or AWS Marketplace
+  #
+  # unlimited and no_customer are a company running free without being managed,
+  # which the admin no longer allows; they are kept so one that gets there anyway
+  # still shows.
   BILLING_CLASSES = %w[not_metered inactive managed blocked trial unlimited no_customer paying].freeze
 
   belongs_to :company

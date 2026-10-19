@@ -101,9 +101,13 @@ class SessionConcurrencyLimit < ApplicationRecord
   # Every path that clears a limit lands here — the company's own settings page,
   # the admin form, the console — so the rule lives here rather than in each.
   def refuse_to_unbound_a_metered_company
-    return unless Deployment.requires_bounded_companies?
-
-    errors.add(:base, "This installation meters its capacity to AWS Marketplace, so a company cannot be left unlimited")
+    if Deployment.requires_bounded_companies?
+      errors.add(:base, "This installation meters its capacity to AWS Marketplace, so a company cannot be left unlimited")
+    elsif Deployment.saas? && Company.exists?(id: scope_id, managed_by_aixle: false)
+      errors.add(:base, "A company that pays cannot be left unlimited; only a company managed by Aixle runs without a limit")
+    else
+      return
+    end
     throw :abort
   end
 

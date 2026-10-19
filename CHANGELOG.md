@@ -14,13 +14,22 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
-- **Tenant usage**: superadmins see what every company used, as the home page of
-  the admin: worker hours, busy hours, peak workers, queue wait and successful and
-  failed sessions by day, week, month or a custom range, each compared with the
-  period before. Every company is measured, those without a worker limit and those
-  Aixle carries included, and each says whether its usage is billed and, if not,
-  why. The first hourly run after the upgrade measures every hour since sessions
-  began going through the admission queue, so history fills in by itself.
+- **Admin**: the admin opens on a dashboard. Tiles show active companies by
+  billing status, members and projects, and the period's worker hours, busy
+  hours (and how much of them is not on a paid plan) and successful sessions.
+  Below them, one row per company for a day, week, month or custom range: worker
+  hours, busy hours, min/max and peak workers, utilization, queue wait, and
+  successful and failed sessions, each compared with the period before, with
+  whether the company pays, is on a trial, is blocked or is managed by Aixle.
+  History back to 2026-09-25 fills in by itself after the upgrade.
+
+### Changed
+- **Admin**: the admin uses the Aixle Flow theme.
+- **Admin**: where Aixle hosts, a company runs free only when it is ticked
+  Managed by Aixle. A worker limit can no longer be cleared, and a company can no
+  longer be made active by hand without a Stripe customer, unless it is managed.
+  On upgrade, active companies that already ran free (no limit, or no Stripe
+  customer) are ticked Managed by Aixle; untick one to put it on the trial.
 
 ## [1.3.0] - 2026-10-17
 

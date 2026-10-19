@@ -85,8 +85,9 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
   end
 
   # Blank is the exemption, not a limit of zero: the company becomes unbounded,
-  # and unbilled.
+  # and unbilled — which is only for a company we carry.
   test "clearing the field removes the limit rather than setting it to zero" do
+    @company.update!(managed_by_aixle: true)
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
 
     patch admin_company_path(@company), params: {
@@ -95,6 +96,19 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
 
     assert_nil limit_row
     assert_nil SessionConcurrencyLimit.for_company(@company.id)
+  end
+
+  test "clearing the limit of a company that pays is refused where we host" do
+    with_mode(Deployment::SAAS)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
+
+    patch admin_company_path(@company), params: {
+      company: { name: @company.name, email_domain: @company.email_domain, session_concurrency_limit: "" }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match(/required for a company that pays/, response.body)
+    assert_equal 4, limit_row.max_sessions
   end
 
   test "a value that is not a positive whole number is refused on the company" do

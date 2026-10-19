@@ -1,4 +1,4 @@
-import type { UsageDay } from 'pages/Admin/TenantUsage/types';
+import type { UsageDay } from 'pages/Admin/Dashboard/types';
 
 // One tenant's whole UTC day at a steady two workers out of a limit of four, as
 // Usage::TenantReport sends it.

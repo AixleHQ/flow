@@ -1,15 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
-import { buildUsageDay } from 'test/factories/tenantUsage';
+import { buildUsageDay } from 'test/factories/adminDashboard';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
-import TenantUsageReport from './TenantUsageReport';
-import type { TenantUsageData } from './types';
+import Dashboard from './Dashboard';
+import type { DashboardData } from './types';
 
 const now = new Date('2026-10-19T12:00:00Z');
 
-const data: TenantUsageData = {
+const data: DashboardData = {
   tenants: [
     { id: 1, name: 'Acme' },
     { id: 2, name: 'Globex' },
@@ -28,23 +28,54 @@ const data: TenantUsageData = {
     }),
   ],
   measuredThrough: '2026-10-19T11:00:00Z',
+  snapshot: { companies: 2, members: 14, projects: 5 },
 };
 
 const rowOf = (name: string) => screen.getByRole('row', { name: new RegExp(`^${name}`) });
+const tile = (name: string) => within(screen.getByRole('region', { name }));
 
-describe('TenantUsageReport', () => {
-  it('opens on the current month, one row per tenant, with why each is billed or not', () => {
-    render(<TenantUsageReport data={data} now={now} />);
+describe('Dashboard', () => {
+  it('opens on the current month, one row per company, with why each is billed or not', () => {
+    render(<Dashboard data={data} now={now} />);
 
     expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
-    expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 tenants')).toBeInTheDocument();
+    expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('Paying')).toBeInTheDocument();
     expect(within(rowOf('Globex')).getByText('Free · managed')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Acme' })).toHaveAttribute('href', '/admin/companies/1');
   });
 
-  it('shows a tenant without a limit as unlimited, with no utilization', () => {
-    render(<TenantUsageReport data={data} now={now} />);
+  it('shows the platform as it stands in tiles', () => {
+    render(<Dashboard data={data} now={now} />);
+
+    expect(tile('Companies').getByText('2')).toBeInTheDocument();
+    expect(tile('Companies').getByText('1 paying · 1 managed')).toBeInTheDocument();
+    expect(tile('People').getByText('14')).toBeInTheDocument();
+    expect(tile('Projects').getByText('5')).toBeInTheDocument();
+  });
+
+  it('shows what the period used in tiles, and how much of it nobody pays for', () => {
+    render(<Dashboard data={data} now={now} />);
+
+    expect(tile('Busy hours').getByText('96')).toBeInTheDocument();
+    expect(tile('Busy hours').getByText('50% not on a paid plan')).toBeInTheDocument();
+    expect(tile('Successful sessions').getByText('58')).toBeInTheDocument();
+    expect(tile('Successful sessions').getByText('▲ +480%')).toBeInTheDocument();
+  });
+
+  it('flags a company that runs free without being managed', () => {
+    const unbilled = {
+      ...data,
+      days: [...data.days, buildUsageDay({ companyId: 1, day: '2026-10-16', billingClass: 'unlimited' as const })],
+    };
+    render(<Dashboard data={unbilled} now={now} />);
+
+    expect(within(rowOf('Acme')).getByText('Not billed · no limit')).toBeInTheDocument();
+    expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
+  });
+
+  it('shows a company without a limit as unlimited, with no utilization', () => {
+    render(<Dashboard data={data} now={now} />);
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
@@ -53,14 +84,14 @@ describe('TenantUsageReport', () => {
   });
 
   it('compares with the same days of the month before', () => {
-    render(<TenantUsageReport data={data} now={now} />);
+    render(<Dashboard data={data} now={now} />);
 
     expect(screen.getByText('Change vs Sep 1 – Sep 15, 2026')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('▲ +100%')).toBeInTheDocument();
   });
 
   it('steps back to the previous month', async () => {
-    render(<TenantUsageReport data={data} now={now} />);
+    render(<Dashboard data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
 
@@ -71,7 +102,7 @@ describe('TenantUsageReport', () => {
   });
 
   it('switches to a single day', async () => {
-    render(<TenantUsageReport data={data} now={now} />);
+    render(<Dashboard data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Day' }));
 
@@ -81,46 +112,46 @@ describe('TenantUsageReport', () => {
   });
 
   it('sums a custom range', async () => {
-    render(<TenantUsageReport data={data} now={now} />);
+    render(<Dashboard data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Custom' }));
 
     expect(screen.getByLabelText('From')).toHaveValue('2026-10-01');
     expect(screen.getByLabelText('To')).toHaveValue('2026-10-19');
-    expect(screen.getByText('Oct 1 – Oct 19, 2026 · custom range · 2 tenants')).toBeInTheDocument();
+    expect(screen.getByText('Oct 1 – Oct 19, 2026 · custom range · 2 companies')).toBeInTheDocument();
   });
 
-  it('filters tenants by name', async () => {
-    render(<TenantUsageReport data={data} now={now} />);
+  it('filters companies by name', async () => {
+    render(<Dashboard data={data} now={now} />);
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Search tenants' }), 'glo');
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search companies' }), 'glo');
 
     expect(screen.queryByRole('rowheader', { name: 'Acme' })).not.toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'Globex' })).toBeInTheDocument();
   });
 
   it('sorts by a column, and reverses on a second click', async () => {
-    render(<TenantUsageReport data={data} now={now} />);
-    const tenantsInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
+    render(<Dashboard data={data} now={now} />);
+    const companiesInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
 
     await userEvent.click(screen.getByRole('button', { name: 'Successful sessions' }));
-    expect(tenantsInOrder()).toEqual(['Globex', 'Acme', 'Total, all tenants']);
+    expect(companiesInOrder()).toEqual(['Globex', 'Acme', 'Total, all companies']);
 
     await userEvent.click(screen.getByRole('button', { name: 'Successful sessions' }));
-    expect(tenantsInOrder()).toEqual(['Acme', 'Globex', 'Total, all tenants']);
+    expect(companiesInOrder()).toEqual(['Acme', 'Globex', 'Total, all companies']);
     expect(screen.getByRole('columnheader', { name: /Successful sessions/ })).toHaveAttribute('aria-sort', 'ascending');
   });
 
-  it('totals the period across tenants', () => {
-    render(<TenantUsageReport data={data} now={now} />);
+  it('totals the period across companies', () => {
+    render(<Dashboard data={data} now={now} />);
 
-    const totals = within(rowOf('Total, all tenants'));
-    expect(totals.getByText('58')).toBeInTheDocument();
+    expect(within(rowOf('Total, all companies')).getByText('58')).toBeInTheDocument();
   });
 
-  it('says so when nothing has been measured yet', () => {
-    render(<TenantUsageReport data={{ tenants: [], days: [], measuredThrough: null }} now={now} />);
+  it('shows the platform tiles and says so when no usage has been measured yet', () => {
+    render(<Dashboard data={{ ...data, tenants: [], days: [], measuredThrough: null }} now={now} />);
 
     expect(screen.getByText(/No usage has been measured yet/)).toBeInTheDocument();
+    expect(tile('People').getByText('14')).toBeInTheDocument();
   });
 });

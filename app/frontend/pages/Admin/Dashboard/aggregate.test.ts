@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildUsageDay } from 'test/factories/tenantUsage';
+import { buildUsageDay } from 'test/factories/adminDashboard';
 
 import { comparisonRange, deltaOf, mondayOf, periodsFor, rangeOf, summarize } from './aggregate';
 

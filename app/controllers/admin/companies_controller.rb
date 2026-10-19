@@ -2,6 +2,19 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
+    ACTIVE_WITHOUT_A_CUSTOMER = "cannot be active without a Stripe customer — the company pays through Checkout, " \
+                                "or tick Managed by Aixle for one we carry"
+
+    def update
+      company = requested_resource
+      company.assign_attributes(resource_params)
+      return super unless active_without_a_customer?(company)
+
+      company.validate
+      company.errors.add(:billing_state, ACTIVE_WITHOUT_A_CUSTOMER)
+      render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+    end
+
     def create
       # Extract initial admin credentials before building company
       initial_admin_email = params.dig(:company, :initial_admin_email)
@@ -12,11 +25,7 @@ module Admin
       company = Company.new(company_params)
       apply_billing_terms(company)
 
-      if unbounded_paying_company?(company)
-        company.validate
-        company.errors.add(:session_concurrency_limit, Company::UNBOUNDED_PAYING_COMPANY)
-        render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
-      elsif company.save
+      if company.save
         # Create initial admin user if credentials provided
         if initial_admin_email.present? && initial_admin_password.present?
           admin_user = User.new(
@@ -65,10 +74,14 @@ module Admin
       end
     end
 
-    # A rule of this form, not of Company: the seeds and the factories make
-    # companies without a limit, and an operator may still clear one later.
-    def unbounded_paying_company?(company)
-      Deployment.saas? && !company.managed_by_aixle? && company.session_concurrency_limit.blank?
+    # Where we host, a company is paid for through Stripe or carried by us. Made
+    # `active` by hand with no Stripe customer, it would run with nothing to bill
+    # through: free, without being ours. A rule of this form rather than of
+    # Company, because the Stripe webhook and the tests move companies to
+    # `active` on their own terms.
+    def active_without_a_customer?(company)
+      Deployment.saas? && company.billing_active? && company.billing_state_changed? &&
+        !company.managed_by_aixle? && company.stripe_customer_id.blank?
     end
 
     # Override this method to specify custom lookup behavior.

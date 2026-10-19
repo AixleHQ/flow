@@ -1,5 +1,6 @@
-// The daily rows Usage::TenantReport renders into the page (keys camelized by
-// Admin::TenantUsagesController). One row per company per UTC day.
+// What Usage::TenantReport renders into the admin dashboard (keys camelized by
+// Admin::DashboardsController): one row per company per UTC day, and the
+// platform's size as it stands.
 
 export type BillingClass =
   'not_metered' | 'inactive' | 'managed' | 'blocked' | 'trial' | 'unlimited' | 'no_customer' | 'paying';
@@ -28,8 +29,15 @@ export interface Tenant {
   name: string;
 }
 
-export interface TenantUsageData {
+export interface Snapshot {
+  companies: number;
+  members: number;
+  projects: number;
+}
+
+export interface DashboardData {
   tenants: Tenant[];
   days: UsageDay[];
   measuredThrough: string | null;
+  snapshot: Snapshot;
 }

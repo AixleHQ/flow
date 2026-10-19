@@ -15,9 +15,10 @@ import {
   type TenantSummary,
   type Totals,
 } from './aggregate';
+import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatHours, formatPercent, formatWait, formatWorkers } from './format';
-import classes from './TenantUsageReport.module.css';
-import type { TenantUsageData } from './types';
+import Tiles from './Tiles';
+import type { BillingClass, DashboardData } from './types';
 
 type SortKey = 'name' | 'billingClass' | DeltaField;
 type Direction = 'ascending' | 'descending';
@@ -28,7 +29,7 @@ interface Column {
 }
 
 const COLUMNS: Column[] = [
-  { key: 'name', label: 'Tenant' },
+  { key: 'name', label: 'Company' },
   { key: 'billingClass', label: 'Billing' },
   { key: 'workerHours', label: 'Worker hours' },
   { key: 'busyHours', label: 'Busy hours' },
@@ -90,11 +91,11 @@ function sortValue(row: TenantSummary, key: SortKey): number | string {
 }
 
 interface Props {
-  data: TenantUsageData;
+  data: DashboardData;
   now?: Date;
 }
 
-export default function TenantUsageReport({ data, now = new Date() }: Props) {
+export default function Dashboard({ data, now = new Date() }: Props) {
   const today = todayOf(now);
   const [grain, setGrain] = useState<Grain>('month');
   const [chosenPeriod, setChosenPeriod] = useState<string | null>(null);
@@ -158,11 +159,30 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
     });
   }, [view.rows, query, sort]);
 
+  const latestClasses = useMemo(() => {
+    const latest = new Map<number, BillingClass>();
+    for (const row of data.days) latest.set(row.companyId, row.billingClass);
+    return Array.from(latest.values()).filter((billingClass) => billingClass !== 'inactive');
+  }, [data.days]);
+
+  const tiles = (
+    <Tiles
+      snapshot={data.snapshot}
+      latestClasses={latestClasses}
+      rows={view.rows}
+      totals={view.totals}
+      previous={view.previousTotals}
+    />
+  );
+
   if (!data.days.length) {
     return (
-      <p className={classes.empty}>
-        No usage has been measured yet. Each hour is measured ten minutes after it closes.
-      </p>
+      <div className={classes.root}>
+        {tiles}
+        <p className={classes.empty}>
+          No usage has been measured yet. Each hour is measured ten minutes after it closes.
+        </p>
+      </div>
     );
   }
 
@@ -174,7 +194,7 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
     span = spanOf(grain === 'custom' ? view.range : { start: view.dataStart, end: view.dataEnd });
     if (grain === 'custom') span += ' · custom range';
     else if (grain !== 'day' && view.period === current) span += ' · to date';
-    span += ` · ${view.rows.length} ${view.rows.length === 1 ? 'tenant' : 'tenants'}`;
+    span += ` · ${view.rows.length} ${view.rows.length === 1 ? 'company' : 'companies'}`;
   }
   const compare = view.comparison
     ? view.previousByTenant.size
@@ -281,8 +301,8 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
         <input
           type="search"
           className={classes.search}
-          aria-label="Search tenants"
-          placeholder="Search tenants"
+          aria-label="Search companies"
+          placeholder="Search companies"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -290,6 +310,10 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
 
       <p className={classes.span}>{span}</p>
       {compare && <p className={classes.compare}>{compare}</p>}
+
+      {tiles}
+
+      <h2 className={classes.sectionTitle}>Companies</h2>
 
       <div className={classes.tableWrap}>
         <table className={classes.table}>
@@ -308,7 +332,7 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
             {visible.length === 0 ? (
               <tr>
                 <td colSpan={COLUMNS.length} className={classes.emptyRow}>
-                  {query ? 'No tenants match that search.' : 'No tenant activity in this period.'}
+                  {query ? 'No companies match that search.' : 'No company activity in this period.'}
                 </td>
               </tr>
             ) : (
@@ -379,7 +403,7 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
           {view.totals && (
             <tfoot>
               <tr>
-                <th scope="row">Total, all tenants</th>
+                <th scope="row">Total, all companies</th>
                 <td />
                 {totalCell(view.totals, 'workerHours')}
                 {totalCell(view.totals, 'busyHours')}
@@ -398,12 +422,13 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
       </div>
 
       <p className={classes.note}>
-        Worker hours are the capacity a tenant was offered — its worker limit over time, which is what a paying tenant
+        Worker hours are the capacity a company was offered — its worker limit over time, which is what a paying company
         is billed for. Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours,
-        and has no value for a tenant without a limit. Min and max workers are the limit (∞ when none was set); peak
+        and has no value for a company without a limit. Min and max workers are the limit (∞ when none was set); peak
         workers is the most held at once. Wait time is how long a session queued before a worker took it. Billing shows
-        whether the tenant&apos;s usage is billed and, when it is not, why. Days are UTC and weeks run Monday to Sunday.
-        The small figure under each value is the change from the previous period; a period still in progress is compared
+        whether the company pays, is on a trial, is blocked, or is managed by Aixle; “Not billed” marks a company that
+        runs free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday. The
+        small figure under each value is the change from the previous period; a period still in progress is compared
         with the same number of days of the one before.
         {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`}
       </p>

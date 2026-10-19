@@ -52,6 +52,20 @@ class Usage::TenantReportTest < ActiveSupport::TestCase
     assert_equal "2026-10-15T06:00:00Z", report[:measured_through]
   end
 
+  test "the platform's size counts what is live: active companies, their active members and projects" do
+    owner = create(:user, company: @acme)
+    create(:user, company: @acme, membership_state: "revoked")
+    create(:user, company: @acme).update_column(:deleted_at, Time.current)
+    create(:user, company: @globex)
+    create(:project, company: @acme, owner: owner)
+    create(:project, company: @acme, owner: owner, state: :archived)
+    @globex.suspend!
+
+    snapshot = Usage::TenantReport.new(now: @day).to_h[:snapshot]
+
+    assert_equal({ companies: 1, members: 1, projects: 1 }, snapshot)
+  end
+
   test "history older than the report carries is left out" do
     hour(@acme, @day - Usage::TenantReport::HISTORY - 1.day)
 
