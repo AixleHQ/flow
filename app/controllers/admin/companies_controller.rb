@@ -22,7 +22,7 @@ module Admin
       company = Company.new(resource_params)
       apply_billing_terms(company)
 
-      unless company.save && create_initial_admin(company)
+      unless company.save
         return render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
 
@@ -30,27 +30,6 @@ module Admin
     end
 
     private
-
-    # An admin given a password here can sign in with it at once. If the user
-    # does not save, the company goes too, so the form can be sent again as is.
-    def create_initial_admin(company)
-      email = company.initial_admin_email
-      password = company.initial_admin_password
-      return true if email.blank? || password.blank?
-
-      admin_user = User.new(
-        email: email, password: password, password_confirmation: password,
-        name: email.split("@").first.titleize, state: "active"
-      )
-      admin_user.company_memberships.build(
-        company: company, role: "admin", state: "active", accepted_at: Time.current
-      )
-      return true if admin_user.save
-
-      company.destroy
-      flash.now[:error] = "Failed to create admin user: #{admin_user.errors.full_messages.join(', ')}"
-      false
-    end
 
     # When the form invited anyone, the page that shows who; otherwise `fallback`.
     def redirect_with_invitations(company, notice, fallback:)
@@ -62,11 +41,11 @@ module Admin
       redirect_to new_admin_company_invitation_path(company), status: :see_other, **messages
     end
 
-    # A first admin without a password, and everyone on the invite list, gets
-    # the invitation a company admin sends from Members. The admin goes first:
-    # listed again below, they are only sent the link again.
+    # The first admin, and everyone on the invite list, gets the invitation a
+    # company admin sends from Members. The admin goes first: listed again below,
+    # they are only sent the link again.
     def invite_members(company)
-      if company.initial_admin_email.present? && company.initial_admin_password.blank?
+      if company.initial_admin_email.present?
         admin = CompanyInvitation.call(company: company, email: company.initial_admin_email, role: "admin")
       end
       members = CompanyInvitation.invite_all(company: company, addresses: company.invite_emails, role: company.invite_role)

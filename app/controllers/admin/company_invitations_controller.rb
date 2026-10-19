@@ -24,6 +24,16 @@ module Admin
       redirect_to new_admin_company_invitation_path(@company), **invitation_flash(results)
     end
 
+    def resend
+      membership = @company.company_memberships.where.not(state: "revoked").find(params[:id])
+      unless membership.invited?
+        return redirect_to(new_admin_company_invitation_path(@company), alert: "Only pending invitations can be re-sent.")
+      end
+
+      result = CompanyInvitation.call(company: @company, email: membership.user.email)
+      redirect_to new_admin_company_invitation_path(@company), (result.sent? ? :notice : :alert) => "#{result.message}."
+    end
+
     private
 
     def set_company
