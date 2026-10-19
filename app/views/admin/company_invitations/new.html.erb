@@ -1,0 +1,81 @@
+<% content_for(:title) { "Invite members to #{@company.name}" } %>
+
+<% content_for(:stylesheet) do %>
+  <style>
+    .company-invitations h2 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+    .company-invitations p { margin: 0.25rem 0 0.5rem; }
+    .company-invitations .invite-section { border: 1px solid var(--app-border-default); border-radius: 8px; background: var(--app-bg-paper); padding: 1rem 1.25rem; margin-top: 1rem; }
+    .company-invitations .invite-field { margin-top: 1rem; }
+    .company-invitations .invite-field label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    .company-invitations textarea { width: 100%; max-width: 40rem; min-height: 8rem; }
+    .company-invitations select { max-width: 16rem; }
+    .company-invitations .invite-actions { margin-top: 1.25rem; }
+    .company-invitations .invite-muted { color: var(--app-text-secondary); }
+  </style>
+<% end %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Invite members to <%= @company.name %></h1>
+  <div>
+    <%= link_to "Back to company", admin_company_path(@company), class: "button" %>
+  </div>
+</header>
+
+<section class="main-content__body company-invitations">
+  <p>
+    Each address gets the email a company admin sends from Members, signed "An administrator": a link to sign up,
+    or sign in, and join <strong><%= @company.name %></strong>. A pending invitation is sent again; members are left
+    as they are.
+  </p>
+
+  <section class="invite-section">
+    <%= form_with url: admin_company_invitations_path(@company), method: :post, local: true do %>
+      <div class="invite-field">
+        <%= label_tag :emails, "Email addresses" %>
+        <p class="invite-muted">One per line, or separated by commas.</p>
+        <%= text_area_tag :emails, nil, rows: 6, required: true, placeholder: "jane@example.com\njohn@example.com" %>
+      </div>
+
+      <div class="invite-field">
+        <%= label_tag :role, "Role" %>
+        <%= select_tag :role, options_for_select(CompanyMembership.role.options, "employee") %>
+      </div>
+
+      <div class="invite-actions">
+        <%= submit_tag "Send invitations", class: "button", name: nil %>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="invite-section">
+    <h2>Members</h2>
+    <% if @memberships.empty? %>
+      <p class="invite-muted">Nobody yet.</p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>State</th>
+            <th>Invited</th>
+            <th>Invited by</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @memberships.each do |membership| %>
+            <tr>
+              <td><%= membership.user.email %></td>
+              <td><%= membership.user.name %></td>
+              <td><%= membership.role.text %></td>
+              <td><%= membership.state.humanize %></td>
+              <td><%= membership.invited_at ? l(membership.invited_at, format: :short) : "—" %></td>
+              <td><%= membership.invited_by&.name || "—" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </section>
+</section>

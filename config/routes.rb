@@ -318,7 +318,9 @@ Rails.application.routes.draw do
         delete :permanent_destroy
       end
     end
-    resources :companies
+    resources :companies do
+      resources :invitations, only: %i[new create], controller: "company_invitations"
+    end
     resources :projects do
       resource :move, only: %i[new create show], controller: "project_moves"
     end

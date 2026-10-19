@@ -32,6 +32,8 @@ en:
     attributes:
       company:
         managed_by_aixle: "Managed by Aixle"
+        invite_emails: "Invite members"
+        invite_role: "Invited as"
   activemodel:
     errors:
       models:
@@ -62,6 +64,10 @@ en:
       batch_delete_resource_confirmation: "Are you sure you want to delete the selected %{name}?"
       impersonate: "Impersonate"
       stop_impersonate: "Stop Impersonate"
+    field_hints:
+      company:
+        initial_admin_password: "Leave blank to email the admin an invitation instead."
+        invite_emails: "Email addresses, one per line or separated by commas. Each gets an invitation to join."
 
   admin:
     integration:

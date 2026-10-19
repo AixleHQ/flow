@@ -45,8 +45,9 @@ class Company < ApplicationRecord
   # Refused up front, with a reason, instead of failing halfway on a foreign key.
   before_destroy :refuse_while_runtimes_remain, prepend: true
 
-  # Virtual attributes for initial admin creation (used in admin form)
-  attr_accessor :initial_admin_email, :initial_admin_password
+  # Virtual attributes of the admin panel's company form: a new company's first
+  # admin, and the people invited with a save (Admin::CompaniesController).
+  attr_accessor :initial_admin_email, :initial_admin_password, :invite_emails, :invite_role
 
   # Where we host, a company that signs itself up runs on a free allowance of
   # capacity before anyone has paid for anything (Billing::Trial).

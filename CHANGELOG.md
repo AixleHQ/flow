@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: a superadmin can invite a company's people from the admin, without
+  signing in as its admin. The company form, new or edit, takes a list of
+  addresses and a role, and an initial admin left without a password is emailed
+  an invitation instead. Any company's page has "Invite members", which takes a
+  pasted list and shows who is invited and who has joined. Each person gets the
+  invitation a company admin sends from Members, from "An administrator".
+
 ## [1.4.0] - 2026-10-19
 
 ### Added
