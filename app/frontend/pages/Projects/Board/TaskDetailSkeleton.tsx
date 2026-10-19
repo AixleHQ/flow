@@ -49,7 +49,7 @@ export function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
         ))}
       </Box>
 
-      {/* Details tab: title, chips, description, then a properties list. */}
+      {/* Details tab: title, chips, a properties list, then the description. */}
       <Box style={{ flex: 1, overflow: 'auto', padding: 20 }}>
         <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
           <Skeleton height={26} width="65%" />
@@ -57,11 +57,9 @@ export function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
             <Skeleton height={20} width={64} radius="sm" />
             <Skeleton height={20} width={78} radius="sm" />
           </Box>
-          <Skeleton height={13} width="100%" />
-          <Skeleton height={13} width="80%" />
         </Box>
 
-        <Box>
+        <Box style={{ marginBottom: 20 }}>
           <Skeleton height={11} width={100} mb={14} />
           {[0, 1, 2, 3, 4].map((i) => (
             <Box
@@ -78,6 +76,11 @@ export function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
               <Skeleton height={12} width={130} />
             </Box>
           ))}
+        </Box>
+
+        <Box style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Skeleton height={13} width="100%" />
+          <Skeleton height={13} width="80%" />
         </Box>
       </Box>
     </>

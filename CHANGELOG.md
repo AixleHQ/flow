@@ -21,6 +21,11 @@ governance, community health — carry none.
   pasted list and shows who is invited and who has joined. Each person gets the
   invitation a company admin sends from Members, from "An administrator".
 
+### Changed
+- **Tasks**: a task's Properties — column, type, priority, assignee, epic, tags —
+  sit right under its title, above the description, so a long description no
+  longer pushes them out of view.
+
 ## [1.4.0] - 2026-10-19
 
 ### Added

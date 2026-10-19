@@ -614,7 +614,7 @@ export function TaskDetailSidebar({
 
         {/* Details — fully editable fields */}
         <Tabs.Panel value="details" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-          {/* Panel header: title, chips, description */}
+          {/* Panel header: title, chips */}
           <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
             {/* Editable title */}
             {editingTitle ? (
@@ -729,58 +729,7 @@ export function TaskDetailSidebar({
                 </Box>
               )}
             </Box>
-
-            {/* Editable description */}
-            {editingDesc ? (
-              <textarea
-                className={styles.ptDesc}
-                value={descValue}
-                rows={3}
-                autoFocus
-                onChange={(e) => setDescValue(e.currentTarget.value)}
-                onBlur={saveDescription}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setDescValue(task.description ?? '');
-                    setEditingDesc(false);
-                  }
-                }}
-              />
-            ) : (
-              <div
-                className={styles.ptDesc}
-                onClick={() => {
-                  if (!canExecute) return;
-                  setDescValue(task.description ?? '');
-                  setEditingDesc(true);
-                }}
-                style={{
-                  cursor: canExecute ? 'text' : 'default',
-                  color:
-                    (pendingDesc ?? task.description)
-                      ? 'var(--mantine-color-dimmed)'
-                      : 'var(--mantine-color-placeholder)',
-                }}
-              >
-                {(pendingDesc ?? task.description) ? (
-                  <Box className={styles.commentMd}>
-                    <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
-                      {pendingDesc ?? task.description ?? ''}
-                    </Markdown>
-                  </Box>
-                ) : (
-                  <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
-                    Click to add description…
-                  </span>
-                )}
-              </div>
-            )}
           </Box>
-
-          {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
-          {hasRuns && (
-            <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
-          )}
 
           {/* Properties */}
           <Box style={{ marginBottom: 20 }}>
@@ -922,6 +871,59 @@ export function TaskDetailSidebar({
               </Text>
             </Box>
           </Box>
+
+          <Box style={{ marginBottom: 18 }}>
+            {/* Editable description */}
+            {editingDesc ? (
+              <textarea
+                className={styles.ptDesc}
+                value={descValue}
+                rows={3}
+                autoFocus
+                onChange={(e) => setDescValue(e.currentTarget.value)}
+                onBlur={saveDescription}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setDescValue(task.description ?? '');
+                    setEditingDesc(false);
+                  }
+                }}
+              />
+            ) : (
+              <div
+                className={styles.ptDesc}
+                onClick={() => {
+                  if (!canExecute) return;
+                  setDescValue(task.description ?? '');
+                  setEditingDesc(true);
+                }}
+                style={{
+                  cursor: canExecute ? 'text' : 'default',
+                  color:
+                    (pendingDesc ?? task.description)
+                      ? 'var(--mantine-color-dimmed)'
+                      : 'var(--mantine-color-placeholder)',
+                }}
+              >
+                {(pendingDesc ?? task.description) ? (
+                  <Box className={styles.commentMd}>
+                    <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                      {pendingDesc ?? task.description ?? ''}
+                    </Markdown>
+                  </Box>
+                ) : (
+                  <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
+                    Click to add description…
+                  </span>
+                )}
+              </div>
+            )}
+          </Box>
+
+          {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
+          {hasRuns && (
+            <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
+          )}
 
           {/* Child tasks — for epics */}
           {task.taskType === 'epic' && (
