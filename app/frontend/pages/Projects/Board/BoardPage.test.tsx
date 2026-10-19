@@ -525,6 +525,32 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  it('says which tracker issue a copied file came from', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [
+          buildTaskAsset({
+            id: 32,
+            name: 'trace.log',
+            source: 'tracker',
+            trackerIssueKey: 'ENG-1',
+            contentType: 'text/plain',
+          }),
+        ],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('tab', { name: /Assets/ }));
+
+    expect(drawer.getByText(/from ENG-1 · text\/plain/)).toBeInTheDocument();
+  });
+
   it('opens description links safely without activating description edit mode', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {

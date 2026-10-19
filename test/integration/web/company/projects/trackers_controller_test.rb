@@ -61,6 +61,14 @@ class Web::Company::Projects::TrackersControllerTest < ActionDispatch::Integrati
     assert @tracker.reload.active?
   end
 
+  test "where files sent to issues are kept can be switched, and only to a known place" do
+    patch company_project_tracker_path(@project, @tracker), params: { tracker: { file_storage: "aixle_link" } }
+    assert_equal "aixle_link", @tracker.reload.file_storage
+
+    patch company_project_tracker_path(@project, @tracker), params: { tracker: { file_storage: "somewhere" } }
+    assert_equal "aixle_link", @tracker.reload.file_storage
+  end
+
   test "attaching a tracker its connection no longer covers says why instead of failing" do
     @tracker.detach!
     @integration.update!(settings: @integration.settings.merge("azure_project_ids" => [ @second ]))

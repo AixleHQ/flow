@@ -27,6 +27,24 @@ class ContextBuilders::TrackerContextTest < ActiveSupport::TestCase
     assert_match "tracker_get_issue", content
   end
 
+  test "the run is told about the issue's files: what is already in its workspace and what was left out" do
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board))
+    @workflow_run.update!(board_task: task, shared_context: { "tracker" => {
+      "handle" => "jira", "event_type" => "tracker.issue.created", "issue" => { "key" => "ENG-1" },
+      "files" => { "copied" => 1, "skipped" => [ { "name" => "dump.png", "reason" => "restricted" } ] }
+    } })
+    copy = task.task_assets.create!(name: "trace.log", source: :tracker, file: StringIO.new("t"))
+    TrackerAttachment.create!(project: @project, provider: "jira", instance: "c1", issue_id: "10100", external_id: "1",
+                              direction: :imported, content_sha256: "s", task_asset: copy, data: { "issue_key" => "ENG-1" })
+
+    content = ContextBuilders::TrackerContext.new(@session).build.sole.content
+
+    assert_match "tracker_download_attachments", content
+    assert_match "`/workspace/tracker/ENG-1/trace.log`", content
+    assert_match "Not copied: dump.png (restricted)", content
+  end
+
   test "a comment that started the run is quoted" do
     @workflow_run.update!(shared_context: { "tracker" => {
       "handle" => "boards", "event_type" => "tracker.comment.created", "issue" => { "key" => "11" },

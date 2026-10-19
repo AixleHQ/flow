@@ -909,11 +909,24 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
         event_type: 'tracker.issue.status_changed',
         project_tracker_id: null,
         aixle_changes: 'ignore',
+        copy_attachments: false,
         filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
         subject_policy: 'find_or_create_task',
         status_reporting: 'failures',
         subject_column_id: '1',
       });
+    });
+
+    it("copies the issue's files to the task when the switch is on, and says what that is for", async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'tracker', trackers })} />);
+
+      expect(screen.getByText(/People see them on the card, and every step's agent finds them/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('switch', { name: 'Copy issue files to the task' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'POST').trigger.copy_attachments).toBe(true);
     });
 
     it('comments on the issue when a run fails unless the switch is turned off', async () => {
@@ -952,6 +965,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       expect(bodyOf(fetchSpy, 'PATCH').trigger).toEqual({
         project_tracker_id: '5',
         aixle_changes: 'other_workflows',
+        copy_attachments: false,
         filter_predicate: { 'comment.mentions_me': true },
         subject_policy: 'none',
         status_reporting: 'none',
