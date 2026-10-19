@@ -40,6 +40,11 @@ governance, community health — carry none.
   free; it needs a card once that trial is spent. On upgrade, active companies
   that already ran free (no limit, or no Stripe customer) are ticked Managed by
   Aixle; untick one to put it on the trial.
+- **Integrations**: the Aixle Flow app for YouTrack (1.0.2) sets itself up through
+  YouTrack's own API; only the service user's tokens still go through Hub. The
+  service user is now created with a random password that is never stored or
+  shown, and the app uses only the `aixle-flow` user it created: any other
+  account with that login stops the setup.
 
 ### Fixed
 - **Admin**: saving a company in the admin no longer turns its settings into a

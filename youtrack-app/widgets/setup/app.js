@@ -60,6 +60,8 @@ function yt(path, query, options) {
   return host.fetchYouTrack(path, Object.assign({ query: query || {} }, options || {}));
 }
 
+// Only the service user's permanent tokens go through Hub: YouTrack 2026.2 has no
+// /api for another user's tokens (2026.3 adds users/{id}/profiles/permanentTokens/tokens).
 function hub(path, options) {
   return host.fetchHub(path, options || {});
 }
@@ -79,10 +81,6 @@ function parseJson(value, fallback) {
   } catch (e) {
     return fallback;
   }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // A page Aixle Flow points to. It may be on another host than the API the app
@@ -205,96 +203,71 @@ async function checkRequest(ctx) {
   return pairing.company.name + ' / ' + pairing.project.name;
 }
 
-const HUB_USER_FIELDS = 'id,login,name,banned,details(id)';
+const USER_FIELDS = 'id,login,banned,ringId';
 
-async function findHubUserById(id) {
+// Also takes a Hub id, which is what version 1.0.1 recorded.
+async function findUserById(id) {
   try {
-    return await hub('api/rest/users/' + encodeURIComponent(id) + '?fields=' + HUB_USER_FIELDS);
+    return await yt('users/' + encodeURIComponent(id), { fields: USER_FIELDS });
   } catch (e) {
     if (e.status === 404) return null;
     throw e;
   }
 }
 
-async function findHubUserByLogin() {
-  const query = encodeURIComponent('login: ' + SERVICE_LOGIN);
-  const page = await hub('api/rest/users?fields=' + HUB_USER_FIELDS + '&query=' + query);
-  return (page.users || []).find((user) => user.login === SERVICE_LOGIN) || null;
+// query matches logins by prefix.
+async function findUserByLogin() {
+  const users = await yt('users', { query: SERVICE_LOGIN, fields: USER_FIELDS, $top: 100 });
+  return users.find((user) => user.login === SERVICE_LOGIN) || null;
 }
 
-// Every way to sign in to Hub (a password, LDAP, an OAuth or SAML login) is one of the user's details.
-function canSignIn(hubUser) {
-  return Array.isArray(hubUser.details) && hubUser.details.length > 0;
-}
-
-async function hasPermanentTokens(hubUser) {
-  const page = await hub('api/rest/users/' + encodeURIComponent(hubUser.id) + '/permanenttokens?fields=id&$top=1');
-  return (page.permanenttokens || []).length > 0;
+// /api creates a user only with a password, so the service user gets a random
+// one that is never stored or shown: nobody can sign in as it. One character of
+// each class satisfies a password policy that asks for them.
+function randomPassword() {
+  const classes = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnopqrstuvwxyz', '23456789', '-_.!@#%'];
+  const all = classes.join('');
+  const pick = (chars) => chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
+  return classes.map(pick).join('') + Array.from({ length: 40 }, () => pick(all)).join('');
 }
 
 // The service user joins every connected project's team and gets a permanent
-// token, so it must be one nobody else can act as: the user this app created
-// (its Hub id is kept in the app's settings), or a user with that login that
-// has no way to sign in and no tokens yet, such as one an interrupted setup
-// created. A person's or another tool's account named aixle-flow is never used.
+// token, so it must be one nobody else can act as: the user this app created,
+// whose id is kept in the app's settings. Any other account named aixle-flow
+// (a person who self-registered, an LDAP account, another tool's) is never used.
 async function resolveServiceUser(ctx) {
-  const recorded = ctx.serviceUserId ? await findHubUserById(ctx.serviceUserId) : null;
-  if (recorded) {
-    if (canSignIn(recorded)) {
-      throw new Problem('The service user ' + recorded.login + ' can sign in now (it has a password or another login), so the app stopped. Remove its logins in Users, then retry.');
-    }
-    return { hubUser: recorded, verb: 'Reused ' };
+  const recorded = ctx.serviceUserId ? await findUserById(ctx.serviceUserId) : null;
+  if (recorded) return { user: recorded, verb: 'Reused ' };
+  if (await findUserByLogin()) {
+    throw new Problem('A user with the login ' + SERVICE_LOGIN + ' already exists that this app did not create, so the app will not use it: whoever can sign in as it would get access to the connected projects. Rename that user in Users, then retry.');
   }
-  const existing = await findHubUserByLogin();
-  if (!existing) {
-    const hubUser = await hub('api/rest/users?fields=' + HUB_USER_FIELDS, {
-      method: 'POST',
-      body: { login: SERVICE_LOGIN, name: SERVICE_NAME }
-    });
-    return { hubUser: hubUser, verb: 'Created ' };
-  }
-  if (canSignIn(existing)) {
-    throw new Problem('A user with the login ' + SERVICE_LOGIN + ' already exists and can sign in, so the app will not use it: whoever signs in as it would get access to the connected projects. Rename that user in Users, then retry.');
-  }
-  if (await hasPermanentTokens(existing)) {
-    throw new Problem('A user with the login ' + SERVICE_LOGIN + ' already exists and has permanent tokens this app did not record, so the app will not use it. Rename that user in Users, then retry.');
-  }
-  return { hubUser: existing, verb: 'Reused ' };
+  const user = await yt('users', { fields: USER_FIELDS }, {
+    method: 'POST',
+    body: { login: SERVICE_LOGIN, fullName: SERVICE_NAME, password: randomPassword() }
+  });
+  return { user: user, verb: 'Created ' };
 }
 
 // globalSettings replaces the whole settings object, so it is read again right before the write.
-async function recordServiceUser(ctx, hubUserId) {
-  if (ctx.serviceUserId === hubUserId) return;
+async function recordServiceUser(ctx, userId) {
+  if (ctx.serviceUserId === userId) return;
   const app = await yt('admin/apps/' + ctx.app.id, { fields: 'globalConfig(globalSettings)' });
   const settings = parseJson(app.globalConfig && app.globalConfig.globalSettings, {});
-  settings.serviceUserId = hubUserId;
+  settings.serviceUserId = userId;
   await yt('admin/apps/' + ctx.app.id + '/globalConfig', { fields: 'id' }, {
     method: 'POST',
     body: { globalSettings: JSON.stringify(settings) }
   });
-  ctx.serviceUserId = hubUserId;
+  ctx.serviceUserId = userId;
 }
 
 async function ensureServiceUser(ctx) {
-  const { hubUser, verb } = await resolveServiceUser(ctx);
-  if (hubUser.banned) throw new Problem('The user ' + hubUser.login + ' is banned. Unban it in Users, then retry.');
-  await recordServiceUser(ctx, hubUser.id);
-  ctx.hubUser = hubUser;
-
-  // YouTrack picks a Hub user up a moment after Hub creates it, and resolves it by its Hub id.
-  // Its YouTrack login can differ (a leftover YouTrack record may still hold "aixle-flow").
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      const user = await yt('users/' + encodeURIComponent(hubUser.id), { fields: 'id,login,ringId' });
-      ctx.user = user;
-      const note = user.login === SERVICE_LOGIN ? '' : ' (in YouTrack: ' + user.login + ')';
-      return verb + hubUser.login + note;
-    } catch (e) {
-      if (e.status !== 404) throw e;
-    }
-    await sleep(1000);
-  }
-  throw new Problem('YouTrack has not picked up the user ' + hubUser.login + ' yet. Retry in a minute.');
+  const { user, verb } = await resolveServiceUser(ctx);
+  await recordServiceUser(ctx, user.id);
+  if (user.banned) throw new Problem('The user ' + user.login + ' is banned. Unban it in Users, then retry.');
+  if (!user.ringId) throw new Problem('YouTrack has not linked the user ' + user.login + ' to Hub yet. Retry in a minute.');
+  ctx.user = user;
+  return verb + user.login;
 }
 
 async function addToTeams(ctx) {
@@ -321,15 +294,13 @@ async function attachApp(ctx) {
 
 async function mintToken(ctx) {
   if (ctx.token) return 'Created';
-  const page = await hub('api/rest/services?fields=id,name,applicationName&$top=500');
-  const services = page.services || [];
-  const youtrack = services.find((service) => service.applicationName === 'YouTrack') ||
-    services.find((service) => service.name === 'YouTrack');
-  if (!youtrack) throw new Problem('Could not find the YouTrack service in Hub.');
+  const config = await yt('config', { fields: 'ring(serviceId)' });
+  const serviceId = config.ring && config.ring.serviceId;
+  if (!serviceId) throw new Problem('YouTrack did not report its service id.');
   const name = (SERVICE_NAME + ' — ' + ctx.pairing.company.name + ' / ' + ctx.pairing.project.name).slice(0, 100);
-  const token = await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens?fields=id,name,token', {
+  const token = await hub('api/rest/users/' + encodeURIComponent(ctx.user.ringId) + '/permanenttokens?fields=id,name,token', {
     method: 'POST',
-    body: { name: name, scope: [{ id: youtrack.id }, { id: HUB_SERVICE_ID }] }
+    body: { name: name, scope: [{ id: serviceId }, { id: HUB_SERVICE_ID }] }
   });
   if (!token || !token.token) throw new Problem('Hub did not return the token.');
   ctx.token = { id: token.id, value: token.token };
@@ -341,7 +312,7 @@ async function mintToken(ctx) {
 async function revokeToken(ctx) {
   if (!ctx.token) return;
   try {
-    await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens/' + encodeURIComponent(ctx.token.id), { method: 'DELETE' });
+    await hub('api/rest/users/' + encodeURIComponent(ctx.user.ringId) + '/permanenttokens/' + encodeURIComponent(ctx.token.id), { method: 'DELETE' });
   } catch (e) {
     console.warn('Aixle Flow: could not revoke the unused token', e);
   }
@@ -375,10 +346,10 @@ async function completePairing(ctx) {
 // stopped using it. Tokens of other connections keep their own names.
 async function retireOldTokens(ctx) {
   if (!ctx.result || !ctx.tokenId) return 'Nothing to revoke';
-  const page = await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens?fields=id,name&$top=500');
+  const page = await hub('api/rest/users/' + encodeURIComponent(ctx.user.ringId) + '/permanenttokens?fields=id,name&$top=500');
   const old = (page.permanenttokens || []).filter((token) => token.name === ctx.tokenName && token.id !== ctx.tokenId);
   for (const token of old) {
-    await hub('api/rest/users/' + encodeURIComponent(ctx.hubUser.id) + '/permanenttokens/' + encodeURIComponent(token.id), { method: 'DELETE' });
+    await hub('api/rest/users/' + encodeURIComponent(ctx.user.ringId) + '/permanenttokens/' + encodeURIComponent(token.id), { method: 'DELETE' });
   }
   return old.length ? 'Revoked ' + old.length : 'Nothing to revoke';
 }

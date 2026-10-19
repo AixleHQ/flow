@@ -48,9 +48,9 @@ function header() {
   return [
     h('h1', null, 'Aixle Flow'),
     h('p', { class: 'lead' },
-      'Aixle Flow runs AI agents on your YouTrack issues. Connecting creates the password-less service user ',
+      'Aixle Flow runs AI agents on your YouTrack issues. Connecting creates the service user ',
       h('code', null, SERVICE_LOGIN),
-      ', adds it to the projects you choose, hands its token to Aixle Flow and sends those projects’ issue events there.')
+      ' with a random password nobody knows, adds it to the projects you choose, hands its token to Aixle Flow and sends those projects’ issue events there.')
   ];
 }
 
