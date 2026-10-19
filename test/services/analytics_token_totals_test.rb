@@ -10,13 +10,13 @@ class AnalyticsTokenTotalsTest < ActiveSupport::TestCase
   end
 
   [ ProjectAnalyticsService, CompanyAnalyticsService, UserAnalyticsService ].each do |service|
-    test "#{service} counts mixed token formats in its summary" do
+    test "#{service} sums the breakdown and ignores the legacy aggregate tokens" do
       seed_mixed_usage
 
       result = service.new(**arguments_for(service)).call
 
-      assert_equal 300, result.total_tokens
-      assert_equal [ 300 ], result.project_breakdowns.map(&:tokens) if result.respond_to?(:project_breakdowns)
+      assert_equal 100, result.total_tokens
+      assert_equal [ 100 ], result.project_breakdowns.map(&:tokens) if result.respond_to?(:project_breakdowns)
     end
 
     test "#{service} returns zero tokens without sessions" do
@@ -25,23 +25,23 @@ class AnalyticsTokenTotalsTest < ActiveSupport::TestCase
   end
 
   [ AgentActivityService, CompanyAgentActivityService, UserAgentActivityService ].each do |service|
-    test "#{service} counts mixed token formats in the same agent group" do
+    test "#{service} sums the breakdown and ignores the legacy aggregate tokens in the same agent group" do
       seed_mixed_usage
 
       result = service.new(**arguments_for(service)).call
 
-      assert_equal [ 300 ], result.sessions_by_agent.map(&:tokens)
+      assert_equal [ 100 ], result.sessions_by_agent.map(&:tokens)
     end
   end
 
   [ SessionCostTokenUsageService, CompanySessionCostTokenUsageService, UserSessionCostTokenUsageService ].each do |service|
-    test "#{service} counts mixed token formats in the same time bucket" do
+    test "#{service} sums the breakdown and ignores the legacy aggregate tokens in the same time bucket" do
       freeze_time do
         seed_mixed_usage
 
         result = service.new(**arguments_for(service)).call
 
-        assert_equal [ 300 ], result.time_series.map(&:total_tokens)
+        assert_equal [ 100 ], result.time_series.map(&:total_tokens)
       end
     end
 
@@ -54,37 +54,37 @@ class AnalyticsTokenTotalsTest < ActiveSupport::TestCase
     end
   end
 
-  test "workflow summaries and time series count mixed token formats" do
+  test "workflow summaries and time series sum the breakdown and ignore the legacy aggregate tokens" do
     freeze_time do
       seed_workflow_usage
 
       result = WorkflowCostAnalyticsService.new(**arguments_for(WorkflowCostAnalyticsService)).call
 
-      assert_equal 300, result.totals[:total_tokens]
-      assert_equal [ 300 ], result.workflows.map(&:total_tokens)
-      assert_equal [ 300 ], result.time_series.map(&:total_tokens)
+      assert_equal 100, result.totals[:total_tokens]
+      assert_equal [ 100 ], result.workflows.map(&:total_tokens)
+      assert_equal [ 100 ], result.time_series.map(&:total_tokens)
     end
   end
 
-  test "company workflow time series counts mixed token formats" do
+  test "company workflow time series sums the breakdown and ignores the legacy aggregate tokens" do
     freeze_time do
       seed_workflow_usage
 
       result = CompanyWorkflowCostAnalyticsService.new(**arguments_for(CompanyWorkflowCostAnalyticsService)).call
 
-      assert_equal [ 300 ], result.time_series.map(&:total_tokens)
+      assert_equal [ 100 ], result.time_series.map(&:total_tokens)
     end
   end
 
-  test "task summary and workflow breakdown count mixed token formats" do
+  test "task summary and workflow breakdown sum the breakdown and ignore the legacy aggregate tokens" do
     board = create(:board, project: @project)
     task = create(:board_task, board: board, board_column: create(:board_column, board: board))
     seed_workflow_usage(task: task)
 
     result = TaskStatisticsService.new(task: task).call
 
-    assert_equal 300, result.token_totals[:total_tokens]
-    assert_equal [ 300 ], result.workflow_breakdowns.map(&:total_tokens)
+    assert_equal 100, result.token_totals[:total_tokens]
+    assert_equal [ 100 ], result.workflow_breakdowns.map(&:total_tokens)
   end
 
   private
@@ -105,16 +105,18 @@ class AnalyticsTokenTotalsTest < ActiveSupport::TestCase
     create(:terminal_session, user: @user, project: @project, session_type: "workflow_step")
   end
 
+  # A detailed session (breakdown present, `tokens` set to a decoy that must be
+  # ignored), an aggregate-only session (breakdown zero, `tokens` set, also
+  # ignored), a zero-usage session and a session with no usage row at all.
   def seed_mixed_usage
     detailed = create_session
-    legacy = create_session
-    # All four components count; the aggregate must not be added a second time.
+    aggregate_only = create_session
     UsageStatistic.create!(terminal_session: detailed, input_tokens: 40, output_tokens: 30,
                            cache_write_tokens: 20, cache_read_tokens: 10, tokens: 999)
-    UsageStatistic.create!(terminal_session: legacy, tokens: 200)
+    UsageStatistic.create!(terminal_session: aggregate_only, tokens: 200)
     UsageStatistic.create!(terminal_session: create_session, tokens: 0)
     create_session
-    [ detailed, legacy ]
+    [ detailed, aggregate_only ]
   end
 
   def seed_workflow_usage(task: nil)
