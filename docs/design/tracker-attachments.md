@@ -1,6 +1,7 @@
 # Tracker attachments — technical design
 
-Status: **Proposal, 2026-10-19.** Nothing here is built. Agreed the same day: the `copy_attachments`
+Status: **Built 2026-10-20 on branch `artempartos/tracker-asset-sync-design`, all five providers; the
+staging check (§12.2) is still to run.** §15 lists where the build differs from this design. Agreed the same day: the `copy_attachments`
 flag (§7.5), applying for Jira's per-tenant quota (§10.1), and delivery straight from the API
 documentation to a staging check, with no spike phase (§12), and GitHub files stored as git objects in
 the issue's repository (§11).
@@ -1004,3 +1005,25 @@ Per provider, on top of the walk:
 - **Azure on staging.** Staging has no Azure integration by design. The staging walk needs PAT mode
   switched on there against a test organization (§12.2), and that test organization has to exist:
   new Azure DevOps organizations now require an Azure subscription to be linked.
+
+## 15. As built (2026-10-20)
+
+All five providers were built in one change, from the API documentation, ahead of the staging check
+(§12.2). Where the build differs from the sections above:
+
+| Area | Design | Built | Why |
+|---|---|---|---|
+| Port (§6.1) | `upload_attachments(scope_id, ref, files)`, one call for all files | `upload_attachment(scope_id, ref, file)`, one file at a time; `attachments?`, `attachment_list?`, `max_upload_bytes`, `compose_comment` and `attachment_markup` on the port | Each file is recorded in `tracker_attachments` as soon as it lands, so a retry after a failed comment finds it instead of uploading it again (`Trackers::AttachmentExporter`). Jira's per-issue write limit allows the ten files a call can carry |
+| File sources (§5.1) | `Concerns::ToolFiles` gains `task_asset_id` and streaming | A separate `Concerns::TrackerFiles` with the four sources, a `stat` size check before a container file is read, and temp files | `chat_post_message`'s contract stays as it is |
+| Run context (§7.4) | Up to 20 files listed at hydrate time | The context lists the copies already on the task, read from the database, and what the copy job skipped (`shared_context.tracker.files`); nothing is read from the tracker when a run starts | A listing at fire time would call the tracker inside the dispatch lock, on every event, for files most runs never open |
+| Jira budget (§10.1) | Per-connection hourly budget in Postgres | `Trackers::Jira::Budget` in `Rails.cache` (Redis in production): the pool state from `X-RateLimit-*` headers, and 300 downloads per connection per hour for copy jobs; a job that finds the pool near its limit retries in 10 minutes, six times | A counter that resets every hour needs no durability; the agent's own calls are never held back |
+| Azure orphan (§5.3) | Partial progress in the ledger row | The upload's answer kept in `Rails.cache` for an hour, keyed by work item and content digest; a retry links it | The ledger row belongs to the whole call, not to one file |
+| YouTrack comments (§4.1) | Attach to the comment where it works | Files are attached to the issue and the comment names them | One upload path, the documented one |
+| Linear upload (§4.5) | — | The PUT goes to the host `fileUpload` names, through `SafeHttp`, with Linear's headers and never the credential | The signed host is Linear's choice and not documented |
+| GitHub storage switch (§11.2) | `settings.github_file_storage` | `project_trackers.settings.file_storage` (`repository` or `aixle_link`), switched by **Link files instead** on the tracker's row | Read by the exporter, not the provider, which serves every tracker of the connection |
+| GitHub fallback (§11.3) | Link to the task page | Files over 25 MB, refused by the repository, or with the switch on are attached to the run's task (`source: agent`) and the comment links the board page (`/board?n=<number>`); without a task they are refused with `not_stored` | — |
+| Card badge (§12.1) | "from APP-123" | The attachment row's subtitle starts with `from <key>` (`TaskAssetResource#tracker_issue_key`) | — |
+
+Not built: the per-provider `max_upload_bytes` for YouTrack (its limit is learned from the 413), and
+GitHub video playback (videos are linked, as §11.2 says).
+

@@ -14,6 +14,17 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Trackers**: agents read and send issue files on every tracker. New
+  `tracker_list_attachments`, `tracker_download_attachments` and
+  `tracker_attach_files` tools fetch an issue's files into the workspace
+  (`/workspace/tracker/<issue key>/`), keep a copy on the issue's task — marked
+  with the issue's key on the card — and put files onto issues. A tracker
+  trigger can **Copy issue files to the task** when a run starts. Files visible
+  to only some people in the tracker are never copied.
+- **Trackers**: on GitHub Projects, files sent to an issue are stored in the
+  issue's repository under hidden `refs/aixle/attachments/` refs, so images show
+  inline in private repositories; **Link files instead** on the Trackers page
+  keeps them on the Aixle task.
 - **Admin**: the admin opens on a dashboard. Tiles show active companies by
   billing status, members and projects, and the period's worker hours, busy
   hours (and how much of them is not on a paid plan) and successful sessions.

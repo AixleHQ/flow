@@ -334,6 +334,14 @@ failed.
   [project filter syntax](https://docs.github.com/en/issues/planning-and-tracking-with-projects/customizing-views-in-your-project/filtering-projects)
   in `native_query`, such as `label:bug updated:>@today-1w`. It filters this
   project's items and nothing else.
+- `tracker_attach_files` stores each file as a commit under a hidden
+  `refs/aixle/attachments/<issue number>/` ref of the issue's repository, through
+  the app's **Contents** write permission, and comments with it: images show
+  inline, other files are linked. The tracker's **Link files instead** switch on
+  the Trackers page keeps files on the Aixle task instead. Images and videos
+  people attached are read through the signed address GitHub gives the app;
+  their PDFs, archives and logs cannot be read through the API.
+  [Files](/docs/trackers#github) has the details.
 
 ## Tools
 
