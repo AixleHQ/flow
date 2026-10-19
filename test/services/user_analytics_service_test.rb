@@ -19,7 +19,7 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
     UsageStatistic.create!(
       terminal_session: session,
       cost_cents:, input_tokens: tokens, output_tokens: 0,
-      cache_write_tokens: 0, cache_read_tokens: 0, tokens:
+      cache_write_tokens: 0, cache_read_tokens: 0
     )
     session
   end
@@ -76,20 +76,6 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
 
     assert { result.total_sessions == 0 }
     assert { result.project_breakdowns.empty? }
-  end
-
-  test "total_tokens ignores the legacy tokens column when breakdown columns are zero" do
-    session = build(:terminal_session, user: @user, project: @project_a, session_type: "agent_session", agent_type: "claude_code")
-    session.save!(validate: false)
-    UsageStatistic.create!(
-      terminal_session: session,
-      cost_cents: 0, input_tokens: 0, output_tokens: 0,
-      cache_write_tokens: 0, cache_read_tokens: 0, tokens: 500
-    )
-
-    result = call
-
-    assert { result.total_tokens == 0 }
   end
 
   test "auth_setup and tool_setup sessions are excluded" do

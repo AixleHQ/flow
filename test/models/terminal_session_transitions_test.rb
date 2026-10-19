@@ -61,7 +61,7 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
 
   test "a cancelled session records the usage it ran up and keeps its container for teardown" do
     UsageStatistic.create!(terminal_session: @session, cost_cents: 250, input_tokens: 900, output_tokens: 100,
-                           cache_write_tokens: 0, cache_read_tokens: 0, tokens: 1000)
+                           cache_write_tokens: 0, cache_read_tokens: 0)
 
     @session.cancel!
 

@@ -57,7 +57,7 @@ module Users
     test "keeps the user's sessions and their usage as the company's history" do
       other_project = create(:project, company: @company, owner: @heir)
       session = create(:terminal_session, :agent_session, user: @user, project: other_project, state: "finished")
-      usage = UsageStatistic.create!(terminal_session: session, tokens: 100, cost_cents: 5)
+      usage = UsageStatistic.create!(terminal_session: session, cost_cents: 5)
 
       PermanentDeletionService.call(user: @user, actor: @actor)
 
@@ -89,7 +89,7 @@ module Users
       other_project = create(:project, company: @company, owner: @heir)
       session = build(:terminal_session, user: @user, project: other_project, state: "finished")
       session.save!(validate: false)
-      UsageStatistic.create!(terminal_session: session, tokens: 100, cost_cents: 5)
+      UsageStatistic.create!(terminal_session: session, cost_cents: 5)
       tool_result = create(:tool_result, terminal_session: session)
 
       assert_difference("User.count", -1) do

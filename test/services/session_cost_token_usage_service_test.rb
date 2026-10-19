@@ -18,7 +18,7 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, project: project, user: user, session_type: "agent_session",
                                         created_at: created_at)
     UsageStatistic.create!(terminal_session: session, cost_cents: cost_cents, input_tokens: total_tokens,
-                           output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, tokens: total_tokens)
+                           output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0)
     session
   end
 
@@ -47,7 +47,7 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
   test "a running session's spend is counted before the session ends" do
     session = create(:terminal_session, :running, project: @project, user: @admin, session_type: "agent_session")
     UsageStatistic.create!(terminal_session: session, cost_cents: 42, input_tokens: 10, output_tokens: 5,
-                           cache_write_tokens: 0, cache_read_tokens: 0, tokens: 15)
+                           cache_write_tokens: 0, cache_read_tokens: 0)
 
     result = call_service(scope: "project")
 

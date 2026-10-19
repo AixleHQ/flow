@@ -161,11 +161,11 @@ class Web::Company::UsersControllerTest < ActionDispatch::IntegrationTest
   test "the deferred analytics resolve to the subject's spend in this company" do
     seed_session(user: @colleague).tap do |session|
       UsageStatistic.create!(terminal_session: session, cost_cents: 300, input_tokens: 3000, output_tokens: 0,
-                             cache_write_tokens: 0, cache_read_tokens: 0, tokens: 3000)
+                             cache_write_tokens: 0, cache_read_tokens: 0)
     end
     seed_session(user: @user).tap do |session|
       UsageStatistic.create!(terminal_session: session, cost_cents: 999, input_tokens: 9999, output_tokens: 0,
-                             cache_write_tokens: 0, cache_read_tokens: 0, tokens: 9999)
+                             cache_write_tokens: 0, cache_read_tokens: 0)
     end
 
     get user_path(@colleague)
