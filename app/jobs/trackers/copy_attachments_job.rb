@@ -9,9 +9,13 @@ module Trackers
     queue_as :default
 
     class RunNotVisible < StandardError; end
+    class PoolNearLimit < StandardError; end
 
     # Enqueued inside the dispatch transaction; the run may not be readable yet.
     retry_on RunNotVisible, wait: 2.seconds, attempts: 5
+    # Jira's pool is shared by every customer (Trackers::Jira::Budget); the
+    # copy waits instead of draining it.
+    retry_on PoolNearLimit, wait: 10.minutes, attempts: 6
 
     def perform(workflow_run_id)
       run = WorkflowRun.find_by(id: workflow_run_id)
@@ -22,7 +26,8 @@ module Trackers
       issue = context["issue"].to_h
       return unless run.board_task && tracker&.usable? && issue["id"].present?
 
-      results = AttachmentImporter.new(project_tracker: tracker, task: run.board_task, user: run.user)
+      results = AttachmentImporter.new(project_tracker: tracker, task: run.board_task, user: run.user,
+                                       throttle: throttle(tracker))
                                   .import(issue["id"], issue_key: issue["key"])
       remember(run, results)
     rescue Trackers::Error => e
@@ -30,6 +35,15 @@ module Trackers
     end
 
     private
+
+    def throttle(tracker)
+      return unless tracker.provider == "jira"
+
+      integration = tracker.integration
+      raise PoolNearLimit, "Jira's rate-limit pool is near its limit" if Jira::Budget.near_limit?(Jira::Budget.pool_for(integration))
+
+      -> { Jira::Budget.take(integration) }
+    end
 
     # Into the run's context without rewriting the rest of it: steps write there too.
     def remember(run, results)

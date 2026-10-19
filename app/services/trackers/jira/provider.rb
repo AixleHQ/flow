@@ -15,6 +15,9 @@ module Trackers
       ACCOUNT_ID = /\A(?:[0-9a-f]{24}|[0-9a-z]+:[0-9a-f-]{36}(?::[0-9a-f-]{36})?)\z/i
       FIELD_KEYS = %w[priority due_date parent components].freeze
       UNASSIGNED = %w[none unassigned nobody].freeze
+      # `!name.png|thumbnail!` shows an attachment, `[^name.pdf]` links one.
+      FILE_REFERENCE = /!([^!|\n]+?)(?:\|[^!\n]*)?!|\[\^([^\]\n]+)\]/
+      COMMENT_PAGES = 5
 
       def serves_project?(project)
         integration.project_id == project.id
@@ -213,7 +216,91 @@ module Trackers
         end
       end
 
+      def attachments? = true
+
+      def max_upload_bytes
+        translate { attachment_settings[:upload_limit] }
+      end
+
+      def list_attachments(scope_id, ref)
+        translate { files_of(scoped!(api.issue(issue_ref!(ref)), scope_id)) }
+      end
+
+      def download_attachment(scope_id, ref, attachment_id, io:, max_bytes:)
+        translate do
+          current = scoped!(api.issue(issue_ref!(ref)), scope_id)
+          found = files_of(current).find { |a| a.id == attachment_id.to_s }
+          raise Error.new("#{current[:key]} has no file #{attachment_id}", code: "not_found") unless found
+          raise Error.new("#{found.name} is shown only in restricted comments", code: "restricted") if found.restricted
+
+          api.download_attachment(found.id, io: io, max_bytes: max_bytes)
+          found
+        end
+      end
+
+      def upload_attachment(scope_id, ref, file)
+        translate do
+          current = scoped!(api.issue(issue_ref!(ref)), scope_id)
+          unless attachment_settings[:enabled]
+            raise Error.new("Attachments are switched off on this Jira site", code: "attachments_disabled")
+          end
+
+          @files&.delete(current[:id])
+          attachment_from(api.upload_attachment(current[:id], file), current, {})
+        end
+      end
+
+      # Wiki markup, as REST v2 takes comments: an image shown, any file linked.
+      def attachment_markup(attachment)
+        attachment.image? ? "!#{attachment.name}|thumbnail!" : "[^#{attachment.name}]"
+      end
+
       private
+
+      # Read once per issue for as long as this provider lives.
+      def files_of(current)
+        (@files ||= {})[current[:id]] ||= begin
+          raw = api.attachments(current[:id])
+          places = raw.any? ? references(current) : {}
+          raw.map { |a| attachment_from(a, current, places) }
+        end
+      end
+
+      # name => where the issue's text shows the file. A file every reference to
+      # which sits in a restricted comment is restricted itself: copying it
+      # would show it to everyone in the Aixle project.
+      def references(current)
+        places = Hash.new { |h, k| h[k] = [] }
+        file_names(current[:description]).each { |name| places[name] << { "kind" => "description", restricted: false } }
+        cursor = nil
+        COMMENT_PAGES.times do
+          page = api.comments(current[:id], limit: 100, cursor: cursor)
+          page[:comments].each do |c|
+            file_names(c[:body]).each { |name| places[name] << { "kind" => "comment", "id" => c[:id], restricted: c[:restricted] == true } }
+          end
+          break unless (cursor = page[:next_cursor])
+        end
+        places
+      end
+
+      def file_names(text)
+        text.to_s.scan(FILE_REFERENCE).map { |image, link| (image || link).strip }.uniq
+      end
+
+      def attachment_from(raw, current, places)
+        found = places.fetch(raw[:name], [])
+        Attachment.new(
+          id: raw[:id], issue_id: current[:id], name: raw[:name], size: raw[:size], content_type: raw[:content_type],
+          created_at: raw[:created_at], location: found.first&.except(:restricted),
+          restricted: found.any? && found.all? { |place| place[:restricted] }, url: browse_url(current[:key])
+        )
+      end
+
+      def attachment_settings
+        Rails.cache.fetch([ "trackers", integration.id, "jira_attachment_settings" ], expires_in: 1.hour) do
+          api.attachment_settings
+        end
+      end
 
       def api
         @api ||= ::Jira::Api.for(integration)

@@ -37,7 +37,8 @@ module FakeJira
       { id: BOT_ID, name: "Aixle Bot" }
     ].freeze
 
-    attr_reader :calls, :issues, :comments_by_issue, :webhook_registry
+    attr_reader :calls, :issues, :comments_by_issue, :webhook_registry, :files_by_issue, :uploads
+    attr_accessor :attachments_enabled
     attr_accessor :me
 
     def initialize
@@ -46,6 +47,10 @@ module FakeJira
       @issues = {}
       @comments_by_issue = Hash.new { |h, k| h[k] = [] }
       @webhook_registry = {}
+      @files_by_issue = Hash.new { |h, k| h[k] = [] }
+      @file_bytes = {}
+      @uploads = []
+      @attachments_enabled = true
       @next_id = 20_000
       @failures = {}
       @before_answering = {}
@@ -59,6 +64,22 @@ module FakeJira
         project: project.slice(:id, :key), assignee: assignee, labels: labels, priority: "Medium", due_date: nil,
         parent: nil, components: [], created_at: "2026-09-30T10:00:00.000+0000", updated_at: "2026-09-30T10:00:00.000+0000"
       }
+    end
+
+    # A file someone attached in Jira.
+    def add_file(issue_id, name:, bytes:, content_type: "application/octet-stream")
+      id = (@next_id += 1).to_s
+      @file_bytes[id] = bytes.b
+      @files_by_issue[issue_id] << { id: id, name: name, size: bytes.bytesize, content_type: content_type,
+                                     created_at: "2026-09-30T10:30:00.000+0000" }
+      id
+    end
+
+    def add_comment_by(issue_id, body:, restricted: false)
+      comment = { id: (@next_id += 1).to_s, author: "Ada Lovelace", body: body, created_at: "2026-09-30T10:40:00.000+0000",
+                  restricted: restricted }
+      @comments_by_issue[issue_id] << comment
+      comment
     end
 
     # The next call to `method` raises `error`.
@@ -173,9 +194,37 @@ module FakeJira
 
     def add_comment(id, body)
       record(:add_comment, id: id, body: body) do
-        comment = { id: (@next_id += 1).to_s, author: @me[:name], body: body, created_at: "2026-09-30T11:00:00.000+0000" }
+        comment = { id: (@next_id += 1).to_s, author: @me[:name], body: body, created_at: "2026-09-30T11:00:00.000+0000",
+                    restricted: false }
         @comments_by_issue[find_issue!(id)[:id]] << comment
         comment
+      end
+    end
+
+    def attachments(id)
+      record(:attachments, id: id) { @files_by_issue[find_issue!(id)[:id]].map(&:dup) }
+    end
+
+    def attachment_settings
+      record(:attachment_settings) { { enabled: @attachments_enabled, upload_limit: 1.gigabyte } }
+    end
+
+    def download_attachment(id, io:, max_bytes:)
+      record(:download_attachment, id: id) do
+        bytes = @file_bytes.fetch(id.to_s)
+        raise Trackers::Error.new("The file is larger than allowed", code: "too_large") if bytes.bytesize > max_bytes
+
+        io.write(bytes)
+        { content_type: "application/octet-stream", size: bytes.bytesize }
+      end
+    end
+
+    def upload_attachment(issue_id, file)
+      record(:upload_attachment, issue_id: issue_id, name: file.filename) do
+        bytes = file.io.read
+        @uploads << { issue_id: issue_id, name: file.filename, bytes: bytes }
+        id = add_file(find_issue!(issue_id)[:id], name: file.filename, bytes: bytes, content_type: file.content_type)
+        @files_by_issue[find_issue!(issue_id)[:id]].find { |f| f[:id] == id }.dup
       end
     end
 

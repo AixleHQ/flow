@@ -22,11 +22,14 @@ module Trackers
       end
     end
 
-    def initialize(project_tracker:, task:, user:, provider: nil)
+    # `throttle`, when given, is asked before each download and skips the file
+    # when it answers false (Trackers::Jira::Budget).
+    def initialize(project_tracker:, task:, user:, provider: nil, throttle: nil)
       @tracker = project_tracker
       @task = task
       @user = user
       @provider = provider || project_tracker.tracker_provider
+      @throttle = throttle
     end
 
     # Copies the files `ids` names, or every file, within the limits. With a
@@ -67,6 +70,7 @@ module Trackers
       return skip(attachment, "over_limit") if budget[:files] >= MAX_FILES
       return skip(attachment, "too_large") if attachment.size.to_i > MAX_FILE_BYTES
       return skip(attachment, "over_limit") if budget[:bytes] + attachment.size.to_i > MAX_TOTAL_BYTES
+      return skip(attachment, "rate_budget") if @throttle && !@throttle.call
 
       Tempfile.create([ "tracker-file", File.extname(attachment.name.to_s).first(20) ], binmode: true) do |file|
         room = [ MAX_FILE_BYTES, MAX_TOTAL_BYTES - budget[:bytes] ].min

@@ -12,7 +12,8 @@ module Jira
     MAX_PAGES = 10
 
     def self.for(integration)
-      new(Client.new(cloud_id: integration.settings.to_h["cloud_id"], credential: Credential.new(integration)))
+      new(Client.new(cloud_id: integration.settings.to_h["cloud_id"], credential: Credential.new(integration),
+                     pool: Trackers::Jira::Budget.pool_for(integration)))
     end
 
     def initialize(client)
@@ -107,6 +108,34 @@ module Jira
       comment(@client.post("api", "2", "issue", id.to_s, "comment", body: { body: body }))
     end
 
+    # The issue's files, inline images included — Jira keeps every one as an
+    # attachment: [{ id:, name:, size:, content_type:, created_at: }].
+    def attachments(id)
+      raw = @client.get("api", "2", "issue", id.to_s, params: { fields: "attachment" })
+      Array(raw.dig("fields", "attachment")).map do |a|
+        { id: a["id"].to_s, name: a["filename"].to_s, size: a["size"], content_type: a["mimeType"].presence,
+          created_at: a["created"] }
+      end
+    end
+
+    # { enabled:, upload_limit: } — attachments can be switched off for a whole site.
+    def attachment_settings
+      raw = @client.get("api", "2", "attachment", "meta")
+      { enabled: raw["enabled"] != false, upload_limit: raw["uploadLimit"] }
+    end
+
+    # `redirect=false` asks the gateway for the bytes themselves; a 303 to the
+    # media host is followed either way.
+    def download_attachment(id, io:, max_bytes:)
+      @client.download("api", "2", "attachment", "content", id.to_s, io: io, max_bytes: max_bytes, params: { redirect: false })
+    end
+
+    def upload_attachment(issue_id, file)
+      created = Array.wrap(@client.upload("api", "2", "issue", issue_id.to_s, "attachments", file: file)).first.to_h
+      { id: created["id"].to_s, name: created["filename"].to_s, size: created["size"], content_type: created["mimeType"].presence,
+        created_at: created["created"] }
+    end
+
     def assignable_users(project_key:, query:)
       Array(@client.get("api", "2", "user", "assignable", "search", params: { project: project_key, query: query, maxResults: 20 }))
         .map { |u| user(u) }
@@ -177,8 +206,10 @@ module Jira
       { id: raw["accountId"], name: raw["displayName"], email: raw["emailAddress"].presence }.compact
     end
 
+    # `restricted`: limited to a role or group, so fewer people see it than see the issue.
     def comment(raw)
-      { id: raw["id"].to_s, author: raw.dig("author", "displayName"), body: raw["body"], created_at: raw["created"] }
+      { id: raw["id"].to_s, author: raw.dig("author", "displayName"), body: raw["body"], created_at: raw["created"],
+        restricted: raw["visibility"].present? }
     end
   end
 end

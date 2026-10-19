@@ -11,11 +11,14 @@ module Jira
     MAX_RETRIES = 2
     MAX_THROTTLE_WAIT = 10
 
-    def initialize(cloud_id:, credential:, retry_delay: 0.3, logger: Rails.logger)
+    # `pool` names the rate-limit pool the requests draw on, when known
+    # (Trackers::Jira::Budget).
+    def initialize(cloud_id:, credential:, retry_delay: 0.3, logger: Rails.logger, pool: nil)
       raise Error.new("This connection has no Jira site", code: "not_configured") if cloud_id.blank?
 
       @cloud_id = cloud_id
       @credential = credential
+      @pool = pool
       @retry_delay = retry_delay
       @logger = logger
     end
@@ -27,6 +30,22 @@ module Jira
     # Not `delete`, so it cannot be reached by a caller that meant Object#delete.
     def request_delete(*segments, body: nil, params: {}) = request(:delete, segments, params: params, body: body)
 
+    # A file's bytes into `io`. Through the gateway like everything else; the
+    # gateway may answer with a 303 to Atlassian's media host, which takes a
+    # signed URL and no token, so the redirect is followed without one.
+    def download(*segments, io:, max_bytes:, params: {})
+      files.download(url_for(segments, params), io: io, max_bytes: max_bytes, headers: @credential.authorization_headers,
+                                                reauthorize: method(:reauthorized_headers))
+    end
+
+    # Multipart POST of one Trackers::UploadFile in the field Jira reads, `file`.
+    def upload(*segments, file:)
+      parts = [ [ "file", file.io, { filename: file.filename, content_type: file.content_type.presence || "application/octet-stream" } ] ]
+      headers = @credential.authorization_headers.merge("Accept" => "application/json", "X-Atlassian-Token" => "no-check")
+      files.send_request(:post, url_for(segments, {}), headers: headers, parts: parts,
+                                                       reauthorize: -> { reauthorized_headers.merge(headers.except("Authorization")) }).json
+    end
+
     private
 
     def request(method, segments, params:, body: nil, attempt: 0)
@@ -36,6 +55,7 @@ module Jira
         req.params.update(params.compact.transform_keys(&:to_s))
       end
       log(method, path, response, started)
+      Trackers::Jira::Budget.observe(@pool, response.headers) if @pool
 
       case response.status
       when 200..299 then parse(response)
@@ -83,6 +103,22 @@ module Jira
 
       sleep(@retry_delay * (2**attempt))
       request(method, segments, params: params, body: body, attempt: attempt + 1)
+    end
+
+    def files
+      @files ||= Trackers::FileTransfer.new(name: "Jira", hosts: [ URI.parse(AppConfig::API_HOST).host ],
+                                            redirect_hosts: [ /\A(?:[a-z0-9-]+\.)?media\.atlassian\.com\z/ ],
+                                            open_timeout: AppConfig.open_timeout, logger: @logger)
+    end
+
+    def reauthorized_headers
+      @credential.invalidate!
+      @credential.authorization_headers
+    end
+
+    def url_for(segments, params)
+      query = params.compact.to_query
+      "#{AppConfig::API_HOST.chomp('/')}#{build_path(segments)}#{"?#{query}" if query.present?}"
     end
 
     def build_path(segments)
