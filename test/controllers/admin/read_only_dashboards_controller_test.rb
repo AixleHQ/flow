@@ -47,7 +47,6 @@ module Admin
       @binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, trigger_mode: :manual, cooldown_seconds: 0)
       @usage = UsageStatistic.create!(
         terminal_session: @terminal_session,
-        tokens: 0,
         cost_cents: 0,
         input_tokens: 0,
         output_tokens: 0,

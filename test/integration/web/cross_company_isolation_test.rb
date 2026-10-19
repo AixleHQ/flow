@@ -41,7 +41,7 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
     UsageStatistic.create!(
       terminal_session: session,
       cost_cents:, input_tokens: tokens, output_tokens: 0,
-      cache_write_tokens: 0, cache_read_tokens: 0, tokens:
+      cache_write_tokens: 0, cache_read_tokens: 0
     )
     session
   end

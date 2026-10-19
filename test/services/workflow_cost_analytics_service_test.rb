@@ -24,8 +24,7 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
       input_tokens: input_tokens,
       output_tokens: output_tokens,
       cache_write_tokens: 0,
-      cache_read_tokens: 0,
-      tokens: input_tokens + output_tokens
+      cache_read_tokens: 0
     )
     run
   end
@@ -125,8 +124,7 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
       input_tokens: 100,
       output_tokens: 80,
       cache_write_tokens: 0,
-      cache_read_tokens: 0,
-      tokens: 180
+      cache_read_tokens: 0
     )
 
     create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 150, input_tokens: 300, output_tokens: 200)
@@ -158,27 +156,5 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     result = call_service(scope: "project", period: "1y")
 
     assert { result.time_series.length == 2 }
-  end
-
-  # ─── total_tokens ────────────────────────────────────────────────────────────
-
-  test "total_tokens ignores the legacy aggregate tokens column" do
-    run = create(:workflow_run, workflow: @workflow, project: @project, user: @admin)
-    session = create(:terminal_session, user: @admin, project: @project)
-    step = create(:step, workflow: @workflow)
-    create(:step_run, workflow_run: run, step: step, terminal_session: session)
-    UsageStatistic.create!(
-      terminal_session: session,
-      cost_cents: 10,
-      input_tokens: 0,
-      output_tokens: 0,
-      cache_write_tokens: 0,
-      cache_read_tokens: 0,
-      tokens: 500
-    )
-
-    result = call_service(scope: "project")
-
-    assert { result.totals[:total_tokens] == 0 }
   end
 end
