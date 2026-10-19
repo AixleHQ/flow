@@ -89,6 +89,12 @@ they name a flow users would recognize.
 | **Company members** | Who belongs to the company |
 | **Company settings** | Company name, branding and workers; sign-in access, SSO connections, domain verification and directory sync; billing (admins) |
 
+### Platform admin
+
+| Area | What it covers |
+| --- | --- |
+| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with whether each company is billed) and the administration of companies, users and the rest |
+
 ### Help
 
 | Area | What it covers |

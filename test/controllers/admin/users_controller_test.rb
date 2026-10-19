@@ -73,7 +73,7 @@ module Admin
       end
 
       assert @user.reload.deleted?
-      assert_redirected_to admin_root_path
+      assert_redirected_to admin_users_path
     end
 
     test "should soft delete user who has board activities without FK violation" do
@@ -92,7 +92,7 @@ module Admin
 
       assert @user.reload.deleted?
       assert_equal @user.id, activity.reload.actor_id
-      assert_redirected_to admin_root_path
+      assert_redirected_to admin_users_path
     end
 
     test "admin user show page surfaces the deleted_at attribute" do

@@ -142,11 +142,36 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   end
 
   test "removing a company limit records that it is gone" do
+    @company.update!(managed_by_aixle: true)
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
 
     SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id).destroy
 
     assert_nil CompanyCapacityChange.where(company_id: @company.id).last.max_sessions
+  end
+
+  # Unlimited is never metered, so where we host it is free, and free is only for
+  # a company we carry. Every path that clears a limit — the admin form, the admin
+  # list of limits, the console — ends here.
+  test "where we host, a company that pays cannot be left unlimited" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id)
+
+    assert_not row.destroy
+
+    assert_equal 12, SessionConcurrencyLimit.for_company(@company.id)
+    assert_match(/only a company managed by Aixle/, row.errors.full_messages.to_sentence)
+  end
+
+  test "where we host, a company we carry may run unlimited" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    @company.update!(managed_by_aixle: true)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    assert SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id).destroy
+
+    assert_nil SessionConcurrencyLimit.for_company(@company.id)
   end
 
   test "a project limit is not a company capacity change" do

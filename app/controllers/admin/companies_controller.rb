@@ -2,6 +2,22 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
+    # Saved here rather than through Administrate's update, which would assign
+    # the form again over a trial started below.
+    def update
+      company = requested_resource
+      company.assign_attributes(resource_params)
+      new_trial = restarted_without_a_customer?(company)
+      start_new_trial(company) if new_trial
+
+      if company.save
+        notice = new_trial ? new_trial_notice(company) : translate_with_resource("update.success")
+        redirect_to after_resource_updated_path(company), notice: notice, status: :see_other
+      else
+        render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      end
+    end
+
     def create
       # Extract initial admin credentials before building company
       initial_admin_email = params.dig(:company, :initial_admin_email)
@@ -12,11 +28,7 @@ module Admin
       company = Company.new(company_params)
       apply_billing_terms(company)
 
-      if unbounded_paying_company?(company)
-        company.validate
-        company.errors.add(:session_concurrency_limit, Company::UNBOUNDED_PAYING_COMPANY)
-        render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
-      elsif company.save
+      if company.save
         # Create initial admin user if credentials provided
         if initial_admin_email.present? && initial_admin_password.present?
           admin_user = User.new(
@@ -65,10 +77,24 @@ module Admin
       end
     end
 
-    # A rule of this form, not of Company: the seeds and the factories make
-    # companies without a limit, and an operator may still clear one later.
-    def unbounded_paying_company?(company)
-      Deployment.saas? && !company.managed_by_aixle? && company.session_concurrency_limit.blank?
+    # Where we host, a company is paid for through Stripe or carried by us. Set
+    # running by hand with no Stripe customer — typically a blocked one an
+    # operator wants to let back in — it would run with nothing to bill through:
+    # free, without being ours. It gets a new free allowance instead, and needs a
+    # card once that is spent. A rule of this form rather than of Company, because
+    # the Stripe webhook moves companies to `active` on its own terms.
+    def restarted_without_a_customer?(company)
+      Deployment.saas? && company.billing_state_changed? && !company.billing_blocked? &&
+        !company.managed_by_aixle? && company.stripe_customer_id.blank?
+    end
+
+    def start_new_trial(company)
+      company.billing_state = "trialing"
+      company.trial_started_at = Time.current
+    end
+
+    def new_trial_notice(company)
+      "#{company.name} is on a new trial: #{Billing::Trial.queue_hours} worker-hours, then it needs a card."
     end
 
     # Override this method to specify custom lookup behavior.

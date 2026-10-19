@@ -40,6 +40,16 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_in_delta 50.0, Billing::Trial.remaining_hours(@company)
   end
 
+  # An operator restarting a company by hand gives it a new allowance; what it
+  # spent before that is not held against it.
+  test "a new trial counts only what was used since it began" do
+    used!(80, at: Time.utc(2026, 9, 29, 10))
+    used!(3, at: Time.utc(2026, 10, 5, 10))
+    @company.update!(trial_started_at: Time.utc(2026, 10, 1))
+
+    assert_equal 3 * 3600, Billing::Trial.used_seconds(@company)
+  end
+
   test "spending the allowance exactly is spending it" do
     used!(Billing::Trial.queue_hours)
 

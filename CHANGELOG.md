@@ -13,6 +13,26 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: the admin opens on a dashboard. Tiles show active companies by
+  billing status, members and projects, and the period's worker hours, busy
+  hours (and how much of them is not on a paid plan) and successful sessions.
+  Below them, one row per company for a day, week, month or custom range: worker
+  hours, busy hours, min/max and peak workers, utilization, queue wait, and
+  successful and failed sessions, each compared with the period before, with
+  whether the company pays, is on a trial, is blocked or is managed by Aixle.
+  History back to 2026-09-25 fills in by itself after the upgrade.
+
+### Changed
+- **Admin**: the admin uses the Aixle Flow theme.
+- **Admin**: where Aixle hosts, a company runs free only when it is ticked
+  Managed by Aixle. A worker limit can no longer be cleared unless the company is
+  managed. Setting a company running by hand when it has no Stripe customer, such
+  as letting a blocked one back in, now starts a new trial instead of running it
+  free; it needs a card once that trial is spent. On upgrade, active companies
+  that already ran free (no limit, or no Stripe customer) are ticked Managed by
+  Aixle; untick one to put it on the trial.
+
 ## [1.3.0] - 2026-10-17
 
 ### Added

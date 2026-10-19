@@ -29,8 +29,8 @@ class CompanyDashboard < Administrate::BaseDashboard
     ),
     settings: Field::JSONB,
     # An operator's override. A company that pays moves between these on its
-    # own, through the allowance and Stripe's webhooks; setting `active` here
-    # without a subscription behind it runs the company for free.
+    # own, through the allowance and Stripe's webhooks; setting it running here
+    # without a Stripe customer starts a new trial (Admin::CompaniesController).
     billing_state: Field::Select.with_options(
       include_blank: false,
       collection: Company::BILLING_STATES
@@ -39,6 +39,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     # column that is not there.
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
     managed_by_aixle: Field::Boolean,
+    trial_started_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     initial_admin_email: Field::String.with_options(searchable: false),
     initial_admin_password: Field::Password,
     users: Field::HasMany,
@@ -72,6 +73,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     secondary_color
     state
     billing_state
+    trial_started_at
     managed_by_aixle
     settings
     session_concurrency_limit

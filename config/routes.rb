@@ -307,7 +307,7 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
-    root to: "users#index"
+    root to: "dashboards#show"
 
     resources :users do
       member do
@@ -360,6 +360,7 @@ Rails.application.routes.draw do
     # fresh deployment does not sit on an empty catalog until the first scheduled run.
     resources :catalog_syncs, only: %i[index create]
     resource :session_admission, only: %i[show]
+    resource :dashboard, only: %i[show]
   end
 
   scope module: :web, defaults: { format: :html } do

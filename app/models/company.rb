@@ -254,11 +254,15 @@ class Company < ApplicationRecord
     return unless @session_concurrency_limit_assigned
 
     if @session_concurrency_limit.blank?
-      return unless Deployment.requires_bounded_companies?
-
-      return errors.add(:session_concurrency_limit,
-                        "is required: this installation meters its capacity to AWS Marketplace, " \
-                        "where unlimited cannot be expressed")
+      if Deployment.requires_bounded_companies?
+        errors.add(:session_concurrency_limit,
+                   "is required: this installation meters its capacity to AWS Marketplace, " \
+                   "where unlimited cannot be expressed")
+      # Where we host, unlimited is free, and free is only for a company we carry.
+      elsif Deployment.saas? && !managed_by_aixle? && !leaving_management?
+        errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY)
+      end
+      return
     end
 
     return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)

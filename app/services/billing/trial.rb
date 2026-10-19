@@ -36,8 +36,13 @@ module Billing
       Deployment.saas? && company.billing_trialing?
     end
 
+    # Counted from the start of the trial the company is on: an operator can
+    # start a new one (Admin::CompaniesController#update), and only what is spent
+    # after that counts against it.
     def used_seconds(company)
-      CompanyCapacityUsage.total_seconds_for(company.id)
+      usage = CompanyCapacityUsage.where(company_id: company.id)
+      usage = usage.since(company.trial_started_at) if company.trial_started_at
+      usage.sum(:quantity_seconds)
     end
 
     def remaining_seconds(company)
