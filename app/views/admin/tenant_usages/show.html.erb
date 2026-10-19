@@ -28,16 +28,3 @@ bundle get onto this one page.
 <section class="main-content__body">
   <%= tag.div(id: "tenant-usage-report", data: { report: @report.to_json }) %>
 </section>
-
-<section class="main-content__body">
-  <h2>Recompute</h2>
-  <p>
-    Every closed hour is measured ten minutes past the next one, and the last three are measured again on
-    each run. To fill in history after a deploy, or to rebuild it after a fix, measure every hour since a date.
-  </p>
-  <%= form_with url: recompute_admin_tenant_usage_path, method: :post do |form| %>
-    <%= form.label :since, "Since (UTC)" %>
-    <%= form.date_field :since, required: true %>
-    <%= form.submit "Recompute" %>
-  <% end %>
-</section>

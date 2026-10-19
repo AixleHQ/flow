@@ -59,7 +59,7 @@ Decisions taken on 2026-10-19:
 
 A row is written for every `active` company every hour, used or not: an idle hour of a paying company is still an hour it was billed for. A suspended or archived company gets a row only for an hour in which something of it still ran. Volume is companies × 8,760 rows a year.
 
-**Separate from the billing ledger on purpose.** `company_capacity_usages` stays the ledger the free allowance is counted from and the Billing tab reads. Billing runs as one attempt per hour because AWS Marketplace double-bills a retry; a reporting bug must never be able to fail that run, and a recompute must never change a billed number. So the report copies `offered_seconds` from the ledger instead of measuring it again, which also means a backfill never has to rebuild billing ceilings that are not stored.
+**Separate from the billing ledger on purpose.** `company_capacity_usages` stays the ledger the free allowance is counted from and the Billing tab reads. Billing runs as one attempt per hour because AWS Marketplace double-bills a retry; a reporting bug must never be able to fail that run, and measuring an hour again must never change a billed number. So the report copies `offered_seconds` from the ledger instead of measuring it again, which also means filling in history never has to rebuild billing ceilings that are not stored.
 
 Two indexes were added for the rollup's reads: `session_admissions.released_at` and `terminal_sessions.finished_at`.
 
@@ -67,9 +67,11 @@ Two indexes were added for the rollup's reads: `session_admissions.released_at` 
 
 `Usage::HourlyRollup.call(from:, to:)` measures closed hours and upserts their rows. It is pure over the database, so measuring an hour again rewrites the same row. It works a day at a time: one query each for the admissions overlapping the day, the sessions that ended in it, the ledger rows and the limit changes, then every hour of the day in memory.
 
-- `usage_rollup_workflow` runs at `10 * * * *`, five minutes after metering so the ledger row exists, with overlap skipped. Unlike metering it retries. Each run measures the **last three closed hours**, which picks up a ledger row written late and any transition committed after its hour closed.
-- **Recompute** on the report page starts the same workflow with a start date, under the stable id `usage_rollup_workflow-recompute`, so a second click while one runs is refused by Temporal. It is how history is filled in after a deploy; the production web pod cannot run `rails runner`.
-- **What history can be recomputed.** Busy hours, peak and wait exist from 2026-09-25 (#325), when every session started having an admission row. Outcomes exist for every session. Worker hours exist from the hour metering first ran in each environment (production: 2026-09-30). The billing class of a recomputed hour is the company's class now, since no history of it is kept; it is accurate from this release on.
+- `usage_rollup_workflow` runs at `10 * * * *`, five minutes after metering so the ledger row exists, with overlap skipped. Unlike metering it retries.
+- **Each run measures the hours not yet measured, and the last three again.** Remeasuring the trailing hours picks up a ledger row written late and any transition committed after its hour closed. Measuring from the last measured hour means a run after the worker was down fills in the hours it missed.
+- **History needs no backfill step.** On the first run the table is empty, so the run measures every hour since the first session admission or the first metered hour, whichever is earlier. No migration and no button are involved. A migration was rejected because it would carry app code that `db/migrate` has to keep replaying from zero (`SchemaParityTest`), and because a production deploy should not wait on a data job.
+- **Rebuilding after a fix to the rollup:** start `usage_rollup_workflow` with `{"from_hour": "<ISO hour>"}` (and optionally `to_hour`) from the Temporal CLI or UI. It measures that range again.
+- **What history exists.** Busy hours, peak and wait exist from 2026-09-25 (#325), when every session started having an admission row. Worker hours exist from the hour metering first ran in each environment (production: 2026-09-30). Outcomes are counted from the same start, since earlier hours are not measured. The billing class of a history hour is the company's class at the time of the first run, since no history of it is kept; it is accurate from this release on.
 
 ## 6. Billing class
 
@@ -108,7 +110,7 @@ A period shows the class of its last measured hour.
 
 ## 8. Verification
 
-Model, service and activity tests cover occupancy and peak, waits, agent logins, outcomes, limits, every billing class, idempotency and the closed-hours rule. The workflow is run through the time-skipping test server. A request test covers the admin page and the recompute trigger. Vitest covers the period and comparison arithmetic and the table's behavior.
+Model, service and activity tests cover occupancy and peak, waits, agent logins, outcomes, limits, every billing class, idempotency, the closed-hours rule and catching up on unmeasured hours. The workflow is run through the time-skipping test server. A request test covers the admin page. Vitest covers the period and comparison arithmetic and the table's behavior.
 
 On a local stack seeded with nine companies, one per class the hosted product can have, and seven weeks of queued sessions run through the real meter and the real rollup, the page was checked in a browser by day, week, month and sort.
 
@@ -118,4 +120,3 @@ On a local stack seeded with nine companies, one per class the hosted product ca
 2. **Who changed a worker limit.** `company_capacity_changes` records when and the new value, but no actor and no source. Adding `actor_id`, `impersonator_id` and `source`, filled from `Current`, would make the history answerable.
 3. **CSV export** — not needed while the page is live in the admin.
 4. **Agent mix.** Sessions and busy hours by `agent_type` and model, read from `terminal_sessions` for the period.
-5. **Starting a recompute with Temporal unreachable** raises a 500 instead of an alert: `TemporalService.start_workflow` rescues `Temporalio::Error`, and a connection failure raises `Temporalio::Internal::Bridge::Error`, which is not one. Catalog syncs behave the same way.

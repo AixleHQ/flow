@@ -161,8 +161,7 @@ export default function TenantUsageReport({ data, now = new Date() }: Props) {
   if (!data.days.length) {
     return (
       <p className={classes.empty}>
-        No usage has been measured yet. Each hour is measured ten minutes after the next one starts; recompute below to
-        fill in earlier history.
+        No usage has been measured yet. Each hour is measured ten minutes after it closes.
       </p>
     );
   }

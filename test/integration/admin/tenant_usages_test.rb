@@ -36,27 +36,4 @@ class Admin::TenantUsagesTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to admin_login_path
   end
-
-  test "recompute starts the rollup workflow over every hour since the date" do
-    sign_in_as(@admin)
-    TemporalService.expects(:start_workflow)
-                   .with(TemporalWorkflowRegistry.workflows["usage_rollup_workflow"],
-                         { from_hour: "2026-09-25T00:00:00Z" }, id: "usage_rollup_workflow-recompute")
-                   .returns(ok: true, workflow_id: "usage_rollup_workflow-recompute")
-
-    post recompute_admin_tenant_usage_path, params: { since: "2026-09-25" }
-
-    assert_redirected_to admin_tenant_usage_path
-    assert_match(/Recomputing usage since 2026-09-25/, flash[:notice])
-  end
-
-  test "recompute without a date starts nothing" do
-    sign_in_as(@admin)
-    TemporalService.expects(:start_workflow).never
-
-    post recompute_admin_tenant_usage_path, params: { since: "" }
-
-    assert_redirected_to admin_tenant_usage_path
-    assert_equal "Pick the date to recompute from", flash[:alert]
-  end
 end

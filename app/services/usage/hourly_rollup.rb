@@ -4,7 +4,7 @@ module Usage
   # Measures closed UTC hours for every company into company_usage_hours
   # (docs/design/tenant-usage-report.md §5). Pure over the database: measuring an
   # hour again rewrites the same row, so the schedule recomputes the last few
-  # hours on every run and a backfill is the same call over a longer range.
+  # hours on every run and a rebuild is the same call over a longer range.
   #
   # A worker is an admitted session in a PROJECT pool, which is exactly what a
   # company's limit governs. Agent logins queue per user, outside every company's
@@ -26,13 +26,13 @@ module Usage
     def initialize(from: nil, to: nil, now: Time.current)
       closed = now.utc.beginning_of_hour
       @to = [ to&.utc&.beginning_of_hour || closed, closed ].min
-      @from = from&.utc&.beginning_of_hour || (@to - TRAILING_HOURS.hours)
+      @from = from&.utc&.beginning_of_hour || unmeasured_since
       @mode = Deployment.mode
     end
 
     attr_reader :from, :to
 
-    # A day at a time, so a backfill over months holds one day of admissions in
+    # A day at a time, so catching up on weeks holds one day of admissions in
     # memory rather than all of them.
     def call
       written = 0
@@ -46,6 +46,23 @@ module Usage
     end
 
     private
+
+    # The trailing hours, and every hour before them that was never measured. The
+    # first run after this ships fills in all the history there is; a run after
+    # the worker was down fills in the hours it missed.
+    def unmeasured_since
+      trailing = to - TRAILING_HOURS.hours
+      last = CompanyUsageHour.maximum(:period_start)
+      first = last ? last + 1.hour : first_measurable_hour
+      [ first, trailing ].compact.min
+    end
+
+    # Busy hours and waits exist from the first session admission, worker hours
+    # from the first hour metered; an hour before both has nothing to measure.
+    def first_measurable_hour
+      [ SessionAdmission.minimum(:created_at), CompanyCapacityUsage.minimum(:period_start) ]
+        .compact.min&.utc&.beginning_of_hour
+    end
 
     def measure(slice_start, slice_end)
       admissions = admissions_between(slice_start, slice_end).group_by(&:company_id)

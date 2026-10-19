@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 module Workflows
-  # Hourly usage rollup (see app/temporal/schedules.yml), and the same rollup
-  # over a longer range when an admin recomputes history from the tenant report.
+  # Hourly usage rollup (see app/temporal/schedules.yml). Started by hand with a
+  # `from_hour` (and optionally a `to_hour`), it measures that range again, which
+  # is how history is rebuilt after a fix to the rollup.
   #
   # Retried, unlike capacity metering: it rewrites only its own rows from the
   # database, so a second attempt writes the same answer and bills nobody.

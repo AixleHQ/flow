@@ -7,7 +7,7 @@
 #
 # Not the billing ledger. company_capacity_usages is what the meter sends a
 # provider; offered_seconds here is a copy of it, so the report shows what was
-# billed and a recompute can never change a billed number.
+# billed and measuring an hour again can never change a billed number.
 class CompanyUsageHour < ApplicationRecord
   # Why an hour is, or is not, billed. Checked in this order.
   #

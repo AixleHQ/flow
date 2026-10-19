@@ -2,8 +2,8 @@
 
 module Activities
   module Usage
-    # Measures closed hours into company_usage_hours: the last few when the
-    # schedule runs it, any range an admin asks to recompute.
+    # Measures closed hours into company_usage_hours: the ones not yet measured
+    # when the schedule runs it, or the range it is given.
     class RollupHoursActivity < ::Activities::Base
       def run(input = nil)
         ::Usage::HourlyRollup.call(from: parse(input&.from_hour), to: parse(input&.to_hour))

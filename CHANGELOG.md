@@ -19,8 +19,8 @@ governance, community health — carry none.
   failed sessions by day, week, month or a custom range, each compared with the
   period before. Every company is measured, those without a worker limit and those
   Aixle carries included, and each says whether its usage is billed and, if not,
-  why. Usage is measured hourly from this release on; **Recompute** on the page
-  fills in history from session records.
+  why. The first hourly run after the upgrade measures every hour since sessions
+  began going through the admission queue, so history fills in by itself.
 
 ## [1.3.0] - 2026-10-17
 

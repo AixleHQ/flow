@@ -192,6 +192,26 @@ class Usage::HourlyRollupTest < ActiveSupport::TestCase
     assert_equal @hour + 1.hour, CompanyUsageHour.where(company: @company).maximum(:period_start)
   end
 
+  test "the first run measures every hour since the first admission, so history needs no backfill" do
+    admission(created: @hour - 2.days + 30.minutes, admitted: @hour - 2.days + 30.minutes,
+              released: @hour - 2.days + 45.minutes)
+
+    result = Usage::HourlyRollup.call(now: @hour + 10.minutes)
+
+    assert_equal (@hour - 2.days).iso8601, result[:from]
+    assert_equal 48, CompanyUsageHour.where(company: @company).count
+    assert_equal 15.minutes, row(@company, @hour - 2.days).occupied_seconds
+  end
+
+  test "hours missed while the worker was down are measured on the next run" do
+    roll_up(from: @hour - 10.hours, to: @hour - 6.hours, now: @hour)
+
+    result = Usage::HourlyRollup.call(now: @hour + 10.minutes)
+
+    assert_equal (@hour - 6.hours).iso8601, result[:from]
+    assert_equal 10, CompanyUsageHour.where(company: @company).count
+  end
+
   test "a range longer than a day is measured whole" do
     result = roll_up(from: @hour - 30.hours, to: @hour + 1.hour)
 
