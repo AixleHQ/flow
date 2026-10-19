@@ -21,12 +21,18 @@ module FakeGithub
       { id: OPS, number: 2, title: "Ops", url: "https://github.com/orgs/acme-corp/projects/2", closed: false }
     ].freeze
 
-    attr_reader :calls, :contents, :comments_by_content
+    attr_reader :calls, :contents, :comments_by_content, :stored, :signed
+    # Set to make the repository refuse files, as a ruleset or a missing permission does.
+    attr_accessor :refuse_storage
 
     def initialize
       @calls = []
       @contents = {}
       @comments_by_content = Hash.new { |h, k| h[k] = [] }
+      @stored = Hash.new { |h, k| h[k] = [] }
+      @blobs = {}
+      @signed = {}
+      @html = Hash.new { |h, k| h[k] = +"" }
       @next = 100
       @failures = {}
       add_issue(id: "I_kwDOissue1", number: 1, title: "It breaks", status: "Ready for AI")
@@ -41,6 +47,20 @@ module FakeGithub
         repository: repository, updated_at: "2026-10-01T10:00:00Z", assignees: assignees, labels: labels,
         placements: project ? [ { item_id: "PVTI_#{id}", project_id: project, status: status, option_id: option&.dig(:id) } ] : []
       }
+    end
+
+    # A person's image as GitHub renders it for an app: a signed address on
+    # private-user-images that keeps the asset's uuid.
+    def add_person_image(node_id, url:, bytes:)
+      uuid = url[/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/]
+      signed = "https://private-user-images.githubusercontent.com/1/9-#{uuid}.png?jwt=signed"
+      @signed[signed] = bytes.b
+      @html[node_id] << %(<p><a href="#{signed}"><img src="#{signed}" alt="image"></a></p>)
+      signed
+    end
+
+    def set_body(node_id, body)
+      @contents.fetch(node_id)[:body] = body
     end
 
     # The next call to `method` raises `error`.
@@ -95,6 +115,45 @@ module FakeGithub
         comment = { id: "IC_#{@next += 1}", body: body, created_at: "2026-10-01T10:05:00Z", author: "aixle-flow[bot]" }
         @comments_by_content[node_id] << comment
         comment.dup
+      end
+    end
+
+    def rendered(node_id)
+      record(:rendered, id: node_id) { [ { id: node_id, html: @html[node_id].dup } ] }
+    end
+
+    def stored_files(repository, number)
+      record(:stored_files, repository: repository, number: number) { @stored["#{repository}##{number}"].map(&:dup) }
+    end
+
+    def store_file(repository, number, file)
+      record(:store_file, repository: repository, number: number, name: file.filename) do
+        raise Trackers::Error.new("Repository rule violations found", code: "validation_failed") if refuse_storage
+
+        ref = "refs/aixle/attachments/#{number}/#{file.sha256[0, 16]}"
+        existing = @stored["#{repository}##{number}"].find { |f| f[:ref] == ref }
+        next existing.dup if existing
+
+        blob = SecureRandom.hex(20)
+        @blobs[blob] = file.io.read
+        entry = { ref: ref, commit: SecureRandom.hex(20), name: file.filename, blob: blob, size: file.size }
+        @stored["#{repository}##{number}"] << entry
+        entry.dup
+      end
+    end
+
+    def download_blob(repository, blob_sha, io:, max_bytes:)
+      record(:download_blob, repository: repository, blob: blob_sha) do
+        io.write(@blobs.fetch(blob_sha))
+        { content_type: "application/octet-stream", size: @blobs[blob_sha].bytesize }
+      end
+    end
+
+    def download_signed(url, io:, max_bytes:)
+      record(:download_signed, url: url) do
+        bytes = @signed[url] || raise(Trackers::Error.new("GitHub has no such file", code: "not_found"))
+        io.write(bytes)
+        { content_type: "image/png", size: bytes.bytesize }
       end
     end
 

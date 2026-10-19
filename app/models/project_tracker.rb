@@ -8,6 +8,9 @@ class ProjectTracker < ApplicationRecord
   extend Enumerize
 
   HANDLE_FORMAT = /\A[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?\z/
+  # Where files sent to a GitHub issue are kept (docs/design/tracker-attachments.md §11):
+  # the issue's own repository, or the Aixle task with a link to it.
+  FILE_STORAGES = %w[repository aixle_link].freeze
 
   enumerize :access, in: %i[read_write read_only], default: :read_write, predicates: true
   enumerize :status, in: %i[active error detached], default: :active, predicates: true, scope: true
@@ -44,6 +47,10 @@ class ProjectTracker < ApplicationRecord
 
   def tracker_provider
     Trackers::Provider.for(integration)
+  end
+
+  def file_storage
+    FILE_STORAGES.include?(settings.to_h["file_storage"]) ? settings["file_storage"] : "repository"
   end
 
   def usable?

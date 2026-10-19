@@ -131,4 +131,64 @@ class Github::ProjectsApiTest < ActiveSupport::TestCase
     assert_equal "rate_limited", assert_raises(Trackers::Error) { @api.set_labels("acme-corp/app", 1, [ "ai" ]) }.code
     assert_nil @api.remove_label("acme-corp/app", 1, "needs review")
   end
+  test "a file is stored as a parentless commit under the issue's own ref" do
+    sha = Digest::SHA256.hexdigest("png")
+    blob = stub_request(:post, "https://api.github.com/repos/acme-corp/app/git/blobs")
+             .with(body: { content: Base64.strict_encode64("png"), encoding: "base64" }.to_json)
+             .to_return(status: 201, body: { sha: "b1" }.to_json, headers: { "Content-Type" => "application/json" })
+    stub_request(:post, "https://api.github.com/repos/acme-corp/app/git/trees")
+      .with(body: { tree: [ { path: "after.png", mode: "100644", type: "blob", sha: "b1" } ] }.to_json)
+      .to_return(status: 201, body: { sha: "t1" }.to_json, headers: { "Content-Type" => "application/json" })
+    stub_request(:post, "https://api.github.com/repos/acme-corp/app/git/commits")
+      .with { |r| JSON.parse(r.body).values_at("tree", "parents") == [ "t1", [] ] }
+      .to_return(status: 201, body: { sha: "c1" }.to_json, headers: { "Content-Type" => "application/json" })
+    ref = stub_request(:post, "https://api.github.com/repos/acme-corp/app/git/refs")
+            .with(body: { ref: "refs/aixle/attachments/1/#{sha[0, 16]}", sha: "c1" }.to_json)
+            .to_return(status: 201, body: { ref: "refs/aixle/attachments/1/#{sha[0, 16]}" }.to_json, headers: { "Content-Type" => "application/json" })
+    file = Trackers::UploadFile.new(io: StringIO.new("png"), filename: "after.png", content_type: "image/png", size: 3, sha256: sha)
+
+    stored = @api.store_file("acme-corp/app", 1, file)
+
+    assert_requested blob
+    assert_requested ref
+    assert_equal({ ref: "refs/aixle/attachments/1/#{sha[0, 16]}", commit: "c1", name: "after.png", blob: "b1", size: 3 }, stored)
+  end
+
+  test "stored files are read from the issue's refs in one query" do
+    stub_graphql(data: { repository: { refs: { nodes: [
+      { name: "refs/aixle/attachments/1/abc", target: { oid: "c1", tree: { entries: [ { name: "after.png", oid: "b1", object: { byteSize: 3 } } ] } } }
+    ] } } }) { |body| body.dig("variables", "prefix") == "refs/aixle/attachments/1/" }
+
+    assert_equal [ { ref: "refs/aixle/attachments/1/abc", commit: "c1", name: "after.png", blob: "b1", size: 3 } ],
+                 @api.stored_files("acme-corp/app", 1)
+  end
+
+  test "a stored file is read back raw with the installation token" do
+    resolve_hosts_publicly!
+    stub_request(:get, "https://api.github.com/repos/acme-corp/app/git/blobs/b1")
+      .with(headers: { "Accept" => "application/vnd.github.raw+json", "Authorization" => "Bearer #{FakeGithub::TokenService::DEFAULT_TOKEN}" })
+      .to_return(status: 200, body: "png")
+    io = StringIO.new
+
+    @api.download_blob("acme-corp/app", "b1", io: io, max_bytes: 1.megabyte)
+
+    assert_equal "png", io.string
+  end
+
+  test "a person's image is fetched by its signed address without the token" do
+    resolve_hosts_publicly!
+    signed = "https://private-user-images.githubusercontent.com/1/9-uuid.png?jwt=signed"
+    stub_request(:get, signed).with { |r| r.headers["Authorization"].nil? }.to_return(status: 200, body: "png")
+    io = StringIO.new
+
+    @api.download_signed(signed, io: io, max_bytes: 1.megabyte)
+
+    assert_equal "png", io.string
+  end
+
+  test "rendered HTML comes with the body first, then the comments" do
+    stub_graphql(data: { node: { id: "I_1", bodyHTML: "<p>a</p>", comments: { nodes: [ { id: "IC_1", bodyHTML: "<p>b</p>" } ] } } })
+
+    assert_equal [ { id: "I_1", html: "<p>a</p>" }, { id: "IC_1", html: "<p>b</p>" } ], @api.rendered("I_1")
+  end
 end

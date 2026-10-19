@@ -12,7 +12,8 @@ module Trackers
     MAX_FILE_BYTES = 50.megabytes
     DEFAULT_COMMENT = "Files from Aixle:"
 
-    # `status` is attached, already_on_issue or refused; `reason` says why a file was refused.
+    # `status` is attached, already_on_issue, linked (kept on the Aixle task and
+    # linked from the issue, §11.3) or refused; `reason` says why.
     Outcome = Data.define(:name, :status, :reason, :attachment) do
       def as_json(*)
         { "name" => name, "status" => status, "reason" => reason, "attachment" => attachment&.as_json }.compact
@@ -21,10 +22,14 @@ module Trackers
 
     def self.max_file_bytes = MAX_FILE_BYTES
 
-    def initialize(project_tracker:, provider: nil, operation: nil)
+    # `task` is where a file the tracker would not store is kept instead, when
+    # the run has one; `user` is who it is kept as.
+    def initialize(project_tracker:, provider: nil, operation: nil, task: nil, user: nil)
       @tracker = project_tracker
       @provider = provider || project_tracker.tracker_provider
       @operation = operation
+      @task = task
+      @user = user
     end
 
     # `files` are Trackers::UploadFile. Returns a Trackers::AttachResult.
@@ -52,6 +57,7 @@ module Trackers
 
       same = force ? nil : already_there(issue, file, current)
       return Outcome.new(name: file.filename, status: "already_on_issue", reason: nil, attachment: same) if same
+      return link_instead(issue, file, "file_storage") if @tracker.file_storage == "aixle_link"
 
       attachment = @provider.upload_attachment(scope_id, issue.id, file)
       record!(issue, file, attachment)
@@ -60,8 +66,29 @@ module Trackers
       raise
     rescue Error => e
       raise if e.code == "not_authorized"
+      return link_instead(issue, file, e.message) if e.code == "not_stored"
 
       Outcome.new(name: file.filename, status: "refused", reason: e.code, attachment: nil)
+    end
+
+    # The file stays on the run's task, which the issue links to; only people
+    # with access to the Aixle project can open it.
+    def link_instead(issue, file, why)
+      return Outcome.new(name: file.filename, status: "refused", reason: "not_stored", attachment: nil) unless @task
+
+      file.io.rewind
+      name = file.filename
+      file.io.define_singleton_method(:original_filename) { name }
+      asset = @task.task_assets.create!(name: name, author: @user, author_type: :agent, source: :agent,
+                                        content_sha256: file.sha256, file_data: TaskAssetUploader.upload(file.io, :store).to_json)
+      link = Attachment.new(id: "aixle:#{asset.id}", issue_id: issue.id, name: name, size: file.size,
+                            content_type: file.content_type, origin: :linked, url: task_url)
+      Outcome.new(name: name, status: "linked", reason: why, attachment: link)
+    end
+
+    def task_url
+      path = Rails.application.routes.url_helpers.company_project_board_path(@tracker.project, n: @task.number)
+      "#{Settings.protocol}://#{Settings.domain}#{path}"
     end
 
     def limit

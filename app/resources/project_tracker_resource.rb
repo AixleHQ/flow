@@ -14,6 +14,11 @@ class ProjectTrackerResource < ApplicationResource
     tracker.usable?
   end
 
+  typelize %w[repository aixle_link]
+  attribute :file_storage do |tracker|
+    tracker.file_storage
+  end
+
   typelize :boolean
   attribute :mentions_recognized do |tracker|
     tracker.recognizes_mentions?
