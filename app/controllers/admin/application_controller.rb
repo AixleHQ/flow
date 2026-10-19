@@ -39,6 +39,37 @@ module Admin
       params[:per_page] || 20
     end
 
+    # administrate-field-jsonb edits a jsonb column as JSON text, and a String
+    # assigned to a jsonb column is stored as a JSON string rather than parsed: an
+    # object became a string of itself on the first save, and every later save
+    # quoted it again. The text is parsed here; a blank or `null` editor means the
+    # column's default. Text that is not JSON leaves the column as it was.
+    def resource_params
+      permitted = super
+      jsonb_attributes.each do |attribute|
+        text = permitted[attribute]
+        next unless text.is_a?(String)
+
+        permitted[attribute] = parse_jsonb(attribute, text)
+      rescue JSON::ParserError
+        permitted.delete(attribute)
+        flash[:alert] = "#{attribute.to_s.humanize} was not valid JSON and was left as it was."
+      end
+      permitted
+    end
+
+    def jsonb_attributes
+      dashboard.class::ATTRIBUTE_TYPES.filter_map do |attribute, type|
+        field = type.respond_to?(:deferred_class) ? type.deferred_class : type
+        attribute if field <= Administrate::Field::JSONB
+      end
+    end
+
+    def parse_jsonb(attribute, text)
+      value = JSON.parse(text) if text.strip.present?
+      value.nil? ? resource_class.column_defaults[attribute.to_s] : value
+    end
+
     def apply_collection_includes(relation)
       includes = dashboard.collection_includes
       if action_name == "index"
