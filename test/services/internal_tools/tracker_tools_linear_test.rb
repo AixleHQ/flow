@@ -49,4 +49,31 @@ class InternalTools::TrackerToolsLinearTest < ActiveSupport::TestCase
     assert_equal [ true, run.id ], event.data["origin"].values_at("attributed", "workflow_run_id")
     assert_equal "Ada Byron", event.data.dig("change", "to")
   end
+  test "files are the uploads the issue's text links to, and downloads use them" do
+    stub_container_runtime
+    issue = FakeLinear::Api::ISSUE_1
+    shot = @linear.store_file("png", name: "shot")
+    log = @linear.store_file("trace", name: "trace")
+    @linear.set_description(issue, "Steps ![screen](#{shot}) and https://example.com/not-a-file")
+    @linear.add_comment_by(issue, body: "full log: [trace.log](#{log})")
+
+    files = run_tool(InternalTools::TrackerListAttachments, issue: "ENG-1")["attachments"]
+    downloaded = run_tool(InternalTools::TrackerDownloadAttachments, issue: "ENG-1")["files"]
+
+    assert_equal [ [ "screen.png", "description" ], [ "trace.log", "comment" ] ],
+                 files.map { |f| [ f["name"], f.dig("location", "kind") ] }
+    assert_equal [ TrackerAttachment.embedded_id(shot), TrackerAttachment.embedded_id(log) ], files.pluck("id")
+    assert_equal %w[copied copied], downloaded.pluck("status")
+    assert_equal [ shot, log ], @linear.calls_to(:download).pluck(:url)
+  end
+
+  test "an uploaded file is shown in a comment, which Linear needs to keep it" do
+    result = run_tool(InternalTools::TrackerAttachFiles, issue: "ENG-1", files: [ { content: "abcd", filename: "a.txt" } ])
+
+    upload = @linear.uploads.sole
+    body = @linear.comments_by_issue[FakeLinear::Api::ISSUE_1].last[:body]
+    assert_equal [ "a.txt", "abcd" ], upload.values_at(:name, :bytes)
+    assert_match %r{\AFiles from Aixle:\n\n\[a.txt\]\(https://uploads\.linear\.app/}, body
+    assert_equal [ "attached" ], result["files"].pluck("status")
+  end
 end

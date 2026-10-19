@@ -3,6 +3,8 @@
 module Linear
   module AppConfig
     API_HOST = "https://api.linear.app"
+    # Where Linear keeps uploaded files; private, read with the API credential.
+    UPLOADS_HOST = "uploads.linear.app"
     AUTHORIZE_URL = "https://linear.app/oauth/authorize"
 
     module_function

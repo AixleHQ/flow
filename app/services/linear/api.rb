@@ -11,6 +11,7 @@ module Linear
         state { id name type }
         assignee { id name displayName email }
         labels(first: 50) { nodes { id name } }
+        attachments(first: 50) { nodes { id title url } }
       }
     GRAPHQL
     COMMENT = "id body createdAt user { id name displayName } botActor { name }"
@@ -149,6 +150,31 @@ module Linear
       comment(raw)
     end
 
+    # A place to put a file: { upload_url:, asset_url:, headers: } — the bytes go
+    # to `upload_url` with every one of `headers`, and `asset_url` is what text
+    # links to. Kept private: an asset URL needs the API credential to read.
+    def file_upload(content_type:, filename:, size:)
+      data = @client.mutate(<<~GRAPHQL, contentType: content_type, filename: filename, size: size)
+        mutation($contentType: String!, $filename: String!, $size: Int!) {
+          fileUpload(contentType: $contentType, filename: $filename, size: $size) {
+            success uploadFile { uploadUrl assetUrl headers { key value } }
+          }
+        }
+      GRAPHQL
+      raw = data.dig("fileUpload", "uploadFile")
+      raise Trackers::Error.new("Linear gave no place to upload the file", code: "provider_error") if raw.blank?
+
+      { upload_url: raw["uploadUrl"], asset_url: raw["assetUrl"], headers: Array(raw["headers"]).to_h { |h| [ h["key"], h["value"] ] } }
+    end
+
+    def upload(url, headers:, file:)
+      @client.put_file(url, headers: headers, file: file)
+    end
+
+    def download(url, io:, max_bytes:)
+      @client.download(url, io: io, max_bytes: max_bytes)
+    end
+
     # Only a workspace admin's key with the Admin permission may manage webhooks. Answers the webhook id.
     def create_webhook(url:, team_id:, secret:, label:)
       data = @client.mutate(<<~GRAPHQL, input: { url: url, teamId: team_id, secret: secret, label: label, resourceTypes: WEBHOOK_RESOURCES })
@@ -191,7 +217,8 @@ module Linear
         team_id: raw.dig("team", "id"), team_key: raw.dig("team", "key"),
         state: raw["state"] && { id: raw.dig("state", "id"), name: raw.dig("state", "name"), type: raw.dig("state", "type") },
         assignee: assignee && { id: assignee["id"], name: assignee["name"], display_name: assignee["displayName"], email: assignee["email"] },
-        labels: Array(raw.dig("labels", "nodes")).map { |l| { id: l["id"], name: l["name"] } }
+        labels: Array(raw.dig("labels", "nodes")).map { |l| { id: l["id"], name: l["name"] } },
+        links: Array(raw.dig("attachments", "nodes")).map { |a| { id: a["id"], title: a["title"], url: a["url"] } }
       }
     end
 

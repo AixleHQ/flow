@@ -17,6 +17,25 @@ module Linear
     def query(document, variables = {}) = request(document, variables, write: false)
     def mutate(document, variables = {}) = request(document, variables, write: true)
 
+    # A file on uploads.linear.app, which wants the same credential as the API.
+    def download(url, io:, max_bytes:)
+      files.download(url, io: io, max_bytes: max_bytes, headers: @credential.authorization_headers,
+                          reauthorize: lambda {
+                            @credential.invalidate!
+                            @credential.authorization_headers
+                          })
+    end
+
+    # The bytes of a Trackers::UploadFile to the signed URL `fileUpload` gave,
+    # with exactly the headers it named and never the credential.
+    def put_file(url, headers:, file:)
+      host = URI.parse(url.to_s).host
+      Trackers::FileTransfer.new(name: "Linear", hosts: [ host ], open_timeout: AppConfig.open_timeout, logger: @logger)
+                            .send_request(:put, url, headers: headers, body: file.io, content_type: file.content_type, size: file.size)
+    rescue URI::InvalidURIError
+      raise Trackers::Error.new("Linear gave an upload address that is not a URL", code: "provider_error")
+    end
+
     private
 
     def request(document, variables, write:, attempt: 0)
@@ -80,6 +99,12 @@ module Linear
       response.body.present? ? JSON.parse(response.body) : {}
     rescue JSON::ParserError
       response.success? ? raise(Trackers::Error.new("Linear returned a non-JSON body", code: "provider_error")) : {}
+    end
+
+    def files
+      @files ||= Trackers::FileTransfer.new(name: "Linear", hosts: [ AppConfig::UPLOADS_HOST ],
+                                            redirect_hosts: [ "storage.googleapis.com" ],
+                                            open_timeout: AppConfig.open_timeout, logger: @logger)
     end
 
     def connection

@@ -20,6 +20,10 @@ module Trackers
       # Linear has no issue types; teams use labels for kinds of work.
       ISSUE_TYPE = "Issue"
 
+      # A markdown link or image to an upload, or a bare upload URL.
+      UPLOAD_LINK = %r{(!?)\[([^\]]*)\]\((https://uploads\.linear\.app/[^)\s]+)\)|(https://uploads\.linear\.app/[^\s)\]>"']+)}
+      COMMENT_PAGES = 5
+
       def serves_project?(project)
         integration.project_id == project.id
       end
@@ -175,7 +179,80 @@ module Trackers
         comment(api.create_comment(current[:id], body), current[:id])
       end
 
+      # Linear keeps no list of files: a file is a link to uploads.linear.app in
+      # the issue's description, its comments or its link attachments.
+      def attachments? = true
+      def attachment_list? = false
+
+      def list_attachments(scope_id, ref)
+        files_of(scoped!(api.issue(issue_ref!(ref)), scope_id))
+      end
+
+      def download_attachment(scope_id, ref, attachment_id, io:, max_bytes:)
+        current = scoped!(api.issue(issue_ref!(ref)), scope_id)
+        found = files_of(current).find { |a| a.id == attachment_id.to_s }
+        raise Error.new("#{current[:key]} has no file #{attachment_id}", code: "not_found") unless found
+
+        fetched = api.download(found.url, io: io, max_bytes: max_bytes)
+        found.with(content_type: fetched[:content_type])
+      end
+
+      def upload_attachment(scope_id, ref, file)
+        current = scoped!(api.issue(issue_ref!(ref)), scope_id)
+        slot = api.file_upload(content_type: file.content_type.presence || "application/octet-stream", filename: file.filename,
+                               size: file.size)
+        api.upload(slot[:upload_url], headers: slot[:headers].merge("Content-Type" => file.content_type.presence || "application/octet-stream"),
+                                      file: file)
+        @files&.delete(current[:id])
+        Attachment.new(id: TrackerAttachment.embedded_id(slot[:asset_url]), issue_id: current[:id], name: file.filename,
+                       size: file.size, content_type: file.content_type, origin: :embedded, url: slot[:asset_url])
+      end
+
+      def attachment_markup(attachment)
+        label = attachment.name.to_s.gsub(/[\[\]]/, "")
+        attachment.image? ? "![#{label}](#{attachment.url})" : "[#{label}](#{attachment.url})"
+      end
+
       private
+
+      # Read once per issue for as long as this provider lives.
+      def files_of(current)
+        (@files ||= {})[current[:id]] ||= begin
+          found = links_in(current[:description], current, "kind" => "description")
+          Array(current[:links]).each do |link|
+            next unless link[:url].to_s.start_with?("https://#{::Linear::AppConfig::UPLOADS_HOST}/")
+
+            found << embedded(current, link[:url], link[:title], "kind" => "link")
+          end
+          each_comment(current) { |c| found.concat(links_in(c[:body], current, "kind" => "comment", "id" => c[:id])) }
+          found.uniq(&:id)
+        end
+      end
+
+      def links_in(text, current, location)
+        text.to_s.scan(UPLOAD_LINK).map do |bang, label, url, bare|
+          embedded(current, url || bare, label.presence, location, image: bang == "!")
+        end
+      end
+
+      def embedded(current, url, label, location, image: false)
+        name = label.presence || File.basename(URI.parse(url).path)
+        name = "#{name}.png" if image && File.extname(name).blank?
+        Attachment.new(id: TrackerAttachment.embedded_id(url), issue_id: current[:id], name: name, origin: :embedded,
+                       location: location, url: url)
+      rescue URI::InvalidURIError
+        Attachment.new(id: TrackerAttachment.embedded_id(url), issue_id: current[:id], name: "file", origin: :embedded,
+                       location: location, url: url, available: false)
+      end
+
+      def each_comment(current)
+        cursor = nil
+        COMMENT_PAGES.times do
+          page = api.comments(current[:id], limit: 100, cursor: cursor)
+          page[:comments].each { |c| yield c }
+          break unless (cursor = page[:next_cursor])
+        end
+      end
 
       def api
         @api ||= ::Linear::Api.for(integration)
