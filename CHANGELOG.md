@@ -33,6 +33,11 @@ governance, community health — carry none.
   that already ran free (no limit, or no Stripe customer) are ticked Managed by
   Aixle; untick one to put it on the trial.
 
+### Fixed
+- **Admin**: saving a company in the admin no longer turns its settings into a
+  quoted string, quoted again on every later save. Settings already saved that
+  way are restored on upgrade.
+
 ## [1.3.0] - 2026-10-17
 
 ### Added
