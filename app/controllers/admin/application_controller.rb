@@ -35,6 +35,8 @@ module Admin
       "ColumnWorkflowBinding" => [ :workflow ]
     }.freeze
 
+    INVITATION_FAILURES_LISTED = 5
+
     def records_per_page
       params[:per_page] || 20
     end
@@ -79,6 +81,22 @@ module Admin
       return relation if includes.empty?
 
       relation.includes(*includes)
+    end
+
+    private
+
+    # The flash travels in the session cookie, which holds 4 KB: a long pasted
+    # list is counted, not echoed. Who was invited shows on the invitations page.
+    def invitation_flash(results)
+      sent, failed = results.partition(&:sent?)
+      messages = {}
+      messages[:notice] = "Invitations sent to #{helpers.pluralize(sent.size, 'address')}." if sent.any?
+      if failed.any?
+        listed = failed.first(INVITATION_FAILURES_LISTED).map(&:message)
+        listed << "#{failed.size - listed.size} more" if failed.size > listed.size
+        messages[:alert] = "Not invited: #{listed.join('; ')}."
+      end
+      messages
     end
   end
 end
