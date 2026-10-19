@@ -22,6 +22,12 @@ governance, community health — carry none.
   successful and failed sessions, each compared with the period before, with
   whether the company pays, is on a trial, is blocked or is managed by Aixle.
   History back to 2026-09-25 fills in by itself after the upgrade.
+- **Admin**: a superadmin can move a project into another company (project page
+  → "Move to another company"). The board, tasks, comments, workflows, run
+  history, triggers and webhook URLs keep their ids. A preflight lists who is not
+  in the target company, which runs not yet started will be cancelled, which
+  repositories and integrations stay behind, and which company files the project
+  gets a copy of; the report stays on the project afterwards.
 
 ### Changed
 - **Admin**: the admin uses the Aixle Flow theme.

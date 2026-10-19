@@ -319,7 +319,9 @@ Rails.application.routes.draw do
       end
     end
     resources :companies
-    resources :projects
+    resources :projects do
+      resource :move, only: %i[new create show], controller: "project_moves"
+    end
     resources :project_collaborators
     resources :agent_credentials
     resources :terminal_sessions, only: %i[index show]

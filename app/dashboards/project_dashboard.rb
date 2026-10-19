@@ -57,6 +57,10 @@ class ProjectDashboard < Administrate::BaseDashboard
     owner
   ].freeze
 
+  # A project changes company only through Admin::ProjectMovesController: its rows'
+  # tenant columns have to move with it.
+  FORM_ATTRIBUTES_EDIT = (FORM_ATTRIBUTES - %i[company]).freeze
+
   COLLECTION_FILTERS = {
     active: ->(resources) { resources.active },
     paused: ->(resources) { resources.paused },
