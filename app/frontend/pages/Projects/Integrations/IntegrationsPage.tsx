@@ -23,6 +23,7 @@ interface Props {
   github?: GithubProps;
   bitbucket?: BitbucketProps;
   jira?: JiraProps;
+  gitlab?: { oauthEnabled: boolean };
   linear?: LinearProps;
   youtrack?: YoutrackProps;
   slack?: SlackProps;
@@ -30,9 +31,10 @@ interface Props {
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops, github, bitbucket, jira, linear, youtrack, slack, teams } = usePage<{
-    props: Props;
-  }>().props as unknown as Props;
+  const { project, integrations, azureDevops, github, bitbucket, jira, gitlab, linear, youtrack, slack, teams } =
+    usePage<{
+      props: Props;
+    }>().props as unknown as Props;
 
   return (
     <>
@@ -45,6 +47,7 @@ const IntegrationsPage = () => {
         github={github}
         bitbucket={bitbucket}
         jira={jira}
+        gitlab={gitlab}
         linear={linear}
         youtrack={youtrack}
         slack={slack}

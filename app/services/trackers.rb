@@ -7,6 +7,7 @@ module Trackers
   PROVIDERS = {
     "azure_devops" => "Trackers::AzureDevops::Provider",
     "github" => "Trackers::Github::Provider",
+    "gitlab" => "Trackers::Gitlab::Provider",
     "jira" => "Trackers::Jira::Provider",
     "linear" => "Trackers::Linear::Provider",
     "youtrack" => "Trackers::Youtrack::Provider"

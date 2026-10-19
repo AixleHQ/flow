@@ -428,6 +428,27 @@ describe('IntegrationsContent', () => {
     );
   });
 
+  it('offers signing in with GitLab first where the deployment has the OAuth app', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        gitlab={{ oauthEnabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'GitLab' }));
+    const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+
+    expect(within(dialog).getByRole('link', { name: 'Sign in with GitLab' })).toHaveAttribute(
+      'href',
+      '/company/projects/1/integrations/gitlab_oauth_start',
+    );
+    expect(within(dialog).getByPlaceholderText('glpat-...')).toBeInTheDocument();
+  });
+
   it('keeps the GitLab dialog open with the reason when GitLab refuses the token', async () => {
     renderPage(
       <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,

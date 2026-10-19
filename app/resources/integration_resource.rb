@@ -321,6 +321,51 @@ class IntegrationResource < ApplicationResource
     integration.tracker_subscriptions.find { |s| s.status == "failing" }&.last_error
   end
 
+  # ----- GitLab (docs/design/gitlab-tracker.md) -----
+
+  # `token` (pasted), `service_account` or `service_account_pending` (signed in,
+  # group not picked yet); nil for a row made before the mode was recorded.
+  typelize "string | null"
+  attribute :gitlab_auth_mode do |integration|
+    next nil unless integration.gitlab?
+
+    integration.settings&.dig("auth_mode").presence || "token"
+  end
+
+  typelize "Array<{ id: string; fullPath: string; name: string }>"
+  attribute :gitlab_groups do |integration|
+    next [] unless integration.gitlab? && integration.settings&.dig("auth_mode") == "service_account_pending"
+
+    Array(integration.settings&.dig("gitlab_groups")).map { |g| g.to_h.slice("id", "full_path", "name") }
+  end
+
+  typelize "string | null"
+  attribute :gitlab_group do |integration|
+    integration.gitlab? ? integration.settings&.dig("gitlab_group", "full_path") : nil
+  end
+
+  typelize "string | null"
+  attribute :gitlab_token_expires_at do |integration|
+    integration.gitlab? ? integration.settings&.dig("token_expires_at") : nil
+  end
+
+  typelize "Array<{ id: string; path: string; name: string; boardId: string | null; boardName: string | null }>"
+  attribute :gitlab_trackers do |integration|
+    next [] unless integration.gitlab?
+
+    Array(integration.settings&.dig("gitlab_trackers")).map do |t|
+      { "id" => t["id"], "path" => t["path"], "name" => t["name"], "board_id" => t["board_id"], "board_name" => t["board_name"] }
+    end
+  end
+
+  # Why issue events do not reach Aixle, when a project hook could not be registered.
+  typelize "string | null"
+  attribute :gitlab_webhook_error do |integration|
+    next nil unless integration.gitlab?
+
+    integration.tracker_subscriptions.find { |s| s.status == "failing" }&.last_error
+  end
+
   # ----- YouTrack -----
 
   typelize "string | null"

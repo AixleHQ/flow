@@ -59,6 +59,7 @@ type TrackerChanges =
 const PROVIDER_LABELS: Record<string, string> = {
   azure_devops: 'Azure Boards',
   github: 'GitHub Projects',
+  gitlab: 'GitLab',
   jira: 'Jira',
   linear: 'Linear',
   youtrack: 'YouTrack',

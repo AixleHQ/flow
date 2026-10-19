@@ -1,8 +1,8 @@
 # Trackers
 
 A **tracker** is a Flow project's link to one external project in a task
-tracker — an Azure Boards project, a Jira project, a GitHub project, a Linear
-team or a YouTrack project — through a connection made on the project's **Integrations** page. The connection holds the credentials;
+tracker — an Azure Boards project, a Jira project, a GitHub project, a GitLab
+project, a Linear team or a YouTrack project — through a connection made on the project's **Integrations** page. The connection holds the credentials;
 the tracker is what agents and triggers address. Through it:
 
 - tracker triggers start workflows when an issue is created, moves to a column,
@@ -11,7 +11,8 @@ the tracker is what agents and triggers address. Through it:
 
 Both work the same way for every provider. Connecting is per provider: see
 [Azure DevOps](/docs/azure-devops), [Jira](/docs/jira),
-[GitHub](/docs/github#github-projects-as-a-tracker), [Linear](/docs/linear) and
+[GitHub](/docs/github#github-projects-as-a-tracker),
+[GitLab](/docs/gitlab#gitlab-issues-as-a-tracker), [Linear](/docs/linear) and
 [YouTrack](/docs/youtrack).
 
 ---
@@ -213,7 +214,7 @@ in [Triggers and gates](/docs/triggers-and-gates).
 | --- | --- | --- |
 | **Issue moves to a status (column)** | `tracker.issue.status_changed` | The issue moves to another column of the tracker's board |
 | **Issue is created** | `tracker.issue.created` | An issue is created in the tracker's project |
-| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects, Linear and YouTrack only when someone is assigned |
+| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects, GitLab, Linear and YouTrack only when someone is assigned |
 | **Comment is added** | `tracker.comment.created` | A comment is added to the issue |
 
 A status is a column of the tracker's board where there is one, not the
