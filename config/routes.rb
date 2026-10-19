@@ -319,7 +319,9 @@ Rails.application.routes.draw do
       end
     end
     resources :companies do
-      resources :invitations, only: %i[new create], controller: "company_invitations"
+      resources :invitations, only: %i[new create], controller: "company_invitations" do
+        post :resend, on: :member
+      end
     end
     resources :projects do
       resource :move, only: %i[new create show], controller: "project_moves"

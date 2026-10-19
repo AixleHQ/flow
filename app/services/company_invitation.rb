@@ -15,10 +15,15 @@ class CompanyInvitation
   Result = Data.define(:status, :email, :errors) do
     def sent? = status.in?(%i[invited resent])
 
+    # Invited, with the email left unsent: the invitation is pending and can be
+    # sent again.
+    def unsent? = status == :unsent
+
     def message
       case status
       when :invited then "Invitation sent to #{email}"
       when :resent then "Invitation re-sent to #{email}"
+      when :unsent then "#{email} is invited, but the email could not be sent. Re-send the invitation"
       when :platform_admin then "#{email} is a platform administrator and cannot be invited"
       when :already_member then "#{email} is already a member of this company"
       when :already_invited then "#{email} has already been invited"
@@ -88,9 +93,13 @@ class CompanyInvitation
     deliver(membership, :invited)
   end
 
+  # deliver_later returns false when the adapter refuses the job, and Solid
+  # Queue raises instead when its database write fails.
   def deliver(membership, status)
-    MembershipMailer.invitation(membership).deliver_later
-    result(status)
+    queued = MembershipMailer.invitation(membership).deliver_later
+    result(queued ? status : :unsent)
+  rescue SolidQueue::Job::EnqueueError
+    result(:unsent)
   end
 
   # Only a placeholder: the invitation signup asks the person for their name.

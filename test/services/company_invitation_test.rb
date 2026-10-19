@@ -94,3 +94,21 @@ class CompanyInvitationTest < ActiveSupport::TestCase
     CompanyInvitation.call(company: @company, inviter: @inviter, email: email, role: role)
   end
 end
+
+class CompanyInvitationUnqueuedMailTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
+  def queue_adapter_for_test = FailingMailQueueAdapter.new
+
+  test "an invitation whose email cannot be queued stays pending, to be sent again" do
+    company = create(:company)
+
+    result = CompanyInvitation.call(company: company, email: "ann@example.com", role: "admin")
+
+    assert_equal :unsent, result.status
+    assert { result.unsent? && !result.sent? }
+    assert_equal "ann@example.com is invited, but the email could not be sent. Re-send the invitation", result.message
+    membership = company.company_memberships.joins(:user).find_by!(users: { email: "ann@example.com" })
+    assert { membership.invited? && membership.admin? }
+  end
+end

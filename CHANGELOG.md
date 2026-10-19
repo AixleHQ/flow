@@ -16,12 +16,17 @@ governance, community health — carry none.
 ### Added
 - **Admin**: a superadmin can invite a company's people from the admin, without
   signing in as its admin. The company form, new or edit, takes a list of
-  addresses and a role, and an initial admin left without a password is emailed
-  an invitation instead. Any company's page has "Invite members", which takes a
+  addresses and a role. Any company's page has "Invite members", which takes a
   pasted list and shows who is invited and who has joined. Each person gets the
   invitation a company admin sends from Members, from "An administrator".
 
 ### Changed
+- **Admin**: a new company's initial admin is invited instead of being given a
+  password by the operator. The form asks only for their address; they get the
+  standard invitation email, set their own password and join as admin. Until
+  they accept they show as Pending under "Invite members", where a Re-send button
+  sends the invitation again. A platform administrator's address is refused, and
+  an email that cannot be sent leaves the company in place and says so.
 - **Tasks**: a task's Properties — column, type, priority, assignee, epic, tags —
   sit right under its title, above the description, so a long description no
   longer pushes them out of view.

@@ -40,8 +40,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
     managed_by_aixle: Field::Boolean,
     trial_started_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
-    initial_admin_email: Field::String.with_options(searchable: false),
-    initial_admin_password: Field::Password,
+    initial_admin_email: Field::Email.with_options(searchable: false),
     invite_emails: Field::Text.with_options(
       searchable: false,
       input_options: { rows: 4, placeholder: "jane@example.com\njohn@example.com" }
@@ -120,7 +119,6 @@ class CompanyDashboard < Administrate::BaseDashboard
     managed_by_aixle
     session_concurrency_limit
     initial_admin_email
-    initial_admin_password
     invite_emails
     invite_role
   ].freeze

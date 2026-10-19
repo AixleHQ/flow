@@ -61,6 +61,7 @@
             <th>State</th>
             <th>Invited</th>
             <th>Invited by</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
@@ -69,9 +70,14 @@
               <td><%= membership.user.email %></td>
               <td><%= membership.user.name %></td>
               <td><%= membership.role.text %></td>
-              <td><%= membership.state.humanize %></td>
+              <td><%= membership.invited? ? "Pending" : membership.state.humanize %></td>
               <td><%= membership.invited_at ? l(membership.invited_at, format: :short) : "—" %></td>
               <td><%= membership.invited_by&.name || "—" %></td>
+              <td>
+                <% if membership.invited? %>
+                  <%= button_to "Re-send", resend_admin_company_invitation_path(@company, membership), class: "button" %>
+                <% end %>
+              </td>
             </tr>
           <% end %>
         </tbody>

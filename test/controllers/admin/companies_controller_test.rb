@@ -59,35 +59,6 @@ module Admin
       assert_redirected_to admin_companies_path
     end
 
-    test "should create company with initial admin user" do
-      admin_email = "admin@newcompany.com"
-      admin_password = "password123"
-
-      assert_difference("Company.count", 1) do
-        assert_difference("User.count", 1) do
-          post :create, params: {
-            company: attributes_for(:company,
-              email_domain: "newcompany.com",
-              initial_admin_email: admin_email,
-              initial_admin_password: admin_password)
-          }
-        end
-      end
-
-      company = Company.last
-      admin_user = User.find_by(email: admin_email)
-
-      assert { admin_user.present? }
-      membership = company.company_memberships.find_by(user: admin_user)
-      assert { membership.present? }
-      assert { membership.admin? }
-      assert { membership.active? }
-      assert { admin_user.active? }
-      assert { admin_user.authenticate(admin_password) }
-      assert { admin_user.name.present? } # Name should be generated from email
-      assert_redirected_to admin_company_path(company)
-    end
-
     test "should not create company with duplicate email domain" do
       create(:company, email_domain: "acme.com")
 

@@ -66,7 +66,7 @@ en:
       stop_impersonate: "Stop Impersonate"
     field_hints:
       company:
-        initial_admin_password: "Leave blank to email the admin an invitation instead."
+        initial_admin_email: "Gets an invitation to join as the company's admin and sets their own password."
         invite_emails: "Email addresses, one per line or separated by commas. Each gets an invitation to join."
 
   admin:
