@@ -160,9 +160,9 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     assert { result.time_series.length == 2 }
   end
 
-  # ─── total_tokens fallback ───────────────────────────────────────────────────
+  # ─── total_tokens ────────────────────────────────────────────────────────────
 
-  test "total_tokens falls back to tokens column when breakdown is zero" do
+  test "total_tokens ignores the legacy aggregate tokens column" do
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @admin)
     session = create(:terminal_session, user: @admin, project: @project)
     step = create(:step, workflow: @workflow)
@@ -179,6 +179,6 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
 
     result = call_service(scope: "project")
 
-    assert { result.totals[:total_tokens] == 500 }
+    assert { result.totals[:total_tokens] == 0 }
   end
 end

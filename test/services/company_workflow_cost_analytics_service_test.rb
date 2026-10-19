@@ -156,9 +156,9 @@ class CompanyWorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     assert { session_result.totals.total_cost_cents > workflow_result.time_series.sum(&:cost_cents) }
   end
 
-  # ─── total_tokens fallback ───────────────────────────────────────────────────
+  # ─── total_tokens ────────────────────────────────────────────────────────────
 
-  test "total_tokens falls back to the tokens column when the breakdown is zero" do
+  test "total_tokens ignores the legacy tokens column when the breakdown is zero" do
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @admin)
     session = create(:terminal_session, user: @admin, project: @project)
     step = create(:step, workflow: @workflow)
@@ -171,6 +171,6 @@ class CompanyWorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
 
     result = call_service(scope: "company")
 
-    assert { result.time_series.sum(&:total_tokens) == 500 }
+    assert { result.time_series.sum(&:total_tokens) == 0 }
   end
 end

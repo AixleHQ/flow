@@ -50,9 +50,7 @@ class TaskStatisticsService
       .where(board_task_id: @task.id)
       .select(
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS total_cost_cents",
-        "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
-        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens"
+        "#{UsageStatistic::TOTAL_TOKENS_SUM_SQL} AS total_tokens"
       ).take
 
     {
@@ -73,9 +71,7 @@ class TaskStatisticsService
         "workflows.id AS workflow_id",
         "workflows.name AS workflow_name",
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS cost_cents",
-        "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
-        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens"
+        "#{UsageStatistic::TOTAL_TOKENS_SUM_SQL} AS total_tokens"
       )
       .order("cost_cents DESC")
 

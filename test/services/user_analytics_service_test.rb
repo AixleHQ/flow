@@ -78,7 +78,7 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
     assert { result.project_breakdowns.empty? }
   end
 
-  test "total_tokens uses legacy tokens fallback when breakdown columns are zero" do
+  test "total_tokens ignores the legacy tokens column when breakdown columns are zero" do
     session = build(:terminal_session, user: @user, project: @project_a, session_type: "agent_session", agent_type: "claude_code")
     session.save!(validate: false)
     UsageStatistic.create!(
@@ -89,7 +89,7 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
 
     result = call
 
-    assert { result.total_tokens == 500 }
+    assert { result.total_tokens == 0 }
   end
 
   test "auth_setup and tool_setup sessions are excluded" do

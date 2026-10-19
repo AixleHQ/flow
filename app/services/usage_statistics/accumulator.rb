@@ -79,10 +79,6 @@ module UsageStatistics
       end
     end
 
-    def total_tokens
-      delta.input_tokens + delta.output_tokens + delta.cache_write_tokens + delta.cache_read_tokens
-    end
-
     # Both halves of the upsert build `models` the same way — out of a JSON array
     # bind rather than a text[] literal, so nothing has to hand-escape a Postgres
     # array. The ON CONFLICT branch unions it with what is already stored and
@@ -94,13 +90,13 @@ module UsageStatistics
           terminal_session_id, source,
           events_data, events_count,
           input_tokens, output_tokens, cache_write_tokens, cache_read_tokens,
-          tokens, total_cents_precise, cost_cents, models,
+          total_cents_precise, cost_cents, models,
           created_at, updated_at
         ) VALUES (
           :terminal_session_id, :source,
           CAST(:events AS jsonb), :count,
           :input_tokens, :output_tokens, :cache_write_tokens, :cache_read_tokens,
-          :tokens, :total_cents, CAST(CEIL(:total_cents) AS bigint),
+          :total_cents, CAST(CEIL(:total_cents) AS bigint),
           ARRAY(SELECT jsonb_array_elements_text(CAST(:models AS jsonb))),
           NOW(), NOW()
         )
@@ -112,7 +108,6 @@ module UsageStatistics
           output_tokens      = usage_statistics.output_tokens      + EXCLUDED.output_tokens,
           cache_write_tokens = usage_statistics.cache_write_tokens + EXCLUDED.cache_write_tokens,
           cache_read_tokens  = usage_statistics.cache_read_tokens  + EXCLUDED.cache_read_tokens,
-          tokens             = usage_statistics.tokens             + EXCLUDED.tokens,
           total_cents_precise = usage_statistics.total_cents_precise + EXCLUDED.total_cents_precise,
           cost_cents         = CAST(
             CEIL(usage_statistics.total_cents_precise + EXCLUDED.total_cents_precise) AS bigint
@@ -136,7 +131,6 @@ module UsageStatistics
         output_tokens: delta.output_tokens,
         cache_write_tokens: delta.cache_write_tokens,
         cache_read_tokens: delta.cache_read_tokens,
-        tokens: total_tokens,
         total_cents: delta.total_cents,
         models: delta.models.to_json
       }
