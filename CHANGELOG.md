@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-19
+
 ### Added
 - **Admin**: the admin opens on a dashboard. Tiles show active companies by
   billing status, members and projects, and the period's worker hours, busy
@@ -614,7 +616,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.3.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.4.0...develop
+[1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1
