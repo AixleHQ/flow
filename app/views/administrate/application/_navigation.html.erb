@@ -9,6 +9,12 @@ controller (e.g. catalog syncs) would otherwise be unreachable without knowing i
 <nav class="navigation">
   <%= link_to(t("administrate.navigation.back_to_app"), root_url, class: "button button--alt button--nav") if defined?(root_url) %>
 
+  <%= link_to(
+    "Tenant usage",
+    admin_tenant_usage_path,
+    class: "navigation__link navigation__link--#{current_page?(admin_tenant_usage_path) || current_page?(admin_root_path) ? 'active' : 'inactive'}"
+  ) %>
+
   <% Administrate::Namespace.new(namespace).resources_with_index_route.each do |resource| %>
     <%#
       `resources_with_index_route` reads the admin ROUTES, so it also returns plain

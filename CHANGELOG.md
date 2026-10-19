@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tenant usage**: superadmins see what every company used, as the home page of
+  the admin: worker hours, busy hours, peak workers, queue wait and successful and
+  failed sessions by day, week, month or a custom range, each compared with the
+  period before. Every company is measured, those without a worker limit and those
+  Aixle carries included, and each says whether its usage is billed and, if not,
+  why. Usage is measured hourly from this release on; **Recompute** on the page
+  fills in history from session records.
+
 ## [1.3.0] - 2026-10-17
 
 ### Added

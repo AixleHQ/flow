@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_19_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -585,6 +585,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
     t.index ["user_id", "company_id"], name: "index_company_memberships_on_user_id_and_company_id", unique: true
   end
 
+  create_table "company_usage_hours", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "period_start", null: false
+    t.integer "limit_min"
+    t.integer "limit_max"
+    t.integer "unlimited_seconds", default: 0, null: false
+    t.integer "offered_seconds", default: 0, null: false
+    t.string "billing_class", null: false
+    t.integer "occupied_seconds", default: 0, null: false
+    t.integer "peak_workers", default: 0, null: false
+    t.integer "sessions_queued", default: 0, null: false
+    t.integer "sessions_admitted", default: 0, null: false
+    t.integer "wait_seconds_total", default: 0, null: false
+    t.integer "wait_seconds_max", default: 0, null: false
+    t.integer "sessions_succeeded", default: 0, null: false
+    t.integer "sessions_failed", default: 0, null: false
+    t.datetime "computed_at", null: false
+    t.index ["company_id", "period_start"], name: "index_company_usage_hours_on_company_id_and_period_start", unique: true
+    t.index ["period_start"], name: "index_company_usage_hours_on_period_start"
+  end
+
   create_table "config_item_accesses", force: :cascade do |t|
     t.string "channel", default: "get_config_item", null: false
     t.bigint "config_item_id", null: false
@@ -1049,6 +1070,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
     t.datetime "updated_at", null: false
     t.string "wait_reason", default: "concurrency_limit"
     t.index ["permit_token"], name: "index_session_admissions_on_permit_token", unique: true
+    t.index ["released_at"], name: "index_session_admissions_on_released_at"
     t.index ["session_admission_pool_id", "id"], name: "session_admission_fifo", where: "(released_at IS NULL)"
     t.index ["session_admission_pool_id"], name: "index_session_admissions_on_session_admission_pool_id"
     t.index ["terminal_session_id"], name: "index_session_admissions_on_terminal_session_id", unique: true
@@ -1465,6 +1487,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
     t.jsonb "version_ids", default: {}, null: false
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
+    t.index ["finished_at"], name: "index_terminal_sessions_on_finished_at"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
@@ -1961,6 +1984,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_090000) do
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
   add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
+  add_foreign_key "company_usage_hours", "companies", on_delete: :cascade
   add_foreign_key "config_items", "companies", on_delete: :cascade, validate: false
   add_foreign_key "config_items", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_config_items_project_company", on_delete: :cascade, validate: false
   add_foreign_key "config_items", "projects", on_delete: :cascade, validate: false

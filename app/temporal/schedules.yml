@@ -232,3 +232,11 @@ schedules:
     cron: "5 * * * *"
     overlap: skip
     enabled: true
+
+  # Usage rollup for the tenant report. Five minutes after metering, because each
+  # hour copies the ledger row the meter writes; it revisits the last three hours,
+  # so a late ledger row or a late transition still lands.
+  - workflow: usage_rollup_workflow
+    cron: "10 * * * *"
+    overlap: skip
+    enabled: true

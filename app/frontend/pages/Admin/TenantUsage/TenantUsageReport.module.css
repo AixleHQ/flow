@@ -1,0 +1,332 @@
+/*
+ * The report renders inside Administrate's layout, whose stylesheet styles bare
+ * elements (table, th, td, button, input, select) and attribute selectors such
+ * as [type="search"]. Every rule here is scoped under .root, so it outranks them
+ * on specificity instead of depending on load order.
+ */
+
+.root {
+  color: var(--app-text-primary);
+  font-family: var(--app-font-body);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.root * {
+  box-sizing: border-box;
+}
+
+.empty {
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-body);
+}
+
+/* ── Toolbar ─────────────────────────────────────── */
+
+.root .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.root .segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-elevated);
+}
+
+.root .segment {
+  margin: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Administrate colors every hovered or focused button blue with
+   `[type=button]:not(.link):hover` (0,3,0); these sit one class above it. */
+.root .toolbar .segment:hover,
+.root .toolbar .segment:focus {
+  background: var(--app-bg-hover);
+  color: var(--app-text-primary);
+}
+
+.root .toolbar .segment[aria-pressed='true'],
+.root .toolbar .segment[aria-pressed='true']:hover,
+.root .toolbar .segment[aria-pressed='true']:focus {
+  background: var(--app-bg-paper);
+  color: var(--app-primary-strong);
+  box-shadow: 0 0 0 1px var(--app-border-default);
+}
+
+.root .periodNav,
+.root .dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.root .navButton {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background: var(--app-bg-paper);
+  color: var(--app-text-primary);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.root .toolbar .navButton:hover,
+.root .toolbar .navButton:focus {
+  background: var(--app-bg-elevated);
+  color: var(--app-text-primary);
+}
+
+.root .toolbar .navButton:disabled {
+  background: var(--app-bg-paper);
+  color: var(--app-text-tertiary);
+  cursor: default;
+}
+
+.root .select,
+.root .search,
+.root .field input {
+  height: 32px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background: var(--app-bg-paper);
+  color: var(--app-text-primary);
+  font: inherit;
+}
+
+.root .field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-weight: 500;
+}
+
+.root .search {
+  width: 220px;
+  margin-left: auto;
+}
+
+.root .segment:focus-visible,
+.root .navButton:focus-visible,
+.root .select:focus-visible,
+.root .search:focus-visible,
+.root .field input:focus-visible,
+.root .table th button:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
+}
+
+.root .span {
+  margin: 0;
+  font-family: var(--app-font-heading);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.root .compare {
+  margin: 2px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+/* ── Table ───────────────────────────────────────── */
+
+.root .tableWrap {
+  margin-top: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-paper);
+}
+
+.root .table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.root .table th,
+.root .table td {
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--app-border-subtle);
+  background: transparent;
+  color: var(--app-text-primary);
+  font-size: 14px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.root .table thead th {
+  border-bottom: 1px solid var(--app-border-default);
+  background: var(--app-bg-elevated);
+  font-weight: 500;
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+.root .table th button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.root .table th button:hover,
+.root .table th button:focus {
+  background: none;
+  color: var(--app-text-primary);
+}
+
+.root .table th[aria-sort='ascending'] button::after {
+  content: ' ▲';
+}
+
+.root .table th[aria-sort='descending'] button::after {
+  content: ' ▼';
+}
+
+.root .table tbody tr:hover td,
+.root .table tbody tr:hover th {
+  background: var(--app-bg-hover);
+}
+
+.root .table tfoot th,
+.root .table tfoot td {
+  border-bottom: 0;
+  border-top: 1px solid var(--app-border-default);
+  background: var(--app-bg-elevated);
+  font-weight: 600;
+}
+
+.root .table .tenant {
+  font-weight: 500;
+}
+
+.root .table .tenant a {
+  color: var(--app-text-primary);
+  text-decoration: none;
+}
+
+.root .table .tenant a:hover {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
+.root .table .number {
+  text-align: right;
+}
+
+.root .table .emptyRow {
+  padding: 24px 12px;
+  color: var(--app-text-secondary);
+  text-align: center;
+}
+
+.root .delta {
+  display: block;
+  color: var(--app-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.root .delta.good {
+  color: var(--app-success-fg);
+}
+
+.root .delta.bad {
+  color: var(--app-danger-fg);
+}
+
+.root .utilization {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.root .bar {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--app-border-subtle);
+}
+
+.root .fill {
+  display: block;
+  height: 100%;
+  background: var(--app-primary);
+}
+
+/* ── Billing badge ───────────────────────────────── */
+
+.root .badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.root .badge.success {
+  border-color: var(--app-success-border);
+  background: var(--app-success-bg);
+  color: var(--app-success-fg);
+}
+
+.root .badge.warning {
+  border-color: var(--app-warning-border);
+  background: var(--app-warning-bg);
+  color: var(--app-warning-fg);
+}
+
+.root .badge.danger {
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-bg);
+  color: var(--app-danger-fg);
+}
+
+.root .badge.info {
+  border-color: var(--app-info-border);
+  background: var(--app-info-bg);
+  color: var(--app-info-fg);
+}
+
+.root .note {
+  max-width: 900px;
+  margin: 12px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}

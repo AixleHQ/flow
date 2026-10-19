@@ -89,6 +89,12 @@ they name a flow users would recognize.
 | **Company members** | Who belongs to the company |
 | **Company settings** | Company name, branding and workers; sign-in access, SSO connections, domain verification and directory sync; billing (admins) |
 
+### Platform admin
+
+| Area | What it covers |
+| --- | --- |
+| **Tenant usage** | The superadmin's report across companies: worker hours, busy hours, peak workers, queue wait and session outcomes per period, and whether each company's usage is billed |
+
 ### Help
 
 | Area | What it covers |

@@ -1,0 +1,43 @@
+<%#
+# Tenant usage
+
+The report itself is a React island (app/frontend/entrypoints/admin_tenant_usage.tsx)
+reading the daily rows from the data attribute below. Administrate's layout yields
+`:stylesheet` and `:javascript` into its head, which is how the island's fonts and
+bundle get onto this one page.
+%>
+
+<% content_for(:title) { "Tenant usage" } %>
+
+<% content_for :stylesheet do %>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<% end %>
+
+<% content_for :javascript do %>
+  <%= vite_react_refresh_tag %>
+  <%= vite_client_tag %>
+  <%= vite_javascript_tag "admin_tenant_usage.tsx" %>
+<% end %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Tenant usage</h1>
+</header>
+
+<section class="main-content__body">
+  <%= tag.div(id: "tenant-usage-report", data: { report: @report.to_json }) %>
+</section>
+
+<section class="main-content__body">
+  <h2>Recompute</h2>
+  <p>
+    Every closed hour is measured ten minutes past the next one, and the last three are measured again on
+    each run. To fill in history after a deploy, or to rebuild it after a fix, measure every hour since a date.
+  </p>
+  <%= form_with url: recompute_admin_tenant_usage_path, method: :post do |form| %>
+    <%= form.label :since, "Since (UTC)" %>
+    <%= form.date_field :since, required: true %>
+    <%= form.submit "Recompute" %>
+  <% end %>
+</section>
