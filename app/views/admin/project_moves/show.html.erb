@@ -1,0 +1,72 @@
+<% content_for(:title) { "#{@project.name} moved" } %>
+<%= render "styles" %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title"><%= @project.name %> moved</h1>
+  <div>
+    <%= link_to "Back to project", admin_project_path(@project), class: "button" %>
+  </div>
+</header>
+
+<section class="main-content__body project-move">
+  <p>
+    Moved from <strong><%= @report["source_company"]["name"] %></strong> to
+    <strong><%= @report["target_company"]["name"] %></strong>
+    on <%= l(@audit.created_at, format: :long) %><%= " by #{@audit.user.email}" if @audit.user %>.
+  </p>
+
+  <section class="move-section">
+    <h2>Before the project runs in <%= @report["target_company"]["name"] %></h2>
+    <ol>
+      <% if @report["detached_repositories"].any? || @report["detached_trackers"].any? %>
+        <li>Attach the detached repositories and trackers to integrations of <%= @report["target_company"]["name"] %>.</li>
+      <% end %>
+      <% if @report["deactivated_integrations"].any? %>
+        <li>Connect the disconnected integrations again in the project's settings.</li>
+      <% end %>
+      <% if @report["chat_triggers"].any? %>
+        <li>Connect the chat workspace in <%= @report["target_company"]["name"] %>.</li>
+      <% end %>
+      <% if @report["without_agent_credentials"].any? %>
+        <li>Ask the people listed under "Agent sign-in needed" to sign in to their agents in <%= @report["target_company"]["name"] %>.</li>
+      <% end %>
+      <li>Send a test event to a webhook trigger.</li>
+      <li>Run a workflow by hand.</li>
+    </ol>
+  </section>
+
+  <%= render "changes", report: @report, done: true %>
+
+  <% if @report["added_members"].any? %>
+    <section class="move-section">
+      <h2>Added to <%= @report["target_company"]["name"] %></h2>
+      <ul>
+        <% @report["added_members"].each do |user| %>
+          <li><%= user["email"] %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <% if @report["dropped_members"].any? %>
+    <section class="move-section">
+      <h2>Taken off the project</h2>
+      <ul>
+        <% @report["dropped_members"].each do |user| %>
+          <li><%= user["email"] %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+
+  <% if @report["cleared_assignments"].any? %>
+    <section class="move-section">
+      <h2>Assignments cleared</h2>
+      <ul>
+        <% @report["cleared_assignments"].each do |assignment| %>
+          <li>Task #<%= assignment["number"] %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+</section>

@@ -772,6 +772,16 @@ export function adminCompanyPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /admin/projects/:project_id/move/new(.:format) */
+export function newAdminProjectMovePath(project_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "projects" + "/" + project_id + "/" + "move" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /admin/projects/:project_id/move(.:format) */
+export function adminProjectMovePath(project_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "projects" + "/" + project_id + "/" + "move" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /admin/projects(.:format) */
 export function adminProjectsPath(options?: object): string {
   return "/" + "admin" + "/" + "projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1180,6 +1190,11 @@ export function adminCatalogSyncsPath(options?: object): string {
 /** /admin/session_admission(.:format) */
 export function adminSessionAdmissionPath(options?: object): string {
   return "/" + "admin" + "/" + "session_admission" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/dashboard(.:format) */
+export function adminDashboardPath(options?: object): string {
+  return "/" + "admin" + "/" + "dashboard" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** / */
