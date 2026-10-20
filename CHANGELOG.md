@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-20
+
 ### Added
 - **Trackers**: agents read and send issue files on every tracker. New
   `tracker_list_attachments`, `tracker_download_attachments` and
@@ -62,8 +64,15 @@ governance, community health — carry none.
   user's Google account (`/config` in the CLI, or the "Terms of Service & Data
   Use" step) instead of being switched off by the image, which releases after
   1.1.27 no longer allow.
+- **Integrations**: the Aixle Flow app for YouTrack (1.0.2) sets itself up through
+  YouTrack's own API; only the service user's tokens still go through Hub. The
+  service user is now created with a random password that is never stored or
+  shown, and the app uses only the `aixle-flow` user it created: any other
+  account with that login stops the setup.
 
 ### Fixed
+- **Workflows**: the Base Resources tab scrolls, so resources below the fold
+  can be reached.
 - **Sessions & Runs**: an interactive Antigravity CLI session opens at the
   prompt instead of the CLI's first-run colour scheme, terms and folder-trust
   screens.
@@ -97,11 +106,6 @@ governance, community health — carry none.
   free; it needs a card once that trial is spent. On upgrade, active companies
   that already ran free (no limit, or no Stripe customer) are ticked Managed by
   Aixle; untick one to put it on the trial.
-- **Integrations**: the Aixle Flow app for YouTrack (1.0.2) sets itself up through
-  YouTrack's own API; only the service user's tokens still go through Hub. The
-  service user is now created with a random password that is never stored or
-  shown, and the app uses only the `aixle-flow` user it created: any other
-  account with that login stops the setup.
 
 ### Fixed
 - **Admin**: saving a company in the admin no longer turns its settings into a
@@ -678,7 +682,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.4.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.5.0...develop
+[1.5.0]: https://github.com/AixleHQ/flow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
