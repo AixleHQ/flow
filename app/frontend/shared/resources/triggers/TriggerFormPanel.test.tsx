@@ -571,8 +571,8 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     // Type is a locked read-only label in edit mode, not a Select.
     expect(screen.getByText('Type is locked when editing')).toBeInTheDocument();
     expect(screen.getByText('Task enters column')).toBeInTheDocument();
-    // A column edit has no Enabled switch (that only shows for non-column kinds).
-    expect(screen.queryByRole('switch', { name: 'Enabled' })).not.toBeInTheDocument();
+    // A column edit has no Trigger enabled switch (that only shows for non-column kinds).
+    expect(screen.queryByRole('switch', { name: 'Trigger enabled' })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
 
@@ -604,8 +604,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByPlaceholderText('C0123ABC (blank = any)')).toHaveValue('C1');
     expect(screen.getByPlaceholderText('ship it (optional)')).toHaveValue('deploy');
     expect(screen.getByRole('textbox', { name: 'Cooldown (s)' })).toHaveValue('120');
-    const enabledSwitch = screen.getByRole('switch', { name: 'Enabled' });
+    const enabledSwitch = screen.getByRole('switch', { name: 'Trigger enabled' });
     expect(enabledSwitch).toBeChecked();
+    expect(screen.getByText(/not run when you turn it back on/)).toBeInTheDocument();
 
     await userEvent.click(enabledSwitch); // toggle off
     await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
@@ -660,7 +661,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByPlaceholderText('C0123ABC (blank = any)')).toHaveValue('C3');
     expect(screen.getByPlaceholderText('ship it (optional)')).toHaveValue('');
     // enabled:false trigger => the switch reflects that.
-    expect(screen.getByRole('switch', { name: 'Enabled' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Trigger enabled' })).not.toBeChecked();
   });
 
   it('seeds a slack edit from a structured text predicate missing op/value', () => {
@@ -698,7 +699,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.queryByText('Verification')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('ref')).toHaveValue('ref');
     expect(screen.getByPlaceholderText('refs/heads/main')).toHaveValue('main');
-    expect(screen.getByRole('switch', { name: 'Enabled' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Trigger enabled' })).not.toBeChecked();
 
     await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
 
@@ -778,7 +779,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     expect(screen.getByPlaceholderText('0 9 * * 1-5')).toHaveValue('*/5 * * * *');
     // enabled defaults to true when the trigger omits it; schedule is non-column so the switch shows.
-    expect(screen.getByRole('switch', { name: 'Enabled' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Trigger enabled' })).toBeChecked();
 
     await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
 
