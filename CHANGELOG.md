@@ -27,7 +27,9 @@ governance, community health — carry none.
 - **Integrations**: **Sign in with GitLab** connects as a GitLab service
   account instead of a person's token. A group Owner signs in once; Flow creates
   the account in the group, keeps only its token for repositories, merge
-  requests and issues, and rotates it before a required expiry. Operators set
+  requests and issues, and rotates it before a required expiry. Signing in to
+  the same group again reuses that account; removing the connection revokes its
+  token, and a group Owner deletes the account in GitLab. Operators set
   `GITLAB_OAUTH_CLIENT_ID` and `GITLAB_OAUTH_CLIENT_SECRET` to offer it.
 - **Trackers**: on GitHub Projects, files sent to an issue are stored in the
   issue's repository under hidden `refs/aixle/attachments/` refs, so images show
@@ -43,6 +45,9 @@ governance, community health — carry none.
   History back to 2026-09-25 fills in by itself after the upgrade.
 
 ### Changed
+- **Triggers & gates**: the trigger form's on/off switch is labeled **Trigger
+  enabled** and says that what arrives while a trigger is off is not run when
+  it is turned back on.
 - **Admin**: the admin uses the Aixle Flow theme.
 - **Admin**: where Aixle hosts, a company runs free only when it is ticked
   Managed by Aixle. A worker limit can no longer be cleared unless the company is
