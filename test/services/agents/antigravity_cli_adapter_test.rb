@@ -175,10 +175,11 @@ module Agents
       assert_equal({ "X-Key" => "x" }, entry["headers"])
     end
 
-    test "default_env_vars hides the CLI logo and points the proxy log at Google's hosts" do
+    test "default_env_vars hides the CLI logo, keeps the pinned CLI, and points the proxy log at Google's hosts" do
       env = @adapter.default_env_vars(@session)
 
       assert_equal "1", env["AGY_CLI_HIDE_LOGO"]
+      assert_equal "true", env["AGY_CLI_DISABLE_AUTO_UPDATE"]
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
       assert_equal "googleapis.com,google.com", env["MITM_TRACKED_DOMAINS"]
       # Still no credential in the environment: the token travels in the config file.

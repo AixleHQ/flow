@@ -192,6 +192,11 @@ module Agents
     def default_env_vars(_session)
       {
         "AGY_CLI_HIDE_LOGO" => "1",
+        # Without it the CLI, run as root, replaces the pinned /usr/local/bin/agy with the
+        # vendor's newest release a second after launch (1.1.27 installed 1.4.2), and the
+        # pin is the telemetry hold (docs/operations/antigravity-cli.md). Only the exact
+        # value "true" is honoured: "1", "TRUE" and "yes" still update.
+        "AGY_CLI_DISABLE_AUTO_UPDATE" => "true",
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
       }

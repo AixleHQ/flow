@@ -21,7 +21,8 @@ Account OAuth is fully supported here, unlike the earlier design of this doc ass
 - MCP servers use `~/.gemini/config/mcp_config.json` and the documented `serverUrl` schema.
 - Antigravity imports Gemini-compatible `GEMINI.md` and skills, so Aixle writes those established paths.
 - Vendor telemetry is disabled. Antigravity does not expose an OTLP export contract; automatic-run token counts remain available in its stream-JSON result and terminal log.
-- The pin is held at 1.1.27 on purpose. In 1.3.1, `settings.json`'s `enableTelemetry` is no longer read (the field is `json:"-"`, and the CLI drops the key when it rewrites the file); telemetry is instead synced from the Google account's server-side setting, so after a raise it follows each user's account rather than this image. Find a local opt-out before raising it.
+- The pin is held at 1.1.27 on purpose. From 1.1.28, `settings.json`'s `enableTelemetry` is no longer read (the field is `json:"-"`, and the CLI drops the key when it rewrites the file); telemetry is instead synced from the Google account's server-side setting, so after a raise it follows each user's account rather than this image. No setting, environment variable or flag replaces it up to 1.4.2 (checked 2026-10-20). Find a local opt-out before raising it.
+- The CLI updates itself. Run as root, the image's user, it replaces `/usr/local/bin/agy` with the vendor's newest release a second after it starts, which undoes the pin. `AGY_CLI_DISABLE_AUTO_UPDATE=true` in every container's environment (`Agents::AntigravityCliAdapter#default_env_vars`) stops it; the CLI ignores any other value, `1` included.
 
 Build from the `docker/` directory:
 
