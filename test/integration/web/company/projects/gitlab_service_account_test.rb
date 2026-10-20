@@ -43,6 +43,7 @@ class Web::Company::Projects::GitlabServiceAccountTest < ActionDispatch::Integra
     pending = Integration.find_by!(project: @project, provider: "gitlab")
     assert_redirected_to company_project_integrations_path(@project, gitlab_setup: pending.id)
 
+    stub_request(:get, "#{API}/groups/31/service_accounts").with(query: hash_including({})).to_return(json([]))
     stub_request(:post, "#{API}/groups/31/service_accounts").to_return(json({ id: 900, username: "aixle-flow-ab12" }, status: 201))
     stub_request(:post, "#{API}/groups/31/members").to_return(json({ message: "Member already exists" }, status: 409))
     stub_request(:post, "#{API}/groups/31/service_accounts/900/personal_access_tokens")
@@ -78,5 +79,28 @@ class Web::Company::Projects::GitlabServiceAccountTest < ActionDispatch::Integra
 
     assert_redirected_to company_project_integrations_path(@project)
     assert_equal 0, Integration.where(provider: "gitlab").count
+  end
+
+  test "disconnecting a service-account connection revokes its token; the account stays for the group's Owner" do
+    integration = create(:integration, :gitlab, :active, company: @company, project: @project)
+    integration.credentials_data = { "personal_access_token" => "glpat-bot" }
+    integration.update!(settings: { "auth_mode" => "service_account", "gitlab_user_id" => "900" })
+    revoked = stub_request(:delete, "#{API}/personal_access_tokens/self").with(headers: { "Authorization" => "Bearer glpat-bot" })
+                .to_return(status: 204)
+
+    delete company_project_integration_path(@project, integration)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_requested revoked
+    assert_not Integration.exists?(integration.id)
+  end
+
+  test "disconnecting a pasted token's connection leaves the token alone" do
+    integration = create(:integration, :gitlab, :active, company: @company, project: @project)
+
+    delete company_project_integration_path(@project, integration)
+
+    assert_not Integration.exists?(integration.id)
+    assert_not_requested :delete, "#{API}/personal_access_tokens/self"
   end
 end

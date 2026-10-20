@@ -100,8 +100,9 @@ module Gitlab
       oauth = integration.credentials_data["oauth_access_token"]
       raise ConnectionError.new("Sign in with GitLab again", code: "not_authorized") if oauth.blank?
 
-      result = ServiceAccountSetup.new(Rest.new(token: oauth)).create!(group["id"])
       target = existing_for_group(group["id"], except: integration) || integration
+      replaced = target.credentials_data["personal_access_token"] if service_account?(target)
+      result = ServiceAccountSetup.new(Rest.new(token: oauth)).create!(group["id"], held: held_accounts(except: [ integration, target ]))
       target.credentials_data = { "personal_access_token" => result.token[:token], "service_account_token_id" => result.token[:id] }
       target.assign_attributes(
         name: "GitLab · #{group['full_path']}", status: :active, connected_by: @connected_by,
@@ -113,6 +114,7 @@ module Gitlab
       )
       target.save!
       integration.destroy! unless target == integration
+      ServiceAccountToken.revoke(replaced)
       target
     rescue Trackers::Error => e
       raise ConnectionError.new(service_account_refusal(e), code: e.code == "not_authorized" ? "not_authorized" : "validation_failed")
@@ -193,6 +195,13 @@ module Gitlab
 
     def identity(integration, info)
       integration.settings.to_h.except("error").merge("gitlab_user_id" => info[:id], "gitlab_username" => info[:username])
+    end
+
+    def service_account?(integration) = integration.settings.to_h["auth_mode"] == SERVICE_ACCOUNT_MODE
+
+    def held_accounts(except:)
+      Integration.where(provider: :gitlab).where.not(id: except.map(&:id)).where("settings ->> 'auth_mode' = ?", SERVICE_ACCOUNT_MODE)
+                 .pluck(Arel.sql("settings ->> 'gitlab_user_id'")).compact
     end
 
     def existing_for_group(group_id, except:)

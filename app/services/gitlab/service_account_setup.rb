@@ -5,6 +5,7 @@ module Gitlab
   # (docs/design/gitlab-tracker.md §4): the groups they own, then a service
   # account in the one they pick — a Maintainer there, holding an `api` token —
   # which the connection runs as from then on. The person's token is not kept.
+  # Reconnecting reuses the deployment's account that no connection holds.
   class ServiceAccountSetup
     NAME = "Aixle Flow"
     MAINTAINER = 40
@@ -28,10 +29,17 @@ module Gitlab
       end
     end
 
-    def create!(group_id)
+    # The account's name carries the deployment's host: staging, production and
+    # self-hosted installs may all sign in to one group, and an account shared
+    # between them would take another deployment's writes for its own.
+    def self.account_name = "#{NAME} (#{Settings.domain})"
+
+    # `held`: the GitLab user ids other connections of this deployment run as.
+    def create!(group_id, held: [])
       group = ERB::Util.url_encode(group_id.to_s)
-      account = @rest.post("/groups/#{group}/service_accounts",
-                           { name: NAME, username: "aixle-flow-#{SecureRandom.hex(4)}" })
+      account = reusable(group, held.map(&:to_s)) ||
+                @rest.post("/groups/#{group}/service_accounts",
+                           { name: self.class.account_name, username: "aixle-flow-#{SecureRandom.hex(4)}" })
       member!(group, account["id"])
       token = @rest.post("/groups/#{group}/service_accounts/#{account['id'].to_i}/personal_access_tokens",
                          { name: NAME, scopes: %w[api] })
@@ -40,6 +48,13 @@ module Gitlab
     end
 
     private
+
+    def reusable(group, held)
+      @rest.paginate("/groups/#{group}/service_accounts", {}, limit: 100)
+           .find { |account| account["name"] == self.class.account_name && held.exclude?(account["id"].to_s) }
+    rescue Trackers::Error
+      nil
+    end
 
     # A group's service account may already be its member.
     def member!(group, user_id)

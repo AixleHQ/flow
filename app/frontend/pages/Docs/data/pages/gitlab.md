@@ -68,7 +68,8 @@ date.
 2. Sign in to GitLab as an **Owner** of the group whose projects Flow should
    reach, and approve Aixle Flow. It asks for the `api` scope.
 3. Back on the Integrations page, pick the group. Flow:
-   - creates a service account named **Aixle Flow** (`aixle-flow-…`) in it;
+   - creates a service account named **Aixle Flow (your Flow address)**
+     (`aixle-flow-…`) in it, or reuses the one it made there before;
    - makes it a **Maintainer** of the group;
    - gives it a token with the `api` scope.
 
@@ -92,7 +93,11 @@ and moves.
   year. Flow rotates it a month before it ends, so nobody has to. If the group
   does not require it, the token does not expire.
 - **Signing in again** for the same group renews that connection, and its
-  repositories and trackers stay.
+  repositories and trackers stay. Flow reuses its service account there and
+  revokes the token it replaces.
+- **Disconnecting** revokes the service account's token. The account itself
+  stays in the group until an Owner deletes it (**Group → Settings → Service
+  accounts**); signing in again reuses it.
 
 ## Connect with a token
 

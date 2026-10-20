@@ -42,9 +42,9 @@ export const GitlabGroupModal = ({ integration, onClose, onCreated, basePath }: 
     <Modal opened={!!integration} onClose={onClose} title="Pick the GitLab group" size="md">
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Flow creates a service account named Aixle Flow in this group, makes it a Maintainer and keeps only its token:
-          repositories, merge requests and issues are then reached as that account, not as you. It sees the group&apos;s
-          projects; invite it to others in GitLab.
+          Flow creates a service account in this group, or reuses the one it made there before, makes it a Maintainer
+          and keeps only its token: repositories, merge requests and issues are then reached as that account, not as
+          you. It sees the group&apos;s projects; invite it to others in GitLab.
         </Text>
         <Select
           label="Group"

@@ -57,13 +57,23 @@ Integrations → Connect GitLab → "Connect with GitLab"
       exchange the code; list the groups the person owns (min_access_level=50)
       a pending connection keeps the person's token, encrypted, until a group is picked
   → Integrations page, "Pick the group for Aixle's service account"
-      POST /groups/:id/service_accounts             (name "Aixle Flow", username aixle-flow-<hex>)
+      GET  /groups/:id/service_accounts             (this deployment's account that no connection holds is reused)
+      POST /groups/:id/service_accounts             (otherwise: name "Aixle Flow (<domain>)", username aixle-flow-<hex>)
       POST /groups/:id/members                      (the account, Maintainer)
       POST /groups/:id/service_accounts/:id/personal_access_tokens   (api)
       the person's token is dropped; the connection is active as the bot
 ```
 
-- **Reconnecting.** Picking the same group again reuses the connection row.
+- **Reconnecting.** Picking the same group again reuses the connection row and its service account, with a
+  new token; the token it replaces is revoked.
+- **One account per deployment.** The account is named after the deployment's domain
+  (`Aixle Flow (staging.flow.aixle.com)`). Staging, production and self-hosted installs may sign in to one
+  group, and an account shared between them would take another deployment's writes for its own. An account
+  is reused only when no connection of this deployment runs as it; one named plain "Aixle Flow" is never
+  reused.
+- **Disconnecting.** Removing the connection revokes its token (`DELETE /personal_access_tokens/self`) after
+  its hooks are removed. The account stays, since only a group Owner may delete it (Group → Settings →
+  Service accounts); the next sign-in to that group reuses it.
 - **Several groups.** One service account per connection, in one group. Projects outside that group are not
   reachable unless the group Owner invites the account there.
 - **Token expiry.** When the group requires an expiry, the token's `expires_at` is kept.

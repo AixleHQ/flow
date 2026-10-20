@@ -18,6 +18,16 @@ module Gitlab
         Date.parse(expires_at.to_s) <= WINDOW.from_now.to_date
     end
 
+    # Only the token: the account outlives the connection, since only a group
+    # Owner may delete it.
+    def revoke(token)
+      return if token.blank?
+
+      Rest.new(token: token).delete("/personal_access_tokens/self")
+    rescue Trackers::Error => e
+      Rails.logger.warn("[Gitlab::ServiceAccountToken] could not revoke a token: #{e.code}")
+    end
+
     def rotate!(integration)
       rest = Rest.for(integration)
       raw = nil
