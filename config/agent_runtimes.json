@@ -57,7 +57,7 @@
       "description": "Google's agent-first terminal runtime, signed in with your Google account",
       "image": "antigravity-cli",
       "dockerfile": "docker/antigravity-cli/Dockerfile",
-      "cli_version": "1.1.27",
+      "cli_version": "1.4.2",
       "cli_latest": null,
       "cli_releases": { "github": "google-antigravity/antigravity-cli", "tag_prefix": "" }
     },
