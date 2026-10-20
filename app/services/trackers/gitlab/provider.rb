@@ -72,11 +72,11 @@ module Trackers
         subscription.secret.present? && token.present? && ActiveSupport::SecurityUtils.secure_compare(token, subscription.secret)
       end
 
-      def parse_delivery(payload, subscription)
+      def parse_delivery(payload, subscription, delivery_id: nil)
         scope_id = subscription.external_scope_id.to_s
         return [] unless covers_scope?(scope_id)
 
-        Notifications.parse(payload, scope_id: scope_id, lists: lists(scope_id))
+        Notifications.parse(payload, scope_id: scope_id, lists: lists(scope_id), delivery_id: delivery_id)
       end
 
       def delivery_id(request, _payload)

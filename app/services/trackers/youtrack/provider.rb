@@ -88,7 +88,7 @@ module Trackers
       end
 
       # A subscription belongs to one YouTrack project, whose token it holds.
-      def parse_delivery(payload, subscription)
+      def parse_delivery(payload, subscription, **)
         Notifications.parse(payload, project: project(subscription.external_scope_id))
       end
 

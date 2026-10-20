@@ -106,7 +106,8 @@ module Trackers
 
     # Deliveries through /webhooks/trackers (providers without a receiver of their own).
     def authentic_delivery?(_request, _raw_body, _subscription) = false
-    def parse_delivery(_payload, _subscription) = []
+    # `delivery_id` is the delivery's dedup key, for a provider whose payload carries no revision of its own.
+    def parse_delivery(_payload, _subscription, delivery_id: nil) = []
     # The provider's own id for a delivery, when it has one, for deduplication.
     def delivery_id(_request, _payload) = nil
 

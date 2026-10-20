@@ -15,15 +15,15 @@ module Trackers
       module_function
 
       # `lists` are the board's label lists, in board order.
-      def parse(payload, scope_id:, lists:)
+      def parse(payload, scope_id:, lists:, delivery_id: nil)
         case payload["object_kind"]
-        when "issue", "work_item" then issue(payload, scope_id, lists)
+        when "issue", "work_item" then issue(payload, scope_id, lists, delivery_id)
         when "note" then note(payload, scope_id)
         else []
         end
       end
 
-      def issue(payload, scope_id, lists)
+      def issue(payload, scope_id, lists, delivery_id = nil)
         attrs = payload["object_attributes"].to_h
         return [] unless attrs["project_id"].to_s == scope_id && attrs["iid"].present? && !attrs["confidential"]
 
@@ -34,7 +34,9 @@ module Trackers
         changes = [ status_change(payload, attrs, lists), assignee_change(payload) ].compact
         return [] if changes.empty?
 
-        [ Notification.build(kind: :issue_updated, changes: changes, revision: attrs["updated_at"], **common) ]
+        # GitLab leaves updated_at alone when only the labels change, so board moves
+        # would share it; the delivery's Idempotency-Key tells them apart.
+        [ Notification.build(kind: :issue_updated, changes: changes, revision: delivery_id || attrs["updated_at"], **common) ]
       end
 
       def note(payload, scope_id)

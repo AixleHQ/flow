@@ -73,7 +73,7 @@ module Trackers
         Webhooks.signed?(request, raw_body, subscription.secret)
       end
 
-      def parse_delivery(payload, _subscription)
+      def parse_delivery(payload, _subscription, **)
         Notifications.parse(payload, teams: linear_teams)
       end
 

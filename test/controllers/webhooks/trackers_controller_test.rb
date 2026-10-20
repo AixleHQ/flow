@@ -137,4 +137,33 @@ class Webhooks::TrackersControllerTest < ActionDispatch::IntegrationTest
                  TrackerDelivery.sole.notifications.sole.values_at("kind", "issue_id", "scope_id")
     assert_equal "active", subscription.reload.status
   end
+
+  test "GitLab board moves are told apart by their delivery, since a label change leaves updated_at alone" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    Gitlab::AppConfig.stubs(:webhooks_enabled?).returns(true)
+    stub_gitlab_tracker!.add_issue(iid: 1, title: "It breaks", labels: [ "Doing" ])
+    gitlab = gitlab_tracker_integration
+    Trackers::Provisioning.ensure_for!(gitlab)
+    create(:trigger_binding, project: gitlab.project, workflow: create(:workflow, scope: gitlab.project),
+                             created_by: gitlab.project.owner, event_type: "tracker.comment.created")
+    subscription = Trackers::Gitlab::Subscriptions.new(gitlab).ensure!.first
+    move = lambda do |from, to, key|
+      raw = { object_kind: "issue", user: { id: 11, username: "ada" },
+              object_attributes: { project_id: FakeGitlab::TrackerApi::PROJECT.to_i, iid: 1, action: "update", state: "opened",
+                                   updated_at: "2026-10-20 03:46:31 UTC" },
+              changes: { labels: { previous: [ { title: from } ], current: [ { title: to } ] } } }.to_json
+      post "/webhooks/trackers/#{subscription.endpoint_token}", params: raw,
+           headers: { "CONTENT_TYPE" => "application/json", "X-Gitlab-Token" => subscription.secret, "Idempotency-Key" => key }
+    end
+
+    perform_enqueued_jobs do
+      move.call("Ready for AI", "Doing", "k-1")
+      move.call("Doing", "Ready for AI", "k-2")
+      move.call("Ready for AI", "Doing", "k-3")
+      move.call("Ready for AI", "Doing", "k-3")
+    end
+
+    assert_equal [ "Doing", "Ready for AI", "Doing" ],
+                 TriggerEvent.where(event_type: "tracker.issue.status_changed").order(:id).map { |e| e.data.dig("change", "to", "name") }
+  end
 end

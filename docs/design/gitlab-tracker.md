@@ -93,6 +93,9 @@ Integrations → Connect GitLab → "Connect with GitLab"
     of the Aixle project can read. An internal note that arrives anyway is dropped.
   - The hook's own change hints are trusted, as for every subscription authenticated by its own secret.
   - A status change is the label lists and the state, before and after.
+  - A board move leaves the issue's `updated_at` unchanged (seen live 2026-10-20), so a change is keyed by
+    the delivery's `Idempotency-Key` rather than by the issue. Keyed by `updated_at`, every move after the
+    first would be dropped as a duplicate. The cost: two connections hooked to the same project each fire.
 - **Files.** Uploads linked from the description and notes.
   - A file on a confidential issue or in an internal note is restricted.
   - Files go up through the uploads API and are shown in a comment.
