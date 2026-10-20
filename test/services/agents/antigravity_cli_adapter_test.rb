@@ -34,12 +34,26 @@ module Agents
       credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" }
       files = @adapter.config_files(credentials)
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
-      assert_not_includes settings, "modelProvider"
-      refute settings["enableTelemetry"]
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] }, settings)
       assert_equal(
         { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" }, "auth_method" => "consumer" },
         JSON.parse(files[@adapter.config_path])
       )
+    end
+
+    test "marks a consumer login's first-run onboarding as done, as agy itself records it" do
+      files = @adapter.config_files({ "access_token" => "tok-123", "auth_method" => "consumer" })
+
+      assert_equal(
+        { "consumerOnboardingComplete" => true, "enterpriseOnboardingComplete" => false, "onboardingComplete" => true },
+        JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/cache/onboarding.json"])
+      )
+    end
+
+    test "leaves onboarding to agy for a login that is not a consumer one" do
+      files = @adapter.config_files({ "access_token" => "tok-123", "auth_method" => "gcp" })
+
+      assert_not_includes files.keys, "/home/antigravity/.gemini/antigravity-cli/cache/onboarding.json"
     end
 
     # Per review feedback, the auth terminal drives the real `agy` CLI directly
@@ -48,7 +62,7 @@ module Agents
     # backend-written script; only the pre-login settings file is seeded upfront.
     test "seeds only OAuth-compatible settings before login, no bespoke script" do
       files = @adapter.auth_setup_files
-      assert_equal({ "enableTelemetry" => false, "showTips" => false },
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] },
                    JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"]))
       assert_equal [ "/home/antigravity/.gemini/antigravity-cli/settings.json" ], files.keys
     end
@@ -175,10 +189,11 @@ module Agents
       assert_equal({ "X-Key" => "x" }, entry["headers"])
     end
 
-    test "default_env_vars hides the CLI logo and points the proxy log at Google's hosts" do
+    test "default_env_vars hides the CLI logo, keeps the pinned CLI, and points the proxy log at Google's hosts" do
       env = @adapter.default_env_vars(@session)
 
       assert_equal "1", env["AGY_CLI_HIDE_LOGO"]
+      assert_equal "true", env["AGY_CLI_DISABLE_AUTO_UPDATE"]
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
       assert_equal "googleapis.com,google.com", env["MITM_TRACKED_DOMAINS"]
       # Still no credential in the environment: the token travels in the config file.

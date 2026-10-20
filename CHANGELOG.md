@@ -30,6 +30,21 @@ governance, community health — carry none.
 - **Tasks**: a task's Properties — column, type, priority, assignee, epic, tags —
   sit right under its title, above the description, so a long description no
   longer pushes them out of view.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.303, Codex 0.163.0,
+  Cursor CLI 2026.10.18-ea085cb, Grok 1.0.62, Kiro CLI 2.32.0 and Antigravity
+  CLI 1.4.2. Gemini CLI stays at 0.60.0: every newer release still stops
+  `--yolo` at a prompt when the agent edits a build file.
+- **Sessions & Runs**: Antigravity CLI telemetry follows the setting on the
+  user's Google account (`/config` in the CLI, or the "Terms of Service & Data
+  Use" step) instead of being switched off by the image, which releases after
+  1.1.27 no longer allow.
+
+### Fixed
+- **Sessions & Runs**: an interactive Antigravity CLI session opens at the
+  prompt instead of the CLI's first-run colour scheme, terms and folder-trust
+  screens.
+- **Sessions & Runs**: an Antigravity CLI session no longer replaces its pinned
+  CLI with the vendor's newest release a second after it starts.
 
 ## [1.4.0] - 2026-10-19
 

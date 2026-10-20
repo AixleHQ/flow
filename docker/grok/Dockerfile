@@ -21,16 +21,17 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 #
 # Three things about that layout changed under us, and 1.0.34 is the version that showed
 # it (the image stopped building on 2026-09-17):
-#   * the payload no longer ships as a `@xai-official/grok-linux-*` sibling package, so
-#     the removal that deduplicated it has nothing to remove;
+#   * the payload is no longer a `@xai-official/grok-linux-*` sibling package but a
+#     dependency nested inside the package (`node_modules/@xai-official/grok-linux-<arch>/
+#     bin/grok.br`), so the removal that deduplicated the sibling has nothing to remove;
 #   * it is unpacked by the package's own postinstall — under the user running `npm
 #     install`, i.e. root — rather than by the agent user's first launch;
 #   * the unpacked file is VERSIONED (`grok-1.0.34`), so a fixed-name assertion could only
 #     ever have passed by accident.
 # What is worth asserting is therefore what proves the install: the payload exists after
-# the postinstall, and the CLI runs as the agent user. The old assertion also guaranteed
-# the decompression was paid at build time for the AGENT's home; that is no longer true,
-# so a session may pay it once on first launch.
+# the postinstall, and the CLI runs as the agent user. The postinstall also writes the
+# package's `bin/grok-native`, which `grok` runs directly, so no session decompresses
+# anything.
 #
 # Once the CLI has run as the agent user, root's unpacked copy goes: it is byte-identical
 # to the package's `bin/grok-native`, which is what `grok` runs, and the agent cannot
