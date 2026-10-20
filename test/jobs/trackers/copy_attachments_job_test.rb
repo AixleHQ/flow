@@ -25,6 +25,7 @@ class Trackers::CopyAttachmentsJobTest < ActiveJob::TestCase
   test "the issue's files land on the run's task, and what was left out goes into the run's context" do
     @youtrack.add_file(ISSUE_1, name: "log.txt", bytes: "boom")
     @youtrack.add_file(ISSUE_1, name: "secret.txt", bytes: "s", restricted: true)
+    Trackers::IssueFileCopy.pending!(@run.id)
 
     Trackers::CopyAttachmentsJob.perform_now(@run.id)
 
@@ -32,6 +33,18 @@ class Trackers::CopyAttachmentsJobTest < ActiveJob::TestCase
     context = @run.reload.shared_context
     assert_equal({ "copied" => 1, "skipped" => [ { "name" => "secret.txt", "reason" => "restricted" } ] }, context.dig("tracker", "files"))
     assert_equal({ "kept" => true }, context["outputs"])
+  end
+
+  test "a copy the tracker refuses ends the run's wait, with the reason" do
+    @youtrack.add_file(ISSUE_1, name: "log.txt", bytes: "boom")
+    @youtrack.fail_next(:issue, Trackers::Error.new("No access to the issue", code: "forbidden"))
+    Trackers::IssueFileCopy.pending!(@run.id)
+
+    Trackers::CopyAttachmentsJob.perform_now(@run.id)
+
+    assert_empty @task.task_assets
+    assert_equal({ "error" => "forbidden" }, @run.reload.shared_context.dig("tracker", "files"))
+    assert_equal({ "kept" => true }, @run.shared_context["outputs"])
   end
 
   test "a run not yet readable is tried again" do

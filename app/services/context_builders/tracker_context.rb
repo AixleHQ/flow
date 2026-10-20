@@ -50,7 +50,19 @@ module ContextBuilders
         note << " Already in your workspace: #{paths.first(20).map { |p| "`#{p}`" }.join(', ')}."
       end
       note << " Not copied: #{skipped.first(10).map { |s| "#{s['name']} (#{s['reason']})" }.join(', ')}." if skipped.any?
-      note
+      note << copy_state_note
+    end
+
+    def copy_state_note
+      files = tracker["files"].to_h
+      if files["pending"]
+        " Copying the issue's files had not finished when this step started: `tracker_download_attachments` " \
+          "fetches the rest, and reuses what is already copied."
+      elsif files["error"]
+        " Copying the issue's files failed (#{files['error']}); `tracker_download_attachments` still fetches them."
+      else
+        ""
+      end
     end
 
     # Jira (and the hosts' own issue links) attach branches, commits and pull

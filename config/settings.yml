@@ -429,6 +429,13 @@ youtrack:
   # to a private address, comma-separated. Every other host must be public.
   trusted_hosts: "<%= ENV['YOUTRACK_TRUSTED_HOSTS'] %>"
 
+# Every tracker (docs/design/tracker-attachments.md §7.5): how long a step of a run
+# that copies its issue's files waits for the copy before it starts, and how often
+# it looks.
+trackers:
+  copy_wait_seconds: 60
+  copy_poll_seconds: 2
+
 coder:
   # Operator-configurable knobs for the Coder MCP services (workspace
   # allocation, health gating, ssh runner).

@@ -576,10 +576,15 @@ every run the binding starts first copies the issue's files onto the Aixle task.
   within the caps (§10).
 - It runs **outside** the dispatch lock, unlike the Slack and Teams ingestors, because one issue can
   carry dozens of large files.
-- **The first session may start before the job ends.** It gets whatever is copied by then. The context
-  says how many files are still missing, and `tracker_download_attachments` fetches them. The tool and
-  the job share `Trackers::AttachmentImporter` and the unique index (§5.3), so neither copies a file
-  twice.
+- **A step waits for the copy, within a bound.** The dispatch marks the run's copy pending
+  (`shared_context.tracker.files = {"pending": true}`); the job replaces that with what it copied, or
+  with the error that stopped it. Each step's `PrepareStepActivity` waits while the copy is pending, up
+  to `Settings.trackers.copy_wait_seconds` (60), before its session exists, so the workspace files and
+  the context about them are read after the copy. Seen on staging 2026-10-20: the job finished 3–10 s
+  after the first session started, so without the wait a step got none or part of the files.
+- A step that still starts first is told the copy had not finished, and `tracker_download_attachments`
+  fetches the rest. The tool and the job share `Trackers::AttachmentImporter` and the unique index
+  (§5.3), so neither copies a file twice. A failed copy is named in the context too.
 - Restricted files are never copied (§9.3), and skipped files are listed in the run's context with the
   reason.
 - Copies are made on later runs of the same task too. Files already copied are reused, and only new ones
@@ -1016,6 +1021,7 @@ All five providers were built in one change, from the API documentation, ahead o
 | Port (§6.1) | `upload_attachments(scope_id, ref, files)`, one call for all files | `upload_attachment(scope_id, ref, file)`, one file at a time; `attachments?`, `attachment_list?`, `max_upload_bytes`, `compose_comment` and `attachment_markup` on the port | Each file is recorded in `tracker_attachments` as soon as it lands, so a retry after a failed comment finds it instead of uploading it again (`Trackers::AttachmentExporter`). Jira's per-issue write limit allows the ten files a call can carry |
 | File sources (§5.1) | `Concerns::ToolFiles` gains `task_asset_id` and streaming | A separate `Concerns::TrackerFiles` with the four sources, a `stat` size check before a container file is read, and temp files | `chat_post_message`'s contract stays as it is |
 | Run context (§7.4) | Up to 20 files listed at hydrate time | The context lists the copies already on the task, read from the database, and what the copy job skipped (`shared_context.tracker.files`); nothing is read from the tracker when a run starts | A listing at fire time would call the tracker inside the dispatch lock, on every event, for files most runs never open |
+| Copy timing (§7.5) | The first session takes what is copied by then | Steps wait in `PrepareStepActivity`, up to a minute, while the run's copy is pending (`Trackers::IssueFileCopy`) | The copy finished after the session started on every staging run |
 | Jira budget (§10.1) | Per-connection hourly budget in Postgres | `Trackers::Jira::Budget` in `Rails.cache` (Redis in production): the pool state from `X-RateLimit-*` headers, and 300 downloads per connection per hour for copy jobs; a job that finds the pool near its limit retries in 10 minutes, six times | A counter that resets every hour needs no durability; the agent's own calls are never held back |
 | Azure orphan (§5.3) | Partial progress in the ledger row | The upload's answer kept in `Rails.cache` for an hour, keyed by work item and content digest; a retry links it | The ledger row belongs to the whole call, not to one file |
 | YouTrack comments (§4.1) | Attach to the comment where it works | Files are attached to the issue and the comment names them | One upload path, the documented one |

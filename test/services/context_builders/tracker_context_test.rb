@@ -45,6 +45,16 @@ class ContextBuilders::TrackerContextTest < ActiveSupport::TestCase
     assert_match "Not copied: dump.png (restricted)", content
   end
 
+  test "a run whose copy of the issue's files failed is told so, and that the tool still fetches them" do
+    @workflow_run.update!(shared_context: { "tracker" => {
+      "handle" => "jira", "event_type" => "tracker.issue.created", "issue" => { "key" => "ENG-1" },
+      "files" => { "error" => "forbidden" }
+    } })
+
+    assert_match "Copying the issue's files failed (forbidden); `tracker_download_attachments` still fetches them.",
+                 ContextBuilders::TrackerContext.new(@session).build.sole.content
+  end
+
   test "a comment that started the run is quoted" do
     @workflow_run.update!(shared_context: { "tracker" => {
       "handle" => "boards", "event_type" => "tracker.comment.created", "issue" => { "key" => "11" },

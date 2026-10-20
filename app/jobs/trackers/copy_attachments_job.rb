@@ -2,9 +2,9 @@
 
 module Trackers
   # A tracker trigger with `copy_attachments` started a run: copy the issue's
-  # files onto the run's task (docs/design/tracker-attachments.md §7.5). The
-  # first step may start before this ends; it gets what is copied by then, and
-  # the run's context says what was left out.
+  # files onto the run's task (docs/design/tracker-attachments.md §7.5). The run
+  # is marked pending until this stops (Trackers::IssueFileCopy); its first step
+  # waits for that, within a bound.
   class CopyAttachmentsJob < ApplicationJob
     queue_as :default
 
@@ -15,7 +15,9 @@ module Trackers
     retry_on RunNotVisible, wait: 2.seconds, attempts: 5
     # Jira's pool is shared by every customer (Trackers::Jira::Budget); the
     # copy waits instead of draining it.
-    retry_on PoolNearLimit, wait: 10.minutes, attempts: 6
+    retry_on PoolNearLimit, wait: 10.minutes, attempts: 6 do |job, _error|
+      IssueFileCopy.record(job.arguments.first, "error" => "rate_limited")
+    end
 
     def perform(workflow_run_id)
       run = WorkflowRun.find_by(id: workflow_run_id)
@@ -24,7 +26,7 @@ module Trackers
       context = run.shared_context.to_h["tracker"].to_h
       tracker = ProjectTracker.find_by(id: context["project_tracker_id"])
       issue = context["issue"].to_h
-      return unless run.board_task && tracker&.usable? && issue["id"].present?
+      return IssueFileCopy.record(run.id, "error" => "unavailable") unless run.board_task && tracker&.usable? && issue["id"].present?
 
       results = AttachmentImporter.new(project_tracker: tracker, task: run.board_task, user: run.user,
                                        throttle: throttle(tracker))
@@ -32,6 +34,7 @@ module Trackers
       remember(run, results)
     rescue Trackers::Error => e
       Rails.logger.warn("[Trackers::CopyAttachmentsJob] run #{workflow_run_id}: #{e.code} #{e.message}")
+      IssueFileCopy.record(workflow_run_id, "error" => e.code)
     end
 
     private
@@ -45,15 +48,11 @@ module Trackers
       -> { Jira::Budget.take(integration) }
     end
 
-    # Into the run's context without rewriting the rest of it: steps write there too.
     def remember(run, results)
-      summary = {
+      IssueFileCopy.record(run.id, {
         "copied" => results.count { |r| r.status != :skipped },
         "skipped" => results.select { |r| r.status == :skipped }.map { |r| { "name" => r.attachment.name, "reason" => r.reason }.compact }
-      }
-      WorkflowRun.where(id: run.id).update_all(
-        [ "shared_context = jsonb_set(shared_context, '{tracker,files}', ?::jsonb, true)", summary.to_json ]
-      )
+      })
     end
   end
 end

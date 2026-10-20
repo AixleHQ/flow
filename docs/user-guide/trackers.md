@@ -451,9 +451,10 @@ can put files onto issues.
   card, when every step should find them in its workspace without asking, or
   when the run's inputs must stay available after the issue changes. Leave it
   off when agents only need some files, or when issue files must not be stored
-  outside the tracker. A step that starts before the copy finishes is told
-  which files are still missing and fetches them itself. On Jira, copying waits
-  while Atlassian reports the app's rate limit near its end.
+  outside the tracker. A run's steps wait up to a minute for the copy to
+  finish; a step that still starts first is told so, and fetches the rest
+  itself. On Jira, copying waits while Atlassian reports the app's rate limit
+  near its end.
 - **What is never copied.** Files over 50 MB; past 20 files or 200 MB in one
   go (the rest stay available to `tracker_download_attachments`); and files the
   tracker shows to only some people — a YouTrack attachment limited to groups,

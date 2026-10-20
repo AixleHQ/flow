@@ -48,6 +48,7 @@ class Trackers::ProcessDeliveryJobTest < ActiveJob::TestCase
 
     Trackers::ProcessDeliveryJob.perform_now(deliver([ { field: "status", from: "To Do", to: "Ready for AI", from_id: "1", to_id: "10004" } ]).id)
     assert_enqueued_with(job: Trackers::CopyAttachmentsJob, args: [ run.id ])
+    assert_equal({ "pending" => true }, run.reload.shared_context.dig("tracker", "files"))
 
     clear_enqueued_jobs
     binding.update!(copy_attachments: false)

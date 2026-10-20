@@ -325,6 +325,7 @@ class TriggerEngine
     def copy_issue_files(run, binding, event, task)
       return unless binding&.copy_attachments && task && Trackers::TriggerSupport.event?(event)
 
+      Trackers::IssueFileCopy.pending!(run.id)
       Trackers::CopyAttachmentsJob.perform_later(run.id)
     end
 
