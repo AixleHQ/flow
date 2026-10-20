@@ -80,7 +80,7 @@ module Trackers
         budget[:files] += 1
         budget[:bytes] += file.size
 
-        name = unique_name(fetched.name || attachment.name, taken)
+        name = unique_name(with_extension(fetched.name || attachment.name, file), taken)
         result = store(fetched, file, name)
         if block_given?
           # Storing the copy closes the temp file; one kept nowhere else is still open.
@@ -162,6 +162,16 @@ module Trackers
     def issue_key
       @issue_key ||= @task && ExternalResource.tracker_issues.where(board_task: @task, provider: @tracker.provider)
                                               .order(:created_at).first&.key
+    end
+
+    # GitHub names an image pasted into an issue by its asset's uuid alone.
+    def with_extension(name, file)
+      return name if File.extname(name.to_s).present?
+
+      file.rewind
+      extension = Marcel::Magic.by_magic(file)&.extensions&.first
+      file.rewind
+      extension ? "#{name}.#{extension}" : name
     end
 
     def unique_name(name, taken)

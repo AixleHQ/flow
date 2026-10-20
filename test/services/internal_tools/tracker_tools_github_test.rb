@@ -61,6 +61,17 @@ class InternalTools::TrackerToolsGithubTest < ActiveSupport::TestCase
     assert_match(/jwt=signed/, @github.calls_to(:download_signed).sole[:url])
   end
 
+  test "an image pasted as HTML, named by its uuid alone, is stored with the extension its bytes give" do
+    stub_container_runtime
+    image = "https://github.com/user-attachments/assets/6a02e991-bc74-41de-8cb5-9089462795ce"
+    @github.set_body("I_kwDOissue1", %(<img width="800" alt="Image" src="#{image}" />))
+    @github.add_person_image("I_kwDOissue1", url: image, bytes: "\x89PNG\r\n\x1A\n".b + ("\0" * 32))
+
+    downloaded = run_tool(InternalTools::TrackerDownloadAttachments, issue: "acme-corp/app#1")["files"]
+
+    assert_equal [ [ "6a02e991-bc74-41de-8cb5-9089462795ce.png", "copied" ] ], downloaded.map { |f| f.values_at("name", "status") }
+  end
+
   test "a file goes into the issue's repository and the comment shows it from the commit" do
     run_tool(InternalTools::TrackerAttachFiles, issue: "acme-corp/app#1", files: [ { content: "png", filename: "after.png" } ])
     again = run_tool(InternalTools::TrackerAttachFiles, issue: "acme-corp/app#1", comment: "Same file",
