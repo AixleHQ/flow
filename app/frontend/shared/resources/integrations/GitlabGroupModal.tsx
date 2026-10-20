@@ -8,18 +8,20 @@ import type { Integration } from '@/types/generated';
 interface Props {
   integration: Integration | null;
   onClose: () => void;
+  onCreated: (integration: Integration) => void;
   basePath: string;
 }
 
 // Finishes a GitLab sign-in: Flow creates its service account in the group picked here.
-export const GitlabGroupModal = ({ integration, onClose, basePath }: Props) => {
+export const GitlabGroupModal = ({ integration, onClose, onCreated, basePath }: Props) => {
   const groups = integration?.gitlabGroups ?? [];
   const [groupId, setGroupId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setGroupId(groups.length === 1 ? groups[0].id : null);
-  }, [groups]);
+    const owned = integration?.gitlabGroups ?? [];
+    setGroupId(owned.length === 1 ? owned[0].id : null);
+  }, [integration]);
 
   const save = useCallback(() => {
     if (!integration || !groupId) return;
@@ -29,12 +31,12 @@ export const GitlabGroupModal = ({ integration, onClose, basePath }: Props) => {
       { gitlabGroupId: groupId },
       {
         preserveScroll: true,
-        onSuccess: onClose,
+        onSuccess: () => onCreated(integration),
         onError: () => notifications.show({ message: 'Failed to create the service account', color: 'red' }),
         onFinish: () => setSaving(false),
       },
     );
-  }, [basePath, groupId, integration, onClose]);
+  }, [basePath, groupId, integration, onCreated]);
 
   return (
     <Modal opened={!!integration} onClose={onClose} title="Pick the GitLab group" size="md">

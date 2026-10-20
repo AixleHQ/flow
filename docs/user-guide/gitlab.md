@@ -73,6 +73,9 @@ date.
    - gives it a token with the `api` scope.
 
    From then on, Flow keeps only that token and drops yours.
+4. Flow then opens **Issue boards**, to make projects' issues a tracker (see
+   [GitLab issues as a tracker](#gitlab-issues-as-a-tracker)). Close it if
+   GitLab is only your code host.
 
 The connection is named after the group, and everything Flow does in GitLab is
 done by the service account: clones and pushes, merge requests, issue comments
@@ -252,7 +255,8 @@ Any GitLab connection can make its projects' issues a tracker, like a Jira
 project. What trackers are and how their triggers work is on
 [Trackers](/docs/trackers).
 
-1. On the connection's row on the **Integrations** page select **Issue boards**.
+1. On the connection's row on the **Integrations** page select **Issue boards**
+   (the board icon). It also opens right after a sign-in.
 2. Pick the projects, and for each the **board** whose label lists are its
    columns.
 

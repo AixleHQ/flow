@@ -208,7 +208,7 @@ export const TrackersContent = ({
           <EmptyState
             icon={<IconTicket size={22} />}
             title="No trackers"
-            description="Connect Azure DevOps, Jira, Linear or YouTrack on the Integrations page, or pick GitHub Projects on a GitHub connection; each project or team a connection covers becomes a tracker here."
+            description="Connect Azure DevOps, Jira, Linear or YouTrack on the Integrations page, or pick GitHub Projects on a GitHub connection or issue boards on a GitLab one; each project or team a connection covers becomes a tracker here."
             action={addButton}
           />
         </Box>

@@ -1393,6 +1393,10 @@ export const IntegrationsContent = ({
       <GitlabGroupModal
         integration={gitlabGroupTarget}
         onClose={() => setGitlabGroupTarget(null)}
+        onCreated={(integration) => {
+          setGitlabGroupTarget(null);
+          setGitlabTrackersTarget(integration);
+        }}
         basePath={basePath}
       />
 

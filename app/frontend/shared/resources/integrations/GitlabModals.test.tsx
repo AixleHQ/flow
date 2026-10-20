@@ -28,12 +28,15 @@ describe('GitlabGroupModal', () => {
       gitlabAuthMode: 'service_account_pending',
       gitlabGroups: [{ id: '31', fullPath: 'acme', name: 'Acme' }],
     });
-    renderPage(<GitlabGroupModal integration={integration} onClose={() => {}} basePath={BASE} />);
+    vi.mocked(router.patch).mockImplementationOnce((_url, _data, options) => options?.onSuccess?.({} as never));
+    const onCreated = vi.fn();
+    renderPage(<GitlabGroupModal integration={integration} onClose={() => {}} onCreated={onCreated} basePath={BASE} />);
 
     expect(screen.getByText(/keeps only its token/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create service account' }));
 
     expect(router.patch).toHaveBeenCalledWith(`${BASE}/6`, { gitlabGroupId: '31' }, expect.anything());
+    expect(onCreated).toHaveBeenCalledWith(integration);
   });
 
   it('waits for a pick when the person owns several groups', () => {
@@ -44,7 +47,7 @@ describe('GitlabGroupModal', () => {
         { id: '32', fullPath: 'acme/ops', name: 'Ops' },
       ],
     });
-    renderPage(<GitlabGroupModal integration={integration} onClose={() => {}} basePath={BASE} />);
+    renderPage(<GitlabGroupModal integration={integration} onClose={() => {}} onCreated={() => {}} basePath={BASE} />);
 
     expect(screen.getByRole('button', { name: 'Create service account' })).toBeDisabled();
   });
