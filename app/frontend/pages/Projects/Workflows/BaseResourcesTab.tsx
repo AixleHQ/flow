@@ -66,7 +66,7 @@ export function BaseResourcesTab({
   const baseConfigItemIds = workflow.baseConfigItemIds ?? [];
 
   return (
-    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+    <div style={{ overflowY: 'auto', height: '100%', background: 'var(--bg)' }}>
       <div style={{ padding: '28px 24px', maxWidth: 640 }}>
         {/* Heading */}
         <div
