@@ -1400,6 +1400,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.bigint "shared_in_session_id"
     t.string "tags", default: [], array: true
     t.datetime "updated_at", null: false
+    t.string "source", default: "upload", null: false
+    t.string "content_sha256"
     t.index ["author_id"], name: "index_task_assets_on_author_id"
     t.index ["board_task_id"], name: "index_task_assets_on_board_task_id"
     t.index ["public_token"], name: "index_task_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
@@ -1582,6 +1584,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.index ["provider", "status", "reported_at"], name: "index_tracker_accounts_on_provider_and_status_and_reported_at"
   end
 
+  create_table "tracker_attachments", force: :cascade do |t|
+    t.bigint "project_id", null: false
+    t.string "provider", null: false
+    t.string "instance", null: false
+    t.string "issue_id", null: false
+    t.string "external_id", null: false
+    t.string "direction", null: false
+    t.string "content_sha256", null: false
+    t.bigint "task_asset_id"
+    t.bigint "tracker_operation_id"
+    t.jsonb "data", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id", "provider", "instance", "issue_id", "content_sha256"], name: "idx_tracker_attachments_content"
+    t.index ["project_id", "provider", "instance", "issue_id", "external_id"], name: "idx_tracker_attachments_identity", unique: true
+    t.index ["task_asset_id"], name: "index_tracker_attachments_on_task_asset_id"
+  end
+
   create_table "tracker_deliveries", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "dedup_key", null: false
@@ -1655,6 +1675,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.string "trigger_mode", default: "auto", null: false
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
+    t.boolean "copy_attachments", default: false, null: false
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
@@ -2088,6 +2109,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
   add_foreign_key "tools", "companies", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_tools_project_company", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "tracker_attachments", "projects", on_delete: :cascade
+  add_foreign_key "tracker_attachments", "task_assets", on_delete: :nullify
   add_foreign_key "tracker_deliveries", "tracker_subscriptions", on_delete: :cascade
   add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
   add_foreign_key "tracker_subscriptions", "integrations", on_delete: :cascade

@@ -1569,7 +1569,8 @@ export function TaskDetailSidebar({
                       ? `${(a.fileSize / 1024).toFixed(1)} KB`
                       : `${(a.fileSize / (1024 * 1024)).toFixed(1)} MB`
                   : null;
-                const subText = [a.contentType, sizeStr].filter(Boolean).join(' · ');
+                const fromIssue = a.trackerIssueKey ? `from ${a.trackerIssueKey}` : null;
+                const subText = [fromIssue, a.contentType, sizeStr].filter(Boolean).join(' · ');
                 return (
                   <Box
                     key={a.id}

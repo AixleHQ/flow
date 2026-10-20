@@ -240,6 +240,7 @@ class TriggerEngine
           )
           decided = started ? "dispatched" : "skipped"
           WorkflowService.dispatch_or_leave_to_relay(result) if started
+          copy_issue_files(result, trigger_binding, event, subject) if started
         end
       end
       # Said once, by the attempt that decided; a replay of the event decides nothing.
@@ -317,6 +318,15 @@ class TriggerEngine
     rescue StandardError => e
       Rails.logger.error("[TriggerEngine] chat file ingest failed for project ##{project&.id}: #{e.message}")
       owned_asset_ids(event.data["input_asset_ids"], project)
+    end
+
+    # Out of the dispatch lock, unlike chat files: an issue can carry dozens of
+    # large files (docs/design/tracker-attachments.md §7.5).
+    def copy_issue_files(run, binding, event, task)
+      return unless binding&.copy_attachments && task && Trackers::TriggerSupport.event?(event)
+
+      Trackers::IssueFileCopy.pending!(run.id)
+      Trackers::CopyAttachmentsJob.perform_later(run.id)
     end
 
     def owned_asset_ids(ids, project)

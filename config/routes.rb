@@ -465,6 +465,7 @@ Rails.application.routes.draw do
     get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
     # The one redirect URI registered on Aixle's Linear OAuth app.
     get "integrations/linear/oauth/callback", to: "integrations/linear_oauth#callback", as: :linear_oauth_callback
+    get "integrations/gitlab/oauth/callback", to: "integrations/gitlab_oauth#callback", as: :gitlab_oauth_callback
     # Where a signed-in user approves, by its code, a pairing the Aixle Flow
     # YouTrack app started.
     get "integrations/youtrack/connect", to: "integrations/youtrack_connect#show", as: :youtrack_connect
@@ -632,6 +633,8 @@ Rails.application.routes.draw do
               # lists the teams a key can see before it is saved.
               get :linear_oauth_start
               post :linear_inspect
+              # GitLab: the OAuth app redirect that starts a service-account connection.
+              get :gitlab_oauth_start
               # YouTrack: a pairing for the Aixle Flow app on the instance.
               post :youtrack_connect
               # Microsoft Teams: a pending connection and its approval link.
@@ -644,6 +647,8 @@ Rails.application.routes.draw do
               get :jira_projects
               get :github_projects
               get :linear_teams
+              get :gitlab_projects
+              get :gitlab_boards
               get :jira_webhook
             end
           end

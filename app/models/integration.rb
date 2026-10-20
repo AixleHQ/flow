@@ -25,6 +25,11 @@ class Integration < ApplicationRecord
   # before the repositories go, removed once the removal has committed.
   before_destroy :collect_ci_webhook_repositories, prepend: true, if: :gitlab?
   after_destroy_commit :unregister_ci_webhooks, if: :gitlab?
+  # So does each tracked GitLab project's issue hook (Trackers::Gitlab::Subscriptions).
+  before_destroy :collect_gitlab_tracker_hooks, prepend: true, if: :gitlab?
+  after_destroy_commit :remove_gitlab_tracker_hooks, if: :gitlab?
+  # After the hook removals above, which still need the token.
+  after_destroy_commit :revoke_gitlab_service_account_token, if: :gitlab?
   # An API-key connection registered its Linear webhooks itself; nothing else removes them.
   before_destroy :collect_linear_webhooks, prepend: true, if: :linear?
   after_destroy_commit :remove_linear_webhooks, if: :linear?
@@ -366,6 +371,21 @@ class Integration < ApplicationRecord
 
   def unregister_ci_webhooks
     Array(@ci_webhook_repositories).each { |repository| Repositories::CiWebhook.unregister(repository) }
+  end
+
+  def collect_gitlab_tracker_hooks
+    @gitlab_token = credentials_data["personal_access_token"]
+    @gitlab_service_account = settings.to_h["auth_mode"] == Gitlab::IntegrationService::SERVICE_ACCOUNT_MODE
+    @gitlab_tracker_hooks = tracker_subscriptions.live.where(strategy: "api").where.not(provider_subscription_id: nil)
+                                                 .pluck(:external_scope_id, :provider_subscription_id)
+  end
+
+  def remove_gitlab_tracker_hooks
+    Trackers::Gitlab::Subscriptions.release(token: @gitlab_token, hooks: @gitlab_tracker_hooks)
+  end
+
+  def revoke_gitlab_service_account_token
+    Gitlab::ServiceAccountToken.revoke(@gitlab_token) if @gitlab_service_account
   end
 
   def collect_linear_webhooks

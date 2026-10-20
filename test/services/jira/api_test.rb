@@ -84,9 +84,73 @@ class Jira::ApiTest < ActiveSupport::TestCase
 
     page = @api.comments("10100", limit: 1)
 
-    assert_equal [ { id: "5", author: "Ada", body: "first [~accountid:557058:ada]", created_at: "2026-09-30T10:00:00.000+0000" } ],
+    assert_equal [ { id: "5", author: "Ada", body: "first [~accountid:557058:ada]", created_at: "2026-09-30T10:00:00.000+0000",
+                     restricted: false } ],
                  page[:comments]
     assert_equal "1", page[:next_cursor]
+  end
+
+  test "a comment limited to a role or group is restricted" do
+    stub_get("api", "2", "issue", "10100", "comment", query: { "startAt" => "0" }, body: {
+      startAt: 0, maxResults: 50, total: 1,
+      comments: [ { id: "6", body: "!dump.png!", author: { displayName: "Ada" }, created: "2026-09-30T10:00:00.000+0000",
+                    visibility: { type: "role", value: "Administrators" } } ]
+    })
+
+    assert_equal [ true ], @api.comments("10100")[:comments].pluck(:restricted)
+  end
+
+  test "an issue's files come from its attachment field" do
+    stub_get("api", "2", "issue", "10100", query: { "fields" => "attachment" }, body: {
+      id: "10100", fields: { attachment: [
+        { self: "https://api.atlassian.com/ex/jira/cloud-1/rest/api/2/attachment/10010", id: "10010", filename: "trace.log",
+          author: { accountId: "557058:ada", displayName: "Ada" }, created: "2026-09-30T10:30:00.000+0000", size: 42,
+          mimeType: "text/plain", content: "https://acme.atlassian.net/rest/api/2/attachment/content/10010" }
+      ] }
+    })
+
+    assert_equal [ { id: "10010", name: "trace.log", size: 42, content_type: "text/plain", created_at: "2026-09-30T10:30:00.000+0000" } ],
+                 @api.attachments("10100")
+  end
+
+  test "a download through the gateway follows its redirect to the media host without the token" do
+    resolve_hosts_publicly!
+    stub_request(:get, jira_url("cloud-1", "api", "2", "attachment", "content", "10010"))
+      .with(query: { "redirect" => "false" }, headers: { "Authorization" => "Bearer t" })
+      .to_return(status: 303, headers: { "Location" => "https://api.media.atlassian.com/file/abc/binary?token=jwt" })
+    media = stub_request(:get, "https://api.media.atlassian.com/file/abc/binary?token=jwt")
+              .with { |request| request.headers["Authorization"].nil? }
+              .to_return(status: 200, body: "trace", headers: { "Content-Type" => "application/octet-stream" })
+    io = StringIO.new
+
+    @api.download_attachment("10010", io: io, max_bytes: 1.megabyte)
+
+    assert_requested media
+    assert_equal "trace", io.string
+  end
+
+  test "a redirect anywhere but Atlassian's media host is not followed" do
+    resolve_hosts_publicly!
+    stub_request(:get, jira_url("cloud-1", "api", "2", "attachment", "content", "10010")).with(query: { "redirect" => "false" })
+      .to_return(status: 302, headers: { "Location" => "https://evil.example/steal" })
+
+    error = assert_raises(Trackers::Error) { @api.download_attachment("10010", io: StringIO.new, max_bytes: 1.megabyte) }
+
+    assert_equal "not_found", error.code
+  end
+
+  test "an upload is multipart with Jira's XSRF opt-out header" do
+    resolve_hosts_publicly!
+    upload = stub_request(:post, jira_url("cloud-1", "api", "2", "issue", "10100", "attachments"))
+               .with(headers: { "X-Atlassian-Token" => "no-check", "Authorization" => "Bearer t" }) { |r| r.headers["Content-Type"].start_with?("multipart/form-data") }
+               .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: [
+                 { id: "10020", filename: "a.txt", size: 1, mimeType: "text/plain", created: "2026-09-30T11:00:00.000+0000" }
+               ].to_json)
+    file = Trackers::UploadFile.new(io: StringIO.new("a"), filename: "a.txt", content_type: "text/plain", size: 1, sha256: "x")
+
+    assert_equal({ id: "10020", name: "a.txt", size: 1, content_type: "text/plain", created_at: "2026-09-30T11:00:00.000+0000" },
+                 @api.upload_attachment("10100", file))
+    assert_requested upload
   end
 
   test "projects follow Jira's offset pages" do

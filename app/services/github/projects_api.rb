@@ -10,6 +10,8 @@ module Github
   # where GraphQL wants a node id for each.
   class ProjectsApi
     API_HOST = "https://api.github.com"
+    # Where Aixle keeps files it put on issues: one ref per file (#store_file).
+    FILES_REF = "refs/aixle/attachments"
     OPEN_TIMEOUT = 5
     READ_TIMEOUT = 20
     MAX_PROJECT_PAGES = 5
@@ -231,7 +233,93 @@ module Github
       raise unless e.code == "not_found"
     end
 
+    # Rendered HTML of an issue or pull request and its latest comments: the only
+    # place GitHub hands an app a fetchable address for a person's private image
+    # — a signed URL valid for minutes. [{ id:, html: }], the body first.
+    def rendered(node_id)
+      data = graphql(<<~GRAPHQL, id: node_id)
+        query($id: ID!) {
+          node(id: $id) {
+            ... on Issue { id bodyHTML comments(last: 100) { nodes { id bodyHTML } } }
+            ... on PullRequest { id bodyHTML comments(last: 100) { nodes { id bodyHTML } } }
+          }
+        }
+      GRAPHQL
+      node = data["node"].to_h
+      [ { id: node["id"], html: node["bodyHTML"].to_s },
+        *Array(node.dig("comments", "nodes")).compact.map { |c| { id: c["id"], html: c["bodyHTML"].to_s } } ]
+    end
+
+    # Files Aixle stored for issue `number` (Github::ProjectsApi#store_file):
+    # [{ ref:, commit:, name:, blob:, size: }].
+    def stored_files(repository, number)
+      owner, name = repository.to_s.split("/", 2)
+      data = graphql(<<~GRAPHQL, owner: owner, repo: name, prefix: "#{FILES_REF}/#{number.to_i}/")
+        query($owner: String!, $repo: String!, $prefix: String!) {
+          repository(owner: $owner, name: $repo) {
+            refs(refPrefix: $prefix, first: 100) {
+              nodes { name target { ... on Commit { oid tree { entries { name oid object { ... on Blob { byteSize } } } } } } }
+            }
+          }
+        }
+      GRAPHQL
+      Array(data.dig("repository", "refs", "nodes")).filter_map do |ref|
+        entry = Array(ref.dig("target", "tree", "entries")).first
+        next unless entry
+
+        { ref: ref["name"], commit: ref.dig("target", "oid"), name: entry["name"], blob: entry["oid"],
+          size: entry.dig("object", "byteSize") }
+      end
+    end
+
+    # Stores a Trackers::UploadFile as a parentless commit under
+    # refs/aixle/attachments/<number>/<content digest> in the issue's own
+    # repository (docs/design/tracker-attachments.md §11.2). One ref per file
+    # and never moved: a moved ref would orphan the commit an earlier comment
+    # links to. The same bytes give the same ref, so a retry finds its file.
+    def store_file(repository, number, file)
+      path = repository_path(repository)
+      ref = "#{FILES_REF}/#{number.to_i}/#{file.sha256[0, 16]}"
+      blob = rest(:post, "/repos/#{path}/git/blobs", { content: Base64.strict_encode64(file.io.read), encoding: "base64" })
+      tree = rest(:post, "/repos/#{path}/git/trees", { tree: [ { path: file.filename, mode: "100644", type: "blob", sha: blob["sha"] } ] })
+      commit = rest(:post, "/repos/#{path}/git/commits",
+                    { message: "Aixle Flow: #{file.filename} for ##{number.to_i}", tree: tree["sha"], parents: [] })
+      begin
+        rest(:post, "/repos/#{path}/git/refs", { ref: ref, sha: commit["sha"] })
+      rescue Trackers::Error => e
+        raise unless e.code == "validation_failed" && e.message.match?(/already exists/i)
+
+        existing = stored_files(repository, number).find { |f| f[:ref] == ref }
+        return existing if existing
+      end
+      { ref: ref, commit: commit["sha"], name: file.filename, blob: blob["sha"], size: file.size }
+    end
+
+    def download_blob(repository, blob_sha, io:, max_bytes:)
+      url = "#{API_HOST}/repos/#{repository_path(repository)}/git/blobs/#{ERB::Util.url_encode(blob_sha)}"
+      files.download(url, io: io, max_bytes: max_bytes,
+                          headers: { "Authorization" => "Bearer #{token}", "Accept" => "application/vnd.github.raw+json",
+                                     "X-GitHub-Api-Version" => "2022-11-28" })
+    end
+
+    # A person's image by the signed URL rendered HTML gave, or by its own URL on
+    # a public repository: either way, no credential travels.
+    def download_signed(url, io:, max_bytes:)
+      signed_files.download(url, io: io, max_bytes: max_bytes)
+    end
+
     private
+
+    def files
+      @files ||= Trackers::FileTransfer.new(name: "GitHub", hosts: [ URI.parse(API_HOST).host ], open_timeout: OPEN_TIMEOUT)
+    end
+
+    def signed_files
+      @signed_files ||= Trackers::FileTransfer.new(
+        name: "GitHub", hosts: [ "github.com", /\A[a-z0-9-]+\.githubusercontent\.com\z/ ],
+        redirect_hosts: [ /\A[a-z0-9-]+\.githubusercontent\.com\z/ ], open_timeout: OPEN_TIMEOUT
+      )
+    end
 
     def graphql(query, write: false, **variables)
       body = post_json("/graphql", { query: query, variables: variables.compact }, write: write)

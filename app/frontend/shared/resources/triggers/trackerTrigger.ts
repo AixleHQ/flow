@@ -23,6 +23,7 @@ export interface TrackerTriggerValue {
   mentionOnly: boolean;
   textContains: string;
   aixleChanges: AixleChanges;
+  copyAttachments: boolean;
   notifyOnFailure: boolean;
   subjectPolicy: string;
   subjectColumnId: string | null;
@@ -43,6 +44,10 @@ export const AIXLE_CHANGE_OPTIONS: { value: AixleChanges; label: string }[] = [
   { value: 'other_workflows', label: 'Only from other workflows' },
   { value: 'always', label: 'Always (up to the chain limits)' },
 ];
+
+export const COPY_ATTACHMENTS_LABEL = 'Copy issue files to the task';
+export const COPY_ATTACHMENTS_HINT =
+  "When a run starts, copy the files attached to the issue onto the Aixle task. People see them on the card, and every step's agent finds them in its workspace. Leave this off if agents only need some of the files — they can fetch those themselves — or if issue files must not be stored outside the tracker. Files over 50 MB and files visible only to some people in the tracker are never copied.";
 
 export const SUBJECT_OPTIONS = [
   { value: 'find_or_create_task', label: "The issue's task — create it the first time" },
@@ -85,6 +90,7 @@ export function trackerValueFromTrigger(trigger: Trigger | null, defaultColumnId
     textContains: typeof text?.value === 'string' ? text.value : '',
     notifyOnFailure: trigger ? trigger.status_reporting !== 'none' : true,
     aixleChanges: (trigger?.aixle_changes as AixleChanges | undefined) ?? 'ignore',
+    copyAttachments: trigger?.copy_attachments ?? false,
     subjectPolicy: trigger?.subject_policy ?? (defaultColumnId ? 'find_or_create_task' : 'none'),
     subjectColumnId: trigger?.subject_column_id?.toString() ?? defaultColumnId,
     subjectTitleTemplate: trigger?.subject_title_template ?? '',
@@ -112,6 +118,7 @@ export function trackerTriggerPayload(value: TrackerTriggerValue, isEdit: boolea
   const payload: Record<string, unknown> = {
     project_tracker_id: value.trackerId,
     aixle_changes: value.aixleChanges,
+    copy_attachments: value.subjectPolicy !== 'none' && value.copyAttachments,
     filter_predicate: filter,
     subject_policy: value.subjectPolicy,
     status_reporting: value.notifyOnFailure ? 'failures' : 'none',

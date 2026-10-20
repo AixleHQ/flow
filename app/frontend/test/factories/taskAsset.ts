@@ -10,6 +10,8 @@ export const buildTaskAsset = (overrides: Partial<TaskAsset> = {}): TaskAsset =>
   authorType: 'human',
   createdAt: '2026-01-02T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
+  source: 'upload',
+  trackerIssueKey: null,
   fileUrl: 'https://files.example.com/mockup.png',
   fileSize: 4096,
   contentType: 'image/png',

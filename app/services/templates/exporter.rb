@@ -380,6 +380,7 @@ module Templates
       # A tracker is this project's, so the exported trigger listens to any
       # tracker of the installing project; status names differ between trackers.
       entry["aixle_changes"] = binding.aixle_changes.to_s if kind == "tracker"
+      entry["copy_attachments"] = true if kind == "tracker" && binding.copy_attachments
       if kind == "tracker" && binding.project_tracker_id
         @notes << "Tracker trigger #{binding.name || binding.id}: exported for any tracker of the installing project."
       end

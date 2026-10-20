@@ -1,8 +1,8 @@
 # Trackers
 
 A **tracker** is a Flow project's link to one external project in a task
-tracker — an Azure Boards project, a Jira project, a GitHub project, a Linear
-team or a YouTrack project — through a connection made on the project's **Integrations** page. The connection holds the credentials;
+tracker — an Azure Boards project, a Jira project, a GitHub project, a GitLab
+project, a Linear team or a YouTrack project — through a connection made on the project's **Integrations** page. The connection holds the credentials;
 the tracker is what agents and triggers address. Through it:
 
 - tracker triggers start workflows when an issue is created, moves to a column,
@@ -11,7 +11,8 @@ the tracker is what agents and triggers address. Through it:
 
 Both work the same way for every provider. Connecting is per provider: see
 [Azure DevOps](/docs/azure-devops), [Jira](/docs/jira),
-[GitHub](/docs/github#github-projects-as-a-tracker), [Linear](/docs/linear) and
+[GitHub](/docs/github#github-projects-as-a-tracker),
+[GitLab](/docs/gitlab#gitlab-issues-as-a-tracker), [Linear](/docs/linear) and
 [YouTrack](/docs/youtrack).
 
 ---
@@ -158,7 +159,9 @@ An ordinary tracker trigger on the chosen workflow:
 - this tracker only;
 - subject `find_or_create_task`: the issue's board task, created in the
   **Task column** the first time;
-- changes made by Aixle ignored (`aixle_changes: ignore`).
+- changes made by Aixle ignored (`aixle_changes: ignore`);
+- the issue's files copied onto the task when a run starts, if you switched on
+  **Copy issue files to the task** ([Files](#files)).
 
 The trigger runs as you. It appears on the workflow's **Triggers** tab as
 "Issue moves to Ready for AI" or "Aixle is mentioned in a comment", where you
@@ -211,7 +214,7 @@ in [Triggers and gates](/docs/triggers-and-gates).
 | --- | --- | --- |
 | **Issue moves to a status (column)** | `tracker.issue.status_changed` | The issue moves to another column of the tracker's board |
 | **Issue is created** | `tracker.issue.created` | An issue is created in the tracker's project |
-| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects, Linear and YouTrack only when someone is assigned |
+| **Issue is assigned** | `tracker.issue.assigned` | The issue's assignee changes, including when it is cleared — on GitHub Projects, GitLab, Linear and YouTrack only when someone is assigned |
 | **Comment is added** | `tracker.comment.created` | A comment is added to the issue |
 
 A status is a column of the tracker's board where there is one, not the
@@ -235,6 +238,8 @@ event cannot be changed once the trigger exists.
   — see below.
 - **Comment on the issue when a run fails** — on by default; see
   [When a run fails](#when-a-run-fails).
+- **Copy issue files to the task** — off by default; shown when the run has a
+  task. See [Files](#files).
 
 There is no assignee condition: an **Issue is assigned** trigger fires on every
 assignee change in the trackers it listens to. The API and the personal MCP tool
@@ -376,6 +381,9 @@ them without attaching anything.
 | `tracker_assign_issue` | Sets an issue's assignee |
 | `tracker_add_comment` | Comments on an issue |
 | `tracker_link_task` | Links a board task to an issue; changes nothing in the tracker |
+| `tracker_list_attachments` | Lists an issue's files: attached ones and those embedded in its description and comments; which are restricted, which cannot be fetched, and which this project already holds a copy of |
+| `tracker_download_attachments` | Puts an issue's files in the workspace under `/workspace/tracker/<issue key>/` and keeps a copy on the issue's board task; changes nothing in the tracker |
+| `tracker_attach_files` | Puts files onto an issue — a task's file, a project asset, a file from the workspace or inline text — and can post a comment that shows them |
 
 What a status or an assignee is differs by provider. On Azure Boards,
 `tracker_transition_issue` takes a state and the card moves to the column that
@@ -418,6 +426,71 @@ event, and it makes retries safe:
   returns the first result instead of writing twice;
 - a write whose outcome Flow could not confirm is reported as
   `outcome_unknown` — read the issue before trying again.
+
+---
+
+## Files
+
+Agents in a tracker run can read the files on the issue that started it, and
+can put files onto issues.
+
+- **What counts as a file.** Files attached to the issue, and images or files
+  embedded in its description and comments. On Linear and GitHub, files exist
+  only as embedded links, so those are what Flow finds.
+- **Getting files in.** By default, files stay in the tracker until an agent
+  needs one: it lists them with `tracker_list_attachments` and fetches them
+  with `tracker_download_attachments`. A fetched file is saved on the issue's
+  board task, marked *from* the issue's key, and placed in the agent's
+  workspace under `/workspace/tracker/<issue key>/`. A file already copied is
+  taken from the copy, not fetched again. With no board task linked to the
+  issue, the file only reaches the workspace; link one with
+  `tracker_link_task` to keep it.
+- **Copy issue files to the task.** Turn this on in a tracker trigger, or when
+  connecting a board column, to copy every file of the issue onto the task when
+  a run starts. Use it when the people reviewing runs need the files on the
+  card, when every step should find them in its workspace without asking, or
+  when the run's inputs must stay available after the issue changes. Leave it
+  off when agents only need some files, or when issue files must not be stored
+  outside the tracker. A run's steps wait up to a minute for the copy to
+  finish; a step that still starts first is told so, and fetches the rest
+  itself. On Jira, copying waits while Atlassian reports the app's rate limit
+  near its end.
+- **What is never copied.** Files over 50 MB; past 20 files or 200 MB in one
+  go (the rest stay available to `tracker_download_attachments`); and files the
+  tracker shows to only some people — a YouTrack attachment limited to groups,
+  or a Jira file that only restricted comments show. A copy on the card is
+  visible to everyone in the project, so a narrower file stays in the tracker.
+- **Putting files on issues.** `tracker_attach_files` sends up to 10 files of
+  up to 50 MB. With `comment`, it posts a comment that shows them. The same
+  bytes already on the issue are not sent again unless `force` is true. A file
+  put on an issue cannot be taken back by Flow, so an agent should never send a
+  secret.
+- **Limits on the tracker's side.** Azure Boards takes files up to 60 MB and
+  100 per work item; YouTrack Cloud takes 10 MB per file unless an
+  administrator raised it; Jira takes what the site's attachment settings
+  allow, and refuses files when attachments are turned off.
+- **Deleting.** Deleting a copy on the card does not touch the tracker, and
+  deleting a file in the tracker does not touch the copy.
+
+### GitHub
+
+GitHub lets no app upload attachments the way its editor does. Flow stores a
+file sent to a GitHub issue in the issue's own repository, as a commit under a
+hidden `refs/aixle/attachments/<issue number>/` ref that clones, the branch
+list and the tag list do not show. The comment shows images inline and links
+other files, for everyone who can read the repository; files are limited to
+25 MB. A file stored this way stays in the repository's history.
+
+To keep Flow from writing to your repositories, use **Link files instead** on
+the tracker's row on the Trackers page. Files sent to its issues then stay on
+the run's Aixle task, and the comment links the task; the row shows **Files as
+links**. A file the repository refuses — a ruleset, a missing permission or a
+file over 25 MB — is linked the same way.
+
+Images and videos people attached to a GitHub issue are fetched through the
+signed address GitHub gives the app. PDFs, archives and logs people attached
+cannot be read through GitHub's API: agents see their names, marked as
+unavailable, and ask for them.
 
 ---
 

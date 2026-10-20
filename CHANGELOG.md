@@ -14,6 +14,27 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Trackers**: agents read and send issue files on every tracker. New
+  `tracker_list_attachments`, `tracker_download_attachments` and
+  `tracker_attach_files` tools fetch an issue's files into the workspace
+  (`/workspace/tracker/<issue key>/`), keep a copy on the issue's task — marked
+  with the issue's key on the card — and put files onto issues. A tracker
+  trigger can **Copy issue files to the task** when a run starts. Files visible
+  to only some people in the tracker are never copied.
+- **Trackers**: GitLab issues are a tracker. Pick a GitLab connection's projects
+  under **Issue boards**; a board's label lists, between Open and Closed, are
+  the columns, and moving an issue swaps those labels.
+- **Integrations**: **Sign in with GitLab** connects as a GitLab service
+  account instead of a person's token. A group Owner signs in once; Flow creates
+  the account in the group, keeps only its token for repositories, merge
+  requests and issues, and rotates it before a required expiry. Signing in to
+  the same group again reuses that account; removing the connection revokes its
+  token, and a group Owner deletes the account in GitLab. Operators set
+  `GITLAB_OAUTH_CLIENT_ID` and `GITLAB_OAUTH_CLIENT_SECRET` to offer it.
+- **Trackers**: on GitHub Projects, files sent to an issue are stored in the
+  issue's repository under hidden `refs/aixle/attachments/` refs, so images show
+  inline in private repositories; **Link files instead** on the Trackers page
+  keeps them on the Aixle task.
 - **Admin**: a superadmin can invite a company's people from the admin, without
   signing in as its admin. The company form, new or edit, takes a list of
   addresses and a role. Any company's page has "Invite members", which takes a
@@ -21,6 +42,9 @@ governance, community health — carry none.
   invitation a company admin sends from Members, from "An administrator".
 
 ### Changed
+- **Triggers & gates**: the trigger form's on/off switch is labeled **Trigger
+  enabled** and says that what arrives while a trigger is off is not run when
+  it is turned back on.
 - **Admin**: a new company's initial admin is invited instead of being given a
   password by the operator. The form asks only for their address; they get the
   standard invitation email, set their own password and join as admin. Until

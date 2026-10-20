@@ -1206,7 +1206,17 @@ export function TriggerFormPanel({
 
               {/* Enabled toggle for edit mode (non-column) */}
               {isEdit && kind !== 'column' && (
-                <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
+                <div style={{ borderTop: '1px solid var(--app-border-default)', paddingTop: 12, marginTop: 4 }}>
+                  <Switch
+                    label="Trigger enabled"
+                    checked={enabled}
+                    onChange={(e) => setEnabled(e.currentTarget.checked)}
+                  />
+                  <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4 }}>
+                    Turn this off to pause the trigger. While it is off nothing it listens for starts a run, and what
+                    arrives in the meantime is not run when you turn it back on.
+                  </div>
+                </div>
               )}
 
               {error && <div style={{ fontSize: 12, color: 'var(--mantine-color-red-6)', marginTop: 8 }}>{error}</div>}

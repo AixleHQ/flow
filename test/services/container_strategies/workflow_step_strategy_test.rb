@@ -254,6 +254,25 @@ module ContainerStrategies
       assert_equal 1001, fake.file_attributes("/workspace/assets/webhook-payload.json")[:uid]
     end
 
+    test "inject_prior_step_outputs places the files copied from the task's tracker issue where the tracker tools put them" do
+      fake = stub_container_runtime(agent_type: "claude_code")
+      Settings.stubs(:container_asset_host).returns(nil)
+      session, _step_run, _step, workflow_run = create_workflow_step_session
+      board = create(:board, project: @project)
+      task = create(:board_task, board: board, board_column: create(:board_column, board: board))
+      workflow_run.update!(board_task: task)
+      copy = task.task_assets.create!(name: "trace.log", source: :tracker, file: StringIO.new("t"))
+      task.task_assets.create!(name: "notes.md", file: StringIO.new("n"))
+      TrackerAttachment.create!(project: @project, provider: "jira", instance: "c1", issue_id: "10100", external_id: "1",
+                                direction: :imported, content_sha256: "s", task_asset: copy, data: { "issue_key" => "ENG-1" })
+
+      build_strategy(session: session).send(:inject_prior_step_outputs, "abc123")
+
+      commands = fake.execs.map { |c| Array(c).join(" ") }
+      assert(commands.any? { |c| c.include?("curl") && c.include?("/workspace/tracker/ENG-1/trace.log") })
+      assert(commands.none? { |c| c.include?("notes.md") }, "a file people attached on the card is not a tracker file")
+    end
+
     test "inject_prior_step_outputs writes no payload file for a run no webhook started" do
       fake = stub_container_runtime(agent_type: "claude_code")
       session, = create_workflow_step_session

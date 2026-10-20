@@ -4,6 +4,7 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconColumns,
+  IconFileExport,
   IconLink,
   IconLock,
   IconLockOpen,
@@ -49,11 +50,16 @@ interface Props {
   basePath: string;
 }
 
-type TrackerChanges = { status: 'active' } | { primary: true } | { access: 'read_write' | 'read_only' };
+type TrackerChanges =
+  | { status: 'active' }
+  | { primary: true }
+  | { access: 'read_write' | 'read_only' }
+  | { file_storage: 'repository' | 'aixle_link' };
 
 const PROVIDER_LABELS: Record<string, string> = {
   azure_devops: 'Azure Boards',
   github: 'GitHub Projects',
+  gitlab: 'GitLab',
   jira: 'Jira',
   linear: 'Linear',
   youtrack: 'YouTrack',
@@ -202,7 +208,7 @@ export const TrackersContent = ({
           <EmptyState
             icon={<IconTicket size={22} />}
             title="No trackers"
-            description="Connect Azure DevOps, Jira, Linear or YouTrack on the Integrations page, or pick GitHub Projects on a GitHub connection; each project or team a connection covers becomes a tracker here."
+            description="Connect Azure DevOps, Jira, Linear or YouTrack on the Integrations page, or pick GitHub Projects on a GitHub connection or issue boards on a GitLab one; each project or team a connection covers becomes a tracker here."
             action={addButton}
           />
         </Box>
@@ -255,6 +261,13 @@ export const TrackersContent = ({
                             <Badge size="xs" variant="light" color="gray">
                               Read-only
                             </Badge>
+                          )}
+                          {tracker.provider === 'github' && tracker.fileStorage === 'aixle_link' && (
+                            <Tooltip label="Files sent to issues stay on the Aixle task; the issue gets a link">
+                              <Badge size="xs" variant="light" color="gray">
+                                Files as links
+                              </Badge>
+                            </Tooltip>
                           )}
                         </Group>
                         <Text fz={12} c="dimmed" ff="monospace">
@@ -345,6 +358,39 @@ export const TrackersContent = ({
                                     {readOnly ? <IconLockOpen size={16} /> : <IconLock size={16} />}
                                   </ActionIcon>
                                 </Tooltip>
+                                {tracker.provider === 'github' && (
+                                  <Tooltip
+                                    label={
+                                      tracker.fileStorage === 'aixle_link'
+                                        ? "Store files sent to issues in the issue's repository"
+                                        : 'Keep files sent to issues on the Aixle task and link them instead'
+                                    }
+                                  >
+                                    <ActionIcon
+                                      aria-label={
+                                        tracker.fileStorage === 'aixle_link'
+                                          ? 'Store files in the repository'
+                                          : 'Link files instead'
+                                      }
+                                      variant="subtle"
+                                      size="sm"
+                                      onClick={() =>
+                                        update(
+                                          tracker,
+                                          {
+                                            file_storage:
+                                              tracker.fileStorage === 'aixle_link' ? 'repository' : 'aixle_link',
+                                          },
+                                          tracker.fileStorage === 'aixle_link'
+                                            ? 'Files go to the repository'
+                                            : 'Files are linked from the Aixle task',
+                                        )
+                                      }
+                                    >
+                                      <IconFileExport size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
                                 <Tooltip label="Detach">
                                   <ActionIcon
                                     aria-label="Detach"

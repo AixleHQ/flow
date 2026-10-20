@@ -23,7 +23,8 @@ class Linear::ApiTest < ActiveSupport::TestCase
     url: "https://linear.app/acme/issue/ENG-1/it-breaks", priority: 2, updatedAt: "2026-10-01T10:00:00.000Z",
     team: { id: "team-eng", key: "ENG" }, state: { id: "st-ready", name: "Ready for AI", type: "unstarted" },
     assignee: { id: "u-ada", name: "Ada Lovelace", displayName: "ada", email: "ada@example.com" },
-    labels: { nodes: [ { id: "lb-ai", name: "ai" } ] }
+    labels: { nodes: [ { id: "lb-ai", name: "ai" } ] },
+    attachments: { nodes: [ { id: "at-1", title: "trace.log", url: "https://uploads.linear.app/o/a/b" } ] }
   }.freeze
 
   test "the identity is the viewer and its workspace; an API key is sent without a scheme" do
@@ -66,8 +67,48 @@ class Linear::ApiTest < ActiveSupport::TestCase
       url: "https://linear.app/acme/issue/ENG-1/it-breaks", priority: 2, updated_at: "2026-10-01T10:00:00.000Z",
       team_id: "team-eng", team_key: "ENG", state: { id: "st-ready", name: "Ready for AI", type: "unstarted" },
       assignee: { id: "u-ada", name: "Ada Lovelace", display_name: "ada", email: "ada@example.com" },
-      labels: [ { id: "lb-ai", name: "ai" } ]
+      labels: [ { id: "lb-ai", name: "ai" } ],
+      links: [ { id: "at-1", title: "trace.log", url: "https://uploads.linear.app/o/a/b" } ]
     }, @api.issue("ENG-1"))
+  end
+
+  test "a file upload slot names the URL, the asset and the headers the PUT must carry" do
+    stub_graphql(data: { fileUpload: { success: true, uploadFile: {
+      uploadUrl: "https://storage.googleapis.com/b/k?X-Goog-Signature=s", assetUrl: "https://uploads.linear.app/o/a/b",
+      headers: [ { key: "x-goog-content-length-range", value: "4,4" } ]
+    } } }) { |body| body["variables"] == { "contentType" => "text/plain", "filename" => "a.txt", "size" => 4 } }
+
+    assert_equal({ upload_url: "https://storage.googleapis.com/b/k?X-Goog-Signature=s", asset_url: "https://uploads.linear.app/o/a/b",
+                   headers: { "x-goog-content-length-range" => "4,4" } },
+                 @api.file_upload(content_type: "text/plain", filename: "a.txt", size: 4))
+  end
+
+  test "the bytes go to the signed URL with Linear's headers and without the credential" do
+    resolve_hosts_publicly!
+    put = stub_request(:put, "https://storage.googleapis.com/b/k?X-Goog-Signature=s")
+            .with(headers: { "x-goog-content-length-range" => "4,4", "Content-Type" => "text/plain" }, body: "abcd") { |r| r.headers["Authorization"].nil? }
+            .to_return(status: 200)
+    file = Trackers::UploadFile.new(io: StringIO.new("abcd"), filename: "a.txt", content_type: "text/plain", size: 4, sha256: "x")
+
+    @api.upload("https://storage.googleapis.com/b/k?X-Goog-Signature=s", headers: { "x-goog-content-length-range" => "4,4" }, file: file)
+
+    assert_requested put
+  end
+
+  test "an uploaded file is read from uploads.linear.app with the API credential" do
+    resolve_hosts_publicly!
+    stub_request(:get, "https://uploads.linear.app/o/a/b").with(headers: { "Authorization" => "lin_api_key" }).to_return(status: 200, body: "trace")
+    io = StringIO.new
+
+    @api.download("https://uploads.linear.app/o/a/b", io: io, max_bytes: 1.megabyte)
+
+    assert_equal "trace", io.string
+  end
+
+  test "a file anywhere but uploads.linear.app is not fetched with the credential" do
+    error = assert_raises(Trackers::Error) { @api.download("https://evil.example/a", io: StringIO.new, max_bytes: 1.megabyte) }
+
+    assert_equal "not_found", error.code
   end
 
   test "an issue Linear does not know is not found" do

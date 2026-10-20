@@ -6,6 +6,8 @@ import { useTrackerStatuses } from 'shared/resources/trackers/useTrackerStatuses
 
 import {
   AIXLE_CHANGE_OPTIONS,
+  COPY_ATTACHMENTS_HINT,
+  COPY_ATTACHMENTS_LABEL,
   describeCondition,
   isAttached,
   SUBJECT_OPTIONS,
@@ -219,6 +221,14 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
               onChange={(e) => set({ subjectTitleTemplate: e.currentTarget.value })}
               styles={inputStyles}
             />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <Switch
+              label={COPY_ATTACHMENTS_LABEL}
+              checked={value.copyAttachments}
+              onChange={(e) => set({ copyAttachments: e.currentTarget.checked })}
+            />
+            <Hint>{COPY_ATTACHMENTS_HINT}</Hint>
           </div>
         </>
       )}

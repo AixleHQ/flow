@@ -1,12 +1,19 @@
 # frozen_string_literal: true
 
 module Gitlab
-  # Where GitLab posts this deployment's pipeline events.
+  # The deployment's GitLab OAuth app, and where GitLab posts this deployment's events.
   module AppConfig
     WEBHOOK_PATH = "/webhooks/gitlab"
     PRIVATE_ADDRESS = /\A(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/
 
     module_function
+
+    def oauth_client_id = Settings.gitlab&.oauth_client_id.to_s.presence
+    def oauth_client_secret = Settings.gitlab&.oauth_client_secret.to_s.presence
+    def oauth_enabled? = oauth_client_id.present? && oauth_client_secret.present?
+
+    def open_timeout = 5
+    def read_timeout = 20
 
     def webhook_base_url
       Settings.gitlab&.webhook_base_url.presence || "#{Settings.protocol}://#{Settings.domain}"

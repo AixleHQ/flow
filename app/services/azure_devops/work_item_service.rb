@@ -216,7 +216,123 @@ module AzureDevops
       get(work_item_id, project_id: project_id).merge(already_linked: true)
     end
 
+    ATTACHMENT_GUID = %r{/_apis/wit/attachments/(?<guid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})}i
+    IMAGE_SRC = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i
+    COMMENT_PAGES = 5
+
+    # The work item's files: its AttachedFile relations, then images embedded
+    # in its HTML fields and comments, which Azure keeps as attachments that no
+    # relation lists: [{ id: guid, name:, size:, created_at:, origin:, location: }].
+    # An embedded image counts only when it is this organization's.
+    def attachments(work_item_id, project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
+      item = client.get("_apis", "wit", "workitems", work_item_id.to_s, family: :wit, project: resolved.project_id,
+                                                                        params: { "$expand" => "relations" })
+      verify_project_scope!(item, resolved)
+
+      files = Array(item["relations"]).filter_map do |relation|
+        next unless relation["rel"] == "AttachedFile" && (guid = attachment_guid(relation["url"], resolved))
+
+        attributes = relation["attributes"].to_h
+        { id: guid, name: attributes["name"].to_s, size: attributes["resourceSize"], created_at: attributes["resourceCreatedDate"],
+          origin: :attached, location: nil }
+      end
+      item["fields"].to_h.each do |_field, value|
+        files.concat(embedded(value, resolved, "kind" => "description")) if value.is_a?(String)
+      end
+      each_comment(client, resolved, work_item_id) do |comment|
+        files.concat(embedded(comment["text"], resolved, "kind" => "comment", "id" => comment["id"].to_s))
+      end
+      files.uniq { |f| f[:id] }.map { |f| f.merge(url: browser_attachment_url(resolved, f[:id], f[:name])) }
+    end
+
+    # Fetched from this organization's own path for the guid — never from a URL
+    # Azure or an issue's HTML supplied.
+    def download_attachment(guid, io:, max_bytes:, project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
+      url = attachment_url(resolved, guid, "download" => true, "api-version" => Client::API_VERSIONS[:wit])
+      transfer.download(url, io: io, max_bytes: max_bytes, headers: client.credential.authorization_headers,
+                                     reauthorize: reauthorize(client))
+    end
+
+    # Uploads the bytes, then links them as an AttachedFile. Two calls: an upload
+    # never linked is an orphan nobody can list, so a caller retrying after a
+    # failed link passes `uploaded:` to link the same upload instead.
+    def upload_attachment(work_item_id, file, project_id: nil, uploaded: nil)
+      client, resolved = client_for(:"work_items.write", project_id: project_id)
+      uploaded ||= begin
+        url = attachment_url(resolved, nil, "fileName" => file.filename, "api-version" => Client::API_VERSIONS[:wit])
+        transfer.send_request(:post, url, headers: client.credential.authorization_headers.merge("Accept" => "application/json"),
+                                                  body: file.io, content_type: "application/octet-stream", size: file.size,
+                                                  reauthorize: reauthorize(client)).json
+      end
+      guid = attachment_guid(uploaded["url"], resolved) || uploaded["id"].to_s
+      yield uploaded if block_given?
+      client.patch("_apis", "wit", "workitems", work_item_id.to_s,
+                   body: [ { op: "add", path: "/relations/-",
+                             value: { rel: "AttachedFile", url: uploaded["url"], attributes: { name: file.filename } } } ],
+                   family: :wit, project: resolved.project_id, content_type: "application/json-patch+json")
+      { id: guid, name: file.filename, size: file.size, url: browser_attachment_url(resolved, guid, file.filename) }
+    end
+
+    def browser_attachment_url(resolved, guid, name)
+      attachment_url(resolved, guid, "fileName" => name)
+    end
+
     private
+
+    def attachment_url(resolved, guid, params)
+      segments = [ resolved.organization, resolved.project_id, "_apis", "wit", "attachments", guid ].compact
+      "#{AppConfig.api_host.chomp('/')}/#{segments.map { |s| ERB::Util.url_encode(s.to_s) }.join('/')}?#{params.to_query}"
+    end
+
+    # The guid of an attachment URL on this organization's host, or nil.
+    def attachment_guid(url, resolved)
+      uri = URI.parse(url.to_s)
+      org = resolved.organization.to_s.downcase
+      host = uri.host.to_s.downcase
+      ours = (host == URI.parse(AppConfig.api_host).host && uri.path.split("/")[1].to_s.casecmp?(org)) ||
+             host == "#{org}.visualstudio.com"
+      ATTACHMENT_GUID.match(uri.path)&.[](:guid)&.downcase if ours
+    rescue URI::InvalidURIError
+      nil
+    end
+
+    def embedded(html, resolved, location)
+      html.to_s.scan(IMAGE_SRC).flatten.filter_map do |src|
+        src = CGI.unescapeHTML(src)
+        guid = attachment_guid(src, resolved)
+        next unless guid
+
+        name = URI.decode_www_form(URI.parse(src).query.to_s).to_h["fileName"].presence || "image-#{guid[0, 8]}.png"
+        { id: guid, name: name, size: nil, created_at: nil, origin: :embedded, location: location }
+      rescue URI::InvalidURIError, ArgumentError
+        nil
+      end
+    end
+
+    def each_comment(client, resolved, work_item_id, &block)
+      token = nil
+      COMMENT_PAGES.times do
+        payload = client.get("_apis", "wit", "workItems", work_item_id.to_s, "comments",
+                             family: :wit_comments, project: resolved.project_id,
+                             params: { "$top" => 200, continuationToken: token.presence })
+        Array(payload["comments"]).each(&block)
+        break unless (token = payload["continuationToken"].presence)
+      end
+    end
+
+    def transfer
+      @transfer ||= Trackers::FileTransfer.new(name: "Azure DevOps", hosts: [ URI.parse(AppConfig.api_host).host ],
+                                               open_timeout: AppConfig.open_timeout, logger: Rails.logger)
+    end
+
+    def reauthorize(client)
+      lambda do
+        client.credential.invalidate!
+        client.credential.authorization_headers
+      end
+    end
 
     def client_for(capability, project_id: nil)
       CredentialProvider.client_for(integration, capability: capability, project_id: project_id)

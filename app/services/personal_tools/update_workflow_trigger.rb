@@ -36,6 +36,8 @@ module PersonalTools
                                  description: "kind=tracker: the project tracker to listen to; null for any tracker."
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
                             description: "kind=tracker: ignore, other_workflows or always — what to do with changes Aixle made."
+      param :copy_attachments, type: :boolean,
+                               description: "kind=tracker: copy the issue's files onto the run's task when a run starts."
       param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
                             description: "kind=chat: move the trigger to another messenger."
       param :filter_predicate, type: :object,

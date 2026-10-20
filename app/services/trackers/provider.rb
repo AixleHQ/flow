@@ -106,7 +106,8 @@ module Trackers
 
     # Deliveries through /webhooks/trackers (providers without a receiver of their own).
     def authentic_delivery?(_request, _raw_body, _subscription) = false
-    def parse_delivery(_payload, _subscription) = []
+    # `delivery_id` is the delivery's dedup key, for a provider whose payload carries no revision of its own.
+    def parse_delivery(_payload, _subscription, delivery_id: nil) = []
     # The provider's own id for a delivery, when it has one, for deduplication.
     def delivery_id(_request, _payload) = nil
 
@@ -128,6 +129,43 @@ module Trackers
     def list_users(_scope_id, query:)
       raise Error.new("#{integration.provider} cannot list its users here; assign by the name the tracker shows",
                       code: "unsupported")
+    end
+
+    # Files on issues (docs/design/tracker-attachments.md §6). A provider
+    # without them keeps these defaults.
+
+    def attachments? = false
+
+    # False where files exist only as links in an issue's text (Linear,
+    # GitHub): a file put there needs a comment to show it.
+    def attachment_list? = attachments?
+
+    # The largest file the tracker takes, when it says so up front.
+    def max_upload_bytes = nil
+
+    # Every file on the issue, attached or embedded in its text, as
+    # Trackers::Attachment. Re-reads the issue, so it is in scope.
+    def list_attachments(_scope_id, _ref) = unsupported_files!
+
+    # Streams the file into `io`, at most `max_bytes`, and returns its
+    # Attachment. The id is resolved against the issue's current files, never
+    # taken as a URL: tracker credentials must not fetch anything else.
+    def download_attachment(_scope_id, _ref, _attachment_id, io:, max_bytes:) = unsupported_files!
+
+    # Puts one Trackers::UploadFile onto the issue and returns its Attachment.
+    def upload_attachment(_scope_id, _ref, _file) = unsupported_files!
+
+    # A comment body showing `attachments` after `text`, in the tracker's markup.
+    def compose_comment(text, attachments)
+      [ text.to_s.strip.presence, *attachments.map { |a| attachment_markup(a) } ].compact.join("\n\n")
+    end
+
+    def attachment_markup(attachment) = attachment.name.to_s
+
+    private
+
+    def unsupported_files!
+      raise Error.new("#{integration.provider} trackers have no file support in Aixle yet", code: "unsupported")
     end
   end
 end

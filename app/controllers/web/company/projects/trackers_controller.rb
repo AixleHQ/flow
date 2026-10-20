@@ -36,6 +36,9 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
   def update
     tracker = ProjectTracker.for_project(current_project).find(params[:id])
     attributes = update_params.slice(:handle, :access).compact_blank
+    if ProjectTracker::FILE_STORAGES.include?(update_params[:file_storage])
+      attributes[:settings] = tracker.settings.to_h.merge("file_storage" => update_params[:file_storage])
+    end
     return redirect_back_with_errors(tracker.errors) unless tracker.update(attributes)
 
     if update_params[:status] == "active" && tracker.detached?
@@ -125,6 +128,6 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
   end
 
   def update_params
-    params.require(:tracker).permit(:handle, :access, :primary, :status)
+    params.require(:tracker).permit(:handle, :access, :primary, :status, :file_storage)
   end
 end

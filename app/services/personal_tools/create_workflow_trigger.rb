@@ -53,6 +53,10 @@ module PersonalTools
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
                             description: "kind=tracker: what to do with changes Aixle itself made. ignore (default), " \
                                          "other_workflows (chain workflows, never re-enter one), or always."
+      param :copy_attachments, type: :boolean,
+                               description: "kind=tracker: copy the issue's files onto the run's task when a run " \
+                                            "starts, so people see them on the card and every step finds them in " \
+                                            "/workspace/tracker/. Off by default."
       param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
                             description: "kind=chat: the messenger to listen to. Required for kind=chat."
       param :filter_predicate, type: :object,

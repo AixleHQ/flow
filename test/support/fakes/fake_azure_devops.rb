@@ -406,6 +406,60 @@ module FakeAzureDevops
       answer(:update) { @work_item.merge(fields).merge(rev: @work_item[:rev] + 1) }
     end
 
+    attr_reader :uploads
+
+    # A file on the work item: attached, or an image embedded in its HTML.
+    def add_file(name:, bytes:, origin: :attached, location: nil)
+      @files ||= []
+      @file_bytes ||= {}
+      guid = SecureRandom.uuid
+      @file_bytes[guid] = bytes.b
+      @files << { id: guid, name: name, size: origin == :attached ? bytes.bytesize : nil, created_at: nil, origin: origin,
+                  location: location, url: "https://dev.azure.com/contoso/p/_apis/wit/attachments/#{guid}?fileName=#{name}" }
+      guid
+    end
+
+    def attachments(work_item_id, project_id: nil)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:attachments, work_item_id: work_item_id, project_id: project_id)
+      raise @error if @error
+
+      Array(@files).map(&:dup)
+    end
+
+    def download_attachment(guid, io:, max_bytes:, project_id: nil)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:download_attachment, guid: guid, project_id: project_id)
+      bytes = @file_bytes.fetch(guid)
+      raise Trackers::Error.new("The file is larger than allowed", code: "too_large") if bytes.bytesize > max_bytes
+
+      io.write(bytes)
+      { content_type: "application/octet-stream", size: bytes.bytesize }
+    end
+
+    # `fail_link` makes the link call fail once, after the upload landed.
+    attr_accessor :fail_link
+
+    def upload_attachment(work_item_id, file, project_id: nil, uploaded: nil)
+      authorize!(:"work_items.write", project_id: project_id)
+      record(:upload_attachment, work_item_id: work_item_id, name: file.filename, reused_upload: uploaded.present?)
+      @uploads ||= []
+      unless uploaded
+        @uploads << { name: file.filename, bytes: file.io.read }
+        uploaded = { "id" => SecureRandom.uuid, "url" => "https://dev.azure.com/contoso/p/_apis/wit/attachments/#{SecureRandom.uuid}" }
+      end
+      yield uploaded if block_given?
+      if fail_link
+        self.fail_link = false
+        raise AzureDevops::ValidationFailed, "VS402625: the link could not be saved"
+      end
+
+      guid = uploaded["url"].split("/").last
+      @files ||= []
+      @files << { id: guid, name: file.filename, size: file.size, origin: :attached, location: nil, url: uploaded["url"] }
+      { id: guid, name: file.filename, size: file.size, url: uploaded["url"] }
+    end
+
     def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil, project_id: nil)
       authorize!(:"work_items.write", project_id: project_id)
       record(:link_pull_request, work_item_id: work_item_id, artifact_id: artifact_id,

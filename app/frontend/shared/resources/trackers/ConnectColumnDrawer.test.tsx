@@ -58,7 +58,41 @@ describe('ConnectColumnDrawer', () => {
       subject_policy: 'find_or_create_task',
       subject_column_id: '9',
       aixle_changes: 'ignore',
+      copy_attachments: false,
     });
+  });
+
+  it("copies the issue's files to the task when asked to", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init) =>
+        Promise.resolve(
+          init?.method === 'POST'
+            ? json({ id: 1 }, 201)
+            : json({ statuses: [{ name: 'Ready for AI', category: 'todo' }] }),
+        ),
+      );
+    const onClose = vi.fn();
+    renderPage(
+      <ConnectColumnDrawer
+        projectId={7}
+        tracker={buildProjectTracker()}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={onClose}
+      />,
+    );
+
+    const column = screen.getByRole('combobox', { name: 'Column' });
+    await waitFor(() => expect(column).toBeEnabled());
+    await userEvent.click(column);
+    await userEvent.click(await screen.findByRole('option', { name: 'Ready for AI' }));
+    await userEvent.click(screen.getByRole('switch', { name: /^Copy issue files to the task/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const post = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'POST');
+    expect(JSON.parse((post?.[1] as RequestInit).body as string).trigger.copy_attachments).toBe(true);
   });
 
   it("falls back to a typed column, and warns that it is not checked, when the board's columns cannot be read", async () => {

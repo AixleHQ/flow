@@ -27,6 +27,14 @@ module Trackers
       UNASSIGNED = %w[none unassigned nobody].freeze
       FIELD_KEYS = %w[repository state].freeze
       ISSUE_TYPE = "Issue"
+      # GitHub's own limit for a file attached in its editor, and half of where
+      # git starts warning about a file (docs/design/tracker-attachments.md §11.2).
+      MAX_STORED_BYTES = 25.megabytes
+      # Files people attached: images and video under /assets/, any other file
+      # under /files/, which no API token can fetch.
+      PERSON_FILE = %r{https://(?:github\.com/user-attachments/(?:assets|files)/|github\.com/[\w.-]+/[\w.-]+/assets/|(?:private-)?user-images\.githubusercontent\.com/)[^\s)\]"'<>]+}
+      PERSON_LINK = /(!?)\[([^\]]*)\]\((#{PERSON_FILE.source})\)|(#{PERSON_FILE.source})/
+      COMMENT_PAGES = 5
 
       def serves_project?(project)
         integration.project_id == project.id
@@ -206,7 +214,111 @@ module Trackers
         comment(api.add_comment(content[:id], body), content[:id])
       end
 
+      # GitHub keeps no list of files and lets no app upload the way its editor
+      # does. Files people attached are links in the issue's text; files Aixle
+      # puts on an issue are git objects in its repository, shown by a comment.
+      def attachments? = true
+      def attachment_list? = false
+
+      def list_attachments(scope_id, ref)
+        files_of(placed!(fetch(scope_id, ref), scope_id))
+      end
+
+      def download_attachment(scope_id, ref, attachment_id, io:, max_bytes:)
+        content = placed!(fetch(scope_id, ref), scope_id)
+        found = files_of(content).find { |a| a.id == attachment_id.to_s }
+        raise Error.new("#{content[:key]} has no file #{attachment_id}", code: "not_found") unless found
+        raise Error.new("GitHub serves #{found.name} to signed-in browsers only", code: "unavailable") unless found.available
+
+        stored = stored_of(content).find { |f| "git:#{f[:commit]}" == found.id }
+        if stored
+          api.download_blob(content[:repository], stored[:blob], io: io, max_bytes: max_bytes)
+        else
+          api.download_signed(signed_url(content, found.url) || found.url, io: io, max_bytes: max_bytes)
+        end
+        found
+      end
+
+      def upload_attachment(scope_id, ref, file)
+        content = placed!(fetch(scope_id, ref), scope_id)
+        if file.size > MAX_STORED_BYTES
+          raise Error.new("GitHub repositories take files up to #{MAX_STORED_BYTES / 1.megabyte} MB here", code: "not_stored")
+        end
+
+        stored = begin
+          api.store_file(content[:repository], content[:number], file)
+        rescue Error => e
+          raise if e.is_a?(Error::OutcomeUnknown) || e.code == "rate_limited"
+
+          raise Error.new("The repository refused the file: #{e.message}", code: "not_stored")
+        end
+        @files&.delete(content[:id])
+        stored_attachment(content, stored)
+      end
+
+      # Pinned to the commit: the ref can never move, and a commit URL outlives a
+      # branch rename. GitHub shows `?raw=true` images to everyone who can read
+      # the repository, private ones included, and links any other file.
+      def attachment_markup(attachment)
+        label = attachment.name.to_s.gsub(/[\[\]]/, "")
+        return "[#{label}](#{attachment.url}) (in Aixle)" if attachment.origin == :linked
+        return "![#{label}](#{attachment.url}?raw=true)" if attachment.image?
+
+        "[#{label}](#{attachment.url})"
+      end
+
       private
+
+      # Read once per issue for as long as this provider lives.
+      def files_of(content)
+        (@files ||= {})[content[:id]] ||= begin
+          found = links_in(content[:body], content, "kind" => "description")
+          each_comment(content) { |c| found.concat(links_in(c[:body], content, "kind" => "comment", "id" => c[:id])) }
+          (stored_of(content).map { |s| stored_attachment(content, s) } + found).uniq(&:id)
+        end
+      end
+
+      def stored_of(content)
+        (@stored ||= {})[content[:id]] ||= api.stored_files(content[:repository], content[:number])
+      end
+
+      def stored_attachment(content, stored)
+        url = "https://github.com/#{content[:repository]}/blob/#{stored[:commit]}/#{ERB::Util.url_encode(stored[:name])}"
+        Attachment.new(id: "git:#{stored[:commit]}", issue_id: content[:id], name: stored[:name], size: stored[:size], url: url)
+      end
+
+      def links_in(text, content, location)
+        text.to_s.scan(PERSON_LINK).map do |bang, label, url, bare|
+          url ||= bare
+          name = label.presence || File.basename(URI.parse(url).path)
+          name = "#{name}.png" if bang == "!" && File.extname(name).blank?
+          Attachment.new(id: TrackerAttachment.embedded_id(url), issue_id: content[:id], name: name, origin: :embedded,
+                         location: location, url: url, available: !url.include?("/user-attachments/files/"))
+        rescue URI::InvalidURIError
+          nil
+        end.compact
+      end
+
+      def each_comment(content)
+        cursor = nil
+        COMMENT_PAGES.times do
+          page = api.comments(content[:id], limit: 100, cursor: cursor)
+          page[:comments].each { |c| yield c }
+          break unless (cursor = page[:next_cursor])
+        end
+      end
+
+      # The signed address rendered HTML gives a person's image: GitHub keeps
+      # the asset's uuid in the signed path, which is how the two are matched.
+      def signed_url(content, url)
+        uuid = url[/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/]
+        return unless uuid
+
+        @rendered ||= {}
+        html = (@rendered[content[:id]] ||= api.rendered(content[:id])).pluck(:html).join("\n")
+        html.scan(/(?:src|href)="(https:\/\/private-user-images\.githubusercontent\.com\/[^"]+)"/).flatten
+            .map { |u| CGI.unescapeHTML(u) }.find { |u| u.include?(uuid) }
+      end
 
       def api
         @api ||= ::Github::ProjectsApi.for(integration)

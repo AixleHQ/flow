@@ -6,7 +6,9 @@ module Activities
     #
     # - extends tracker webhooks that expire (Jira's dynamic webhooks last 30 days);
     # - renews the grant of every Jira 3LO connection idle for 30 days, since
-    #   Atlassian retires a refresh token unused for 90.
+    #   Atlassian retires a refresh token unused for 90;
+    # - rotates a GitLab service account's token a month before its group's
+    #   required expiry (Gitlab::ServiceAccountToken).
     #
     # Per-record rescue: one failing connection never stops the rest.
     class RefreshSubscriptionsActivity < ::Activities::Base
@@ -14,7 +16,7 @@ module Activities
       IDLE_GRANT = 30.days
 
       def run(_input = nil)
-        counts = { refreshed: 0, renewed_grants: 0, errors: 0 }
+        counts = { refreshed: 0, renewed_grants: 0, rotated_tokens: 0, errors: 0 }
 
         TrackerSubscription.expiring(EXPIRY_WINDOW).includes(:integration).find_each do |subscription|
           next unless subscription.integration.active? && subscription.integration.jira?
@@ -32,6 +34,16 @@ module Activities
         rescue StandardError => e
           counts[:errors] += 1
           log(:warn, "jira integration #{integration.id} grant renewal raised: #{e.class}: #{e.message}")
+        end
+
+        Integration.active.where(provider: "gitlab").find_each do |integration|
+          next unless ::Gitlab::ServiceAccountToken.due?(integration)
+
+          ::Gitlab::ServiceAccountToken.rotate!(integration)
+          counts[:rotated_tokens] += 1
+        rescue StandardError => e
+          counts[:errors] += 1
+          log(:warn, "gitlab integration #{integration.id} token rotation raised: #{e.class}: #{e.message}")
         end
 
         log(:info, "tracker subscription sweep: #{counts}")

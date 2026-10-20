@@ -13,6 +13,8 @@ module Trackers
       }.freeze
       ISSUE_URL = %r{\Ahttps?://[^/]+/(?<organization>[^/]+)/(?<project>[^/]+)/_workitems/edit/(?<id>\d+)}i
       FIELD_KEYS = %w[area_path iteration_path priority acceptance_criteria repro_steps].freeze
+      # Azure DevOps Services' own limit (docs/design/tracker-attachments.md §4.3).
+      MAX_UPLOAD_BYTES = 60.megabytes
 
       def serves_project?(project)
         integration.project_id == project.id
@@ -165,10 +167,62 @@ module Trackers
         end
       end
 
+      def attachments? = true
+      def max_upload_bytes = MAX_UPLOAD_BYTES
+
+      def list_attachments(scope_id, ref)
+        translate { files_of(work_item_id!(ref), scope_id) }
+      end
+
+      def download_attachment(scope_id, ref, attachment_id, io:, max_bytes:)
+        translate do
+          id = work_item_id!(ref)
+          found = files_of(id, scope_id).find { |a| a.id == attachment_id.to_s.downcase }
+          raise Error.new("Work item #{id} has no file #{attachment_id}", code: "not_found") unless found
+
+          fetched = work_items.download_attachment(found.id, io: io, max_bytes: max_bytes, project_id: scope_id)
+          found.with(content_type: fetched[:content_type])
+        end
+      end
+
+      # A retry after the link failed links the upload already made rather than
+      # leaving another orphan behind it.
+      def upload_attachment(scope_id, ref, file)
+        translate do
+          id = work_item_id!(ref)
+          key = [ "trackers", integration.id, "azure_upload", id, file.sha256 ]
+          raw = work_items.upload_attachment(id, file, project_id: scope_id, uploaded: Rails.cache.read(key)) do |uploaded|
+            Rails.cache.write(key, uploaded, expires_in: 1.hour)
+          end
+          Rails.cache.delete(key)
+          @files&.delete(id)
+          Attachment.new(id: raw[:id], issue_id: id.to_s, name: raw[:name], size: raw[:size], content_type: file.content_type,
+                         url: raw[:url])
+        end
+      end
+
+      # Comments are HTML.
+      def compose_comment(text, attachments)
+        [ text.to_s.strip.presence, *attachments.map { |a| attachment_markup(a) } ].compact.join("<br><br>")
+      end
+
+      def attachment_markup(attachment)
+        url = ERB::Util.h(attachment.url)
+        name = ERB::Util.h(attachment.name)
+        attachment.image? ? %(<img src="#{url}" alt="#{name}">) : %(<a href="#{url}">#{name}</a>)
+      end
+
       private
 
       def work_items
         @work_items ||= ::AzureDevops::WorkItemService.new(integration)
+      end
+
+      def files_of(id, scope_id)
+        (@files ||= {})[id] ||= work_items.attachments(id, project_id: scope_id).map do |raw|
+          Attachment.new(id: raw[:id], issue_id: id.to_s, name: raw[:name], size: raw[:size], created_at: raw[:created_at],
+                         origin: raw[:origin], location: raw[:location], url: raw[:url])
+        end
       end
 
       # Azure offers no reliable "who am I" call for a service principal, so the

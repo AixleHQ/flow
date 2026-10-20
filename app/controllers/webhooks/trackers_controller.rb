@@ -59,11 +59,11 @@ class Webhooks::TrackersController < ActionController::API
   private
 
   def accept(subscription, provider, payload, raw)
-    notifications = provider.parse_delivery(payload, subscription)
+    dedup_key = provider.delivery_id(request, payload).presence || Digest::SHA256.hexdigest(raw)
+    notifications = provider.parse_delivery(payload, subscription, delivery_id: dedup_key)
     subscription.update_columns(last_event_at: Time.current, status: "active", updated_at: Time.current)
     return if notifications.empty?
 
-    dedup_key = provider.delivery_id(request, payload).presence || Digest::SHA256.hexdigest(raw)
     delivery = TrackerDelivery.record(subscription: subscription, dedup_key: dedup_key, notifications: notifications)
     Trackers::ProcessDeliveryJob.perform_later(delivery.id) if delivery
   end

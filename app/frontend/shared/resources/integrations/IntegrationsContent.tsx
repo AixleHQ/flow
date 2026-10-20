@@ -37,6 +37,7 @@ import {
   IconSearch,
   IconSettings,
   IconTrash,
+  IconUsersGroup,
   IconWebhook,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -58,6 +59,8 @@ import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from
 import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
+import { GitlabGroupModal } from './GitlabGroupModal';
+import { GitlabTrackersModal } from './GitlabTrackersModal';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
 import { TeamsApprovalModal } from './TeamsApprovalModal';
@@ -94,6 +97,8 @@ interface IntegrationsContentProps {
   bitbucket?: BitbucketProps;
   // Absent on the company page: Jira connects to a project.
   jira?: JiraProps;
+  // Absent on the company page. `oauthEnabled`: the deployment has a GitLab OAuth app.
+  gitlab?: { oauthEnabled: boolean };
   // Absent on the company page: Linear connects to a project.
   linear?: LinearProps;
   // Absent on the company page: YouTrack connects to a project.
@@ -129,7 +134,7 @@ const TOKEN_PROVIDERS = new Set(['gitlab', 'coder']);
 
 // A Bitbucket app connection has no token of its own, but it can still be re-checked.
 const holdsToken = (integration: Integration) =>
-  TOKEN_PROVIDERS.has(integration.provider) ||
+  (TOKEN_PROVIDERS.has(integration.provider) && !integration.gitlabAuthMode?.startsWith('service_account')) ||
   (integration.provider === 'bitbucket' && integration.bitbucketAuthMode === 'token');
 const testable = (integration: Integration) => holdsToken(integration) || integration.provider === 'bitbucket';
 
@@ -160,6 +165,7 @@ export const IntegrationsContent = ({
   github,
   bitbucket,
   jira,
+  gitlab,
   linear,
   youtrack,
   slack,
@@ -242,7 +248,12 @@ export const IntegrationsContent = ({
     if (jiraPending) setJiraProjectsTarget(jiraPending);
     const linearPending = pending('linear_setup', 'linear');
     if (linearPending) setLinearTeamsTarget(linearPending);
+    const gitlabPending = pending('gitlab_setup', 'gitlab');
+    if (gitlabPending) setGitlabGroupTarget(gitlabPending);
   }, [integrations]);
+
+  const [gitlabGroupTarget, setGitlabGroupTarget] = useState<Integration | null>(null);
+  const [gitlabTrackersTarget, setGitlabTrackersTarget] = useState<Integration | null>(null);
 
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
@@ -848,6 +859,29 @@ export const IntegrationsContent = ({
                                   } (${integration.jiraAuthMode === 'oauth' ? 'Atlassian account' : 'service account'})`}
                             </Text>
                           )}
+                          {integration.provider === 'gitlab' &&
+                            integration.gitlabAuthMode === 'service_account_pending' && (
+                              <Text fz={11} c="dimmed" truncate maw={260}>
+                                Pick the GitLab group to finish connecting
+                              </Text>
+                            )}
+                          {integration.provider === 'gitlab' && integration.gitlabAuthMode === 'service_account' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {`as ${String(integration.settings?.gitlab_username ?? 'the service account')} in ${
+                                integration.gitlabGroup ?? 'its group'
+                              }${integration.gitlabTokenExpiresAt ? ` · token renews before ${integration.gitlabTokenExpiresAt}` : ''}`}
+                            </Text>
+                          )}
+                          {integration.gitlabTrackers.length > 0 && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {`issue boards: ${integration.gitlabTrackers.map((t) => t.path).join(', ')}`}
+                            </Text>
+                          )}
+                          {integration.gitlabWebhookError && (
+                            <Text fz={11} c="var(--app-danger-fg)" truncate maw={260}>
+                              {integration.gitlabWebhookError}
+                            </Text>
+                          )}
                           {integration.githubProjects.length > 0 && (
                             <Text fz={11} c="dimmed" truncate maw={260}>
                               {`projects: ${integration.githubProjects.map((p) => p.title).join(', ')}`}
@@ -972,6 +1006,36 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
+                        {integration.provider === 'gitlab' &&
+                          integration.gitlabAuthMode === 'service_account_pending' &&
+                          canExecute &&
+                          !readOnly && (
+                            <Tooltip label="Pick the group">
+                              <ActionIcon
+                                aria-label={`Pick the GitLab group for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setGitlabGroupTarget(integration)}
+                              >
+                                <IconUsersGroup size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                        {integration.provider === 'gitlab' &&
+                          integration.status === 'active' &&
+                          canExecute &&
+                          !readOnly && (
+                            <Tooltip label="Issue boards">
+                              <ActionIcon
+                                aria-label={`GitLab issue boards for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setGitlabTrackersTarget(integration)}
+                              >
+                                <IconLayoutKanban size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
                         {integration.githubProjectsSupported && canExecute && !readOnly && (
                           <Tooltip label="GitHub Projects">
                             <ActionIcon
@@ -1326,6 +1390,22 @@ export const IntegrationsContent = ({
         basePath={basePath}
       />
 
+      <GitlabGroupModal
+        integration={gitlabGroupTarget}
+        onClose={() => setGitlabGroupTarget(null)}
+        onCreated={(integration) => {
+          setGitlabGroupTarget(null);
+          setGitlabTrackersTarget(integration);
+        }}
+        basePath={basePath}
+      />
+
+      <GitlabTrackersModal
+        integration={gitlabTrackersTarget}
+        onClose={() => setGitlabTrackersTarget(null)}
+        basePath={basePath}
+      />
+
       {azureDevops && (
         <AzureDevopsConnectModal
           opened={azureOpen}
@@ -1348,6 +1428,20 @@ export const IntegrationsContent = ({
 
       <Modal opened={gitlabOpen} onClose={requestCloseGitlab} title="Connect GitLab" centered size="sm">
         <Stack gap="md">
+          {gitlab?.oauthEnabled && (
+            <>
+              <Text size="sm" c="dimmed">
+                Recommended: sign in as an Owner of a GitLab group. Flow then creates its own service account in that
+                group and keeps only that account&apos;s token.
+              </Text>
+              <Button component="a" href={`${basePath}/gitlab_oauth_start`}>
+                Sign in with GitLab
+              </Button>
+              <Text size="xs" c="dimmed" ta="center">
+                or connect with a token
+              </Text>
+            </>
+          )}
           <Text size="sm" c="dimmed">
             Enter a GitLab Personal Access Token with <b>api</b> scope to connect your GitLab account.
           </Text>

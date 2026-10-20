@@ -1,7 +1,15 @@
 # Connecting GitLab
 
-GitLab connects per Flow project with a personal access token, and the
-connection acts as the person the token belongs to. From then on:
+GitLab connects per Flow project in one of two ways:
+
+- **Sign in with GitLab** (recommended, where the operator set up the OAuth app).
+  An Owner of a GitLab group signs in once. Flow creates a **service account**
+  in that group and from then on acts as that account, never as a person. See
+  [Sign in with GitLab](#sign-in-with-gitlab).
+- **A token** you paste, which acts as whoever it belongs to. See
+  [The token](#the-token).
+
+From then on:
 
 - you attach the GitLab projects that person is a member of as
   **repositories**;
@@ -12,9 +20,9 @@ connection acts as the person the token belongs to. From then on:
 - Flow registers a pipeline hook on each attached project, so a CI gate on a
   board task resolves as soon as its pipeline finishes.
 
-There are no GitLab triggers, and GitLab issues are not a tracker. There is no
-OAuth app either, so you register nothing in GitLab and set no `GITLAB_APP_*`
-variable.
+- GitLab projects you pick become **trackers**: their issues start workflows
+  and agents work on them with the `tracker_*` tools. See
+  [GitLab issues as a tracker](#gitlab-issues-as-a-tracker).
 
 ## Who does what
 
@@ -53,7 +61,45 @@ revoked goes unnoticed: the row still says **Active** while clones fail.
 **Test connection** then marks the row **Error**. Keep track of the expiry
 date.
 
-## Connect
+## Sign in with GitLab
+
+1. On the project's **Integrations** page choose **Connect → GitLab**, then
+   **Sign in with GitLab**.
+2. Sign in to GitLab as an **Owner** of the group whose projects Flow should
+   reach, and approve Aixle Flow. It asks for the `api` scope.
+3. Back on the Integrations page, pick the group. Flow:
+   - creates a service account named **Aixle Flow (your Flow address)**
+     (`aixle-flow-…`) in it, or reuses the one it made there before;
+   - makes it a **Maintainer** of the group;
+   - gives it a token with the `api` scope.
+
+   From then on, Flow keeps only that token and drops yours.
+4. Flow then opens **Issue boards**, to make projects' issues a tracker (see
+   [GitLab issues as a tracker](#gitlab-issues-as-a-tracker)). Close it if
+   GitLab is only your code host.
+
+The connection is named after the group, and everything Flow does in GitLab is
+done by the service account: clones and pushes, merge requests, issue comments
+and moves.
+
+- **What it can reach.** The service account sees the group's projects and its
+  subgroups'. To reach a project elsewhere, invite the account there in GitLab.
+- **Seats.** A service account takes no seat. GitLab allows 100 per top-level
+  group on Free; GitLab.com has them on every tier since GitLab 18.11.
+- **Who can do it.** On GitLab.com, a service account in a top-level group can
+  be created only by that group's Owner; a subgroup's Owner can create one in
+  the subgroup.
+- **Expiry.** If the group requires tokens to expire, the token lasts up to a
+  year. Flow rotates it a month before it ends, so nobody has to. If the group
+  does not require it, the token does not expire.
+- **Signing in again** for the same group renews that connection, and its
+  repositories and trackers stay. Flow reuses its service account there and
+  revokes the token it replaces.
+- **Disconnecting** revokes the service account's token. The account itself
+  stays in the group until an Owner deletes it (**Group → Settings → Service
+  accounts**); signing in again reuses it.
+
+## Connect with a token
 
 1. On the project's **Integrations** page choose **Connect → GitLab**.
 2. Paste the token into **Personal Access Token** and select **Connect**.
@@ -208,6 +254,41 @@ hooks.
 
 ---
 
+## GitLab issues as a tracker
+
+Any GitLab connection can make its projects' issues a tracker, like a Jira
+project. What trackers are and how their triggers work is on
+[Trackers](/docs/trackers).
+
+1. On the connection's row on the **Integrations** page select **Issue boards**
+   (the board icon). It also opens right after a sign-in.
+2. Pick the projects, and for each the **board** whose label lists are its
+   columns.
+
+Each project becomes a tracker on the project's **Trackers** page.
+
+- **Columns** are **Open**, then the board's label lists in board order, then
+  **Closed**. An issue is in Closed when it is closed. Otherwise it is in the
+  first list whose label it carries, or in Open when it carries none of them.
+- **Moving an issue** adds the target list's label, removes the other lists'
+  labels, and closes or reopens the issue for Closed. Without a board, the
+  columns are only Open and Closed.
+- **Issues** are keyed `group/project#12`. Agents can also pass `#12` (in the
+  tracker's project) or the issue's URL.
+- **Assignees** are GitLab usernames of the project's members.
+- **Events.** Flow adds a webhook to each tracked project for issue and comment
+  events, which needs the **Maintainer** role there. Confidential issues and
+  internal notes start nothing.
+- **Files** are the uploads an issue's description and comments link to. Files
+  on a confidential issue or in an internal note are never copied. Files an
+  agent sends are uploaded to the project and linked from a comment.
+- **Who the writes are from.** With **Sign in with GitLab**, writes come from
+  the service account, and `@aixle-flow-…` in a comment mentions Flow. With a
+  token, writes come from whoever the token belongs to.
+
+GitLab's work item **Status** field (Premium) is not used as columns yet. Use
+label lists on a board.
+
 ## Self-managed GitLab
 
 Each deployment talks to one GitLab instance, which is gitlab.com unless the
@@ -233,6 +314,16 @@ GITLAB_ENDPOINT=https://gitlab.example.com/api/v4
   reach that address. A GitLab on a private host may use a private address
   for it; a GitLab on a public host gets no hook at a private one.
 - **Public repository** still means gitlab.com only.
+- **Sign in with GitLab** needs an OAuth application on the instance. An
+  administrator creates it under **Admin → Applications → New application**:
+  - redirect URI `<PROTOCOL>://<DOMAIN>/integrations/gitlab/oauth/callback`;
+  - scope `api`;
+  - **Trusted** ticked.
+
+  Give its id and secret to the operator as `GITLAB_OAUTH_CLIENT_ID` and
+  `GITLAB_OAUTH_CLIENT_SECRET`. On gitlab.com, the deployment's operator
+  registers the application under a group's **Settings → Applications**, with
+  the same redirect URI and scope.
 
 Sessions get the token from Flow's credential endpoint, `GIT_CREDENTIALS_URL`,
 which by default is on the internal network. Never point it at a public host,

@@ -3,6 +3,17 @@
 class TaskAssetResource < ApplicationResource
   attributes :id, :name, :tags, :author_id, :author_type, :created_at, :updated_at
 
+  typelize "string"
+  attribute :source do |asset|
+    asset.source.to_s
+  end
+
+  # The tracker issue a copied file came from (docs/design/tracker-attachments.md §5).
+  typelize "string | null"
+  attribute :tracker_issue_key do |asset|
+    asset.tracker_attachment&.issue_key if asset.source.tracker?
+  end
+
   typelize "string | null"
   attribute :file_url do |asset|
     asset.file&.url

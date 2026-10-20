@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Alert, Button, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Button, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useState } from 'react';
 
@@ -7,6 +7,7 @@ import type { ProjectTracker } from '@/types/generated';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { COPY_ATTACHMENTS_HINT, COPY_ATTACHMENTS_LABEL } from 'shared/resources/triggers/trackerTrigger';
 import { apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
@@ -40,6 +41,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
   const [status, setStatus] = useState('');
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [columnId, setColumnId] = useState<string | null>(null);
+  const [copyAttachments, setCopyAttachments] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -49,6 +51,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
     setStatus('');
     setWorkflowId(workflows[0]?.id.toString() ?? null);
     setColumnId(boardColumns[0]?.id.toString() ?? null);
+    setCopyAttachments(false);
     setError(null);
   }, [tracker, workflows, boardColumns]);
 
@@ -56,6 +59,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
   const dirty =
     entry !== 'status' ||
     status !== '' ||
+    copyAttachments ||
     workflowId !== (workflows[0]?.id.toString() ?? null) ||
     columnId !== (boardColumns[0]?.id.toString() ?? null);
   const requestClose = useConfirmClose(dirty, onClose);
@@ -83,6 +87,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
             subject_policy: 'find_or_create_task',
             subject_column_id: columnId,
             aixle_changes: 'ignore',
+            copy_attachments: copyAttachments,
           },
         }),
       });
@@ -162,6 +167,12 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
           onChange={setColumnId}
           allowDeselect={false}
           withAsterisk
+        />
+        <Switch
+          label={COPY_ATTACHMENTS_LABEL}
+          description={COPY_ATTACHMENTS_HINT}
+          checked={copyAttachments}
+          onChange={(e) => setCopyAttachments(e.currentTarget.checked)}
         />
         <Text size="xs" c="dimmed">
           The workflow moves the issue on with its tracker tools; changes it makes do not start it again.

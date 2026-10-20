@@ -18,6 +18,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       github: github_props,
       bitbucket: bitbucket_props,
       jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
+      gitlab: { oauth_enabled: Gitlab::AppConfig.oauth_enabled? },
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       youtrack: { enabled: true, marketplace_url: Youtrack::Config::MARKETPLACE_URL },
       slack: { enabled: Slack::Oauth.enabled? },
@@ -55,7 +56,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     return update_linear(integration) if integration.linear?
     return update_youtrack if integration.youtrack?
     return update_github_projects(integration) if integration.github? && params.key?(:github_project_ids)
-    return replace_gitlab_token(integration) if integration.gitlab?
+    return update_gitlab(integration) if integration.gitlab?
     return replace_bitbucket_token(integration) if integration.bitbucket?
     return replace_coder_token(integration) if params.key?(:session_token)
 
@@ -270,6 +271,31 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
   end
 
+  def gitlab_oauth_start
+    unless Gitlab::AppConfig.oauth_enabled?
+      return redirect_to company_project_integrations_path(current_project), alert: "GitLab's OAuth app is not configured"
+    end
+
+    # allow_other_host: the GitLab instance, built from deployment Settings.
+    redirect_to Gitlab::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
+  end
+
+  # The projects a GitLab connection can track, and the ones it does.
+  def gitlab_projects
+    integration = Integration.for_project(current_project).where(provider: :gitlab).find(params[:id])
+    render json: { projects: gitlab_service.available_projects(integration),
+                   selected: Array(integration.settings.to_h["gitlab_trackers"]).map { |t| t.slice("id", "board_id") } }
+  rescue Trackers::Error, Gitlab::IntegrationService::ConnectionError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  def gitlab_boards
+    integration = Integration.for_project(current_project).where(provider: :gitlab).find(params[:id])
+    render json: { boards: gitlab_service.boards(integration, params[:gitlab_project_id].to_s) }
+  rescue Trackers::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
   # The teams a Linear connection can see — the picker that finishes an OAuth
   # connection, or changes one.
   def linear_teams
@@ -422,6 +448,22 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   rescue Gitlab::IntegrationService::ConnectionError => e
     redirect_to company_project_integrations_path(current_project),
                 inertia: { errors: { personal_access_token: e.message } }
+  end
+
+  # A pending sign-in finishes with its group; a connection changes its
+  # tracked projects, or replaces its pasted token.
+  def update_gitlab(integration)
+    if params[:gitlab_group_id].present?
+      integration = gitlab_service.create_service_account(integration, group_id: params[:gitlab_group_id].to_s)
+      return redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} connected as #{integration.settings['gitlab_username']}"
+    end
+    return replace_gitlab_token(integration) unless params.key?(:gitlab_trackers)
+
+    trackers = Array(params[:gitlab_trackers]).map { |t| t.permit(:project_id, :board_id).to_h }
+    integration = gitlab_service.configure_trackers(integration, trackers: trackers)
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} saved"
+  rescue Gitlab::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project), alert: "GitLab: #{e.message}"
   end
 
   def replace_gitlab_token(integration)

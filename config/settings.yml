@@ -260,6 +260,11 @@ gitlab:
   # Where GitLab posts pipeline events, when DOMAIN is not reachable from GitLab
   # (a tunnel in development). A host GitLab cannot reach registers no hooks.
   webhook_base_url: "<%= ENV['GITLAB_WEBHOOK_BASE_URL'] %>"
+  # The deployment's GitLab OAuth app (docs/design/gitlab-tracker.md). Optional —
+  # with it, a group Owner connects once and Flow makes a service account; without
+  # it, GitLab connects with a pasted token only.
+  oauth_client_id: "<%= ENV['GITLAB_OAUTH_CLIENT_ID'] %>"
+  oauth_client_secret: "<%= ENV['GITLAB_OAUTH_CLIENT_SECRET'] %>"
 
 # Bitbucket Cloud (docs/design/bitbucket-integration.md). App mode is offered
 # exactly when the three forge values are set; token mode needs nothing here.
@@ -423,6 +428,13 @@ youtrack:
   # Self-hosted YouTrack hosts this deployment may reach although they resolve
   # to a private address, comma-separated. Every other host must be public.
   trusted_hosts: "<%= ENV['YOUTRACK_TRUSTED_HOSTS'] %>"
+
+# Every tracker (docs/design/tracker-attachments.md §7.5): how long a step of a run
+# that copies its issue's files waits for the copy before it starts, and how often
+# it looks.
+trackers:
+  copy_wait_seconds: 60
+  copy_poll_seconds: 2
 
 coder:
   # Operator-configurable knobs for the Coder MCP services (workspace

@@ -151,6 +151,39 @@ module Trackers
         assert @provider.covers_scope?(@scope)
         refute @provider.covers_scope?(SecureRandom.uuid)
       end
+      test "files include images embedded in the work item's HTML, and download by guid" do
+        attached = @fakes.work_items.add_file(name: "trace.log", bytes: "trace")
+        inline = @fakes.work_items.add_file(name: "steps.png", bytes: "png", origin: :embedded, location: { "kind" => "description" })
+        io = StringIO.new
+
+        files = @provider.list_attachments(@scope, "11")
+        @provider.download_attachment(@scope, "11", inline.upcase, io: io, max_bytes: 1.megabyte)
+
+        assert_equal [ [ attached, :attached ], [ inline, :embedded ] ], files.map { |f| [ f.id, f.origin ] }
+        assert_equal "png", io.string
+      end
+
+      test "a retry after the link failed links the upload already made" do
+        Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+        @fakes.work_items.fail_link = true
+        file = -> { Trackers::UploadFile.new(io: StringIO.new("a"), filename: "a.txt", content_type: "text/plain", size: 1, sha256: "s1") }
+
+        assert_raises(Trackers::Error) { @provider.upload_attachment(@scope, "11", file.call) }
+        attachment = @provider.upload_attachment(@scope, "11", file.call)
+
+        assert_equal [ false, true ], @fakes.work_items.calls_to(:upload_attachment).pluck(:reused_upload)
+        assert_equal 1, @fakes.work_items.uploads.size
+        assert_equal "a.txt", attachment.name
+      end
+
+      test "a comment shows files as HTML" do
+        image = Trackers::Attachment.new(id: "g1", issue_id: "11", name: "a<b>.png", content_type: "image/png", url: "https://dev.azure.com/o/p/_apis/wit/attachments/g1?fileName=a.png")
+        doc = Trackers::Attachment.new(id: "g2", issue_id: "11", name: "spec.pdf", url: "https://dev.azure.com/o/p/_apis/wit/attachments/g2?fileName=spec.pdf")
+
+        assert_equal %(Done<br><br><img src="https://dev.azure.com/o/p/_apis/wit/attachments/g1?fileName=a.png" alt="a&lt;b&gt;.png">) +
+                     %(<br><br><a href="https://dev.azure.com/o/p/_apis/wit/attachments/g2?fileName=spec.pdf">spec.pdf</a>),
+                     @provider.compose_comment("Done", [ image, doc ])
+      end
     end
   end
 end

@@ -12,6 +12,9 @@ module Activities
         validation = validate_inputs(step_run)
         return fail_step(step_run, "Input validation failed", validation.errors) unless validation.valid?
 
+        # The copy of the issue's files races the run's start; the session, its
+        # workspace and its context about those files are all made after this.
+        ::Trackers::IssueFileCopy.new(step_run.workflow_run).await
         step_run.mark_running!
         step_run.create_sub_step_runs!
 

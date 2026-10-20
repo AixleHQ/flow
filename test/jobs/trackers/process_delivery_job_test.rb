@@ -38,6 +38,24 @@ class Trackers::ProcessDeliveryJobTest < ActiveJob::TestCase
     assert_equal [ "ENG-1 It breaks", "https://acme.atlassian.net/browse/ENG-1" ], [ @task.title, @task.external_resources.sole.url ]
   end
 
+  test "a trigger that copies issue files queues the copy once its run starts, and one that does not queues nothing" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @project.owner,
+                                       event_type: "tracker.issue.status_changed", subject_policy: :find_or_create_task,
+                                       subject_column: @column, copy_attachments: true)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @project.owner)
+    WorkflowService.stubs(:enqueue).returns(run)
+    WorkflowService.stubs(:dispatch_or_leave_to_relay)
+
+    Trackers::ProcessDeliveryJob.perform_now(deliver([ { field: "status", from: "To Do", to: "Ready for AI", from_id: "1", to_id: "10004" } ]).id)
+    assert_enqueued_with(job: Trackers::CopyAttachmentsJob, args: [ run.id ])
+    assert_equal({ "pending" => true }, run.reload.shared_context.dig("tracker", "files"))
+
+    clear_enqueued_jobs
+    binding.update!(copy_attachments: false)
+    Trackers::ProcessDeliveryJob.perform_now(deliver([ { field: "status", from: "Ready for AI", to: "To Do", from_id: "10004", to_id: "1" } ]).id)
+    assert_no_enqueued_jobs(only: Trackers::CopyAttachmentsJob)
+  end
+
   test "an issue-created delivery waits for a create still in flight, and its last attempt publishes it as it stands" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @project.owner, event_type: "tracker.issue.created")
     create(:tracker_operation, project_tracker: @integration.project_trackers.find_by!(external_scope_id: "10000"),

@@ -33,7 +33,7 @@ module FakeLinear
     ].freeze
     LABELS = [ { id: "lb-bug", name: "Bug" }, { id: "lb-ai", name: "ai" } ].freeze
 
-    attr_reader :calls, :comments_by_issue, :webhooks
+    attr_reader :calls, :comments_by_issue, :webhooks, :stored, :uploads
     attr_accessor :me
 
     def initialize
@@ -43,6 +43,8 @@ module FakeLinear
       @issues = {}
       @comments_by_issue = Hash.new { |h, k| h[k] = [] }
       @webhooks = {}
+      @stored = {}
+      @uploads = []
       @next = 100
       @failures = {}
       add_issue(id: ISSUE_1, key: "ENG-1", title: "It breaks", state_id: "st-ready", team: TEAMS[0])
@@ -54,8 +56,23 @@ module FakeLinear
         id: id, key: key, number: key.split("-").last.to_i, title: title, description: description,
         url: "https://linear.app/acme/issue/#{key}/slug", priority: 0, updated_at: "2026-10-01T10:00:00.000Z",
         team_id: team[:id], team_key: team[:key], state: STATES.find { |s| s[:id] == state_id }.dup,
-        assignee: assignee, labels: labels
+        assignee: assignee, labels: labels, links: []
       }
+    end
+
+    # A file on uploads.linear.app; its URL is what issue text links to.
+    def store_file(bytes, name: "file")
+      url = "https://uploads.linear.app/#{ORGANIZATION}/#{SecureRandom.uuid}/#{name}"
+      @stored[url] = bytes.b
+      url
+    end
+
+    def set_description(issue_id, text)
+      @issues.fetch(issue_id)[:description] = text
+    end
+
+    def add_comment_by(issue_id, body:)
+      @comments_by_issue[issue_id] << { id: "cm-#{@next += 1}", body: body, created_at: "2026-10-01T10:04:00.000Z", author: "ada" }
     end
 
     # The next call to `method` raises `error`.
@@ -132,6 +149,33 @@ module FakeLinear
         comment = { id: "cm-#{@next += 1}", body: body, created_at: "2026-10-01T10:05:00.000Z", author: "aixle" }
         @comments_by_issue[issue_id] << comment
         comment.dup
+      end
+    end
+
+    def file_upload(content_type:, filename:, size:)
+      record(:file_upload, content_type: content_type, filename: filename, size: size) do
+        @pending = "https://uploads.linear.app/#{ORGANIZATION}/#{SecureRandom.uuid}/#{SecureRandom.uuid}"
+        { upload_url: "https://storage.googleapis.com/linear-uploads/#{SecureRandom.hex(4)}?X-Goog-Signature=s",
+          asset_url: @pending, headers: { "x-goog-content-length-range" => "#{size},#{size}" } }
+      end
+    end
+
+    def upload(url, headers:, file:)
+      record(:upload, url: url, headers: headers) do
+        bytes = file.io.read
+        @uploads << { name: file.filename, bytes: bytes, headers: headers }
+        @stored[@pending] = bytes
+        nil
+      end
+    end
+
+    def download(url, io:, max_bytes:)
+      record(:download, url: url) do
+        bytes = @stored.fetch(url)
+        raise Trackers::Error.new("The file is larger than allowed", code: "too_large") if bytes.bytesize > max_bytes
+
+        io.write(bytes)
+        { content_type: "application/octet-stream", size: bytes.bytesize }
       end
     end
 

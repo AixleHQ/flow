@@ -106,6 +106,52 @@ describe('TrackersContent', () => {
     );
   });
 
+  it('lets a GitHub tracker keep files sent to issues on the Aixle task, and shows when it does', async () => {
+    renderPage(
+      <TrackersContent
+        projectId={7}
+        trackers={[
+          buildProjectTracker({ id: 8, name: 'Roadmap', handle: 'roadmap', provider: 'github' }),
+          buildProjectTracker({
+            id: 9,
+            name: 'Ops',
+            handle: 'ops',
+            provider: 'github',
+            primary: false,
+            fileStorage: 'aixle_link',
+          }),
+        ]}
+        availableScopes={[]}
+        basePath={basePath}
+      />,
+    );
+    const roadmap = screen.getByRole('row', { name: /^Roadmap/ });
+    const ops = screen.getByRole('row', { name: /^Ops/ });
+
+    expect(within(ops).getByText('Files as links')).toBeInTheDocument();
+    expect(within(roadmap).queryByText('Files as links')).not.toBeInTheDocument();
+    await userEvent.click(within(roadmap).getByRole('button', { name: 'Link files instead' }));
+    expect(router.patch).toHaveBeenLastCalledWith(
+      `${basePath}/8`,
+      { tracker: { file_storage: 'aixle_link' } },
+      expect.anything(),
+    );
+    await userEvent.click(within(ops).getByRole('button', { name: 'Store files in the repository' }));
+    expect(router.patch).toHaveBeenLastCalledWith(
+      `${basePath}/9`,
+      { tracker: { file_storage: 'repository' } },
+      expect.anything(),
+    );
+  });
+
+  it('offers the file storage switch for GitHub trackers only', () => {
+    renderPage(
+      <TrackersContent projectId={7} trackers={[buildProjectTracker()]} availableScopes={[]} basePath={basePath} />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Link files instead' })).not.toBeInTheDocument();
+  });
+
   it('detaches only after confirmation, and offers to attach a detached tracker again', async () => {
     renderPage(
       <TrackersContent

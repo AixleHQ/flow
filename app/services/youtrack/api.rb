@@ -10,6 +10,8 @@ module Youtrack
     ISSUE = "id,idReadable,summary,description,created,updated,resolved,project(id,shortName,name)," \
             "reporter(#{USER}),tags(id,name),customFields($type,name,value(#{VALUE}))"
     COMMENT = "id,text,created,deleted,author(#{USER})"
+    ATTACHMENT = "id,name,size,mimeType,url,created,removed,draft,comment(id)," \
+                 "visibility($type,permittedGroups(id),permittedUsers(id))"
     PROJECT_FIELD = "$type,field(name,fieldType(id)),bundle(values(id,name,isResolved,archived,ordinal),aggregatedUsers(#{USER}))"
     ACTIVITY = "id,timestamp,author(#{USER}),field(name,presentation),added(#{VALUE}),removed(#{VALUE})"
     PAGE = 100
@@ -114,6 +116,23 @@ module Youtrack
       comment_from(@client.post("/api/issues/#{escape(issue_id)}/comments", { text: text.to_s }, fields: COMMENT))
     end
 
+    # The issue's files, removed and draft ones left out:
+    # [{ id:, name:, size:, content_type:, created_at:, comment_id:, url:, restricted: }].
+    # `url` is signed for the token's account; it is a credential.
+    def attachments(issue_id)
+      list(@client.get("/api/issues/#{escape(issue_id)}/attachments", fields: ATTACHMENT, "$top": 500))
+        .reject { |a| a["removed"] || a["draft"] }.map { |a| attachment_from(a) }
+    end
+
+    def download(url, io:, max_bytes:)
+      @client.download(url, io: io, max_bytes: max_bytes)
+    end
+
+    def upload_attachment(issue_id, file)
+      created = @client.upload("/api/issues/#{escape(issue_id)}/attachments", file, fields: ATTACHMENT)
+      attachment_from(Array.wrap(created).first.to_h)
+    end
+
     # The issue's latest comments, newest first, read from its history: the
     # comments endpoint pages oldest first and ignores $reverse.
     def recent_comments(issue_id, top: 20)
@@ -160,6 +179,16 @@ module Youtrack
         tags: Array(raw["tags"]).map { |t| { id: t["id"].to_s, name: t["name"].to_s } },
         custom_fields: Array(raw["customFields"]).map { |f| { name: f["name"].to_s, type: f["$type"].to_s, value: value(f["value"]) } }
       }
+    end
+
+    # Limited to groups or people when either list is set; the issue's own
+    # visibility is not the file's.
+    def attachment_from(raw)
+      visibility = raw["visibility"].to_h
+      limited = visibility["$type"] == "LimitedVisibility" &&
+                (Array(visibility["permittedGroups"]).any? || Array(visibility["permittedUsers"]).any?)
+      { id: raw["id"].to_s, name: raw["name"].to_s, size: raw["size"], content_type: raw["mimeType"].presence,
+        created_at: time(raw["created"]), comment_id: raw.dig("comment", "id")&.to_s, url: raw["url"], restricted: limited }
     end
 
     def comment_from(raw)

@@ -1134,6 +1134,9 @@
                   "other_workflows",
                   "always"
                 ]
+              },
+              "copy_attachments": {
+                "type": "boolean"
               }
             },
             "required": [

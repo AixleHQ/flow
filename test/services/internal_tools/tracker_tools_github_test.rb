@@ -46,4 +46,56 @@ class InternalTools::TrackerToolsGithubTest < ActiveSupport::TestCase
     assert_equal [ "Todo", "Ready for AI", "In Progress", "Done" ], statuses.pluck("name")
     assert_equal [ "acme-corp/app#1" ], issues.pluck("key")
   end
+  test "a person's image comes in through its signed address; their PDF is listed as unavailable" do
+    stub_container_runtime
+    image = "https://github.com/user-attachments/assets/1b2c3d4e-0000-4000-8000-000000000001"
+    pdf = "https://github.com/user-attachments/files/123/spec.pdf"
+    @github.set_body("I_kwDOissue1", "Broken: ![screen](#{image})\nSpec: [spec.pdf](#{pdf})")
+    @github.add_person_image("I_kwDOissue1", url: image, bytes: "png")
+
+    files = run_tool(InternalTools::TrackerListAttachments, issue: "acme-corp/app#1")["attachments"]
+    downloaded = run_tool(InternalTools::TrackerDownloadAttachments, issue: "acme-corp/app#1")["files"]
+
+    assert_equal [ [ "screen.png", true ], [ "spec.pdf", false ] ], files.map { |f| f.values_at("name", "available") }
+    assert_equal [ [ "copied", nil ], [ "skipped", "unavailable" ] ], downloaded.map { |f| f.values_at("status", "reason") }
+    assert_match(/jwt=signed/, @github.calls_to(:download_signed).sole[:url])
+  end
+
+  test "an image pasted as HTML, named by its uuid alone, is stored with the extension its bytes give" do
+    stub_container_runtime
+    image = "https://github.com/user-attachments/assets/6a02e991-bc74-41de-8cb5-9089462795ce"
+    @github.set_body("I_kwDOissue1", %(<img width="800" alt="Image" src="#{image}" />))
+    @github.add_person_image("I_kwDOissue1", url: image, bytes: "\x89PNG\r\n\x1A\n".b + ("\0" * 32))
+
+    downloaded = run_tool(InternalTools::TrackerDownloadAttachments, issue: "acme-corp/app#1")["files"]
+
+    assert_equal [ [ "6a02e991-bc74-41de-8cb5-9089462795ce.png", "copied" ] ], downloaded.map { |f| f.values_at("name", "status") }
+  end
+
+  test "a file goes into the issue's repository and the comment shows it from the commit" do
+    run_tool(InternalTools::TrackerAttachFiles, issue: "acme-corp/app#1", files: [ { content: "png", filename: "after.png" } ])
+    again = run_tool(InternalTools::TrackerAttachFiles, issue: "acme-corp/app#1", comment: "Same file",
+                                                        files: [ { content: "png", filename: "after.png" } ])
+
+    stored = @github.stored["acme-corp/app#1"].sole
+    body = @github.comments_by_content["I_kwDOissue1"].first[:body]
+    assert_equal "refs/aixle/attachments/1/#{Digest::SHA256.hexdigest('png')[0, 16]}", stored[:ref]
+    assert_equal "Files from Aixle:\n\n![after.png](https://github.com/acme-corp/app/blob/#{stored[:commit]}/after.png?raw=true)", body
+    assert_equal [ "already_on_issue" ], again["files"].pluck("status")
+  end
+
+  test "a file the repository refuses stays on the run's task and the issue links to it" do
+    workflow = create(:workflow, scope: @project)
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board))
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: task)
+    create(:step_run, workflow_run: run, step: create(:step, :non_interactive, workflow: workflow), terminal_session: @session.reload)
+    @github.refuse_storage = true
+
+    result = run_tool(InternalTools::TrackerAttachFiles, issue: "acme-corp/app#1", files: [ { content: "log", filename: "run.log" } ])
+
+    assert_equal [ "linked" ], result["files"].pluck("status")
+    assert_equal [ "run.log", "agent" ], task.task_assets.sole.values_at(:name, :source)
+    assert_match %r{\[run.log\]\(https?://[^)]+/board\?n=#{task.number}\) \(in Aixle\)}, @github.comments_by_content["I_kwDOissue1"].first[:body]
+  end
 end

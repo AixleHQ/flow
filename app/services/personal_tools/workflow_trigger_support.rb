@@ -19,7 +19,7 @@ module PersonalTools
     # Mutable fields, mirroring the controller's permit lists.
     BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds status_reporting
                         subject_policy subject_column_id subject_title_template
-                        project_tracker_id aixle_changes].freeze
+                        project_tracker_id aixle_changes copy_attachments].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze
     SCHEDULE_KEYS = %w[cron timezone].freeze
 

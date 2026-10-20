@@ -96,4 +96,38 @@ class InternalTools::TrackerToolsJiraTest < ActiveSupport::TestCase
 
     assert_equal [ { "id" => "557058:ada", "name" => "Ada Lovelace" } ], users
   end
+  test "a file shown only in restricted comments is listed as restricted and never fetched" do
+    stub_container_runtime
+    public_file = @jira.add_file("10100", name: "trace.log", bytes: "trace")
+    hidden = @jira.add_file("10100", name: "dump.png", bytes: "png", content_type: "image/png")
+    @jira.add_comment_by("10100", body: "see !dump.png|thumbnail!", restricted: true)
+    @jira.add_comment_by("10100", body: "full log: [^trace.log]")
+
+    files = run_tool(InternalTools::TrackerListAttachments, issue: "ENG-1")["attachments"]
+    downloaded = run_tool(InternalTools::TrackerDownloadAttachments, issue: "ENG-1")["files"]
+
+    assert_equal [ [ public_file, false ], [ hidden, true ] ], files.map { |f| f.values_at("id", "restricted") }
+    assert_equal({ "kind" => "comment", "id" => @jira.comments_by_issue["10100"].last[:id] }, files.first["location"])
+    assert_equal [ %w[copied], %w[skipped restricted] ], downloaded.map { |f| f.values_at("status", "reason").compact }
+    assert_equal [ public_file ], @jira.calls_to(:download_attachment).pluck(:id)
+  end
+
+  test "files go up one by one and the comment shows them in wiki markup" do
+    result = run_tool(InternalTools::TrackerAttachFiles, issue: "ENG-1", comment: "Screens",
+                                                         files: [ { content: "png", filename: "shot.png" }, { content: "%PDF", filename: "spec.pdf" } ])
+
+    assert_equal %w[shot.png spec.pdf], @jira.uploads.pluck(:name)
+    assert_equal "Screens\n\n!shot.png|thumbnail!\n\n[^spec.pdf]", @jira.comments_by_issue["10100"].last[:body]
+    assert_equal result["comment"]["id"], TrackerOperation.find_by!(operation: "attach_files").result_ref
+  end
+
+  test "a site with attachments switched off refuses each file and posts nothing" do
+    @jira.attachments_enabled = false
+
+    result = run_tool(InternalTools::TrackerAttachFiles, issue: "ENG-1", comment: "x", files: [ { content: "a", filename: "a.txt" } ])
+
+    assert_equal [ [ "refused", "attachments_disabled" ] ], result["files"].map { |f| f.values_at("status", "reason") }
+    assert_nil result["comment"]
+    assert_empty @jira.comments_by_issue["10100"]
+  end
 end
