@@ -19,29 +19,19 @@ class Web::Company::MembersController < Web::Company::ApplicationController
     }
   end
 
-  # Invite = find-or-create the global User identity (new users are created
-  # passwordless — they set credentials via the invitation signup flow), then
-  # create a membership in the `invited` state and email a signed accept link.
   def create
-    user = find_or_build_user
+    result = CompanyInvitation.call(
+      company: current_company, inviter: current_user,
+      email: create_params[:email], name: create_params[:name], role: allowed_role
+    )
 
-    # Invariant: super admins have no memberships — never invite one.
-    if user.persisted? && user.super_admin?
-      return redirect_to company_members_path,
-                         inertia: { errors: { email: "#{user.email} is a platform administrator and cannot be invited" } }
-    end
-
-    membership = current_company.company_memberships.find_by(user_id: user.id) if user.persisted?
-
-    if membership.present?
-      handle_existing_membership(user, membership)
+    if result.sent?
+      redirect_to company_members_path, notice: result.message
+    elsif result.status == :invalid
+      redirect_to company_members_path, inertia: { errors: result.errors }
     else
-      invite_new_membership(user)
+      redirect_to company_members_path, inertia: { errors: { email: result.message } }
     end
-  rescue ActiveRecord::RecordNotUnique
-    # Concurrent invite of the same email (user or membership unique index).
-    redirect_to company_members_path,
-                inertia: { errors: { email: "#{create_params[:email]} has already been invited" } }
   end
 
   # Re-send the invitation email. Touching invited_at rotates the token
@@ -107,58 +97,6 @@ class Web::Company::MembersController < Web::Company::ApplicationController
 
   def create_params
     params.require(:user).permit(:email, :name)
-  end
-
-  def find_or_build_user
-    email = create_params[:email].to_s.strip.downcase
-    user = User.find_or_initialize_by(email: email)
-    user.name = create_params[:name] if user.name.blank? && create_params[:name].present?
-    user
-  end
-
-  # Existing membership in this company: pending invite → resend; revoked →
-  # re-invite (reuse the row — user+company is unique); anything else → error.
-  def handle_existing_membership(user, membership)
-    if membership.invited?
-      membership.update!(invited_at: Time.current)
-      MembershipMailer.invitation(membership).deliver_later
-      redirect_to company_members_path, notice: "Invitation re-sent to #{user.email}"
-    elsif membership.revoked?
-      membership.assign_attributes(
-        role: allowed_role || "employee",
-        invited_by: current_user, invited_at: Time.current, accepted_at: nil
-      )
-      membership.aasm(:state).fire(:reinvite)
-      save_and_send_invitation(user, membership)
-    else
-      redirect_to company_members_path,
-                  inertia: { errors: { email: "#{user.email} is already a member of this company" } }
-    end
-  end
-
-  def invite_new_membership(user)
-    membership = user.company_memberships.build(
-      company: current_company,
-      role: allowed_role || "employee",
-      invited_by: current_user,
-      invited_at: Time.current
-    )
-
-    if user.save
-      MembershipMailer.invitation(membership).deliver_later
-      redirect_to company_members_path, notice: "Invitation sent to #{user.email}"
-    else
-      redirect_to company_members_path, inertia: { errors: user.errors.presence || membership.errors }
-    end
-  end
-
-  def save_and_send_invitation(user, membership)
-    if membership.save
-      MembershipMailer.invitation(membership).deliver_later
-      redirect_to company_members_path, notice: "Invitation sent to #{user.email}"
-    else
-      redirect_to company_members_path, inertia: { errors: membership.errors }
-    end
   end
 
   def allowed_role

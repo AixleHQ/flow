@@ -25,7 +25,7 @@ module Agents
     # unreachable (expired token, network failure), or it no longer lists the
     # configured model at all. It mirrors the mappings the CLI hardcodes for a saved
     # model that outlived its catalog entry (codex-rs/tui/src/app/startup_prompts.rs,
-    # model_upgrade_for_migration, as of 0.161.0).
+    # model_upgrade_for_migration, as of 0.163.0).
     FALLBACK_MODEL_MIGRATIONS = {
       "gpt-5.4" => "gpt-6-sol",
       "gpt-5.4-mini" => "gpt-6-luna"

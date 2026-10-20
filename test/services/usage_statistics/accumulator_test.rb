@@ -42,7 +42,6 @@ module UsageStatistics
       assert_equal 20, stat.output_tokens
       assert_equal 3, stat.cache_write_tokens
       assert_equal 5, stat.cache_read_tokens
-      assert_equal 128, stat.tokens
       assert_equal 1, stat.events_count
       assert_equal "otlp", stat.source
       assert_equal [ "claude-sonnet-5" ], stat.models
@@ -55,7 +54,6 @@ module UsageStatistics
 
       stat = @session.reload.usage_statistic
       assert_equal 30, stat.input_tokens
-      assert_equal 30, stat.tokens
       assert_equal 3, stat.events_count
       assert_equal 3, stat.events_data.size
       assert_in_delta 1.5, stat.total_cents_precise.to_f, 0.0001

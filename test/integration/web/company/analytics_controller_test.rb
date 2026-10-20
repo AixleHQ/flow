@@ -74,8 +74,7 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
       terminal_session: session,
       cost_cents: 150,
       input_tokens: 1000, output_tokens: 500,
-      cache_write_tokens: 0, cache_read_tokens: 0,
-      tokens: 1500
+      cache_write_tokens: 0, cache_read_tokens: 0
     )
 
     get company_analytics_path
@@ -102,8 +101,7 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
       terminal_session: session,
       cost_cents: 250,
       input_tokens: 800, output_tokens: 400,
-      cache_write_tokens: 0, cache_read_tokens: 0,
-      tokens: 1200
+      cache_write_tokens: 0, cache_read_tokens: 0
     )
 
     get company_analytics_path

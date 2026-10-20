@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1739,7 +1739,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_120000) do
     t.bigint "output_tokens", default: 0, null: false
     t.string "source", default: "unknown", null: false
     t.bigint "terminal_session_id", null: false
-    t.bigint "tokens", default: 0, null: false
     t.decimal "total_cents_precise", precision: 12, scale: 6, default: "0.0"
     t.datetime "updated_at", null: false
     t.index ["terminal_session_id"], name: "index_usage_statistics_on_terminal_session_id", unique: true

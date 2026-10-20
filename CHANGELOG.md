@@ -35,6 +35,44 @@ governance, community health — carry none.
   issue's repository under hidden `refs/aixle/attachments/` refs, so images show
   inline in private repositories; **Link files instead** on the Trackers page
   keeps them on the Aixle task.
+- **Admin**: a superadmin can invite a company's people from the admin, without
+  signing in as its admin. The company form, new or edit, takes a list of
+  addresses and a role. Any company's page has "Invite members", which takes a
+  pasted list and shows who is invited and who has joined. Each person gets the
+  invitation a company admin sends from Members, from "An administrator".
+
+### Changed
+- **Triggers & gates**: the trigger form's on/off switch is labeled **Trigger
+  enabled** and says that what arrives while a trigger is off is not run when
+  it is turned back on.
+- **Admin**: a new company's initial admin is invited instead of being given a
+  password by the operator. The form asks only for their address; they get the
+  standard invitation email, set their own password and join as admin. Until
+  they accept they show as Pending under "Invite members", where a Re-send button
+  sends the invitation again. A platform administrator's address is refused, and
+  an email that cannot be sent leaves the company in place and says so.
+- **Tasks**: a task's Properties — column, type, priority, assignee, epic, tags —
+  sit right under its title, above the description, so a long description no
+  longer pushes them out of view.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.303, Codex 0.163.0,
+  Cursor CLI 2026.10.18-ea085cb, Grok 1.0.62, Kiro CLI 2.32.0 and Antigravity
+  CLI 1.4.2. Gemini CLI stays at 0.60.0: every newer release still stops
+  `--yolo` at a prompt when the agent edits a build file.
+- **Sessions & Runs**: Antigravity CLI telemetry follows the setting on the
+  user's Google account (`/config` in the CLI, or the "Terms of Service & Data
+  Use" step) instead of being switched off by the image, which releases after
+  1.1.27 no longer allow.
+
+### Fixed
+- **Sessions & Runs**: an interactive Antigravity CLI session opens at the
+  prompt instead of the CLI's first-run colour scheme, terms and folder-trust
+  screens.
+- **Sessions & Runs**: an Antigravity CLI session no longer replaces its pinned
+  CLI with the vendor's newest release a second after it starts.
+
+## [1.4.0] - 2026-10-19
+
+### Added
 - **Admin**: the admin opens on a dashboard. Tiles show active companies by
   billing status, members and projects, and the period's worker hours, busy
   hours (and how much of them is not on a paid plan) and successful sessions.
@@ -43,11 +81,14 @@ governance, community health — carry none.
   successful and failed sessions, each compared with the period before, with
   whether the company pays, is on a trial, is blocked or is managed by Aixle.
   History back to 2026-09-25 fills in by itself after the upgrade.
+- **Admin**: a superadmin can move a project into another company (project page
+  → "Move to another company"). The board, tasks, comments, workflows, run
+  history, triggers and webhook URLs keep their ids. A preflight lists who is not
+  in the target company, which runs not yet started will be cancelled, which
+  repositories and integrations stay behind, and which company files the project
+  gets a copy of; the report stays on the project afterwards.
 
 ### Changed
-- **Triggers & gates**: the trigger form's on/off switch is labeled **Trigger
-  enabled** and says that what arrives while a trigger is off is not run when
-  it is turned back on.
 - **Admin**: the admin uses the Aixle Flow theme.
 - **Admin**: where Aixle hosts, a company runs free only when it is ticked
   Managed by Aixle. A worker limit can no longer be cleared unless the company is
@@ -56,6 +97,11 @@ governance, community health — carry none.
   free; it needs a card once that trial is spent. On upgrade, active companies
   that already ran free (no limit, or no Stripe customer) are ticked Managed by
   Aixle; untick one to put it on the trial.
+- **Integrations**: the Aixle Flow app for YouTrack (1.0.2) sets itself up through
+  YouTrack's own API; only the service user's tokens still go through Hub. The
+  service user is now created with a random password that is never stored or
+  shown, and the app uses only the `aixle-flow` user it created: any other
+  account with that login stops the setup.
 
 ### Fixed
 - **Admin**: saving a company in the admin no longer turns its settings into a
@@ -632,7 +678,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.3.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.4.0...develop
+[1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/AixleHQ/flow/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/AixleHQ/flow/compare/v1.2.0...v1.2.1

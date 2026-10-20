@@ -8,7 +8,6 @@ class UsageStatisticDashboard < Administrate::BaseDashboard
     terminal_session: Field::BelongsTo,
     source: Field::String,
     models: Field::String,
-    tokens: Field::Number,
     input_tokens: Field::Number,
     output_tokens: Field::Number,
     cache_read_tokens: Field::Number,
@@ -25,7 +24,6 @@ class UsageStatisticDashboard < Administrate::BaseDashboard
     id
     terminal_session
     source
-    tokens
     cost_cents
     created_at
   ].freeze
@@ -35,7 +33,6 @@ class UsageStatisticDashboard < Administrate::BaseDashboard
     terminal_session
     source
     models
-    tokens
     input_tokens
     output_tokens
     cache_read_tokens

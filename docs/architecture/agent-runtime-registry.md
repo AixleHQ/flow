@@ -66,7 +66,14 @@ Read the vendor's release notes between the two versions against the adapter too
 than credentials: a CLI can keep its login files and telemetry and still change a default
 that blocks a headless session or hides its output (Gemini CLI 0.61's build-file prompt
 under `--yolo`, Codex 0.157's background server and alternate-screen transcript), or drop
-a setting the image relies on (Antigravity 1.3.1 no longer reads `enableTelemetry`).
+a setting the image relies on (Antigravity 1.1.28 no longer reads `enableTelemetry`).
+
+Then start the old and the new image the way a session does — the adapter's config files
+and launch command in the `agent` tmux pane, for an interactive, an automatic and a login
+container — with a credential that is not valid, and compare the panes. Each should stop at
+its login screen or its authentication error, and the new image should show nothing the old
+one did not: no onboarding step, no dialog, no update notice. Check the CLI binary is still
+the pinned release afterwards, too; Antigravity replaced its own within a second.
 
 The Monday canary (`canary-YYYYMMDD` tags) builds the newest releases and keeps one issue
 labelled `agent-cli-updates` up to date: each pin against the vendor's newest release,

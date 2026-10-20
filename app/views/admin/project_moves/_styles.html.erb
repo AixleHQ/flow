@@ -1,0 +1,18 @@
+<% content_for(:stylesheet) do %>
+  <style>
+    .project-move h2 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+    .project-move p { margin: 0.25rem 0 0.5rem; }
+    .project-move ul, .project-move ol { margin: 0.25rem 0 0 1.25rem; padding: 0; }
+    .project-move ul { list-style: disc; }
+    .project-move ol { list-style: decimal; }
+    .project-move li { margin: 0.2rem 0; }
+    .project-move .move-section { border: 1px solid var(--app-border-default); border-radius: 8px; background: var(--app-bg-paper); padding: 1rem 1.25rem; margin-top: 1rem; }
+    .project-move .move-section--warning { border-color: var(--app-warning-border); background: var(--app-warning-bg); }
+    .project-move .move-blocker { border: 1px solid var(--app-danger-border); background: var(--app-danger-bg); color: var(--app-danger-fg); border-radius: 8px; padding: 0.75rem 1.25rem; margin-top: 1rem; }
+    .project-move .move-choice { display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0; }
+    .project-move .move-choice label { margin: 0; font-weight: normal; }
+    .project-move .move-actions { display: flex; align-items: center; gap: 1rem; margin-top: 1.25rem; }
+    .project-move .move-muted { color: var(--app-text-secondary); }
+    .project-move select { max-width: 32rem; }
+  </style>
+<% end %>

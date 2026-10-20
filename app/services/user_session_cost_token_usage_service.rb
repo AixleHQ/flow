@@ -25,7 +25,7 @@ class UserSessionCostTokenUsageService
       .pluck(
         trunc_sql,
         Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
-        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
+        Arel.sql(UsageStatistic::TOTAL_TOKENS_SUM_SQL)
       )
       .map do |(date, cost, tokens)|
         TimeSeriesPoint.new(date: date.to_date.iso8601, cost_cents: cost.to_i, total_tokens: tokens.to_i)

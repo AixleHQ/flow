@@ -61,7 +61,7 @@ class AgentActivityServiceTest < ActiveSupport::TestCase
                                        cost_cents: session_cost, total_tokens: 10)
     session.save!(validate: false)
     UsageStatistic.create!(terminal_session: session, cost_cents: usage_cost, input_tokens: 12,
-                           output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, tokens: 12)
+                           output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0)
     session
   end
 end

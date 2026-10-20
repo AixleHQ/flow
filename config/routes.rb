@@ -318,8 +318,14 @@ Rails.application.routes.draw do
         delete :permanent_destroy
       end
     end
-    resources :companies
-    resources :projects
+    resources :companies do
+      resources :invitations, only: %i[new create], controller: "company_invitations" do
+        post :resend, on: :member
+      end
+    end
+    resources :projects do
+      resource :move, only: %i[new create show], controller: "project_moves"
+    end
     resources :project_collaborators
     resources :agent_credentials
     resources :terminal_sessions, only: %i[index show]

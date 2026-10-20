@@ -62,7 +62,7 @@ class UserAnalyticsService
       .where(terminal_session_id: sessions.select(:id))
       .pick(
         Arel.sql("COALESCE(SUM(cost_cents), 0)"),
-        Arel.sql("COALESCE(NULLIF(SUM(input_tokens + output_tokens + cache_write_tokens + cache_read_tokens), 0), SUM(tokens), 0)")
+        Arel.sql(UsageStatistic::TOTAL_TOKENS_SUM_SQL)
       )
     { cost_cents: row[0].to_i, tokens: row[1].to_i }
   end
@@ -88,7 +88,7 @@ class UserAnalyticsService
         "projects.name",
         Arel.sql("COUNT(terminal_sessions.id)"),
         Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
-        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
+        Arel.sql(UsageStatistic::TOTAL_TOKENS_SUM_SQL)
       )
       .map do |(id, name, sess_count, cost, tokens)|
         ProjectBreakdown.new(

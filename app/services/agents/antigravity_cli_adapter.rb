@@ -35,6 +35,10 @@ module Agents
   class AntigravityCliAdapter < BaseAdapter
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
+    ONBOARDING_PATH = ".gemini/antigravity-cli/cache/onboarding.json"
+    CONSUMER_ONBOARDING = { "consumerOnboardingComplete" => true, "enterpriseOnboardingComplete" => false,
+                            "onboardingComplete" => true }.freeze
+    WORKSPACE = "/workspace"
 
     # API-equivalent prices in USD per million tokens. Antigravity's result event
     # reports cache reads as a subset of input tokens, so cached input is removed
@@ -168,15 +172,23 @@ module Agents
       }.compact
     end
 
+    # Every session container is a fresh install, so agy would run its first-run
+    # onboarding — colour scheme, then "Terms of Service & Data Use" with the telemetry
+    # box pre-ticked — at the start of every interactive session. The user went through
+    # it once when signing in (the auth container is not seeded with this), and this is
+    # the file agy itself leaves behind after it. Consumer logins only: the "Google Cloud
+    # project" login has its own enterprise terms, never observed here.
     def config_files(credentials, _workflow_config = {})
-      {
+      files = {
         "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json,
         config_path => generate_config(credentials).to_json
       }
+      files["#{home_dir}/#{ONBOARDING_PATH}"] = CONSUMER_ONBOARDING.to_json if credentials["auth_method"] == "consumer"
+      files
     end
 
-    # Written before auth starts so the auth terminal already has telemetry/tips
-    # disabled when `agy` itself launches (see AgentAuthStrategy#before_exec).
+    # Written before auth starts so the auth terminal already has tips disabled and
+    # the workspace trusted when `agy` itself launches (see AgentAuthStrategy#before_exec).
     def auth_setup_files
       { "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json }
     end
@@ -192,6 +204,11 @@ module Agents
     def default_env_vars(_session)
       {
         "AGY_CLI_HIDE_LOGO" => "1",
+        # Without it the CLI, run as root, replaces the pinned /usr/local/bin/agy with the
+        # vendor's newest release a second after launch (1.1.27 installed 1.4.2), so a
+        # session runs whatever shipped that day instead of the pin. Only the exact value
+        # "true" is honoured: "1", "TRUE" and "yes" still update.
+        "AGY_CLI_DISABLE_AUTO_UPDATE" => "true",
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
       }
@@ -398,7 +415,10 @@ module Agents
     def settings
       # Omitting modelProvider selects Antigravity's OAuth-backed default
       # backend. Explicitly selecting "gemini" instead requires GEMINI_API_KEY.
-      { "enableTelemetry" => false, "showTips" => false }
+      # No telemetry key: since 1.1.28 telemetry follows the Google account's own
+      # setting, and agy drops `enableTelemetry` from this file when it rewrites it.
+      # The trusted workspace answers "Do you trust the contents of this project?".
+      { "showTips" => false, "trustedWorkspaces" => [ WORKSPACE ] }
     end
   end
 end

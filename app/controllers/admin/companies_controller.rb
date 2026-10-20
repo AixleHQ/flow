@@ -12,55 +12,45 @@ module Admin
 
       if company.save
         notice = new_trial ? new_trial_notice(company) : translate_with_resource("update.success")
-        redirect_to after_resource_updated_path(company), notice: notice, status: :see_other
+        redirect_with_invitations(company, notice, fallback: after_resource_updated_path(company))
       else
         render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
     end
 
     def create
-      # Extract initial admin credentials before building company
-      initial_admin_email = params.dig(:company, :initial_admin_email)
-      initial_admin_password = params.dig(:company, :initial_admin_password)
-
-      # Remove virtual attributes from params before creating company
-      company_params = resource_params.except(:initial_admin_email, :initial_admin_password)
-      company = Company.new(company_params)
+      company = Company.new(resource_params)
       apply_billing_terms(company)
 
-      if company.save
-        # Create initial admin user if credentials provided
-        if initial_admin_email.present? && initial_admin_password.present?
-          admin_user = User.new(
-            email: initial_admin_email,
-            password: initial_admin_password,
-            password_confirmation: initial_admin_password,
-            name: initial_admin_email.split("@").first.titleize, # Generate name from email
-            state: "active"
-          )
-          admin_user.company_memberships.build(
-            company: company, role: "admin", state: "active", accepted_at: Time.current
-          )
-
-          unless admin_user.save
-            # If admin user creation fails, delete the company and show errors
-            company.destroy
-            flash[:error] = "Failed to create admin user: #{admin_user.errors.full_messages.join(', ')}"
-            render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
-            return
-          end
-        end
-
-        redirect_to(
-          [ namespace, company ],
-          notice: translate_with_resource("create.success"),
-        )
-      else
-        render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      unless company.save
+        return render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
+
+      redirect_with_invitations(company, translate_with_resource("create.success"), fallback: [ namespace, company ])
     end
 
     private
+
+    # When the form invited anyone, the page that shows who; otherwise `fallback`.
+    def redirect_with_invitations(company, notice, fallback:)
+      invitations = invite_members(company)
+      return redirect_to(fallback, notice: notice, status: :see_other) if invitations.empty?
+
+      messages = invitation_flash(invitations)
+      messages[:notice] = [ notice, messages[:notice] ].compact.join(" ")
+      redirect_to new_admin_company_invitation_path(company), status: :see_other, **messages
+    end
+
+    # The first admin, and everyone on the invite list, gets the invitation a
+    # company admin sends from Members. The admin goes first: listed again below,
+    # they are only sent the link again.
+    def invite_members(company)
+      if company.initial_admin_email.present?
+        admin = CompanyInvitation.call(company: company, email: company.initial_admin_email, role: "admin")
+      end
+      members = CompanyInvitation.invite_all(company: company, addresses: company.invite_emails, role: company.invite_role)
+      [ admin, *members ].compact
+    end
 
     # Where we host, a company made here pays the way a self-serve signup does —
     # free allowance, then a card — unless it is one we carry. Left at the

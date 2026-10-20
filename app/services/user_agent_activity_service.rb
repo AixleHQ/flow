@@ -24,7 +24,7 @@ class UserAgentActivityService
         :agent_type,
         Arel.sql("COUNT(terminal_sessions.id)"),
         Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
-        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
+        Arel.sql(UsageStatistic::TOTAL_TOKENS_SUM_SQL)
       )
       .map do |(agent_type, count, cost, tokens)|
         AgentBreakdown.new(agent_type:, sessions: count.to_i, cost_cents: cost.to_i, tokens: tokens.to_i)

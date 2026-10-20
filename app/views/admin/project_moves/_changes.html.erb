@@ -1,0 +1,113 @@
+<%#
+# What a project move does, read from a ProjectMove::Preflight#to_h report:
+# before the move (`done: false`) or from its audit after it (`done: true`).
+%>
+<% verb = ->(future, past) { done ? past : future } %>
+<% source = report["source_company"]["name"] %>
+<% target = report["target_company"]["name"] %>
+
+<% if report["name"]["from"] != report["name"]["to"] || report["slug"]["from"] != report["slug"]["to"] %>
+  <section class="move-section">
+    <h2><%= verb.call("Will be renamed", "Renamed") %></h2>
+    <p>
+      <%= target %> already has a project with this name or slug:
+      <strong><%= report["name"]["to"] %></strong> (<code><%= report["slug"]["to"] %></code>).
+    </p>
+  </section>
+<% end %>
+
+<% if report["cancelled_runs"].any? || report["cancelled_sessions"].any? %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Will be cancelled", "Cancelled") %></h2>
+    <p class="move-muted">Work that had not started yet. A run or session with a live agent blocks the move instead.</p>
+    <ul>
+      <% report["cancelled_runs"].each do |run| %>
+        <li>Run #<%= run["id"] %> — <%= run["workflow"] %> (<%= run["state"] %>)</li>
+      <% end %>
+      <% report["cancelled_sessions"].each do |session| %>
+        <li>Session #<%= session["id"] %> (<%= session["state"] %>)</li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["copied_assets"].any? %>
+  <section class="move-section">
+    <h2><%= verb.call("Company assets to copy into the project", "Company assets copied into the project") %></h2>
+    <p class="move-muted">Steps point at these <%= source %> assets. The originals stay; the project's references move to the copies.</p>
+    <ul>
+      <% report["copied_assets"].each do |asset| %>
+        <li><code><%= asset["path"] %></code></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["detached_repositories"].any? %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Repositories to detach", "Repositories detached") %></h2>
+    <p class="move-muted">Their integration stays with <%= source %>. Until one in <%= target %> is attached, a private repository does not clone.</p>
+    <ul>
+      <% report["detached_repositories"].each do |repository| %>
+        <li><code><%= repository["full_name"] %></code></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["detached_trackers"].any? %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Trackers to detach", "Trackers detached") %></h2>
+    <p class="move-muted">Their integration stays with <%= source %>, so their events no longer reach the project.</p>
+    <ul>
+      <% report["detached_trackers"].each do |tracker| %>
+        <li><%= tracker["name"] %></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["deactivated_integrations"].any? %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Integrations to disconnect", "Integrations disconnected") %></h2>
+    <ul>
+      <% report["deactivated_integrations"].each do |integration| %>
+        <li><%= integration["name"] %> (<%= integration["provider"] %>) — <%= integration["reason"] %></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["chat_triggers"].any? %>
+  <section class="move-section">
+    <h2>Chat triggers</h2>
+    <p class="move-muted">Chat messages reach the triggers of the workspace's own company. These stay silent until <%= target %> connects the workspace.</p>
+    <ul>
+      <% report["chat_triggers"].each do |binding| %>
+        <li><%= binding["name"] %></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% if report["dropped_reservation"] %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Session reservation to drop", "Session reservation dropped") %></h2>
+    <p>
+      The project reserved <%= report["dropped_reservation"]["max_sessions"] %> concurrent sessions, more than
+      <%= target %> has left to allocate.
+    </p>
+  </section>
+<% end %>
+
+<% if report["without_agent_credentials"].any? %>
+  <section class="move-section">
+    <h2>Agent sign-in needed</h2>
+    <p class="move-muted">Agent credentials belong to one company. These people have none in <%= target %> yet:</p>
+    <ul>
+      <% report["without_agent_credentials"].each do |user| %>
+        <li><%= user["name"] %> (<%= user["email"] %>)</li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>

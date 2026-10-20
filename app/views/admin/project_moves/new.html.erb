@@ -1,0 +1,93 @@
+<% content_for(:title) { "Move #{@project.name}" } %>
+<%= render "styles" %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Move <%= @project.name %> to another company</h1>
+  <div>
+    <%= link_to "Back to project", admin_project_path(@project), class: "button" %>
+  </div>
+</header>
+
+<section class="main-content__body project-move">
+  <p>
+    Now in <strong><%= @project.company.name %></strong>. Rows are not copied: the board, tasks, comments,
+    workflows, run history, triggers, config items and project resources keep their ids.
+  </p>
+
+  <section class="move-section">
+    <%= form_with url: new_admin_project_move_path(@project), method: :get, local: true do %>
+      <h2><%= label_tag :target_company_id, "Target company" %></h2>
+      <div class="move-actions">
+        <%= select_tag :target_company_id,
+                       options_from_collection_for_select(@companies, :id, :name, @target&.id),
+                       include_blank: "Choose a company" %>
+        <%= submit_tag "Check", class: "button", name: nil %>
+      </div>
+    <% end %>
+  </section>
+
+  <% if @preflight %>
+    <% @preflight.blockers.each do |blocker| %>
+      <div class="move-blocker" role="alert"><%= blocker %></div>
+    <% end %>
+
+    <%= render "changes", report: @preflight.to_h, done: false %>
+
+    <%= form_with url: admin_project_move_path(@project), method: :post, local: true,
+                  data: { turbo_confirm: "Move #{@project.name} to #{@target.name}?" } do %>
+      <%= hidden_field_tag :target_company_id, @target.id %>
+
+      <section class="move-section">
+        <h2><%= label_tag :owner_id, "New owner" %></h2>
+        <p class="move-muted">An employee or admin of <%= @target.name %>.</p>
+        <%= select_tag :owner_id,
+                       options_for_select(@preflight.owner_candidates.map { |user| [ "#{user.name} (#{user.email})", user.id ] },
+                                          @project.owner_id),
+                       include_blank: @preflight.owner_candidates.exists?(id: @project.owner_id) ? false : "Choose an owner" %>
+      </section>
+
+      <% if @preflight.missing_members.any? %>
+        <section class="move-section move-section--warning">
+          <h2>People who are not in <%= @target.name %></h2>
+          <ul>
+            <% @preflight.missing_members.each do |user| %>
+              <li>
+                <%= user.name %> (<%= user.email %>)
+                <% if (state = @preflight.inactive_target_memberships[user.id]) %>
+                  — <%= state %> in <%= @target.name %>; adding leaves that as it is and takes them off the project
+                <% end %>
+              </li>
+            <% end %>
+          </ul>
+          <fieldset>
+            <legend class="move-muted">What happens to them</legend>
+            <div class="move-choice">
+              <%= radio_button_tag :member_policy, "add", true %>
+              <%= label_tag :member_policy_add, "Add them to #{@target.name} as employees" %>
+            </div>
+            <div class="move-choice">
+              <%= radio_button_tag :member_policy, "drop" %>
+              <%= label_tag :member_policy_drop, "Take them off the project and clear their tasks" %>
+            </div>
+            <div class="move-choice">
+              <%= radio_button_tag :member_policy, "block" %>
+              <%= label_tag :member_policy_block, "Do not move the project" %>
+            </div>
+          </fieldset>
+        </section>
+      <% else %>
+        <%= hidden_field_tag :member_policy, "block" %>
+      <% end %>
+
+      <div class="move-actions">
+        <% if @preflight.cancellations? %>
+          <div class="move-choice">
+            <%= check_box_tag :confirm_cancellations, "1" %>
+            <%= label_tag :confirm_cancellations, "Cancel the runs and sessions listed above" %>
+          </div>
+        <% end %>
+        <%= submit_tag "Move project", class: "button button--danger", name: nil, disabled: !@preflight.movable? %>
+      </div>
+    <% end %>
+  <% end %>
+</section>

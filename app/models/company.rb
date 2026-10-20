@@ -45,8 +45,9 @@ class Company < ApplicationRecord
   # Refused up front, with a reason, instead of failing halfway on a foreign key.
   before_destroy :refuse_while_runtimes_remain, prepend: true
 
-  # Virtual attributes for initial admin creation (used in admin form)
-  attr_accessor :initial_admin_email, :initial_admin_password
+  # Virtual attributes of the admin panel's company form: a new company's first
+  # admin, and the people invited with a save (Admin::CompaniesController).
+  attr_accessor :initial_admin_email, :invite_emails, :invite_role
 
   # Where we host, a company that signs itself up runs on a free allowance of
   # capacity before anyone has paid for anything (Billing::Trial).
@@ -93,6 +94,7 @@ class Company < ApplicationRecord
   validate :email_domain_not_reserved
   validate :session_concurrency_limit_is_a_positive_integer
   validate :company_we_stop_carrying_is_bounded, if: :leaving_management?
+  validate :initial_admin_invitable, on: :create, if: -> { initial_admin_email.present? }
 
   # Callbacks
   before_validation :generate_slug, on: :create
@@ -294,5 +296,17 @@ class Company < ApplicationRecord
 
   def email_domain_not_reserved
     errors.add(:email_domain, "is reserved") if email_domain.present? && RESERVED_DOMAINS.include?(email_domain)
+  end
+
+  # The first admin is invited once the company saves (Admin::CompaniesController),
+  # so an address that could not be invited stops the save instead of leaving a
+  # company nobody can get into.
+  def initial_admin_invitable
+    email = initial_admin_email.strip.downcase
+    if !email.match?(URI::MailTo::EMAIL_REGEXP)
+      errors.add(:initial_admin_email, :invalid)
+    elsif User.exists?(email: email, super_admin: true)
+      errors.add(:initial_admin_email, "belongs to a platform administrator, who cannot be a member of a company")
+    end
   end
 end

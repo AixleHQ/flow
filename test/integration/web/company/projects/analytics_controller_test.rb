@@ -140,8 +140,7 @@ class Web::Company::Projects::AnalyticsControllerTest < ActionDispatch::Integrat
       terminal_session: session,
       cost_cents: 150,
       input_tokens: 1000, output_tokens: 500,
-      cache_write_tokens: 0, cache_read_tokens: 0,
-      tokens: 1500
+      cache_write_tokens: 0, cache_read_tokens: 0
     )
 
     get company_project_analytics_path(@project)
