@@ -107,9 +107,10 @@ it arrives before everything downstream because the key every table hangs off ch
 
 AWS now supports **Concurrent Agreements** — "multiple active purchases for the same
 product within a single AWS account". It is **opt-in for listings created before 1 June
-2026 and required for every SaaS product created after it**. Our draft,
-`prod-kkdmouyxh7cji`, was created on 19 October 2026, so it is enabled by default and
-there is nothing to decide.
+2026 and required for every SaaS product created after it**. Our draft was created on
+19 October 2026, so it is enabled by default and there is nothing to decide. (The entity
+id is in `marketplace-infra/SAAS_PRODUCT.md`, which is where seller-account identifiers
+belong.)
 
 What changes, from the Seller Guide and the Ruby SDK's own signatures:
 
@@ -528,9 +529,9 @@ arguments — the pod's own IRSA identity, in the buyer's own account
 (`marketplace_metering_client.rb:59-63`). That works because the pod and the subscription
 are the same account.
 
-Here they are not. The call must be signed by the account that owns the listing
-(`076388571405`) while the application runs in `541894707537`, so the client assumes a
-role in the seller account and refreshes it. That is a different client construction and a
+Here they are not. The call must be signed by the account that owns the listing, while
+the application runs in a different one, so the client assumes a role in the seller
+account and refreshes it. That is a different client construction and a
 new way to fail that has nothing to do with metering: a credential error and a metering
 rejection must not be reported as the same thing, because one is ours to fix in minutes
 and the other is a listing problem.
@@ -601,14 +602,16 @@ Two things to know before planning the first deploy:
   the new schema is served by the old code. Every migration here is additive, and the code
   that requires a new column ships in the slice after the one that adds it.
 
-The public door is the constraint. `staging.flow.aixle.com` resolves publicly but answers
-`401` behind basic auth; `webhooks-staging.flow.aixle.com` is the auth-free host and routes
-exactly three path prefixes, each with a `webhook-host-rewrite` middleware. The Marketplace
-registration POST needs a fourth, which is the same change SCIM and the YouTrack pairing
-API each made for the same reason.
+The public door is the constraint, and its shape matters more than its addresses. Staging's
+own host resolves publicly but sits behind HTTP basic auth, which AWS cannot pass. A second
+host exists for exactly this problem — third parties that must reach staging and cannot
+authenticate — and it routes a small, explicit list of path prefixes through a middleware
+that rewrites `Host` to the internal name. The Marketplace registration POST needs one more
+entry on that list, which is the same change SCIM and the YouTrack pairing API each made
+for the same reason. Both hosts and the exact rules are in `aixle-infra`.
 
 A tester will meet one basic-auth prompt partway through the flow, when the app redirects
-from the auth-free host to the app's own. That is expected on staging and not a defect.
+from the auth-free host to staging's own. That is expected on staging and not a defect.
 
 On the AWS side this wants a `[TEST]` SaaS product with Limited visibility and an
 allowlisted buyer account, pointed at staging — the shape the container product already
