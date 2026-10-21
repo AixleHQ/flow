@@ -121,11 +121,11 @@ class FeatureFlags::AdminTest < ActiveSupport::TestCase
 
   test "every write requires a reason" do
     writes = [
-      -> (reason) { admin.set_global(:coder_reap, true, actor: @admin, reason: reason) },
-      -> (reason) { admin.clear_global(:coder_reap, actor: @admin, reason: reason) },
-      -> (reason) { admin.set_override(:board_ai_summary, @company, true, actor: @admin, reason: reason) },
-      -> (reason) { admin.remove_override(:board_ai_summary, @company, actor: @admin, reason: reason) },
-      -> (reason) { admin.turn_off_everywhere(:board_ai_summary, actor: @admin, reason: reason) }
+      ->(reason) { admin.set_global(:coder_reap, true, actor: @admin, reason: reason) },
+      ->(reason) { admin.clear_global(:coder_reap, actor: @admin, reason: reason) },
+      ->(reason) { admin.set_override(:board_ai_summary, @company, true, actor: @admin, reason: reason) },
+      ->(reason) { admin.remove_override(:board_ai_summary, @company, actor: @admin, reason: reason) },
+      ->(reason) { admin.turn_off_everywhere(:board_ai_summary, actor: @admin, reason: reason) }
     ]
 
     writes.product([ nil, "", "   " ]).each do |write, reason|
