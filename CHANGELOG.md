@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: a Feature flags page lists every declared flag with where its
+  value comes from. Super admins can set a flag's global value, turn it off
+  everywhere, and add or remove company overrides, each with a required reason
+  recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
+  A company's admin page lists its feature overrides.
+
 ### Changed
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a

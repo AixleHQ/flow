@@ -1,0 +1,224 @@
+<% definition = @definition %>
+<% row = @row %>
+<% locked = row.locked? %>
+<% content_for(:title) { "Feature flag #{definition.key}" } %>
+<%= render "styles" %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title"><code><%= definition.key %></code></h1>
+  <div>
+    <%= link_to "All feature flags", admin_feature_flags_path, class: "button" %>
+  </div>
+</header>
+
+<section class="main-content__body feature-flags">
+  <p><%= definition.description %></p>
+  <p class="flag-muted">
+    Owner <%= definition.owner %> · <%= definition.kind %> · <%= definition.scope %> scope
+    <% if definition.client? %>· sent to the browser<% end %>
+    <% if definition.introduced %>· introduced <%= definition.introduced %><% end %>
+    <% if definition.remove_by %>· remove by <%= definition.remove_by %><% end %>
+    <% if row.past_remove_by? %><%= feature_flag_badge("past remove-by", "danger") %><% end %>
+  </p>
+
+  <% if locked %>
+    <div class="flag-locked" role="status">
+      Locked by <code><%= definition.env_var %></code>: it is <strong><%= feature_flag_audit_value(row.env_value) %></strong>
+      in every process<%= " for every company, whatever its override" if definition.company_scoped? %>.
+      Change the variable and restart to change it; nothing on this page can.
+    </div>
+  <% end %>
+
+  <section class="flag-section">
+    <h2>Where the value comes from</h2>
+    <table>
+      <thead><tr><th>Layer</th><th>Value</th><th></th></tr></thead>
+      <tbody>
+        <% [ [ :env, row.env_value, "ENV #{definition.env_var}" ], [ :global, row.global, "Global value" ],
+             [ :default, definition.default, "Declared default" ] ].each do |source, value, label| %>
+          <tr class="<%= 'flag-winner' if row.resolution.source == source %>">
+            <td><%= label %></td>
+            <td><%= feature_flag_value(value) %></td>
+            <td><%= "decides it#{' for companies without an override' if definition.company_scoped?}" if row.resolution.source == source %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <% if definition.company_scoped? %>
+      <p class="flag-muted">A company override beats the global value and the default<%= ", but not ENV" if locked %>.</p>
+    <% end %>
+  </section>
+
+  <section class="flag-section">
+    <h2>Global value</h2>
+    <%= form_with url: admin_feature_flag_path(definition.key), method: :patch, local: true do %>
+      <fieldset <%= "disabled" if locked %>>
+        <div class="flag-form">
+          <fieldset>
+            <legend class="flag-muted">Value</legend>
+            <% [ [ "on", true, "On" ], [ "off", false, "Off" ], [ "default", nil, "Use default (#{feature_flag_audit_value(definition.default)})" ] ].each do |value, current, label| %>
+              <span>
+                <%= radio_button_tag :value, value, row.global == current, id: "value_#{value}" %>
+                <%= label_tag "value_#{value}", label %>
+              </span>
+            <% end %>
+          </fieldset>
+          <div class="flag-reason">
+            <%= label_tag :global_reason, "Reason" %>
+            <%= text_field_tag :reason, nil, id: "global_reason", required: true %>
+          </div>
+          <%= submit_tag "Save global value", class: "button", name: nil %>
+        </div>
+      </fieldset>
+    <% end %>
+  </section>
+
+  <section class="flag-section flag-section--danger">
+    <h2>Turn off everywhere</h2>
+    <p class="flag-muted">
+      Sets the global value off<%= " and deletes every company override, so no company keeps it on" if definition.company_scoped? %>.
+      The previous values are kept in the audit below.
+    </p>
+    <%= form_with url: turn_off_everywhere_admin_feature_flag_path(definition.key), method: :post, local: true,
+                  data: { turbo_confirm: "Turn #{definition.key} off for every company?" } do %>
+      <fieldset <%= "disabled" if locked %>>
+        <div class="flag-form">
+          <div class="flag-reason">
+            <%= label_tag :off_reason, "Reason" %>
+            <%= text_field_tag :reason, nil, id: "off_reason", required: true %>
+          </div>
+          <%= submit_tag "Turn off everywhere", class: "button button--danger", name: nil %>
+        </div>
+      </fieldset>
+    <% end %>
+  </section>
+
+  <% if definition.company_scoped? %>
+    <section class="flag-section">
+      <h2>Company overrides</h2>
+      <% if @overrides.any? %>
+        <table>
+          <thead>
+            <tr><th>Company</th><th>Value</th><th>Reason</th><th>Set by</th><th>When</th><th></th></tr>
+          </thead>
+          <tbody>
+            <% @overrides.each do |override| %>
+              <tr>
+                <td><%= link_to override.company.name, admin_company_path(override.company) %></td>
+                <td>
+                  <%= feature_flag_value(override.enabled) %>
+                  <% if locked %><%= feature_flag_badge("shadowed by #{definition.env_var}", "warning") %><% end %>
+                </td>
+                <td><%= override.reason %></td>
+                <td><%= override.created_by&.email || "—" %></td>
+                <td><%= l(override.updated_at, format: :short) %></td>
+                <td>
+                  <%= form_with url: admin_feature_flag_override_path(definition.key, override.company_id), method: :delete, local: true,
+                                class: "flag-inline-form", data: { turbo_confirm: "Remove the override for #{override.company.name}?" } do %>
+                    <fieldset <%= "disabled" if locked %> class="flag-inline-form">
+                      <%= label_tag "remove_reason_#{override.company_id}", "Reason", class: "flag-muted" %>
+                      <%= text_field_tag :reason, nil, id: "remove_reason_#{override.company_id}", required: true %>
+                      <%= submit_tag "Remove", class: "button button--danger", name: nil %>
+                    </fieldset>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% else %>
+        <p class="flag-muted">No company is an exception.</p>
+      <% end %>
+    </section>
+
+    <section class="flag-section">
+      <h2>Check a company, or add an override</h2>
+      <%= form_with url: admin_feature_flag_path(definition.key), method: :get, local: true, class: "flag-form" do %>
+        <div class="flag-reason">
+          <%= label_tag :company_query, "Company name" %>
+          <%= search_field_tag :company_query, @company_query %>
+        </div>
+        <%= submit_tag "Find", class: "button", name: nil %>
+      <% end %>
+
+      <% if @company_query.present? %>
+        <% if @company_matches.any? %>
+          <table>
+            <thead><tr><th>Company</th><th>Gets</th><th>Decided by</th><th>Shadowed</th></tr></thead>
+            <tbody>
+              <% @company_matches.each do |company| %>
+                <% resolution = @overview.resolver.resolve(definition.key, company: company) %>
+                <tr>
+                  <td><%= link_to company.name, admin_company_path(company) %></td>
+                  <td><%= feature_flag_value(resolution.value) %></td>
+                  <td><%= feature_flag_source(resolution.source) %><%= " (#{resolution.env_var})" if resolution.source == :env %></td>
+                  <td>
+                    <% if resolution.shadowed.any? %>
+                      <%= safe_join(resolution.shadowed.map { |layer| "#{feature_flag_source(layer[:source])}: #{feature_flag_audit_value(layer[:value])}" }, ", ") %>
+                    <% else %>
+                      <span class="flag-muted">—</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+
+          <%= form_with url: admin_feature_flag_overrides_path(definition.key), method: :post, local: true do %>
+            <fieldset <%= "disabled" if locked %>>
+              <div class="flag-form">
+                <div>
+                  <%= label_tag :company_id, "Company" %>
+                  <%= select_tag :company_id, options_from_collection_for_select(@company_matches, :id, :name), required: true %>
+                </div>
+                <fieldset>
+                  <legend class="flag-muted">Value</legend>
+                  <span><%= radio_button_tag :value, "on", true, id: "override_on" %> <%= label_tag :override_on, "On" %></span>
+                  <span><%= radio_button_tag :value, "off", false, id: "override_off" %> <%= label_tag :override_off, "Off" %></span>
+                </fieldset>
+                <div class="flag-reason">
+                  <%= label_tag :override_reason, "Reason" %>
+                  <%= text_field_tag :reason, nil, id: "override_reason", required: true %>
+                </div>
+                <%= submit_tag "Add override", class: "button", name: nil %>
+              </div>
+            </fieldset>
+          <% end %>
+        <% else %>
+          <p class="flag-muted">No company matches “<%= @company_query %>”.</p>
+        <% end %>
+      <% end %>
+    </section>
+  <% end %>
+
+  <section class="flag-section">
+    <h2>History</h2>
+    <% if @audits.any? %>
+      <table>
+        <thead><tr><th>When</th><th>Who</th><th>Change</th><th>Company</th><th>Reason</th></tr></thead>
+        <tbody>
+          <% @audits.each do |audit| %>
+            <% changes = audit.audited_changes || {} %>
+            <% before, after = changes["enabled"] %>
+            <tr>
+              <td><%= l(audit.created_at, format: :short) %></td>
+              <td><%= audit.user.try(:email) || audit.username || "—" %></td>
+              <td>
+                <%= audit.action.delete_prefix("feature_flag.").humanize %>:
+                <%= feature_flag_audit_value(before) %> → <%= feature_flag_audit_value(after) %>
+                <% if changes["overrides"].present? %>
+                  <br><span class="flag-muted">removed overrides:
+                    <%= changes["overrides"].map { |o| "#{o['company'] || "company #{o['company_id']}"} #{feature_flag_audit_value(o['enabled'])}" }.join(", ") %></span>
+                <% end %>
+              </td>
+              <td><%= audit.associated.try(:name) || "—" %></td>
+              <td><%= audit.comment %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="flag-muted">Nobody has changed this flag.</p>
+    <% end %>
+  </section>
+</section>

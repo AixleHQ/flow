@@ -44,4 +44,10 @@ controller (e.g. catalog syncs) would otherwise be unreachable without knowing i
     admin_catalog_syncs_path,
     class: "navigation__link navigation__link--#{current_page?(admin_catalog_syncs_path) ? 'active' : 'inactive'}"
   ) %>
+
+  <%= link_to(
+    "Feature flags",
+    admin_feature_flags_path,
+    class: "navigation__link navigation__link--#{request.path.start_with?(admin_feature_flags_path) ? 'active' : 'inactive'}"
+  ) %>
 </nav>
