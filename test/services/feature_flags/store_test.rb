@@ -204,9 +204,15 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
 
     first = Thread.new { store.snapshot }
     load_started.pop
-    second = Thread.new { store.snapshot }
-    # Let the second check reach the lock: blocked on it, or (the bug) already done.
-    Timeout.timeout(5) { Thread.pass until second.stop? }
+    second_entering = Queue.new
+    second = Thread.new do
+      second_entering << true
+      store.snapshot
+    end
+    second_entering.pop
+    # Without waiting on the lock the second check would return within this
+    # window, with the defaults; it must still be waiting for the first load.
+    assert_nil second.join(0.5), "the second check waits for the first load"
     release_load << true
 
     [ first, second ].each { |thread| thread.join(5) }
