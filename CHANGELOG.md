@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Profile**: a personal MCP token that none of your companies accepts now
+  answers with an error telling you to sign in and regenerate it, instead of
+  empty company and project lists.
+- **Profile**: an operator impersonating someone can no longer regenerate or
+  disable that person's personal MCP token. A token issued that way reached
+  none of their companies, and replacing it cut off their own clients.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
