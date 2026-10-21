@@ -600,15 +600,12 @@ the same way `catalog_syncs` and `session_admission` do.
   - `comment`: the reason.
   - The change is also logged with Rails' tagged logger, so it can be found in Loki next to the
     errors it may cause.
-- **Permissions.** Only super admins, in v1. That is exactly who `/admin` admits today.
-- **Assumption, stated as the task asked:** company admins do **not** manage their own
-  overrides.
+- **Permissions.** Only super admins (`users.super_admin`), permanently. That is exactly who
+  `/admin` admits today.
+- **Product decision:** feature flags are a platform-wide setting. Company admins never manage
+  or influence them, including their own company's overrides.
   - Flags are a platform rollout and safety tool. A company admin turning on a half-shipped
     feature, or turning off a kill switch, is a support incident.
-  - If self-serve opt-in betas are wanted later, add a registry attribute
-    `self_serve: true` for flags that company admins may toggle. Expose it on the company
-    settings page under a Pundit policy (`company_admin` only). It reuses the same override
-    rows and audit. This is a separate task, not part of v1.
 
 ### 7.3 When the store is unavailable
 
@@ -754,7 +751,6 @@ Sizes: S ≈ 1 day, M ≈ 2–3 days. Tasks 1→2→3 are sequential. Tasks 4 an
 
 **Deferred, not sized into the total:**
 - percentage-of-companies rollout, about 1 day (§4.4);
-- self-serve flags for company admins, about 2 days (§7.2);
 - an OpenFeature provider wrapper, about 1 day (§2.1).
 
 ---
