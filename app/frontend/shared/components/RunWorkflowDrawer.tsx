@@ -65,8 +65,26 @@ const MODE_OPTIONS = [
   { value: 'custom' as const, title: 'Custom', description: 'Pick per step' },
 ];
 
-const AUTOMATIC_DISABLED_REASON =
-  'Automatic run is disabled for this workflow — turn on "Auto-run available" for every session to enable it';
+const SHOWN_STEP_NAMES = 3;
+
+function namedSteps(steps: RunWorkflowStep[]): string {
+  const names = steps.slice(0, SHOWN_STEP_NAMES).map((s) => `"${s.name}"`);
+  const hidden = steps.length - names.length;
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(hidden > 0 ? [...names, `${hidden} more`] : names);
+}
+
+function automaticModeOption(manualSteps: RunWorkflowStep[]) {
+  const option = MODE_OPTIONS[0];
+  if (manualSteps.length === 0) return option;
+
+  const count = manualSteps.length;
+  return {
+    ...option,
+    description: count === 1 ? '1 session needs input' : `${count} sessions need input`,
+    disabled: true,
+    disabledReason: `Auto-run is off for ${namedSteps(manualSteps)}. Turn on "Auto-run available" for every session to run this workflow fully automatic.`,
+  };
+}
 
 /**
  * Run Workflow as a 460px right drawer, structurally identical to New Session:
@@ -110,35 +128,25 @@ export function RunWorkflowDrawer({
     setMode('automatic');
     setSelectedRepoIds([]);
     setSelectedAssetIds([]);
+    setCustomAutoRun({});
     setRequestedModel(null);
   }, [opened, initialWorkflowId]);
 
   const workflow = useMemo(() => workflows.find((w) => w.id === workflowId) ?? null, [workflows, workflowId]);
   const steps = workflow?.steps ?? [];
 
-  // The rule WorkflowService#validate_mode! enforces. Derived from props so it
-  // follows a setting that changes while the drawer is open.
-  const automaticAvailable = steps.every((s) => s.allowNonInteractive);
-  const defaultMode: ExecutionMode = automaticAvailable ? 'automatic' : 'custom';
-  const modeOptions = useMemo(
-    () =>
-      MODE_OPTIONS.map((o) =>
-        o.value === 'automatic' && !automaticAvailable
-          ? { ...o, disabled: true, disabledReason: AUTOMATIC_DISABLED_REASON }
-          : o,
-      ),
-    [automaticAvailable],
-  );
-
-  useEffect(() => {
-    if (!automaticAvailable && mode === 'automatic') setMode('custom');
-  }, [automaticAvailable, mode]);
+  // Derived on every render, not synced through an effect: the steps come from
+  // props, and an Inertia reload can switch a session's auto-run while the
+  // drawer is open. The server refuses the same runs (WorkflowService#validate_mode!).
+  const manualSteps = steps.filter((s) => !s.allowNonInteractive);
+  const automaticAvailable = manualSteps.length === 0;
+  const defaultMode: ExecutionMode = automaticAvailable ? 'automatic' : 'interactive';
+  const effectiveMode: ExecutionMode = mode === 'automatic' && !automaticAvailable ? 'interactive' : mode;
+  const modeOptions = [automaticModeOption(manualSteps), ...MODE_OPTIONS.slice(1)];
 
   // Custom mode starts from each step's own capability — a step that cannot run
-  // unattended must not silently default to "auto".
-  useEffect(() => {
-    setCustomAutoRun(Object.fromEntries((workflow?.steps ?? []).map((s) => [s.id, s.allowNonInteractive])));
-  }, [workflow]);
+  // unattended must not silently default to "auto", nor be switched to it.
+  const stepAutoRun = (step: RunWorkflowStep) => step.allowNonInteractive && (customAutoRun[step.id] ?? true);
 
   const modelOptions = useMemo(() => {
     if (!agentRuntime) return [];
@@ -151,10 +159,10 @@ export function RunWorkflowDrawer({
   const canSubmit = !!workflow && !!agentRuntime && steps.length > 0 && !starting;
 
   // Mirrors what the open-effect resets. The runtime pick survives a close, and the per-step
-  // switches only exist in Custom mode, which already counts.
+  // switches only exist in Custom mode, which is never the default and so already counts.
   const dirty =
     workflowId !== (initialWorkflowId ?? null) ||
-    mode !== defaultMode ||
+    effectiveMode !== defaultMode ||
     selectedRepoIds.length > 0 ||
     selectedAssetIds.length > 0 ||
     requestedModel !== null;
@@ -169,13 +177,13 @@ export function RunWorkflowDrawer({
       {
         workflowRun: {
           workflowId: workflow.id,
-          mode: API_MODE_MAP[mode],
+          mode: API_MODE_MAP[effectiveMode],
           agentRuntime: agentRuntime,
           requestedModel: requestedModel || undefined,
           repositoryIds: selectedRepoIds.map(Number),
           inputAssetIds: selectedAssetIds,
-          ...(mode === 'custom' && {
-            stepOverrides: Object.fromEntries(steps.map((s) => [s.id, { autoRun: !!customAutoRun[s.id] }])),
+          ...(effectiveMode === 'custom' && {
+            stepOverrides: Object.fromEntries(steps.map((s) => [s.id, { autoRun: stepAutoRun(s) }])),
           }),
         },
       },
@@ -236,23 +244,23 @@ export function RunWorkflowDrawer({
 
         <Box>
           <FormSection icon={<IconPlayerPlay size={14} />}>Execution mode</FormSection>
-          <ModeCards aria-label="Execution mode" options={modeOptions} value={mode} onChange={setMode} />
+          <ModeCards aria-label="Execution mode" options={modeOptions} value={effectiveMode} onChange={setMode} />
 
-          {mode !== 'custom' && (
+          {effectiveMode !== 'custom' && (
             <p className={classes.note}>
-              {mode === 'automatic'
+              {effectiveMode === 'automatic'
                 ? "All sessions run automatically end-to-end. You'll get the finished run and its assets when it's done."
                 : "You'll be prompted to review and approve each session before it continues."}
             </p>
           )}
 
-          {mode === 'custom' && steps.length > 0 && (
+          {effectiveMode === 'custom' && steps.length > 0 && (
             <div className={classes.stepCard}>
               <div className={classes.stepCardHead}>Sessions</div>
               <Stack gap="xs">
                 {steps.map((step) => {
                   const forced = !step.allowNonInteractive;
-                  const autoRun = forced ? false : !!customAutoRun[step.id];
+                  const autoRun = stepAutoRun(step);
                   return (
                     <div className={classes.stepRow} key={step.id}>
                       <Switch

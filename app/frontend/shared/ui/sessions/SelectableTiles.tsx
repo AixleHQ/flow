@@ -117,8 +117,9 @@ export function ModeCards<T extends string>({ options, value, onChange, ...rest 
               type="button"
               role="radio"
               aria-checked={isSelected}
+              // Not the native `disabled`: a disabled button cannot take focus, and some
+              // browsers send it no hover events, so the tooltip with the reason would never open.
               aria-disabled={isDisabled || undefined}
-              disabled={isDisabled}
               className={[classes.mode, isSelected ? classes.modeSelected : '', isDisabled ? classes.disabled : '']
                 .filter(Boolean)
                 .join(' ')}

@@ -273,10 +273,20 @@ class WorkflowService
       run.errors.add(:base, AgentCredential::PreflightError::NO_CREDENTIALS)
     end
 
+    # A step's own "Auto-run available" is a ceiling: an override may hold an
+    # auto step for input, never run a step that requires input unattended.
     def validate_mode!(run, workflow, overrides)
+      steps = workflow.steps.not_deleted.to_a
+
+      forced_auto = steps.select { |step| !step.allow_non_interactive && overrides.dig(step.id.to_s, "auto_run") }
+      if forced_auto.any?
+        run.errors.add(:base, "Cannot run automatically: steps #{forced_auto.map(&:name).join(', ')} require user interaction")
+        return
+      end
+
       return unless run.non_interactive?
 
-      blocking_steps = workflow.steps.not_deleted.reject do |step|
+      blocking_steps = steps.reject do |step|
         override = overrides[step.id.to_s]
         override ? override["auto_run"] : step.allow_non_interactive
       end

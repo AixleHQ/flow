@@ -167,6 +167,18 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_equal 0, WorkflowRun.count
   end
 
+  test "create refuses a Custom run that switches on auto-run for a step requiring input" do
+    step = create(:step, workflow: @workflow, position: 1, name: "Post to Slack", allow_non_interactive: false)
+
+    post company_project_workflow_runs_path(@project), params: {
+      workflow_run: { workflow_id: @workflow.id, mode: "mixed", step_overrides: { step.id.to_s => { "autoRun" => true } } }
+    }, as: :json
+
+    assert_redirected_to company_project_workflow_runs_path(@project)
+    assert_equal "Cannot run automatically: steps Post to Slack require user interaction", flash[:alert]
+    assert_equal 0, WorkflowRun.count
+  end
+
   test "create normalizes camelCase step_overrides keys to snake_case" do
     create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
     mock_workflow_execution_start

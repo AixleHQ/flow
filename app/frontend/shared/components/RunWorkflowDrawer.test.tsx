@@ -140,7 +140,7 @@ describe('RunWorkflowDrawer', () => {
     const onClose = vi.fn();
     renderDrawer({ initialWorkflowId: 9, onClose });
 
-    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
@@ -189,7 +189,7 @@ describe('RunWorkflowDrawer', () => {
     );
     const { rerender } = renderAuthedPage(drawer(true));
 
-    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
     const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
     await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
@@ -202,12 +202,41 @@ describe('RunWorkflowDrawer', () => {
     expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 
-  it('disables Fully automatic and starts in Custom when a session has auto-run off', async () => {
+  it('brings the Custom switches back to what each step allows when reopened after a discard', async () => {
+    const drawer = (opened: boolean) => (
+      <RunWorkflowDrawer
+        opened={opened}
+        onClose={vi.fn()}
+        projectId={7}
+        workflows={workflows}
+        initialWorkflowId={9}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(true));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    await userEvent.click(screen.getByLabelText('Run "Collect data" automatically'));
+    expect(screen.getByLabelText('Run "Collect data" automatically')).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    rerender(drawer(false));
+    rerender(drawer(true));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    expect(screen.getByLabelText('Run "Collect data" automatically')).toBeChecked();
+  });
+
+  it('disables Fully automatic and starts in Interactive when a session has auto-run off', async () => {
     renderDrawer({ initialWorkflowId: 9 });
 
     const automatic = screen.getByRole('radio', { name: /Fully automatic/ });
-    expect(automatic).toBeDisabled();
-    expect(screen.getByRole('radio', { name: /Custom/ })).toHaveAttribute('aria-checked', 'true');
+    expect(automatic).toHaveAttribute('aria-disabled', 'true');
+    expect(automatic).toHaveTextContent('1 session needs input');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
 
     await userEvent.click(automatic);
     expect(automatic).toHaveAttribute('aria-checked', 'false');
@@ -216,8 +245,36 @@ describe('RunWorkflowDrawer', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/workflow_runs',
-      expect.objectContaining({ workflowRun: expect.objectContaining({ mode: 'mixed' }) }),
+      expect.objectContaining({ workflowRun: expect.objectContaining({ mode: 'interactive' }) }),
       expect.any(Object),
+    );
+  });
+
+  it('names the sessions that keep Fully automatic off', async () => {
+    const manual = (id: number, name: string) => ({
+      id,
+      name,
+      position: id,
+      allowNonInteractive: false,
+      dependsOnStepIds: [],
+    });
+    renderDrawer({
+      initialWorkflowId: 12,
+      workflows: [
+        {
+          id: 12,
+          name: 'Release train',
+          steps: ['Plan', 'Build', 'Review', 'Ship', 'Announce'].map((name, i) => manual(20 + i, name)),
+        },
+      ],
+    });
+
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveTextContent('5 sessions need input');
+
+    await userEvent.hover(screen.getByRole('radio', { name: /Fully automatic/ }));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Auto-run is off for "Plan", "Build", "Review", and 2 more. Turn on "Auto-run available" for every session to run this workflow fully automatic.',
     );
   });
 
@@ -225,7 +282,7 @@ describe('RunWorkflowDrawer', () => {
     renderDrawer({ initialWorkflowId: 11 });
 
     const automatic = screen.getByRole('radio', { name: /Fully automatic/ });
-    expect(automatic).toBeEnabled();
+    expect(automatic).not.toHaveAttribute('aria-disabled');
     expect(automatic).toHaveAttribute('aria-checked', 'true');
 
     await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
@@ -252,14 +309,51 @@ describe('RunWorkflowDrawer', () => {
     );
     const { rerender } = renderAuthedPage(drawer(workflows));
 
-    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-checked', 'true');
 
     rerender(drawer(withStepAutoRun(false)));
-    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toBeDisabled();
-    expect(screen.getByRole('radio', { name: /Custom/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
 
     rerender(drawer(withStepAutoRun(true)));
-    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('never sends auto-run in Custom for a session that turned it off while the drawer was open', async () => {
+    const drawer = (list: RunWorkflowOption[]) => (
+      <RunWorkflowDrawer
+        opened
+        onClose={vi.fn()}
+        projectId={7}
+        workflows={list}
+        initialWorkflowId={11}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(workflows));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    expect(screen.getByLabelText('Run "Label issues" automatically')).toBeChecked();
+
+    rerender(drawer(withStepAutoRun(false)));
+    expect(screen.getByLabelText('Run "Label issues" automatically')).toBeDisabled();
+    expect(screen.getByLabelText('Run "Label issues" automatically')).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflow_runs',
+      expect.objectContaining({
+        workflowRun: expect.objectContaining({
+          mode: 'mixed',
+          stepOverrides: { 3: { autoRun: true }, 4: { autoRun: false } },
+        }),
+      }),
+      expect.any(Object),
+    );
   });
 
   it('re-evaluates Fully automatic when another workflow is picked', async () => {
@@ -271,8 +365,8 @@ describe('RunWorkflowDrawer', () => {
 
     await userEvent.click(screen.getByDisplayValue('Nightly triage'));
     await userEvent.click(await screen.findByRole('option', { name: 'Weekly GA report' }));
-    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toBeDisabled();
-    expect(screen.getByRole('radio', { name: /Custom/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('closes without asking once the run has started', async () => {

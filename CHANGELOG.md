@@ -33,6 +33,11 @@ governance, community health — carry none.
   none of their companies, and replacing it cut off their own clients.
 - **Tasks**: the board settings gear stays with Bulk, Collapse all and Activity
   at the right of the filter row instead of dropping onto a line of its own.
+- **Workflows**: **Run workflow** no longer offers **Fully automatic** when a
+  session has **Auto-run available** turned off: the option is greyed out, says
+  how many sessions need input and names them on hover, and the drawer starts
+  in **Interactive** instead. A Custom run can no longer start such a session
+  automatically, whether from the drawer or the API.
 
 ## [1.5.0] - 2026-10-20
 
@@ -92,9 +97,6 @@ governance, community health — carry none.
   account with that login stops the setup.
 
 ### Fixed
-- **Workflows**: **Run workflow** no longer offers **Fully automatic** when a
-  session has **Auto-run available** turned off — the option is greyed out
-  with a hint, and the drawer starts in **Custom** instead.
 - **Workflows**: the Base Resources tab scrolls, so resources below the fold
   can be reached.
 - **Sessions & Runs**: an interactive Antigravity CLI session opens at the
