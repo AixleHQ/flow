@@ -909,6 +909,67 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(aggregate.steps[0].preferredModel).toBe('opus-9');
   });
 
+  it("a Kiro CLI step offers the models the user's Kiro credential reported and saves the pick", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
+        agentModels: [
+          {
+            agentType: 'kiro_cli',
+            models: [
+              { modelId: 'auto', displayName: 'auto' },
+              { modelId: 'claude-opus-5', displayName: 'claude-opus-5' },
+            ],
+          },
+        ],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Required agent runtime' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Kiro CLI' }));
+    await userEvent.click(screen.getAllByLabelText('Preferred model')[0]);
+    await userEvent.click(await screen.findByRole('option', { name: 'claude-opus-5' }));
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ requiredAgentRuntime: 'kiro_cli', preferredModel: 'claude-opus-5' });
+  });
+
+  it('says to connect the runtime when the user has no credential for it', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'kiro_cli' })],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+      }),
+    });
+
+    expect(screen.getByText(/Connect Kiro CLI in your Profile to choose a model/)).toBeInTheDocument();
+  });
+
+  it('says the models are not reported yet when the credential has none', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'kiro_cli' })],
+        agentModels: [{ agentType: 'kiro_cli', models: [] }],
+      }),
+    });
+
+    expect(screen.getByText(/Kiro CLI has not reported its models yet/)).toBeInTheDocument();
+  });
+
+  it('shows no model hint while the deferred models are still loading', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'kiro_cli' })],
+        agentModels: undefined,
+      }),
+    });
+
+    expect(screen.queryByText(/Connect Kiro CLI/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/has not reported its models/)).not.toBeInTheDocument();
+  });
+
   it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {
     const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {

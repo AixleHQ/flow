@@ -646,6 +646,7 @@ const BuilderPage = () => {
                       repositories={repositories}
                       configItems={configItems}
                       agentModels={agentModels}
+                      agentModelsLoading={rawAgentModels === undefined}
                       readOnly={readOnly}
                       onFieldChange={(field, value) => updateStepField(selectedSession.id, field, value)}
                       onAssetSpecsChange={(field, specs) => handleAssetSpecsChange(selectedSession.id, field, specs)}

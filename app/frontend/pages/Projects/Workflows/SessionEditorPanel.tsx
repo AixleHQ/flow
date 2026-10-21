@@ -19,7 +19,7 @@ import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker
 import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
-import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
+import { AGENT_SELECT_OPTIONS, agentLabel } from 'shared/ui/agentRuntimes';
 import { InfoHint } from 'shared/ui/InfoHint';
 
 import classes from './BuilderPage.module.css';
@@ -183,6 +183,24 @@ interface AgentModelsEntry {
   models: AgentModel[];
 }
 
+// The models listed are the editing user's own: they come from that user's credential
+// for the runtime, so a runtime they have not connected, or one whose catalogue could
+// not be read, has nothing to offer. Say which, rather than leave an empty picker.
+function preferredModelHint(
+  runtime: string | null | undefined,
+  modelsMap: Record<string, AgentModel[]>,
+  loading: boolean,
+): string | null {
+  if (!runtime || loading) return null;
+  const label = agentLabel(runtime);
+  const models = modelsMap[runtime];
+  if (!models) return `Connect ${label} in your Profile to choose a model. Until then it runs on its default.`;
+  if (models.length === 0) {
+    return `${label} has not reported its models yet. They appear after its next session, or when you reconnect it in your Profile.`;
+  }
+  return null;
+}
+
 interface SessionEditorPanelProps {
   step: SessionStep;
   allSteps: SessionStep[];
@@ -195,6 +213,8 @@ interface SessionEditorPanelProps {
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
+  /** The models prop is deferred: until it arrives, an empty list means nothing yet. */
+  agentModelsLoading?: boolean;
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown) => void;
   onAssetSpecsChange: (field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => void;
@@ -222,6 +242,7 @@ export function SessionEditorPanel({
   repositories,
   configItems,
   agentModels = [],
+  agentModelsLoading = false,
   readOnly,
   onFieldChange,
   onAssetSpecsChange,
@@ -241,6 +262,7 @@ export function SessionEditorPanel({
   const modelsMap: Record<string, AgentModel[]> = {};
   for (const entry of agentModels) modelsMap[entry.agentType] = entry.models;
   const runtimeModels = step.requiredAgentRuntime ? (modelsMap[step.requiredAgentRuntime] ?? []) : [];
+  const modelsHint = preferredModelHint(step.requiredAgentRuntime, modelsMap, agentModelsLoading);
   const modelOptions = runtimeModels
     .filter((m) => m.modelId)
     .map((m) => ({ value: m.modelId, label: m.displayName || m.modelId }));
@@ -419,6 +441,7 @@ export function SessionEditorPanel({
                   },
                 }}
               />
+              {modelsHint && <p className={classes.fieldHelp}>{modelsHint}</p>}
             </div>
           )}
         </div>

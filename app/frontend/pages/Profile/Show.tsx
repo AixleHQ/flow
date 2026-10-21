@@ -265,6 +265,11 @@ function CredentialModelRow({ credential, models }: { credential: AgentCredentia
           size="sm"
         />
       </Group>
+      {models.length === 0 && (
+        <Text size="xs" c="dimmed" mt={4}>
+          {agentLabel} has not reported its models yet. They appear after its next session, or when you reconnect it.
+        </Text>
+      )}
     </Box>
   );
 }

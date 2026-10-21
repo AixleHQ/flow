@@ -572,6 +572,15 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('says a credential has not reported its models instead of leaving an empty default-model row', () => {
+    const credential = buildCredential({ id: 100, agentType: 'kiro_cli' });
+    const profile = buildProfile({ configuredAgents: ['kiro_cli'], agentCredentials: [credential] });
+    const props = { ...baseProps(profile), agentModels: [{ agentType: 'kiro_cli', models: [] }] };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    expect(screen.getByText(/Kiro CLI has not reported its models yet/)).toBeInTheDocument();
+  });
+
   it('keeps a saved default model visible when the fetched list does not contain it', async () => {
     // A pin chosen before the model left the catalogue (or a Bedrock ARN) is not in
     // agentModels. Mantine shows a value with no matching option as an empty input, so

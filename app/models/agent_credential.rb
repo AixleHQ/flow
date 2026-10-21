@@ -272,6 +272,10 @@ class AgentCredential < ApplicationRecord
     "agent_models/#{agent_type}/#{id}"
   end
 
+  def invalidate_models_cache
+    Rails.cache.delete(models_cache_key)
+  end
+
   # Decrypted config data. Raises Encryptable::DecryptionError when the stored
   # blob cannot be read: an unreadable credential must stop a launch with a
   # sign-in prompt, never start a session that has no credentials at all.
@@ -619,10 +623,6 @@ class AgentCredential < ApplicationRecord
     return if CompanyMembership.exists?(user_id: user_id, company_id: company_id)
 
     errors.add(:company, "must be one the user is a member of")
-  end
-
-  def invalidate_models_cache
-    Rails.cache.delete(models_cache_key)
   end
 
   # Derive expires_at from the adapter's soonest token expiry (epoch ms → Time).

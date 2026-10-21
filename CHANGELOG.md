@@ -21,6 +21,10 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Workflows**: a model Kiro CLI reports after a session or a sign-in shows up in a
+  step's Preferred Model list and in your profile's default models straight away,
+  instead of up to a day later. When a step's runtime has no models to offer, the
+  editor says why: connect the runtime in your Profile, or wait for it to report them.
 - **Admin**: in the dark theme, form fields stay dark after moving between
   admin pages; they turned white with light grey text, so typed values were
   barely readable. The "No limit — unbilled" badge and the permanent-delete

@@ -508,6 +508,41 @@ module ContainerStrategies
       assert result.key?(:outputs_count)
     end
 
+    # The Kiro picker reads the captured catalogue, and the capture is written with
+    # update_column: unless the write busts the cached list, a model released since the
+    # last capture stays out of the step editor until the cache expires.
+    test "persist_credential_metadata replaces a cached model list with the newly captured catalogue" do
+      Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+      credential = create(:agent_credential, :kiro_cli, user: @user, config_data: kiro_login_without_profile,
+                                                        metadata: { "kiro_models" => [ { "model_id" => "claude-sonnet-4.5" } ] })
+      membership = CompanyMembership.find_by!(user: @user, company: credential.company)
+      assert_equal %w[claude-sonnet-4.5], membership.agent_models_by_type["kiro_cli"].pluck(:model_id)
+
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "kiro_cli")
+      ContainerRuntime.stubs(:build).returns(fake)
+      build_strategy(agent_type: "kiro_cli", credential: credential)
+        .send(:persist_credential_metadata, fake.resolve_container("abc123"), credential,
+              AgentCredentialsService.for("kiro_cli"), :session)
+
+      assert_equal %w[auto claude-opus-5 qwen3-coder-next],
+                   CompanyMembership.find(membership.id).agent_models_by_type["kiro_cli"].pluck(:model_id)
+    end
+
+    test "persist_credential_metadata keeps the cached model list when the catalogue is unchanged" do
+      Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "kiro_cli")
+      ContainerRuntime.stubs(:build).returns(fake)
+      captured = Agents::KiroCliAdapter.new.collect_credential_metadata(fake, fake.resolve_container("abc123"), nil, :session)
+      credential = create(:agent_credential, :kiro_cli, user: @user, config_data: kiro_login_without_profile, metadata: captured)
+      Rails.cache.write(credential.models_cache_key, [ { model_id: "cached" } ])
+
+      build_strategy(agent_type: "kiro_cli", credential: credential)
+        .send(:persist_credential_metadata, fake.resolve_container("abc123"), credential,
+              AgentCredentialsService.for("kiro_cli"), :session)
+
+      assert_equal [ { model_id: "cached" } ], Rails.cache.read(credential.models_cache_key)
+    end
+
     # == Full Flow Tests ==
 
     test "session_type returns agent_session" do

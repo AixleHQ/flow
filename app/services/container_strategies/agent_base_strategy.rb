@@ -303,13 +303,22 @@ module ContainerStrategies
       extras = agent_service.adapter.collect_credential_metadata(runtime, container, credential, phase)
       return if extras.blank?
 
-      credential.with_lock do
+      stored = credential.with_lock do
         merged = (credential.metadata || {}).merge(extras)
-        next if merged == credential.metadata
+        next false if merged == credential.metadata
 
         credential.update_column(:metadata, merged)
         Rails.logger.info("[#{self.class.name.demodulize}] Stored #{extras.keys.join(', ')} on credential #{credential.id}")
+        true
       end
+      return unless stored
+
+      # update_column skips the callbacks that bust the models cache and refresh the
+      # profile, and an adapter may read its model list from this metadata (Kiro's
+      # kiro_models). Done after the lock commits, so neither a page reload nor a
+      # concurrent fetch can cache the list from the metadata being replaced.
+      credential.invalidate_models_cache
+      credential.broadcast_refresh_to(credential.user)
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name.demodulize}] Failed to collect credential metadata: #{e.message}")
     end
