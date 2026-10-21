@@ -246,6 +246,47 @@ pairing rule (`config/initializers/cors.rb:22-26`).
 The token is single-use and short-lived, so the exchange happens on arrival; what is
 carried onward is the resolved `CustomerIdentifier`, not the token.
 
+**The POST's fields are fixed, and there is no way to add one.** Established 21 October
+against the Seller Guide, because the design would have been different if it were not:
+
+| Field | When |
+|---|---|
+| `x-amzn-marketplace-token` | always; an opaque string, exchanged through `ResolveCustomer` |
+| `x-amzn-marketplace-offer-type` | only when the offer is a free trial, with the value `free-trial` |
+
+Everything else — the buyer's AWS account id, the `CustomerIdentifier`, the product code
+— comes back from `ResolveCustomer`, not from the form. There is no screen anywhere in
+Marketplace where a buyer could type a company name, an email or a code that would reach
+us in this request.
+
+**This turns §5.2 from a preference into the only option.** That section argues for asking
+on our own page rather than letting a buyer bring an answer with them; it turns out a buyer
+cannot bring one. The argument stands, but it is no longer the reason.
+
+**`free-trial` is a tripwire, not a feature.** §1 settles on pure usage pricing with no
+free trial, so this parameter should never arrive. If it does, somebody has created a
+free-trial offer against this product, and the application's billing assumptions are wrong
+in the expensive direction: `BatchMeterUsage` during an AWS free trial charges a customer
+who was promised nothing. The endpoint should therefore **read the parameter and refuse the
+registration loudly** rather than ignore it. Note that our own `Billing::Trial` is a
+different thing entirely — a Stripe-shaped allowance — and §4.3 already says it must not
+reach a Marketplace company.
+
+Two workarounds exist for carrying per-purchase context and neither is taken:
+
+- **A static query string on the fulfilment URL.** One URL per listing, so it is a
+  constant, not per-purchase. We have nothing to put in it. *Unverified either way:*
+  whether AWS preserves a query string on the URL it posts to has not been tested, and it
+  would be a silent failure if it does not.
+- **`SearchAgreements` to find the buyer's offer.** A second AWS API, a second IAM
+  permission and a second service to be unavailable, in exchange for context we do not
+  need: under pure usage the price lives on the offer and AWS applies it without the
+  caller knowing, which is measured — the container product's metering survived a change
+  of agreement without the application noticing
+  (`marketplace-infra/BEFORE_PUBLISHING.md`). The offer identifier arrives free in the SNS
+  notifications anyway (§8), so storing it from there costs nothing and asking for it
+  costs a dependency.
+
 ### 5.2 Every arrival is a new tenant, except a bound one
 
 An earlier draft of this section had four arrival cases, one of which asked the visitor
@@ -315,9 +356,16 @@ marketplace_customers
   aws_account_id        string  not null
   company_id            bigint  null, unique when present  # null until registration binds it
   subscription_state    string  not null                   # pending | active | unsubscribe_pending | unsubscribed
+  offer_identifier      string  null                       # from the SNS notification, never asked for
   subscribed_at         datetime
   unsubscribed_at       datetime
 ```
+
+`offer_identifier` is written when a notification carries it and is read by nobody in the
+billing path — it is there so that "which deal is this customer on" is answerable during a
+support conversation without calling a second AWS API. Nothing should start depending on
+it being present: it arrives with the notification, and a customer whose registration ran
+before any notification has none yet.
 
 `company_id` is nullable because §5.4 says a subscription can exist before anybody has
 registered; it is unique so one company never holds two subscriptions. The unique index on
@@ -400,6 +448,12 @@ customer who has stopped paying.
 `subscribe-success` for a `CustomerIdentifier` nobody has registered is §5.4's state, and
 it needs somewhere to be seen. The admin panel is the obvious home; what it must not be is
 a log line.
+
+The message carries the offer identifier alongside the customer identifier and the product
+code, which is the only per-deal context that reaches us anywhere. It is stored (§6) and
+otherwise ignored. *To verify:* that it is present on every one of the four actions and not
+only on `subscribe-success` — the column is nullable either way, so this decides a comment
+rather than a design.
 
 ---
 
