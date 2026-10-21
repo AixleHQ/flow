@@ -29,7 +29,7 @@ class FeatureFlagsTypescriptTest < ActiveSupport::TestCase
   test "names are sorted, so the file only changes when the set does" do
     entry = { "description" => "A flag.", "owner" => "@AixleHQ/web", "kind" => "ops", "scope" => "global",
               "default" => false, "client" => true }
-    registry = FeatureFlags::Registry.new("zeta_panel" => entry, "alpha_panel" => entry)
+    registry = FeatureFlags::Registry.new({ "zeta_panel" => entry, "alpha_panel" => entry })
 
     assert_includes FeatureFlags::Typescript.render(registry),
                     "export type FeatureFlagName =\n  | 'alphaPanel'\n  | 'zetaPanel';\n"
