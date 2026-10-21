@@ -46,9 +46,10 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
 
   test "stub_feature_env locks the flag for the block without touching ENV" do
     with_example_flags do
+      env_before = ENV.to_h
       stub_feature_env(:coder_reap, "off") do
         assert_equal :env, Feature.explain(:coder_reap).source
-        assert_nil ENV.fetch("FEATURE_CODER_REAP", nil)
+        assert_equal env_before, ENV.to_h
       end
 
       assert_equal :default, Feature.explain(:coder_reap).source
