@@ -1,4 +1,5 @@
 import type { CurrentUser, Project } from '@/types/generated';
+import type { FeatureFlagName } from '@/types/generated/featureFlags';
 
 export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'antigravity_cli' | 'claude_code' | 'grok' | 'kiro_cli';
 export type UserRole = 'employee' | 'admin' | 'super_admin' | 'viewer';
@@ -72,5 +73,7 @@ export interface SharedProps {
   permissions?: SharedPermissions;
   settings: SharedSettings;
   trial?: SharedTrial | null;
+  /** Server-resolved `client: true` flags; read them with useFeatureFlag. Optional: a page served by an older pod does not send it. */
+  features?: Partial<Record<FeatureFlagName, boolean>>;
   [key: string]: unknown;
 }
