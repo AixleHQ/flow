@@ -163,6 +163,27 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_not @user.reload.mcp_enabled?
   end
 
+  test "an operator impersonating someone can neither regenerate nor disable their MCP token" do
+    token = @user.regenerate_mcp_token!(proof_provider_ids: [ IdentityProvider.password.id ])
+    operator = create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(operator)
+    post impersonate_admin_user_path(@user)
+
+    post regenerate_mcp_token_profile_path
+
+    assert_redirected_to mcp_profile_path
+    assert_match(/while impersonating/, flash[:alert])
+    follow_redirect!
+    assert_inertia_props { |props| assert_nil props[:mcp][:token] }
+
+    delete disable_mcp_token_profile_path
+
+    assert_redirected_to mcp_profile_path
+    assert_match(/while impersonating/, flash[:alert])
+    assert_equal @user, User.find_by_mcp_token(token)
+    assert_equal [ IdentityProvider.password.id ], @user.reload.mcp_token_proof_provider_ids
+  end
+
   test "update_mcp_tools stores the selection and drops names the registry does not know" do
     patch update_mcp_tools_profile_path, params: { toolNames: %w[list_projects not_a_tool] }, as: :json
 

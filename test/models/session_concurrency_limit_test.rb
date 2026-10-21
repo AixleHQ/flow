@@ -13,6 +13,10 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     SessionConcurrencyLimit.new(scope_type: "Project", scope_id: project.id, max_sessions: max_sessions)
   end
 
+  def marketplace!
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::AWS_MARKETPLACE))
+  end
+
   def allocation(excluding: nil)
     SessionConcurrencyAllocation.new(company_id: @company.id, excluding: excluding)
   end
@@ -172,6 +176,43 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     assert SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id).destroy
 
     assert_nil SessionConcurrencyLimit.for_company(@company.id)
+  end
+
+  test "in an AWS Marketplace installation a company has at least three workers" do
+    marketplace!
+    row = SessionConcurrencyLimit.new(scope_type: "Company", scope_id: @company.id, max_sessions: 2)
+
+    assert_not row.valid?
+    assert_equal [ "must be at least 3 in an AWS Marketplace installation" ], row.errors[:max_sessions]
+
+    row.max_sessions = 3
+
+    assert row.valid?, row.errors.full_messages.to_sentence
+  end
+
+  test "the minimum binds a company, not the reservations drawn from it" do
+    marketplace!
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
+
+    assert limit_for(@project, 1).valid?
+  end
+
+  test "a company given fewer workers before the minimum keeps them until its number changes" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
+    marketplace!
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id)
+
+    assert row.update(max_sessions: "2"), row.errors.full_messages.to_sentence
+    assert_not row.update(max_sessions: 1)
+    assert_equal 2, row.reload.max_sessions
+  end
+
+  test "outside AWS Marketplace a company may run on one worker" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 1)
+
+    assert_equal 1, SessionConcurrencyLimit.for_company(@company.id)
   end
 
   test "a project limit is not a company capacity change" do

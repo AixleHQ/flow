@@ -121,7 +121,7 @@ describe('Projects/Overview/OverviewPage', () => {
 
     // KPI labels
     expect(screen.getByText('Sessions Launched')).toBeInTheDocument();
-    expect(screen.getByText('Total Spend')).toBeInTheDocument();
+    expect(screen.getByText('Token Cost')).toBeInTheDocument();
     expect(screen.getByText('Workflows')).toBeInTheDocument();
     expect(screen.getByText('Board Tasks')).toBeInTheDocument();
 

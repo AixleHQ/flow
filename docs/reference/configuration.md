@@ -84,7 +84,7 @@ and test fall back to fixed non-secret values.
 
 | Variable                              | Required | Default | Purpose                                                        |
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `DEPLOYMENT_MODE`                     | no       | `saas`  | One of `self_hosted`, `saas`, `aws_marketplace`. Decides who may move a company's session limit and where the installation's capacity is metered: nowhere for `self_hosted`, Stripe for `saas`, AWS Marketplace for `aws_marketplace`. Unset or unrecognised reads as `saas`, so a hosted installation cannot grant itself capacity by omission. Development and test default to `self_hosted`. |
+| `DEPLOYMENT_MODE`                     | no       | `saas`  | One of `self_hosted`, `saas`, `aws_marketplace`. Decides who may move a company's session limit and where the installation's capacity is metered: nowhere for `self_hosted`, Stripe for `saas`, AWS Marketplace for `aws_marketplace`. In `aws_marketplace` every company also has at least 3 workers. Unset or unrecognised reads as `saas`, so a hosted installation cannot grant itself capacity by omission. Development and test default to `self_hosted`. |
 | `REGISTRATION_ENABLED`                | no       | `false` | `true` opens self-serve signup: the public `/workspace/new` form and the `/how-it-works` page that leads to it. Hosted (`saas`) deployments only — elsewhere it has no effect, since a workspace is made by the operator or bought through AWS. Off by default so the screens can ship before the product is ready to take strangers. Refuses to boot where Stripe is not configured: a workspace that signs itself up spends its free capacity and then has nowhere to pay. |
 | `PRICING_QUEUE_HOURLY_RATE`           | no       | `5`     | List price of one worker-hour, in US dollars, as shown on the public `/how-it-works` calculator. Nothing is billed from it — metering reports quantities and the invoice is priced by Stripe or AWS Marketplace — so changing it changes what visitors are quoted and nothing else. |
 | `AWS_MARKETPLACE_PRODUCT_CODE`        | no       | unset   | The product an installation bought through AWS Marketplace meters against, put here by the installation from the code the buyer's subscription issued. Without it nothing calls `MeterUsage`: capacity is measured and recorded but never sent, and an installation in `aws_marketplace` mode without it records failed hours rather than pretending to have billed. Empty everywhere else. |
@@ -389,6 +389,17 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `URL_SAFETY_TRUSTED_HOSTS`     | no       | empty                  | Comma-separated public hostnames allowed to resolve to a private IP (split-horizon DNS for our own staging hosts). Only the Coder integration reads it — its URL check, API calls and `coder ssh`; every other URL check (MCP servers, OAuth endpoints, identity providers) ignores it. |
 | `TOOL_RESULTS_RETENTION_DAYS`  | no       | `30`                   | How long a tool result's stored payload is kept.               |
 | `CONTEXT_TOKEN_BUDGET`         | no       | `6000`                 | Token budget for rendered prompt context.                      |
+
+## Feature flags
+
+Flags are declared in `config/feature_flags.yml`; a variable only locks a flag
+declared there. Read once at boot, so a change needs a restart.
+
+| Variable                         | Required | Default | Purpose                                                     |
+| -------------------------------- | -------- | ------- | ----------------------------------------------------------- |
+| `FEATURE_<KEY>`                  | no       | unset   | Locks the declared flag `<key>` (upper-cased, e.g. `FEATURE_BOARD_AI_SUMMARY` for `board_ai_summary`) on or off, over every company override and admin value. `on`, `true`, `1` and `off`, `false`, `0`, case-insensitive; empty is unset. Any other value fails boot naming the variable. A variable for a flag nobody declares is ignored with one warning at boot (logged and sent to Sentry), so removing a flag never needs an infra change first. |
+| `FEATURE_FLAGS_REFRESH_INTERVAL` | no       | `5`     | Seconds between a process's checks for changed runtime flag values. Reserved: nothing reads runtime values from the database yet. |
+| `FEATURE_FLAGS_MAX_STALENESS`    | no       | `60`    | Seconds after which a process reloads runtime flag values even without a change signal. Reserved, as above. |
 
 ## Docs explorer
 

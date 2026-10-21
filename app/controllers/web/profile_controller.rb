@@ -6,6 +6,7 @@ class Web::ProfileController < Web::ApplicationController
   layout "inertia"
 
   before_action :require_auth
+  before_action :refuse_mcp_token_change_while_impersonating, only: %i[regenerate_mcp_token disable_mcp_token]
 
   def show
     render inertia: "Profile/Show", props: {
@@ -224,6 +225,15 @@ class Web::ProfileController < Web::ApplicationController
 
   def require_auth
     redirect_to login_path unless signed_in?
+  end
+
+  # An impersonation proves no sign-in method of the person's, so a token issued
+  # under it reaches none of their companies; and rotating or disabling the token
+  # cuts off the clients the person set up themselves.
+  def refuse_mcp_token_change_while_impersonating
+    return unless impersonated?
+
+    redirect_to mcp_profile_path, alert: "The MCP token cannot be changed while impersonating."
   end
 
   # The credentials this page may edit: the acting user's, in the company they are

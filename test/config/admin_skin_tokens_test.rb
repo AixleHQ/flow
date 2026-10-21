@@ -25,10 +25,12 @@ class AdminSkinTokensTest < ActiveSupport::TestCase
 
   def normalize(value) = value.strip.tr('"', "'")
 
-  # The dashboard island on the admin home draws on the same declarations.
+  # The dashboard island on the admin home and the admin's own views draw on the
+  # same declarations.
   test "the skin declares every token the admin uses, in both schemes" do
     dashboard = Rails.root.join("app/frontend/pages/Admin/Dashboard/Dashboard.module.css").read
-    used = "#{SKIN}#{dashboard}".scan(/var\((--app-[a-z0-9-]+)\)/).flatten.uniq
+    views = Rails.root.glob("app/views/{admin,administrate,fields}/**/*.erb").map(&:read).join
+    used = "#{SKIN}#{dashboard}#{views}".scan(/var\((--app-[a-z0-9-]+)\)/).flatten.uniq
 
     assert_empty used - skin_tokens("light").keys
     assert_empty used - skin_tokens("dark").keys - %w[--app-font-body --app-font-heading --app-font-mono-label],
