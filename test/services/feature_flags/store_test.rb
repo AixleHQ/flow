@@ -187,6 +187,62 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     assert_equal false, store.snapshot.global(:coder_reap) # rubocop:disable Minitest/RefuteFalse
   end
 
+  test "a check that arrives during the first load waits for it instead of answering from the defaults" do
+    set_global(:coder_reap, false)
+    set_override(:board_ai_summary, @company, true)
+    # Built here, so the loader thread needs no database connection of its own.
+    loaded = FeatureFlag.load_snapshot
+    load_started = Queue.new
+    release_load = Queue.new
+    loads = 0
+    store = build_store(loader: lambda {
+      loads += 1
+      load_started << true
+      release_load.pop
+      loaded
+    })
+
+    first = Thread.new { store.snapshot }
+    load_started.pop
+    second = Thread.new { store.snapshot }
+    # Let the second check reach the lock: blocked on it, or (the bug) already done.
+    Timeout.timeout(5) { Thread.pass until second.stop? }
+    release_load << true
+
+    [ first, second ].each { |thread| thread.join(5) }
+    assert_same loaded, first.value
+    assert_same loaded, second.value, "the second check must see the loaded values, not Snapshot::EMPTY"
+    assert_equal 1, loads, "the waiting check does not load a second time"
+    assert_equal 1, @token.reads
+  end
+
+  test "once a snapshot is loaded, a check that finds a refresh running serves it without waiting" do
+    store_snapshot = nil
+    loads = 0
+    load_started = Queue.new
+    release_load = Queue.new
+    store = build_store(loader: lambda {
+      loads += 1
+      if loads > 1
+        load_started << true
+        release_load.pop
+      end
+      store_snapshot = FeatureFlags::Snapshot.new({ coder_reap: { global: loads.odd?, overrides: {} } })
+    })
+    first_snapshot = store.snapshot
+
+    @token.bump
+    advance(REFRESH)
+    refreshing = Thread.new { store.snapshot }
+    load_started.pop
+
+    assert_same first_snapshot, store.snapshot, "served the held snapshot while the refresh runs"
+    release_load << true
+    refreshing.join(5)
+    assert_same store_snapshot, store.snapshot
+    refute_same first_snapshot, store_snapshot
+  end
+
   test "a value changed mid-request does not change the answer inside that request" do
     store = build_store
 

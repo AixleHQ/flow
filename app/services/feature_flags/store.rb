@@ -40,8 +40,16 @@ module FeatureFlags
 
     # One thread refreshes; any other that finds it due meanwhile serves the
     # snapshot it already has instead of queueing behind a database round trip.
+    # Until a first snapshot is loaded there is nothing good to serve, so those
+    # threads wait for the load instead of answering from Snapshot::EMPTY while
+    # the database is healthy. Once they get the lock the due check below sees
+    # the deadlines the load set and returns, so they do not load again.
     def refresh
-      return unless @refresh_lock.try_lock
+      if @snapshot.get.nil?
+        @refresh_lock.lock
+      else
+        return unless @refresh_lock.try_lock
+      end
 
       begin
         now = @clock.call
