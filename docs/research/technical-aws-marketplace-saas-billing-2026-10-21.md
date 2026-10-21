@@ -66,6 +66,7 @@ them and two of them cannot be revised after publication.
 | **A Marketplace company cannot attach a card** | Where AWS bills, Checkout is not offered at all. One-way and cheap: it is a refusal on screens that already have a guard. |
 | **Every arrival creates a new tenant** | A visitor arriving from Marketplace is signed out and led to workspace creation, whoever they are and whatever they already have — unless the identifier is already bound. See §5.2. |
 | **The payer is shown on every active company** | `stripe` or `aws`, in the admin and on the company's own billing screen. Two payers on one installation is invisible until somebody can see which is which. |
+| **The key is `LicenseArn`, not `CustomerIdentifier`** | Forced, not chosen. AWS requires **Concurrent Agreements** of every SaaS product created after 1 June 2026, and our draft was created on 19 October. Under it `CustomerIdentifier` is not populated, `BatchMeterUsage` requires a `LicenseArn` per record and does not accept a product code, and one AWS account may hold several live agreements for the same product. See §3.1. |
 
 The dimension string is the one thing publication makes permanent. It must match the new
 adapter's constant character for character, and it is a **new** constant beside
@@ -95,7 +96,51 @@ twice over:
 
 ---
 
-## 3. What already exists, and what it is missing
+## 3. What the ground is
+
+### 3.1 Concurrent Agreements, which this product cannot opt out of
+
+Read out of the Seller Guide on 21 October, after an earlier draft of this document had
+been written against the older integration. It is the single largest correction here, and
+it arrives before everything downstream because the key every table hangs off changes.
+
+AWS now supports **Concurrent Agreements** — "multiple active purchases for the same
+product within a single AWS account". It is **opt-in for listings created before 1 June
+2026 and required for every SaaS product created after it**. Our draft,
+`prod-kkdmouyxh7cji`, was created on 19 October 2026, so it is enabled by default and
+there is nothing to decide.
+
+What changes, from the Seller Guide and the Ruby SDK's own signatures:
+
+| | Old integration | This product |
+|---|---|---|
+| `ResolveCustomer` returns | `CustomerIdentifier`, `ProductCode` | also `CustomerAWSAccountId`, `LicenseArn`, `metadata.agreement_id`. "For new SaaS product integrations, the `CustomerIdentifier` field is not populated" |
+| The tenant key | `CustomerIdentifier`, one per account | **`LicenseArn`, one per agreement.** An account may hold several at once |
+| `BatchMeterUsage` | `product_code` + `customer_identifier` per record | `license_arn` per record. "For opted-in products, `LicenseArn` is required, and `ProductCode` is not supported" |
+| Notifications | SNS | EventBridge. See §8 |
+
+Two consequences worth stating plainly because they are easy to miss:
+
+**The one-per-hour metering limit applies per method.** The Seller Guide warns that the
+limit "applies independently to each method", so an implementation that sent both a
+licence-keyed record and a legacy product-code record for the same hour would bill twice
+rather than be refused. We only ever write the new one, which is why there is no
+compatibility path in this design.
+
+**AWS names our tenancy decision.** Its three documented strategies are separate tenants
+per licence, one unified tenant, or letting the buyer choose. §5.2's rule — always a new
+tenant — **is** the first of those. That decision was taken on its own merits before this
+section was written, and it happens to be the one AWS describes first; it also means a
+buyer who deliberately buys twice gets two workspaces, which is the feature Concurrent
+Agreements exists to provide rather than a bug to defend against.
+
+`aws-sdk-marketplacemetering` already carries all of it: `resolve_customer` returns
+`license_arn`, `customer_aws_account_id` and `metadata.agreement_id`, and
+`batch_meter_usage` takes `license_arn` inside each usage record. *To verify in the
+container:* that the pinned 1.107.0 is new enough, since `Gemfile:211` allows `~> 1.106`
+and a bump is free if it is not.
+
+### 3.2 What already exists in the codebase, and what is missing
 
 Measured, at `develop` on 21 October.
 
@@ -244,7 +289,11 @@ cannot render the app. This endpoint wants `ActionController::Base` with a scope
 pairing rule (`config/initializers/cors.rb:22-26`).
 
 The token is single-use and short-lived, so the exchange happens on arrival; what is
-carried onward is the resolved `CustomerIdentifier`, not the token.
+carried onward is the resolved licence, not the token.
+
+`ResolveCustomer` answers with `LicenseArn`, `CustomerAWSAccountId`, `ProductCode`,
+`metadata.agreement_id` — and `CustomerIdentifier`, which §3.1 says is **not populated**
+for a product on Concurrent Agreements. Nothing may key off it.
 
 **The POST's fields are fixed, and there is no way to add one.** Established 21 October
 against the Seller Guide, because the design would have been different if it were not:
@@ -339,7 +388,16 @@ A buyer can reach the registration page again from Manage subscriptions, and AWS
 fresh token each time. A second arrival that creates a second company is the easiest bug to
 write here and the hardest to unpick afterwards, because by then both have data in them.
 
-`CustomerIdentifier` is the key: unique, bound to exactly one company, written once.
+**`LicenseArn` is the key**: unique, bound to exactly one company, written once. An earlier
+draft said `CustomerIdentifier`, which §3.1 corrects — that field is not populated for this
+product, and keying on the AWS account id instead would be worse than wrong, because
+Concurrent Agreements let one account hold several live agreements and the account id would
+collapse them into one tenant.
+
+The distinction has a visible consequence. Two arrivals from the *same AWS account* with
+*different* licences are two purchases and get two workspaces; two arrivals carrying the
+*same* licence are the same purchase and must land on the same one. Only the licence tells
+those apart.
 
 ### 5.4 Registration and subscription arrive in either order
 
@@ -359,17 +417,29 @@ entitled to nothing yet.
 companies
   billing_provider      string  not null  default "none"   # none | stripe | aws_marketplace
 
-marketplace_customers
-  customer_identifier   string  not null  unique           # from ResolveCustomer
+marketplace_licenses
+  license_arn           string  not null  unique           # THE key -- one per agreement
+  customer_aws_account_id string not null                  # NOT unique: an account may hold several
+  agreement_id          string  null                       # ResolveCustomer metadata
   product_code          string  not null
-  aws_account_id        string  not null
+  customer_identifier   string  null                       # not populated on this product; kept for forensics
   company_id            bigint  null, unique when present  # null until registration binds it
-  subscription_state    string  not null                   # pending | active | unsubscribe_pending | unsubscribed
-  offer_identifier      string  null                       # from the SNS notification, never asked for
+  subscription_state    string  not null                   # pending | active | ending | ended
+  offer_identifier      string  null                       # from the notification, never asked for
   registered_offer_type string  null                       # x-amzn-marketplace-offer-type as it arrived, or null
   subscribed_at         datetime
-  unsubscribed_at       datetime
+  ended_at              datetime
 ```
+
+The table is named for the licence rather than the customer because that is what a row is.
+An earlier draft called it `marketplace_customers` and made the AWS account unique, which
+§3.1 shows would have merged two deliberate purchases into one tenant.
+
+**`subscription_state` gates metering, and that is not a nicety.** The Seller Guide is
+explicit: "Records that are sent to the AWS Marketplace Metering Service before you receive
+the ... notification aren't metered." So capacity offered to a company whose licence is
+still `pending` is measured (it happened) and not delivered (AWS would discard it). §5.4's
+"registration before the subscription is confirmed" is exactly this window.
 
 `registered_offer_type` stores the string as it arrived rather than an interpretation of
 it, because §10 has not decided what a trial means for us yet and a boolean would bake in
@@ -415,8 +485,11 @@ for this one" when AWS does.
 `Meter::AwsMarketplace`:
 
 - iterate the row's `breakdown_minutes`;
-- map company → `CustomerIdentifier`, skipping companies whose provider is not
-  `aws_marketplace` and counting them, as Stripe counts its own;
+- map company → `LicenseArn`, skipping companies whose provider is not `aws_marketplace`
+  and those whose licence is not yet `active`, counting both as Stripe counts its own;
+- put `license_arn` on each usage record and **send no product code** — §3.1: for a product
+  on Concurrent Agreements the product code is not accepted, and sending both keyings for
+  one hour bills it twice rather than being refused;
 - floor each customer's minutes — `UsageRecord.Quantity` is an integer, and because each
   customer is billed separately there is no remainder to redistribute;
 - send in slices of 25, the call's limit;
@@ -451,23 +524,45 @@ listing's.
 
 ## 8. Subscription notifications
 
-Four, under pure usage pricing: `subscribe-success`, `subscribe-fail`,
-`unsubscribe-pending`, `unsubscribe-success`. Not `entitlement-updated`, which belongs to
-contract pricing we are not selling.
+**EventBridge, not SNS.** An earlier draft of this document, and
+`marketplace-infra/SAAS_PRODUCT.md`, both describe an SQS queue subscribed to the seller
+account's SNS topics. That is the old integration, and for this product it is not merely
+deprecated but unusable: the Seller Guide states that SNS for SaaS products "are being
+replaced with Amazon EventBridge notifications", that SNS "doesn't send the `LicenseArn`
+parameter", and that sellers registered after 15 July 2026 cannot use SNS at all.
 
-They arrive on SNS topics owned by the seller account and are read from an SQS queue in
-ours. Consuming them is not bookkeeping: an unsubscribe nobody reads means serving a
-customer who has stopped paying.
+A notification channel that cannot carry the key we bill on is not a channel we can use,
+whether or not our seller account is old enough to be offered it. **This needs the matching
+correction in `aixle-infra`:** an EventBridge rule and target, not an SNS-to-SQS
+subscription.
 
-`subscribe-success` for a `CustomerIdentifier` nobody has registered is §5.4's state, and
-it needs somewhere to be seen. The admin panel is the obvious home; what it must not be is
-a log line.
+The events, and what each does here:
 
-The message carries the offer identifier alongside the customer identifier and the product
-code, which is the only per-deal context that reaches us anywhere. It is stored (§6) and
-otherwise ignored. *To verify:* that it is present on every one of the four actions and not
-only on `subscribe-success` — the column is nullable either way, so this decides a comment
-rather than a design.
+| Event | What it means | What we do |
+|---|---|---|
+| Purchase agreement created | the licence is live and metering is accepted | `subscription_state` → `active`; before this, records are discarded by AWS (§6) |
+| Purchase agreement ended | **about one hour to send final metering records** | run the meter for that licence *immediately*, then `ended`, then block the company |
+| License updated | the agreement changed — a private offer accepted, a renewal | re-read and store; the offer identifier moves |
+| License deprovisioned | access is over | block, as above |
+
+Not `entitlement-updated`, which belongs to contract pricing we are not selling.
+
+**The one-hour window does not fit the hourly schedule, and this is the sharpest thing in
+this section.** The capacity meter runs at five past the hour (`5 * * * *`) and reports the
+hour that has just closed. An agreement that ends at 10:10 gives us until about 11:10; the
+partial hour 10:00–10:10 would not be offered to AWS until 11:05 at the earliest and, for
+any end time later in the hour, not until after the window has shut. So agreement-ended
+must trigger a metering run for that licence there and then rather than waiting for the
+schedule — which is a second entry point into `CapacityMeter`, scoped to one licence and to
+a part-hour, and it is the only place in this design where metering is event-driven rather
+than periodic.
+
+An agreement created for a licence nobody has registered is §5.4's state, and it needs
+somewhere to be seen. The admin panel is the obvious home; what it must not be is a log
+line.
+
+The offer identifier rides these events and is the only per-deal context that reaches us
+anywhere. It is stored (§6) and otherwise ignored.
 
 ---
 
@@ -537,12 +632,24 @@ marketing copy.
   blocked — but three things have to be answered before any free-trial offer is created,
   and only the first of them is AWS's.
 
-  **Does metering during a trial charge the buyer?** Unknown, and the one question here
-  that we cannot answer ourselves. Either AWS zero-rates usage for the trial term and we
-  meter as normal, or it does not and `BatchMeterUsage` bills somebody who was promised
-  nothing. This goes to Seller Operations, the channel that answered the eleven questions
-  in `marketplace-infra/SELLER_OPERATIONS.md`, **before** an offer exists rather than
-  after. Guessing it is the expensive direction of a mistake.
+  **Does metering during a trial charge the buyer? Strongly implied, never stated.**
+  Searched on 21 October. Nothing in the Seller Guide tells a seller to stop metering
+  during a trial, and two sentences say the trial is a grant of free usage rather than a
+  suspension of reporting: the seller page speaks of "the free usage amount granted during
+  a free trial", and the buyer page says the procurement page shows "the duration of the
+  free trial period and how much free software usage is included in the trial". Read
+  together, AWS discounts and we meter exactly as always.
+
+  That is an inference from two sentences about something else, not an answer, and the
+  mistake it guards against charges a customer who was promised nothing. It still goes to
+  Seller Operations — but the question is now sharp enough to be answered in one line:
+  *for a usage-priced SaaS free trial, does the seller continue to send `BatchMeterUsage`
+  records, and does AWS zero-rate them for the trial term?*
+
+  Two facts settled along the way: one free trial offer per public SaaS product, length
+  7–90 days, and **the dimensions cannot be changed for a subscription free trial** —
+  which removes the idea of trialling on a cheaper dimension. And each AWS account may use
+  a product's free trial only once.
 
   **A trial on this product costs us, and the buyer sets the number.** This is the
   consequence nobody has named yet, and it is not an AWS question. On the container
@@ -559,9 +666,18 @@ marketing copy.
   rather than reversing — our queue-hour allowance still must not apply, but the clamp it
   rides on is exactly what a trial wants.
 
-  **How a trial ends.** Whether a notification arrives, or the end is a date we have to
-  hold ourselves, is unverified. It decides whether trial expiry is an event we consume or
-  a sweep we run.
+  **How a trial ends: answered, and it needs no work.** The buyer guide is unambiguous —
+  "SaaS free trials won't automatically convert into paid agreements. If you no longer want
+  the free trial, you can let the free trial expire." So there is no trial-end event to
+  consume and no date for us to hold: an expiring trial is an agreement ending, and §8
+  already blocks the company on that. A buyer who then buys arrives as a *second* agreement
+  created, carrying a new offer identifier — which §5.3 already handles, because it is a
+  new licence.
+
+  The one thing this does change is expectation rather than code: a trial that nobody
+  converts ends in a blocked company holding real work, and the only thing that brings it
+  back is the buyer purchasing. Whatever we say to them at that moment is a product
+  decision nobody has made.
 - **The reverse: a Marketplace customer who wants to pay by card.** Closed by §1 in one
   direction only — they cannot attach a card while AWS bills them. What they do after
   unsubscribing, when their company is `blocked` and the Checkout refusal is still in
@@ -587,7 +703,7 @@ marketing copy.
 | 2 | `marketplace_customers`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
 | 3 | `Billing::Meter::AwsMarketplaceSaas` + the assumed-role client | Independent of 2 — can be proved against a hand-bound customer row |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
-| 5 | SQS consumption and the subscription states | Needs the queue, which is `aixle-infra` work |
+| 5 | EventBridge consumption, the licence states, and the immediate final meter on agreement-ended | Needs the rule and queue, which is `aixle-infra` work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
 | 6 | Staging ingress, config, and a live run against a `[TEST]` listing | The first time any of it meets AWS |
 
 Slices 1, 3 and 4 are provable in the test suite. Slices 2, 5 and 6 are not finished until
