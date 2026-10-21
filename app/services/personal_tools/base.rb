@@ -69,8 +69,18 @@ module PersonalTools
         if pinned_project
           user.company_memberships.active.where(company_id: pinned_project.company_id).pluck(:company_id)
         else
-          user.mcp_token_company_ids
+          user.mcp_token_company_ids.presence || refuse_token_reaching_no_company!
         end
+    end
+
+    # Without this, a token whose proofs no company accepts answers every list
+    # with an empty result and no error, which reads as an account with nothing in it.
+    def refuse_token_reaching_no_company!
+      return [] unless user.company_memberships.active.exists?
+
+      raise UnauthorizedError,
+            "This MCP token was issued without a sign-in method any of your companies accepts — " \
+            "sign in to Aixle, then regenerate the token from your profile"
     end
 
     # The single company to act in when a tool has no project to derive one

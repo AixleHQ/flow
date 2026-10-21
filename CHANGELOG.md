@@ -13,9 +13,20 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Company settings**: in an AWS Marketplace installation a company has at
+  least 3 workers. A new company starts at 3, and a lower number is refused; a
+  company that already has fewer keeps them until its number is changed.
+
 ### Fixed
-- **Admin**: the companies list loads every company's session limit in one
-  query instead of one per company.
+- **Profile**: a personal MCP token that none of your companies accepts now
+  answers with an error telling you to sign in and regenerate it, instead of
+  empty company and project lists.
+- **Profile**: an operator impersonating someone can no longer regenerate or
+  disable that person's personal MCP token. A token issued that way reached
+  none of their companies, and replacing it cut off their own clients.
+- **Tasks**: the board settings gear stays with Bulk, Collapse all and Activity
+  at the right of the filter row instead of dropping onto a line of its own.
 
 ## [1.5.0] - 2026-10-20
 

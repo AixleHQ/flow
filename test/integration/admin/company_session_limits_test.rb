@@ -133,6 +133,44 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     assert_nil limit_row, "nothing may be written when the form is refused"
   end
 
+  test "a new company in an AWS Marketplace installation starts at three workers" do
+    with_mode(Deployment::AWS_MARKETPLACE)
+
+    get new_admin_company_path
+
+    assert_response :success
+    assert_select "input[name='company[session_concurrency_limit]'][value='3'][min='3']"
+  end
+
+  test "an AWS Marketplace company cannot be given fewer than three workers" do
+    with_mode(Deployment::AWS_MARKETPLACE)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
+
+    patch admin_company_path(@company), params: {
+      company: { name: @company.name, email_domain: @company.email_domain, session_concurrency_limit: "2" }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match(/must be at least 3 in an AWS Marketplace installation/, response.body)
+    assert_equal 4, limit_row.max_sessions
+  end
+
+  test "an AWS Marketplace company given fewer workers before the minimum can still be edited" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
+    with_mode(Deployment::AWS_MARKETPLACE)
+
+    get edit_admin_company_path(@company)
+
+    assert_select "input[name='company[session_concurrency_limit]'][value='2'][min='2']"
+
+    patch admin_company_path(@company), params: {
+      company: { name: "Renamed", email_domain: @company.email_domain, session_concurrency_limit: "2" }
+    }
+
+    assert_equal "Renamed", @company.reload.name
+    assert_equal 2, limit_row.max_sessions
+  end
+
   # Every other update of a company has to leave the limit alone, or saving a
   # logo would silently exempt the customer from billing.
   test "an update that does not submit the field leaves the limit untouched" do
