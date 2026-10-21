@@ -31,6 +31,14 @@ module Admin
 
     private
 
+    def new_resource(params = {})
+      company = super
+      if Deployment.requires_bounded_companies? && company.session_concurrency_limit.blank?
+        company.session_concurrency_limit = Deployment.minimum_workers
+      end
+      company
+    end
+
     # When the form invited anyone, the page that shows who; otherwise `fallback`.
     def redirect_with_invitations(company, notice, fallback:)
       invitations = invite_members(company)

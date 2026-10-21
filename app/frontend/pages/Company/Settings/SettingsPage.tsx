@@ -55,6 +55,8 @@ interface CapacityAllocation {
 interface Capacity {
   /** What the company may run at once, or null when it has no limit. */
   maxSessions: number | null;
+  /** The fewest workers this installation allows a company. */
+  minimum: number;
   /** What is left after its projects' reservations; null when there is no limit. */
   available: number | null;
   reserved: number;
@@ -213,9 +215,9 @@ const SettingsPage = () => {
                 {capacity.canManage ? (
                   <NumberInput
                     label="Workers"
-                    description={`How many sessions this company may run at once — each worker runs one. Projects reserve workers out of it; those without a reservation share what is left, up to ${capacity.projectDefault} each. Leave empty for no limit.`}
+                    description={`How many sessions this company may run at once — each worker runs one. Projects reserve workers out of it; those without a reservation share what is left, up to ${capacity.projectDefault} each. ${capacity.minimum > 1 ? `At least ${capacity.minimum} in this installation.` : 'Leave empty for no limit.'}`}
                     placeholder="No limit"
-                    min={1}
+                    min={capacity.minimum}
                     allowDecimal={false}
                     allowNegative={false}
                     value={form.values.capacity}

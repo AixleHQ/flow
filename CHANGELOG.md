@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Company settings**: in an AWS Marketplace installation a company has at
+  least 3 workers. A new company starts at 3, and a lower number is refused; a
+  company that already has fewer keeps them until its number is changed.
+
 ### Fixed
 - **Profile**: a personal MCP token that none of your companies accepts now
   answers with an error telling you to sign in and regenerate it, instead of
