@@ -25,6 +25,9 @@ governance, community health — carry none.
   admin pages; they turned white with light grey text, so typed values were
   barely readable. The "No limit — unbilled" badge and the permanent-delete
   section on a user's page follow the theme as well.
+- **Admin**: the buttons at the top of a record's page fit the page when its
+  name is long. On a user with a long name and email, "Destroy" overlapped the
+  edit button and "Sign out everywhere" ran off the right edge.
 - **Profile**: a personal MCP token that none of your companies accepts now
   answers with an error telling you to sign in and regenerate it, instead of
   empty company and project lists.

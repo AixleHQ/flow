@@ -18,7 +18,6 @@ copying the whole page. This keeps us in sync with future Administrate updates.
         restore_admin_user_path(page.resource),
         method: :post,
         class: "button",
-        style: "margin-left: 0.5rem;",
         data: { turbo_confirm: "Restore #{page.resource.email}?" }
       ) %>
     <% elsif impersonated? && current_user.id == page.resource.id %>
@@ -42,7 +41,6 @@ copying the whole page. This keeps us in sync with future Administrate updates.
         sign_out_everywhere_admin_user_path(page.resource),
         method: :delete,
         class: "button button--danger",
-        style: "margin-left: 0.5rem;",
         data: { turbo_confirm: "End every browser session of #{page.resource.email}?" }
       ) %>
     <% end %>
