@@ -34,6 +34,21 @@ module FeatureFlags
   class InvalidRegistry < Error; end
   class InvalidEnv < Error; end
 
+  # A change FeatureFlags::Admin will not make. Nothing was written.
+  class WriteRefused < Error; end
+
+  # FEATURE_<KEY> decides the flag in every process, so a runtime value would
+  # only look like a change.
+  class EnvLocked < WriteRefused
+    attr_reader :key, :variable
+
+    def initialize(key, variable)
+      @key = key
+      @variable = variable
+      super("#{key} is locked by #{variable}: change it in the environment and restart")
+    end
+  end
+
   # A FEATURE_* variable for a key the registry does not declare. Reported, never raised.
   class UndeclaredEnv < Error
     attr_reader :variable
