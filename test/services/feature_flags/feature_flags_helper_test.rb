@@ -73,6 +73,32 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
     end
   end
 
+  test "the test settings drop FEATURE_* variables from the process environment" do
+    saved = ENV.fetch("FEATURE_CODER_REAP", nil)
+    ENV["FEATURE_CODER_REAP"] = "off"
+    settings = Config.load_files(Rails.root.join("config/settings.yml"), Rails.root.join("config/settings/test.yml"))
+
+    assert_empty settings.feature_flags.env.to_h
+  ensure
+    saved.nil? ? ENV.delete("FEATURE_CODER_REAP") : ENV["FEATURE_CODER_REAP"] = saved
+  end
+
+  test "the suite boots with an empty ENV layer" do
+    assert_empty Settings.feature_flags.env.to_h
+    assert_empty FeatureFlags.env_source.raw
+  end
+
+  test "a FEATURE_* lock left in the ENV layer does not reach the next test" do
+    with_example_flags do
+      FeatureFlags.env_source = FeatureFlags::EnvSource.new({ "FEATURE_CODER_REAP" => "off" }, registry: FeatureFlags.registry)
+      assert_equal :env, Feature.explain(:coder_reap).source
+
+      reset_feature_flags!
+
+      assert_equal :default, Feature.explain(:coder_reap).source
+    end
+  end
+
   test "the memory store writes and removes values" do
     store = FeatureFlags::MemoryStore.new
     store.set_global(:coder_reap, false)

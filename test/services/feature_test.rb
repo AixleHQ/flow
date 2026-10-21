@@ -57,6 +57,17 @@ class FeatureTest < ActiveSupport::TestCase
     refute Feature.enabled?(:board_ai_sumary)
   end
 
+  test "an undeclared key is reported once per key, and reads as off on every call" do
+    Rails.env.stubs(:local?).returns(false)
+
+    reports = capture_error_reports(FeatureFlags::UnknownFlag) do
+      3.times { refute Feature.enabled?(:board_ai_sumary, company: @company) }
+      2.times { assert_equal :unknown, Feature.explain(:old_flag).source }
+    end
+
+    assert_equal %w[board_ai_sumary old_flag], reports.map { |report| report.context[:flag] }
+  end
+
   test "with the shipped empty registry nothing is declared" do
     assert_predicate FeatureFlags.registry, :empty?
   end

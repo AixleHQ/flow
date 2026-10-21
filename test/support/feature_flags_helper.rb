@@ -14,7 +14,15 @@ module FeatureFlagsHelper
   EXAMPLE_REGISTRY = Rails.root.join("test/fixtures/files/feature_flags_registry.yml")
 
   included do
-    setup { FeatureFlags.store.reset! }
+    setup { reset_feature_flags! }
+  end
+
+  # Empties the store and the ENV layer, so every test starts from the declared
+  # defaults whatever an earlier test or the process environment left behind.
+  def reset_feature_flags!
+    FeatureFlags.store.reset!
+    Feature::REPORTED_UNKNOWN.clear
+    FeatureFlags.env_source = FeatureFlags::EnvSource.new({}, registry: FeatureFlags.registry)
   end
 
   def with_feature(key, enabled, company: FeatureFlags::UNSET)
