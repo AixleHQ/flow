@@ -66,7 +66,9 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
     - why `aws_marketplace` must keep meaning the container product, and what breaks if it does not;
     - `companies.billing_provider` and a `Billing::Payer` object, replacing the `Deployment.saas? && !managed_by_aixle?` conjunction that four places already spell differently;
     - the four `Deployment` predicates that invert for an AWS-billed company, and the three that are already right (`manage_capacity?`, `EffectiveCapacity.ceilings`, and `customer_owns_capacity?`, which is dead code);
-    - binding a buyer through `ResolveCustomer`: the four arrivals at one URL, idempotence on `CustomerIdentifier`, and a subscription that can arrive before the registration;
+    - Concurrent Agreements, mandatory for any SaaS product created after 1 June 2026 and therefore for ours: `CustomerIdentifier` is not populated, `LicenseArn` is the tenant key, `BatchMeterUsage` refuses a product code, and one AWS account may hold several live agreements;
+    - binding a buyer through `ResolveCustomer`: idempotence on `LicenseArn`, and a subscription that can arrive before the registration;
+    - EventBridge rather than SNS — SNS cannot carry `LicenseArn` — and the one-hour window after an agreement ends, which the hourly schedule cannot meet without an event-driven final meter;
     - metering with `BatchMeterUsage` as `Meter::Stripe` with the calls swapped — two providers claiming two ledger rows for one measured hour, which `(provider, period_start)` already allows — plus the assumed-role client, which is the one genuinely new failure mode;
     - one payer per company kept by prevention rather than migration: no card where AWS bills, and every Marketplace arrival signed out into a new tenant unless its `CustomerIdentifier` is already bound;
     - the staging plan: where the auth-free public door is, and why a migration ships one slice ahead of the code that needs it;
