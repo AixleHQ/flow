@@ -52,7 +52,7 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
 
     get admin_companies_path
 
-    assert_match(/42/, response.body)
+    assert_select "td.cell-data--company-capacity-field", text: "42"
   end
 
   test "the index reads every company's limit in one query" do
@@ -65,7 +65,7 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     assert_queries_match(/FROM "session_concurrency_limits"/, count: 1) { get admin_companies_path }
 
     assert_response :success
-    %w[41 43 47].each { |limit| assert_match(/#{limit}/, response.body) }
+    %w[41 43 47].each { |limit| assert_select "td.cell-data--company-capacity-field", text: limit }
     assert_match(/No limit — unbilled/, response.body)
   end
 
