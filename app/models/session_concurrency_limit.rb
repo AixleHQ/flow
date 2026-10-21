@@ -12,6 +12,9 @@ class SessionConcurrencyLimit < ApplicationRecord
   validates :scope_id, uniqueness: { scope: :scope_type }
   validate :scope_must_exist
   validate :fits_within_company_limit
+  # On change only: a company given fewer before the minimum existed keeps them
+  # until its number is changed.
+  validate :company_has_minimum_workers, if: -> { company_scope? && will_save_change_to_max_sessions? }
 
   # Here rather than in a caller: three places write these rows, and a raised cap
   # has to reach the pools now rather than at the next reconciliation.
@@ -58,6 +61,8 @@ class SessionConcurrencyLimit < ApplicationRecord
     end
   end
 
+  def self.below_minimum_workers = "must be at least #{Deployment.minimum_workers} in an AWS Marketplace installation"
+
   def scope_record
     scope_type&.safe_constantize&.find_by(id: scope_id)
   end
@@ -82,6 +87,12 @@ class SessionConcurrencyLimit < ApplicationRecord
     return if budget.fits?(max_sessions)
 
     errors.add(:max_sessions, budget.refusal_for(max_sessions))
+  end
+
+  def company_has_minimum_workers
+    return if errors.include?(:max_sessions) || max_sessions >= Deployment.minimum_workers
+
+    errors.add(:max_sessions, self.class.below_minimum_workers)
   end
 
   def scope_must_exist

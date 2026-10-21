@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -698,6 +698,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
     t.datetime "updated_at", null: false
     t.index ["board_task_id", "kind", "provider", "instance", "external_id"], name: "idx_external_resources_unique", unique: true
     t.index ["kind", "provider", "instance", "external_id"], name: "idx_external_resources_identity"
+  end
+
+  create_table "feature_flag_overrides", force: :cascade do |t|
+    t.bigint "feature_flag_id", null: false
+    t.bigint "company_id", null: false
+    t.boolean "enabled", null: false
+    t.text "reason", null: false
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_feature_flag_overrides_on_company_id"
+    t.index ["created_by_id"], name: "index_feature_flag_overrides_on_created_by_id"
+    t.index ["feature_flag_id", "company_id"], name: "index_feature_flag_overrides_on_feature_flag_id_and_company_id", unique: true
+  end
+
+  create_table "feature_flags", force: :cascade do |t|
+    t.string "key", null: false
+    t.boolean "enabled"
+    t.integer "rollout_percent"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_feature_flags_on_key", unique: true
+    t.index ["updated_by_id"], name: "index_feature_flags_on_updated_by_id"
   end
 
   create_table "folders", force: :cascade do |t|
@@ -2015,6 +2039,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
   add_foreign_key "entity_versions", "terminal_sessions", on_delete: :nullify
   add_foreign_key "entity_versions", "users", column: "author_id", on_delete: :nullify
   add_foreign_key "external_resources", "board_tasks", on_delete: :cascade
+  add_foreign_key "feature_flag_overrides", "companies", on_delete: :cascade
+  add_foreign_key "feature_flag_overrides", "feature_flags", on_delete: :cascade
+  add_foreign_key "feature_flag_overrides", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "feature_flags", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "folders", "companies", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_folders_project_company", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", on_delete: :cascade, validate: false

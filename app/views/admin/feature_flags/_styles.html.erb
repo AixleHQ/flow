@@ -1,0 +1,25 @@
+<% content_for(:stylesheet) do %>
+  <style>
+    .feature-flags h2 { margin: 0 0 0.5rem; font-size: 1.05rem; }
+    .feature-flags p { margin: 0.25rem 0 0.5rem; }
+    .feature-flags .flag-section { border: 1px solid var(--app-border-default); border-radius: 8px; background: var(--app-bg-paper); padding: 1rem 1.25rem; margin-top: 1rem; }
+    .feature-flags .flag-section--danger { border-color: var(--app-danger-border); }
+    .feature-flags .flag-locked { border: 1px solid var(--app-warning-border); background: var(--app-warning-bg); color: var(--app-warning-fg); border-radius: 8px; padding: 0.75rem 1.25rem; margin-top: 1rem; }
+    .feature-flags .flag-muted { color: var(--app-text-secondary); }
+    .feature-flags .flag-value { font-weight: 600; }
+    .feature-flags .flag-value--on { color: var(--app-success-fg); }
+    .feature-flags .flag-value--off { color: var(--app-danger-fg); }
+    .feature-flags .flag-badge { display: inline-block; padding: 1px 8px; margin: 1px 2px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid; }
+    .feature-flags .flag-badge--warning { color: var(--app-warning-fg); background: var(--app-warning-bg); border-color: var(--app-warning-border); }
+    .feature-flags .flag-badge--info { color: var(--app-info-fg); background: var(--app-info-bg); border-color: var(--app-info-border); }
+    .feature-flags .flag-badge--danger { color: var(--app-danger-fg); background: var(--app-danger-bg); border-color: var(--app-danger-border); }
+    .feature-flags .flag-winner { background: var(--app-action-selected); font-weight: 600; }
+    .feature-flags .flag-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1rem; margin-top: 0.5rem; }
+    .feature-flags .flag-form fieldset { border: 0; margin: 0; padding: 0; display: flex; gap: 1rem; }
+    .feature-flags .flag-form label { margin: 0; font-weight: normal; }
+    .feature-flags .flag-form .flag-reason { flex: 1 1 20rem; }
+    .feature-flags .flag-form .flag-reason input { width: 100%; }
+    .feature-flags .flag-inline-form { display: flex; gap: 0.5rem; align-items: center; }
+    .feature-flags code { white-space: nowrap; }
+  </style>
+<% end %>

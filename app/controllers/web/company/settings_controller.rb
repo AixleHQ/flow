@@ -100,6 +100,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
 
     {
       max_sessions: capacity_limit_record&.max_sessions,
+      minimum: Deployment.minimum_workers,
       available: allocation.available,
       reserved: allocation.allocated,
       allocations: allocation.breakdown,

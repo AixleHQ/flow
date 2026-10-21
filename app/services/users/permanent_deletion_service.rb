@@ -10,8 +10,10 @@ module Users
   # sessions, MCP token columns, favourites, collaborators, board view presets)
   # is removed by the `dependent:` associations on User. Terminal sessions are
   # the company's record of work done and spent — its analytics are built on
-  # them — so they stay, attributed to "Deleted user". Everything runs in one
-  # transaction, so a failure anywhere leaves the user fully intact.
+  # them — so they stay, attributed to "Deleted user". Feature flag values and
+  # company overrides they set stay in force with `updated_by` / `created_by`
+  # nullified. Everything runs in one transaction, so a failure anywhere leaves
+  # the user fully intact.
   #
   # Contrast with User#soft_delete!, which only sets `deleted_at` and is still
   # the default admin "Delete".

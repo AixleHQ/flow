@@ -2,13 +2,52 @@
 # Company Show
 
 Administrate's show page, plus the way into inviting the company's members
-(Admin::CompanyInvitationsController).
+(Admin::CompanyInvitationsController) and the feature flags this company is
+an exception to.
 %>
 
 <% content_for(:header_last) do %>
-  <div style="margin-left: 0.5rem;">
+  <div>
     <%= link_to "Invite members", new_admin_company_invitation_path(page.resource), class: "button" %>
   </div>
+<% end %>
+
+<% content_for(:after_main) do %>
+  <% overrides = page.resource.feature_flag_overrides.includes(:feature_flag, :created_by).order(:created_at) %>
+  <section class="main-content__body" aria-labelledby="feature-overrides-heading">
+    <h2 id="feature-overrides-heading">Feature overrides</h2>
+    <% if overrides.any? %>
+      <table>
+        <thead>
+          <tr><th>Flag</th><th>Value</th><th>Reason</th><th>Set by</th><th>When</th></tr>
+        </thead>
+        <tbody>
+          <% overrides.each do |override| %>
+            <% key = override.feature_flag.key %>
+            <% definition = override.feature_flag.definition %>
+            <tr>
+              <td>
+                <% if definition %>
+                  <%= link_to key, admin_feature_flag_path(key) %>
+                  <% unless FeatureFlags.env_source.value_for(key).nil? %>
+                    — shadowed by <code><%= definition.env_var %></code>
+                  <% end %>
+                <% else %>
+                  <code><%= key %></code> — no longer declared
+                <% end %>
+              </td>
+              <td><%= override.enabled ? "on" : "off" %></td>
+              <td><%= override.reason %></td>
+              <td><%= override.created_by&.email || "—" %></td>
+              <td><%= l(override.updated_at, format: :short) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p>This company gets every feature flag's global value or default. <%= link_to "Feature flags", admin_feature_flags_path %></p>
+    <% end %>
+  </section>
 <% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

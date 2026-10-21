@@ -17,7 +17,21 @@ const workflows: RunWorkflowOption[] = [
     ],
   },
   { id: 10, name: 'Release notes digest', steps: [] },
+  {
+    id: 11,
+    name: 'Nightly triage',
+    steps: [
+      { id: 3, name: 'Fetch issues', position: 1, allowNonInteractive: true, dependsOnStepIds: [] },
+      { id: 4, name: 'Label issues', position: 2, allowNonInteractive: true, dependsOnStepIds: [3] },
+    ],
+  },
 ];
+
+function withStepAutoRun(allowNonInteractive: boolean): RunWorkflowOption[] {
+  return workflows.map((w) =>
+    w.id === 11 ? { ...w, steps: w.steps.map((s) => (s.id === 4 ? { ...s, allowNonInteractive } : s)) } : w,
+  );
+}
 
 function renderDrawer(overrides: Partial<React.ComponentProps<typeof RunWorkflowDrawer>> = {}) {
   return renderAuthedPage(
@@ -126,7 +140,7 @@ describe('RunWorkflowDrawer', () => {
     const onClose = vi.fn();
     renderDrawer({ initialWorkflowId: 9, onClose });
 
-    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
@@ -186,6 +200,173 @@ describe('RunWorkflowDrawer', () => {
 
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('brings the Custom switches back to what each step allows when reopened after a discard', async () => {
+    const drawer = (opened: boolean) => (
+      <RunWorkflowDrawer
+        opened={opened}
+        onClose={vi.fn()}
+        projectId={7}
+        workflows={workflows}
+        initialWorkflowId={9}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(true));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    await userEvent.click(screen.getByLabelText('Run "Collect data" automatically'));
+    expect(screen.getByLabelText('Run "Collect data" automatically')).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    rerender(drawer(false));
+    rerender(drawer(true));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    expect(screen.getByLabelText('Run "Collect data" automatically')).toBeChecked();
+  });
+
+  it('disables Fully automatic and starts in Interactive when a session has auto-run off', async () => {
+    renderDrawer({ initialWorkflowId: 9 });
+
+    const automatic = screen.getByRole('radio', { name: /Fully automatic/ });
+    expect(automatic).toHaveAttribute('aria-disabled', 'true');
+    expect(automatic).toHaveTextContent('1 session needs input');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
+
+    await userEvent.click(automatic);
+    expect(automatic).toHaveAttribute('aria-checked', 'false');
+
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflow_runs',
+      expect.objectContaining({ workflowRun: expect.objectContaining({ mode: 'interactive' }) }),
+      expect.any(Object),
+    );
+  });
+
+  it('names the sessions that keep Fully automatic off', async () => {
+    const manual = (id: number, name: string) => ({
+      id,
+      name,
+      position: id,
+      allowNonInteractive: false,
+      dependsOnStepIds: [],
+    });
+    renderDrawer({
+      initialWorkflowId: 12,
+      workflows: [
+        {
+          id: 12,
+          name: 'Release train',
+          steps: ['Plan', 'Build', 'Review', 'Ship', 'Announce'].map((name, i) => manual(20 + i, name)),
+        },
+      ],
+    });
+
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveTextContent('5 sessions need input');
+
+    await userEvent.hover(screen.getByRole('radio', { name: /Fully automatic/ }));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'Auto-run is off for "Plan", "Build", "Review", and 2 more. Turn on "Auto-run available" for every session to run this workflow fully automatic.',
+    );
+  });
+
+  it('keeps Fully automatic as the default when every session allows auto-run', async () => {
+    renderDrawer({ initialWorkflowId: 11 });
+
+    const automatic = screen.getByRole('radio', { name: /Fully automatic/ });
+    expect(automatic).not.toHaveAttribute('aria-disabled');
+    expect(automatic).toHaveAttribute('aria-checked', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflow_runs',
+      expect.objectContaining({ workflowRun: expect.objectContaining({ workflowId: 11, mode: 'non_interactive' }) }),
+      expect.any(Object),
+    );
+  });
+
+  it('follows an auto-run setting that changes while the drawer is open', () => {
+    const drawer = (list: RunWorkflowOption[]) => (
+      <RunWorkflowDrawer
+        opened
+        onClose={vi.fn()}
+        projectId={7}
+        workflows={list}
+        initialWorkflowId={11}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(workflows));
+
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-checked', 'true');
+
+    rerender(drawer(withStepAutoRun(false)));
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
+
+    rerender(drawer(withStepAutoRun(true)));
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('never sends auto-run in Custom for a session that turned it off while the drawer was open', async () => {
+    const drawer = (list: RunWorkflowOption[]) => (
+      <RunWorkflowDrawer
+        opened
+        onClose={vi.fn()}
+        projectId={7}
+        workflows={list}
+        initialWorkflowId={11}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(workflows));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    expect(screen.getByLabelText('Run "Label issues" automatically')).toBeChecked();
+
+    rerender(drawer(withStepAutoRun(false)));
+    expect(screen.getByLabelText('Run "Label issues" automatically')).toBeDisabled();
+    expect(screen.getByLabelText('Run "Label issues" automatically')).not.toBeChecked();
+
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflow_runs',
+      expect.objectContaining({
+        workflowRun: expect.objectContaining({
+          mode: 'mixed',
+          stepOverrides: { 3: { autoRun: true }, 4: { autoRun: false } },
+        }),
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('re-evaluates Fully automatic when another workflow is picked', async () => {
+    renderDrawer();
+
+    await userEvent.click(screen.getByPlaceholderText('Select a workflow…'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Nightly triage' }));
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-checked', 'true');
+
+    await userEvent.click(screen.getByDisplayValue('Nightly triage'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Weekly GA report' }));
+    expect(screen.getByRole('radio', { name: /Fully automatic/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('radio', { name: /Interactive/ })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('closes without asking once the run has started', async () => {

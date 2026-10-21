@@ -29,3 +29,9 @@ agents:
   antigravity:
     oauth_client_id: test-antigravity-client.apps.googleusercontent.com
     oauth_client_secret: test-antigravity-secret
+
+# No FEATURE_* lock from the shell, CI or .env reaches the suite: `nil` replaces
+# the `env` object config/settings.yml builds from ENV. A test that needs a lock
+# uses stub_feature_env (test/support/feature_flags_helper.rb).
+feature_flags:
+  env: ~

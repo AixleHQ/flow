@@ -54,6 +54,20 @@ class CompanyDestroyTest < ActiveSupport::TestCase
     assert User.exists?(@user.id), "people are not the company's to delete"
   end
 
+  test "destroying a company removes its feature flag overrides, and only its own" do
+    with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
+      flag = FeatureFlag.create!(key: "board_ai_summary", enabled: false)
+      flag.overrides.create!(company: @company, enabled: true, reason: "pilot customer")
+      other = flag.overrides.create!(company: create(:company), enabled: true, reason: "pilot customer")
+
+      @company.destroy!
+
+      assert_not FeatureFlagOverride.exists?(company_id: @company.id)
+      assert FeatureFlagOverride.exists?(other.id)
+      assert FeatureFlag.exists?(flag.id), "the flag is the platform's, not the company's"
+    end
+  end
+
   test "a company whose session runtime is still being torn down refuses to go, and says why" do
     with_company_limit(@company, 1)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
