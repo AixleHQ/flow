@@ -19,6 +19,10 @@ governance, community health — carry none.
   company that already has fewer keeps them until its number is changed.
 
 ### Fixed
+- **Admin**: in the dark theme, form fields stay dark after moving between
+  admin pages; they turned white with light grey text, so typed values were
+  barely readable. The "No limit — unbilled" badge and the permanent-delete
+  section on a user's page follow the theme as well.
 - **Profile**: a personal MCP token that none of your companies accepts now
   answers with an error telling you to sign in and regenerate it, instead of
   empty company and project lists.

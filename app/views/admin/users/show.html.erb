@@ -54,8 +54,8 @@ copying the whole page. This keeps us in sync with future Administrate updates.
     submit. This is separate from the header's soft-delete Delete action. %>
 <% content_for(:after_main) do %>
   <% unless page.resource.super_admin? %>
-    <section class="permanent-delete" style="margin: 2rem 2rem 0; padding: 1.5rem 2rem; border: 1px solid #c0392b; border-radius: 4px;">
-      <h2 style="color: #c0392b;">Permanently delete user</h2>
+    <section class="permanent-delete" style="margin: 2rem 2rem 0; padding: 1.5rem 2rem; border: 1px solid var(--app-danger-border); border-radius: 4px;">
+      <h2 style="color: var(--app-danger-fg);">Permanently delete user</h2>
       <p>
         This <strong>irreversibly</strong> removes
         <strong><%= page.resource.email %></strong> and their personal data from

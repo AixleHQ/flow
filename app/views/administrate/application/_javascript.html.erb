@@ -4,7 +4,18 @@
 Administrate's own scripts, then the admin's (app/frontend/entrypoints/admin.ts:
 the light/dark switch) on every admin page. A page adds its own through
 `content_for(:javascript)`.
+
+Administrate bundles the CSS anchor positioning polyfill, which runs in every
+browser and swaps the <link> to Administrate's stylesheet for a blob: copy. On
+the next Turbo visit the head no longer matches, so Turbo appends the original
+after the skin and Administrate's `[type=text] { background-color: #fff }`
+wins again. `elements: []` leaves stylesheets alone; the one thing it
+positions, the search hint popover, has native support in current browsers.
 %>
+
+<%= javascript_tag nonce: true do %>
+  window.ANCHOR_POSITIONING_POLYFILL_OPTIONS = { elements: [] };
+<% end %>
 
 <% Administrate::Engine.javascripts.each do |js_path| %>
   <%= javascript_include_tag js_path, "data-turbo-track": "reload", defer: true %>
