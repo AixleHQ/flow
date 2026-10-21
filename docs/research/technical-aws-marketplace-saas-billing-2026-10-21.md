@@ -60,7 +60,7 @@ them and two of them cannot be revised after publication.
 |---|---|
 | Two listings | The container product keeps selling; the SaaS product is added beside it. Both titles have to distinguish "in your own AWS account" from "hosted by us". |
 | A dimension of its own | **not** `queue_minute`. `worker_minute` is the proposal, matching the word the product uses everywhere a buyer reads. **The API identifier is immutable after publication**; confirm the exact string before the listing form is filled. |
-| Pure usage pricing | No contract dimensions, therefore no `GetEntitlements` and no `entitlement-updated` to consume. The seller-account role carries two permissions, not three. |
+| Pure usage pricing | No contract dimensions, therefore no `GetEntitlements` and no `entitlement-updated` to consume. The seller-account role carries two permissions, not three. **This does not settle free trials** — a trial is a property of the offer and is compatible with usage pricing. See §10. |
 | Unsubscribe blocks and keeps | `billing_state` goes to `blocked` with a reason of its own. Data is untouched; a buyer who subscribes again returns to their workspace. |
 | **There is no payer migration** | Not a mechanism that moves a company from one payer to the other, but rules that stop a company from ever having two. Settled 21 October, after the question was raised on a call and answered "let us have that problem first" — which is correct, and is an argument for prevention rather than for machinery. |
 | **A Marketplace company cannot attach a card** | Where AWS bills, Checkout is not offered at all. One-way and cheap: it is a refusal on screens that already have a guard. |
@@ -263,14 +263,23 @@ us in this request.
 on our own page rather than letting a buyer bring an answer with them; it turns out a buyer
 cannot bring one. The argument stands, but it is no longer the reason.
 
-**`free-trial` is a tripwire, not a feature.** §1 settles on pure usage pricing with no
-free trial, so this parameter should never arrive. If it does, somebody has created a
-free-trial offer against this product, and the application's billing assumptions are wrong
-in the expensive direction: `BatchMeterUsage` during an AWS free trial charges a customer
-who was promised nothing. The endpoint should therefore **read the parameter and refuse the
-registration loudly** rather than ignore it. Note that our own `Billing::Trial` is a
-different thing entirely — a Stripe-shaped allowance — and §4.3 already says it must not
-reach a Marketplace company.
+**`free-trial` is persisted, whatever we decide about trials.** An earlier draft of this
+section called the parameter a tripwire and had the endpoint refuse a registration that
+carried it, on the reasoning that pure usage pricing meant no trial. **That inference was
+wrong.** The pricing model and the free trial are independent: a free trial is a property
+of the *offer*, and a usage-priced SaaS offer may carry one. (What AWS does restrict —
+answered by Seller Operations on 29 September — is free trials on **AMI** products using
+the Metering Service. It has never applied here.) Refusing would have broken a real
+purchase.
+
+Whether we will offer one is **not decided** — see §10. What the endpoint does is decided,
+and it is the same under either answer: **read the parameter and store it**. This is the
+only moment it arrives for free, the token is single-use, and the POST does not happen
+again. Losing it is unrecoverable; keeping it costs a column.
+
+Our own `Billing::Trial` is a different thing entirely — a Stripe-shaped allowance in
+queue-hours — and §4.3 already says it must not reach a Marketplace company. Two trial
+mechanisms on one company would each believe they were the one in charge.
 
 Two workarounds exist for carrying per-purchase context and neither is taken:
 
@@ -357,9 +366,14 @@ marketplace_customers
   company_id            bigint  null, unique when present  # null until registration binds it
   subscription_state    string  not null                   # pending | active | unsubscribe_pending | unsubscribed
   offer_identifier      string  null                       # from the SNS notification, never asked for
+  registered_offer_type string  null                       # x-amzn-marketplace-offer-type as it arrived, or null
   subscribed_at         datetime
   unsubscribed_at       datetime
 ```
+
+`registered_offer_type` stores the string as it arrived rather than an interpretation of
+it, because §10 has not decided what a trial means for us yet and a boolean would bake in
+an answer we do not have.
 
 `offer_identifier` is written when a notification carries it and is read by nobody in the
 billing path — it is there so that "which deal is this customer on" is answerable during a
@@ -517,6 +531,37 @@ marketing copy.
 
   Not urgent, and deliberately so: nothing can reach this state until the registration
   slice exists.
+- **Free trials: whether we offer one, and what it means if we do.** Raised on a call as a
+  possibility, not settled. It is listed here rather than in §1 because the registration
+  endpoint behaves identically either way (§5.1 stores the parameter), so nothing is
+  blocked — but three things have to be answered before any free-trial offer is created,
+  and only the first of them is AWS's.
+
+  **Does metering during a trial charge the buyer?** Unknown, and the one question here
+  that we cannot answer ourselves. Either AWS zero-rates usage for the trial term and we
+  meter as normal, or it does not and `BatchMeterUsage` bills somebody who was promised
+  nothing. This goes to Seller Operations, the channel that answered the eleven questions
+  in `marketplace-infra/SELLER_OPERATIONS.md`, **before** an offer exists rather than
+  after. Guessing it is the expensive direction of a mistake.
+
+  **A trial on this product costs us, and the buyer sets the number.** This is the
+  consequence nobody has named yet, and it is not an AWS question. On the container
+  product a trial runs in the buyer's own account on their own hardware, so capacity costs
+  them whatever we charge. Here the workers run on our cluster. Meanwhile
+  `Web::Company::SettingsPolicy#manage_capacity?` lets a company admin raise their own
+  number — correct for a metered product, where raising it raises the bill, and **not**
+  correct during a trial, where it raises nothing but our costs. `MARKETPLACE_MINIMUM_WORKERS`
+  is 3; nothing stops a trialling buyer from setting 50 on the first day.
+
+  So a free trial needs a ceiling the customer cannot raise, for its duration. The
+  mechanism already exists and is the one §4.3 says must not reach a Marketplace company:
+  `Billing::EffectiveCapacity.ceilings`. If trials happen, that sentence needs refining
+  rather than reversing — our queue-hour allowance still must not apply, but the clamp it
+  rides on is exactly what a trial wants.
+
+  **How a trial ends.** Whether a notification arrives, or the end is a date we have to
+  hold ourselves, is unverified. It decides whether trial expiry is an event we consume or
+  a sweep we run.
 - **The reverse: a Marketplace customer who wants to pay by card.** Closed by §1 in one
   direction only — they cannot attach a card while AWS bills them. What they do after
   unsubscribing, when their company is `blocked` and the Checkout refusal is still in
