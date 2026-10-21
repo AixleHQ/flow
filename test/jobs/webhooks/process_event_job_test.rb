@@ -10,9 +10,19 @@ module Webhooks
       @workflow = create(:workflow, scope: @project)
       # Slack endpoints are company-scoped (one workspace serves every project).
       @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.companies.first)
+      @slack = Integration.create!(provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
+                                   name: "Acme", status: :active)
+      @endpoint.update!(config: { "integration_id" => @slack.id })
       @binding = create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user,
         event_type: "chat.message", filter_predicate: { "channel" => "C1" })
+    end
+
+    # The company's one Slack install, with the token and settings a test needs.
+    def slack_install(bot_token: "xoxb-1", bot_user_id: nil, **attributes)
+      @slack.update!(attributes) if attributes.any?
+      @slack.update!(credentials_data: { "bot_token" => bot_token, "bot_user_id" => bot_user_id }.compact)
+      @slack
     end
 
     def received(payload, key: "Ev1")
@@ -101,11 +111,7 @@ module Webhooks
     end
 
     test "threads Slack reply context and the message into shared_context; whitelists attachments" do
-      integration = Integration.create!(
-        provider: :slack, company: @user.companies.first, project: @project, connected_by: @user,
-        name: "Acme", status: :active, settings: { "team_id" => "T1" }
-      )
-      @endpoint.update!(config: { "integration_id" => integration.id })
+      integration = slack_install(settings: { "team_id" => "T1" })
 
       payload = {
         "type" => "event_callback", "event_id" => "EvF", "team_id" => "T1",
@@ -165,11 +171,7 @@ module Webhooks
     end
 
     def bot_install(bot_user_id: "U0BOT")
-      integration = Integration.create!(provider: :slack, company: @user.companies.first, project: nil,
-        connected_by: @user, name: "Acme", status: :active)
-      integration.update!(credentials_data: { "bot_token" => "xoxb-1", "bot_user_id" => bot_user_id })
-      @endpoint.update!(config: { "integration_id" => integration.id })
-      integration
+      slack_install(bot_user_id: bot_user_id)
     end
 
     def mention(text, key:)
@@ -236,12 +238,7 @@ module Webhooks
     end
 
     test "ingests Slack attachments into the matching binding's project at fire time" do
-      integration = Integration.create!(
-        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
-        name: "Acme", status: :active
-      )
-      integration.update!(credentials_data: { "bot_token" => "xoxb-1" })
-      @endpoint.update!(config: { "integration_id" => integration.id })
+      slack_install(bot_token: "xoxb-1")
 
       fake_slack = stub_slack_client!
       fake_slack.file_body = "BYTES"
@@ -283,12 +280,7 @@ module Webhooks
 
     test "replies with help on a bare mention when no text predicate matches" do
       @binding.update!(filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
-      integration = Integration.create!(
-        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
-        name: "Acme", status: :active
-      )
-      integration.update!(credentials_data: { "bot_token" => "xoxb-help" })
-      @endpoint.update!(config: { "integration_id" => integration.id })
+      slack_install(bot_token: "xoxb-help")
       stub_slack_client!
 
       payload = {
@@ -310,12 +302,7 @@ module Webhooks
     end
 
     test "replies with help when the mention text is /help" do
-      integration = Integration.create!(
-        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
-        name: "Acme", status: :active
-      )
-      integration.update!(credentials_data: { "bot_token" => "xoxb-help" })
-      @endpoint.update!(config: { "integration_id" => integration.id })
+      slack_install(bot_token: "xoxb-help")
       stub_slack_client!
 
       payload = {

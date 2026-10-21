@@ -53,7 +53,8 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
                    "message_id" => "1700000000777" }, JSON.parse(result[:stdout]))
   end
 
-  test "a new thread in a channel, named by team and channel" do
+  test "a new thread in a channel connected to the company, named by team and channel" do
+    ChatChannelConnection.create!(chat_conversation: @channel, company: @company)
     started = stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations")
               .with(body: hash_including("channelData" => { "channel" => { "id" => "19:abc@thread.tacv2" },
                                                             "tenant" => { "id" => TEAMS_CUSTOMER_TENANT } }))
@@ -74,7 +75,24 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     result = run_tool(InternalTools::ChatPostMessage, text: "hi", conversation: foreign.external_id)
 
     assert_equal 1, result[:exit_code]
-    assert_match(/No Teams conversation is named/, result[:stderr])
+    assert_match(/No Teams conversation connected to this company is named/, result[:stderr])
+  end
+
+  test "a channel of the company's own install is reached only once it is connected" do
+    other = ChatConversation.create!(integration: @teams, provider: "teams", external_id: "19:other@thread.tacv2",
+                                     kind: "channel", name: "Reports", team_name: "Sales", service_url: TEAMS_SERVICE_URL,
+                                     tenant_id: TEAMS_CUSTOMER_TENANT)
+
+    refused = run_tool(InternalTools::ChatPostMessage, text: "hi", conversation: "Sales/Reports", new_thread: true)
+    assert_equal 1, refused[:exit_code]
+    assert_match(/Connect one in Aixle: Integrations → Microsoft Teams → Connect a channel/, refused[:stderr])
+
+    ChatChannelConnection.create!(chat_conversation: other, company: @company)
+    started = stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations")
+              .to_return(status: 201, body: { id: "19:other@thread.tacv2;messageid=1", activityId: "1" }.to_json)
+
+    assert_equal 0, run_tool(InternalTools::ChatPostMessage, text: "hi", conversation: "Sales/Reports", new_thread: true)[:exit_code]
+    assert_requested started
   end
 
   test "an Adaptive Card goes out as one; a clickable one, or Block Kit, is refused by name" do

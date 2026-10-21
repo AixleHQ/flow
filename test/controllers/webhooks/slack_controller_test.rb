@@ -92,4 +92,18 @@ class Webhooks::SlackControllerTest < ActionDispatch::IntegrationTest
     assert_not @endpoint.reload.enabled
     assert @integration.reload.inactive?
   end
+
+  test "a renamed connected channel keeps its new name, and nothing is queued for it" do
+    channel = connect_chat_channel(company: @company, integration: @integration, external_id: "C0DEPLOYS1", name: "deploys")
+    raw = { type: "event_callback", team_id: "T1",
+            event: { type: "channel_rename", channel: { id: "C0DEPLOYS1", name: "releases", created: 1_700_000_000 } } }.to_json
+
+    assert_no_enqueued_jobs do
+      post "/webhooks/slack/events", params: raw, headers: slack_headers(raw)
+    end
+
+    assert_response :ok
+    assert_equal "releases", channel.reload.name
+    assert_equal 0, ReceivedWebhook.count
+  end
 end

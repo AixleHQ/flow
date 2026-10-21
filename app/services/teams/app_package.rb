@@ -10,6 +10,8 @@ module Teams
     # installed package is older than the one Aixle offers.
     VERSION = "1.2.0"
     SCHEMA = "1.30"
+    # What people see and mention in Teams; the connect dialog tells them to pick it.
+    NAME = "Aixle Flow"
     COLOR_ICON = Rails.root.join("public/icon-192.png")
     OUTLINE_ICON = Rails.root.join("app/assets/images/teams/outline.png")
 
@@ -39,7 +41,7 @@ module Teams
         "id" => manifest_id,
         "developer" => { "name" => "Aixle", "websiteUrl" => base, "privacyUrl" => "#{base}/privacy-policy",
                          "termsOfUseUrl" => "#{base}/terms-of-service" },
-        "name" => { "short" => "Aixle Flow", "full" => "Aixle Flow" },
+        "name" => { "short" => NAME, "full" => NAME },
         "description" => {
           "short" => "Start Aixle Flow workflows from Teams",
           "full" => "Mention Aixle Flow in a channel or chat, or message it directly, to start the workflow your " \

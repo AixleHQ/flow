@@ -13,7 +13,27 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: Slack and Microsoft Teams channels are connected to a
+  company from inside the channel: ask for a code in Flow, then mention the app
+  with `connect <code>` there, and the app confirms it in the channel for
+  everyone to see. A channel can be connected for posting only, and
+  disconnected from the Slack or Teams row.
+
 ### Changed
+- **Triggers & gates**: a chat trigger listens in exactly one channel connected
+  to the company and cannot be switched on without one; a channel id can no
+  longer be typed, and conditions cannot name a channel. Existing triggers keep
+  their channel; one that fired from several channels is split into one trigger
+  per channel, and one that never fired, or listened to Slack direct messages,
+  is switched off as "Needs a channel". A 1:1 Teams chat starts no trigger;
+  `/run` still works there.
+- **Workflows**: agents post, read, edit and delete chat messages only in
+  channels connected to the company and in the thread their run came from.
+- **Integrations**: Slack asks for `channels:read` and `groups:read` to show a
+  connected channel's name. Operators: add them (and the `channel_rename` and
+  `group_rename` events) to the Slack app, and set them in `SLACK_SCOPES` if you
+  override it; each workspace reinstalls the app once to pick them up.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.

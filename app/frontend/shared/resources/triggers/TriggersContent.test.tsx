@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildChatChannel } from 'test/factories/chatChannel';
+import { buildChatTrigger } from 'test/factories/trigger';
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { TriggersContent } from './TriggersContent';
@@ -26,18 +28,12 @@ const triggers: Trigger[] = [
     workflow_name: 'Intake',
     created_by: { id: 1, name: 'Ida Ferris' },
   },
-  {
-    id: 2,
-    kind: 'chat',
-    source: 'chat',
-    chat_provider: 'slack',
-    event_type: 'chat.message',
-    filter_predicate: { text: { op: 'contains', value: 'ship' } },
-    enabled: true,
+  buildChatTrigger({
+    filter_predicate: { provider: 'slack', text: { op: 'contains', value: 'ship' } },
     workflow_id: 4,
     workflow_name: 'Release',
     created_by: { id: 1, name: 'Ida Ferris' },
-  },
+  }),
   {
     id: 2,
     kind: 'webhook',
@@ -83,6 +79,7 @@ describe('TriggersContent', () => {
     );
     const chat = screen.getByRole('article', { name: 'Slack message contains "ship"' });
     expect(within(chat).getByText('SLACK.MESSAGE')).toBeInTheDocument();
+    expect(within(chat).getByText('Slack · #deploys')).toBeInTheDocument();
     expect(screen.getByText('verification: shared_token')).toBeInTheDocument();
     expect(screen.getByText(/A workflow can also be started by hand/)).toBeInTheDocument();
   });
@@ -121,6 +118,51 @@ describe('TriggersContent', () => {
     await waitFor(() =>
       expect(screen.getByRole('switch', { name: 'Enable Slack message contains "ship"' })).not.toBeChecked(),
     );
+  });
+
+  it('says which chat trigger needs a channel, keeps it off, and shows why switching it on was refused', async () => {
+    const waiting = buildChatTrigger({
+      id: 5,
+      chat_provider: 'teams',
+      chat_channel: null,
+      filter_predicate: { provider: 'teams' },
+      enabled: false,
+      workflow_id: 4,
+    });
+    const general = buildChatTrigger({
+      id: 6,
+      chat_provider: 'teams',
+      chat_channel: buildChatChannel({ id: 21, label: 'General', team_name: 'Sales', provider: 'teams' }),
+      filter_predicate: { provider: 'teams', text: { op: 'contains', value: 'deploy' } },
+      enabled: false,
+      workflow_id: 4,
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init) =>
+        Promise.resolve(
+          init?.method === 'PATCH'
+            ? json({ errors: ['Chat channel is not connected to this company'] }, 422)
+            : json({ triggers: [waiting, general] }),
+        ),
+      );
+    render();
+
+    const card = await screen.findByRole('article', { name: 'Any Microsoft Teams message' });
+    expect(within(card).getByText('Needs a channel')).toBeInTheDocument();
+    expect(within(card).getByRole('switch')).toBeDisabled();
+    const other = screen.getByRole('article', { name: 'Microsoft Teams message contains "deploy"' });
+    expect(within(other).getByText('Microsoft Teams · Sales / General')).toBeInTheDocument();
+    expect(within(other).queryByText('Needs a channel')).not.toBeInTheDocument();
+
+    await userEvent.click(within(other).getByRole('switch'));
+
+    expect(await screen.findByText('Chat channel is not connected to this company')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/projects/7/workflows/4/triggers/6',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+    expect(within(other).getByRole('switch')).not.toBeChecked();
   });
 
   it('deletes a column trigger only after confirmation, with the column kind', async () => {

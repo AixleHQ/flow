@@ -3,8 +3,8 @@
 Slack connects per **company**. When you connect a Slack workspace, the install
 belongs to the company and serves every project in it. From then on:
 
-- an @mention of the app in a channel can start a workflow (a **Chat message**
-  trigger for Slack);
+- an @mention of the app in a connected channel can start a workflow (a **Chat
+  message** trigger for Slack);
 - the thread a request came from gets a status card that follows the run;
 - agents in workflow steps post, edit, delete and read messages with the
   `chat_*` tools.
@@ -34,8 +34,7 @@ a company admin can remove it.
 Finish within ten minutes, signed in to Flow as the same person who started.
 Otherwise the authorization is refused and you start again.
 
-Then invite the app into each channel where people will mention it, or where
-agents will post.
+Then connect the channels Flow may use: see [Connect a channel](#connect-a-channel).
 
 ### What the app asks for
 
@@ -44,6 +43,7 @@ agents will post.
 | `app_mentions:read` | Receiving the @mentions that start workflows |
 | `chat:write` | Replies, the `/help` list, status cards, and posting, editing and deleting messages |
 | `channels:history`, `groups:history` | `chat_read_thread` in public and private channels |
+| `channels:read`, `groups:read` | Showing the name of a connected channel |
 | `files:read` | Downloading files attached to a mention, so the run gets them |
 | `files:write` | Attaching files with `chat_post_message` |
 | `commands` | The **Run workflow** shortcut and the slash command |
@@ -61,14 +61,50 @@ existing row. Your triggers stay as they are.
 
 ---
 
+## Connect a channel
+
+Flow reaches only the channels connected to your company. A trigger listens in
+one of them, and agents post, read and edit only there (and in the thread a run
+came from). A channel is never typed in by its ID: it is connected from inside
+the channel, by someone who is in it.
+
+1. Ask for a code in Flow, in one of two places:
+   - in a chat trigger, next to **Channel**: **Connect a new channel…**;
+   - on the Slack row of the **Integrations** page: **Connect a channel**, for a
+     channel that workflows only post to, such as one for reports.
+2. Invite the app to the channel if it is not there yet: `/invite @<app>`. The
+   dialog shows the app's name.
+3. In the channel, type `@<app>`, pick the app from the list, and paste the
+   rest of the line the dialog shows: `connect aixle-7F3K9QXM`.
+4. The app answers in the thread, for everyone in the channel to see: which
+   company the channel is now connected to, who asked for the code and who
+   posted it, and, when the code came from a trigger, that the trigger listens
+   there. The dialog in Flow shows the channel as connected.
+
+A code works once, for ten minutes. Anyone who can change a project can ask for
+one. Whoever posts it must be in the channel, which is what makes the
+connection the channel's own choice; a code passed on to someone in the channel
+works too, and the app's answer stays in the channel as the record.
+
+A connection belongs to the company, so every project in it can use the
+channel. It stays when the person who posted the code leaves the channel.
+
+To disconnect a channel, choose **Disconnect** next to it on the Slack row. The
+app says in the channel that your company disconnected it. Triggers that
+listened there switch off and need a new channel. Removing the app from the
+channel (`/remove @<app>`) stops it for everyone, as with any Slack app.
+
+---
+
 ## Start a workflow from a Slack message
 
 On the workflow, open **Triggers → Add a trigger**. Under **Trigger type**,
 choose **Chat message**, set **Messenger** to **Slack**, and fill in:
 
-- **Channel id** limits the trigger to one channel. Enter the channel's ID
-  (for example `C0123ABC`), not its name. You can find it in the channel's
-  details in Slack. Leave the field blank to accept any channel.
+- **Channel** is the one channel the trigger listens in. Pick one of the
+  channels connected to your company, or choose **Connect a new channel…** (see
+  [Connect a channel](#connect-a-channel)). A trigger without a channel cannot
+  be switched on and shows **Needs a channel**.
 - **Text match** and **Pattern** limit the trigger to some messages. The match
   options are **contains**, **equals**, **regex** and **starts with**. Leave
   **Pattern** blank to accept every mention.
@@ -81,8 +117,8 @@ choose **Chat message**, set **Messenger** to **Slack**, and fill in:
   **None — project-level run**, or **Create a task**. With **Create a task**,
   you also pick a **Task column** and can set a **Task title template**.
 
-Select **Add trigger**. Then, in a channel the trigger accepts, mention the
-app: `@<app> ship it`.
+Select **Add trigger**. Then, in the trigger's channel, mention the app:
+`@<app> ship it`. To listen in several channels, add a trigger for each.
 
 A Slack trigger needs a connected workspace. Until the company has an active
 Slack install, Flow refuses to add a Slack trigger, or to switch one on, with
@@ -145,9 +181,9 @@ Flow.
 ### One mention, every project
 
 One workspace serves every project in the company, by design. So a mention is
-matched against the Slack triggers of all those projects, and it can start one
-run in each project that matches. To keep projects apart, give each trigger a
-**Channel id**.
+matched against the Slack triggers of all those projects that listen in that
+channel, and it can start one run in each project that matches. To keep projects
+apart, give their triggers different channels.
 
 Slack's own retries of one message never start a second run. To limit how
 often people can start one, set the trigger's **Cooldown (s)**.
@@ -171,14 +207,14 @@ often people can start one, set the trigger's **Cooldown (s)**.
 ### Asking what is available: /help
 
 Mention the app with `/help` and nothing else: `@<app> /help`. The app replies
-in the thread with the triggers that apply to that channel, in every project of
+in the thread with the triggers that listen in that channel, in every project of
 the company. Each entry shows its pattern, its workflow and its project.
 
 The app sends the same reply when a mention matches no trigger. If no trigger
-accepts the channel at all, it replies *"No Slack triggers configured for this
+listens in the channel at all, it replies *"No Slack triggers configured for this
 channel."*
 
-`help` is reserved, so a trigger cannot use it as a pattern.
+`help` and `connect` are reserved, so a trigger cannot use them as a pattern.
 
 ### The status card
 
@@ -222,7 +258,9 @@ an active Slack install. For other sessions, attach them from the tool picker's
 
 In a run that started from Slack, the channel and thread default to the
 triggering message. Anywhere else nothing is filled in, so the agent passes
-`provider: "slack"` and `conversation` (a channel ID) itself.
+`provider: "slack"` and a `conversation`: a connected channel's name
+(`#reports`) or ID. The tools refuse a channel that is not connected to your
+company, and list the ones that are.
 
 Some details:
 
@@ -246,7 +284,8 @@ Some details:
 - **Remove** on the Integrations row (company admins only) stops Flow from
   listening to that workspace. Another company can then connect the workspace.
   Removing the row does not uninstall the app from the workspace; you do that
-  in Slack. The workflow triggers stay, but nothing reaches them.
+  in Slack. Its channels are disconnected, and the chat triggers that listened
+  there switch off and need a new channel.
 - **Uninstalling the app in Slack**, or revoking its tokens, marks the row
   **inactive**. Flow ignores further events from that workspace and hides the
   tools. To restore it, use **Connect → Slack** again.
@@ -264,15 +303,16 @@ installs that same app into its own workspace.
      `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback`. Flow builds the
      URL from `PROTOCOL` and `DOMAIN` and sends it to Slack, so it must match
      exactly.
-   - Add the seven bot token scopes listed above.
+   - Add the nine bot token scopes listed above.
 3. Under **Event Subscriptions**:
    - Turn events on.
    - Set the Request URL to `https://<DOMAIN>/webhooks/slack/events`. Flow
      answers Slack's verification challenge on its own. Each Slack row on the
      **Integrations** page shows this URL, with a copy button.
-   - Subscribe to the bot events `app_mention`, `app_uninstalled` and
-     `tokens_revoked`. The last two let Flow see when a workspace removes the
-     app.
+   - Subscribe to the bot events `app_mention`, `app_uninstalled`,
+     `tokens_revoked`, `channel_rename` and `group_rename`. The two lifecycle
+     events let Flow see when a workspace removes the app; the rename events keep
+     a connected channel's name current.
 4. Under **Interactivity & Shortcuts**:
    - Turn interactivity on and set the Request URL to
      `https://<DOMAIN>/webhooks/slack/interactions`.
@@ -301,11 +341,12 @@ Linking a Slack account uses Sign in with Slack with the same app. It returns
 to `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback/link`, below the
 redirect URL above, which Slack accepts without registering another.
 
-A workspace that installed the app before the `commands` scope existed has to
-install it again (**Connect → Slack**) before the shortcut and the command show
-up there.
+A workspace that installed the app before the `commands`, `channels:read` and
+`groups:read` scopes existed has to install it again (**Connect → Slack**). Until
+then the shortcut and the command do not show up there, and connected channels
+show their ID instead of their name.
 
-`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the seven above
+`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the nine above
 and accepts commas or spaces. If you drop a scope, the feature that needs it
 stops working.
 
@@ -324,6 +365,7 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
   rate-limits it heavily for newer apps outside its Marketplace, so read a
   thread once rather than polling it.
 - Attachments: Flow takes 10 files per message, up to 50 MB each.
+- A trigger listens in one channel. Direct messages start no trigger.
 - Each workspace belongs to one company.
 - If a company connects several workspaces, a run that did not start from Slack
   always posts through the one connected first. It cannot pick another.
@@ -341,16 +383,22 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 | **Connect** has no **Slack** entry | The deployment has no Slack app | Operator: set `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` |
 | The row is **inactive** | The app was uninstalled in Slack, or its tokens were revoked | **Connect → Slack** again |
 | A mention gets no reply at all | The row is not active, the app is not in the channel, or (self-hosted) the signing secret or event subscription is wrong | Check the row; invite the app; check step 3 and `SLACK_SIGNING_SECRET` |
-| *"No Slack triggers configured for this channel."* | No enabled Slack trigger, in any of the company's projects, accepts this channel | Check the trigger's **Channel id** (an ID, not a name) and that it is enabled |
+| *"No Slack triggers configured for this channel."* | No enabled Slack trigger, in any of the company's projects, listens in this channel | Check the trigger's **Channel** and that it is enabled |
+| The app answers *"This code is not valid here or has expired."* | The code was already used, is older than ten minutes, is for Teams, or belongs to a company that has not connected this workspace | Ask for a new code in Flow; the dialog shows why the last attempt was refused |
+| The app answers *"Post the code in the channel you want to connect…"* | The code was sent in a direct message | Post it in the channel |
+| `@<app> connect …` gets no answer | The app is not in the channel, or the mention was typed as plain text | Invite the app, then type `@` and pick it from the list |
+| Saving a trigger fails with *"Chat channel is required…"* | The trigger has no channel and is being switched on | Pick a channel, or connect one with **Connect a new channel…** |
+| Saving a trigger fails with *"can't name where a message comes from…"* | Its conditions name `channel` or another place (from the API or MCP) | Set the trigger's channel (`chat_channel_id`) instead |
 | The app replies with *"Available commands"* instead of starting a run | The mention matched no pattern | Compare the pattern with what follows the mention. A message that starts with someone else's mention keeps it, so use **contains** for those |
 | A matching mention starts nothing and gets no reply | The trigger's **Cooldown (s)** has not passed since its last run | Wait, or lower the cooldown |
 | Saving a trigger fails with *"Slack is not connected for this company…"* | The company has no active Slack install | Connect Slack, or reconnect an inactive row, then save again. Or save the trigger switched off |
-| Saving a trigger fails with *"can't use help — that word lists available commands"* | `help` is reserved | Choose another pattern |
+| Saving a trigger fails with *"can't use help — Aixle answers that word before any trigger"* | `help` and `connect` are reserved | Choose another pattern |
 | Saving a trigger fails with *"can't run unattended — enable auto-run on these steps first: …"* | A step needs a person to start it | Turn on auto-run for the steps named |
 | The trigger shows *"No creator — this trigger cannot start a run"* | It was added before creators were recorded | Re-create the trigger |
 | An agent sees *"Slack is not connected for this project"* | No active install in the company | Connect Slack, or reconnect an inactive row |
-| An agent sees *"No channel given. Only a run started from Slack has one to fall back on — pass `channel` explicitly."* | The session did not start from Slack | Pass a channel ID |
-| An agent sees *"Slack rejected the request: …"* | Slack's own error code, such as `channel_not_found` or `not_in_channel` | Use a channel ID and invite the app to the channel |
+| An agent sees *"No channel given. Only a run started from Slack has one to fall back on — pass `conversation` explicitly."* | The session did not start from Slack | Pass a connected channel's name or ID |
+| An agent sees *"… is not a Slack channel connected to …"* | The channel is not connected to the company | Connect it: **Integrations → Slack → Connect a channel** |
+| An agent sees *"Slack rejected the request: …"* | Slack's own error code, such as `not_in_channel` | Invite the app to the channel |
 | A run failed but Slack heard nothing | **Report failures back to Slack** is off, the run was started again by hand, or the install is inactive | Turn the switch on, or check the row |
 | Files from the message are missing in the run | Over 50 MB, after the tenth file, or not hosted by Slack | Share them another way, for example as project assets |
 

@@ -113,6 +113,10 @@ class TriggerEngine
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
+      if Chat.connect_request?(event)
+        Chat.answer_connect(event)
+        return []
+      end
       if Chat.help_request?(event)
         Chat.answer_help(event)
         return []

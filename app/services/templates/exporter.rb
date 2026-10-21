@@ -369,7 +369,7 @@ module Templates
     def binding_entry(binding)
       kind = WorkflowTriggers::Serializer.kind(binding.event_type)
       filter = binding.filter_predicate.to_h
-      filter = filter.except("provider") if kind == "chat"
+      filter = chat_conditions(binding, filter) if kind == "chat"
       entry = { "kind" => kind, "workflow" => @keys["workflows"][binding.workflow_id], "name" => binding.name,
                 "trigger_mode" => binding.trigger_mode.to_s, "subject_policy" => binding.subject_policy.to_s,
                 "subject_title_template" => binding.subject_title_template,
@@ -393,6 +393,14 @@ module Templates
         @notes << "Webhook trigger #{binding.name || binding.id}: its URL and secret are not exported; the installer gets a new endpoint."
       end
       entry.compact
+    end
+
+    # A channel is connected to one company, so the installer connects its own.
+    def chat_conditions(binding, filter)
+      if binding.chat_conversation_id || filter.key?("channel")
+        @notes << "Chat trigger #{binding.name || binding.id}: its channel is not exported; the installer connects one."
+      end
+      filter.except("provider").reject { |key, _| TriggerBinding.chat_routing_key?(key) }
     end
 
     def export_config_items

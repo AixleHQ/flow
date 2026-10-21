@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildChatTrigger } from 'test/factories/trigger';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
-import { TriggersTab } from './TriggersTab';
+import { type Trigger, TriggersTab } from './TriggersTab';
 
 type TabProps = ComponentProps<typeof TriggersTab>;
 
@@ -39,15 +40,8 @@ const columnTrigger = (o: Record<string, unknown> = {}) => ({
   ...o,
 });
 
-const slackTrigger = (o: Record<string, unknown> = {}) => ({
-  id: 2,
-  kind: 'chat',
-  chat_provider: 'slack',
-  event_type: 'chat.message',
-  filter_predicate: { channel: 'C1', text: { op: 'contains', value: 'ship' } },
-  enabled: true,
-  ...o,
-});
+const slackTrigger = (o: Partial<Trigger> = {}) =>
+  buildChatTrigger({ filter_predicate: { provider: 'slack', text: { op: 'contains', value: 'ship' } }, ...o });
 
 const scheduleTrigger = (o: Record<string, unknown> = {}) => ({
   id: 3,
@@ -225,23 +219,38 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(await screen.findByText('— · UTC')).toBeInTheDocument();
   });
 
-  it('renders a matching slack trigger with quoted text and channel meta', async () => {
+  it('renders a matching slack trigger with quoted text and the channel it listens to', async () => {
     installFetch({ triggers: [slackTrigger()] });
 
     renderPage(<TriggersTab {...baseProps()} />);
 
     expect(await screen.findByText('Slack message contains "ship"')).toBeInTheDocument();
-    expect(screen.getByText('channel C1')).toBeInTheDocument();
+    expect(screen.getByText('Slack · #deploys')).toBeInTheDocument();
     expect(screen.getByText('SLACK.MESSAGE')).toBeInTheDocument();
+    expect(screen.queryByText('Needs a channel')).not.toBeInTheDocument();
   });
 
-  it('renders a slack trigger with a custom op and no channel', async () => {
+  it('renders a slack trigger with a custom op', async () => {
     installFetch({ triggers: [slackTrigger({ filter_predicate: { text: { op: 'eq', value: 'deploy' } } })] });
 
     renderPage(<TriggersTab {...baseProps()} />);
 
     expect(await screen.findByText('Slack message eq "deploy"')).toBeInTheDocument();
-    expect(screen.getByText('anywhere the bot is addressed')).toBeInTheDocument();
+  });
+
+  it('marks a chat trigger with no channel, and will not switch it on', async () => {
+    const fetchSpy = installFetch({ triggers: [slackTrigger({ chat_channel: null, enabled: false })] });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    expect(await screen.findByText('Needs a channel')).toBeInTheDocument();
+    expect(screen.getByText('Slack · no channel')).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: 'Enable Slack message contains "ship"' });
+    expect(toggle).toBeDisabled();
+    await userEvent.hover(toggle);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Choose a channel for this trigger first');
+    await userEvent.click(toggle);
+    expect(fetchSpy).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' }));
   });
 
   it('ignores a stored name and shows the derived slack title', async () => {
@@ -269,13 +278,13 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(await screen.findByText('Any Slack message')).toBeInTheDocument();
   });
 
-  it('renders "Any Slack message" / "any channel" when there is no filter', async () => {
+  it('renders "Any Slack message" in its channel when there is no filter', async () => {
     installFetch({ triggers: [slackTrigger({ filter_predicate: {} })] });
 
     renderPage(<TriggersTab {...baseProps()} />);
 
     expect(await screen.findByText('Any Slack message')).toBeInTheDocument();
-    expect(screen.getByText('anywhere the bot is addressed')).toBeInTheDocument();
+    expect(screen.getByText('Slack · #deploys')).toBeInTheDocument();
   });
 
   it('renders a webhook trigger with verification strategy and object condition meta', async () => {

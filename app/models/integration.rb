@@ -44,6 +44,8 @@ class Integration < ApplicationRecord
   has_many :project_trackers, dependent: :destroy
   has_many :tracker_subscriptions, dependent: :destroy
   has_many :chat_conversations, dependent: :delete_all
+  # Its channels go with it, so the triggers listening in them switch off first.
+  before_destroy :release_chat_triggers, prepend: true, if: -> { slack? || teams? }
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?
@@ -416,6 +418,10 @@ class Integration < ApplicationRecord
   def release_teams_tenant
     WebhookEndpoint.where(provider: "teams", company_id: company_id)
                    .where("config->>'integration_id' = ?", id.to_s).delete_all
+  end
+
+  def release_chat_triggers
+    TriggerBinding.release_chat_channels!(TriggerBinding.where(chat_conversation_id: chat_conversations.select(:id)))
   end
 
   def release_slack_workspace

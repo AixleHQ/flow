@@ -65,20 +65,30 @@ module InternalTools
         )
       end
 
-      # The install and channel a call acts on, defaulting the channel to the one
-      # that triggered the run. Returns [integration, channel, error]: on the first
-      # missing half, error is a tool error naming what is absent.
+      # The install and channel a call acts on: the thread the run came from by
+      # default, otherwise a channel connected to the project's company
+      # (Chat::ChannelAccess). Returns [integration, channel, error].
       def resolve_slack_target(explicit_channel)
         return [ nil, nil, error("This tool needs a project — the session has none") ] if project.nil?
 
+        origin = slack_context["channel"]
+        value = explicit_channel.to_s.strip.presence
+        return slack_origin_target(origin) if origin.present? && (value.nil? || value == origin)
+
+        if value.nil?
+          return [ nil, nil, error("No channel given. Only a run started from Slack has one to " \
+                                   "fall back on — pass `conversation` explicitly.") ]
+        end
+
+        conversation = Chat::ChannelAccess.find(project, "slack", value)
+        return [ nil, nil, error(Chat::ChannelAccess.not_connected(project, "slack", value)) ] if conversation.nil?
+
+        [ conversation.integration, conversation.external_id, nil ]
+      end
+
+      def slack_origin_target(channel)
         integration = slack_integration
         return [ nil, nil, error("Slack is not connected for this project") ] if integration.nil?
-
-        channel = explicit_channel.presence || slack_context["channel"]
-        if channel.blank?
-          return [ integration, nil, error("No channel given. Only a run started from Slack has one to " \
-                                           "fall back on — pass `channel` explicitly.") ]
-        end
 
         [ integration, channel, nil ]
       end

@@ -131,6 +131,27 @@ module Chat
       actor.to_h["name"].presence
     end
 
+    # The connect flow's answer. A targeted message cannot be answered in its
+    # thread, so its answer starts a new post in the channel.
+    def reply(event, text)
+      data = event.data.to_h
+      conversation = Teams::Notifier.conversation_for(data["integration_id"], data.dig("conversation", "id"))
+      return nil if conversation.nil?
+
+      Teams::Notifier.post(conversation, text: text, thread_id: data["targeted"] ? nil : data["thread_id"]).to_h["id"]
+    end
+
+    def strong(text) = "**#{escape(text)}**"
+
+    def escape(text) = Teams::Notifier.escape(text)
+
+    def bot_mention(_event) = strong(Teams::AppPackage::NAME)
+
+    # Every addressed activity is recorded before it is processed, so the row exists.
+    def conversation_for(event, integration)
+      Teams::Notifier.conversation_for(integration.id, event.data.to_h.dig("conversation", "id"))
+    end
+
     # Microsoft's rule: the mention is an entity, and its own `text` is what to
     # remove — a name typed by hand is not a mention and stays in the request.
     def request_text(activity)

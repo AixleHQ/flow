@@ -75,6 +75,18 @@ module Slack
         })
       end
 
+      # Who the token is: the bot's own user id and the name people mention it by.
+      # Needs no scope.
+      def auth_test(token:)
+        post("auth.test", token: token)
+      end
+
+      # One conversation's details, its name among them. Requires channels:read
+      # for public channels and groups:read for private ones.
+      def conversation_info(token:, channel:)
+        post("conversations.info", token: token, params: { channel: channel })
+      end
+
       # Upload one or more files and share them in a SINGLE Slack message. Each
       # file is `{ filename:, content:, title? }`; `initial_comment` becomes the
       # message text shown above the attachments. Uses Slack's external-upload flow

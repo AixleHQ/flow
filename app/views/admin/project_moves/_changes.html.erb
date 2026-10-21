@@ -81,7 +81,7 @@
 <% if report["chat_triggers"].any? %>
   <section class="move-section">
     <h2>Chat triggers</h2>
-    <p class="move-muted">Chat messages reach the triggers of the workspace's own company. These stay silent until <%= target %> connects the workspace.</p>
+    <p class="move-muted">A chat channel is connected to a company, not to a project. These triggers lose their channel and switch off; they work again once <%= target %> connects its own channels to them.</p>
     <ul>
       <% report["chat_triggers"].each do |binding| %>
         <li><%= binding["name"] %></li>

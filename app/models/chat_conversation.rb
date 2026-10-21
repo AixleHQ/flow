@@ -8,10 +8,32 @@ class ChatConversation < ApplicationRecord
   extend Enumerize
 
   belongs_to :integration
+  has_many :chat_channel_connections, dependent: :delete_all
 
   enumerize :kind, in: %i[channel group direct], predicates: true
 
   validates :provider, :external_id, presence: true
+
+  scope :connected_to_company, ->(company_id) {
+    where(id: ChatChannelConnection.where(company_id: company_id).select(:chat_conversation_id))
+  }
+
+  # A Slack channel the bot heard from. Slack keeps no registry of its own here,
+  # so the row appears when the channel is connected.
+  def self.record_slack!(integration:, channel_id:, name: nil)
+    row = find_or_initialize_by(integration: integration, external_id: channel_id)
+    row.assign_attributes(provider: "slack", kind: "channel", name: name.presence || row.name, last_activity_at: Time.current)
+    row.save!
+    row
+  rescue ActiveRecord::RecordNotUnique
+    retry
+  end
+
+  def label
+    return name.presence || (group? ? "Group chat" : external_id) if provider == "teams"
+
+    name.present? ? "##{name}" : external_id
+  end
 
   # Upserts the conversation an authenticated Teams activity came from. A
   # channel event (created, renamed, deleted) arrives on the team's General

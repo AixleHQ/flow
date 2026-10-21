@@ -40,8 +40,9 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
   end
 
   test "chat and schedule triggers get their fixed event types" do
-    create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
-    slack = create_trigger("chat", chat_provider: "slack", name: "standup")
+    slack_install = create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
+    channel = connect_chat_channel(company: @project.company, integration: slack_install)
+    slack = create_trigger("chat", chat_provider: "slack", name: "standup", chat_channel_id: channel.id)
     schedule = create_trigger("schedule", enabled: false, schedule_config: { "cron" => "0 9 * * 1-5", "timezone" => "UTC" })
 
     assert_equal [ "chat", "chat.message", "slack" ], [ slack.kind, slack.trigger.event_type, slack.trigger.chat_provider ]
@@ -51,20 +52,40 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
     assert_equal @project, schedule.trigger.project
   end
 
-  test "a chat trigger listens to the messenger it names, and follows its runs with a status card" do
-    create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
+  test "a chat trigger listens to the messenger it names, in its one channel, and follows its runs with a status card" do
+    teams = create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
+    channel = connect_chat_channel(company: @project.company, provider: "teams", integration: teams)
 
-    trigger = create_trigger("chat", chat_provider: "teams", filter_predicate: { "channel" => "19:a@thread.tacv2" }).trigger
+    trigger = create_trigger("chat", chat_provider: "teams", chat_channel_id: channel.id,
+                                     filter_predicate: { "text" => "deploy" }).trigger
 
-    assert_equal({ "channel" => "19:a@thread.tacv2", "provider" => "teams" }, trigger.filter_predicate)
+    assert_equal channel, trigger.chat_conversation
+    assert_equal({ "text" => "deploy", "provider" => "teams", "channel" => channel.external_id }, trigger.filter_predicate)
     assert_equal "lifecycle", trigger.status_reporting
   end
 
   test "a chat trigger asked to stay silent reports nothing" do
     create(:integration, provider: :teams, status: :active, company: @project.company, project: nil)
 
-    assert_equal "none", create_trigger("chat", chat_provider: "teams", status_reporting: "none").trigger.status_reporting
-    assert_equal "failures", create_trigger("chat", chat_provider: "teams", status_reporting: "failures").trigger.status_reporting
+    assert_equal "none", create_trigger("chat", chat_provider: "teams", status_reporting: "none", enabled: false).trigger.status_reporting
+    assert_equal "failures", create_trigger("chat", chat_provider: "teams", status_reporting: "failures", enabled: false)
+                               .trigger.status_reporting
+  end
+
+  test "a chat trigger can't be switched on without a channel connected to its company, nor name one in its conditions" do
+    create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
+    foreign = connect_chat_channel(company: create(:company), external_id: "C0FOREIGN1")
+
+    missing = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("chat", chat_provider: "slack") }
+    assert_match(/Chat channel is required/, missing.message)
+    stolen = assert_raises(ActiveRecord::RecordInvalid) do
+      create_trigger("chat", chat_provider: "slack", chat_channel_id: foreign.id, enabled: false)
+    end
+    assert_match(/Chat channel is not connected to this company/, stolen.message)
+    named = assert_raises(ActiveRecord::RecordInvalid) do
+      create_trigger("chat", chat_provider: "slack", enabled: false, filter_predicate: { "conversation.id" => "C0FOREIGN1" })
+    end
+    assert_match(/can't name where a message comes from \(conversation.id\)/, named.message)
   end
 
   test "a chat trigger needs a messenger, and that messenger connected" do

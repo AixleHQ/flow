@@ -7,6 +7,8 @@
 # gateway uses. App-uninstall / token-revocation events deactivate the install.
 class Webhooks::SlackController < ActionController::API
   LIFECYCLE_EVENTS = %w[app_uninstalled tokens_revoked].freeze
+  # Keep a connected channel's name current; nothing else reads these.
+  RENAME_EVENTS = %w[channel_rename group_rename].freeze
 
   def events
     raw = request.raw_post
@@ -23,6 +25,10 @@ class Webhooks::SlackController < ActionController::API
     inner_type = payload.dig("event", "type").to_s
     if LIFECYCLE_EVENTS.include?(inner_type)
       deactivate_install(endpoint)
+      return head :ok
+    end
+    if RENAME_EVENTS.include?(inner_type)
+      rename_channel(endpoint, payload.dig("event", "channel"))
       return head :ok
     end
 
@@ -99,6 +105,14 @@ class Webhooks::SlackController < ActionController::API
     return nil if team_id.blank?
 
     WebhookEndpoint.active.find_by(slug: "slack-team-#{team_id}")
+  end
+
+  def rename_channel(endpoint, channel)
+    channel = channel.is_a?(Hash) ? channel : {}
+    return if channel["id"].blank? || channel["name"].blank?
+
+    ChatConversation.where(provider: "slack", integration_id: endpoint.config.to_h["integration_id"], external_id: channel["id"])
+                    .update_all(name: channel["name"], updated_at: Time.current)
   end
 
   def deactivate_install(endpoint)

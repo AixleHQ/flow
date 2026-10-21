@@ -48,6 +48,7 @@ import { formatDateMedium } from 'shared/lib/formatDate';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
+import { ChatChannelsSection } from 'shared/resources/chat-channels/ChatChannelsSection';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -87,6 +88,8 @@ interface IntegrationsContentProps {
   integrations: Integration[];
   basePath: string;
   title: string;
+  // Absent on the company page.
+  projectId?: number;
   // Absent on the company page and whenever the deployment has Azure DevOps
   // switched off, which is what hides the connect entry entirely.
   azureDevops?: AzureDevopsProps;
@@ -121,6 +124,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   linear: 'Linear',
   youtrack: 'YouTrack',
 };
+
+const CHAT_PROVIDERS = ['slack', 'teams'];
 
 const SCOPE_COLORS: Record<string, string> = {
   company: 'gray',
@@ -161,6 +166,7 @@ export const IntegrationsContent = ({
   integrations,
   basePath,
   title,
+  projectId,
   azureDevops,
   github,
   bitbucket,
@@ -343,6 +349,17 @@ export const IntegrationsContent = ({
   }, [integrations, search, scopeFilter]);
 
   const hasFilters = !!search || scopeFilter !== 'all';
+
+  // Channels belong to the company, not to one install, so each messenger lists them once.
+  const channelRows = useMemo(() => {
+    const ids = new Set<number>();
+    if (!isProjectContext) return ids;
+    for (const provider of CHAT_PROVIDERS) {
+      const first = filtered.find((i) => i.provider === provider && i.status === 'active');
+      if (first) ids.add(first.id);
+    }
+    return ids;
+  }, [filtered, isProjectContext]);
 
   const handleDelete = useCallback(
     (integration: Integration) => {
@@ -755,7 +772,7 @@ export const IntegrationsContent = ({
               {filtered.map((integration) => {
                 const readOnly = isProjectContext && integration.scopeIndicator === 'company';
 
-                return (
+                const row = (
                   <Table.Tr key={integration.id}>
                     <Table.Td>
                       <Group gap="sm" wrap="nowrap">
@@ -1306,6 +1323,16 @@ export const IntegrationsContent = ({
                     </Table.Td>
                   </Table.Tr>
                 );
+                if (projectId === undefined || !channelRows.has(integration.id)) return row;
+
+                return [
+                  row,
+                  <Table.Tr key={`${integration.id}-channels`}>
+                    <Table.Td colSpan={6}>
+                      <ChatChannelsSection projectId={projectId} provider={integration.provider} canEdit={canExecute} />
+                    </Table.Td>
+                  </Table.Tr>,
+                ];
               })}
             </Table.Tbody>
           </Table>

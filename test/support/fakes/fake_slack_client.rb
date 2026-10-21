@@ -3,7 +3,8 @@
 # In-memory fake for the Slack boundary. A real object implementing
 # Slack::Client's public class-method interface (exchange_code, post_message,
 # update_message, delete_message, conversation_replies, upload_files,
-# download_file) as INSTANCE methods (R3, docs/testing.md §4).
+# download_file, auth_test, conversation_info) as INSTANCE methods (R3,
+# docs/testing.md §4).
 # Callers stub Slack::Client onto one of these via
 # SlackTestHelper#stub_slack_client!.
 #
@@ -21,6 +22,7 @@ class FakeSlackClient
   DEFAULT_BOT_TOKEN = "xoxb-fake-0000000000-bot-token"
   DEFAULT_BOT_USER  = "U0BOTFAKE0"
   DEFAULT_BOT_ID    = "B00000000"
+  DEFAULT_BOT_NAME  = "aixle-flow"
   DEFAULT_SCOPE     = "chat:write,files:read,files:write"
   DEFAULT_FILE_BODY = "fake slack file bytes"
   WORKSPACE_HOST    = "fake-workspace.slack.com"
@@ -39,10 +41,14 @@ class FakeSlackClient
   }.freeze
 
   attr_reader :oauth_exchanges, :posted_messages, :uploaded_files, :downloads,
-              :updated_messages, :deleted_messages, :replies_reads, :opened_views, :openid_exchanges
+              :updated_messages, :deleted_messages, :replies_reads, :opened_views, :openid_exchanges,
+              :auth_tests
   # Let a test tailor the shared canned values (e.g. a specific team_id) without
   # reaching into the response builders.
-  attr_accessor :team_id, :team_name, :bot_token, :bot_user_id, :scope, :file_body
+  attr_accessor :team_id, :team_name, :bot_token, :bot_user_id, :bot_name, :scope, :file_body
+  # conversations.info: channel id => name. A channel not listed answers
+  # channel_not_found; `conversation_info_error` makes every call fail with it.
+  attr_accessor :channel_names, :conversation_info_error
   # The thread conversations.replies hands back, so a test can stage a thread
   # without knowing the wire shape. Each entry is a Slack message hash.
   attr_accessor :thread_messages
@@ -66,6 +72,10 @@ class FakeSlackClient
     @team_name   = DEFAULT_TEAM_NAME
     @bot_token   = DEFAULT_BOT_TOKEN
     @bot_user_id = DEFAULT_BOT_USER
+    @bot_name    = DEFAULT_BOT_NAME
+    @channel_names = {}
+    @conversation_info_error = nil
+    @auth_tests  = []
     @scope       = DEFAULT_SCOPE
     @file_body   = DEFAULT_FILE_BODY
 
@@ -194,6 +204,29 @@ class FakeSlackClient
   def openid_token(code:, redirect_uri:)
     @openid_exchanges << { code: code, redirect_uri: redirect_uri }
     { "ok" => true, "id_token" => JWT.encode(openid_claims, nil, "none") }
+  end
+
+  # auth.test — { ok, url, team, user, team_id, user_id, bot_id }.
+  def auth_test(token:)
+    @auth_tests << { token: token }
+    {
+      "ok" => true, "url" => "https://#{WORKSPACE_HOST}/", "team" => team_name, "user" => bot_name,
+      "team_id" => team_id, "user_id" => bot_user_id, "bot_id" => DEFAULT_BOT_ID, "is_enterprise_install" => false
+    }
+  end
+
+  # conversations.info — { ok, channel } for a channel in `channel_names`.
+  def conversation_info(token:, channel:)
+    raise Slack::Client::Error, conversation_info_error if conversation_info_error
+    raise Slack::Client::Error, "channel_not_found" unless channel_names.key?(channel)
+
+    {
+      "ok" => true,
+      "channel" => {
+        "id" => channel, "name" => channel_names[channel], "is_channel" => true, "is_private" => false,
+        "is_archived" => false, "is_member" => true, "created" => 1_700_000_000
+      }
+    }
   end
 
   # views.open — { ok, view } echoing the view it was given.

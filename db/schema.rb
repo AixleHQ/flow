@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -431,6 +431,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.integer "version", null: false
     t.index ["kind"], name: "index_catalog_templates_on_kind"
     t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
+  end
+
+  create_table "chat_channel_connections", force: :cascade do |t|
+    t.bigint "chat_conversation_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "requested_by_id"
+    t.string "posted_by_external_id"
+    t.string "posted_by_name"
+    t.string "confirmation_message_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_conversation_id", "company_id"], name: "idx_on_chat_conversation_id_company_id_df284b3410", unique: true
+    t.index ["company_id"], name: "index_chat_channel_connections_on_company_id"
+    t.index ["requested_by_id"], name: "index_chat_channel_connections_on_requested_by_id"
+  end
+
+  create_table "chat_connect_codes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "trigger_binding_id"
+    t.bigint "requested_by_id"
+    t.bigint "chat_channel_connection_id"
+    t.string "provider", null: false
+    t.string "code_digest", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "redeemed_at"
+    t.string "failure_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_channel_connection_id"], name: "index_chat_connect_codes_on_chat_channel_connection_id"
+    t.index ["code_digest"], name: "index_chat_connect_codes_on_code_digest", unique: true
+    t.index ["company_id"], name: "index_chat_connect_codes_on_company_id"
+    t.index ["project_id"], name: "index_chat_connect_codes_on_project_id"
+    t.index ["requested_by_id"], name: "index_chat_connect_codes_on_requested_by_id"
+    t.index ["trigger_binding_id"], name: "index_chat_connect_codes_on_trigger_binding_id"
   end
 
   create_table "chat_conversations", force: :cascade do |t|
@@ -1700,6 +1735,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.boolean "copy_attachments", default: false, null: false
+    t.bigint "chat_conversation_id"
+    t.index ["chat_conversation_id"], name: "index_trigger_bindings_on_chat_conversation_id"
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
@@ -2011,6 +2048,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
   add_foreign_key "boards", "projects", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "chat_conversations", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "companies", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "users", column: "requested_by_id", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "chat_channel_connections", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "companies", on_delete: :cascade
+  add_foreign_key "chat_connect_codes", "projects", on_delete: :cascade
+  add_foreign_key "chat_connect_codes", "trigger_bindings", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "users", column: "requested_by_id", on_delete: :nullify
   add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
   add_foreign_key "chat_identities", "users", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
@@ -2143,6 +2188,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
   add_foreign_key "tracker_subscriptions", "integrations", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "chat_conversations", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify

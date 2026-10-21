@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { Switch } from '@mantine/core';
+import { Switch, Tooltip } from '@mantine/core';
 import {
   IconBolt,
   IconClock,
@@ -15,9 +15,9 @@ import {
 
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
-import { creatorLabel, creatorTone, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
+import { creatorLabel, creatorTone, needsChannel, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
-import type { ChatProviderOption, Trigger } from './types';
+import type { Trigger } from './types';
 
 const SOURCE_ICONS: Record<string, typeof IconBolt> = {
   board: IconColumns,
@@ -53,7 +53,6 @@ const iconButton = {
 interface TriggerCardsProps {
   triggers: Trigger[];
   trackers?: TrackerOption[];
-  chatProviders?: ChatProviderOption[];
   readOnly: boolean;
   onEdit: (t: Trigger) => void;
   onDelete: (t: Trigger) => void;
@@ -66,7 +65,6 @@ interface TriggerCardsProps {
 export function TriggerCards({
   triggers,
   trackers = [],
-  chatProviders = [],
   readOnly,
   onEdit,
   onDelete,
@@ -83,6 +81,7 @@ export function TriggerCards({
         const isDisabled = t.enabled === false;
         const href = workflowHref?.(t);
         const title = triggerTitle(t);
+        const channelless = needsChannel(t);
         return (
           <article
             key={`${t.kind}-${t.id}`}
@@ -139,7 +138,7 @@ export function TriggerCards({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {triggerMeta(t, trackers, chatProviders)}
+                  {triggerMeta(t, trackers)}
                 </div>
               </div>
             </div>
@@ -201,6 +200,23 @@ export function TriggerCards({
                     ? `${(t.chat_provider ?? 'chat').toUpperCase()}.MESSAGE`
                     : (SOURCE_BADGES[source] ?? t.event_type)}
                 </span>
+                {channelless && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      color: 'var(--app-warning-fg)',
+                      background: 'var(--app-warning-bg)',
+                      border: '1px solid var(--app-warning-border)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      flexShrink: 0,
+                    }}
+                  >
+                    Needs a channel
+                  </span>
+                )}
               </div>
 
               {!readOnly && (
@@ -208,12 +224,17 @@ export function TriggerCards({
                   {/* A board-column trigger has no off switch: removing it is how it stops. */}
                   {source !== 'board' && (
                     <>
-                      <Switch
-                        size="xs"
-                        aria-label={`Enable ${title}`}
-                        checked={t.enabled !== false}
-                        onChange={(e) => onToggle(t, e.currentTarget.checked)}
-                      />
+                      <Tooltip label="Choose a channel for this trigger first" disabled={!channelless}>
+                        <span style={{ display: 'inline-flex' }}>
+                          <Switch
+                            size="xs"
+                            aria-label={`Enable ${title}`}
+                            checked={t.enabled !== false}
+                            disabled={channelless}
+                            onChange={(e) => onToggle(t, e.currentTarget.checked)}
+                          />
+                        </span>
+                      </Tooltip>
                       <div style={{ width: 1, height: 16, background: 'var(--app-border-default)', margin: '0 4px' }} />
                     </>
                   )}

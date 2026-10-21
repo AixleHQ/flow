@@ -266,7 +266,6 @@ export function TriggersTab({
           <TriggerCards
             triggers={triggers}
             trackers={trackers}
-            chatProviders={chatProviders}
             readOnly={readOnly}
             onEdit={openEdit}
             onDelete={remove}

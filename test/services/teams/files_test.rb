@@ -43,21 +43,20 @@ class Teams::FilesTest < ActiveSupport::TestCase
                             raw_payload: activity)
   end
 
-  test "a 1:1 file becomes a project asset, and no link to it outlives the message" do
+  test "a 1:1 file starts no trigger, and no link to it outlives the message" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
                              filter_predicate: { "provider" => "teams" })
-    ChatConversation.record_teams!(integration: @integration, activity: direct_activity)
-    stub_request(:get, DOWNLOAD).to_return(status: 200, body: "%PDF-1.7 brief")
+    direct = ChatConversation.record_teams!(integration: @integration, activity: direct_activity)
+    help = stub_request(:post, "#{TEAMS_SERVICE_URL}v3/conversations/#{direct.external_id}/activities")
+           .to_return(status: 201, body: { id: "1" }.to_json)
+    download = stub_request(:get, DOWNLOAD)
     received = receive(direct_activity)
-    handed = nil
-    WorkflowService.expects(:enqueue).with { |**args| handed = args[:input_asset_ids] }.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).never
 
     Webhooks::ProcessEventJob.perform_now(received.id)
 
-    asset = Asset.last
-    assert_equal [ asset.id ], handed
-    assert_equal [ "brief.pdf", "teams", "teams" ], [ asset.name, asset.folder, asset.latest_version.source ]
-    assert_equal "%PDF-1.7 brief", asset.latest_version.file.read
+    assert_requested help
+    assert_not_requested download
     assert_nil TriggerEvent.sole.data["file_refs"]
     assert_equal({ "uniqueId" => "u1", "fileType" => "pdf" }, received.reload.raw_payload.dig("attachments", 0, "content"))
   end

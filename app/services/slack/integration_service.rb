@@ -42,6 +42,7 @@ module Slack
       # routed by `settings->>'team_id'` without decrypting every install.
       integration.settings = integration.settings.to_h
         .merge("team_id" => team_id, "team_name" => team["name"])
+        .merge({ "bot_name" => bot_name(data["access_token"]) }.compact)
         .except("error")
       integration.status = :active
       Integration.transaction do
@@ -59,6 +60,14 @@ module Slack
     end
 
     private
+
+    # What people type to mention the bot, for the connect instructions. A
+    # failure here leaves it to be read later (Chat.bot_name).
+    def bot_name(token)
+      Slack::Client.auth_test(token: token)["user"].presence
+    rescue Slack::Client::Error
+      nil
+    end
 
     # A Slack install belongs to the COMPANY (project_id: nil) and serves every
     # project — connecting from any project reuses the one company-wide install,

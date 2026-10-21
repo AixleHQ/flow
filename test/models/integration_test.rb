@@ -337,6 +337,19 @@ class IntegrationTest < ActiveSupport::TestCase
     end
   end
 
+  test "removing a chat install takes its channels with it and switches off the triggers that listened there" do
+    slack = create(:integration, provider: :slack, status: :active, company: @company, connected_by: @user)
+    project = create(:project, company: @company, owner: @user)
+    trigger = create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: @user)
+    assert_equal slack, trigger.chat_conversation.integration
+
+    slack.destroy!
+
+    trigger.reload
+    assert_equal [ false, nil, { "provider" => "slack" } ], [ trigger.enabled, trigger.chat_conversation, trigger.filter_predicate ]
+    assert_equal 0, ChatChannelConnection.count
+  end
+
   # ====== GitLab hooks ======
 
   test "removing a GitLab connection removes the hooks its repositories registered" do

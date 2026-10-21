@@ -233,5 +233,41 @@ module Slack
       end
       assert_match(/file_download_failed_404/, error.message)
     end
+
+    # --- auth.test / conversations.info ------------------------------------------
+
+    test "auth_test parses the auth.test body into the fake's shape" do
+      expected = @fake.auth_test(token: BOT_TOKEN)
+      stub = stub_request(:post, "#{API}/auth.test")
+        .with(headers: { "Authorization" => "Bearer #{BOT_TOKEN}" })
+        .to_return(json(expected))
+
+      actual = Slack::Client.auth_test(token: BOT_TOKEN)
+
+      assert_equal expected, actual
+      assert_equal [ "aixle-flow", "U0BOTFAKE0" ], actual.values_at("user", "user_id")
+      assert_requested stub
+    end
+
+    test "conversation_info parses the conversations.info body into the fake's shape" do
+      @fake.channel_names = { "C1" => "deploys" }
+      expected = @fake.conversation_info(token: BOT_TOKEN, channel: "C1")
+      stub = stub_request(:post, "#{API}/conversations.info")
+        .with(headers: { "Authorization" => "Bearer #{BOT_TOKEN}" }, body: { "channel" => "C1" })
+        .to_return(json(expected))
+
+      actual = Slack::Client.conversation_info(token: BOT_TOKEN, channel: "C1")
+
+      assert_equal expected, actual
+      assert_equal "deploys", actual.dig("channel", "name")
+      assert_requested stub
+    end
+
+    test "conversation_info raises Slack::Client::Error without the read scope" do
+      stub_request(:post, "#{API}/conversations.info").to_return(json(ok: false, error: "missing_scope"))
+
+      error = assert_raises(Slack::Client::Error) { Slack::Client.conversation_info(token: BOT_TOKEN, channel: "C1") }
+      assert_match(/missing_scope/, error.message)
+    end
   end
 end

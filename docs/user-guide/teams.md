@@ -3,8 +3,9 @@
 Microsoft Teams connects per **company**. One connection serves every project in
 the company. From then on:
 
-- people start workflows by mentioning the app in a channel or group chat, or by
-  messaging it directly (a **Chat message** trigger);
+- people start workflows by mentioning the app in a connected channel or group
+  chat (a **Chat message** trigger), or start one themselves with **Run
+  workflow** or `/run`;
 - the thread a request came from gets a status card that follows the run;
 - agents in workflow steps post, edit, delete and read messages with the
   `chat_*` tools, and send and receive files.
@@ -80,15 +81,44 @@ nothing from it.
 
 ---
 
+## Connect a channel
+
+Flow reaches only the channels and group chats connected to your company. A
+trigger listens in one of them, and agents post, read and edit only there (and
+in the thread a run came from). A channel is connected from inside it, by
+someone who is in it.
+
+1. Ask for a code in Flow: in a chat trigger, next to **Channel**, choose
+   **Connect a new channel…**; or on the Teams row of the **Integrations** page
+   choose **Connect a channel**, for one that workflows only post to.
+2. Add **Aixle Flow** to the team or group chat if it is not there yet.
+3. In the channel, type `@Aixle Flow`, pick the app from the list, and paste the
+   rest of the line the dialog shows: `connect aixle-7F3K9QXM`. A mention typed
+   as plain text does not reach the app.
+4. The app answers in the thread, for everyone there to see: which company the
+   conversation is now connected to, and who asked and posted. The dialog in Flow
+   shows it as connected.
+
+A code works once, for ten minutes. Anyone who can change a project can ask for
+one. A code sent in a 1:1 chat is refused: a 1:1 chat cannot be connected. The
+connection belongs to the company, so every project in it can use the channel.
+
+To disconnect a channel, choose **Disconnect** next to it on the Teams row. The
+app says in the channel that your company disconnected it, and triggers that
+listened there switch off and need a new channel.
+
+---
+
 ## Start a workflow from Teams
 
 On the workflow, open **Triggers → Add a trigger**. Under **Trigger type**,
 choose **Chat message**, then:
 
 - **Messenger**: **Microsoft Teams**.
-- **Where**: **Anywhere the bot is addressed**, **Direct messages**, or one
-  channel or group chat. The list shows the channels of every team the app was
-  added to, and the group chats it is in.
+- **Channel**: the one channel or group chat the trigger listens in. Pick one
+  connected to your company, or choose **Connect a new channel…** (see
+  [Connect a channel](#connect-a-channel)). A trigger without a channel cannot
+  be switched on and shows **Needs a channel**.
 - **Text match** and **Pattern** limit the trigger to some messages: **contains**,
   **equals**, **regex** or **starts with**. Leave **Pattern** blank to accept
   every message.
@@ -100,7 +130,8 @@ choose **Chat message**, then:
 - In a channel or group chat, a message must **mention** the app: pick it from
   the `@` list. Typing `@Aixle Flow` as plain text is not a mention, and Teams
   does not tell the app about it.
-- In a 1:1 chat with the app, every message counts.
+- A 1:1 chat with the app starts no trigger. Use **Run workflow** or `/run`
+  there instead.
 
 The pattern is matched against the message without the mention, ignoring case.
 
@@ -110,7 +141,8 @@ Mention the app with `help`, or type `/` in a channel or group chat and pick
 **help** from Aixle Flow. It replies with the triggers that apply to that
 conversation, in every project of the company; asked with `/help`, the reply is
 private, visible only to you. It also replies this way when a mention matches no
-trigger. `help` is reserved, so no trigger can use it as a pattern.
+trigger. `help` and `connect` are reserved, so no trigger can use them as a
+pattern.
 
 A message sent to the app privately (through `/`) never starts a trigger: the
 run's status card would appear where everyone sees it. The app answers that
@@ -145,8 +177,7 @@ with Microsoft is recognized without linking.
 `/status` lists, privately, the last ten runs started from that conversation in
 the past 30 days, by a trigger or by someone, with their state and links. It
 needs a linked account and shows only runs of projects you can open in Flow.
-In a 1:1 chat with the app, type `/run` or `/status`: a sentence that merely
-starts with "run" or "status" goes to your triggers.
+In a 1:1 chat with the app, type `/run` or `/status`.
 `run` and `status` are reserved like `help`: no Teams trigger can use them as
 its pattern.
 
@@ -181,12 +212,11 @@ starts themselves with **Run workflow** or `/run` belongs to them instead.
 ### What the run receives
 
 - **The message**, with the name of the person who sent it.
-- **Where to reply**: the channel thread, group chat or 1:1 chat it came from.
+- **Where to reply**: the channel thread or group chat it came from.
 - **Attached files**, saved into the project's assets in a `teams` folder and
-  passed to the run: up to 10 files of up to 50 MB each. In a 1:1 chat this
-  always works. In channels and group chats it needs file access; without it the
-  files are left out. Images pasted into a channel or group chat message are
-  included even without it.
+  passed to the run: up to 10 files of up to 50 MB each. They need file access;
+  without it the files are left out. Images pasted into the message are included
+  even without it.
 
 ---
 
@@ -202,7 +232,8 @@ starts themselves with **Run workflow** or `/run` belongs to them instead.
 The same tools work in Slack, and they answer in whichever messenger the run
 came from. In a run that started from Teams, the conversation and thread default
 to the triggering message. Elsewhere, pass `provider: "teams"` and a
-`conversation`: `Team/Channel`, a channel name, or its id.
+`conversation` connected to your company: `Team/Channel`, a channel name, or its
+id. The tools refuse one that is not connected, and list the ones that are.
 
 - **Adaptive Cards** up to version 1.5. Cards with `Action.Submit` or
   `Action.Execute` are refused, because nothing receives their clicks yet;
@@ -224,8 +255,9 @@ to the triggering message. Elsewhere, pass `provider: "teams"` and a
 
 **Remove** on the Integrations row (company admins only) disconnects the
 organization. The app stays installed in Teams until an administrator removes
-it there, but Flow no longer acts on its messages. Triggers stay in Flow;
-nothing reaches them. Another company can then connect the organization.
+it there, but Flow no longer acts on its messages. Its channels are disconnected,
+and the chat triggers that listened there switch off and need a new channel.
+Another company can then connect the organization.
 
 If someone mentions the app from an organization that is not connected, it
 answers at most once a day per conversation that the organization has not

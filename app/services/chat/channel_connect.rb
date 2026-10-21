@@ -1,0 +1,139 @@
+# frozen_string_literal: true
+
+module Chat
+  # `@<bot> connect <code>` in a channel connects that channel to the company
+  # that asked for the code (docs/design/shared-chat-workspaces.md §8.2–8.3).
+  #
+  # Every refusal gets the same reply in the channel, so nobody there learns
+  # which companies exist; the person who asked for the code sees the reason on
+  # the code itself in Aixle.
+  module ChannelConnect
+    # Only the bare word or the word and a code: "connect the repo to staging" is
+    # a request for a workflow, not for this.
+    REQUEST = /\A\/?connect(?:\s+#{ChatConnectCode::PREFIX}\S*)?\s*\z/i
+    UNUSABLE = "This code is not valid here or has expired. Request a new one in Aixle."
+    DIRECT = "Post the code in the channel you want to connect, not in a direct chat."
+
+    Outcome = Data.define(:code, :connection, :binding, :already_connected)
+
+    module_function
+
+    def request?(event)
+      event.data.to_h["text"].to_s.strip.match?(REQUEST)
+    end
+
+    # True once answered.
+    def call(event)
+      provider = Chat.provider_for(event)
+      return false if provider.nil?
+
+      code = ChatConnectCode.extract(event.data.to_h["text"])
+      return answer(provider, event, hint(provider)) if code.nil?
+
+      if event.data.to_h.dig("conversation", "type") == "direct"
+        refuse!(code, "Posted in a direct chat, not in a channel")
+        return answer(provider, event, DIRECT)
+      end
+
+      outcome = redeem(provider, event, code)
+      return answer(provider, event, UNUSABLE) if outcome.nil?
+
+      message_id = provider.reply(event, confirmation(provider, event, outcome))
+      outcome.connection.update_column(:confirmation_message_id, message_id) if message_id && !outcome.already_connected
+      true
+    rescue StandardError => e
+      Rails.logger.error("[Chat::ChannelConnect] event ##{event&.id}: #{e.class}: #{e.message}")
+      false
+    end
+
+    def redeem(provider, event, code)
+      ChatConnectCode.transaction do
+        record = ChatConnectCode.lock.find_by(code_digest: ChatConnectCode.digest(code))
+        reason = refusal(record, provider, event)
+        if reason
+          record&.update!(failure_reason: reason) unless record&.redeemed_at
+          next nil
+        end
+
+        integration = Integration.active.find_by(id: event.data.to_h["integration_id"], provider: provider.key,
+                                                 company_id: record.company_id)
+        conversation = integration && provider.conversation_for(event, integration)
+        if conversation.nil?
+          record.update!(failure_reason: "Posted in a #{provider.label} workspace this company has not connected")
+          next nil
+        end
+
+        connect(record, conversation, event)
+      end
+    end
+
+    def refusal(record, provider, event)
+      return "unknown" if record.nil?
+      return "Already used" if record.redeemed_at
+      return "Expired" if record.expires_at <= Time.current
+      return "Posted in #{provider.label}, but the code is for #{Chat.provider(record.provider)&.label}" if record.provider != provider.key
+      return "Posted in a workspace this company has not connected" if event.company_id != record.company_id
+
+      nil
+    end
+
+    def connect(record, conversation, event)
+      actor = event.data.to_h["actor"].to_h
+      connection = ChatChannelConnection.find_or_initialize_by(chat_conversation: conversation, company_id: record.company_id)
+      already = connection.persisted?
+      unless already
+        connection.assign_attributes(requested_by: record.requested_by, posted_by_external_id: actor["id"],
+                                     posted_by_name: actor["name"])
+        connection.save!
+      end
+      binding = bind_trigger(record, conversation)
+      record.update!(redeemed_at: Time.current, chat_channel_connection: connection, failure_reason: nil)
+      Outcome.new(code: record, connection: connection, binding: binding, already_connected: already)
+    end
+
+    # A code asked for on behalf of one trigger points that trigger at the
+    # channel. Switching it on stays its owner's call.
+    def bind_trigger(record, conversation)
+      binding = record.trigger_binding
+      return nil unless binding&.chat? && binding.project&.company_id == record.company_id &&
+                        binding.chat_provider == conversation.provider
+
+      binding.update(chat_conversation: conversation) ? binding : nil
+    end
+
+    def refuse!(code, reason)
+      ChatConnectCode.where(code_digest: ChatConnectCode.digest(code), redeemed_at: nil).update_all(failure_reason: reason)
+    end
+
+    def answer(provider, event, text)
+      provider.reply(event, text)
+      true
+    end
+
+    def hint(provider)
+      "To connect this channel, request a code in Aixle (Integrations → #{provider.label} → Connect a channel, " \
+        "or from a chat trigger), then post it here."
+    end
+
+    def confirmation(provider, event, outcome)
+      company = outcome.code.company.name
+      first = if outcome.already_connected
+        "This channel was already connected to #{provider.strong(company)}."
+      else
+        who = [ (provider.escape(outcome.code.requested_by.name) + " in Aixle" if outcome.code.requested_by),
+                provider.mention(event.data.to_h["actor"]).then { |m| "posted by #{m}" if m } ].compact
+        "This channel is now connected to #{provider.strong(company)}#{" (#{who.join(', ')})" if who.any?}."
+      end
+      [ first, purpose(provider, event, outcome, company) ].join("\n")
+    end
+
+    def purpose(provider, event, outcome, company)
+      binding = outcome.binding
+      return "#{provider.strong(company)}'s workflows can post here." if binding.nil?
+
+      name = binding.name.presence || binding.workflow&.name || "this workflow"
+      "Trigger #{provider.strong(name)} in project #{provider.strong(binding.project.name)} listens to mentions " \
+        "of #{provider.bot_mention(event)} here."
+    end
+  end
+end
