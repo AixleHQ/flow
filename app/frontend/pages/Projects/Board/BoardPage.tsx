@@ -797,60 +797,66 @@ const BoardPage = () => {
             </ActionIcon>
           )}
 
-          <Box style={{ flex: 1 }} />
+          {/* One unit, so a full row wraps the whole cluster and never strands the gear alone. */}
+          <Group gap={6} wrap="nowrap" ml="auto">
+            {/* Bulk — arms explicit selection mode. Hidden for view-only members, who get no
+                selection affordance at all (issue #581). */}
+            {canExecute && (
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={bulkMode ? <IconCheck size={12} /> : <IconCheckbox size={12} />}
+                onClick={toggleBulkMode}
+                styles={
+                  bulkMode
+                    ? {
+                        root: {
+                          backgroundColor: 'var(--mantine-color-brand-light)',
+                          color: 'var(--mantine-color-brand-6)',
+                          borderColor: 'var(--mantine-color-brand-light-hover)',
+                        },
+                      }
+                    : undefined
+                }
+              >
+                {bulkMode ? 'Done' : 'Bulk'}
+              </Button>
+            )}
 
-          {/* Bulk — arms explicit selection mode. Hidden for view-only members, who get no
-              selection affordance at all (issue #581). */}
-          {canExecute && (
+            {/* Collapse all */}
             <Button
               variant="default"
               size="xs"
-              leftSection={bulkMode ? <IconCheck size={12} /> : <IconCheckbox size={12} />}
-              onClick={toggleBulkMode}
-              styles={
-                bulkMode
-                  ? {
-                      root: {
-                        backgroundColor: 'var(--mantine-color-brand-light)',
-                        color: 'var(--mantine-color-brand-6)',
-                        borderColor: 'var(--mantine-color-brand-light-hover)',
-                      },
-                    }
-                  : undefined
-              }
+              leftSection={allColumnsCollapsed ? <IconArrowsMaximize size={12} /> : <IconArrowsMinimize size={12} />}
+              onClick={handleToggleAll}
             >
-              {bulkMode ? 'Done' : 'Bulk'}
+              {allColumnsCollapsed ? 'Expand all' : 'Collapse all'}
             </Button>
-          )}
 
-          {/* Collapse all */}
-          <Button
-            variant="default"
-            size="xs"
-            leftSection={allColumnsCollapsed ? <IconArrowsMaximize size={12} /> : <IconArrowsMinimize size={12} />}
-            onClick={handleToggleAll}
-          >
-            {allColumnsCollapsed ? 'Expand all' : 'Collapse all'}
-          </Button>
+            {/* Activity */}
+            <Button
+              variant="default"
+              size="xs"
+              leftSection={<IconActivity size={12} />}
+              onClick={() => setActivityOpen(true)}
+            >
+              Activity
+            </Button>
 
-          {/* Activity */}
-          <Button
-            variant="default"
-            size="xs"
-            leftSection={<IconActivity size={12} />}
-            onClick={() => setActivityOpen(true)}
-          >
-            Activity
-          </Button>
-
-          {/* Board settings — the only entry point to BoardSettingsDialog */}
-          {canExecute && (
-            <Tooltip label="Board settings">
-              <ActionIcon variant="subtle" size="sm" aria-label="Board settings" onClick={() => setSettingsOpen(true)}>
-                <IconSettings size={16} />
-              </ActionIcon>
-            </Tooltip>
-          )}
+            {/* Board settings — the only entry point to BoardSettingsDialog */}
+            {canExecute && (
+              <Tooltip label="Board settings">
+                <ActionIcon
+                  variant="subtle"
+                  size="sm"
+                  aria-label="Board settings"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <IconSettings size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </Group>
         </Group>
 
         {/* Selection toolbar — second row, visible only when tasks are selected */}
