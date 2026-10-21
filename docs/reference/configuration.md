@@ -398,8 +398,8 @@ declared there. Read once at boot, so a change needs a restart.
 | Variable                         | Required | Default | Purpose                                                     |
 | -------------------------------- | -------- | ------- | ----------------------------------------------------------- |
 | `FEATURE_<KEY>`                  | no       | unset   | Locks the declared flag `<key>` (upper-cased, e.g. `FEATURE_BOARD_AI_SUMMARY` for `board_ai_summary`) on or off, over every company override and admin value. `on`, `true`, `1` and `off`, `false`, `0`, case-insensitive; empty is unset. Any other value fails boot naming the variable. A variable for a flag nobody declares is ignored with one warning at boot (logged and sent to Sentry), so removing a flag never needs an infra change first. |
-| `FEATURE_FLAGS_REFRESH_INTERVAL` | no       | `5`     | Seconds between a process's checks for changed runtime flag values. Reserved: nothing reads runtime values from the database yet. |
-| `FEATURE_FLAGS_MAX_STALENESS`    | no       | `60`    | Seconds after which a process reloads runtime flag values even without a change signal. Reserved, as above. |
+| `FEATURE_FLAGS_REFRESH_INTERVAL` | no       | `5`     | Seconds between a process's checks of the Redis change token for runtime flag values (admin values and company overrides). |
+| `FEATURE_FLAGS_MAX_STALENESS`    | no       | `60`    | Seconds after which a process reloads runtime flag values from the database even without a change signal, e.g. while Redis is down. |
 
 ## Docs explorer
 

@@ -15,6 +15,8 @@ module FeatureFlags
 
   UNKNOWN_FLAG_SOURCE = "feature_flags.unknown_flag"
   UNDECLARED_ENV_SOURCE = "feature_flags.undeclared_env"
+  RELOAD_FAILED_SOURCE = "feature_flags.reload_failed"
+  VERSION_BUMP_FAILED_SOURCE = "feature_flags.version_bump_failed"
 
   class Error < StandardError; end
 
@@ -45,7 +47,7 @@ module FeatureFlags
 
   class << self
     # Test seams: the suite swaps these through test/support/feature_flags_helper.rb.
-    attr_writer :registry, :env_source, :store
+    attr_writer :registry, :env_source, :store, :version_token
 
     def registry
       @registry ||= Registry.load(REGISTRY_PATH)
@@ -55,14 +57,33 @@ module FeatureFlags
       @env_source ||= EnvSource.new(Settings.feature_flags&.env.to_h, registry: registry)
     end
 
-    # Only the in-memory store exists until the database-backed one lands, so
-    # every flag resolves from ENV and its declared default.
+    # The suite replaces this with a MemoryStore before any test runs.
     def store
-      @store ||= MemoryStore.new
+      @store ||= Store.new(version_token: version_token,
+                           refresh_interval: Settings.feature_flags.refresh_interval_seconds,
+                           max_staleness: Settings.feature_flags.max_staleness_seconds)
+    end
+
+    # Writers call `bump` after their transaction commits.
+    def version_token
+      @version_token ||= VersionToken.new
+    end
+
+    # The first check of a request or job pins the snapshot in Current, so a
+    # value changed meanwhile cannot make one page render half old, half new.
+    # Rails clears Current when an executor run starts and ends: requests and
+    # Active Job executions are runs. Temporal activities are not (the SDK runs
+    # them on its own thread pool and Activities::Base adds no executor), so a
+    # pin there would outlive the activity on that pool thread: outside a run,
+    # each check reads the store's current snapshot instead.
+    def snapshot
+      return store.snapshot unless Rails.application.executor.active?
+
+      Current.feature_snapshot ||= store.snapshot
     end
 
     def resolver
-      Resolver.new(registry: registry, env: env_source, snapshot: store.snapshot)
+      Resolver.new(registry: registry, env: env_source, snapshot: snapshot)
     end
 
     # Loads and validates the registry and the ENV layer, raising on anything
