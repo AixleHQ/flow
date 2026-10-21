@@ -8,6 +8,9 @@
 #   with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
 #   stub_feature_env(:board_ai_summary, "off") { ... }                     # the FEATURE_* lock
 #   with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }    # declare test flags
+#
+# The database-backed FeatureFlags::Store is tested on its own, against real
+# rows and FakeFeatureFlagVersionToken (test/services/feature_flags/store_test.rb).
 module FeatureFlagsHelper
   extend ActiveSupport::Concern
 
@@ -17,10 +20,27 @@ module FeatureFlagsHelper
     setup { reset_feature_flags! }
   end
 
+  class_methods do
+    # with_feature_registry for every test of the class.
+    def uses_feature_registry(path)
+      setup do
+        @registry_before_test = [ FeatureFlags.registry, FeatureFlags.env_source ]
+        registry = FeatureFlags::Registry.load(path)
+        FeatureFlags.registry = registry
+        FeatureFlags.env_source = FeatureFlags.env_source.with_registry(registry)
+      end
+
+      teardown do
+        FeatureFlags.registry, FeatureFlags.env_source = @registry_before_test if @registry_before_test
+      end
+    end
+  end
+
   # Empties the store and the ENV layer, so every test starts from the declared
   # defaults whatever an earlier test or the process environment left behind.
   def reset_feature_flags!
     FeatureFlags.store.reset!
+    Current.feature_snapshot = nil
     Feature::REPORTED_UNKNOWN.clear
     FeatureFlags.env_source = FeatureFlags::EnvSource.new({}, registry: FeatureFlags.registry)
   end
@@ -41,9 +61,15 @@ module FeatureFlagsHelper
       store.set_override(definition.key, company.id, enabled)
     end
 
+    # A test runs inside one executor run, so the snapshot its first check
+    # pinned would otherwise hide the value set here.
+    Current.feature_snapshot = nil
     yield
   ensure
-    store&.replace(previous) if previous
+    if previous
+      store.replace(previous)
+      Current.feature_snapshot = nil
+    end
   end
 
   def stub_feature_env(key, value)
@@ -71,3 +97,6 @@ module FeatureFlagsHelper
     end
   end
 end
+
+# The suite never reads flag values from the database or Redis.
+FeatureFlags.store = FeatureFlags::MemoryStore.new

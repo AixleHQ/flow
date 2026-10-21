@@ -143,6 +143,18 @@ module Users
       assert_nil folder.reload.created_by_id
     end
 
+    test "keeps the feature flag values the user set, with the author nullified" do
+      with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
+        flag = FeatureFlag.create!(key: "board_ai_summary", enabled: true, updated_by: @user)
+        override = flag.overrides.create!(company: @company, enabled: false, reason: "asked to wait", created_by: @user)
+
+        PermanentDeletionService.call(user: @user, actor: @actor)
+
+        assert_equal [ true, nil ], [ flag.reload.enabled, flag.updated_by_id ]
+        assert_equal [ false, nil ], [ override.reload.enabled, override.created_by_id ]
+      end
+    end
+
     test "nullifies invited_by on memberships this user created" do
       invitee_membership = create(:company_membership, company: @company, invited_by: @user)
 

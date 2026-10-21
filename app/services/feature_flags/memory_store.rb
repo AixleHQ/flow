@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module FeatureFlags
-  # Runtime values held in process memory. It is the store in every environment
-  # until the database-backed one exists, and stays the store in tests, where
-  # test/support/feature_flags_helper.rb writes to it and resets it per test.
+  # Runtime values held in process memory: the store in tests, where
+  # test/support/feature_flags_helper.rb installs it, writes to it and resets it
+  # per test. Everywhere else FeatureFlags::Store reads them from the database.
   # Each write swaps in a new frozen Snapshot, so a reader never sees half a change.
   class MemoryStore
     def initialize
