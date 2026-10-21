@@ -25,6 +25,8 @@ governance, community health — carry none.
 - **Profile**: an operator impersonating someone can no longer regenerate or
   disable that person's personal MCP token. A token issued that way reached
   none of their companies, and replacing it cut off their own clients.
+- **Tasks**: the board settings gear stays with Bulk, Collapse all and Activity
+  at the right of the filter row instead of dropping onto a line of its own.
 
 ## [1.5.0] - 2026-10-20
 
