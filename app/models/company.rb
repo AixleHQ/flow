@@ -267,9 +267,14 @@ class Company < ApplicationRecord
       return
     end
 
-    return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
+    unless @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
+      return errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+    end
 
-    errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+    requested = @session_concurrency_limit.to_i
+    return if requested >= Deployment.minimum_workers || requested == SessionConcurrencyLimit.for_company(id)
+
+    errors.add(:session_concurrency_limit, SessionConcurrencyLimit.below_minimum_workers)
   end
 
   def seed_auth_policies

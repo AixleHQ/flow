@@ -23,6 +23,9 @@ module Deployment
 
   MODES = [ SELF_HOSTED, SAAS, AWS_MARKETPLACE ].freeze
 
+  # The Marketplace deployment tier starts at three workers per company (board #191).
+  MARKETPLACE_MINIMUM_WORKERS = 3
+
   class << self
     def mode
       raw = Settings.deployment&.mode.to_s.strip.downcase
@@ -55,6 +58,8 @@ module Deployment
     # metering record — AWS Marketplace takes a quantity or nothing. So where the
     # installation meters itself to AWS, every company must carry a number.
     def requires_bounded_companies? = aws_marketplace?
+
+    def minimum_workers = aws_marketplace? ? MARKETPLACE_MINIMUM_WORKERS : 1
 
     # Whether capacity is charged for at all. A company admin may raise their own
     # limit wherever it is, because raising it raises what they pay; they may

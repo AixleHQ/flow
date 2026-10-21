@@ -115,6 +115,20 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 30, limit_for(@company)&.max_sessions
   end
 
+  test "a marketplace admin is told the fewest workers the installation allows" do
+    marketplace!
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "2" }
+
+    assert_equal 12, limit_for(@company)&.max_sessions
+    assert_match(/must be at least 3/, Array(session["inertia_errors"][:capacity]).to_sentence)
+
+    get company_settings_path
+
+    assert_inertia_props { |props| assert_equal 3, props[:capacity][:minimum] }
+  end
+
   # Every other path that clears a limit is stopped in the model, so the console
   # and the admin form are covered by the same rule as the form above.
   test "the row itself refuses to be destroyed in marketplace mode" do
