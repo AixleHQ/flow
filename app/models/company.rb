@@ -39,6 +39,10 @@ class Company < ApplicationRecord
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
   has_many :billing_cancellations, dependent: :delete_all
+  # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
+  # No `dependent:` — the row's before_destroy would abort destroying a metered company.
+  has_one :session_concurrency_limit_row, as: :scope, class_name: "SessionConcurrencyLimit",
+                                          inverse_of: false
 
   # A session whose runtime is still being torn down holds a reservation, and
   # destroying it would free a slot that is not free (TerminalSession refuses).
@@ -146,6 +150,7 @@ class Company < ApplicationRecord
   # both tiers from one table. Nil means unbounded and unbilled.
   def session_concurrency_limit
     return @session_concurrency_limit if defined?(@session_concurrency_limit)
+    return session_concurrency_limit_row&.max_sessions if association(:session_concurrency_limit_row).loaded?
 
     SessionConcurrencyLimit.for_company(id)
   end

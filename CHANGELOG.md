@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Admin**: the companies list loads every company's session limit in one
+  query instead of one per company.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added

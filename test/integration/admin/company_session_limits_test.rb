@@ -55,6 +55,20 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     assert_match(/42/, response.body)
   end
 
+  test "the index reads every company's limit in one query" do
+    with_mode(Deployment::SAAS)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 41)
+    SessionConcurrencyLimit.set!(scope: create(:company), max_sessions: 43)
+    SessionConcurrencyLimit.set!(scope: create(:company), max_sessions: 47)
+    create(:company)
+
+    assert_queries_match(/FROM "session_concurrency_limits"/, count: 1) { get admin_companies_path }
+
+    assert_response :success
+    %w[41 43 47].each { |limit| assert_match(/#{limit}/, response.body) }
+    assert_match(/No limit — unbilled/, response.body)
+  end
+
   test "the show page reports the company's limit" do
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
 

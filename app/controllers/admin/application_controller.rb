@@ -18,7 +18,9 @@ module Admin
 
     # Re-add associations skipped via {SkipAdministrateCollectionIncludes} on dashboards — they are
     # still needed on standalone index tables, but redundant on nested Administrate collections.
+    # Also preloads what virtual index columns read, so they do not query per row.
     INDEX_COLLECTION_INCLUDES_EXTRAS = {
+      "Company" => [ :session_concurrency_limit_row ],
       "Step" => [ :workflow ],
       "TaskComment" => [ :board_task ],
       "BoardColumn" => [ :board ],
