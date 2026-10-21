@@ -164,8 +164,9 @@ class FeatureFlags::AdminTest < ActiveSupport::TestCase
   end
 
   test "a write that fails inside its transaction leaves no rows, no audit and no bump" do
-    gone = create(:company)
-    Company.where(id: gone.id).delete_all
+    # A company deleted after the page that offered it was rendered: the
+    # override's foreign key fails after the flag row was written.
+    gone = Company.instantiate("id" => Company.maximum(:id).to_i + 1, "name" => "Gone")
 
     assert_raises(ActiveRecord::InvalidForeignKey) do
       admin.set_override(:board_ai_summary, gone, true, actor: @admin, reason: "pilot")
