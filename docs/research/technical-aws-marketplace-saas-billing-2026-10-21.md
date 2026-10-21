@@ -62,6 +62,7 @@ them and two of them cannot be revised after publication.
 | A dimension of its own | **not** `queue_minute`. `worker_minute` is the proposal, matching the word the product uses everywhere a buyer reads. **The API identifier is immutable after publication**; confirm the exact string before the listing form is filled. |
 | Pure usage pricing | No contract dimensions, therefore no `GetEntitlements` and no `entitlement-updated` to consume. The seller-account role carries two permissions, not three. **This does not settle free trials** — a trial is a property of the offer and is compatible with usage pricing. See §10. |
 | Unsubscribe blocks and keeps | `billing_state` goes to `blocked` with a reason of its own. Data is untouched; a buyer who subscribes again returns to their workspace. |
+| **Our own trial is off wherever a payer is attached** | Stripe or AWS alike. A Marketplace free trial, if one is ever offered, is AWS's discount on usage we report as normal — not a mode of ours. The two never coexist, so no company is ever in two trials. See §10. |
 | **There is no payer migration** | Not a mechanism that moves a company from one payer to the other, but rules that stop a company from ever having two. Settled 21 October, after the question was raised on a call and answered "let us have that problem first" — which is correct, and is an argument for prevention rather than for machinery. |
 | **A Marketplace company cannot attach a card** | Where AWS bills, Checkout is not offered at all. One-way and cheap: it is a refusal on screens that already have a guard. |
 | **Every arrival creates a new tenant** | A visitor arriving from Marketplace is signed out and led to workspace creation, whoever they are and whatever they already have — unless the identifier is already bound. See §5.2. |
@@ -401,13 +402,30 @@ those apart.
 
 ### 5.4 Registration and subscription arrive in either order
 
-AWS sends `subscribe-success` to SNS on its own schedule, and a buyer can subscribe and
-never finish registering. That leaves a customer who is being billed and has no account —
-a state that has to be **visible to us deliberately**, because otherwise the first report
-of it is a complaint.
+AWS emits agreement-created on its own schedule, and a buyer can subscribe and never finish
+registering. That leaves a customer who is being billed and has no account — a state that
+has to be **visible to us deliberately**, because otherwise the first report of it is a
+complaint.
 
-The opposite happens too: somebody registers before the subscription is confirmed and is
-entitled to nothing yet.
+The opposite happens too, and it decides a line of code: somebody registers before the
+agreement is confirmed.
+
+**A Marketplace company is never created `trialing`.** Today `WorkspaceOnboardingForm`
+writes `billing_state: "trialing"` for every new company, which is right for a stranger
+signing up and wrong here: our allowance is switched off by an attached payer (§10), so a
+company that AWS bills has no trial to be in.
+
+**And it does not start able to run.** The temptation is to let them in immediately and eat
+the few seconds of unbillable capacity, but AWS says not to, and says why: a `subscribe-fail`
+means "payment might have failed even though the buyer has already transitioned from the
+AWS Marketplace to the seller's SaaS landing page", and the guidance is explicit — "The
+seller should wait for the `subscribe-success` message before allowing consumption of the
+product", and "To prevent billing issues, we strongly recommend programmatically waiting
+for this notification before launching resources on behalf of your customers."
+
+So the company is created blocked, on a reason of its own, and the agreement-created event
+is what releases it. The screen the registering person sees in that window is a product
+decision nobody has made; what it must not be is an error, because nothing is wrong.
 
 ---
 
@@ -626,11 +644,15 @@ marketing copy.
 
   Not urgent, and deliberately so: nothing can reach this state until the registration
   slice exists.
-- **Free trials: whether we offer one, and what it means if we do.** Raised on a call as a
-  possibility, not settled. It is listed here rather than in §1 because the registration
-  endpoint behaves identically either way (§5.1 stores the parameter), so nothing is
-  blocked — but three things have to be answered before any free-trial offer is created,
-  and only the first of them is AWS's.
+- **Free trials: one verification, no design.** Settled on 21 October, and the settlement
+  is that there is nothing for us to build. Our own allowance is switched off by any
+  attached payer, Stripe or AWS alike, and an AWS free trial is AWS's own discount applied
+  to the usage we report in the ordinary way. So the two mechanisms never meet: there is no
+  state in which `Billing::Trial` and a Marketplace trial are both live for one company.
+
+  That matches what the documentation implies (below) without either of them saying it
+  outright, which leaves exactly one thing to do and it is a test rather than a decision —
+  see the first bullet below.
 
   **Does metering during a trial charge the buyer? Strongly implied, never stated.**
   Searched on 21 October. Nothing in the Seller Guide tells a seller to stop metering
@@ -640,11 +662,19 @@ marketing copy.
   free trial period and how much free software usage is included in the trial". Read
   together, AWS discounts and we meter exactly as always.
 
-  That is an inference from two sentences about something else, not an answer, and the
-  mistake it guards against charges a customer who was promised nothing. It still goes to
-  Seller Operations — but the question is now sharp enough to be answered in one line:
-  *for a usage-priced SaaS free trial, does the seller continue to send `BatchMeterUsage`
-  records, and does AWS zero-rate them for the trial term?*
+  That is an inference from two sentences about something else, and it is also what the
+  product side expects — the discount is AWS's and arrives on its own. Two independent
+  readings agreeing is worth something and is still not AWS saying it, and the mistake it
+  guards against charges a customer who was promised nothing.
+
+  **So this is now a test, not a question.** Because nobody is building trial handling,
+  the whole of the risk is "AWS does not behave as both of us assume", and that is
+  observable: put a free-trial offer on the `[TEST]` listing, subscribe from the allowlisted
+  account, let an hour meter, and read the buyer's bill — the same Cost Explorer check the
+  container product already uses (`marketplace-infra/BEFORE_PUBLISHING.md`). A zero there
+  settles it in a way no reply would. Worth asking Seller Operations in the same breath, in
+  one line: *for a usage-priced SaaS free trial, does the seller keep sending
+  `BatchMeterUsage` records, and does AWS zero-rate them for the trial term?*
 
   Two facts settled along the way: one free trial offer per public SaaS product, length
   7–90 days, and **the dimensions cannot be changed for a subscription free trial** —
@@ -660,11 +690,19 @@ marketing copy.
   correct during a trial, where it raises nothing but our costs. `MARKETPLACE_MINIMUM_WORKERS`
   is 3; nothing stops a trialling buyer from setting 50 on the first day.
 
+  The discount being AWS's own **sharpens** this rather than settling it. If AWS zero-rates
+  what we report, then during a trial the buyer pays nothing and the workers still run on
+  our cluster: the cost is entirely ours, and the person deciding how much of it to incur
+  is the buyer. Nothing in "AWS applies the discount" puts a ceiling on that.
+
   So a free trial needs a ceiling the customer cannot raise, for its duration. The
   mechanism already exists and is the one §4.3 says must not reach a Marketplace company:
   `Billing::EffectiveCapacity.ceilings`. If trials happen, that sentence needs refining
   rather than reversing — our queue-hour allowance still must not apply, but the clamp it
   rides on is exactly what a trial wants.
+
+  This is the one part of free trials that is ours to build, and it only becomes due when
+  somebody decides to create the offer.
 
   **How a trial ends: answered, and it needs no work.** The buyer guide is unambiguous —
   "SaaS free trials won't automatically convert into paid agreements. If you no longer want
