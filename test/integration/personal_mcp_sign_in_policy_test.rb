@@ -61,6 +61,13 @@ class PersonalMCPSignInPolicyTest < ActionDispatch::IntegrationTest
     assert_nil error_text(call_tool(token, "list_board_tasks", project_id: @sso_project.id))
   end
 
+  test "a token no company accepts says so instead of answering with empty lists" do
+    token = @user.regenerate_mcp_token!(proof_provider_ids: [])
+
+    assert_match(/sign in to Aixle, then regenerate the token/, error_text(call_tool(token, "list_companies")))
+    assert_match(/sign in to Aixle, then regenerate the token/, error_text(call_tool(token, "list_projects")))
+  end
+
   test "a token issued before proofs were recorded counts as a password sign-in" do
     token = @user.regenerate_mcp_token!
 
