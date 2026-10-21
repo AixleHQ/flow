@@ -37,7 +37,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     company = signed_in_company
 
     with_feature(:board_ai_summary, true, company: company) do
-      assert_equal true, features_prop(company_projects_path)[:boardAiSummary]
+      assert_equal({ "boardAiSummary" => true }, features_prop(company_projects_path).to_h)
     end
   end
 
@@ -46,7 +46,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     other = create(:company)
 
     with_feature(:board_ai_summary, true, company: other) do
-      assert_equal false, features_prop(company_projects_path)[:boardAiSummary]
+      assert_equal({ "boardAiSummary" => false }, features_prop(company_projects_path).to_h)
     end
   end
 
