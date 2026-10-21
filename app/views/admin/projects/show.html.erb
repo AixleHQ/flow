@@ -6,7 +6,7 @@ company (Admin::ProjectMovesController) and, once moved, its report.
 %>
 
 <% content_for(:header_last) do %>
-  <div style="margin-left: 0.5rem;">
+  <div>
     <%= link_to "Move to another company", new_admin_project_move_path(page.resource), class: "button" %>
     <% if Audit.exists?(associated: page.resource, action: "project_moved_in") %>
       <%= link_to "Last move", admin_project_move_path(page.resource), class: "button" %>

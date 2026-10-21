@@ -6,7 +6,7 @@ Administrate's show page, plus the way into inviting the company's members
 %>
 
 <% content_for(:header_last) do %>
-  <div style="margin-left: 0.5rem;">
+  <div>
     <%= link_to "Invite members", new_admin_company_invitation_path(page.resource), class: "button" %>
   </div>
 <% end %>
