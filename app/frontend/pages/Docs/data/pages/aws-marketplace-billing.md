@@ -40,14 +40,18 @@ allocations are split so their parts still add up to that whole. The seconds
 dropped this way are never charged for, and the exact figure is kept on our side
 of the record for reconciliation.
 
-## Every company must have a limit
+## Every company has at least three workers
 
 In this product a company **cannot** be left without a session limit. Unlimited
 has no encoding in a metering record — AWS takes a quantity or nothing — so an
 unbounded company would run capacity that no record could describe.
 
-Your administrator sets each company's limit on **Settings → General → Session
-capacity**, and may raise or lower it at any time. The change takes effect
+The limit is **three workers or more**. A new company starts at three, and a
+number below three is refused. A company that was given fewer before this
+minimum existed keeps its number until someone changes it.
+
+Your administrator sets each company's limit on **Settings → General → Workers**,
+and may raise or lower it at any time, down to three. The change takes effect
 immediately, and the hour it happens in is billed for what was actually offered
 during each part of it.
 

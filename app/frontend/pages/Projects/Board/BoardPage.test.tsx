@@ -1753,6 +1753,15 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByRole('heading', { name: 'Board Settings' })).toBeInTheDocument();
   });
 
+  it('keeps the board settings gear in the same toolbar group as Activity and Collapse all', () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    const group = screen.getByRole('button', { name: 'Board settings' }).parentElement?.parentElement;
+
+    expect(group).toContainElement(screen.getByRole('button', { name: 'Activity' }));
+    expect(group).toContainElement(screen.getByRole('button', { name: 'Collapse all' }));
+  });
+
   // --- create-task modal submit + validation ---
 
   it('submits the create-task form, POSTs the new task and renders its card', async () => {

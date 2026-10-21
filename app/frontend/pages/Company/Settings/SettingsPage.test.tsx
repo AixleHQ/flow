@@ -18,6 +18,7 @@ const company = {
 
 const capacity = {
   maxSessions: 20,
+  minimum: 1,
   available: 14,
   reserved: 6,
   allocations: [{ name: 'Gateway', maxSessions: 6 }],
@@ -43,6 +44,15 @@ describe('Company settings page', () => {
 
     await waitFor(() => expect(patch).toHaveBeenCalled());
     expect(patch.mock.calls[0][1]).toMatchObject({ capacity: '30' });
+  });
+
+  it('tells a Marketplace admin the fewest workers the installation allows', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { company, capacity: { ...capacity, minimum: 3 }, canManage: true },
+    });
+
+    expect(screen.getByText(/At least 3 in this installation/)).toBeInTheDocument();
+    expect(screen.queryByText(/Leave empty for no limit/)).not.toBeInTheDocument();
   });
 
   // The hosted product invoices for this number, so it is shown and not offered.

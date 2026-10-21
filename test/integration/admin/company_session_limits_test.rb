@@ -52,7 +52,21 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
 
     get admin_companies_path
 
-    assert_match(/42/, response.body)
+    assert_select "td.cell-data--company-capacity-field", text: "42"
+  end
+
+  test "the index reads every company's limit in one query" do
+    with_mode(Deployment::SAAS)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 41)
+    SessionConcurrencyLimit.set!(scope: create(:company), max_sessions: 43)
+    SessionConcurrencyLimit.set!(scope: create(:company), max_sessions: 47)
+    create(:company)
+
+    assert_queries_match(/FROM "session_concurrency_limits"/, count: 1) { get admin_companies_path }
+
+    assert_response :success
+    %w[41 43 47].each { |limit| assert_select "td.cell-data--company-capacity-field", text: limit }
+    assert_match(/No limit — unbilled/, response.body)
   end
 
   test "the show page reports the company's limit" do
@@ -117,6 +131,44 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     }
 
     assert_nil limit_row, "nothing may be written when the form is refused"
+  end
+
+  test "a new company in an AWS Marketplace installation starts at three workers" do
+    with_mode(Deployment::AWS_MARKETPLACE)
+
+    get new_admin_company_path
+
+    assert_response :success
+    assert_select "input[name='company[session_concurrency_limit]'][value='3'][min='3']"
+  end
+
+  test "an AWS Marketplace company cannot be given fewer than three workers" do
+    with_mode(Deployment::AWS_MARKETPLACE)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
+
+    patch admin_company_path(@company), params: {
+      company: { name: @company.name, email_domain: @company.email_domain, session_concurrency_limit: "2" }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match(/must be at least 3 in an AWS Marketplace installation/, response.body)
+    assert_equal 4, limit_row.max_sessions
+  end
+
+  test "an AWS Marketplace company given fewer workers before the minimum can still be edited" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
+    with_mode(Deployment::AWS_MARKETPLACE)
+
+    get edit_admin_company_path(@company)
+
+    assert_select "input[name='company[session_concurrency_limit]'][value='2'][min='2']"
+
+    patch admin_company_path(@company), params: {
+      company: { name: "Renamed", email_domain: @company.email_domain, session_concurrency_limit: "2" }
+    }
+
+    assert_equal "Renamed", @company.reload.name
+    assert_equal 2, limit_row.max_sessions
   end
 
   # Every other update of a company has to leave the limit alone, or saving a

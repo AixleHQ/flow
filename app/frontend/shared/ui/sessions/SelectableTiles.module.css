@@ -112,8 +112,12 @@
   width: 100%;
 }
 
-.mode:hover {
+.mode:hover:not(.disabled) {
   border-color: var(--app-border-strong);
+}
+
+.mode.disabled {
+  cursor: not-allowed;
 }
 
 .modeSelected {

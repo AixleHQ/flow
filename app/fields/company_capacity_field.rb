@@ -12,4 +12,8 @@ class CompanyCapacityField < Administrate::Field::Base
   def unlimited? = data.blank?
 
   def unbilled? = unlimited? && Deployment.saas?
+
+  # Never above the number the company already has: the browser would refuse to
+  # submit any edit of a company given fewer before the minimum existed.
+  def minimum = [ Deployment.minimum_workers, data.presence&.to_i ].compact.min
 end

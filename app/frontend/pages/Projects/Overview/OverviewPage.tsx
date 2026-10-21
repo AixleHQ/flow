@@ -204,7 +204,7 @@ const OverviewPage = () => {
           <Box className={classes.kpiCard}>
             <Box className={classes.kpiTop}>
               <IconCoin size={15} color={KPI_ICON_COLOR} />
-              <Text className={classes.kpiLabel}>Total Spend</Text>
+              <Text className={classes.kpiLabel}>Token Cost</Text>
             </Box>
             <Text className={`${classes.kpiValue} ${classes.kpiValueMono}`}>
               {formatSpend(summary.totalSpendCents)}

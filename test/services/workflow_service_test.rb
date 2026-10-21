@@ -90,6 +90,31 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_not run.persisted?
   end
 
+  test "start refuses an override that runs a step requiring input automatically, in any mode" do
+    @step2.update!(allow_non_interactive: true)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).never
+
+    runs = %i[mixed non_interactive].map do |mode|
+      WorkflowService.start(workflow: @workflow, project: @project, user: @user, mode: mode,
+                            overrides: { @step1.id.to_s => { "auto_run" => true } })
+    end
+
+    runs.each do |run|
+      assert_not run.persisted?
+      assert_equal [ "Cannot run automatically: steps Step 1 require user interaction" ], run.errors.full_messages
+    end
+  end
+
+  test "start lets an override hold a step that may run automatically for input" do
+    @step1.update!(allow_non_interactive: true)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
+
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, mode: :mixed,
+                                overrides: { @step1.id.to_s => { "auto_run" => false }, @step2.id.to_s => { "auto_run" => false } })
+
+    assert run.persisted?
+  end
+
   test "start refuses a run that would fail on a reference, and names it" do
     asset = create(:asset, scope: @project, created_by: @user, name: "brief.md")
     @step2.update!(instructions: "Read {{asset:#{asset.id}}}.")
@@ -344,7 +369,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     asset = create(:asset, scope: @project)
     repository = create(:repository, scope: @project, integration: create(:integration, company: @company))
     run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user,
-      mode: "interactive", step_overrides: { @step1.id.to_s => { "auto_run" => true } },
+      mode: "interactive", step_overrides: { @step1.id.to_s => { "auto_run" => false } },
       input_asset_ids: [ asset.id ], repository_ids: [ repository.id ], agent_runtime: "claude_code",
       shared_context: { "requested_model" => "opus" })
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
@@ -364,7 +389,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_not_equal run.id, new_run.id
     assert_equal @workflow.id, new_run.workflow_id
     assert_equal "interactive", new_run.mode
-    assert_equal({ @step1.id.to_s => { "auto_run" => true } }, new_run.step_overrides)
+    assert_equal({ @step1.id.to_s => { "auto_run" => false } }, new_run.step_overrides)
     assert_equal [ asset.id ], new_run.input_asset_ids
     assert_equal [ repository.id ], new_run.repository_ids
     assert_equal "claude_code", new_run.agent_runtime

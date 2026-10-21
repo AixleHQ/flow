@@ -5,7 +5,7 @@
 **Overview** is the project's front page and the fastest answer to "what is
 this project doing, and what is it costing?"
 
-- **KPI cards** — board tasks, sessions launched, workflow runs, total spend,
+- **KPI cards** — board tasks, sessions launched, workflow runs, token cost,
   each with a delta against the previous period, plus an average cost per
   session once sessions have run.
 - **Workflow Runs** — a donut of run outcomes with a success rate, total, and a

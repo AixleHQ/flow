@@ -129,13 +129,34 @@
 }
 
 :root .main-content__header {
+  flex-wrap: wrap;
+  gap: 12px;
   border-bottom-color: var(--app-border-default);
   padding-top: 20px;
   padding-bottom: 16px;
 }
 
 :root .main-content__page-title {
+  min-width: 0;
   font-size: 26px;
+  overflow-wrap: anywhere;
+}
+
+:root .main-content__header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Administrate labels the show/edit header buttons "Edit <name>" / "Show <name>",
+   and a user's name is "Name (email)" — unbounded, so cap it; the title above
+   carries the full name. */
+:root .main-content__header .button {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Navigation ──────────────────────────────────── */
