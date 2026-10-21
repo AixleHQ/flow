@@ -191,17 +191,19 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     store = build_store
 
     with_store(store) do
-      assert Feature.enabled?(:coder_reap)
+      Rails.application.executor.wrap do
+        assert Feature.enabled?(:coder_reap)
 
-      set_global(:coder_reap, false)
-      @token.bump
-      advance(REFRESH)
+        set_global(:coder_reap, false)
+        @token.bump
+        advance(REFRESH)
 
-      assert Feature.enabled?(:coder_reap), "the request keeps the snapshot its first check pinned"
-      assert_equal false, store.snapshot.global(:coder_reap) # rubocop:disable Minitest/RefuteFalse
+        assert Feature.enabled?(:coder_reap), "the request keeps the snapshot its first check pinned"
+        assert_equal false, store.snapshot.global(:coder_reap) # rubocop:disable Minitest/RefuteFalse
 
-      Current.reset
-      refute Feature.enabled?(:coder_reap), "the next request sees the new value"
+        Current.reset
+        refute Feature.enabled?(:coder_reap), "the next request sees the new value"
+      end
     end
   end
 end

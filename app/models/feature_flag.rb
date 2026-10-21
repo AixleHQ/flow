@@ -14,11 +14,12 @@ class FeatureFlag < ApplicationRecord
   validates :key, presence: true, uniqueness: true
   validate :key_declared, on: :create
 
-  # Two SELECTs, no matter how many flags or overrides there are.
+  # Two SELECTs, no matter how many flags or overrides there are. An override
+  # whose flag was created between them is left for the next reload.
   def self.load_snapshot
     flags = pluck(:id, :key, :enabled).to_h { |id, key, enabled| [ id, { key: key, global: enabled, overrides: {} } ] }
     FeatureFlagOverride.pluck(:feature_flag_id, :company_id, :enabled).each do |flag_id, company_id, enabled|
-      flags[flag_id][:overrides][company_id] = enabled
+      flags[flag_id]&.fetch(:overrides)&.store(company_id, enabled)
     end
 
     FeatureFlags::Snapshot.new(flags.values.to_h { |flag| [ flag[:key], flag.slice(:global, :overrides) ] })
