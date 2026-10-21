@@ -8,9 +8,9 @@ metering with `BatchMeterUsage`, and consuming subscription notifications. The
 installation that sells it is production, which already bills other companies through
 Stripe.
 **Related:** `docs/design/...` (none yet), `ARCHITECTURE.md` (tenancy through `Company`),
-`docs/reference/configuration.md` (the ENV surface), and in the deployment repositories
-`marketplace-infra/SAAS_PRODUCT.md` (the listing and the seller account) and
-`aixle-infra/doc/helm/stripe-billing.md` (how a third party reaches staging).
+`docs/reference/configuration.md` (the ENV surface), and two documents in the private
+repositories: the listing repository's note on the SaaS listing and the seller account, and
+the infrastructure repository's note on how a third party reaches staging.
 
 ---
 
@@ -108,9 +108,8 @@ it arrives before everything downstream because the key every table hangs off ch
 AWS now supports **Concurrent Agreements** — "multiple active purchases for the same
 product within a single AWS account". It is **opt-in for listings created before 1 June
 2026 and required for every SaaS product created after it**. Our draft was created on
-19 October 2026, so it is enabled by default and there is nothing to decide. (The entity
-id is in `marketplace-infra/SAAS_PRODUCT.md`, which is where seller-account identifiers
-belong.)
+19 October 2026, so it is enabled by default and there is nothing to decide. (The entity id lives in
+the listing repository, which is where seller-account identifiers belong.)
 
 What changes, from the Seller Guide and the Ruby SDK's own signatures:
 
@@ -342,8 +341,8 @@ Two workarounds exist for carrying per-purchase context and neither is taken:
   permission and a second service to be unavailable, in exchange for context we do not
   need: under pure usage the price lives on the offer and AWS applies it without the
   caller knowing, which is measured — the container product's metering survived a change
-  of agreement without the application noticing
-  (`marketplace-infra/BEFORE_PUBLISHING.md`). The offer identifier arrives free in the SNS
+  of agreement without the application noticing, recorded in the listing
+  repository. The offer identifier arrives free in the SNS
   notifications anyway (§8), so storing it from there costs nothing and asking for it
   costs a dependency.
 
@@ -543,8 +542,8 @@ listing's.
 
 ## 8. Subscription notifications
 
-**EventBridge, not SNS.** An earlier draft of this document, and
-`marketplace-infra/SAAS_PRODUCT.md`, both describe an SQS queue subscribed to the seller
+**EventBridge, not SNS.** An earlier draft of this document, and the listing
+repository's own note, both describe an SQS queue subscribed to the seller
 account's SNS topics. That is the old integration, and for this product it is not merely
 deprecated but unusable: the Seller Guide states that SNS for SaaS products "are being
 replaced with Amazon EventBridge notifications", that SNS "doesn't send the `LicenseArn`
@@ -552,8 +551,8 @@ parameter", and that sellers registered after 15 July 2026 cannot use SNS at all
 
 A notification channel that cannot carry the key we bill on is not a channel we can use,
 whether or not our seller account is old enough to be offered it. **This needs the matching
-correction in `aixle-infra`:** an EventBridge rule and target, not an SNS-to-SQS
-subscription.
+correction in the infrastructure repository:** an EventBridge rule and target, not an
+SNS-to-SQS subscription.
 
 The events, and what each does here:
 
@@ -589,15 +588,15 @@ anywhere. It is stored (§6) and otherwise ignored.
 
 Staging, and it is already shaped for it — `DEPLOYMENT_MODE: saas`,
 `REGISTRATION_ENABLED: "true"` and a Stripe test-mode price are all set
-(`aixle-infra/kube/helmfile/values/aixle-app/staging.yaml`). So the Marketplace path stands
+in staging's Helm values. So the Marketplace path stands
 up beside a live Stripe path there, which is the per-company-payer problem in miniature on
 a real environment.
 
 Two things to know before planning the first deploy:
 
-- **The deploy workflow takes any flow branch whose CI is green on staging**
-  (`palad-ai/palad-app`, `.github/workflows/deploy.yml`), so a feature branch can be
-  exercised there without a release tag.
+- **The deploy workflow takes any branch of this repository whose CI is green on
+  staging** — it is dispatched by hand from the private deploy repository — so a feature
+  branch can be exercised there without a release tag.
 - **Migrations run before the new code is promoted**, so for the few minutes between them
   the new schema is served by the old code. Every migration here is additive, and the code
   that requires a new column ships in the slice after the one that adds it.
@@ -608,7 +607,8 @@ host exists for exactly this problem — third parties that must reach staging a
 authenticate — and it routes a small, explicit list of path prefixes through a middleware
 that rewrites `Host` to the internal name. The Marketplace registration POST needs one more
 entry on that list, which is the same change SCIM and the YouTrack pairing API each made
-for the same reason. Both hosts and the exact rules are in `aixle-infra`.
+for the same reason. Both hosts and the exact rules are in the infrastructure
+repository.
 
 A tester will meet one basic-auth prompt partway through the flow, when the app redirects
 from the auth-free host to staging's own. That is expected on staging and not a defect.
@@ -674,7 +674,7 @@ marketing copy.
   the whole of the risk is "AWS does not behave as both of us assume", and that is
   observable: put a free-trial offer on the `[TEST]` listing, subscribe from the allowlisted
   account, let an hour meter, and read the buyer's bill — the same Cost Explorer check the
-  container product already uses (`marketplace-infra/BEFORE_PUBLISHING.md`). A zero there
+  container product already uses. A zero there
   settles it in a way no reply would. Worth asking Seller Operations in the same breath, in
   one line: *for a usage-priced SaaS free trial, does the seller keep sending
   `BatchMeterUsage` records, and does AWS zero-rate them for the trial term?*
@@ -744,7 +744,7 @@ marketing copy.
 | 2 | `marketplace_customers`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
 | 3 | `Billing::Meter::AwsMarketplaceSaas` + the assumed-role client | Independent of 2 — can be proved against a hand-bound customer row |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
-| 5 | EventBridge consumption, the licence states, and the immediate final meter on agreement-ended | Needs the rule and queue, which is `aixle-infra` work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
+| 5 | EventBridge consumption, the licence states, and the immediate final meter on agreement-ended | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
 | 6 | Staging ingress, config, and a live run against a `[TEST]` listing | The first time any of it meets AWS |
 
 Slices 1, 3 and 4 are provable in the test suite. Slices 2, 5 and 6 are not finished until
