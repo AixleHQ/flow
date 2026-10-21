@@ -1,0 +1,18 @@
+# Every flag the app may check, as `Feature.enabled?(:key, ...)`. Loaded and
+# validated once at boot by FeatureFlags::Registry: an invalid entry fails boot.
+#
+# Keys are snake_case (/\A[a-z][a-z0-9_]*\z/); the ENV lock is FEATURE_<KEY>.
+# Keys starting with `flags` are rejected: FEATURE_FLAGS_* is reserved for the
+# system's own settings.
+#
+#   board_ai_summary:
+#     description: AI summary panel on the board task drawer.   # required
+#     owner: "@AixleHQ/board"                                    # required
+#     kind: release                                              # required: release | ops
+#     scope: company                                             # required: company | global
+#     default: false                                             # required: true | false
+#     client: true                                               # optional, default false
+#     introduced: 2026-11-03                                     # optional
+#     remove_by: 2027-01-31                                      # required for kind: release
+#
+# Design: docs/research/technical-feature-flags-system-design-research-2026-10-21.md
