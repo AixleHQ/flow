@@ -1,11 +1,23 @@
 # External runners for agent sessions — design
 
-**Status:** proposed, revision 2 (design only, no implementation in this change)
+**Status:** proposed, revision 3 (design only, no implementation in this change)
 **Created:** 2026-10-20 · **Revised:** 2026-10-21
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
-**Baseline:** `origin/develop` @ `a496477b`
+**Baseline:** `origin/develop` @ `1f4ca0bd`
 
-**Revision 2** applies the design review of revision 1 (`967aed2d`):
+**Revision 3** applies the correction to the revision 2 review. The design no longer
+depends on `aixle-infra`, the infrastructure of our own production and staging
+deployment, which is not part of the product:
+
+- Staging validation names no Coder template. It uses the staging Coder integration
+  configured on the test project and whatever template it offers at test time (§12.4,
+  task 14).
+- The Kubernetes controller's RBAC is derived from least privilege for what the controller
+  does in one namespace, not from our runtime ClusterRole (§9.6).
+- The `aixle-infra` open item is dropped (§16), along with the staging-template citation
+  in §6.8.
+
+**Revision 2** applied the design review of revision 1 (`967aed2d`):
 
 - Coder runs the agent in Docker by default, as a runner setting `execution_mode` (§6.8).
 - The "single egress host" promise is dropped. Only the inbound guarantee stays (§9.5).
@@ -17,7 +29,7 @@
 - `provision` does not create the environment row (§5.1).
 - Hosted-untouched is written down as tech debt with an exit condition (§12.3).
 - Conformance fixtures are committed in phase 2 (§12.2).
-- Staging templates are corrected (§12.4), and interactive sessions are decided (§12.2).
+- Interactive sessions are decided (§12.2).
 
 Everything else in revision 1 was accepted as designed.
 
@@ -37,11 +49,6 @@ point is an adapter interface, not a Coder branch.
 Section 1 settles the naming and the execution model, because every later section depends
 on them. Sections 2–15 cover what the task asks for. Section 16 lists what this design
 could not close on paper.
-
-About `aixle-infra`: neither design session could read it. Revision 2 takes its facts
-about the staging Coder templates from the design review (§12.4). The hosted RBAC
-footprint in §9.6 is still mirrored from this repository's `KubernetesRuntime`, and §16
-says what is left to check against `kube/SESSION-ADMISSION.md`.
 
 ---
 
@@ -99,11 +106,10 @@ The reasons the hybrid holds:
 The refinement for Kubernetes: outside-in provisioning would need a kubeconfig or service
 account that can create pods and secrets in the customer's cluster, plus reachability to
 the customer's API server. That is the most powerful credential the security axis asks us
-not to hold. A controller inside the cluster has the same RBAC footprint the hosted runtime
-has in our own cluster (namespaced `pods`, `secrets` and `services`, §9.6), but it is
-installed, scoped and audited by the customer, and it connects out. This answers the open
-question: **the user installs something into their cluster themselves**. We do not take a
-kubeconfig.
+not to hold. A controller inside the cluster needs only a least-privilege namespaced Role
+for session pods, secrets and service accounts (§9.6). The customer installs, scopes and
+audits it, and it connects out. This answers the open question: **the user installs
+something into their cluster themselves**. We do not take a kubeconfig.
 
 Coder keeps outside provisioning. The Coder API is built to be called remotely, a Coder API
 token is limited by Coder's own RBAC to one Coder user's workspaces, and the platform
@@ -689,10 +695,10 @@ Why `docker` is the default:
   out of the first iteration (they stay only for `native`).
 - **One prerequisite.** The machine needs a Docker daemon and disk, instead of a glibc,
   `bash`, `git`, `tmux ≥ 3`, `curl` and `tar` checklist.
-- **It already works on what is deployed.** The default staging Coder template
-  (`aws-ec2-spot-v2`) installs Docker with buildx, writes `/etc/docker/daemon.json`, sets
-  log rotation and prunes the build cache (`terraform/coder/templates/staging/aws-ec2-spot-v2/main.tf`
-  in `aixle-infra`, per the design review).
+- **It works on common Coder templates as they are.** A Docker daemon is a usual part of
+  a development workspace template. Where a template lacks one, adding it is a template
+  change the customer owns, and the runner reports the missing daemon at check-in
+  (§8) instead of failing mid-session.
 - **Scrub becomes cheap and reliable.** Credentials, the prompt and the agent's home live in
   the container layer, so removing the container removes them (§7.2).
 
@@ -959,14 +965,42 @@ The Helm chart (`aixle-runner`, published as an OCI artifact to
 into one namespace:
 
 - a Deployment of `aixle-runner --mode controller` with the registration token Secret;
-- a namespaced Role (`pods`, `pods/log`, `secrets`, `serviceaccounts`: create, get, list,
-  watch, delete) — no `pods/exec`, nothing cluster-scoped;
+- a ServiceAccount for the controller, bound to one namespaced Role (below) by a
+  RoleBinding — nothing cluster-scoped;
 - an optional NetworkPolicy (`networkPolicy.enabled`, default off). It is a convenience for
   customers who filter egress, prefilled from the documented list in §9.5. It is not a
   platform requirement.
 
-This footprint was derived from what this repository's `KubernetesRuntime` asks of the
-hosted cluster. It is still unchecked against `kube/SESSION-ADMISSION.md` (§16).
+**RBAC, derived from what the controller does.** This is not taken from the RBAC of our
+hosted deployment, which serves a different installation with different constraints. The
+controller does four things in its namespace and nothing else (the `provision`, `teardown`
+and `observe` ops of §6.4, and the reconciliation pass of §10): it creates a session pod,
+it gives that pod a bootstrap Secret and its own ServiceAccount, it watches the pod, and it
+deletes all three afterwards. Each rule is the least verb set for one of those, and the
+chart grants nothing else:
+
+| Resource | Verbs | Why |
+| --- | --- | --- |
+| `pods` | `create`, `get`, `list`, `watch`, `delete` | Create the session pod on `provision`, watch it to report `observe` and to reconcile after a controller restart, delete it on `teardown`. No `update`/`patch`: a pod is never changed after creation. |
+| `pods/log` | `get` | Diagnose a pod that failed before its session runner checked in (`bootstrap_timeout`, image pull errors). After check-in, logs come through the protocol. |
+| `secrets` | `create`, `get`, `delete` | Create the per-environment bootstrap Secret, delete it after check-in and on `teardown`. `get` checks whether it is still there during reconciliation. No `list`/`watch`, so the controller cannot enumerate other Secrets in the namespace. |
+| `serviceaccounts` | `create`, `get`, `delete` | One ServiceAccount per session pod, with `automountServiceAccountToken: false`, so pods never share an identity a customer may have bound elsewhere. Same reasoning as Secrets for no `list`/`watch`. |
+| `events` | `create` | Optional (`rbac.events`, default on). Lets the controller record why it rejected or deleted a pod where `kubectl describe` shows it. |
+
+Not granted, on purpose:
+
+- `pods/exec`, `pods/attach`, `pods/portforward`: execution is inside-out (§1.2), so nothing
+  ever needs to enter a pod;
+- `rolebindings`, `roles` and any `escalate`/`bind`: session ServiceAccounts get no
+  permissions at all, so the controller never has to grant any;
+- anything cluster-scoped, including `nodes` and `namespaces`: the controller is installed
+  into a namespace the customer chose, and it is not allowed to create one.
+
+The labels the controller sets (`aixle.com/runner`, `aixle.com/environment`) scope what it
+deletes. A `teardown` for an environment it did not create is refused by the controller,
+even though the Role would let it delete other pods in the namespace. Customers who want the
+API server to enforce that too install the chart into a dedicated namespace, which the chart
+README recommends.
 
 Session pods get:
 
@@ -1147,21 +1181,25 @@ reasoned about, and tested, twice: once for each model, including the ways each 
 
 ### 12.4 Validating the first Coder runner on staging
 
-The staging Coder control plane is `coder.staging.flow.aixle.com` (the host after the
-domain migration). Staging has three EC2 spot workspace templates in `aixle-infra`:
-`aws-ec2-spot-v1`, `aws-ec2-spot-v2` and `aws-ec2-spot-v3`. **v2 is the default**, and v3
-is opt-in per `terraform/coder/templates/staging/aws-ec2-spot-v3/README.md`. Validation uses
-**`aws-ec2-spot-v2`**: it is the default, and it ships the Docker daemon `docker` mode needs
-(buildx, `/etc/docker/daemon.json`, log rotation, build-cache prune). Two things to check
-in the template before phase 3:
+Validation runs against **the staging Coder integration already configured on the test
+project**, with whatever workspace template that integration offers at the time of
+testing. This design names no template and no template version on purpose: the template is
+a property of our staging environment and will drift, and the runner has to work on a
+template the design never saw, which is also the customer case. What the validation needs
+from the chosen template is checked at test time, not assumed here:
 
-- the build-cache prune leaves pulled images alone, or else the warm-image benefit is
-  measured with that loss counted (§6.8);
-- the disk size covers an agent image plus the workspace volume (§6.8 prerequisite).
+- it can run a Docker daemon, which is the only `docker`-mode prerequisite (§6.8). If it
+  cannot, the runner reports that at check-in, which is itself a check of the §8 message;
+- its disk covers an agent image plus the workspace volume (§6.8);
+- if it prunes images or build cache on a schedule, the warm-image result of step 5 is
+  read with that counted.
 
-1. Create a project runner on a staging test project over the existing staging Coder
-   integration: template `aws-ec2-spot-v2`, `execution_mode: docker` (the default),
-   `max_environments: 2`.
+The template used, and the answers to these three, are recorded in the validation task's
+result, so a later re-run knows what it is comparing against.
+
+1. Create a project runner on the staging test project over its existing Coder
+   integration: one of the templates the integration offers, `execution_mode: docker`
+   (the default), `max_environments: 2`.
 2. Health goes `connected`. Revoking the integration token turns it `unreachable` with the
    integration named.
 3. A one-step non-interactive workflow (`claude_code`, a repository attached) runs. Check:
@@ -1178,7 +1216,8 @@ in the template before phase 3:
    Coder SSH with `docker ps -a` and a file search).
 6. Repeat step 3 with `cursor_cli` and with `grok`: usage is recorded from the MITM log
    exactly as on hosted, which confirms `agent_runtimes: all` in `docker` mode.
-7. Kill the runner's connection (block egress on the workspace security group) for 2 min
+7. Kill the runner's connection (block the workspace's outbound traffic to the platform
+   host, for example with a firewall rule on the workspace) for 2 min
    mid-session: the agent continues and the logs back-fill on reconnect. Block it for 20
    min: the session fails with the grace message.
 8. Restart the host runner mid-session (`systemctl --user restart aixle-runner`): the
@@ -1399,7 +1438,7 @@ from §12.2.
 | 11 | 3 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, teardown, observe over `Coder::Api`/`WorkspaceService`; `execution_mode` and `config.docker` schema and validation (§6.8), with capabilities derived from the mode; install script with SHA-256 verify and the `verify` hook; Docker prerequisite check. |
 | 12 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
 | 13 | 3 | Runner page environments table and actions (Reset, Rebuild, Force release), connection-lost banner, revoke flow, Administrate dashboards. |
-| 14 | 3 | Staging validation per §12.4 on `aws-ec2-spot-v2` in `docker` mode (QA task). Check the template's build-cache prune and disk size against §6.8, and make any `aixle-infra` changes needed. |
+| 14 | 3 | Staging validation per §12.4 in `docker` mode (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.4 checks (Docker daemon, disk, pruning) in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
 | 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd, the IDE and the watcher through the host runner, plus session page routing. Lifts `interactive_terminal: false`. |
 | 17 | 5 | Kubernetes: `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
@@ -1432,15 +1471,3 @@ from §12.2.
 
   What would settle it is the pricing decision for the first non-staging customer. It has
   to be made before trigger 2 of §14.1, and nothing earlier depends on it.
-- **`aixle-infra` verification still outstanding.** The design review corrected the staging
-  template facts (§12.4), and they are applied here. The revision 2 session still could not
-  read `aixle-infra`: it is not attached to the session, and the credential helper only
-  serves `flow`. Two checks are therefore assigned rather than done:
-  - **§9.6 RBAC footprint against `kube/SESSION-ADMISSION.md`** (runtime ClusterRole,
-    quotas, NetworkPolicies). This must be done before task 17 (Kubernetes), and it is
-    part of that task's definition of done. It does not affect phases 1–4, where the
-    platform holds no Kubernetes credential for an external runner at all.
-  - **Staging egress changes for task 14.** Under the inbound-only guarantee (§9.5) the
-    workspace needs outbound access to the platform host, `github.com` release assets
-    and `ghcr.io`. Whether the `aws-ec2-spot-v2` security group already allows these is
-    checked as the first step of task 14.
