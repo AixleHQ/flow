@@ -65,6 +65,9 @@ const MODE_OPTIONS = [
   { value: 'custom' as const, title: 'Custom', description: 'Pick per step' },
 ];
 
+const AUTOMATIC_DISABLED_REASON =
+  'Automatic run is disabled for this workflow — turn on "Auto-run available" for every session to enable it';
+
 /**
  * Run Workflow as a 460px right drawer, structurally identical to New Session:
  * Workflow → Agent runtime → Execution mode → Configuration, with the same
@@ -113,6 +116,24 @@ export function RunWorkflowDrawer({
   const workflow = useMemo(() => workflows.find((w) => w.id === workflowId) ?? null, [workflows, workflowId]);
   const steps = workflow?.steps ?? [];
 
+  // The rule WorkflowService#validate_mode! enforces. Derived from props so it
+  // follows a setting that changes while the drawer is open.
+  const automaticAvailable = steps.every((s) => s.allowNonInteractive);
+  const defaultMode: ExecutionMode = automaticAvailable ? 'automatic' : 'custom';
+  const modeOptions = useMemo(
+    () =>
+      MODE_OPTIONS.map((o) =>
+        o.value === 'automatic' && !automaticAvailable
+          ? { ...o, disabled: true, disabledReason: AUTOMATIC_DISABLED_REASON }
+          : o,
+      ),
+    [automaticAvailable],
+  );
+
+  useEffect(() => {
+    if (!automaticAvailable && mode === 'automatic') setMode('custom');
+  }, [automaticAvailable, mode]);
+
   // Custom mode starts from each step's own capability — a step that cannot run
   // unattended must not silently default to "auto".
   useEffect(() => {
@@ -133,7 +154,7 @@ export function RunWorkflowDrawer({
   // switches only exist in Custom mode, which already counts.
   const dirty =
     workflowId !== (initialWorkflowId ?? null) ||
-    mode !== 'automatic' ||
+    mode !== defaultMode ||
     selectedRepoIds.length > 0 ||
     selectedAssetIds.length > 0 ||
     requestedModel !== null;
@@ -215,7 +236,7 @@ export function RunWorkflowDrawer({
 
         <Box>
           <FormSection icon={<IconPlayerPlay size={14} />}>Execution mode</FormSection>
-          <ModeCards aria-label="Execution mode" options={MODE_OPTIONS} value={mode} onChange={setMode} />
+          <ModeCards aria-label="Execution mode" options={modeOptions} value={mode} onChange={setMode} />
 
           {mode !== 'custom' && (
             <p className={classes.note}>

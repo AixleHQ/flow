@@ -71,6 +71,9 @@ governance, community health — carry none.
   account with that login stops the setup.
 
 ### Fixed
+- **Workflows**: **Run workflow** no longer offers **Fully automatic** when a
+  session has **Auto-run available** turned off — the option is greyed out
+  with a hint, and the drawer starts in **Custom** instead.
 - **Workflows**: the Base Resources tab scrolls, so resources below the fold
   can be reached.
 - **Sessions & Runs**: an interactive Antigravity CLI session opens at the

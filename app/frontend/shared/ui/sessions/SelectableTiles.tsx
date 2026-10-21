@@ -80,6 +80,9 @@ interface ModeOption<T extends string> {
   value: T;
   title: string;
   description: string;
+  disabled?: boolean;
+  /** Shown as a tooltip while the option is disabled. */
+  disabledReason?: string;
 }
 
 interface ModeCardsProps<T extends string> {
@@ -98,24 +101,40 @@ export function ModeCards<T extends string>({ options, value, onChange, ...rest 
       role="radiogroup"
       aria-label={rest['aria-label']}
     >
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={option.value === value}
-          className={option.value === value ? `${classes.mode} ${classes.modeSelected}` : classes.mode}
-          onClick={() => onChange(option.value)}
-        >
-          <div className={classes.modeTitle}>{option.title}</div>
-          <div className={classes.modeDesc}>{option.description}</div>
-          {option.value === value && (
-            <span className={classes.modeTick}>
-              <IconCheck size={14} />
-            </span>
-          )}
-        </button>
-      ))}
+      {options.map((option) => {
+        const isSelected = option.value === value;
+        const isDisabled = !!option.disabled;
+
+        return (
+          <Tooltip
+            key={option.value}
+            label={option.disabledReason}
+            disabled={!isDisabled || !option.disabledReason}
+            multiline
+            maw={240}
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              aria-disabled={isDisabled || undefined}
+              disabled={isDisabled}
+              className={[classes.mode, isSelected ? classes.modeSelected : '', isDisabled ? classes.disabled : '']
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => !isDisabled && onChange(option.value)}
+            >
+              <div className={classes.modeTitle}>{option.title}</div>
+              <div className={classes.modeDesc}>{option.description}</div>
+              {isSelected && (
+                <span className={classes.modeTick}>
+                  <IconCheck size={14} />
+                </span>
+              )}
+            </button>
+          </Tooltip>
+        );
+      })}
     </div>
   );
 }
