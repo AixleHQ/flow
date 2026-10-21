@@ -15,7 +15,7 @@ class FeatureFlags::SnapshotPinningTest < ActiveSupport::TestCase
     def execute
       Current.feature_snapshot = nil
       enabled = Feature.enabled?(:coder_reap)
-      { "executor_active" => Rails.application.executor.active?, "pinned" => !Current.feature_snapshot.nil?,
+      { "executor_active" => Rails.application.executor.active? == true, "pinned" => !Current.feature_snapshot.nil?,
         "enabled" => enabled }
     end
   end
@@ -37,7 +37,7 @@ class FeatureFlags::SnapshotPinningTest < ActiveSupport::TestCase
     seen = Thread.new do
       first = Feature.enabled?(:coder_reap)
       FeatureFlags.store.set_global(:coder_reap, false)
-      [ Rails.application.executor.active?, first, Feature.enabled?(:coder_reap), Current.feature_snapshot ]
+      [ Rails.application.executor.active? == true, first, Feature.enabled?(:coder_reap), Current.feature_snapshot ]
     end.value
 
     assert_equal [ false, true, false, nil ], seen

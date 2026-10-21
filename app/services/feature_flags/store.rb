@@ -22,19 +22,21 @@ module FeatureFlags
       @clock = clock
       @snapshot = Concurrent::AtomicReference.new
       @refresh_lock = Mutex.new
-      @next_check_at = nil
-      @loaded_at = nil
+      @check_at = nil
+      @reload_at = nil
       @token = nil
     end
 
     def snapshot
-      refresh if refresh_due?
+      refresh if due?(@clock.call)
       @snapshot.get || Snapshot::EMPTY
     end
 
     private
 
-    def refresh_due? = @next_check_at.nil? || @clock.call >= @next_check_at
+    def due?(now) = check_due?(now) || reload_due?(now)
+    def check_due?(now) = @check_at.nil? || now >= @check_at
+    def reload_due?(now) = @reload_at.nil? || now >= @reload_at
 
     # One thread refreshes; any other that finds it due meanwhile serves the
     # snapshot it already has instead of queueing behind a database round trip.
@@ -43,27 +45,31 @@ module FeatureFlags
 
       begin
         now = @clock.call
-        return unless @next_check_at.nil? || now >= @next_check_at
+        check = check_due?(now)
+        forced = reload_due?(now)
+        return unless check || forced
 
-        @next_check_at = now + @refresh_interval
-        # Read before the SELECTs: a write committed while they run then leaves
-        # a token this store has not seen, and the next check reloads again.
-        token = @version_token.read
-        reload(token, now) if stale?(token, now)
+        token = @token
+        if check
+          @check_at = now + @refresh_interval
+          # Read before the SELECTs: a write committed while they run then
+          # leaves a token this store has not seen, and the next check reloads.
+          token = @version_token.read
+        end
+        reload(token, now) if forced || (!token.nil? && token != @token)
       ensure
         @refresh_lock.unlock
       end
     end
 
-    def stale?(token, now)
-      @loaded_at.nil? || now >= @loaded_at + @max_staleness || (!token.nil? && token != @token)
-    end
-
     def reload(token, now)
       @snapshot.set(@loader.call)
       @token = token
-      @loaded_at = now
+      @reload_at = now + @max_staleness
     rescue StandardError => e
+      # A token change that failed to load is retried by the next check, as the
+      # token still differs; a forced reload is retried after one interval.
+      @reload_at = now + @refresh_interval if reload_due?(now)
       Rails.logger.error("[FeatureFlags] reload failed, serving the last loaded values: #{e.class}: #{e.message}")
       Rails.error.report(e, handled: true, severity: :error, source: RELOAD_FAILED_SOURCE,
                             context: { error_class: e.class.name, loaded: !@snapshot.get.nil? })
