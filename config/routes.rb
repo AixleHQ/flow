@@ -93,6 +93,16 @@ Rails.application.routes.draw do
   get "/share/:token", to: "web/public_assets#show", as: :public_asset
   get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
 
+  # Where AWS Marketplace sends a buyer who has just subscribed to the SaaS
+  # listing. The POST is cross-site and carries no session cookie — SameSite=Lax
+  # withholds it — so it only exchanges the token and hands the licence to the
+  # GET below in a signed ticket. This is the product's fulfilment URL, and it
+  # must stay reachable without authentication of any kind.
+  post "marketplace/aws/register", to: "web/marketplace_registrations#create",
+                                   as: :marketplace_registration_landing
+  get "marketplace/aws/continue", to: "web/marketplace_registrations#show",
+                                  as: :marketplace_registration
+
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.
   # Step one of signing in: an address, and nothing else. What comes back is

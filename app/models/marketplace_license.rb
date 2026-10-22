@@ -23,6 +23,12 @@ class MarketplaceLicense < ApplicationRecord
   #   ended    over. AWS accepts nothing further.
   STATES = %w[pending active ending ended].freeze
 
+  # Carries one licence from the POST AWS makes to the GET that follows it. Short
+  # lived because it only has to survive a redirect, and signed because the URL
+  # it rides in is the buyer's address bar.
+  REGISTRATION_VALID_FOR = 15.minutes
+  generates_token_for :registration, expires_in: REGISTRATION_VALID_FOR
+
   validates :license_arn, presence: true, uniqueness: true
   validates :customer_aws_account_id, presence: true
   validates :product_code, presence: true
