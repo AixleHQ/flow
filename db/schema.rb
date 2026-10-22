@@ -900,6 +900,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_130000) do
     t.index ["user_id"], name: "index_magic_link_tokens_on_user_id"
   end
 
+  create_table "marketplace_licenses", force: :cascade do |t|
+    t.string "license_arn", null: false
+    t.string "customer_aws_account_id", null: false
+    t.string "product_code", null: false
+    t.string "agreement_id"
+    t.string "customer_identifier"
+    t.bigint "company_id"
+    t.string "subscription_state", default: "pending", null: false
+    t.string "offer_identifier"
+    t.string "registered_offer_type"
+    t.datetime "subscribed_at"
+    t.datetime "ended_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "(company_id IS NOT NULL)"
+    t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"
+    t.index ["license_arn"], name: "index_marketplace_licenses_on_license_arn", unique: true
+    t.index ["subscription_state"], name: "index_marketplace_licenses_on_subscription_state"
+  end
+
   create_table "mcp_servers", force: :cascade do |t|
     t.datetime "archived_at"
     t.jsonb "args", default: []
@@ -2137,6 +2157,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_130000) do
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
+  add_foreign_key "marketplace_licenses", "companies"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
