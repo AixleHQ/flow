@@ -603,30 +603,57 @@ whether or not our seller account is old enough to be offered it. **This needs t
 correction in the infrastructure repository:** an EventBridge rule and target, not an
 SNS-to-SQS subscription.
 
-The events, and what each does here:
+**They arrive on the seller account's bus, not on ours.** Read out of the Seller Guide on
+22 October: "EventBridge sends events to your default event bus" — the seller account's.
+So the rule lives in the seller account while the queue it feeds lives in the one this
+application runs in, and
+that is a cross-account delivery rather than a routing detail. EventBridge supports an SQS
+target in another account **in the same Region**, which us-east-1 is for both, given an
+execution role in the rule's account and a resource policy on the queue. Nothing in the
+infrastructure repository manages the seller account today, so where that rule is declared
+is an open question (§10) rather than a line of Terraform.
+
+The pattern matches `"source": ["aws.agreement-marketplace"]`. Not `aws.marketplace`.
+
+**We are both manufacturer and proposer**, because we extend the offer directly, and the
+Seller Guide says that "to avoid redundant messages, only the proposer purchase agreement
+event is sent when you are both". So the purchase-agreement events arrive in their
+**Proposer** spelling and the licence events in their **Manufacturer** one, and a rule
+written against the wrong half of that pair matches nothing at all:
 
 | Event | What it means | What we do |
 |---|---|---|
-| Purchase agreement created | the licence is live and metering is accepted | `subscription_state` → `active`; before this, records are discarded by AWS (§6) |
-| Purchase agreement ended | **about one hour to send final metering records** | run the meter for that licence *immediately*, then `ended`, then block the company |
-| License updated | the agreement changed — a private offer accepted, a renewal | re-read and store; the offer identifier moves |
-| License deprovisioned | access is over | block, as above |
+| `Purchase Agreement Created - Proposer` | a new, replaced or renewed agreement | `subscription_state` → `active`; before this AWS discards records (§6) |
+| `Purchase Agreement Amended - Proposer` | the agreement changed | re-read and store; the offer identifier moves |
+| `Purchase Agreement Ended - Proposer` | expired, cancelled or terminated | block the company. **Not** the metering deadline — see below |
+| `License Updated - Manufacturer` | the entitlement changed | store. Nothing to act on under pure usage pricing |
+| `License Deprovisioned - Manufacturer` | **the one-hour final reporting window opens** | meter that licence immediately, then `ended` |
+| `Spend Threshold Vet Failed` | AWS could not verify the buyer's card | usage-based products only. Nobody has decided what this should do |
 
-Not `entitlement-updated`, which belongs to contract pricing we are not selling.
+**An earlier draft of this section had the deadline on the wrong event**, and the mistake
+was expensive in the direction that matters. It said agreement-ended starts the hour. It
+does not: "AWS Marketplace sends the License Deprovisioned - Manufacturer event to signal
+the start of the final reporting window. Sellers have one hour after receiving this event."
+Metering off agreement-ended would fire at a moment AWS has not opened the window at, and
+the usage that falls between the two events would be reported at neither.
 
 **The one-hour window does not fit the hourly schedule, and this is the sharpest thing in
 this section.** The capacity meter runs at five past the hour (`5 * * * *`) and reports the
-hour that has just closed. An agreement that ends at 10:10 gives us until about 11:10; the
+hour that has just closed. A licence deprovisioned at 10:10 gives us until about 11:10; the
 partial hour 10:00–10:10 would not be offered to AWS until 11:05 at the earliest and, for
-any end time later in the hour, not until after the window has shut. So agreement-ended
-must trigger a metering run for that licence there and then rather than waiting for the
-schedule — which is a second entry point into `CapacityMeter`, scoped to one licence and to
-a part-hour, and it is the only place in this design where metering is event-driven rather
-than periodic.
+any later minute, not until after the window has shut. So that event must meter the licence
+there and then rather than waiting for the schedule — a second entry point into
+`CapacityMeter`, scoped to one licence and a part-hour, and the only place in this design
+where metering is event-driven rather than periodic.
 
 An agreement created for a licence nobody has registered is §5.4's state, and it needs
 somewhere to be seen. The admin panel is the obvious home; what it must not be is a log
 line.
+
+**A free trial is not announced; it is asked about.** The created event does not say so —
+"DescribeAgreement API is used to determine if the new agreement is a free trial" — which
+is a second place the answer lives, beside the registration parameter §5.1 stores. Neither
+is load-bearing while §10 says trials change nothing we do.
 
 The offer identifier rides these events and is the only per-deal context that reaches us
 anywhere. It is stored (§6) and otherwise ignored.
@@ -774,6 +801,13 @@ marketing copy.
   force, is not written down anywhere. The rule probably wants to be "the refusal is on
   an active Marketplace subscription, not on a company that once had one", but that
   sentence has not been checked against the unsubscribe states in §8.
+- ~~**Where the seller account's EventBridge rule is declared.**~~ Answered on 22 October.
+  Nothing manages the seller account as code -- the infrastructure repository owns the
+  account this runs in and says plainly that nothing in it may depend on the listing
+  repository, which owns no infrastructure at all. So the rule, and the two roles beside
+  it, are an idempotent script in the listing repository: readable, re-runnable and
+  diffable, which a console session is not. The queue, its policy and this application's
+  right to read it stayed ordinary work in the infrastructure repository.
 - **The exact dimension identifier.** `worker_minute` is the proposal. Immutable after
   publication, and it must match the adapter's constant exactly.
 - **Where a subscribed-but-unregistered customer is shown**, and who is expected to look.
