@@ -143,7 +143,7 @@ class TriggerBinding < ApplicationRecord
   # and only where the binding's company has the channel connected.
   def self.listening_in(event)
     data = event.data.to_h
-    conversations = ChatConversation.where(integration_id: data["integration_id"], external_id: data["channel"].to_s)
+    conversations = ChatConversation.in_workspace_of(data["integration_id"]).where(external_id: data["channel"].to_s)
     where(chat_conversation_id: conversations.select(:id))
       .where(<<~SQL.squish)
         EXISTS (SELECT 1 FROM chat_channel_connections connections

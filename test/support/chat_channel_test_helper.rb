@@ -15,15 +15,14 @@ module ChatChannelTestHelper
     provider = provider.to_s
     integration ||= Integration.where(company: company, provider: provider).order(:id).first ||
                     chat_integration(company, provider)
-    conversation = ChatConversation.find_or_create_by!(integration: integration,
-                                                       external_id: external_id || default_channel(provider)) do |row|
-      row.provider = provider
-      row.kind = kind
-      row.name = name
+    conversation = ChatConversation.registry_row(integration, external_id || default_channel(provider))
+    if conversation.new_record?
+      conversation.assign_attributes(provider: provider, kind: kind, name: name)
       if provider == "teams"
-        row.service_url = TeamsTestHelper::TEAMS_SERVICE_URL
-        row.tenant_id = TeamsTestHelper::TEAMS_CUSTOMER_TENANT
+        conversation.assign_attributes(service_url: TeamsTestHelper::TEAMS_SERVICE_URL,
+                                       tenant_id: TeamsTestHelper::TEAMS_CUSTOMER_TENANT)
       end
+      conversation.save!
     end
     ChatChannelConnection.find_or_create_by!(chat_conversation: conversation, company: company)
     conversation

@@ -761,6 +761,36 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(trigger.kind).toBeUndefined(); // edits never resend the (locked) kind
   });
 
+  it('keeps the conditions set through the API that the form has no field for, but none on the channel', async () => {
+    const editing = buildChatTrigger({
+      filter_predicate: {
+        provider: 'slack',
+        text: { op: 'contains', value: 'deploy' },
+        user: 'U1',
+        'actor.id': 'A7',
+        channel: 'C042',
+        'conversation.id': 'C042',
+      },
+    });
+    const fetchSpy = installFetch();
+    renderPage(<TriggerFormPanel {...baseProps({ editing, chatProviders: [slack] })} />);
+
+    const text = screen.getByPlaceholderText('ship it (optional)');
+    await userEvent.clear(text);
+    await userEvent.type(text, 'release');
+    await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' })),
+    );
+    expect(bodyOf(fetchSpy, 'PATCH').trigger.filter_predicate).toEqual({
+      provider: 'slack',
+      text: { op: 'contains', value: 'release' },
+      user: 'U1',
+      'actor.id': 'A7',
+    });
+  });
+
   it('seeds a slack edit from a plain-string text predicate', () => {
     const editing = buildChatTrigger({ filter_predicate: { provider: 'slack', text: 'shipit' } });
 

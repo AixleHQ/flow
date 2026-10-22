@@ -25,7 +25,8 @@ module Api
           Chat::ChannelAccess.describe(row).merge(
             connected_at: connection&.created_at&.iso8601,
             requested_by: connection&.requested_by&.name,
-            posted_by: connection&.posted_by_name || connection&.posted_by_external_id
+            posted_by: connection&.posted_by_name || connection&.posted_by_external_id,
+            confirmation_url: connection&.confirmation_url
           )
         end
       end

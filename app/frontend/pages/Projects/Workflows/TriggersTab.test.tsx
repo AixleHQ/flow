@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { notifications } from '@mantine/notifications';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -98,6 +99,8 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // The toasts live in Mantine's global store and would outlast the test that raised them.
+  notifications.clean();
 });
 
 describe('Projects/Workflows/TriggersTab', () => {
@@ -501,7 +504,28 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByRole('button', { name: 'Edit Task enters "Backlog"' })).toBeInTheDocument();
   });
 
-  it('reverts the switch and logs an error when a toggle request fails', async () => {
+  it('says why the server refused a switch, and leaves the switch as it was', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation((_input, init) =>
+        Promise.resolve(
+          init?.method === 'PATCH'
+            ? json({ errors: ['Chat channel is not connected to this company'] }, 422)
+            : json({ triggers: [slackTrigger({ id: 2, enabled: false })] }),
+        ),
+      );
+
+    renderPage(<TriggersTab {...baseProps()} />);
+    await screen.findByText('Slack message contains "ship"');
+
+    await userEvent.click(screen.getByRole('switch'));
+
+    expect(await screen.findByText('Chat channel is not connected to this company')).toBeInTheDocument();
+    expect(callBody(fetchSpy, 'PATCH')).toEqual({ trigger: { enabled: true } });
+    expect(screen.getByRole('switch')).not.toBeChecked();
+  });
+
+  it('falls back to a generic message when the refused switch has no reason', async () => {
     installFetch({ triggers: [slackTrigger({ id: 2, enabled: true })], patchOk: false });
 
     renderPage(<TriggersTab {...baseProps()} />);
@@ -509,8 +533,7 @@ describe('Projects/Workflows/TriggersTab', () => {
 
     await userEvent.click(screen.getByRole('switch'));
 
-    await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalled());
-    // Failure reverts the optimistic change, so the switch remains checked.
+    expect(await screen.findByText('Failed to update the trigger')).toBeInTheDocument();
     expect(screen.getByRole('switch')).toBeChecked();
   });
 

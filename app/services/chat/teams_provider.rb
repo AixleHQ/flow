@@ -23,6 +23,8 @@ module Chat
       kind = CONVERSATION_TYPES.fetch(conversation["conversationType"].to_s, "group")
       conversation_id, root_id = conversation["id"].to_s.split(";messageid=", 2)
       channel_data = activity["channelData"].to_h
+      # The key the conversation registry keeps a channel under (ChatConversation.record_teams!).
+      conversation_id = channel_data.dig("channel", "id").presence || conversation_id if kind == "channel"
       tenant_id = channel_data.dig("tenant", "id") || conversation["tenantId"]
       files, file_refs = attached_files(endpoint, activity, kind)
       {
@@ -68,7 +70,7 @@ module Chat
       return "#{base}?context=%7B%22contextType%22:%22chat%22%7D" unless kind == "channel"
 
       channel_data = activity["channelData"].to_h
-      group = ChatConversation.where(integration_id: endpoint.config.to_h["integration_id"], external_id: conversation_id)
+      group = ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).where(external_id: conversation_id)
                               .pick(:team_aad_group_id)
       query = { tenantId: channel_data.dig("tenant", "id"), groupId: group, parentMessageId: root_id || activity["id"],
                 teamName: channel_data.dig("team", "name"), channelName: channel_data.dig("channel", "name") }.compact
@@ -141,6 +143,9 @@ module Chat
       Teams::Notifier.post(conversation, text: text, thread_id: data["targeted"] ? nil : data["thread_id"]).to_h["id"]
     end
 
+    # The message the code was posted in, whose thread holds the confirmation.
+    def permalink(event, _message_id) = event.data.to_h["url"]
+
     def strong(text) = "**#{escape(text)}**"
 
     def escape(text) = Teams::Notifier.escape(text)
@@ -199,8 +204,8 @@ module Chat
     end
 
     def graph_files(endpoint, activity, kind)
-      conversation = ChatConversation.find_by(integration_id: endpoint.config.to_h["integration_id"],
-                                              external_id: activity.dig("conversation", "id").to_s.split(";messageid=", 2).first)
+      external_id = activity.dig("conversation", "id").to_s.split(";messageid=", 2).first
+      conversation = ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).find_by(external_id: external_id)
       return [ nil, nil ] if conversation.nil?
 
       path = message_path(conversation, activity, kind)

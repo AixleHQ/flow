@@ -57,7 +57,7 @@ class Teams::FilesTest < ActiveSupport::TestCase
 
     assert_requested help
     assert_not_requested download
-    assert_nil TriggerEvent.sole.data["file_refs"]
+    assert_equal 0, TriggerEvent.count, "nothing matched, so nothing of the message is kept"
     assert_equal({ "uniqueId" => "u1", "fileType" => "pdf" }, received.reload.raw_payload.dig("attachments", 0, "content"))
   end
 

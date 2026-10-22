@@ -16,6 +16,7 @@ export const buildConnectedChatChannel = (overrides: Partial<ConnectedChatChanne
   connected_at: '2026-10-22T09:00:00Z',
   requested_by: 'Jane Doe',
   posted_by: 'ivan',
+  confirmation_url: null,
   ...overrides,
 });
 

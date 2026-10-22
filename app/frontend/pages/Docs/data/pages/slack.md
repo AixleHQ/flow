@@ -52,9 +52,14 @@ The app asks for no direct-message history, so threads in DMs cannot be read.
 
 ### More than one workspace
 
-A company can connect several workspaces: each one gets its own row. A workspace
-can belong to only one company. If another company already holds a workspace,
-connecting it is refused until that company removes it or uninstalls the app.
+A company can connect several workspaces: each one gets its own row.
+
+Several companies can also connect the same workspace. Each one reaches only the
+channels connected to it: another company's channels never show up for you, and
+messages there never reach your triggers. A channel connected to more than one
+company starts the matching triggers of each, and the app answers `/help` once,
+naming every company that listens there. The app is the same bot for everyone,
+so a company's agents edit and delete only the messages posted for that company.
 
 Connecting the same workspace again, from any project, refreshes its token on the
 existing row. Your triggers stay as they are.
@@ -89,8 +94,9 @@ works too, and the app's answer stays in the channel as the record.
 A connection belongs to the company, so every project in it can use the
 channel. It stays when the person who posted the code leaves the channel.
 
-To disconnect a channel, choose **Disconnect** next to it on the Slack row. The
-app says in the channel that your company disconnected it. Triggers that
+Each connected channel on the Slack row links to the app's confirmation in
+Slack (**View in Slack**). To disconnect a channel, choose **Disconnect** next
+to it. The app says in the channel that your company disconnected it. Triggers that
 listened there switch off and need a new channel. Removing the app from the
 channel (`/remove @<app>`) stops it for everyone, as with any Slack app.
 
@@ -272,6 +278,9 @@ Some details:
 - **Interactive blocks.** Flow rejects `actions` and `input` blocks. This
   deployment runs no Slack interactivity endpoint, so a click on them would go
   nowhere.
+- **Throttling.** When Slack rate-limits the app, the tool returns
+  `rate_limited` with how many seconds to wait (`retry_after`). The limit is
+  the app's in that workspace, shared by every company that connected it.
 - **Which workspace.** Replies go through the workspace the run came from. If
   that workspace was removed or uninstalled, the tools say Slack is not
   connected rather than post through another one. A run that did not start
@@ -282,13 +291,14 @@ Some details:
 ## Removing or uninstalling
 
 - **Remove** on the Integrations row (company admins only) stops Flow from
-  listening to that workspace. Another company can then connect the workspace.
-  Removing the row does not uninstall the app from the workspace; you do that
-  in Slack. Its channels are disconnected, and the chat triggers that listened
-  there switch off and need a new channel.
+  listening to that workspace for your company. Other companies that connected
+  it keep working. Removing the row does not uninstall the app from the
+  workspace; you do that in Slack. Your channels there are disconnected, and
+  your chat triggers that listened there switch off and need a new channel.
 - **Uninstalling the app in Slack**, or revoking its tokens, marks the row
-  **inactive**. Flow ignores further events from that workspace and hides the
-  tools. To restore it, use **Connect → Slack** again.
+  **inactive** for every company that connected the workspace. Flow ignores
+  further events from it and hides the tools. **Connect → Slack** again, from
+  any of those companies, restores it for all of them.
 
 ---
 
@@ -366,7 +376,6 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
   thread once rather than polling it.
 - Attachments: Flow takes 10 files per message, up to 50 MB each.
 - A trigger listens in one channel. Direct messages start no trigger.
-- Each workspace belongs to one company.
 - If a company connects several workspaces, a run that did not start from Slack
   always posts through the one connected first. It cannot pick another.
 
@@ -378,7 +387,6 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 | *"Slack authorization did not match your session"* | You approved in Slack while signed in to Flow as someone else | Sign in as the person who started, and connect again |
 | *"This Slack authorization link was already used"* | The callback page was reloaded or revisited | Start again from **Connect → Slack** |
 | *"Slack connection was cancelled"* | You declined on Slack's consent screen | Connect again |
-| *"This Slack workspace is already connected to another organization"* | Another company holds the workspace | That company removes it, or uninstalls the app in Slack |
 | *"Slack OAuth failed: …"* | Slack refused the token exchange. The rest is Slack's error code, such as `bad_redirect_uri` or `bad_client_secret` | Self-hosted: check `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and the redirect URL on the app |
 | **Connect** has no **Slack** entry | The deployment has no Slack app | Operator: set `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` |
 | The row is **inactive** | The app was uninstalled in Slack, or its tokens were revoked | **Connect → Slack** again |

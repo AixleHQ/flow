@@ -48,7 +48,7 @@ module Slack
           return [ text, [ section_block(text) ] ]
         end
 
-        lines = bindings.map { |b| catalog_line(b) }
+        lines = bindings.map { |b| catalog_line(b, Chat::HelpCatalog.place(b, bindings)) }
         text = "Available commands:\n#{lines.join("\n")}"
         blocks = [
           section_block("*Available commands*"),
@@ -57,11 +57,10 @@ module Slack
         [ text, blocks ]
       end
 
-      def catalog_line(binding)
+      def catalog_line(binding, project)
         workflow = Chat::HelpCatalog.workflow_name(binding)
         pattern = Chat::HelpCatalog.pattern(binding)
         label = Chat::HelpCatalog.label(binding)
-        project = binding.project&.name
         base = if label == workflow
           "• *#{escape_mrkdwn(workflow)}* (#{escape_mrkdwn(pattern)})"
         else

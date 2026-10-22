@@ -22,13 +22,6 @@ module Slack
       team_id = team["id"].to_s
       return refused("Slack did not return a workspace id") if team_id.blank?
 
-      # Enforce 1 workspace : 1 company. The Slack events endpoint is keyed by
-      # team_id (globally unique slug), so a workspace must belong to exactly one
-      # company — otherwise a second install would hijack the first's event routing.
-      if foreign_company_owns_workspace?(team_id)
-        return refused("This Slack workspace is already connected to another organization")
-      end
-
       integration = find_or_build_for_team(team_id)
       integration.connected_by = @connected_by
       integration.name = team["name"].presence || "Slack"
@@ -47,14 +40,15 @@ module Slack
       integration.status = :active
       Integration.transaction do
         integration.save!
+        share_token_with_peers(integration)
         provision_endpoint(integration, team_id)
       end
       integration
     rescue Slack::Client::Error => e
       refused("Slack OAuth failed: #{e.message}")
     rescue ActiveRecord::RecordNotUnique
-      # Lost a race to another company claiming the same workspace's endpoint slug.
-      refused("This Slack workspace is already connected to another organization")
+      # Lost a race to another install of the same workspace creating its endpoint.
+      refused("Slack was being connected to this workspace at the same moment — connect again")
     rescue ActiveRecord::RecordInvalid => e
       refused(e.message)
     end
@@ -76,35 +70,37 @@ module Slack
       @company.integrations.build(provider: :slack, connected_by: @connected_by, project: nil)
     end
 
-    # Anchor a WebhookEndpoint for this install, keyed by team_id, so inbound
-    # Slack events (one shared Request URL) route to the right project +
-    # integration via Webhooks::ProcessEventJob. Verification is central (the app
-    # signing secret), so no per-endpoint secret is stored.
-    # True if another company holds this workspace's events endpoint. A disabled
-    # endpoint — the app was uninstalled from Slack, or the install removed here —
-    # holds nothing, or a workspace once connected would be claimed forever.
-    def foreign_company_owns_workspace?(team_id)
-      foreign_owner?(WebhookEndpoint.find_by(slug: "slack-team-#{team_id}"))
+    # Every company that connected the workspace speaks through the same bot,
+    # so whichever of them installed last hands its token to the rest. An
+    # uninstall had switched them all off; this switches them back on.
+    def share_token_with_peers(integration)
+      return if integration.chat_workspace.nil?
+
+      integration.chat_workspace.integrations.where(provider: :slack).where.not(id: integration.id).find_each do |peer|
+        peer.update!(credentials_data: integration.credentials_data, status: :active)
+      end
+      integration.chat_workspace.update!(status: "active")
     end
 
-    def foreign_owner?(endpoint)
-      endpoint.present? && endpoint.enabled? && endpoint.company_id.present? && endpoint.company_id != @company.id
-    end
-
+    # The workspace's one events endpoint (one shared Request URL, keyed by
+    # team_id). It keeps hearing through the install it already names while that
+    # serves the same workspace; verification is central (the app signing
+    # secret), so no per-endpoint secret is stored.
     def provision_endpoint(integration, team_id)
       endpoint = WebhookEndpoint.find_or_initialize_by(slug: "slack-team-#{team_id}")
-      # Race-safe re-check: never take over an endpoint another company holds.
-      raise ActiveRecord::RecordNotUnique, "Slack workspace owned by another company" if endpoint.persisted? && foreign_owner?(endpoint)
+      current = endpoint.chat_install if endpoint.persisted?
+      hears = current&.chat_workspace_id.present? && current.chat_workspace_id == integration.chat_workspace_id ? current : integration
 
       endpoint.assign_attributes(
         provider: :slack,
         verification_strategy: :slack_v0,
-        project: nil, # company-scoped: the workspace serves all the company's projects
-        company: @company,
-        created_by: @connected_by,
+        project: nil, # the workspace serves every project of every company that connected it
+        company: hears.company,
         enabled: true,
-        config: endpoint.config.to_h.merge("integration_id" => integration.id, "team_id" => team_id)
+        config: endpoint.config.to_h.merge("integration_id" => hears.id, "team_id" => team_id,
+                                           "chat_workspace_id" => integration.chat_workspace_id)
       )
+      endpoint.created_by ||= @connected_by
       endpoint.save!
     end
 

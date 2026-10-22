@@ -22,11 +22,18 @@ module Chat
             provider.update_status_card(dispatch.trigger_event, message_id, status)
           else
             message_id = provider.post_status_card(dispatch.trigger_event, status)
+            remember(dispatch, message_id)
           end
           card = { "message_id" => message_id, "state" => status.state }
           dispatch.update!(detail: dispatch.detail.to_h.merge("chat_status" => card))
         end
       end
+    end
+
+    def remember(dispatch, message_id)
+      data = dispatch.trigger_event.data.to_h
+      conversation = ChatConversation.in_workspace_of(data["integration_id"]).find_by(external_id: data["channel"].to_s)
+      ChatMessage.record!(conversation: conversation, message_id: message_id, company_id: dispatch.trigger_event.company_id)
     end
 
     def status_of(dispatch)

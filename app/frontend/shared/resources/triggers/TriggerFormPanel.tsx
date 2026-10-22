@@ -81,6 +81,22 @@ function chatFilterFromPredicate(pred: Record<string, unknown>): { op: string; v
   return { op: 'contains', value: '' };
 }
 
+// The server refuses a condition on where a message came from — the trigger's channel says that
+// (TriggerBinding::CHAT_ROUTING_KEYS) — so carrying one over would fail the save.
+const CHAT_PLACE_KEYS = ['channel', 'conversation', 'workspace', 'team', 'integration_id', 'subject', 'service_url'];
+
+// Conditions set through the API or MCP that the form has no field for, such as the sender.
+function chatConditionsKept(pred: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(pred).filter(
+      ([key]) =>
+        key !== 'provider' &&
+        key !== 'text' &&
+        !CHAT_PLACE_KEYS.some((root) => key === root || key.startsWith(`${root}.`)),
+    ),
+  );
+}
+
 const conversationOption = (channel: ChatChannel): ChatConversationOption => ({
   id: channel.id,
   name: channel.name,
@@ -236,6 +252,7 @@ export function TriggerFormPanel({
     } else {
       const filter: Record<string, unknown> = {};
       if (kind === 'chat') {
+        Object.assign(filter, chatConditionsKept(editing?.filter_predicate ?? {}));
         filter.provider = chatProvider;
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
         if (!isEdit) trigger.chat_provider = chatProvider;

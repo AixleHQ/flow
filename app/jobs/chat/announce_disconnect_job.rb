@@ -9,12 +9,13 @@ module Chat
 
     def perform(conversation_id, company_name)
       conversation = ChatConversation.find_by(id: conversation_id)
-      return if conversation.nil? || !conversation.integration&.active?
+      install = conversation&.posting_integration
+      return if install.nil?
 
       provider = Chat.provider(conversation.provider)
       text = "#{provider.strong(company_name)} disconnected this channel."
       if conversation.provider == Chat::SlackProvider::KEY
-        Slack::Notifier.post(integration: conversation.integration, channel: conversation.external_id, text: text)
+        Slack::Notifier.post(integration: install, channel: conversation.external_id, text: text)
       else
         Teams::Notifier.post(conversation, text: text)
       end

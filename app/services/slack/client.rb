@@ -7,6 +7,18 @@ module Slack
   class Client
     class Error < StandardError; end
 
+    # Slack's answer to a call over its limit: HTTP 429 with `ratelimited` and
+    # how many seconds to wait. One app's limits are shared by every company
+    # that connected the workspace.
+    class RateLimited < Error
+      attr_reader :retry_after
+
+      def initialize(retry_after)
+        @retry_after = retry_after
+        super("ratelimited")
+      end
+    end
+
     BASE = "https://slack.com/api"
 
     class << self
@@ -79,6 +91,11 @@ module Slack
       # Needs no scope.
       def auth_test(token:)
         post("auth.test", token: token)
+      end
+
+      # A link to one message. Needs no scope.
+      def permalink(token:, channel:, message_ts:)
+        post("chat.getPermalink", token: token, params: { channel: channel, message_ts: message_ts })
       end
 
       # One conversation's details, its name among them. Requires channels:read
@@ -197,6 +214,7 @@ module Slack
       # Slack always returns HTTP 200 with an { "ok": bool, "error": "..." } body.
       def parse!(resp)
         body = JSON.parse(resp.body.to_s)
+        raise RateLimited, resp.headers["Retry-After"].to_i.clamp(1, 600) if body["error"] == "ratelimited"
         raise Error, (body["error"].presence || "slack_api_error") unless body["ok"]
 
         body

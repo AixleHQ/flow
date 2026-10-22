@@ -1,7 +1,7 @@
 # Shared chat workspaces and channel-bound chat triggers — technical design
 
-**Status:** Direction agreed 2026-10-22: decisions 1–20 (§2), no open questions. Phase 1 built (§20).
-Spikes S1–S4 (§15.3) remain before phase 2.
+**Status:** Direction agreed 2026-10-22: decisions 1–20 (§2), no open questions. Phases 1 and 2 built
+(§20, §21). Spikes S3 and S4 (§15.3) still want a live check on staging.
 **Board task:** #199, "Make channel selection required when launching a trigger via Slack".
 **Code baseline:** `715fc7c0`
 **Audience:** backend, frontend and operations engineers
@@ -795,6 +795,53 @@ it differs from the sections above:
   - Every Teams channel and group chat already in the registry is connected.
   - Copies of a split trigger are named `<name> (2)`, `<name> (3)`.
   - It logs counts only.
+
+## 21. Phase 2 as built
+
+On the same branch as phase 1. Where it differs from the sections above:
+
+- **The token stays on each company's install.** `chat_workspaces` holds no
+  credentials. Each company's `Integration` keeps its copy of the bot token, and
+  `Slack::IntegrationService` hands the latest one to every install of the
+  workspace on each install or reinstall. That reinstall also switches back on
+  the installs an uninstall had switched off. Every reader of
+  `credentials_data["bot_token"]` therefore works unchanged, and spike S1 stops
+  mattering: whichever token Slack returns last serves everyone.
+- **Linking to the workspace.** `Integration#attach_chat_workspace` links an
+  install to its workspace from `team_id` / `tenant_id`; the migration links
+  existing installs the same way. `Integration#chat_peers` is the installs of
+  every company on that workspace.
+- **The registry.** It is looked up by workspace (`ChatConversation.in_workspace_of`).
+  `integration_id` stays as the install that first recorded a row, now nullable
+  with `on_delete: :nullify`, so a company's disconnect leaves the shared rows in
+  place. An install that serves no workspace yet keeps a registry of its own.
+- **The endpoint.** One endpoint per workspace keeps hearing through the install
+  it names (`WebhookEndpoint#chat_install`). That install falls back to another
+  company's when it is inactive, and when it is removed the endpoint is handed to
+  a peer (`Integration#hand_endpoints_to`). It is disabled (Slack) or deleted
+  (Teams) only when the last company leaves.
+- **The router.** `Chat::WorkspaceRouter` runs from `ProcessEventJob` for every
+  chat endpoint. A message no company's trigger matches is stored in no company
+  and gets the help catalog once.
+- **The ledger.** `chat_messages` records what `chat_post_message`, status cards
+  and connect confirmations post, per company. `chat_update_message` /
+  `chat_delete_message` check it only in a channel connected to two or more
+  companies; elsewhere every bot message is the one company's.
+- **Rate limits.** `Slack::Client::RateLimited` carries `retry_after`. The tools
+  answer `rate_limited`, the way Teams' 429 already did. `Slack::Notifier` raises
+  it only for an agent's call (`raise_rate_limit: true`); system posts keep
+  logging and moving on.
+- **Self-service.** `Chat::RunCatalog` spans the person's companies on the
+  workspace, naming the company when there is more than one. `Chat::RunStarter`
+  records the run under the company of the chosen project, through that
+  company's install. Linking an account accepts a member of any of those
+  companies. The link page names only the person's own companies (decision 17).
+- **Confirmation link.** Slack's comes from `chat.getPermalink`, which needs no
+  scope. Teams' is the message the code was posted in, whose thread holds the
+  confirmation. It is stored as `confirmation_url` and shown on the Channels list.
+- **Spike S2.** `Chat::TeamsProvider.normalize` now keys a channel message by
+  `channelData.channel.id`, as `ChatConversation.record_teams!` always did. S3
+  and S4 still want a live check on staging.
 
 ## Sources
 

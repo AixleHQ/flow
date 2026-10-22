@@ -1,4 +1,4 @@
-import { ActionIcon, Box, Button, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Box, Button, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { IconPlus, IconUnlink } from '@tabler/icons-react';
@@ -20,6 +20,8 @@ interface ChatChannelsSectionProps {
   canEdit: boolean;
 }
 
+const MESSENGER_SHORT_NAMES: Record<string, string> = { slack: 'Slack', teams: 'Teams' };
+
 function provenance(channel: ConnectedChatChannel): string {
   return [
     channel.requested_by && `connected by ${channel.requested_by}`,
@@ -36,6 +38,7 @@ export const ChatChannelsSection = ({ projectId, provider, canEdit }: ChatChanne
   const [failed, setFailed] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
+  const shortName = MESSENGER_SHORT_NAMES[provider] ?? label;
 
   const load = useCallback(async () => {
     try {
@@ -119,19 +122,32 @@ export const ChatChannelsSection = ({ projectId, provider, canEdit }: ChatChanne
                   {provenance(channel)}
                 </Text>
               </Box>
-              {canEdit && (
-                <Tooltip label="Disconnect">
-                  <ActionIcon
-                    aria-label={`Disconnect ${channelName(channel)}`}
-                    variant="subtle"
-                    size="sm"
-                    color="red"
-                    onClick={() => disconnect(channel)}
+              <Group gap="xs" wrap="nowrap">
+                {channel.confirmation_url && (
+                  <Anchor
+                    href={channel.confirmation_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    fz={12}
+                    style={{ whiteSpace: 'nowrap' }}
                   >
-                    <IconUnlink size={16} />
-                  </ActionIcon>
-                </Tooltip>
-              )}
+                    View in {shortName}
+                  </Anchor>
+                )}
+                {canEdit && (
+                  <Tooltip label="Disconnect">
+                    <ActionIcon
+                      aria-label={`Disconnect ${channelName(channel)}`}
+                      variant="subtle"
+                      size="sm"
+                      color="red"
+                      onClick={() => disconnect(channel)}
+                    >
+                      <IconUnlink size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </Group>
             </Group>
           ))}
         </Stack>

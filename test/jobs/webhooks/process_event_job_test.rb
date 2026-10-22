@@ -199,13 +199,25 @@ module Webhooks
     test "keeps a leading mention of someone other than the bot in the matched text" do
       bot_install
       stub_slack_client!
-      @binding.update!(filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
+      @binding.update!(filter_predicate: { "text" => { "op" => "starts_with", "value" => "<@u0alice>" } })
 
-      WorkflowService.expects(:enqueue).never
+      WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
 
       Webhooks::ProcessEventJob.perform_now(mention("<@U0ALICE> <@U0BOT> deploy", key: "EvOther").id)
 
       assert_equal "<@U0ALICE> <@U0BOT> deploy", TriggerEvent.find_by!(event_type: Chat::EVENT_TYPE).data["text"]
+    end
+
+    test "a message no trigger matches gets the help catalog and is stored in no company" do
+      bot_install
+      stub_slack_client!
+      @binding.update!(filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
+      WorkflowService.expects(:enqueue).never
+
+      Webhooks::ProcessEventJob.perform_now(mention("<@U0BOT> lunch?", key: "EvLunch").id)
+
+      assert_equal 0, TriggerEvent.count
+      assert_match(/Available commands/, fake_slack.last_posted_message[:text])
     end
 
     test "drops a leading mention, label and all, when the install cannot say who the bot is" do

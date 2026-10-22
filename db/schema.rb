@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -442,6 +442,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
     t.string "confirmation_message_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "confirmation_url"
     t.index ["chat_conversation_id", "company_id"], name: "idx_on_chat_conversation_id_company_id_df284b3410", unique: true
     t.index ["company_id"], name: "index_chat_channel_connections_on_company_id"
     t.index ["requested_by_id"], name: "index_chat_channel_connections_on_requested_by_id"
@@ -472,7 +473,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
     t.datetime "created_at", null: false
     t.string "external_id", null: false
     t.boolean "installed", default: true, null: false
-    t.bigint "integration_id", null: false
+    t.bigint "integration_id"
     t.string "kind", null: false
     t.datetime "last_activity_at"
     t.string "name"
@@ -484,6 +485,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
     t.string "tenant_id"
     t.datetime "updated_at", null: false
     t.datetime "welcomed_at"
+    t.bigint "chat_workspace_id"
+    t.index ["chat_workspace_id", "external_id"], name: "index_chat_conversations_on_chat_workspace_id_and_external_id", unique: true
+    t.index ["chat_workspace_id"], name: "index_chat_conversations_on_chat_workspace_id"
     t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
     t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
   end
@@ -499,6 +503,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
     t.string "workspace_id", null: false
     t.index ["provider", "workspace_id", "external_user_id"], name: "index_chat_identities_on_sender", unique: true
     t.index ["user_id"], name: "index_chat_identities_on_user_id"
+  end
+
+  create_table "chat_messages", force: :cascade do |t|
+    t.bigint "chat_conversation_id", null: false
+    t.bigint "company_id", null: false
+    t.string "message_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_conversation_id", "message_id"], name: "index_chat_messages_on_chat_conversation_id_and_message_id", unique: true
+    t.index ["company_id"], name: "index_chat_messages_on_company_id"
+  end
+
+  create_table "chat_workspaces", force: :cascade do |t|
+    t.string "provider", null: false
+    t.string "external_id", null: false
+    t.string "name"
+    t.string "status", default: "active", null: false
+    t.jsonb "settings", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "external_id"], name: "index_chat_workspaces_on_provider_and_external_id", unique: true
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -845,8 +870,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
     t.bigint "bitbucket_installation_id"
+    t.bigint "chat_workspace_id"
     t.index ["azure_devops_installation_id"], name: "index_integrations_on_azure_devops_installation_id"
     t.index ["bitbucket_installation_id"], name: "index_integrations_on_bitbucket_installation_id"
+    t.index ["chat_workspace_id"], name: "index_integrations_on_chat_workspace_id"
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
     t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
@@ -2056,8 +2083,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
   add_foreign_key "chat_connect_codes", "projects", on_delete: :cascade
   add_foreign_key "chat_connect_codes", "trigger_bindings", on_delete: :nullify
   add_foreign_key "chat_connect_codes", "users", column: "requested_by_id", on_delete: :nullify
-  add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
+  add_foreign_key "chat_conversations", "chat_workspaces", on_delete: :cascade
+  add_foreign_key "chat_conversations", "integrations", on_delete: :nullify
   add_foreign_key "chat_identities", "users", on_delete: :cascade
+  add_foreign_key "chat_messages", "chat_conversations", on_delete: :cascade
+  add_foreign_key "chat_messages", "companies", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade
@@ -2098,6 +2128,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_100100) do
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict
+  add_foreign_key "integrations", "chat_workspaces", on_delete: :nullify
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify

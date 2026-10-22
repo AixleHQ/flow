@@ -83,7 +83,7 @@ module InternalTools
         conversation = Chat::ChannelAccess.find(project, "slack", value)
         return [ nil, nil, error(Chat::ChannelAccess.not_connected(project, "slack", value)) ] if conversation.nil?
 
-        [ conversation.integration, conversation.external_id, nil ]
+        [ Chat::ChannelAccess.install_for(project, conversation), conversation.external_id, nil ]
       end
 
       def slack_origin_target(channel)
@@ -104,6 +104,8 @@ module InternalTools
       # that is what tells the agent which retry is worth making.
       def slack_call
         [ yield, nil ]
+      rescue Slack::Client::RateLimited => e
+        [ nil, error({ error: "rate_limited", retry_after: e.retry_after }.to_json) ]
       rescue Slack::Client::Error => e
         [ nil, error("Slack rejected the request: #{e.message}") ]
       end

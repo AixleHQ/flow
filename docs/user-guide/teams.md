@@ -35,8 +35,9 @@ organization, who does not need a Flow account.
 4. The organization is now connected. The row on the **Integrations** page
    shows its domain and who approved it.
 
-An organization belongs to one company. If another company already connected it,
-the approval is refused.
+Several companies can connect the same organization, each with its own
+administrator approval and each once. Each reaches only the channels connected
+to it, and its agents edit and delete only the app's messages posted for it.
 
 ### File access
 
@@ -103,7 +104,8 @@ A code works once, for ten minutes. Anyone who can change a project can ask for
 one. A code sent in a 1:1 chat is refused: a 1:1 chat cannot be connected. The
 connection belongs to the company, so every project in it can use the channel.
 
-To disconnect a channel, choose **Disconnect** next to it on the Teams row. The
+Each connected channel on the Teams row links to the message the code was posted
+in (**View in Teams**). To disconnect a channel, choose **Disconnect** next to it. The
 app says in the channel that your company disconnected it, and triggers that
 listened there switch off and need a new channel.
 
@@ -257,7 +259,7 @@ id. The tools refuse one that is not connected, and list the ones that are.
 organization. The app stays installed in Teams until an administrator removes
 it there, but Flow no longer acts on its messages. Its channels are disconnected,
 and the chat triggers that listened there switch off and need a new channel.
-Another company can then connect the organization.
+Other companies that connected the organization keep working.
 
 If someone mentions the app from an organization that is not connected, it
 answers at most once a day per conversation that the organization has not

@@ -115,6 +115,16 @@ module Chat
                            thread_ts: data["thread_ts"].presence || data["ts"])&.ts
     end
 
+    def permalink(event, message_id)
+      integration = install_for(event)
+      return nil if integration.nil? || message_id.blank?
+
+      Slack::Client.permalink(token: integration.credentials_data["bot_token"], channel: event.data.to_h["channel"],
+                              message_ts: message_id)["permalink"]
+    rescue Slack::Client::Error
+      nil
+    end
+
     def strong(text) = "*#{escape(text)}*"
 
     # Slack mrkdwn reads these three characters as markup.

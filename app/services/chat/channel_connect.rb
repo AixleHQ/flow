@@ -39,7 +39,7 @@ module Chat
       return answer(provider, event, UNUSABLE) if outcome.nil?
 
       message_id = provider.reply(event, confirmation(provider, event, outcome))
-      outcome.connection.update_column(:confirmation_message_id, message_id) if message_id && !outcome.already_connected
+      record_confirmation(provider, event, outcome, message_id)
       true
     rescue StandardError => e
       Rails.logger.error("[Chat::ChannelConnect] event ##{event&.id}: #{e.class}: #{e.message}")
@@ -49,17 +49,16 @@ module Chat
     def redeem(provider, event, code)
       ChatConnectCode.transaction do
         record = ChatConnectCode.lock.find_by(code_digest: ChatConnectCode.digest(code))
-        reason = refusal(record, provider, event)
+        reason = refusal(record, provider)
         if reason
           record&.update!(failure_reason: reason) unless record&.redeemed_at
           next nil
         end
 
-        integration = Integration.active.find_by(id: event.data.to_h["integration_id"], provider: provider.key,
-                                                 company_id: record.company_id)
+        integration = company_install(event, record.company_id)
         conversation = integration && provider.conversation_for(event, integration)
         if conversation.nil?
-          record.update!(failure_reason: "Posted in a #{provider.label} workspace this company has not connected")
+          record.update!(failure_reason: "Posted in a workspace this company has not connected")
           next nil
         end
 
@@ -67,14 +66,22 @@ module Chat
       end
     end
 
-    def refusal(record, provider, event)
+    def refusal(record, provider)
       return "unknown" if record.nil?
       return "Already used" if record.redeemed_at
       return "Expired" if record.expires_at <= Time.current
       return "Posted in #{provider.label}, but the code is for #{Chat.provider(record.provider)&.label}" if record.provider != provider.key
-      return "Posted in a workspace this company has not connected" if event.company_id != record.company_id
 
       nil
+    end
+
+    # The code's company's own install of the workspace the message came from:
+    # any company that connected it may connect its channels.
+    def company_install(event, company_id)
+      heard_by = Integration.find_by(id: event.data.to_h["integration_id"])
+      return nil if heard_by.nil?
+
+      heard_by.chat_peers.active.find_by(company_id: company_id)
     end
 
     def connect(record, conversation, event)
@@ -99,6 +106,15 @@ module Chat
                         binding.chat_provider == conversation.provider
 
       binding.update(chat_conversation: conversation) ? binding : nil
+    end
+
+    def record_confirmation(provider, event, outcome, message_id)
+      return if message_id.nil? || outcome.already_connected
+
+      outcome.connection.update_columns(confirmation_message_id: message_id,
+                                        confirmation_url: provider.permalink(event, message_id))
+      ChatMessage.record!(conversation: outcome.connection.chat_conversation, message_id: message_id,
+                          company_id: outcome.connection.company_id)
     end
 
     def refuse!(code, reason)

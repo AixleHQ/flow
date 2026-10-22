@@ -1,4 +1,5 @@
 import { Loader } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconBolt, IconClock, IconColumns, IconMessage, IconTicket, IconWebhook } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -87,19 +88,14 @@ export function TriggersTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ trigger: { enabled } }),
         });
-        if (res.ok) {
-          setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled } : x)));
-        } else {
-          console.error('Failed to toggle trigger:', res.statusText);
-          // Revert the UI state on failure
-          setTriggers((prev) =>
-            prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled: !enabled } : x)),
-          );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          notifications.show({ message: (data.errors ?? ['Failed to update the trigger']).join(', '), color: 'red' });
+          return;
         }
+        setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled } : x)));
       } catch (error) {
         console.error('Error toggling trigger:', error);
-        // Revert the UI state on failure
-        setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled: !enabled } : x)));
       }
     },
     [projectId, workflowId],

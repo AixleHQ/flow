@@ -38,7 +38,8 @@ module Teams
         label = Chat::HelpCatalog.label(binding)
         line = label == workflow ? "- **#{Notifier.escape(workflow)}**" : "- **#{Notifier.escape(label)}** — #{Notifier.escape(workflow)}"
         line += " (#{Notifier.escape(Chat::HelpCatalog.pattern(binding))})"
-        binding.project&.name.present? ? "#{line} _#{Notifier.escape(binding.project.name)}_" : line
+        place = Chat::HelpCatalog.place(binding, bindings)
+        place.present? ? "#{line} _#{Notifier.escape(place)}_" : line
       end
       "**What this conversation can start**\n\n#{lines.join("\n")}"
     end

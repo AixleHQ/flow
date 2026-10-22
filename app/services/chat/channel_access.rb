@@ -10,7 +10,7 @@ module Chat
     # The company's connected channels, through its active installs.
     def channels(project, provider: nil)
       rows = ChatConversation.connected_to_company(project.company_id)
-                             .where(integration: Integration.active.visible_for_project(project))
+                             .in_workspace_of(Integration.active.visible_for_project(project).select(:id))
                              .order(:team_name, :name, :id)
       provider ? rows.where(provider: provider.to_s) : rows
     end
@@ -31,6 +31,17 @@ module Chat
       rows = scope.where("lower(chat_conversations.name) = ?", channel.delete_prefix("#").downcase)
       rows = rows.where("lower(chat_conversations.team_name) = ?", team.downcase) if team
       rows.one? ? rows.first : nil
+    end
+
+    # The project's company's own install of the workspace a channel lives in.
+    def install_for(project, conversation)
+      installs = Integration.active.visible_for_project(project).where(provider: conversation.provider)
+      installs = if conversation.chat_workspace_id
+        installs.where(chat_workspace_id: conversation.chat_workspace_id)
+      else
+        installs.where(id: conversation.integration_id)
+      end
+      installs.order(:id).first
     end
 
     def not_connected(project, provider, value)

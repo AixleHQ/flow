@@ -1552,6 +1552,48 @@ describe('IntegrationsContent', () => {
       expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack`, expect.anything());
     });
 
+    it("links to the bot's confirmation in the channel, where the server has one", async () => {
+      const permalink = 'https://acme.slack.com/archives/C042/p1761123456000100';
+      answerFetch({
+        [`GET ${CHANNELS}`]: {
+          channels: [
+            buildConnectedChatChannel({ confirmation_url: permalink }),
+            buildConnectedChatChannel({ id: 12, name: 'ops', label: '#ops' }),
+          ],
+        },
+      });
+      const { unmount } = renderProject([acmeSlack]);
+
+      const list = await screen.findByRole('list', { name: 'Slack channels' });
+      const [deploys, ops] = within(list).getAllByRole('listitem');
+      const link = within(deploys).getByRole('link', { name: 'View in Slack' });
+      expect(link).toHaveAttribute('href', permalink);
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noreferrer');
+      expect(within(ops).queryByRole('link')).not.toBeInTheDocument();
+      unmount();
+
+      const message = 'https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/1761123456000';
+      answerFetch({
+        [`GET ${CHANNELS}`]: {
+          channels: [
+            buildConnectedChatChannel({
+              id: 21,
+              name: 'General',
+              label: 'General',
+              team_name: 'Sales',
+              provider: 'teams',
+              confirmation_url: message,
+            }),
+          ],
+        },
+      });
+      renderProject([makeIntegration({ id: 5, name: 'Microsoft Teams', provider: 'teams' })]);
+
+      const teamsList = await screen.findByRole('list', { name: 'Microsoft Teams channels' });
+      expect(within(teamsList).getByRole('link', { name: 'View in Teams' })).toHaveAttribute('href', message);
+    });
+
     it('lists none for a Teams connection still waiting for approval, nor without a project', () => {
       const pendingTeams = makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' });
       const { unmount } = renderProject([pendingTeams]);

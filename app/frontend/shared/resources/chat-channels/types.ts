@@ -14,6 +14,8 @@ export interface ConnectedChatChannel extends ChatChannel {
   connected_at: string | null;
   requested_by: string | null;
   posted_by: string | null;
+  // The bot's confirmation in the channel: a Slack permalink, or the Teams message the code was posted in.
+  confirmation_url: string | null;
 }
 
 export type ChatConnectCodeState = 'pending' | 'redeemed' | 'expired';

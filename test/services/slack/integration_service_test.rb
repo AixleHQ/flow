@@ -92,40 +92,32 @@ module Slack
       assert_equal 1, @company.integrations.where(provider: :slack).count
     end
 
-    test "rejects a workspace already connected to another company (no hijack)" do
+    test "a second company connecting the same workspace shares it: one bot token, and the endpoint keeps its install" do
       other = create(:user, :with_company)
-      create(:webhook_endpoint, slug: "slack-team-T123", provider: :slack,
-        verification_strategy: :slack_v0, company: other.companies.first, created_by: other,
-        config: { "team_id" => "T123" })
+      first = Slack::IntegrationService.new(company: other.companies.first, connected_by: other)
+      stub_slack_oauth(team_id: "T123").bot_token = "xoxb-first"
+      theirs = first.create_from_oauth(code: "c1")
+      fake_slack.bot_token = "xoxb-second"
 
-      stub_slack_oauth(team_id: "T123")
+      ours = service.create_from_oauth(code: "c2")
 
-      integration = nil
-      assert_no_difference -> { Integration.count } do
-        integration = service.create_from_oauth(code: "c")
-      end
-
-      assert integration.error?
-      assert_match(/another organization/, integration.settings["error"])
+      assert ours.persisted? && ours.active?, ours.settings["error"].to_s
+      assert_equal theirs.chat_workspace, ours.chat_workspace
+      assert_equal [ "xoxb-second" ] * 2, [ theirs.reload, ours ].map { |i| i.credentials_data["bot_token"] }
+      endpoint = WebhookEndpoint.find_by!(slug: "slack-team-T123")
+      assert_equal [ theirs.id, ours.chat_workspace_id ], endpoint.config.values_at("integration_id", "chat_workspace_id")
     end
 
-    # The early check missed a claim made concurrently; the endpoint write
-    # catches it, and the install it was about to anchor is not kept.
-    test "losing the race for a workspace's endpoint keeps no install" do
+    test "reinstalling the app after Slack removed it switches every company of the workspace back on" do
       other = create(:user, :with_company)
-      create(:webhook_endpoint, slug: "slack-team-T123", provider: :slack,
-        verification_strategy: :slack_v0, company: other.companies.first, created_by: other,
-        config: { "team_id" => "T123" })
-      WebhookEndpoint.stubs(:find_by).with(slug: "slack-team-T123").returns(nil)
       stub_slack_oauth(team_id: "T123")
+      theirs = Slack::IntegrationService.new(company: other.companies.first, connected_by: other).create_from_oauth(code: "c1")
+      theirs.update!(status: :inactive)
 
-      integration = nil
-      assert_no_difference -> { Integration.count } do
-        integration = service.create_from_oauth(code: "c")
-      end
+      service.create_from_oauth(code: "c2")
 
-      assert integration.error?
-      assert_match(/another organization/, integration.settings["error"])
+      assert theirs.reload.active?
+      assert_equal "active", theirs.chat_workspace.status
     end
 
     # Once uninstalled from Slack, or removed from Aixle, the other company's

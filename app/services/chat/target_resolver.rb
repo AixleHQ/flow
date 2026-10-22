@@ -10,8 +10,8 @@ module Chat
 
     # [conversation, error message]
     def teams(project, value, origin)
-      installed = ChatConversation.where(provider: "teams",
-                                         integration: Integration.active.visible_for_project(project).where(provider: :teams))
+      installed = ChatConversation.where(provider: "teams")
+                                  .in_workspace_of(Integration.active.visible_for_project(project).where(provider: :teams).select(:id))
       return from_origin(installed, origin) if value.blank?
 
       value = value.to_s.strip
@@ -32,7 +32,7 @@ module Chat
         return [ nil, "No conversation given, and this run was not started from Teams — pass `conversation`." ]
       end
 
-      row = scope.find_by(integration_id: origin["integration_id"], external_id: origin.dig("conversation", "id"))
+      row = scope.in_workspace_of(origin["integration_id"]).find_by(external_id: origin.dig("conversation", "id"))
       row ? [ row, nil ] : [ nil, "The Teams conversation this run came from is no longer connected." ]
     end
 

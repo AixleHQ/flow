@@ -59,7 +59,7 @@ module Teams
     def file_access? = @integration.settings.to_h["file_access"].present?
 
     def allowed_drive(ref)
-      conversation = @integration.chat_conversations.find_by(external_id: ref["conversation"])
+      conversation = ChatConversation.in_workspace_of(@integration.id).find_by(external_id: ref["conversation"])
       return nil if conversation.nil?
 
       conversation.channel? ? Files.channel_drive(conversation) : Files.user_drive(conversation.tenant_id, ref["sender"])

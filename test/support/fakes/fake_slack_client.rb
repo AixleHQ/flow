@@ -3,7 +3,7 @@
 # In-memory fake for the Slack boundary. A real object implementing
 # Slack::Client's public class-method interface (exchange_code, post_message,
 # update_message, delete_message, conversation_replies, upload_files,
-# download_file, auth_test, conversation_info) as INSTANCE methods (R3,
+# download_file, auth_test, conversation_info, permalink) as INSTANCE methods (R3,
 # docs/testing.md §4).
 # Callers stub Slack::Client onto one of these via
 # SlackTestHelper#stub_slack_client!.
@@ -213,6 +213,12 @@ class FakeSlackClient
       "ok" => true, "url" => "https://#{WORKSPACE_HOST}/", "team" => team_name, "user" => bot_name,
       "team_id" => team_id, "user_id" => bot_user_id, "bot_id" => DEFAULT_BOT_ID, "is_enterprise_install" => false
     }
+  end
+
+  # chat.getPermalink — { ok, channel, permalink }.
+  def permalink(token:, channel:, message_ts:)
+    { "ok" => true, "channel" => channel,
+      "permalink" => "https://#{WORKSPACE_HOST}/archives/#{channel}/p#{message_ts.to_s.delete('.')}" }
   end
 
   # conversations.info — { ok, channel } for a channel in `channel_names`.

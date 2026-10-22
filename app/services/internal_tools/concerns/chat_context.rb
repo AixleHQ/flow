@@ -73,6 +73,22 @@ module InternalTools
         end
       end
 
+      def slack_conversation(integration, channel)
+        integration && ChatConversation.in_workspace_of(integration.id).find_by(external_id: channel.to_s)
+      end
+
+      def remember_message(conversation, message_id)
+        ChatMessage.record!(conversation: conversation, message_id: message_id, company_id: project&.company_id)
+      end
+
+      # In a channel several companies share, the bot's messages are not all this one's.
+      def foreign_message(conversation, message_id)
+        return nil unless ChatMessage.foreign?(conversation: conversation, message_id: message_id, company_id: project&.company_id)
+
+        error("Message #{message_id} was not posted for #{project.company.name} — in a channel several companies " \
+              "share, a run changes only its own company's messages")
+      end
+
       # A payload for the other messenger is refused by name, never dropped.
       def wrong_payload(provider)
         if provider == "slack" && params[:adaptive_card].present?

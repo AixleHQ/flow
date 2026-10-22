@@ -14,6 +14,13 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: several companies can connect the same Slack workspace or
+  Microsoft 365 organization, as peers. Each reaches only the channels connected
+  to it, a shared channel starts each company's own triggers and answers `/help`
+  once, `/run` offers the workflows of every company of yours that connected the
+  workspace, and an agent changes only the bot messages posted for its company.
+  Disconnecting one company leaves the others working; uninstalling the app in
+  Slack stops it for all of them, and reinstalling from any restores it.
 - **Integrations**: Slack and Microsoft Teams channels are connected to a
   company from inside the channel: ask for a code in Flow, then mention the app
   with `connect <code>` there, and the app confirms it in the channel for
@@ -29,7 +36,9 @@ governance, community health — carry none.
   is switched off as "Needs a channel". A 1:1 Teams chat starts no trigger;
   `/run` still works there.
 - **Workflows**: agents post, read, edit and delete chat messages only in
-  channels connected to the company and in the thread their run came from.
+  channels connected to the company and in the thread their run came from. When
+  Slack rate-limits the app, `chat_*` tools answer `rate_limited` with
+  `retry_after` instead of a plain failure.
 - **Integrations**: Slack asks for `channels:read` and `groups:read` to show a
   connected channel's name. Operators: add them (and the `channel_rename` and
   `group_rename` events) to the Slack app, and set them in `SLACK_SCOPES` if you
