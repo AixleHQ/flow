@@ -28,6 +28,10 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Repositories**: an agent's first commit no longer fails with "Author
+  identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
+  commit is authored and committed by **Aixle Flow** with the address
+  `noreply@<DOMAIN>` of your deployment, instead of a name the agent chose.
 - **Triggers & gates**: an agent can gate a task on a GitLab merge request's
   pipeline without help. `pull_request_checks` now returns the merge request's
   head pipeline with its id, which `gitlab_pipeline_completed` takes, and links
