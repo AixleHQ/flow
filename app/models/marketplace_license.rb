@@ -1,33 +1,25 @@
 # frozen_string_literal: true
 
-# One AWS Marketplace agreement for the SaaS listing, and the company it bought
-# a workspace for.
+# One AWS Marketplace agreement for the SaaS listing, and the company it bought.
 #
-# The licence is the identity, not the customer and not the AWS account: under
-# Concurrent Agreements one account may hold several live agreements for the
-# same product, and `CustomerIdentifier` is no longer populated at all. Two
-# arrivals from one AWS account carrying different licences are two purchases
-# and get two workspaces; two carrying the same licence are one purchase and
-# must land on the same one.
+# Keyed on the licence rather than the customer or the AWS account: under
+# Concurrent Agreements one account may hold several live agreements for the same
+# product, and `CustomerIdentifier` is no longer populated at all.
 class MarketplaceLicense < ApplicationRecord
   belongs_to :company, optional: true
 
-  # Driven entirely by what AWS tells us, so these are not an AASM lifecycle
-  # anybody here may move through: nothing in the product advances a licence.
-  #
-  #   pending  resolved at registration, not yet confirmed. Metering records
-  #            sent now are discarded by AWS, so nothing may be sent.
-  #   active   AWS has confirmed the agreement and accepts metering.
-  #   ending   the agreement is closing and roughly one hour remains to report
-  #            the last of its usage.
-  #   ended    over. AWS accepts nothing further.
-  STATES = %w[pending active ending ended].freeze
-
-  # Carries one licence from the POST AWS makes to the GET that follows it. Short
-  # lived because it only has to survive a redirect, and signed because the URL
-  # it rides in is the buyer's address bar.
   REGISTRATION_VALID_FOR = 15.minutes
+  # Carries the licence from the POST AWS makes to the GET that follows it; the
+  # POST holds no session to put it in (SameSite withholds the cookie).
   generates_token_for :registration, expires_in: REGISTRATION_VALID_FOR
+
+  # Moved only by what AWS tells us, so not an AASM lifecycle anyone here walks.
+  #
+  #   pending  resolved at registration; AWS discards metering sent now
+  #   active   confirmed, and metering is accepted
+  #   ending   closing, with about one hour left to report the last usage
+  #   ended    over; AWS accepts nothing further
+  STATES = %w[pending active ending ended].freeze
 
   validates :license_arn, presence: true, uniqueness: true
   validates :customer_aws_account_id, presence: true
@@ -36,8 +28,8 @@ class MarketplaceLicense < ApplicationRecord
   validates :company_id, uniqueness: true, allow_nil: true
 
   scope :bound, -> { where.not(company_id: nil) }
-  # A subscription nobody has registered against. Visible on purpose: somebody is
-  # being billed and has no way in, and the first report of it must not be theirs.
+  # Somebody is being billed and has no way into the product. The first report of
+  # that must not be theirs.
   scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
 
   def pending? = subscription_state == "pending"
@@ -47,7 +39,7 @@ class MarketplaceLicense < ApplicationRecord
 
   def bound? = company_id.present?
 
-  # Whether AWS would accept usage for this licence now. `ending` still counts:
-  # the hour it allows is exactly when the last of the usage has to go.
+  # `ending` counts: the hour AWS allows after an agreement closes is exactly
+  # when the last usage has to go.
   def meterable? = bound? && (active? || ending?)
 end
