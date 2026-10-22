@@ -135,11 +135,18 @@ section was written, and it happens to be the one AWS describes first; it also m
 buyer who deliberately buys twice gets two workspaces, which is the feature Concurrent
 Agreements exists to provide rather than a bug to defend against.
 
-`aws-sdk-marketplacemetering` already carries all of it: `resolve_customer` returns
-`license_arn`, `customer_aws_account_id` and `metadata.agreement_id`, and
-`batch_meter_usage` takes `license_arn` inside each usage record. *To verify in the
-container:* that the pinned 1.107.0 is new enough, since `Gemfile:211` allows `~> 1.106`
-and a bump is free if it is not.
+**The pinned gem already carries all of it.** Read out of the API model at 1.107.0 on
+22 October, rather than assumed:
+
+```
+ResolveCustomer output: [customer_identifier, product_code, customer_aws_account_id,
+                         license_arn, metadata]
+metadata:               [agreement_id]
+UsageRecord:            [timestamp, customer_identifier, dimension, quantity,
+                         usage_allocations, customer_aws_account_id, license_arn]
+```
+
+No bump is needed, and `Gemfile:211` allows one anyway.
 
 ### 3.2 What already exists in the codebase, and what is missing
 
@@ -759,8 +766,8 @@ marketing copy.
 | | Slice | Why here |
 |---|---|---|
 | 1 | **Built.** `billing_provider` + `Billing::Payer` + the payer shown read-only in the admin, behaviour otherwise unchanged | The riskiest change, because it touches the live Stripe path. Alone and first, so a staging failure is unambiguous. The customer-facing display moved to slice 2, where there is more than one answer to show |
-| 2 | `marketplace_customers`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
-| 3 | `Billing::Meter::AwsMarketplaceSaas` + the assumed-role client | Independent of 2 — can be proved against a hand-bound customer row |
+| 2 | The seller-account client, `marketplace_licenses`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
+| 3 | `Billing::Meter::AwsMarketplaceSaas` | Independent of 2 — can be proved against a hand-bound licence row. An earlier version of this table put the assumed-role client here; it belongs in slice 2, because `ResolveCustomer` is a call to the same service and must be signed the same way, so the registration endpoint cannot exist without it |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
 | 5 | EventBridge consumption, the licence states, and the immediate final meter on agreement-ended | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
 | 6 | Staging ingress, config, and a live run against a `[TEST]` listing | The first time any of it meets AWS |
