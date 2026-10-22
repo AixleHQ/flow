@@ -124,8 +124,13 @@ class TaskService
       succeeded = []
       skipped   = []
 
+      # One query for the whole selection instead of one per task.
+      active_run_task_ids = WorkflowRun.active
+                                       .where(board_task_id: tasks.select(:id))
+                                       .distinct.pluck(:board_task_id).to_set
+
       tasks.each do |task|
-        if task.workflow_runs.where(state: %w[pending running paused]).exists?
+        if active_run_task_ids.include?(task.id)
           skipped << { task_id: task.id, reason: "active_run" }
           next
         end

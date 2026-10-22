@@ -101,6 +101,20 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert_equal 0, BoardActivity.where(board: @board, event_type: :task_unarchived, board_task: task).count
   end
 
+  # == bulk_action ==
+
+  test "bulk_action looks up active runs in one query, not one per task" do
+    create_list(:board_task, 3, board: @board, board_column: @column)
+    tasks = @board.board_tasks
+
+    result = assert_queries_match(/SELECT DISTINCT "workflow_runs"/, count: 1) do
+      TaskService.bulk_action(action: :delete, tasks: tasks, actor: @user)
+    end
+
+    assert_equal 3, result[:succeeded].size
+    assert_empty result[:skipped]
+  end
+
   # == update ==
 
   test "update saves changes and records activity" do
