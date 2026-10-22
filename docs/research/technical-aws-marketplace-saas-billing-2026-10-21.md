@@ -827,7 +827,7 @@ marketing copy.
 | 2 | The seller-account client, `marketplace_licenses`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
 | 3 | `Billing::Meter::AwsMarketplaceSaas` | Independent of 2 — can be proved against a hand-bound licence row. An earlier version of this table put the assumed-role client here; it belongs in slice 2, because `ResolveCustomer` is a call to the same service and must be signed the same way, so the registration endpoint cannot exist without it |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
-| 5 | EventBridge consumption, the licence states, and the immediate final meter on agreement-ended | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
+| 5 | EventBridge consumption, the licence states, and the immediate final meter on `License Deprovisioned - Manufacturer` | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
 | 6 | Staging ingress, config, and a live run against a `[TEST]` listing | The first time any of it meets AWS |
 
 Slices 1, 3 and 4 are provable in the test suite. Slices 2, 5 and 6 are not finished until
