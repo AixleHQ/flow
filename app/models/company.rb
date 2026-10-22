@@ -73,6 +73,22 @@ class Company < ApplicationRecord
   # same metered minutes twice.
   BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed].freeze
 
+  # Who sends this company its invoice. One installation can hold more than one
+  # answer, which is why this is a column rather than a deployment mode: the
+  # hosted product bills some companies through Stripe and carries others, and
+  # AWS will bill a third kind.
+  #
+  # `none` is both a company we carry and one nobody has ever charged. The two
+  # are told apart by `managed_by_aixle`, which answers a different question —
+  # whether we forgive the bill, not who sends it.
+  BILLING_PROVIDER_NONE = "none"
+  BILLING_PROVIDER_STRIPE = "stripe"
+  BILLING_PROVIDER_AWS_MARKETPLACE = "aws_marketplace"
+
+  BILLING_PROVIDERS = [
+    BILLING_PROVIDER_NONE, BILLING_PROVIDER_STRIPE, BILLING_PROVIDER_AWS_MARKETPLACE
+  ].freeze
+
   # What a company we carry (`managed_by_aixle`) is given when it is made. Its
   # admins cannot change it; we can, from the admin.
   MANAGED_SESSION_LIMIT = 2
@@ -94,6 +110,7 @@ class Company < ApplicationRecord
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
   validates :billing_state, inclusion: { in: BILLING_STATES }
   validates :billing_block_reason, inclusion: { in: BILLING_BLOCK_REASONS }, allow_nil: true
+  validates :billing_provider, inclusion: { in: BILLING_PROVIDERS }
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
@@ -121,6 +138,8 @@ class Company < ApplicationRecord
   def billing_blocked? = billing_state == "blocked"
 
   def billing_cancellation_scheduled? = billing_active? && billing_cancels_at.present?
+
+  def billing_payer = Billing::Payer.for(self)
 
   # The one word the billing screen and the banner are written against.
   def billing_status
@@ -267,7 +286,7 @@ class Company < ApplicationRecord
                    "is required: this installation meters its capacity to AWS Marketplace, " \
                    "where unlimited cannot be expressed")
       # Where we host, unlimited is free, and free is only for a company we carry.
-      elsif Deployment.saas? && !managed_by_aixle? && !leaving_management?
+      elsif billing_payer.bills? && !leaving_management?
         errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY)
       end
       return
@@ -278,7 +297,7 @@ class Company < ApplicationRecord
     end
 
     requested = @session_concurrency_limit.to_i
-    return if requested >= Deployment.minimum_workers || requested == SessionConcurrencyLimit.for_company(id)
+    return if requested >= billing_payer.minimum_workers || requested == SessionConcurrencyLimit.for_company(id)
 
     errors.add(:session_concurrency_limit, SessionConcurrencyLimit.below_minimum_workers)
   end

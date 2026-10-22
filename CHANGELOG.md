@@ -33,6 +33,12 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Admin**: a company's page and the companies list show which system bills it
+  — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
+  It is read-only: the value follows from a subscription existing, so it is not
+  something to type. Existing companies are filled in by a migration, with one
+  that Aixle carries counted as billed by nobody even if Stripe still holds a
+  customer for it.
 
 ### Changed
 - **Triggers & gates**: a chat trigger listens in exactly one channel connected

@@ -583,6 +583,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_130000) do
     t.datetime "billing_event_at"
     t.boolean "managed_by_aixle", default: false, null: false
     t.datetime "trial_started_at"
+    t.string "billing_provider", default: "none", null: false
+    t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
