@@ -309,10 +309,34 @@ POST that must end in a rendered page, not JSON.
 
 The closest existing shape is `Webhooks::StripeController` — an unauthenticated POST from
 a third party that grants paid status — but that one is `ActionController::API`, which
-cannot render the app. This endpoint wants `ActionController::Base` with a scoped
-`skip_before_action :verify_authenticity_token`, which is the
-`Web::OidcSessionsController:14` pattern, plus a CORS entry in the shape of the YouTrack
-pairing rule (`config/initializers/cors.rb:22-26`).
+cannot render the app. The CSRF skip is the `Web::OidcSessionsController:14` pattern:
+scoped to the one action, on a controller that otherwise keeps the web stack.
+
+**No CORS entry, and an earlier draft was wrong to ask for one.** A CORS rule governs
+requests JavaScript makes. This is a top-level form navigation, which CORS does not reach
+at all.
+
+**What does reach it is `SameSite`, and it decides the shape of the endpoint.** The session
+cookie is `SameSite=Lax`, and Lax withholds a cookie from a cross-site *POST* — so the
+request AWS makes carries no session, whoever is signed in on that browser. There is
+nothing to read and nothing to sign out.
+
+So it is two actions, and the split is forced rather than tidy:
+
+| | |
+|---|---|
+| `POST /marketplace/aws/register` | the fulfilment URL. Holds no session. Exchanges the token, writes the licence, and redirects carrying a signed, short-lived token naming it |
+| `GET /marketplace/aws/continue` | same-site, on our own origin, where the session exists. Signs the visitor out, then lands them per §5.2 |
+
+The carrier is `generates_token_for :registration` on the licence — the idiom
+`CompanyMembership` already uses for invitations — rather than the session, which the POST
+cannot write to usefully.
+
+**One repository-specific trap, and it is silent.** `ApplicationController#underscore_params`
+puts every incoming parameter key through `String#underscore` before any action runs, and
+that turns hyphens into underscores. The controller therefore reads
+`x_amzn_marketplace_token`, not the name AWS documents. Spelling it as AWS does resolves
+`nil`, registers nobody, and raises nothing.
 
 The token is single-use and short-lived, so the exchange happens on arrival; what is
 carried onward is the resolved licence, not the token.
