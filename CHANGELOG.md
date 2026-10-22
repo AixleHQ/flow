@@ -28,6 +28,10 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Triggers & gates**: an agent can gate a task on a GitLab merge request's
+  pipeline without help. `pull_request_checks` now returns the merge request's
+  head pipeline with its id, which `gitlab_pipeline_completed` takes, and links
+  each CI job to its job page instead of leaving the link empty.
 - **Admin**: **Permanently delete** on a user's page works again. It was refused
   with "a database constraint prevented removal" for anyone who had signed in
   since sign-in methods began to be recorded per session.
