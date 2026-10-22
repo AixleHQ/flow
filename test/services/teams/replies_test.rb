@@ -38,7 +38,7 @@ class Teams::RepliesTest < ActiveSupport::TestCase
     stub = stub_request(:post, @thread).with { |request|
       body = JSON.parse(request.body)
       body["textFormat"] == "markdown" && body["from"] == { "id" => "28:#{TEAMS_APP_ID}" } &&
-        body["text"].include?("**digest** — Weekly Digest (starts\\_with \"digest\") _Sales Ops_")
+        body["text"].include?("**digest** — Weekly Digest (starts\\_with \"digest\")") && !body["text"].include?("Sales Ops")
     }.to_return(status: 201, body: { id: "1" }.to_json)
 
     assert Chat.answer_help(event)

@@ -49,6 +49,9 @@ module InternalTools
       integration, channel, target_error = resolve_slack_target(params[:conversation])
       return target_error if target_error
 
+      foreign = foreign_message(slack_conversation(integration, channel), params[:message_id])
+      return foreign if foreign
+
       _response, call_error = slack_call do
         Slack::Client.delete_message(token: slack_bot_token(integration), channel: channel, ts: params[:message_id].to_s)
       end
@@ -58,6 +61,9 @@ module InternalTools
     def delete_teams
       conversation, target_error = teams_target
       return target_error if target_error
+
+      foreign = foreign_message(conversation, params[:message_id])
+      return foreign if foreign
 
       Teams::Messages.delete(conversation, thread_id: teams_thread(conversation), message_id: params[:message_id].to_s)
       success("Deleted #{params[:message_id]}")

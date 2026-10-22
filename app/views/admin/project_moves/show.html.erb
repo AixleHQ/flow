@@ -25,7 +25,7 @@
         <li>Connect the disconnected integrations again in the project's settings.</li>
       <% end %>
       <% if @report["chat_triggers"].any? %>
-        <li>Connect the chat workspace in <%= @report["target_company"]["name"] %>.</li>
+        <li>Connect the chat workspace and its channels in <%= @report["target_company"]["name"] %>, then choose a channel for each chat trigger and switch it on.</li>
       <% end %>
       <% if @report["without_agent_credentials"].any? %>
         <li>Ask the people listed under "Agent sign-in needed" to sign in to their agents in <%= @report["target_company"]["name"] %>.</li>

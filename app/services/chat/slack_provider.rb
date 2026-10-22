@@ -107,6 +107,93 @@ module Chat
       Slack::FileIngestor.new(integration: integration, project: project).ingest(data["files"])
     end
 
+    # The connect flow's answer, in the thread it was asked in. The posted
+    # message's ts, or nil when nothing reached Slack.
+    def reply(event, text)
+      data = event.data.to_h
+      Slack::Notifier.post(integration: install_for(event), channel: data["channel"], text: text,
+                           thread_ts: data["thread_ts"].presence || data["ts"])&.ts
+    end
+
+    def permalink(event, message_id)
+      integration = install_for(event)
+      return nil if integration.nil? || message_id.blank?
+
+      Slack::Client.permalink(token: integration.credentials_data["bot_token"], channel: event.data.to_h["channel"],
+                              message_ts: message_id)["permalink"]
+    rescue Slack::Client::Error
+      nil
+    end
+
+    # Only the person who posted sees it.
+    def reply_privately(event, text)
+      data = event.data.to_h
+      integration = install_for(event)
+      return nil if integration.nil? || data["user"].blank?
+
+      Slack::Client.post_ephemeral(token: integration.credentials_data["bot_token"], channel: data["channel"],
+                                   user: data["user"], text: text, thread_ts: data["thread_ts"].presence || data["ts"])
+    rescue Slack::Client::Error => e
+      Rails.logger.warn("[Chat::SlackProvider] private reply failed: #{e.message}")
+      nil
+    end
+
+    def strong(text) = "*#{escape(text)}*"
+
+    # Slack mrkdwn reads these three characters as markup.
+    def escape(text) = text.to_s.gsub("&", "&amp;").gsub("<", "&lt;").gsub(">", "&gt;")
+
+    def bot_mention(event)
+      id = bot_user_id(event.data.to_h["integration_id"])
+      id.present? ? "<@#{id}>" : "the bot"
+    end
+
+    # Slack keeps no registry of its channels here, so the row is written when a
+    # channel is connected, with the name Slack gives it when the install may read it.
+    def conversation_for(event, integration)
+      channel = event.data.to_h["channel"].to_s
+      return nil if channel.blank?
+
+      ChatConversation.record_slack!(integration: integration, channel_id: channel, name: channel_name(integration, channel))
+    end
+
+    # Slack completes a mention from the display name only, never from the
+    # username auth.test returns, so instructions name the bot by its display
+    # name and fall back to the username while users:read is missing.
+    def bot_name(token)
+      me = Slack::Client.auth_test(token: token)
+      display_name(token, me["user_id"]) || me["user"].presence
+    rescue Slack::Client::Error
+      nil
+    end
+
+    def person_name(integration, actor)
+      display_name(integration.credentials_data["bot_token"], actor.to_h["id"])
+    end
+
+    def display_name(token, user_id)
+      return nil if user_id.blank?
+
+      profile = Slack::Client.user_info(token: token, user: user_id).dig("user", "profile").to_h
+      profile["display_name"].presence || profile["real_name"].presence
+    rescue Slack::Client::Error => e
+      Rails.logger.info("[Chat::SlackProvider] no name for #{user_id}: #{e.message}")
+      nil
+    end
+
+    def channel_name(integration, channel)
+      Slack::Client.conversation_info(token: integration.credentials_data["bot_token"], channel: channel).dig("channel", "name")
+    rescue Slack::Client::Error => e
+      Rails.logger.info("[Chat::SlackProvider] no name for #{channel}: #{e.message}")
+      nil
+    end
+
+    def install_for(event)
+      data = event.data.to_h
+      Slack::InstallResolver.call(company_id: event.company_id || event.project&.company_id, project_id: event.project_id,
+                                  integration_id: data["integration_id"], team_id: data["team"])
+    end
+
     # "<@UBOT> Deploy &amp; tag" → "Deploy & tag": the leading mention of the bot
     # dropped, entities decoded, whitespace trimmed. When the install can't say
     # who the bot is, any leading mention is dropped.

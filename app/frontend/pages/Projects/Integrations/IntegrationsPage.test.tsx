@@ -66,12 +66,13 @@ describe('Projects/Integrations/IntegrationsPage', () => {
 
   // A company-wide install (Slack) has no page of its own: a company admin
   // removes it from any project, and nobody else sees the control.
-  it('offers removal of a company-wide integration only to a company admin', () => {
+  it('offers removal of a company-wide integration only to a company admin', async () => {
     const slack = integration({ id: 9, name: 'acme-slack', provider: 'slack', scopeIndicator: 'company' });
 
     const { unmount } = renderAuthedPage(<IntegrationsPage />, {
       props: { project, integrations: [slack], projectPermissions: { canExecute: true, canManage: true } },
     });
+    expect(screen.getByRole('button', { name: 'Channels for acme-slack' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     unmount();
 

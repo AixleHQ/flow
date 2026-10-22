@@ -53,7 +53,7 @@ module Slack
       assert_match(/ship/, msg[:text])
       assert_match(/Ship Report/, msg[:text])
       assert_match(/contains "ship"/, msg[:text])
-      assert_match(/Acme App/, msg[:text])
+      assert_no_match(/Acme App/, msg[:text], "the project is not named where guests may read")
       assert msg[:blocks].present?
       assert_equal "section", msg[:blocks].first["type"]
     end

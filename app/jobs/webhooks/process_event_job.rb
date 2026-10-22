@@ -19,18 +19,16 @@ module Webhooks
         return
       end
 
-      # Chat endpoints are company-scoped (one workspace or tenant serves every
-      # project of the company) → company-wide fan-out. Other endpoints stay
-      # project-scoped.
-      TriggerEngine.publish(
-        event_type: normalized[:event_type],
-        source: "#{endpoint.provider}:#{endpoint.slug}",
-        subject: normalized[:subject],
-        data: normalized[:data],
-        project: endpoint.project,
-        company: endpoint.company,
-        dedup_key: "#{endpoint.provider}:#{received.idempotency_key}"
-      )
+      source = "#{endpoint.provider}:#{endpoint.slug}"
+      dedup_key = "#{endpoint.provider}:#{received.idempotency_key}"
+      if Chat.provider(endpoint.provider)
+        # A chat workspace serves every company that connected it.
+        Chat::WorkspaceRouter.call(endpoint: endpoint, normalized: normalized, source: source, dedup_key: dedup_key)
+      else
+        TriggerEngine.publish(event_type: normalized[:event_type], source: source, subject: normalized[:subject],
+                              data: normalized[:data], project: endpoint.project, company: endpoint.company,
+                              dedup_key: dedup_key)
+      end
 
       received.update!(status: "processed", raw_payload: scrubbed_payload(endpoint, received.raw_payload))
     end

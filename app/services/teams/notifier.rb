@@ -19,7 +19,7 @@ module Teams
     def conversation_for(integration_id, external_id)
       return nil if integration_id.blank? || external_id.blank?
 
-      ChatConversation.find_by(integration_id: integration_id, external_id: external_id, provider: "teams")
+      ChatConversation.in_workspace_of(integration_id).find_by(external_id: external_id, provider: "teams")
     end
   end
 end

@@ -37,7 +37,7 @@ module Slack
     end
 
     def member?(user, integration)
-      user.company_memberships.active.exists?(company_id: integration.company_id)
+      user.company_memberships.active.exists?(company_id: integration.chat_peers.select(:company_id))
     end
 
     # A subdirectory of the install's redirect URL, which Slack accepts without
@@ -63,7 +63,7 @@ module Slack
 
       integration = integration_for(context)
       raise Refused, "This Slack workspace is no longer connected to Aixle." if integration.nil?
-      raise Refused, "You are not a member of #{integration.company.name} in Aixle." unless member?(user, integration)
+      raise Refused, "You are not a member of a company that connected this workspace in Aixle." unless member?(user, integration)
 
       claims = sign_in_claims(code, nonce)
       unless claims[TEAM_CLAIM] == context["team"] && claims[USER_CLAIM] == context["user"]

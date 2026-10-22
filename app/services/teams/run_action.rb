@@ -109,7 +109,7 @@ module Teams
     def conversation(integration, activity)
       external_id = activity.dig("conversation", "id").to_s.split(";messageid=", 2).first
       external_id = activity.dig("channelData", "channel", "id").presence || external_id if channel?(activity)
-      ChatConversation.find_by(integration: integration, external_id: external_id, installed: true)
+      ChatConversation.in_workspace_of(integration.id).find_by(external_id: external_id, installed: true)
     end
 
     def channel?(activity) = activity.dig("conversation", "conversationType") == "channel"

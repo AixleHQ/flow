@@ -134,6 +134,18 @@ class VersionsTest < ActiveSupport::TestCase
     assert_not kept_off.reload.enabled
   end
 
+  test "a chat trigger whose channel was disconnected while archived stays off when restored" do
+    workflow = create(:workflow, scope: @project)
+    trigger = create(:trigger_binding, workflow: workflow, project: @project, enabled: true)
+    Versions.archive!(workflow, actor: @actor)
+    Chat::ChannelDisconnect.call(trigger.chat_conversation, company: @project.company)
+
+    Versions.restore!(workflow, actor: @actor, enable_trigger_ids: [ trigger.id ])
+
+    assert_not workflow.reload.deleted?
+    assert_not trigger.reload.enabled
+  end
+
   test "skill snapshots carry the whole directory and revert restores it" do
     skill = create(:skill, scope: @project, files: { "SKILL.md" => "one", "scripts/run.sh" => "echo 1" })
     Versions.save!(skill, actor: @actor) { skill.update!(files: { "SKILL.md" => "two" }) }

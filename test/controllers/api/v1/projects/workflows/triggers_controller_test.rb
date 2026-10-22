@@ -21,8 +21,11 @@ module Api
             JSON.parse(response.body)
           end
 
+          # An active Slack install with one channel connected to the company.
           def connect_slack!
-            create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+            install = create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+            @channel = connect_chat_channel(company: @company, integration: install)
+            install
           end
 
           test "index lists column and event triggers for the workflow" do
@@ -59,19 +62,22 @@ module Api
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {
                 project_id: @project.id, workflow_id: @workflow.id,
-                trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "create_task", subject_column_id: @column.id }
+                trigger: { kind: "chat", chat_provider: "slack", chat_channel_id: @channel.id, subject_policy: "create_task",
+                           subject_column_id: @column.id }
               }
             end
             assert_response :created
             assert_equal [ "chat.message", "chat", "slack" ], json.values_at("event_type", "kind", "chat_provider")
-            assert_equal({ "channel" => "C1", "provider" => "slack" }, TriggerBinding.sole.filter_predicate)
+            assert_equal [ @channel.id, "#{ChatChannelTestHelper::SLACK_CHANNEL}" ], json["chat_channel"].values_at("id", "label")
+            assert_equal({ "provider" => "slack" }, json["filter_predicate"])
+            assert_equal @channel, TriggerBinding.sole.chat_conversation
           end
 
           test "a Slack trigger follows its runs with a status card unless it is silenced" do
             connect_slack!
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
-              trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+              trigger: { kind: "chat", chat_provider: "slack", chat_channel_id: @channel&.id, subject_policy: "none" }
             }
 
             assert_response :created
@@ -89,10 +95,11 @@ module Api
           end
 
           test "a Teams chat trigger says how it reports back, and keeps its messenger when its conditions change" do
-            create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+            teams = create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+            channel = connect_chat_channel(company: @company, provider: "teams", integration: teams)
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
-              trigger: { kind: "chat", chat_provider: "teams", filter_predicate: { channel: "19:a@thread.tacv2" },
+              trigger: { kind: "chat", chat_provider: "teams", chat_channel_id: channel.id,
                          status_reporting: "failures", subject_policy: "none" }
             }, as: :json
             assert_response :created
@@ -100,23 +107,41 @@ module Api
 
             patch :update, params: {
               project_id: @project.id, workflow_id: @workflow.id, id: json["id"],
-              trigger: { filter_predicate: { "conversation.type" => "direct" }, status_reporting: "lifecycle" }
+              trigger: { filter_predicate: { "text" => "deploy" }, status_reporting: "lifecycle" }
             }, as: :json
 
             assert_response :success
-            assert_equal({ "conversation.type" => "direct", "provider" => "teams" }, TriggerBinding.sole.filter_predicate)
+            assert_equal({ "text" => "deploy", "provider" => "teams" }, json["filter_predicate"])
             assert_equal "lifecycle", json["status_reporting"]
+          end
+
+          test "a chat trigger's channel is chosen among the company's, never named in its conditions" do
+            connect_slack!
+            foreign = connect_chat_channel(company: create(:company), external_id: "C0FOREIGN1")
+
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id, trigger: {
+              kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C0FOREIGN1" }, subject_policy: "none"
+            } }, as: :json
+            assert_response :unprocessable_entity
+            assert_includes json["errors"].join, "can't name where a message comes from (channel)"
+
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id, trigger: {
+              kind: "chat", chat_provider: "slack", chat_channel_id: foreign.id, subject_policy: "none"
+            } }, as: :json
+            assert_response :unprocessable_entity
+            assert_includes json["errors"], "Chat channel is not connected to this company"
+            assert_equal 0, TriggerBinding.count
           end
 
           test "a Slack trigger is refused, on create and when switched on, until the company connects Slack" do
             assert_no_difference -> { TriggerBinding.count } do
               post :create, params: {
                 project_id: @project.id, workflow_id: @workflow.id,
-                trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+                trigger: { kind: "chat", chat_provider: "slack", chat_channel_id: @channel&.id, subject_policy: "none" }
               }
             end
             assert_response :unprocessable_entity
-            assert_equal [ TriggerBinding.chat_not_connected("Slack") ], json["errors"]
+            assert_includes json["errors"], TriggerBinding.chat_not_connected("Slack")
 
             binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
                                                event_type: "chat.message", enabled: false)
@@ -217,7 +242,7 @@ module Api
 
             post :create, params: {
               project_id: @project.id, workflow_id: @workflow.id,
-              trigger: { kind: "chat", chat_provider: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+              trigger: { kind: "chat", chat_provider: "slack", chat_channel_id: @channel&.id, subject_policy: "none" }
             }
             assert_response :created
             assert_equal({ "id" => @user.id, "name" => @user.name }, json["created_by"])

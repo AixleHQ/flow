@@ -88,18 +88,20 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
                  triggers.find { |t| t["kind"] == "chat" }["created_by"])
   end
 
-  test "create_workflow_trigger creates a slack trigger with a filter predicate" do
-    create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+  test "create_workflow_trigger creates a slack trigger listening in a connected channel" do
+    install = create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+    channel = connect_chat_channel(company: @company, integration: install, external_id: "C0DEPLOYS1", name: "deploys")
     body = call_tool("create_workflow_trigger",
                      { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack",
-                       name: "on mention", filter_predicate: { channel: "C123" },
+                       name: "on mention", chat_channel_id: channel.id, filter_predicate: { text: "ship" },
                        subject_policy: "create_task", subject_column_id: @column.id })
 
-    assert_not error?(body)
+    assert_not error?(body), text(body)
     trigger = payload(body)
     assert_equal [ "chat", "slack" ], trigger.values_at("kind", "chat_provider")
     assert_equal "chat.message", trigger["event_type"]
-    assert_equal({ "channel" => "C123", "provider" => "slack" }, trigger["filter_predicate"])
+    assert_equal [ channel.id, "#deploys" ], trigger["chat_channel"].values_at("id", "label")
+    assert_equal({ "text" => "ship", "provider" => "slack" }, trigger["filter_predicate"])
     assert_equal "create_task", trigger["subject_policy"]
     assert_equal @user.id, TriggerBinding.find(trigger["id"]).created_by_id
   end
@@ -178,13 +180,15 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_equal "manual", column.reload.trigger_mode
     assert_equal 30, column.cooldown_seconds
 
+    other = connect_chat_channel(company: @company, external_id: "C0OTHER001")
     evt_body = call_tool("update_workflow_trigger",
                          { project_id: @project.id, workflow_id: @workflow.id, kind: "chat", chat_provider: "slack",
-                           trigger_id: event.id, enabled: false, filter_predicate: { channel: "C9" } })
-    assert_not error?(evt_body)
+                           trigger_id: event.id, enabled: false, chat_channel_id: other.id, filter_predicate: { text: "go" } })
+    assert_not error?(evt_body), text(evt_body)
     event.reload
     assert_not event.enabled
-    assert_equal({ "channel" => "C9", "provider" => "slack" }, event.filter_predicate)
+    assert_equal other, event.chat_conversation
+    assert_equal({ "text" => "go", "provider" => "slack", "channel" => "C0OTHER001" }, event.filter_predicate)
     assert_equal "standup", event.name
   end
 

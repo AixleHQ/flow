@@ -62,9 +62,11 @@ module WorkflowTriggers
         # What starts the run, for grouping: board, chat, schedule, webhook, tracker or event.
         source: self.class.kind(binding.event_type),
         chat_provider: binding.chat_provider,
+        # The one channel a chat trigger listens to; nil means it needs one.
+        chat_channel: binding.chat_conversation && Chat::ChannelAccess.describe(binding.chat_conversation),
         event_type: binding.event_type,
         name: binding.name,
-        filter_predicate: binding.filter_predicate,
+        filter_predicate: binding.chat? ? binding.filter_predicate.to_h.except("channel") : binding.filter_predicate,
         trigger_mode: binding.trigger_mode,
         subject_policy: binding.subject_policy,
         subject_column_id: binding.subject_column_id,

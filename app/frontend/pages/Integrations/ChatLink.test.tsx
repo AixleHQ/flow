@@ -53,11 +53,29 @@ describe('ChatLink', () => {
   });
 
   it('shows why a link cannot be used', () => {
-    renderPage(<ChatLink {...teams} state="other_company" workspace="Acme" />, {
+    renderPage(<ChatLink {...teams} state="other_company" workspace="Acme or Globex" />, {
       props: { flash: { alert: 'That Microsoft account is not the Teams account that asked for this link.' } },
     });
 
-    expect(screen.getByRole('heading', { name: 'Switch to Acme' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Switch company in Aixle' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This Microsoft Teams workspace is connected to Aixle through Acme or Globex. Switch to it in Aixle, then open the link again.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText(/not the Teams account that asked/)).toBeInTheDocument();
+  });
+
+  it('asks to switch company when none of the visitor’s companies connected the workspace', () => {
+    renderPage(<ChatLink {...slack} state="other_company" workspace="a company that connected it" />, {
+      props: { flash: {} },
+    });
+
+    expect(screen.getByRole('heading', { name: 'Switch company in Aixle' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This Slack workspace is connected to Aixle through a company that connected it. Switch to it in Aixle, then open the link again.',
+      ),
+    ).toBeInTheDocument();
   });
 });

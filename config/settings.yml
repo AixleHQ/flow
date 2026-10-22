@@ -396,8 +396,11 @@ slack:
   signing_secret: "<%= ENV['SLACK_SIGNING_SECRET'] %>"
   # Bot scopes requested at install time, comma-separated as Slack's OAuth v2
   # authorize URL expects (Slack::Oauth also accepts spaces here).
-  # `commands` carries the Run workflow shortcut and the slash command.
-  scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write,commands' %>
+  # `commands` carries the Run workflow shortcut and the slash command;
+  # `channels:read` and `groups:read` give a connected channel its name;
+  # `users:read` gives the bot's display name, the only one Slack completes a
+  # mention from, and the name of whoever connected a channel.
+  scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,channels:read,groups:read,users:read,files:read,files:write,chat:write,commands' %>
 
 jira:
   # One Atlassian OAuth 2.0 (3LO) app per deployment, shared by every customer

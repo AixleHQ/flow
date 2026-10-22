@@ -7,14 +7,32 @@ module Chat
   module HelpCatalog
     module_function
 
-    # Every condition but the text is about where the message came from — the
-    # messenger, the channel, direct or not — so those decide what is listed here.
+    # The triggers listening in the conversation, in every company that
+    # connected it: their connection was announced there, so listing them tells
+    # nobody anything new. Conditions other than the text (the sender, say)
+    # still decide what is listed.
     def bindings(event)
+      return [] if Chat.provider_for(event).nil?
+
       data = event.data.to_h
-      TriggerBinding.for_event(event)
-        .includes(:workflow, :project)
-        .select { |binding| TriggerFilter.match?(binding.filter_predicate.to_h.except("text"), data) }
-        .sort_by { |binding| [ binding.project&.name.to_s, label(binding) ] }
+      TriggerBinding.active.where(event_type: event.event_type, project_id: listening_projects(data).select(:id))
+        .joins(:workflow).merge(Workflow.active).merge(TriggerBinding.listening_in(event))
+        .includes(:workflow, project: :company)
+        .select { |binding| TriggerFilter.match?(binding.filter_predicate.to_h.except("text", "channel"), data) }
+        .sort_by { |binding| [ binding.project&.company&.name.to_s, label(binding) ] }
+    end
+
+    def listening_projects(data)
+      installs = Integration.find_by(id: data["integration_id"])&.chat_peers&.active
+      Project.where(company_id: installs ? installs.select(:company_id) : [])
+    end
+
+    # Whose a listed trigger is, when the list spans several companies. Never
+    # its project: the channel may hold guests and other organizations.
+    def place(binding, bindings)
+      return nil if bindings.map { |b| b.project&.company_id }.uniq.size < 2
+
+      binding.project&.company&.name
     end
 
     def label(binding)

@@ -1,7 +1,9 @@
 import cronstrue from 'cronstrue';
 
+import { channelName } from 'shared/resources/chat-channels/channelName';
+
 import { isAttached, TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
-import type { ChatProviderOption, Trigger } from './types';
+import type { Trigger } from './types';
 
 // Where a run can come from, as the Triggers page groups and filters them.
 export const SOURCE_LABELS: Record<string, string> = {
@@ -90,11 +92,11 @@ const AIXLE_CHANGE_LABELS: Record<string, string> = {
   always: 'follows Aixle changes',
 };
 
-export function triggerMeta(
-  t: Trigger,
-  trackers: TrackerOption[] = [],
-  chatProviders: ChatProviderOption[] = [],
-): string {
+export function needsChannel(t: Trigger): boolean {
+  return triggerSource(t) === 'chat' && !t.chat_channel;
+}
+
+export function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
   const source = triggerSource(t);
   if (source === 'tracker') {
     const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
@@ -109,11 +111,7 @@ export function triggerMeta(
     return `${cfg.cron ?? '—'} · ${cfg.timezone ?? 'UTC'}`;
   }
   if (source === 'chat') {
-    const channel = t.filter_predicate?.channel;
-    if (t.filter_predicate?.['conversation.type'] === 'direct') return 'direct messages';
-    if (typeof channel !== 'string' || !channel) return 'anywhere the bot is addressed';
-    const known = chatProviders.find((p) => p.key === t.chat_provider)?.conversations.find((c) => c.id === channel);
-    return known?.name ? `in ${known.name}` : `channel ${channel}`;
+    return `${chatLabel(t)} · ${t.chat_channel ? channelName(t.chat_channel) : 'no channel'}`;
   }
   const pred = t.filter_predicate ?? {};
   const keys = Object.keys(pred);

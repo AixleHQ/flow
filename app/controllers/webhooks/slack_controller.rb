@@ -7,6 +7,8 @@
 # gateway uses. App-uninstall / token-revocation events deactivate the install.
 class Webhooks::SlackController < ActionController::API
   LIFECYCLE_EVENTS = %w[app_uninstalled tokens_revoked].freeze
+  # Keep a connected channel's name current; nothing else reads these.
+  RENAME_EVENTS = %w[channel_rename group_rename].freeze
 
   def events
     raw = request.raw_post
@@ -23,6 +25,10 @@ class Webhooks::SlackController < ActionController::API
     inner_type = payload.dig("event", "type").to_s
     if LIFECYCLE_EVENTS.include?(inner_type)
       deactivate_install(endpoint)
+      return head :ok
+    end
+    if RENAME_EVENTS.include?(inner_type)
+      rename_channel(endpoint, payload.dig("event", "channel"))
       return head :ok
     end
 
@@ -78,8 +84,8 @@ class Webhooks::SlackController < ActionController::API
   private
 
   def integration_for(team_id)
-    endpoint = endpoint_for(team_id)
-    Integration.active.find_by(id: endpoint&.config.to_h["integration_id"], provider: :slack)
+    install = endpoint_for(team_id)&.chat_install
+    install if install&.slack?
   end
 
   def verified?(raw)
@@ -101,10 +107,22 @@ class Webhooks::SlackController < ActionController::API
     WebhookEndpoint.active.find_by(slug: "slack-team-#{team_id}")
   end
 
+  def rename_channel(endpoint, channel)
+    channel = channel.is_a?(Hash) ? channel : {}
+    return if channel["id"].blank? || channel["name"].blank?
+
+    ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).where(provider: "slack", external_id: channel["id"])
+                    .update_all(name: channel["name"], updated_at: Time.current)
+  end
+
+  # The app left the workspace, so it left it for every company that connected it.
   def deactivate_install(endpoint)
     endpoint.update(enabled: false)
-    integration_id = endpoint.config.to_h["integration_id"]
-    Integration.where(id: integration_id).update_all(status: "inactive") if integration_id
+    installs = Integration.where(id: endpoint.config.to_h["integration_id"])
+    workspace_id = installs.pick(:chat_workspace_id)
+    installs = installs.or(Integration.where(chat_workspace_id: workspace_id, provider: :slack)) if workspace_id
+    installs.update_all(status: "inactive", updated_at: Time.current)
+    ChatWorkspace.where(id: workspace_id).update_all(status: "inactive", updated_at: Time.current) if workspace_id
   end
 
   def idempotency_key_for(endpoint, payload, raw)

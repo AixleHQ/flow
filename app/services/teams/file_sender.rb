@@ -14,7 +14,7 @@ module Teams
     # Files are written only into the channel the run was started from — the
     # permission behind the write reaches every channel of the organization.
     def deliver(conversation, thread_id:, files:, project:, user:, origin_conversation: nil)
-      if conversation.channel? && conversation.integration.settings.to_h["file_access"] &&
+      if conversation.channel? && Chat::ChannelAccess.install_for(project, conversation)&.settings.to_h["file_access"] &&
          conversation.external_id == origin_conversation
         to_channel(conversation, thread_id, files)
       elsif conversation.direct?

@@ -25,7 +25,7 @@ module PersonalTools
       workflow = find_workflow!(project)
 
       triggers = column_bindings(project, workflow).includes(:board_column, :created_by, :workflow).map { |t| serialize_column(t) } +
-                 serialize_bindings(workflow.trigger_bindings.includes(:created_by, :workflow).order(:created_at).to_a)
+                 serialize_bindings(workflow.trigger_bindings.includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a)
       success(project_id: project.id, workflow_id: workflow.id, triggers: triggers)
     end
   end

@@ -43,6 +43,7 @@ const IntegrationsPage = () => {
         integrations={integrations}
         basePath={`/company/projects/${project.id}/integrations`}
         title="Integrations"
+        projectId={project.id}
         azureDevops={azureDevops}
         github={github}
         bitbucket={bitbucket}
