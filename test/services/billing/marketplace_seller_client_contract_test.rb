@@ -5,7 +5,7 @@ require "test_helper"
 # The adapter and its fake have to stay the same shape, or every test below the
 # fake is testing something the application does not do.
 class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
-  METHODS = %i[configured? resolve_customer].freeze
+  METHODS = %i[configured? resolve_customer batch_meter_usage].freeze
 
   def configure!(product_code: "saasproduct", seller_role_arn: "arn:aws:iam::111122223333:role/seller")
     Settings.stubs(:aws_marketplace).returns(
@@ -63,6 +63,13 @@ class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
 
     configure!(product_code: nil)
     assert_not Billing::MarketplaceSellerClient.new.configured?
+  end
+
+  test "an empty hour asks AWS for nothing, in the adapter and in the fake alike" do
+    assert_empty FakeMarketplaceSellerClient.new.batch_meter_usage([])
+
+    configure!
+    assert_empty Billing::MarketplaceSellerClient.new.batch_meter_usage([])
   end
 
   # The error tree is the contract: a caller has to be able to tell a role it

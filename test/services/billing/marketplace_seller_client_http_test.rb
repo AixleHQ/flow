@@ -147,6 +147,81 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
     assert_match(/#{Regexp.escape(ROLE_ARN)}/, error.message)
   end
 
+  def stub_meter(body:, status: 200)
+    stub_request(:post, METERING_ENDPOINT)
+      .with(headers: { "X-Amz-Target" => "AWSMPMeteringService.BatchMeterUsage" })
+      .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/x-amz-json-1.1" })
+  end
+
+  def usage(license_arn: LICENSE_ARN, quantity: 60)
+    Billing::MarketplaceSellerClient::Usage.new(
+      license_arn: license_arn, dimension: "worker_minute",
+      quantity: quantity, occurred_at: Time.utc(2026, 10, 22, 9)
+    )
+  end
+
+  # For a product on Concurrent Agreements AWS takes the licence and refuses a
+  # product code; sending both keyings would bill the hour twice rather than be
+  # refused, because the one-record-per-hour limit counts each separately.
+  test "a usage record names the licence and carries no product code" do
+    stub_meter(body: { "Results" => [
+      { "UsageRecord" => { "LicenseArn" => LICENSE_ARN }, "MeteringRecordId" => "mr-1", "Status" => "Success" }
+    ], "UnprocessedRecords" => [] })
+
+    outcomes = Billing::MarketplaceSellerClient.new.batch_meter_usage([ usage ])
+
+    assert_equal [ LICENSE_ARN ], outcomes.map(&:license_arn)
+    assert outcomes.sole.accepted?
+    assert_requested(:post, METERING_ENDPOINT) do |request|
+      body = JSON.parse(request.body)
+      record = body.fetch("UsageRecords").sole
+
+      body["ProductCode"].nil? && record["LicenseArn"] == LICENSE_ARN &&
+        record["Dimension"] == "worker_minute" && record["Quantity"] == 60 &&
+        record["CustomerIdentifier"].nil?
+    end
+  end
+
+  test "an hour AWS already holds is accepted rather than retried" do
+    stub_meter(body: { "Results" => [
+      { "UsageRecord" => { "LicenseArn" => LICENSE_ARN }, "MeteringRecordId" => nil, "Status" => "DuplicateRecord" }
+    ], "UnprocessedRecords" => [] })
+
+    outcome = Billing::MarketplaceSellerClient.new.batch_meter_usage([ usage ]).sole
+
+    assert outcome.accepted?
+    assert outcome.duplicate?
+  end
+
+  # A record AWS could not process comes back under its own key. Dropping it
+  # would count an hour as delivered that nobody was charged for.
+  test "records AWS could not process are reported, not discarded" do
+    other = "arn:aws:license-manager:us-east-1:444455556666:license/l-other"
+    stub_meter(body: {
+      "Results" => [
+        { "UsageRecord" => { "LicenseArn" => LICENSE_ARN }, "MeteringRecordId" => "mr-1", "Status" => "Success" }
+      ],
+      "UnprocessedRecords" => [ { "LicenseArn" => other, "Dimension" => "worker_minute", "Quantity" => 60 } ]
+    })
+
+    outcomes = Billing::MarketplaceSellerClient.new.batch_meter_usage([ usage, usage(license_arn: other) ])
+
+    assert_equal 2, outcomes.size
+    assert_equal [ false ], outcomes.reject(&:accepted?).map(&:accepted?)
+    assert_equal other, outcomes.reject(&:accepted?).sole.license_arn
+  end
+
+  test "more than twenty-five records go in more than one call" do
+    stub_meter(body: { "Results" => [], "UnprocessedRecords" => [] })
+
+    usages = Array.new(Billing::MarketplaceSellerClient::BATCH_SIZE + 1) do |n|
+      usage(license_arn: "arn:aws:license-manager:us-east-1:444455556666:license/l-#{n}")
+    end
+    Billing::MarketplaceSellerClient.new.batch_meter_usage(usages)
+
+    assert_requested :post, METERING_ENDPOINT, times: 2
+  end
+
   test "any other refusal stays a plain adapter error" do
     stub_resolve(
       status: 400,

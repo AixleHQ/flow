@@ -34,6 +34,23 @@ module Billing
     DEFAULT_REGION = "us-east-1"
     SESSION_NAME = "aixle-marketplace-saas"
 
+    # BatchMeterUsage takes at most 25 usage records per call.
+    BATCH_SIZE = 25
+
+    # What AWS answers per record. `DuplicateRecord` means the hour is already
+    # held, which is a success for a replay rather than a failure to retry.
+    SUCCESS = "Success"
+    DUPLICATE = "DuplicateRecord"
+
+    # One licence's usage for one hour, as this adapter takes it.
+    Usage = Data.define(:license_arn, :dimension, :quantity, :occurred_at)
+
+    # What came back for it, without the vendor's types.
+    Outcome = Data.define(:license_arn, :status, :metering_record_id) do
+      def accepted? = status == SUCCESS || status == DUPLICATE
+      def duplicate? = status == DUPLICATE
+    end
+
     # Every installation but the one that sells the listing.
     def configured?
       seller_role_arn.present? && product_code.present?
@@ -57,7 +74,51 @@ module Billing
       end
     end
 
+    # Up to 25 records a call, as AWS counts them. Returns one Outcome per record
+    # — including the ones AWS could not process, which come back under their own
+    # key and would otherwise be silently dropped from a count of what landed.
+    def batch_meter_usage(usages)
+      return [] if usages.empty?
+
+      api do
+        usages.each_slice(BATCH_SIZE).flat_map do |slice|
+          answer = client.batch_meter_usage(usage_records: slice.map { |usage| usage_record(usage) })
+
+          outcomes(answer) + unprocessed(answer)
+        end
+      end
+    end
+
     private
+
+    # No product code: for a product on Concurrent Agreements AWS takes the
+    # licence instead and refuses the other keying. Sending both would not be
+    # refused — the one-record-per-hour limit counts each keying separately — it
+    # would bill the hour twice.
+    def usage_record(usage)
+      {
+        timestamp: usage.occurred_at,
+        dimension: usage.dimension,
+        quantity: usage.quantity,
+        license_arn: usage.license_arn
+      }
+    end
+
+    def outcomes(answer)
+      Array(answer.results).map do |result|
+        Outcome.new(
+          license_arn: result.usage_record&.license_arn,
+          status: result.status,
+          metering_record_id: result.metering_record_id
+        )
+      end
+    end
+
+    def unprocessed(answer)
+      Array(answer.unprocessed_records).map do |record|
+        Outcome.new(license_arn: record.license_arn, status: "Unprocessed", metering_record_id: nil)
+      end
+    end
 
     def settings
       ::Settings.aws_marketplace&.saas || Hashie::Mash.new
