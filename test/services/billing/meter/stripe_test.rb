@@ -18,6 +18,20 @@ class Billing::Meter::StripeTest < ActiveSupport::TestCase
     )
   end
 
+  # A company AWS bills has a Stripe customer only by accident of history; left
+  # in, it would be counted as unbilled, which reads as "nobody pays for this"
+  # when somebody does.
+  test "a company AWS bills is neither charged here nor counted as unbilled" do
+    aws = create(:company, stripe_customer_id: "cus_leftover",
+                           billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    external_id = @adapter.deliver(report(@acme.id.to_s => 3600, aws.id.to_s => 3600))
+
+    assert_equal %w[cus_acme], @client.meter_events.map(&:customer_id)
+    assert_match(/sent=1/, external_id)
+    assert_match(/unbilled=0/, external_id)
+  end
+
   test "each company's hour is sent against its own customer, exactly" do
     @adapter.deliver(report(@acme.id.to_s => 5400, @globex.id.to_s => 90))
 

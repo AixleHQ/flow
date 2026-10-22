@@ -74,6 +74,25 @@ class Billing::PayerTest < ActiveSupport::TestCase
     assert company.billing_payer.bills?
   end
 
+  # Three paths write a Stripe customer and the column has to be true for all of
+  # them, or the admin shows `none` beside a company that is paying.
+  test "a company that acquires a Stripe customer records Stripe as its payer" do
+    company = create(:company)
+    assert company.billing_payer.none?
+
+    company.update!(stripe_customer_id: "cus_new")
+
+    assert company.billing_payer.stripe?
+  end
+
+  test "a customer id left over from before cannot re-point a company AWS bills" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    company.update!(stripe_customer_id: "cus_leftover")
+
+    assert company.billing_payer.aws_marketplace?
+  end
+
   test "bounding and the worker minimum follow the installation until a payer changes them" do
     company = create(:company)
 

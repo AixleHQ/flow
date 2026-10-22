@@ -137,6 +137,10 @@ class Company < ApplicationRecord
   before_validation :keep_managed_company_running, if: :managed_by_aixle?
   before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
   before_validation :forget_billing_block, unless: :billing_blocked?
+  # Three paths write a Stripe customer — Checkout, the webhook, the admin — and
+  # the column has to be true for all of them or the admin shows `none` beside a
+  # company that is paying.
+  before_validation :record_stripe_as_the_payer, if: :acquiring_a_stripe_customer?
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }
@@ -262,6 +266,17 @@ class Company < ApplicationRecord
 
   # A company that is running again has no reason to be stopped, and an unpaid
   # invoice it was pointed at belongs to the stop that has just been undone.
+  def acquiring_a_stripe_customer?
+    # Only from nothing: a company AWS bills must never be re-pointed by a
+    # customer id left over from before.
+    stripe_customer_id.present? && will_save_change_to_stripe_customer_id? &&
+      billing_provider == BILLING_PROVIDER_NONE
+  end
+
+  def record_stripe_as_the_payer
+    self.billing_provider = BILLING_PROVIDER_STRIPE
+  end
+
   def forget_billing_block
     self.billing_block_reason = nil
     self.billing_unpaid_invoice_url = nil
