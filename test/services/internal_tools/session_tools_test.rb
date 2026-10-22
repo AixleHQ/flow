@@ -27,6 +27,13 @@ class InternalTools::SessionToolsTest < ActiveSupport::TestCase
 
   def ids(result) = payload(result)["sessions"].map { |row| row["id"] }
 
+  def queries_during(&)
+    count = 0
+    counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record", &)
+    count
+  end
+
   # == session_list ==
 
   test "lists the project's active sessions and leaves finished ones out" do
@@ -96,6 +103,22 @@ class InternalTools::SessionToolsTest < ActiveSupport::TestCase
 
     assert_equal 1, ids(list(limit: 1)).size
     assert_operator ids(list(limit: 5_000)).size, :<=, InternalTools::SessionList::MAX_LIMIT
+  end
+
+  test "listing more sessions costs no more queries and still reports each wait reason" do
+    pool = SessionAdmissionPool.create!(key: "project:#{@project.id}", limit: 10, policy_revision: 1)
+    admit = lambda do |reason|
+      neighbour = create(:terminal_session, :running, :agent_session, user: @user, project: @project)
+      SessionAdmission.create!(terminal_session: neighbour, session_admission_pool: pool, wait_reason: reason)
+      neighbour
+    end
+    admit.call("concurrency_limit")
+    one = queries_during { list }
+    queued = Array.new(3) { admit.call("namespace_quota") }
+
+    assert_equal one, queries_during { list }
+    rows = payload(list)["sessions"].index_by { |row| row["id"] }
+    queued.each { |neighbour| assert_equal "namespace_quota", rows[neighbour.id]["wait_reason"] }
   end
 
   # == session_log ==
