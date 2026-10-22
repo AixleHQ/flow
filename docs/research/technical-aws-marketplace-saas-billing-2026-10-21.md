@@ -59,7 +59,7 @@ them and two of them cannot be revised after publication.
 | | |
 |---|---|
 | Two listings | The container product keeps selling; the SaaS product is added beside it. Both titles have to distinguish "in your own AWS account" from "hosted by us". |
-| A dimension of its own | **not** `queue_minute`. `worker_minute` is the proposal, matching the word the product uses everywhere a buyer reads. **The API identifier is immutable after publication**; confirm the exact string before the listing form is filled. |
+| A dimension of its own | **not** `queue_minute`. `worker_minute`, decided 22 October, matching the word the product uses everywhere a buyer reads. **The API identifier is immutable after publication**, so this string is now fixed: `Billing::Meter::AwsMarketplaceSaas::DIMENSION` and the listing form must agree exactly. |
 | Pure usage pricing | No contract dimensions, therefore no `GetEntitlements` and no `entitlement-updated` to consume. The seller-account role carries two permissions, not three. **This does not settle free trials** — a trial is a property of the offer and is compatible with usage pricing. See §10. |
 | Unsubscribe blocks and keeps | `billing_state` goes to `blocked` with a reason of its own. Data is untouched; a buyer who subscribes again returns to their workspace. |
 | **Our own trial is off wherever a payer is attached** | Stripe or AWS alike. A Marketplace free trial, if one is ever offered, is AWS's discount on usage we report as normal — not a mode of ours. The two never coexist, so no company is ever in two trials. See §10. |
@@ -808,12 +808,14 @@ marketing copy.
   it, are an idempotent script in the listing repository: readable, re-runnable and
   diffable, which a console session is not. The queue, its policy and this application's
   right to read it stayed ordinary work in the infrastructure repository.
-- **The exact dimension identifier.** `worker_minute` is the proposal. Immutable after
-  publication, and it must match the adapter's constant exactly.
+- ~~**The exact dimension identifier.**~~ `worker_minute`, decided 22 October. Already the
+  adapter's constant. Immutable once the listing is published, so from that moment the two
+  can only be changed together by creating a second dimension.
 - **Where a subscribed-but-unregistered customer is shown**, and who is expected to look.
-- **One service account or two** for the right to assume the seller role. The app's pods
-  carry exactly one IAM role today and a service account annotation holds one role ARN, so
-  this is a choice rather than a line of Terraform.
+- ~~**One service account or two**~~ for the right to assume the seller role. One: the
+  infrastructure applied on 22 October attaches the Marketplace policy to the role the
+  web and worker pods already carry, rather than introducing a second service account that
+  would take the asset access with it.
 - **Whether the registration page may live on the production domain**, and what AWS
   requires of it during assessment.
 
