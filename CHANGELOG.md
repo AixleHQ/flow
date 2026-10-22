@@ -28,6 +28,10 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Repositories**: an agent's first commit no longer fails with "Author
+  identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
+  commit is authored and committed by **Aixle Flow** with the address
+  `noreply@<DOMAIN>` of your deployment, instead of a name the agent chose.
 - **Admin**: **Permanently delete** on a user's page works again. It was refused
   with "a database constraint prevented removal" for anyone who had signed in
   since sign-in methods began to be recorded per session.

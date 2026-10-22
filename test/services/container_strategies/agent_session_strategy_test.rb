@@ -65,6 +65,17 @@ module ContainerStrategies
       refute env_vars.any? { |v| v == "SESSION_TYPE=auth_setup" }
     end
 
+    test "commits as the deployment's bot, on its domain without the port" do
+      Settings.stubs(:domain).returns("flow.example.com:8443")
+
+      env_vars = build_strategy.build_env_vars
+
+      assert_includes env_vars, "GIT_AUTHOR_NAME=Aixle Flow"
+      assert_includes env_vars, "GIT_AUTHOR_EMAIL=noreply@flow.example.com"
+      assert_includes env_vars, "GIT_COMMITTER_NAME=Aixle Flow"
+      assert_includes env_vars, "GIT_COMMITTER_EMAIL=noreply@flow.example.com"
+    end
+
     test "does not include MCP env vars (MCP configured via config files)" do
       strategy = build_strategy
 

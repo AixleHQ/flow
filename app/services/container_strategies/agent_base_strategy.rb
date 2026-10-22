@@ -142,6 +142,7 @@ module ContainerStrategies
       # that actually holds Azure repositories gets a key.
       env_vars.merge!(AzureDevops::SessionGitSetup.container_env(session))
       env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session))
+      env_vars.merge!(GitCredentials::SessionGitSetup.identity_env)
 
       env_vars.merge!(agent_service.adapter.default_env_vars(session))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
