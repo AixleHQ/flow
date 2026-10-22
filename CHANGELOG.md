@@ -28,6 +28,11 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Admin**: **Permanently delete** on a user's page works again. It was refused
+  with "a database constraint prevented removal" for anyone who had signed in
+  since sign-in methods began to be recorded per session.
+- **Sign-in & onboarding**: signing in no longer fails with a server error once
+  one of your earlier sessions ended more than 30 days ago.
 - **Admin**: in the dark theme, form fields stay dark after moving between
   admin pages; they turned white with light grey text, so typed values were
   barely readable. The "No limit — unbilled" badge and the permanent-delete

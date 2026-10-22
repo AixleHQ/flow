@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -2158,7 +2158,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "user_identities", "identity_providers"
   add_foreign_key "user_identities", "users"
   add_foreign_key "user_session_proofs", "identity_providers"
-  add_foreign_key "user_session_proofs", "user_sessions"
+  add_foreign_key "user_session_proofs", "user_sessions", on_delete: :cascade
   add_foreign_key "user_sessions", "users", column: "impersonator_id", on_delete: :nullify
   add_foreign_key "user_sessions", "users", on_delete: :cascade
   add_foreign_key "users", "companies", column: "last_company_id", on_delete: :nullify
