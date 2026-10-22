@@ -55,9 +55,9 @@ module InternalTools
           },
           pipeline_id: {
             type: "integer",
-            description: "(gitlab_pipeline_completed) GitLab pipeline id: CI_PIPELINE_ID inside the pipeline, " \
-                         "`id` from the pipelines API, or the number in a .../-/pipelines/<id> URL. Not the " \
-                         "per-project `iid`."
+            description: "(gitlab_pipeline_completed) GitLab pipeline id: `checks.pipeline.id` from " \
+                         "pull_request_checks for a merge request's pipeline, CI_PIPELINE_ID inside the pipeline, " \
+                         "or the number in a .../-/pipelines/<id> URL. Not the per-project `iid`."
           },
           repo_full_name: {
             type: "string",

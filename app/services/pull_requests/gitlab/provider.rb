@@ -127,9 +127,10 @@ module PullRequests
 
         items = Array(statuses).map do |status|
           { name: status.name, status: ci_state(status.status, allow_failure: attr(status, :allow_failure) == true),
-            url: attr(status, :target_url) }
+            url: status_url(repository, status) }
         end
-        Checks.new(state: overall(pipeline, items), head_sha: mr.sha, items: items)
+        Checks.new(state: overall(pipeline, items), head_sha: mr.sha, items: items,
+                   pipeline: head_pipeline(pipeline))
       end
 
       def owns_reference?(repository, ref)
@@ -159,6 +160,18 @@ module PullRequests
       end
 
       def web_url(repository, iid) = "#{::Gitlab::Host.web_base}/#{repository.full_name}/-/merge_requests/#{iid}"
+
+      # GitLab fills `target_url` only on statuses posted from outside; its own CI
+      # jobs come back with none, and a job's status id is its job id.
+      def status_url(repository, status)
+        attr(status, :target_url).presence || "#{::Gitlab::Host.web_base}/#{repository.full_name}/-/jobs/#{status.id}"
+      end
+
+      def head_pipeline(pipeline)
+        return nil if attr(pipeline, :id).blank?
+
+        { id: pipeline.id, status: ci_state(pipeline.status), url: attr(pipeline, :web_url) }
+      end
 
       def pull_request(repository, mr)
         PullRequest.new(
