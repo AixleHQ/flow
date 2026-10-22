@@ -39,6 +39,10 @@ class Company < ApplicationRecord
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
   has_many :billing_cancellations, dependent: :delete_all
+  # Nullified rather than destroyed: deleting a workspace does not cancel an AWS
+  # subscription, and a licence that outlives its company is exactly the state
+  # somebody has to see — AWS is still billing and nobody can reach the product.
+  has_one :marketplace_license, dependent: :nullify
   has_many :feature_flag_overrides, dependent: :delete_all
   # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
   # No `dependent:` — the row's before_destroy would abort destroying a metered company.
