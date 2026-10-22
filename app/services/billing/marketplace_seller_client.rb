@@ -4,41 +4,29 @@ module Billing
   # AWS Marketplace, signed by the account that owns the SaaS listing.
   #
   # Separate from Billing::MarketplaceMeteringClient, and the difference is whose
-  # credentials the call carries rather than which API it reaches. The container
-  # product meters from inside the buyer's own AWS account, where the pod and the
-  # subscription belong to the same account and the pod's own identity is the
-  # right signer. A SaaS listing has no pod in the buyer's account: the call has
-  # to be signed by the seller account while this application runs in another, so
-  # it assumes a role there and refreshes it.
-  #
-  # That gap is a way to fail that has nothing to do with Marketplace. A role we
-  # cannot assume and a token Marketplace refuses are different problems — the
-  # first is ours and takes minutes, the second is the buyer's link having
-  # expired — so they are different exceptions, and a caller that reports them
-  # alike will send somebody to the wrong place.
+  # credentials the call carries rather than which API it reaches: a SaaS listing
+  # has no pod in the buyer's account, so the call is signed by the seller
+  # account while this application runs in another.
   class MarketplaceSellerClient
     class Error < StandardError; end
 
     # The seller role could not be assumed. Nothing about the request was wrong.
     class CredentialsError < Error; end
 
-    # Expired, already spent, or malformed. A registration token is single use
-    # and short lived, so there is nothing to retry: the buyer has to arrive
-    # again from Marketplace.
+    # Single use and short lived, so there is nothing to retry: the buyer has to
+    # arrive again from Marketplace.
     class InvalidToken < Error; end
 
-    # A token that resolves to a different product. Checked here rather than
-    # left to a caller because this object is the one that knows which product
-    # the installation sells, and a miss is the kind of thing that binds a
-    # stranger's subscription to a workspace.
+    # Checked here because this object is the one that knows which product the
+    # installation sells, and a miss binds a stranger's subscription to a
+    # workspace.
     class ForeignProduct < Error; end
 
     # What ResolveCustomer answers, without the vendor's types.
     #
-    # `license_arn` is the key: one per agreement, and under Concurrent
-    # Agreements one AWS account may hold several at once. `customer_identifier`
-    # is nil on such a product — AWS stopped populating it — and is carried only
-    # so that a support question about an old integration has an answer.
+    # `customer_identifier` is nil under Concurrent Agreements — AWS stopped
+    # populating it — and is carried only so an old integration's question has an
+    # answer. Nothing may key on it.
     Customer = Data.define(
       :license_arn, :aws_account_id, :product_code, :agreement_id, :customer_identifier
     )
@@ -46,8 +34,7 @@ module Billing
     DEFAULT_REGION = "us-east-1"
     SESSION_NAME = "aixle-marketplace-saas"
 
-    # Nothing here may be called on an installation that does not sell the SaaS
-    # listing, which is every installation but ours.
+    # Every installation but the one that sells the listing.
     def configured?
       seller_role_arn.present? && product_code.present?
     end
@@ -80,8 +67,7 @@ module Billing
     def seller_role_arn = settings.seller_role_arn
     def region = settings.region.presence || DEFAULT_REGION
 
-    # Explicit, not the SDK's default chain. The pod's own region is whatever
-    # cluster it runs in and the listing's is not negotiable; and the pod's own
+    # Explicit: the pod's region is whatever cluster it runs in, and the pod's
     # identity is the one account that must not sign this call.
     def client
       @client ||= ::Aws::MarketplaceMetering::Client.new(region: region, credentials: credentials)
@@ -95,9 +81,8 @@ module Billing
       )
     end
 
-    # One error tree out of this adapter, so callers are not written against the
-    # vendor's. The STS rescue has to be here rather than around #credentials:
-    # the role is assumed lazily, on the first call that needs it.
+    # The STS rescue belongs here rather than around #credentials: the role is
+    # assumed lazily, on the first call that needs it.
     def api
       raise Error, "no AWS Marketplace SaaS listing configured" unless configured?
 

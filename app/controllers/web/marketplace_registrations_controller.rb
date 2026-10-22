@@ -2,17 +2,10 @@
 
 # Where a buyer lands after subscribing to the AWS Marketplace SaaS listing.
 #
-# Two actions, and the split is forced rather than tidy. AWS sends the buyer's
-# browser here with a cross-site form POST carrying `x-amzn-marketplace-token`,
-# and a cross-site POST does not carry a `SameSite=Lax` cookie — so the session
-# is simply not there to read, whoever is signed in. #create therefore holds no
-# session at all: it exchanges the token, writes the licence, and hands the
-# licence to #show in a signed token. #show is an ordinary same-site GET on our
-# own origin, where the session exists and can be replaced.
-#
-# What arrives is fixed and cannot be added to: `x-amzn-marketplace-token`
-# always, and `x-amzn-marketplace-offer-type` only on a free-trial offer.
-# Everything else about the buyer comes back from ResolveCustomer.
+# Two actions because a cross-site POST carries no `SameSite=Lax` cookie: the
+# request AWS makes has no session to read, whoever is signed in. #create holds
+# none, and hands the licence to #show in a signed token; #show is same-site on
+# our own origin, where the session exists and can be replaced.
 class Web::MarketplaceRegistrationsController < Web::ApplicationController
   layout "inertia"
 
@@ -22,7 +15,7 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
   skip_before_action :enforce_onboarding
   skip_before_action :redirect_super_admin_to_admin_panel
 
-  # The token is the only credential, so the cost of guessing has to be real.
+  # The token is the only credential here.
   rate_limit to: 20, within: 1.hour, only: :create, by: -> { request.remote_ip },
              with: -> { refuse("Too many attempts. Try again in an hour.") }
 
@@ -52,8 +45,7 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
   rescue Billing::MarketplaceSellerClient::InvalidToken, Billing::MarketplaceSellerClient::ForeignProduct
     refuse(EXPIRED)
   rescue Billing::MarketplaceSellerClient::Error => e
-    # A role we cannot assume is ours to fix and says nothing useful to a buyer,
-    # so it is reported rather than explained.
+    # Ours to fix, and nothing a buyer can act on.
     Sentry.capture_exception(e)
     refuse(UNAVAILABLE)
   end
@@ -63,9 +55,8 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
     license = MarketplaceLicense.find_by_token_for(:registration, params[:ticket])
     return refuse(EXPIRED) if license.nil?
 
-    # Whoever was signed in here is not necessarily the person who just bought
-    # this, and in AWS that button is usually pressed by somebody who will never
-    # use the product. Starting from nobody is the only honest default.
+    # In AWS the subscribe button is usually pressed by somebody who will never
+    # open the product, so whoever is signed in here is not evidence of anything.
     sign_out if signed_in?
 
     return redirect_to login_path, notice: already_set_up(license) if license.bound?

@@ -4,11 +4,9 @@ module Billing
   # Turns the token AWS posts to our fulfilment URL into the licence row
   # everything else keys on.
   #
-  # Idempotent on the licence, which is most of the risk in this whole feature. A
-  # buyer reaches the registration page again from Manage subscriptions whenever
-  # they like and AWS issues a fresh token each time; an arrival that made a
-  # second workspace would be the easiest bug here to write and the hardest to
-  # unpick afterwards, because by then both have data in them.
+  # Idempotent on the licence: a buyer reaches the registration page again from
+  # Manage subscriptions whenever they like, with a fresh token each time, and an
+  # arrival that made a second workspace would split their data in two.
   class MarketplaceRegistration
     def initialize(client: MarketplaceSellerClient.new)
       @client = client
@@ -18,9 +16,8 @@ module Billing
 
     def configured? = client.configured?
 
-    # Raises the adapter's errors unchanged: a token the buyer let expire and a
-    # role we cannot assume need different things said to different people, and
-    # flattening them here would take that choice away from the caller.
+    # The adapter's errors come through unchanged: an expired token and a role
+    # we cannot assume need different things said to different people.
     def call(registration_token:, offer_type: nil)
       record(client.resolve_customer(registration_token: registration_token), offer_type)
     end
@@ -40,8 +37,7 @@ module Billing
       license.save!
       license
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
-      # Two tabs, one buyer. Whoever lost the race reads the row the winner made;
-      # a failure with no row behind it is a real one and goes up.
+      # Two tabs, one buyer. A failure with no row behind it is a real one.
       MarketplaceLicense.find_by(license_arn: customer.license_arn) || raise(e)
     end
   end
