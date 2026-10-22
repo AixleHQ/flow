@@ -20,8 +20,8 @@ interface PageProps {
   suggestedEmail: string | null;
   /** A stranger names the address they will own the workspace with; a signed-in person has proved theirs. */
   needsEmail: boolean;
-  /** Worker-hours the workspace may spend before anyone asks it for a card. */
-  freeQueueHours: number;
+  /** Worker-hours the workspace may spend before anyone asks it for a card. Null where AWS bills from the start. */
+  freeQueueHours: number | null;
   /** Set when a signed-in person's domain already has a workspace, so there is nothing here to create. */
   claimedDomain?: ClaimedDomain | null;
   /**
@@ -244,9 +244,14 @@ const NewWorkspacePage = () => {
                   {needsEmail ? 'Email me the link' : 'Create workspace'}
                 </Button>
                 <p className={classes.footnote}>
-                  You become its first administrator and can invite the rest of the team straight away. The first{' '}
-                  {freeQueueHours} worker-hours are free, and they are spent at whatever rate you run: four workers at
-                  once use four worker-hours an hour.
+                  You become its first administrator and can invite the rest of the team straight away.
+                  {freeQueueHours !== null && (
+                    <>
+                      {' '}
+                      The first {freeQueueHours} worker-hours are free, and they are spent at whatever rate you run:
+                      four workers at once use four worker-hours an hour.
+                    </>
+                  )}
                 </p>
               </Stack>
             </form>

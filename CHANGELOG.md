@@ -111,6 +111,16 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Sign-in & onboarding**: a buyer who subscribes to Aixle Flow on AWS
+  Marketplace is sent to a page of ours that sets their workspace up. They are
+  signed out first and create a new workspace, confirming the address by email
+  as any other signup does — the subscription proves the purchase, not the
+  address. Returning from Manage subscriptions reaches the workspace they
+  already made rather than making a second one. The new workspace is billed by
+  AWS, is not offered our free worker-hours, and waits until AWS confirms the
+  agreement before it runs. Operators: this needs
+  `AWS_MARKETPLACE_SAAS_PRODUCT_CODE` and `AWS_MARKETPLACE_SELLER_ROLE_ARN`;
+  without them the page answers 404 and nothing else changes.
 - **Admin**: a company's page and the companies list show which system bills it
   — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
   It is read-only: the value follows from a subscription existing, so it is not

@@ -30,7 +30,9 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def create
-    form = WorkspaceOnboardingForm.new(user: current_user, **workspace_params.to_h.symbolize_keys)
+    form = WorkspaceOnboardingForm.new(
+      user: current_user, marketplace_license: marketplace_license, **workspace_params.to_h.symbolize_keys
+    )
     return refuse(**form.errors.to_hash(true)) unless form.valid?
 
     return refuse(base: EMAIL_SIGNUP_UNAVAILABLE) unless signed_in? || emailed_proof_accepted?
@@ -44,10 +46,10 @@ class Web::WorkspacesController < Web::ApplicationController
   def confirm
     return refuse(base: EMAIL_SIGNUP_UNAVAILABLE) unless emailed_proof_accepted?
 
-    answers = WorkspaceSignupTicket.decode(params[:token])
+    answers = ticket_answers
     return refuse(base: "That link has expired. Fill the form in again and we will send a new one.") if answers.nil?
 
-    form = WorkspaceOnboardingForm.new(**answers)
+    form = WorkspaceOnboardingForm.new(marketplace_license: marketplace_license, **answers.except(:marketplace_license_id))
     existing = User.find_by(email: form.email)
     return refuse(base: "That account cannot create a workspace.") if existing&.deleted?
     return refuse(base: "You already belong to a workspace.") if existing&.company_memberships&.exists?
@@ -59,6 +61,7 @@ class Web::WorkspacesController < Web::ApplicationController
     # it is what makes the session one the new company's policy accepts. Without
     # it the person lands on step-up holding no credential to step up with.
     sign_in(owner, provider: IdentityProvider.deployment!("magic_link"))
+    forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
   end
 
@@ -73,7 +76,13 @@ class Web::WorkspacesController < Web::ApplicationController
   def create_now(form)
     return refuse(**form.errors.to_hash(true)) unless form.save(current_user)
 
+    forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
+  end
+
+  # sign_in resets the session, so this runs after it rather than before.
+  def forget_marketplace_license
+    session.delete(:marketplace_license_id)
   end
 
   def send_confirmation(form)
@@ -84,7 +93,26 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def ticket_for(form)
-    WorkspaceSignupTicket.issue(name: form.name, email: form.email, max_sessions: form.max_sessions)
+    WorkspaceSignupTicket.issue(
+      name: form.name, email: form.email, max_sessions: form.max_sessions,
+      marketplace_license_id: marketplace_license&.id
+    )
+  end
+
+  # From the session a Marketplace arrival left behind, or from the emailed link
+  # when it is opened somewhere that session is not.
+  def marketplace_license
+    return @marketplace_license if defined?(@marketplace_license)
+
+    id = session[:marketplace_license_id] || ticket_answers&.dig(:marketplace_license_id)
+    @marketplace_license = id && MarketplaceLicense.find_by(id: id)
+  end
+
+  def ticket_answers
+    return nil if params[:token].blank?
+
+    @ticket_answers = WorkspaceSignupTicket.decode(params[:token]) unless defined?(@ticket_answers)
+    @ticket_answers
   end
 
   def refuse(**errors)
@@ -109,8 +137,9 @@ class Web::WorkspacesController < Web::ApplicationController
       # whole of that screen: the form could only be refused.
       claimed_domain: (Auth::ClaimedDomain.for(current_user)&.to_h if signed_in?),
       # What they get before anyone asks them for a card, which is the part of
-      # the bargain the form was silent about.
-      free_queue_hours: Billing::Trial.queue_hours
+      # the bargain the form was silent about. Nil for a Marketplace buyer: AWS
+      # bills them from the first minute, so there is no allowance to promise.
+      free_queue_hours: (Billing::Trial.queue_hours if marketplace_license.nil?)
     }
   end
 
@@ -133,8 +162,13 @@ class Web::WorkspacesController < Web::ApplicationController
     params.fetch(:workspace, {}).permit(:name, :email, :email_domain, :max_sessions)
   end
 
+  # A Marketplace buyer is not a stranger signing up: the subscription is the
+  # authorisation that REGISTRATION_ENABLED withholds from everyone else.
   def require_self_serve_signup
-    redirect_to login_path(error: "no_workspace") unless Deployment.self_serve_signup?
+    return if Deployment.self_serve_signup?
+    return if marketplace_license.present?
+
+    redirect_to login_path(error: "no_workspace")
   end
 
   # Someone who already belongs somewhere has no business here, and a super admin

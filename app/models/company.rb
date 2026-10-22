@@ -75,7 +75,11 @@ class Company < ApplicationRecord
   # an ended subscription both need a new card through Checkout, while a failed
   # payment needs its open invoice paid — a second subscription would bill the
   # same metered minutes twice.
-  BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed].freeze
+  # `awaiting_subscription` is not a problem to be fixed: a Marketplace workspace
+  # exists from the moment its buyer registers, and AWS confirms the agreement
+  # separately. Metering records sent before that confirmation are discarded, so
+  # the workspace waits rather than runs.
+  BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed awaiting_subscription].freeze
 
   # Who sends this company its invoice. One installation can hold more than one
   # answer, which is why this is a column rather than a deployment mode: the
