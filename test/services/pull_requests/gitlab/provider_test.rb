@@ -131,7 +131,7 @@ module PullRequests
       end
 
       test "checks report the head pipeline and every commit status" do
-        stub_mr(7, mr(7, head_pipeline: { id: 555, status: "running" }))
+        stub_mr(7, mr(7, head_pipeline: { id: 555, status: "running", web_url: "https://gitlab.com/group/app/-/pipelines/555" }))
         stub_request(:get, %r{#{Regexp.escape(GITLAB_API)}/projects/group(?:%2F|/)app/repository/commits/#{HEAD}/statuses})
           .to_return(json([ status("lint", "success"), status("rspec", "running"), status("flaky", "failed", allow_failure: true) ]))
 
@@ -140,13 +140,28 @@ module PullRequests
         assert_equal "pending", checks.state
         assert_equal HEAD, checks.head_sha
         assert_equal %w[passed pending passed], checks.items.map { |item| item[:status] }
+        assert_equal({ id: 555, status: "pending", url: "https://gitlab.com/group/app/-/pipelines/555" }, checks.pipeline)
+      end
+
+      test "checks link a CI job to its job page and an external status to its own target" do
+        stub_mr(7, mr(7))
+        stub_request(:get, %r{/repository/commits/#{HEAD}/statuses})
+          .to_return(json([ status("rspec", "success", id: 8101),
+                            status("deploy-preview", "success", id: 8102, target_url: "https://ci.example.com/runs/42") ]))
+
+        urls = @provider.checks(@repository, 7).items.map { |item| item[:url] }
+
+        assert_equal [ "https://gitlab.com/group/app/-/jobs/8101", "https://ci.example.com/runs/42" ], urls
       end
 
       test "checks are none when nothing reported" do
         stub_mr(7, mr(7, head_pipeline: nil))
         stub_request(:get, %r{/repository/commits/#{HEAD}/statuses}).to_return(json([]))
 
-        assert_equal "none", @provider.checks(@repository, 7).state
+        checks = @provider.checks(@repository, 7)
+
+        assert_equal "none", checks.state
+        assert_nil checks.pipeline
       end
 
       # == writes ==
@@ -345,9 +360,10 @@ module PullRequests
           new_file: new_file, renamed_file: renamed_file, deleted_file: deleted_file }
       end
 
-      def status(name, state, allow_failure: false)
-        { id: rand(1000), sha: HEAD, ref: "feature/login", status: state, name: name, allow_failure: allow_failure,
-          target_url: "https://gitlab.com/group/app/-/jobs/#{rand(1000)}", created_at: "2026-10-11T10:00:00.000Z" }
+      # GitLab's own CI jobs carry no target_url; only statuses posted through the API do.
+      def status(name, state, id: rand(1000), allow_failure: false, target_url: nil)
+        { id: id, sha: HEAD, ref: "feature/login", status: state, name: name, allow_failure: allow_failure,
+          target_url: target_url, pipeline_id: 555, created_at: "2026-10-11T10:00:00.000Z" }
       end
     end
   end

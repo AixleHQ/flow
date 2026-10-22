@@ -188,9 +188,11 @@ workflow step calls `board_create_gate` with:
 - `gate_type`: `gitlab_pipeline_completed`
 - `repo_full_name`: the repository as Flow lists it, for example
   `group/subgroup/app`. It must be attached to the task's project.
-- `pipeline_id`: the GitLab pipeline id, `CI_PIPELINE_ID` inside the
-  pipeline or the number at the end of its `/-/pipelines/<id>` URL. The
-  per-project `iid` does not work.
+- `pipeline_id`: the GitLab pipeline id. For a merge request, an agent reads
+  it from `pull_request_checks` as `pipeline.id`, the merge request's head
+  pipeline. Inside the pipeline it is `CI_PIPELINE_ID`, and in a browser the
+  number at the end of the `/-/pipelines/<id>` URL. The per-project `iid`
+  does not work.
 
 ### The pipeline hook
 
