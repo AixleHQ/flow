@@ -15,13 +15,16 @@
 class FakeMarketplaceSellerClient
   PRODUCT_CODE = "saastestproductcode00000"
 
-  attr_reader :tokens
+  attr_reader :tokens, :recorded, :metered, :refusals
   attr_accessor :configured, :failure, :customer
 
   def initialize(configured: true)
     @configured = configured
     @tokens = []
     @customer = nil
+    @recorded = []
+    @metered = []
+    @refusals = {}
   end
 
   def configured?
@@ -47,7 +50,36 @@ class FakeMarketplaceSellerClient
 
   def last_token = tokens.last
 
+  # One Outcome per record, as AWS answers. A licence already metered for an
+  # hour comes back DuplicateRecord rather than failing, which is what makes
+  # replaying a whole hour safe.
+  def batch_meter_usage(usages)
+    raise_failure!
+    return [] if usages.empty?
+
+    usages.map do |usage|
+      key = [ usage.license_arn, usage.occurred_at, usage.dimension ]
+      status = metered.include?(key) ? Billing::MarketplaceSellerClient::DUPLICATE : status_for(usage)
+      metered << key
+
+      recorded << usage if status == Billing::MarketplaceSellerClient::SUCCESS
+      Billing::MarketplaceSellerClient::Outcome.new(
+        license_arn: usage.license_arn, status: status,
+        metering_record_id: status == Billing::MarketplaceSellerClient::SUCCESS ? "mr-#{recorded.size}" : nil
+      )
+    end
+  end
+
+  # Make one licence come back refused, as AWS does for one it has never heard of.
+  def refuse(license_arn, status: "InvalidLicense")
+    refusals[license_arn] = status
+  end
+
   private
+
+  def status_for(usage)
+    refusals.fetch(usage.license_arn, Billing::MarketplaceSellerClient::SUCCESS)
+  end
 
   def license_arn_for(token)
     "arn:aws:license-manager:us-east-1:111122223333:license/l-#{Digest::SHA256.hexdigest(token.to_s)[0, 16]}"
