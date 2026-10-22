@@ -27,6 +27,8 @@ module Billing
 
       attr_reader :client
 
+      def enabled? = client.configured?
+
       def deliver(report)
         usages, unbillable = usages_for(report)
         outcomes = client.batch_meter_usage(usages)

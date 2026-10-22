@@ -16,6 +16,18 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
   end
 
+  # A card here would be a second bill for capacity AWS already charges for.
+  test "a workspace AWS bills is not offered a card" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE, billing_state: "active")
+
+    post company_billing_checkout_path
+
+    assert_redirected_to company_settings_path
+    assert_match(/AWS Marketplace/, flash[:alert])
+    assert_nil @company.reload.stripe_customer_id
+    assert_empty @client.customers
+  end
+
   test "an administrator is sent to Stripe's page" do
     post company_billing_checkout_path, headers: { "X-Inertia" => "true" }
 

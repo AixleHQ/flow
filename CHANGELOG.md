@@ -68,6 +68,11 @@ governance, community health — carry none.
   them (and the `channel_rename` and `group_rename` events) to the Slack app, and
   set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
   app once to pick them up.
+- **Company settings**: a workspace billed through AWS Marketplace is no longer
+  offered a card. Adding one would be a second bill for capacity AWS already
+  charges for; the billing screens say where to manage it instead. A workspace
+  that acquires a Stripe customer now records Stripe as its payer, so the admin
+  shows who bills it rather than `none`.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.
