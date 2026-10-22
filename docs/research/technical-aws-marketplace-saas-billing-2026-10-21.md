@@ -646,6 +646,20 @@ there and then rather than waiting for the schedule — a second entry point int
 `CapacityMeter`, scoped to one licence and a part-hour, and the only place in this design
 where metering is event-driven rather than periodic.
 
+**The licence states belong in `app/state_machines`, and the argument is the
+delivery rather than the shape.** SQS neither orders messages nor delivers them
+exactly once, so a stale `active` can arrive after `ended` and the same event
+can arrive twice. Assigned to a column that is only read, either is applied in
+silence -- and this column decides whether an hour is billed, so a silent
+regression charges for an hour nobody ran, or drops the last one. A machine
+refuses the transition rather than recording it.
+
+It is not written yet because there is nothing to transition: rows are created
+`pending` by the column default and nothing moves them until this slice.
+`Company` carries both idioms side by side -- `state` through a machine,
+`billing_state` assigned -- and the difference between them is exactly whether
+anything is allowed to refuse a move.
+
 An agreement created for a licence nobody has registered is §5.4's state, and it needs
 somewhere to be seen. The admin panel is the obvious home; what it must not be is a log
 line.
@@ -834,7 +848,7 @@ marketing copy.
 | 2 | The seller-account client, `marketplace_licenses`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
 | 3 | `Billing::Meter::AwsMarketplaceSaas` | Independent of 2 — can be proved against a hand-bound licence row. An earlier version of this table put the assumed-role client here; it belongs in slice 2, because `ResolveCustomer` is a call to the same service and must be signed the same way, so the registration endpoint cannot exist without it |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
-| 5 | EventBridge consumption, the licence states, and the immediate final meter on `License Deprovisioned - Manufacturer` | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
+| 5 | EventBridge consumption, the licence states **as a machine in `app/state_machines`**, and the immediate final meter on `License Deprovisioned - Manufacturer` | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
 | 6 | Staging ingress, config, and a live run against the real listing held at **Limited** visibility | The first time any of it meets AWS. Limited means the product is visible only to allowlisted AWS accounts, so we subscribe to our own product from our own account: a real agreement, real events, a real `LicenseArn`, at $0.01 a dimension. An earlier version of this row assumed a second `[TEST]` listing; the allowlist makes one unnecessary |
 
 Slices 1, 3 and 4 are provable in the test suite. Slices 2, 5 and 6 are not finished until
