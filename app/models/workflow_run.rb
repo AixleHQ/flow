@@ -34,6 +34,7 @@ class WorkflowRun < ApplicationRecord
   belongs_to :failed_agent_credential, class_name: "AgentCredential", optional: true
 
   has_many :step_runs, dependent: :destroy
+  has_many :llm_calls, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
   has_many :column_transitions, dependent: :nullify
 
