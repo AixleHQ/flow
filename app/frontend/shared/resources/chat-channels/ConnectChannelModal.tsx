@@ -249,8 +249,7 @@ export const ConnectChannelModal = ({
               </CopyButton>
             </Group>
             <Text size="xs" c="dimmed">
-              Pick the bot from the list as you type. A mention pasted as plain text does not reach the bot: Teams
-              ignores a typed @name.
+              Pick the bot from the list as you type. A mention pasted as plain text does not reach the bot.
             </Text>
           </Step>
 

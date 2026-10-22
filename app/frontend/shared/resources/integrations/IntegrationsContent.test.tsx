@@ -1511,6 +1511,11 @@ describe('IntegrationsContent', () => {
     const CODES = '/api/v1/projects/1/chat_connect_codes';
     const acmeSlack = makeIntegration({ id: 8, name: 'Acme Slack', provider: 'slack' });
 
+    const openChannels = async (name = 'Acme Slack') => {
+      await userEvent.click(screen.getByRole('button', { name: `Channels for ${name}` }));
+      return screen.findByRole('dialog', { name: /channels$/ });
+    };
+
     const renderProject = (integrations: Integration[], props: Record<string, unknown> = {}) =>
       renderPage(
         <IntegrationsContent
@@ -1529,12 +1534,12 @@ describe('IntegrationsContent', () => {
       vi.restoreAllMocks();
     });
 
-    it("lists the company's channels in that messenger once, with who connected them", async () => {
+    it("opens the company's channels in that messenger from one connection, with who connected them", async () => {
       const fetchSpy = answerFetch({
         [`GET ${CHANNELS}`]: {
           channels: [
             buildConnectedChatChannel(),
-            buildConnectedChatChannel({ id: 12, name: 'ops', label: '#ops', requested_by: null, posted_by: 'U042' }),
+            buildConnectedChatChannel({ id: 12, name: 'ops', label: '#ops', requested_by: null, posted_by: 'Olo' }),
           ],
         },
       });
@@ -1543,12 +1548,16 @@ describe('IntegrationsContent', () => {
         makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
       ]);
 
-      const list = await screen.findByRole('list', { name: 'Slack channels' });
+      expect(screen.queryByRole('list', { name: 'Slack channels' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Channels for Ops Slack' })).not.toBeInTheDocument();
+      const dialog = await openChannels();
+      expect(dialog).toHaveAccessibleName('Slack channels');
+
+      const list = await within(dialog).findByRole('list', { name: 'Slack channels' });
       expect(within(list).getAllByRole('listitem')).toHaveLength(2);
       expect(within(list).getByText('#deploys')).toBeInTheDocument();
       expect(within(list).getByText(/^connected by Jane Doe · posted by ivan · /)).toBeInTheDocument();
-      expect(within(list).getByText(/^posted by U042 · /)).toBeInTheDocument();
-      expect(screen.getAllByRole('list', { name: 'Slack channels' })).toHaveLength(1);
+      expect(within(list).getByText(/^posted by Olo · /)).toBeInTheDocument();
       expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack`, expect.anything());
     });
 
@@ -1564,7 +1573,7 @@ describe('IntegrationsContent', () => {
       });
       const { unmount } = renderProject([acmeSlack]);
 
-      const list = await screen.findByRole('list', { name: 'Slack channels' });
+      const list = await within(await openChannels()).findByRole('list', { name: 'Slack channels' });
       const [deploys, ops] = within(list).getAllByRole('listitem');
       const link = within(deploys).getByRole('link', { name: 'View in Slack' });
       expect(link).toHaveAttribute('href', permalink);
@@ -1590,7 +1599,8 @@ describe('IntegrationsContent', () => {
       });
       renderProject([makeIntegration({ id: 5, name: 'Microsoft Teams', provider: 'teams' })]);
 
-      const teamsList = await screen.findByRole('list', { name: 'Microsoft Teams channels' });
+      const teamsDialog = await openChannels('Microsoft Teams');
+      const teamsList = await within(teamsDialog).findByRole('list', { name: 'Microsoft Teams channels' });
       expect(within(teamsList).getByRole('link', { name: 'View in Teams' })).toHaveAttribute('href', message);
     });
 
@@ -1598,7 +1608,7 @@ describe('IntegrationsContent', () => {
       const pendingTeams = makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' });
       const { unmount } = renderProject([pendingTeams]);
 
-      expect(screen.queryByText('Channels')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Channels for/ })).not.toBeInTheDocument();
       unmount();
 
       renderPage(
@@ -1607,7 +1617,7 @@ describe('IntegrationsContent', () => {
           props: settingsProps,
         },
       );
-      expect(screen.queryByText('Channels')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Channels for/ })).not.toBeInTheDocument();
     });
 
     it('connects a channel with a code posted in it, and lists it', async () => {
@@ -1626,8 +1636,9 @@ describe('IntegrationsContent', () => {
       });
       renderProject([acmeSlack]);
 
-      expect(await screen.findByText(/No channel is connected yet/)).toBeInTheDocument();
-      await userEvent.click(screen.getByRole('button', { name: 'Connect a channel' }));
+      const channelsDialog = await openChannels();
+      expect(await within(channelsDialog).findByText(/No channel is connected yet/)).toBeInTheDocument();
+      await userEvent.click(within(channelsDialog).getByRole('button', { name: 'Connect a channel' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
       await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), 'deploys');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
@@ -1642,7 +1653,9 @@ describe('IntegrationsContent', () => {
       await act(() => vi.advanceTimersByTimeAsync(3000));
 
       expect(await within(dialog).findByText('Connected to #deploys')).toBeInTheDocument();
-      expect(await screen.findByRole('list', { name: 'Slack channels' })).toHaveTextContent('#deploys');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+      const back = await screen.findByRole('dialog', { name: 'Slack channels' });
+      expect(await within(back).findByRole('list', { name: 'Slack channels' })).toHaveTextContent('#deploys');
     });
 
     it('disconnects a channel only after saying what that switches off', async () => {
@@ -1652,7 +1665,8 @@ describe('IntegrationsContent', () => {
       });
       renderProject([acmeSlack]);
 
-      await userEvent.click(await screen.findByRole('button', { name: 'Disconnect #deploys' }));
+      const channelsDialog = await openChannels();
+      await userEvent.click(await within(channelsDialog).findByRole('button', { name: 'Disconnect #deploys' }));
       const dialog = await screen.findByRole('dialog', { name: 'Disconnect channel' });
       expect(within(dialog).getByText(/Chat triggers listening there switch off/)).toBeInTheDocument();
       expect(fetchSpy).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'DELETE' }));
@@ -1669,7 +1683,8 @@ describe('IntegrationsContent', () => {
       answerFetch({ [`GET ${CHANNELS}`]: { channels: [buildConnectedChatChannel()] } });
       renderProject([acmeSlack], { projectPermissions: { canExecute: false, canManage: false } });
 
-      expect(await screen.findByText('#deploys')).toBeInTheDocument();
+      const dialog = await openChannels();
+      expect(await within(dialog).findByText('#deploys')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Connect a channel' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Disconnect #deploys' })).not.toBeInTheDocument();
     });

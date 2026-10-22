@@ -157,6 +157,30 @@ module Chat
       ChatConversation.record_slack!(integration: integration, channel_id: channel, name: channel_name(integration, channel))
     end
 
+    # Slack completes a mention from the display name only, never from the
+    # username auth.test returns, so instructions name the bot by its display
+    # name and fall back to the username while users:read is missing.
+    def bot_name(token)
+      me = Slack::Client.auth_test(token: token)
+      display_name(token, me["user_id"]) || me["user"].presence
+    rescue Slack::Client::Error
+      nil
+    end
+
+    def person_name(integration, actor)
+      display_name(integration.credentials_data["bot_token"], actor.to_h["id"])
+    end
+
+    def display_name(token, user_id)
+      return nil if user_id.blank?
+
+      profile = Slack::Client.user_info(token: token, user: user_id).dig("user", "profile").to_h
+      profile["display_name"].presence || profile["real_name"].presence
+    rescue Slack::Client::Error => e
+      Rails.logger.info("[Chat::SlackProvider] no name for #{user_id}: #{e.message}")
+      nil
+    end
+
     def channel_name(integration, channel)
       Slack::Client.conversation_info(token: integration.credentials_data["bot_token"], channel: channel).dig("channel", "name")
     rescue Slack::Client::Error => e

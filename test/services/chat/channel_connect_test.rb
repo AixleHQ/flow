@@ -18,6 +18,7 @@ class Chat::ChannelConnectTest < ActiveJob::TestCase
     @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @company,
                                           config: { "integration_id" => @slack.id })
     stub_slack_client!.channel_names = { "C0NEW00001" => "deploys", "C0OTHER001" => "random" }
+    fake_slack.user_names = { "U0POSTER" => "olo" }
   end
 
   def slack_mention(text, channel: "C0NEW00001", key: SecureRandom.hex)
@@ -41,7 +42,8 @@ class Chat::ChannelConnectTest < ActiveJob::TestCase
     slack_mention("connect #{code.downcase}")
 
     connection = ChatChannelConnection.sole
-    assert_equal [ @company, @user, "U0POSTER" ], [ connection.company, connection.requested_by, connection.posted_by_external_id ]
+    assert_equal [ @company, @user, "U0POSTER", "olo" ],
+                 [ connection.company, connection.requested_by, connection.posted_by_external_id, connection.posted_by_name ]
     assert_equal [ "slack", "C0NEW00001", "deploys" ],
                  [ connection.chat_conversation.provider, connection.chat_conversation.external_id, connection.chat_conversation.name ]
     assert_equal "redeemed", code_record.reload.state

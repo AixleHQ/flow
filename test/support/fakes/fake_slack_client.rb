@@ -23,6 +23,7 @@ class FakeSlackClient
   DEFAULT_BOT_USER  = "U0BOTFAKE0"
   DEFAULT_BOT_ID    = "B00000000"
   DEFAULT_BOT_NAME  = "aixle-flow"
+  DEFAULT_BOT_DISPLAY_NAME = "Aixle Flow"
   DEFAULT_SCOPE     = "chat:write,files:read,files:write"
   DEFAULT_FILE_BODY = "fake slack file bytes"
   WORKSPACE_HOST    = "fake-workspace.slack.com"
@@ -49,6 +50,10 @@ class FakeSlackClient
   # conversations.info: channel id => name. A channel not listed answers
   # channel_not_found; `conversation_info_error` makes every call fail with it.
   attr_accessor :channel_names, :conversation_info_error
+  # users.info: the bot answers with `bot_display_name`, anyone else in
+  # `user_names` (id => display name) with theirs, the rest user_not_found;
+  # `user_info_error` makes every call fail with it.
+  attr_accessor :bot_display_name, :user_names, :user_info_error
   # The thread conversations.replies hands back, so a test can stage a thread
   # without knowing the wire shape. Each entry is a Slack message hash.
   attr_accessor :thread_messages
@@ -74,6 +79,8 @@ class FakeSlackClient
     @bot_user_id = DEFAULT_BOT_USER
     @bot_name    = DEFAULT_BOT_NAME
     @channel_names = {}
+    @bot_display_name = DEFAULT_BOT_DISPLAY_NAME
+    @user_names = {}
     @conversation_info_error = nil
     @auth_tests  = []
     @ephemeral_messages = []
@@ -214,6 +221,21 @@ class FakeSlackClient
       "ok" => true, "url" => "https://#{WORKSPACE_HOST}/", "team" => team_name, "user" => bot_name,
       "team_id" => team_id, "user_id" => bot_user_id, "bot_id" => DEFAULT_BOT_ID, "is_enterprise_install" => false
     }
+  end
+
+  # users.info — { ok, user } with Slack's two names: a bot has only a real name.
+  def user_info(token:, user:)
+    raise Slack::Client::Error, user_info_error if user_info_error
+
+    profile =
+      if user == bot_user_id
+        { "display_name" => "", "real_name" => bot_display_name }
+      elsif user_names.key?(user)
+        { "display_name" => user_names[user], "real_name" => "#{user_names[user]} (real)" }
+      else
+        raise Slack::Client::Error, "user_not_found"
+      end
+    { "ok" => true, "user" => { "id" => user, "name" => user.downcase, "profile" => profile } }
   end
 
   # chat.postEphemeral — { ok, message_ts }.

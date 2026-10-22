@@ -28,6 +28,7 @@ import {
   IconCopy,
   IconDownload,
   IconExternalLink,
+  IconHash,
   IconKey,
   IconLayoutKanban,
   IconLink,
@@ -48,7 +49,7 @@ import { formatDateMedium } from 'shared/lib/formatDate';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
-import { ChatChannelsSection } from 'shared/resources/chat-channels/ChatChannelsSection';
+import { ChatChannelsModal } from 'shared/resources/chat-channels/ChatChannelsModal';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -238,6 +239,7 @@ export const IntegrationsContent = ({
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
+  const [channelsProvider, setChannelsProvider] = useState<string | null>(null);
   const linearAvailable = isProjectContext && !!linear;
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
@@ -350,8 +352,8 @@ export const IntegrationsContent = ({
 
   const hasFilters = !!search || scopeFilter !== 'all';
 
-  // Channels belong to the company, not to one install, so each messenger lists them once.
-  const channelRows = useMemo(() => {
+  // Channels belong to the company, not to one install, so each messenger offers them once.
+  const channelOwners = useMemo(() => {
     const ids = new Set<number>();
     if (!isProjectContext) return ids;
     for (const provider of CHAT_PROVIDERS) {
@@ -1011,6 +1013,17 @@ export const IntegrationsContent = ({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
+                        {channelOwners.has(integration.id) && (
+                          <Button
+                            aria-label={`Channels for ${integration.name}`}
+                            size="compact-xs"
+                            variant="light"
+                            leftSection={<IconHash size={12} />}
+                            onClick={() => setChannelsProvider(integration.provider)}
+                          >
+                            Channels
+                          </Button>
+                        )}
                         {integration.provider === 'github' && canExecute && !readOnly && (
                           <Tooltip label="Test connection">
                             <ActionIcon
@@ -1323,16 +1336,7 @@ export const IntegrationsContent = ({
                     </Table.Td>
                   </Table.Tr>
                 );
-                if (projectId === undefined || !channelRows.has(integration.id)) return row;
-
-                return [
-                  row,
-                  <Table.Tr key={`${integration.id}-channels`}>
-                    <Table.Td colSpan={6}>
-                      <ChatChannelsSection projectId={projectId} provider={integration.provider} canEdit={canExecute} />
-                    </Table.Td>
-                  </Table.Tr>,
-                ];
+                return row;
               })}
             </Table.Tbody>
           </Table>
@@ -1432,6 +1436,16 @@ export const IntegrationsContent = ({
         onClose={() => setGitlabTrackersTarget(null)}
         basePath={basePath}
       />
+
+      {projectId !== undefined && (
+        <ChatChannelsModal
+          projectId={projectId}
+          provider={channelsProvider ?? 'slack'}
+          opened={channelsProvider !== null}
+          onClose={() => setChannelsProvider(null)}
+          canEdit={canExecute}
+        />
+      )}
 
       {azureDevops && (
         <AzureDevopsConnectModal

@@ -75,7 +75,9 @@ Agreed in the #199 discussion on 2026-10-21 and 2026-10-22:
     The connection is announced publicly anyway.
 17. **A company never sees which other companies share its workspace.** It sees only its own channels.
 18. **Slack asks for `channels:read` and `groups:read`**, so Aixle can show channel names. They are added in
-    the reinstall already owed for #425 (§8.4).
+    the reinstall already owed for #425 (§8.4). `users:read` joins them (2026-10-23): Slack completes a
+    mention from the bot's display name only, not from the username `auth.test` returns, so the connect
+    instructions read the display name with `users.info`. The same call names whoever posted the code.
 19. **Removing a connection is announced in the channel**: "**Acme** disconnected this channel" (§8.3).
 20. **No per-company share of Slack's rate limit in v1.** Each company is handled the same (§11.5).
 

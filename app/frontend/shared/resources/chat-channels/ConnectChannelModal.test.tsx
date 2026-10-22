@@ -98,7 +98,7 @@ describe('ConnectChannelModal', () => {
     expect(within(dialog).getByText(/In #deploys, type/)).toBeInTheDocument();
     expect(within(dialog).getByText('@aixle-flow')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Copy the message' })).toBeInTheDocument();
-    expect(within(dialog).getByText(/Teams ignores a typed @name/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/A mention pasted as plain text does not reach the bot/)).toBeInTheDocument();
     expect(within(dialog).getByText('Posted in any other channel, the code connects nothing.')).toBeInTheDocument();
     expect(within(dialog).getByRole('status')).toHaveTextContent('expires in 10:00');
 

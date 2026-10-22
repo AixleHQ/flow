@@ -44,6 +44,7 @@ Then connect the channels Flow may use: see [Connect a channel](#connect-a-chann
 | `chat:write` | Replies, the `/help` list, status cards, and posting, editing and deleting messages |
 | `channels:history`, `groups:history` | `chat_read_thread` in public and private channels |
 | `channels:read`, `groups:read` | Showing the name of a connected channel |
+| `users:read` | Naming the app as Slack shows it, and who connected a channel |
 | `files:read` | Downloading files attached to a mention, so the run gets them |
 | `files:write` | Attaching files with `chat_post_message` |
 | `commands` | The **Run workflow** shortcut and the slash command |
@@ -323,7 +324,7 @@ installs that same app into its own workspace.
      `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback`. Flow builds the
      URL from `PROTOCOL` and `DOMAIN` and sends it to Slack, so it must match
      exactly.
-   - Add the nine bot token scopes listed above.
+   - Add the ten bot token scopes listed above.
 3. Under **Event Subscriptions**:
    - Turn events on.
    - Set the Request URL to `https://<DOMAIN>/webhooks/slack/events`. Flow
@@ -361,12 +362,13 @@ Linking a Slack account uses Sign in with Slack with the same app. It returns
 to `<PROTOCOL>://<DOMAIN>/integrations/slack/oauth/callback/link`, below the
 redirect URL above, which Slack accepts without registering another.
 
-A workspace that installed the app before the `commands`, `channels:read` and
-`groups:read` scopes existed has to install it again (**Connect → Slack**). Until
-then the shortcut and the command do not show up there, and connected channels
-show their ID instead of their name.
+A workspace that installed the app before the `commands`, `channels:read`,
+`groups:read` and `users:read` scopes existed has to install it again
+(**Connect → Slack**). Until then the shortcut and the command do not show up
+there, connected channels show their ID instead of their name, and Flow names
+the app by its username, which Slack does not complete a mention from.
 
-`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the nine above
+`SLACK_SCOPES` changes the scopes Flow requests. It defaults to the ten above
 and accepts commas or spaces. If you drop a scope, the feature that needs it
 stops working.
 

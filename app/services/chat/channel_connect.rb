@@ -68,7 +68,7 @@ module Chat
           next nil
         end
 
-        connect(record, conversation, event)
+        connect(record, conversation, event, provider, integration)
       end
     end
 
@@ -90,13 +90,13 @@ module Chat
       heard_by.chat_peers.active.find_by(company_id: company_id)
     end
 
-    def connect(record, conversation, event)
+    def connect(record, conversation, event, provider, integration)
       actor = event.data.to_h["actor"].to_h
       connection = ChatChannelConnection.find_or_initialize_by(chat_conversation: conversation, company_id: record.company_id)
       already = connection.persisted?
       unless already
         connection.assign_attributes(requested_by: record.requested_by, posted_by_external_id: actor["id"],
-                                     posted_by_name: actor["name"])
+                                     posted_by_name: provider.person_name(integration, actor))
         connection.save!
       end
       binding = bind_trigger(record, conversation)

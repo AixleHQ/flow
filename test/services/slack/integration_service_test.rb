@@ -43,7 +43,7 @@ module Slack
       assert_equal "T123", integration.settings["team_id"]
       assert_equal "Acme HQ", integration.settings["team_name"]
       # what people type to mention the bot, for the channel connect dialog
-      assert_equal "aixle-flow", integration.settings["bot_name"]
+      assert_equal "Aixle Flow", integration.settings["bot_name"]
       assert_equal [ { token: "xoxb-abc" } ], fake.auth_tests
       # the OAuth code was exchanged through the Slack boundary exactly once
       assert_equal 1, fake.oauth_exchanges.size

@@ -47,9 +47,11 @@ governance, community health — carry none.
   Slack rate-limits the app, `chat_*` tools answer `rate_limited` with
   `retry_after` instead of a plain failure.
 - **Integrations**: Slack asks for `channels:read` and `groups:read` to show a
-  connected channel's name. Operators: add them (and the `channel_rename` and
-  `group_rename` events) to the Slack app, and set them in `SLACK_SCOPES` if you
-  override it; each workspace reinstalls the app once to pick them up.
+  connected channel's name, and `users:read` to name the app the way Slack
+  completes a mention of it and to name who connected a channel. Operators: add
+  them (and the `channel_rename` and `group_rename` events) to the Slack app, and
+  set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
+  app once to pick them up.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.

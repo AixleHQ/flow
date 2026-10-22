@@ -160,6 +160,8 @@ module Chat
 
     def bot_mention(_event) = strong(Teams::AppPackage::NAME)
 
+    def person_name(_integration, actor) = actor.to_h["name"].presence
+
     # Every addressed activity is recorded before it is processed, so the row exists.
     def conversation_for(event, integration)
       Teams::Notifier.conversation_for(integration.id, event.data.to_h.dig("conversation", "id"))

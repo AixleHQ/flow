@@ -93,10 +93,15 @@ module Slack
         })
       end
 
-      # Who the token is: the bot's own user id and the name people mention it by.
-      # Needs no scope.
+      # Who the token is: the bot's own user id and username. Needs no scope.
       def auth_test(token:)
         post("auth.test", token: token)
+      end
+
+      # One member of the workspace, the bot included, with the names Slack
+      # shows for them. Requires users:read.
+      def user_info(token:, user:)
+        post("users.info", token: token, params: { user: user })
       end
 
       # A link to one message. Needs no scope.

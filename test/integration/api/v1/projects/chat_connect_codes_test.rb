@@ -36,16 +36,25 @@ class Api::V1::Projects::ChatConnectCodesTest < ActionDispatch::IntegrationTest
     assert_nil shown["code"]
   end
 
-  test "Slack's bot name is read from the install once when it was never stored" do
+  test "Slack's bot name is its display name, read from the install once when it was never stored" do
     @slack.update!(settings: { "team_id" => "T1" })
-    stub_slack_client!.bot_name = "aixle-staging"
+    stub_slack_client!.bot_display_name = "Aixle Flow (staging)"
 
     post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
     post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
 
-    assert_equal "@aixle-staging", response.parsed_body["mention"]
+    assert_equal "@Aixle Flow (staging)", response.parsed_body["mention"]
     assert_equal 1, fake_slack.auth_tests.size
-    assert_equal "aixle-staging", @slack.reload.settings["bot_name"]
+    assert_equal "Aixle Flow (staging)", @slack.reload.settings["bot_name"]
+  end
+
+  test "an install that may not read names offers the bot's username" do
+    @slack.update!(settings: { "team_id" => "T1" })
+    stub_slack_client!.user_info_error = "missing_scope"
+
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
+
+    assert_equal "@aixle-flow", response.parsed_body["mention"]
   end
 
   test "a code is always for a channel named up front" do

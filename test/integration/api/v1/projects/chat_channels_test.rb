@@ -21,12 +21,14 @@ class Api::V1::Projects::ChatChannelsTest < ActionDispatch::IntegrationTest
     connect_chat_channel(company: @company, provider: "teams", integration: teams)
     ChatConversation.create!(integration: @slack, provider: "slack", external_id: "C0UNCONNE1", kind: "channel")
     connect_chat_channel(company: create(:company), external_id: "C0FOREIGN1")
+    ChatChannelConnection.find_by!(chat_conversation: @deploys).update!(posted_by_external_id: "U0POSTER")
 
     get api_v1_project_chat_channels_path(@project), params: { provider: "slack" }, as: :json
 
     assert_response :success
     channels = response.parsed_body["channels"]
-    assert_equal [ [ @deploys.id, "#deploys", "slack" ] ], channels.map { |c| c.values_at("id", "label", "provider") }
+    assert_equal [ [ @deploys.id, "#deploys", "slack", nil ] ],
+                 channels.map { |c| c.values_at("id", "label", "provider", "posted_by") }
 
     get api_v1_project_chat_channels_path(@project), as: :json
     assert_equal %w[slack teams], response.parsed_body["channels"].pluck("provider").sort

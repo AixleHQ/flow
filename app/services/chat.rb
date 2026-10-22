@@ -87,8 +87,7 @@ module Chat
   end
 
   # The name people type to mention the bot, for instructions shown in Aixle.
-  # Slack's comes from the install (auth.test), read once and kept; Teams' is the
-  # app's. `fetch: false` never calls Slack, for a page render.
+  # Slack's comes from the install, read once and kept; Teams' is the app's. `fetch: false` never calls Slack, for a page render.
   def bot_name(key, project, fetch: true)
     return Teams::AppPackage::NAME if key.to_s == TeamsProvider::KEY
 
@@ -99,12 +98,9 @@ module Chat
   end
 
   def remember_slack_bot_name(integration)
-    name = Slack::Client.auth_test(token: integration.credentials_data["bot_token"])["user"].presence
+    name = SlackProvider.bot_name(integration.credentials_data["bot_token"])
     integration.update_column(:settings, integration.settings.to_h.merge("bot_name" => name)) if name
     name
-  rescue Slack::Client::Error => e
-    Rails.logger.warn("[Chat] auth.test failed for integration ##{integration.id}: #{e.message}")
-    nil
   end
 
   def origin(run) = run&.shared_context.to_h["chat"].presence
