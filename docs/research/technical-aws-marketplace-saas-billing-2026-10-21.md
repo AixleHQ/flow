@@ -202,33 +202,51 @@ the bill — and it already forces `billing_state: "active"`
 (`company.rb:205-207`). Folding it into `billing_provider` would be a larger refactor of
 the Stripe lifecycle for no gain here.
 
-**The column is shown, not only stored.** Every active company displays its payer —
-`stripe` or `aws` — in the admin panel, and on the company's own billing screen. Decided
-21 October, and it is not cosmetic: the moment two payers share an installation, "who is
-billing this customer" stops being answerable from the fact that they are paying. An
-operator looking at a company that owes money needs to know which system to open before
-they can do anything at all, and the only alternative is inferring it from which column
-happens to be filled — which is precisely the inference §4.1 exists to replace.
+**The column is shown, not only stored.** Decided 21 October, and it is not cosmetic: the
+moment two payers share an installation, "who is billing this customer" stops being
+answerable from the fact that they are paying. An operator looking at a company that owes
+money needs to know which system to open before they can do anything at all, and the only
+alternative is inferring it from which column happens to be filled — which is precisely
+the inference §4.1 exists to replace.
 
-It ships in slice 1, with the column, rather than with the Marketplace code. On a
-single-payer installation it reads `stripe` everywhere and looks pointless; that is the
-cheapest moment to get it in front of the people who will later rely on it.
+**The admin shipped in slice 1**, read-only and searchable, on both the company's page and
+the companies list. Read-only because the provider follows from a subscription existing: an
+operator who could type it could claim a company is billed by a system that has never heard
+of it.
+
+**The company's own billing screen did not**, and the reason is worth keeping. Until a
+second provider can exist there is exactly one true answer to show every customer, so the
+screen would say "billed through Stripe" to everyone and teach nobody anything. It belongs
+in the slice that makes the sentence capable of being false.
 
 ### 4.2 `Billing::Payer`
 
 A small object resolved from a company, answering the questions that are per-company and
 are currently asked of `Deployment`:
 
+As built in slice 1:
+
 ```ruby
-payer = Billing::Payer.for(company)
+payer = Billing::Payer.for(company)   # also Company#billing_payer
 
 payer.provider            # "none" | "stripe" | "aws_marketplace"
+payer.none?               # …and one predicate per provider
 payer.bills?              # is anyone invoiced for this company's capacity
-payer.owns_capacity?      # may a company admin move the number
 payer.requires_bound?     # must the company carry a limit
 payer.minimum_workers     # 1, or 3 for a Marketplace company
-payer.trial?              # does the free allowance apply
 ```
+
+Two that an earlier draft listed are not there. `owns_capacity?` was to be moved
+off `Deployment`; it turned out to have no call sites at all and was deleted
+instead. `trial?` stayed inside `Billing::Trial`, which already owns that
+question — moving it would have widened slice 1 without making slice 2 smaller.
+
+**`bills?` does not read the column, and that is deliberate.** Being billable and
+having a payer attached are different facts: a company that has never paid is
+still billable — its minutes go on the ledger row and the adapter reports it as
+`unbilled` — so reading `provider != "none"` here would silently drop those
+companies out of the metered quantity. The object names the axis; the column
+starts deciding things in slice 2.
 
 `Deployment` keeps describing the installation and supplies the default for a company
 with no provider of its own, so `self_hosted` and the container `aws_marketplace` mode
@@ -740,7 +758,7 @@ marketing copy.
 
 | | Slice | Why here |
 |---|---|---|
-| 1 | `billing_provider` + `Billing::Payer` + the payer shown on every active company, behaviour otherwise unchanged | The riskiest change, because it touches the live Stripe path. Alone and first, so a staging failure is unambiguous |
+| 1 | **Built.** `billing_provider` + `Billing::Payer` + the payer shown read-only in the admin, behaviour otherwise unchanged | The riskiest change, because it touches the live Stripe path. Alone and first, so a staging failure is unambiguous. The customer-facing display moved to slice 2, where there is more than one answer to show |
 | 2 | `marketplace_customers`, the registration endpoint, `ResolveCustomer`, the sign-out-and-create flow, the Checkout refusal, and the duplicate-domain detector from §10 | Needs slice 1's column to bind to. The detector ships here rather than later: after this slice the overlap it finds can exist |
 | 3 | `Billing::Meter::AwsMarketplaceSaas` + the assumed-role client | Independent of 2 — can be proved against a hand-bound customer row |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |

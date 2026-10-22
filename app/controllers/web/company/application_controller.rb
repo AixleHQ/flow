@@ -22,7 +22,7 @@ class Web::Company::ApplicationController < Web::ApplicationController
           can_manage_projects: current_membership&.admin? || false,
           # Where we host, and only there, is anyone billed — and never a
           # company we carry.
-          can_manage_billing: Deployment.saas? && !current_company&.managed_by_aixle? &&
+          can_manage_billing: ::Billing::Payer.for(current_company).bills? &&
             (current_membership&.admin? || false),
           can_write: current_membership.present? && !current_membership.viewer?
         }
