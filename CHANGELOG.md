@@ -26,6 +26,11 @@ governance, community health — carry none.
   with `connect <code>` there, and the app confirms it in the channel for
   everyone to see. A channel can be connected for posting only, and
   disconnected from the Slack or Teams row.
+- **Admin**: a Feature flags page lists every declared flag with where its
+  value comes from. Super admins can set a flag's global value, turn it off
+  everywhere, and add or remove company overrides, each with a required reason
+  recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
+  A company's admin page lists its feature overrides.
 
 ### Changed
 - **Triggers & gates**: a chat trigger listens in exactly one channel connected

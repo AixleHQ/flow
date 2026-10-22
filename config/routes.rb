@@ -368,6 +368,12 @@ Rails.application.routes.draw do
     # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
     # fresh deployment does not sit on an empty catalog until the first scheduled run.
     resources :catalog_syncs, only: %i[index create]
+    # Not Administrate resources either: most declared flags have no row, and the
+    # pages are about the value each company ends up with.
+    resources :feature_flags, only: %i[index show update destroy], param: :key do
+      post :turn_off_everywhere, on: :member
+      resources :overrides, only: %i[create destroy], param: :company_id, controller: "feature_flag_overrides"
+    end
     resource :session_admission, only: %i[show]
     resource :dashboard, only: %i[show]
   end
