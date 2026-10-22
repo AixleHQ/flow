@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261022120100_attach_chat_installs_to_workspaces")
+require Rails.root.join("db/migrate/20261022121100_attach_chat_installs_to_workspaces")
 
 class AttachChatInstallsToWorkspacesTest < ActiveSupport::TestCase
   def migrate
