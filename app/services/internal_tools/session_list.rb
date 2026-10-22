@@ -59,7 +59,7 @@ module InternalTools
     end
 
     def scope(state)
-      scope = supervision_scope.includes(:user).order(created_at: :desc)
+      scope = supervision_scope.includes(:user, :session_admission).order(created_at: :desc)
       scope = scope.where(state: STATE_FILTERS.fetch(state)) unless state == "all"
       scope
     end
