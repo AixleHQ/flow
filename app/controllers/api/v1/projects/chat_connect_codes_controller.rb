@@ -10,7 +10,7 @@ module Api
         def create
           trigger = TriggerBinding.where(project: current_project).find(params[:trigger_id]) if params[:trigger_id].present?
           _record, payload = Chat::ConnectCodes.issue!(project: current_project, provider: params[:provider],
-                                                       user: current_user, trigger_binding: trigger)
+                                                       channel: params[:channel], user: current_user, trigger_binding: trigger)
           render json: payload, status: :created
         rescue Chat::ConnectCodes::Refused => e
           render json: { errors: [ e.message ] }, status: :unprocessable_entity

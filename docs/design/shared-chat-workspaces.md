@@ -1,6 +1,6 @@
 # Shared chat workspaces and channel-bound chat triggers — technical design
 
-**Status:** Direction agreed 2026-10-22: decisions 1–20 (§2), no open questions. Phases 1 and 2 built
+**Status:** Direction agreed 2026-10-22: decisions 1–23 (§2), no open questions. Phases 1 and 2 built
 (§20, §21). Spikes S3 and S4 (§15.3) still want a live check on staging.
 **Board task:** #199, "Make channel selection required when launching a trigger via Slack".
 **Code baseline:** `715fc7c0`
@@ -78,6 +78,23 @@ Agreed in the #199 discussion on 2026-10-21 and 2026-10-22:
     the reinstall already owed for #425 (§8.4).
 19. **Removing a connection is announced in the channel**: "**Acme** disconnected this channel" (§8.3).
 20. **No per-company share of Slack's rate limit in v1.** Each company is handled the same (§11.5).
+
+Decided 2026-10-22 after a design review:
+
+21. **A code names its channel.** Whoever asks for a code says which channel it is for: Slack
+    `#deploys` or `deploys`; Teams `Team / Channel` (every team has a General), or a group chat's name.
+    Posted anywhere else the code connects nothing, and it still works where it belongs. This replaces
+    a confirm-in-Aixle step: a code left in a channel the bot is not in cannot be carried to another one.
+22. **The bot's public messages name the company and the command, never a person or a project.** A
+    channel may hold guests and other organizations. `help` lists each trigger's command and workflow,
+    plus its company when several share the channel.
+23. **A refusal is private, and a code is kept as an HMAC.** Slack shows a refused code only to whoever
+    posted it (ephemeral); Teams, which cannot, says it at most once a minute per person. The stored
+    digest is keyed with a server secret, so a copy of the database does not give a live code back.
+
+Not taken from the same review: a separate "read any thread" level on a connection, and announcing or
+re-confirming the channels the migration connected. Within one company both are valid as they are, and
+a connection into another company is announced in its channel anyway.
 
 ## 3. What exists
 
@@ -340,16 +357,19 @@ Redemption runs at the workspace step of inbound routing (§10.1), before help, 
 A bare `@Aixle connect` without a code is not a request (decision 11). The bot answers: "Request a code in
 Aixle: Integrations → Slack → Connect a channel."
 
-Every failure (unknown, expired, already used, another messenger, company not on this workspace) gets the
-same reply: "This code is not valid here or has expired. Request a new one in Aixle." The person who
-requested the code sees the precise reason in Aixle, and the channel learns nothing about other companies.
+Every failure (another channel than the code names, unknown, expired, already used, another messenger,
+company not on this workspace) gets the same reply, shown only to whoever posted it (decision 23): "This
+code is not valid here or has expired. Request a new one in Aixle." The person who requested the code
+sees the precise reason in Aixle, and the channel learns nothing about other companies.
 
 ### 8.3 The public confirmation
 
 The bot answers in the thread, visible to everyone in the channel:
 
-> This channel is now connected to **Acme** (requested by Jane Doe in Aixle, posted by @ivan).
-> Trigger **"Deploy"** in project **Payments** listens to mentions of @Aixle here.
+> This channel is now connected to **Acme**.
+> @Aixle deploy here starts one of **Acme**'s workflows.
+
+It names the company and what starts the trigger, and no person or project (decision 22).
 
 A channel connected for posting only (§8.5) gets the second line in this form instead:
 
@@ -409,8 +429,11 @@ A channel connected for posting only (§8.5) gets the second line in this form i
 
 **The invariant.** An enabled `chat.message` binding has a `chat_conversation_id` that is:
 - connected to the binding's company;
-- on a workspace that the company has an active integration for;
 - of the binding's messenger, and not `direct`.
+
+Whether the install is active is not part of it. An uninstalled app or a removed team stops the
+messages arriving, and a reinstall brings every trigger back as it was; saving a trigger meanwhile
+still works.
 
 **Enforced as a model validation.** It is a validation, not a check on one save path, so every write path
 inherits it: web, API, MCP, template activation and archive restore (G6). Each event that would break the

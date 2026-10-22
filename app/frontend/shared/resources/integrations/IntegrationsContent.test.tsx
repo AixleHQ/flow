@@ -1629,11 +1629,13 @@ describe('IntegrationsContent', () => {
       expect(await screen.findByText(/No channel is connected yet/)).toBeInTheDocument();
       await userEvent.click(screen.getByRole('button', { name: 'Connect a channel' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), 'deploys');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
       expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toHaveValue(
         'connect aixle-7F3K9QXM',
       );
       const request = fetchSpy.mock.calls.find(([url, init]) => url === CODES && init?.method === 'POST');
-      expect(JSON.parse(request?.[1]?.body as string)).toEqual({ provider: 'slack' });
+      expect(JSON.parse(request?.[1]?.body as string)).toEqual({ provider: 'slack', channel: 'deploys' });
 
       channels = [buildConnectedChatChannel()];
       state = 'redeemed';

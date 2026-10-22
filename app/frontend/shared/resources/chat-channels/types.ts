@@ -26,6 +26,8 @@ export interface ChatConnectCode {
   provider: string;
   state: ChatConnectCodeState;
   expires_at: string;
+  // The channel the code is for, as the server understood what was typed: Slack `#deploys`, Teams `Sales / General`.
+  channel_name: string;
   trigger_id?: number;
   failure_reason?: string;
   bot_name?: string;

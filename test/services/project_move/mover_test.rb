@@ -10,7 +10,7 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
 
   test "moves the project and everything it owns into the target, keeping every id" do
     task_numbers = [ @s.parent_task.reload.number, @s.child_task.reload.number ]
-    ChatConnectCode.issue!(project: @s.project, provider: "slack", user: @s.owner)
+    ChatConnectCode.issue!(project: @s.project, provider: "slack", user: @s.owner, channel: "#deploys")
 
     report = move(member_policy: "add")
 

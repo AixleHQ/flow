@@ -22,9 +22,11 @@ governance, community health — carry none.
   Disconnecting one company leaves the others working; uninstalling the app in
   Slack stops it for all of them, and reinstalling from any restores it.
 - **Integrations**: Slack and Microsoft Teams channels are connected to a
-  company from inside the channel: ask for a code in Flow, then mention the app
-  with `connect <code>` there, and the app confirms it in the channel for
-  everyone to see. A channel can be connected for posting only, and
+  company from inside the channel: ask for a code in Flow for a named channel,
+  then mention the app with `connect <code>` there, and the app confirms it in
+  the channel, naming the company and what starts the trigger. Posted in any
+  other channel the code connects nothing, and a refused code is shown only to
+  whoever posted it. A channel can be connected for posting only, and
   disconnected from the Slack or Teams row.
 - **Admin**: a Feature flags page lists every declared flag with where its
   value comes from. Super admins can set a flag's global value, turn it off

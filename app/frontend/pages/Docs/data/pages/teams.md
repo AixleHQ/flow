@@ -91,18 +91,25 @@ someone who is in it.
 
 1. Ask for a code in Flow: in a chat trigger, next to **Channel**, choose
    **Connect a new channel…**; or on the Teams row of the **Integrations** page
-   choose **Connect a channel**, for one that workflows only post to.
+   choose **Connect a channel**, for one that workflows only post to. Say which
+   conversation the code is for: **Team / Channel** for a channel (every team
+   has a General, so the team is required), or a group chat's name. A group chat
+   without a name gets one in Teams first.
 2. Add **Aixle Flow** to the team or group chat if it is not there yet.
 3. In the channel, type `@Aixle Flow`, pick the app from the list, and paste the
    rest of the line the dialog shows: `connect aixle-7F3K9QXM`. A mention typed
    as plain text does not reach the app.
-4. The app answers in the thread, for everyone there to see: which company the
-   conversation is now connected to, and who asked and posted. The dialog in Flow
-   shows it as connected.
+4. The app answers in the thread, for everyone there to see, which company the
+   conversation is now connected to and, for a trigger, what starts it there. It
+   names no person and no project. The dialog in Flow shows it as connected.
 
-A code works once, for ten minutes. Anyone who can change a project can ask for
-one. A code sent in a 1:1 chat is refused: a 1:1 chat cannot be connected. The
-connection belongs to the company, so every project in it can use the channel.
+A code works once, for ten minutes, and only in the conversation it names:
+posted anywhere else it connects nothing, and still works where it belongs.
+Anyone who can change a project can ask for one. A code sent in a 1:1 chat is
+refused: a 1:1 chat cannot be connected. When a code cannot be used the app
+says so at most once a minute to the same person, and the dialog in Flow says
+why. The connection belongs to the company, so every project in it can use the
+channel.
 
 Each connected channel on the Teams row links to the message the code was posted
 in (**View in Teams**). To disconnect a channel, choose **Disconnect** next to it. The

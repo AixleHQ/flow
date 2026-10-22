@@ -287,5 +287,14 @@ module Slack
       error = assert_raises(Slack::Client::RateLimited) { Slack::Client.post_message(token: BOT_TOKEN, channel: "C1", text: "hi") }
       assert_equal [ 30, "ratelimited" ], [ error.retry_after, error.message ]
     end
+
+    test "post_ephemeral posts JSON to one person and parses into the fake's shape" do
+      expected = @fake.post_ephemeral(token: BOT_TOKEN, channel: "C1", user: "U1", text: "only you")
+      stub = stub_request(:post, "#{API}/chat.postEphemeral")
+        .with(body: hash_including("channel" => "C1", "user" => "U1", "text" => "only you")).to_return(json(expected))
+
+      assert_equal expected, Slack::Client.post_ephemeral(token: BOT_TOKEN, channel: "C1", user: "U1", text: "only you")
+      assert_requested stub
+    end
   end
 end

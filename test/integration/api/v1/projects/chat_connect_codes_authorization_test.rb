@@ -17,12 +17,12 @@ class Api::V1::Projects::ChatConnectCodesAuthorizationTest < ActionDispatch::Int
 
   test "create is a project write" do
     assert_project_write(transport: :api) do
-      post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack" }, as: :json
+      post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
     end
   end
 
   test "show is a project read" do
-    record, _code = ChatConnectCode.issue!(project: @project, provider: "slack", user: @owner)
+    record, _code = ChatConnectCode.issue!(project: @project, provider: "slack", user: @owner, channel: "#deploys")
     assert_project_read(transport: :api) { get api_v1_project_chat_connect_code_path(@project, record), as: :json }
   end
 end

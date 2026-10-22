@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 module Chat
-  # `@<bot> connect <code>` in a channel connects that channel to the company
-  # that asked for the code (docs/design/shared-chat-workspaces.md §8.2–8.3).
+  # `@<bot> connect <code>` in the channel a code names connects that channel
+  # to the company that asked for it (docs/design/shared-chat-workspaces.md §8.2–8.3).
   #
-  # Every refusal gets the same reply in the channel, so nobody there learns
-  # which companies exist; the person who asked for the code sees the reason on
-  # the code itself in Aixle.
+  # Every refusal gets the same answer, shown only to whoever posted it where the
+  # messenger allows, so nobody in the channel learns which companies exist and a
+  # stream of bad codes is no noise; the person who asked for the code sees the
+  # reason on the code itself in Aixle. Only a connection is announced to all.
   module ChannelConnect
     # Only the bare word or the word and a code: "connect the repo to staging" is
     # a request for a workflow, not for this.
@@ -59,6 +60,11 @@ module Chat
         conversation = integration && provider.conversation_for(event, integration)
         if conversation.nil?
           record.update!(failure_reason: "Posted in a workspace this company has not connected")
+          next nil
+        end
+        mismatch = record.channel_mismatch(conversation)
+        if mismatch
+          record.update!(failure_reason: mismatch)
           next nil
         end
 
@@ -122,7 +128,7 @@ module Chat
     end
 
     def answer(provider, event, text)
-      provider.reply(event, text)
+      provider.reply_privately(event, text)
       true
     end
 
@@ -131,25 +137,21 @@ module Chat
         "or from a chat trigger), then post it here."
     end
 
+    # Names the company and what starts it, and nobody: the channel may hold
+    # guests and other organizations, and the trace is the company.
     def confirmation(provider, event, outcome)
-      company = outcome.code.company.name
-      first = if outcome.already_connected
-        "This channel was already connected to #{provider.strong(company)}."
-      else
-        who = [ (provider.escape(outcome.code.requested_by.name) + " in Aixle" if outcome.code.requested_by),
-                provider.mention(event.data.to_h["actor"]).then { |m| "posted by #{m}" if m } ].compact
-        "This channel is now connected to #{provider.strong(company)}#{" (#{who.join(', ')})" if who.any?}."
-      end
+      company = provider.strong(outcome.code.company.name)
+      first = outcome.already_connected ? "This channel was already connected to #{company}." : "This channel is now connected to #{company}."
       [ first, purpose(provider, event, outcome, company) ].join("\n")
     end
 
     def purpose(provider, event, outcome, company)
       binding = outcome.binding
-      return "#{provider.strong(company)}'s workflows can post here." if binding.nil?
+      return "#{company}'s workflows can post here." if binding.nil?
 
-      name = binding.name.presence || binding.workflow&.name || "this workflow"
-      "Trigger #{provider.strong(name)} in project #{provider.strong(binding.project.name)} listens to mentions " \
-        "of #{provider.bot_mention(event)} here."
+      command = Chat::HelpCatalog.command(binding)
+      asked = command ? "#{provider.bot_mention(event)} #{provider.escape(command)}" : "a mention of #{provider.bot_mention(event)}"
+      "#{asked} here starts one of #{company}'s workflows."
     end
   end
 end

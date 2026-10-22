@@ -10,7 +10,7 @@ class ChatConnectCodeTest < ActiveSupport::TestCase
 
   test "a code is shown once and stored only as its digest, for ten minutes" do
     freeze_time do
-      record, code = ChatConnectCode.issue!(project: @project, provider: "slack", user: @user)
+      record, code = ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "#deploys")
 
       assert_match(/\Aaixle-[0-9A-HJKMNP-TV-Z]{8}\z/, code)
       assert_equal ChatConnectCode.digest(code), record.code_digest
@@ -30,11 +30,32 @@ class ChatConnectCodeTest < ActiveSupport::TestCase
   end
 
   test "a company holds at most ten unused codes at a time" do
-    ChatConnectCode::MAX_OPEN_PER_COMPANY.times { ChatConnectCode.issue!(project: @project, provider: "slack", user: @user) }
+    ChatConnectCode::MAX_OPEN_PER_COMPANY.times { ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "#deploys") }
 
-    error = assert_raises(ActiveRecord::RecordInvalid) { ChatConnectCode.issue!(project: @project, provider: "slack", user: @user) }
+    error = assert_raises(ActiveRecord::RecordInvalid) { ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "#deploys") }
     assert_match(/Too many unused codes/, error.message)
 
-    travel(11.minutes) { assert ChatConnectCode.issue!(project: @project, provider: "teams", user: @user).first.persisted? }
+    travel(11.minutes) { assert ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "Sales / General").first.persisted? }
+  end
+
+  test "the digest needs the server's secret, not just the code" do
+    assert_not_equal Digest::SHA256.hexdigest("aixle-7f3k9qxm"), ChatConnectCode.digest("aixle-7F3K9QXM")
+  end
+
+  test "a code knows its channel however it was typed, and a Teams channel only together with its team" do
+    slack, = ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "  #Deploys ")
+    deploys = ChatConversation.new(provider: "slack", kind: "channel", name: "deploys", external_id: "C1")
+    assert_equal [ "Deploys", "#Deploys" ], [ slack.channel_name, slack.channel_label ]
+    assert_nil slack.channel_mismatch(deploys)
+    assert_equal "Posted in #random, but the code is for #Deploys", slack.channel_mismatch(deploys.dup.tap { |c| c.name = "random" })
+
+    teams, = ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "Sales/General")
+    general = ChatConversation.new(provider: "teams", kind: "channel", name: "General", team_name: "Sales", external_id: "19:x")
+    assert_nil teams.channel_mismatch(general)
+    assert_match(%r{but the code is for Sales / General}, teams.channel_mismatch(general.dup.tap { |c| c.team_name = "Support" }))
+
+    chat, = ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "Launch crew")
+    assert_nil chat.channel_mismatch(ChatConversation.new(provider: "teams", kind: "group", name: "launch crew", external_id: "19:g"))
+    assert_equal "Name the team too for a Teams channel: Team / Channel", chat.channel_mismatch(general)
   end
 end

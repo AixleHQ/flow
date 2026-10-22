@@ -125,6 +125,19 @@ module Chat
       nil
     end
 
+    # Only the person who posted sees it.
+    def reply_privately(event, text)
+      data = event.data.to_h
+      integration = install_for(event)
+      return nil if integration.nil? || data["user"].blank?
+
+      Slack::Client.post_ephemeral(token: integration.credentials_data["bot_token"], channel: data["channel"],
+                                   user: data["user"], text: text, thread_ts: data["thread_ts"].presence || data["ts"])
+    rescue Slack::Client::Error => e
+      Rails.logger.warn("[Chat::SlackProvider] private reply failed: #{e.message}")
+      nil
+    end
+
     def strong(text) = "*#{escape(text)}*"
 
     # Slack mrkdwn reads these three characters as markup.

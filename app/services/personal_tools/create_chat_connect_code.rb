@@ -4,7 +4,8 @@ module PersonalTools
   class CreateChatConnectCode < Base
     tool do
       display_name "Create Chat Connect Code"
-      description "Ask for a one-time code that connects a Slack or Microsoft Teams channel to the project's company. " \
+      description "Ask for a one-time code that connects one named Slack or Microsoft Teams channel to the project's " \
+                  "company; posted in any other channel it connects nothing. " \
                   "A person in that channel invites the bot (the `invite` field), then mentions the bot by its name " \
                   "(the `mention` field, picked from the list as they type) followed by the `command` field; the bot " \
                   "confirms in the channel. The code works once, for 10 minutes. With trigger_id, the chat trigger is " \
@@ -14,6 +15,9 @@ module PersonalTools
       tags :integrations, :workflows
       param :project_id, type: :integer, description: "Project id.", required: true
       param :provider, type: :string, enum: Chat::PROVIDERS.keys, required: true, description: "The messenger."
+      param :channel, type: :string, required: true,
+                      description: "The channel to connect, as people see it: Slack \"#deploys\" or \"deploys\"; Teams " \
+                                   "\"Team / Channel\", or a group chat's name."
       param :trigger_id, type: :integer, description: "A chat trigger of this project to point at the channel."
     end
 
@@ -23,8 +27,8 @@ module PersonalTools
       trigger = TriggerBinding.where(project: project).find_by(id: params[:trigger_id]) if params[:trigger_id].present?
       return error("Trigger #{params[:trigger_id]} not found in project #{project.id}") if params[:trigger_id].present? && trigger.nil?
 
-      _record, payload = Chat::ConnectCodes.issue!(project: project, provider: params[:provider], user: user,
-                                                   trigger_binding: trigger)
+      _record, payload = Chat::ConnectCodes.issue!(project: project, provider: params[:provider], channel: params[:channel],
+                                                   user: user, trigger_binding: trigger)
       success(payload)
     rescue Chat::ConnectCodes::Refused => e
       error(e.message)

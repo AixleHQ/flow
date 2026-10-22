@@ -26,6 +26,7 @@ export const buildChatConnectCode = (overrides: Partial<ChatConnectCode> = {}): 
   provider: 'slack',
   state: 'pending',
   expires_at: '2026-10-22T10:10:00Z',
+  channel_name: '#deploys',
   bot_name: 'aixle-flow',
   mention: '@aixle-flow',
   invite: '/invite @aixle-flow',

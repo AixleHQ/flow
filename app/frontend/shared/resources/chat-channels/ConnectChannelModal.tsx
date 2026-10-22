@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Button,
   Code,
   CopyButton,
@@ -13,7 +14,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { IconAlertCircle, IconCheck, IconCopy } from '@tabler/icons-react';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ApiError, apiRequest } from 'shared/lib/apiFetch';
 import { CHAT_PROVIDER_LABELS } from 'shared/resources/triggers/describeTrigger';
@@ -23,6 +24,14 @@ import { channelName } from './channelName';
 import type { ChatChannel, ChatConnectCode } from './types';
 
 const POLL_INTERVAL_MS = 3000;
+
+const CHANNEL_HINTS: Record<string, { placeholder: string; description: string }> = {
+  slack: { placeholder: '#deploys', description: "The channel's name, with or without #." },
+  teams: {
+    placeholder: 'Sales / General',
+    description: "Team / Channel, or a group chat's name. A Teams channel needs its team: every team has a General.",
+  },
+};
 
 interface ConnectChannelModalProps {
   projectId: number;
@@ -51,9 +60,9 @@ function Step({ number, title, children }: { number: number; title: ReactNode; c
 }
 
 /**
- * Connects a Slack or Teams channel to the company with a one-time code: the
- * person posts it in the channel, the bot connects the channel it came from and
- * says so there. A channel id is never typed.
+ * Connects a Slack or Teams channel to the company with a one-time code issued
+ * for the channel the person names: they post it there, the bot connects that
+ * channel and says so there. A channel id is never typed.
  */
 export const ConnectChannelModal = ({
   projectId,
@@ -63,27 +72,29 @@ export const ConnectChannelModal = ({
   onClose,
   onConnected,
 }: ConnectChannelModalProps) => {
+  const [channel, setChannel] = useState('');
   const [code, setCode] = useState<ChatConnectCode | null>(null);
   const [issuing, setIssuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // Each request for a code supersedes the one before it, and closing drops both.
   const attempt = useRef(0);
-  // StrictMode runs effects twice, and every code issued counts against the company's cap of open codes.
-  const issuedThisOpening = useRef(false);
   const reported = useRef<number | null>(null);
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
+  const hint = CHANNEL_HINTS[provider];
+  const blank = channel.trim() === '';
 
-  const issue = useCallback(async () => {
+  const issue = async (event: FormEvent) => {
+    event.preventDefault();
+    if (blank || issuing) return;
     const current = ++attempt.current;
-    setCode(null);
     setError(null);
     setIssuing(true);
     try {
       const created = await apiRequest<ChatConnectCode>(apiV1ProjectChatConnectCodesPath(projectId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, ...(triggerId ? { trigger_id: triggerId } : {}) }),
+        body: JSON.stringify({ provider, channel, ...(triggerId ? { trigger_id: triggerId } : {}) }),
       });
       if (current === attempt.current) setCode(created);
     } catch (e) {
@@ -91,22 +102,22 @@ export const ConnectChannelModal = ({
     } finally {
       if (current === attempt.current) setIssuing(false);
     }
-  }, [projectId, provider, triggerId]);
+  };
 
-  useEffect(() => {
-    if (opened) {
-      if (!issuedThisOpening.current) {
-        issuedThisOpening.current = true;
-        issue();
-      }
-      return;
-    }
-    issuedThisOpening.current = false;
+  const changeChannel = () => {
     attempt.current += 1;
     setCode(null);
     setError(null);
+  };
+
+  useEffect(() => {
+    if (opened) return;
+    attempt.current += 1;
+    setChannel('');
+    setCode(null);
+    setError(null);
     setIssuing(false);
-  }, [opened, issue]);
+  }, [opened]);
 
   const pending = code?.state === 'pending';
   const codeId = code?.id;
@@ -144,23 +155,33 @@ export const ConnectChannelModal = ({
 
   return (
     <Modal opened={opened} onClose={onClose} title={`Connect a ${label} channel`} centered size="md">
-      {issuing ? (
-        <Group justify="center" py="md">
-          <Loader size="sm" aria-label="Creating a code" />
-        </Group>
-      ) : error ? (
-        <Stack gap="md">
-          <Alert color="red" variant="light" icon={<IconAlertCircle size={16} />}>
-            {error}
-          </Alert>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
-              Close
-            </Button>
-            <Button onClick={issue}>Try again</Button>
-          </Group>
-        </Stack>
-      ) : code?.state === 'redeemed' ? (
+      {!code ? (
+        <form onSubmit={issue}>
+          <Stack gap="md">
+            <TextInput
+              label="Channel"
+              placeholder={hint?.placeholder}
+              description={hint?.description}
+              value={channel}
+              onChange={(e) => setChannel(e.currentTarget.value)}
+              data-autofocus
+            />
+            {error && (
+              <Alert color="red" variant="light" icon={<IconAlertCircle size={16} />}>
+                {error}
+              </Alert>
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={onClose}>
+                Close
+              </Button>
+              <Button type="submit" loading={issuing} disabled={blank}>
+                Get code
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      ) : code.state === 'redeemed' ? (
         <Stack gap="md">
           <Alert color="green" variant="light" icon={<IconCheck size={16} />}>
             Connected to {code.channel ? channelName(code.channel) : 'the channel'}
@@ -173,9 +194,9 @@ export const ConnectChannelModal = ({
             <Button onClick={onClose}>Done</Button>
           </Group>
         </Stack>
-      ) : code ? (
+      ) : (
         <Stack gap="md">
-          <Step number={1} title="Invite the bot first">
+          <Step number={1} title={`Invite the bot to ${code.channel_name} first`}>
             <Text size="sm" c="dimmed">
               The bot only sees the channels it is in.
             </Text>
@@ -202,10 +223,10 @@ export const ConnectChannelModal = ({
             title={
               code.mention ? (
                 <>
-                  In the channel, type <Code>{code.mention}</Code> and pick it from the list, then paste:
+                  In {code.channel_name}, type <Code>{code.mention}</Code> and pick it from the list, then paste:
                 </>
               ) : (
-                'In the channel, mention the bot and pick it from the list, then paste:'
+                `In ${code.channel_name}, mention the bot and pick it from the list, then paste:`
               )
             }
           >
@@ -233,6 +254,8 @@ export const ConnectChannelModal = ({
             </Text>
           </Step>
 
+          <Text size="sm">Posted in any other channel, the code connects nothing.</Text>
+
           {code.failure_reason && (
             <Alert color="yellow" variant="light" icon={<IconAlertCircle size={16} />}>
               The last attempt was refused: {code.failure_reason}
@@ -246,7 +269,7 @@ export const ConnectChannelModal = ({
                 <Button variant="default" onClick={onClose}>
                   Close
                 </Button>
-                <Button onClick={issue}>Get a new code</Button>
+                <Button onClick={changeChannel}>Get a new code</Button>
               </Group>
             </Stack>
           ) : (
@@ -257,7 +280,10 @@ export const ConnectChannelModal = ({
                   Waiting for the message · expires in {formatRemaining(Date.parse(code.expires_at) - now)}
                 </Text>
               </Group>
-              <Group justify="flex-end">
+              <Group justify="space-between">
+                <Anchor component="button" type="button" size="sm" onClick={changeChannel}>
+                  Change channel
+                </Anchor>
                 <Button variant="default" onClick={onClose}>
                   Close
                 </Button>
@@ -265,7 +291,7 @@ export const ConnectChannelModal = ({
             </Stack>
           )}
         </Stack>
-      ) : null}
+      )}
     </Modal>
   );
 };

@@ -487,7 +487,10 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     it('adds the channel the posted code connected, selects it and saves the trigger with it', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
-      const issued = buildChatConnectCode({ expires_at: new Date(Date.now() + 600_000).toISOString() });
+      const issued = buildChatConnectCode({
+        channel_name: '#releases',
+        expires_at: new Date(Date.now() + 600_000).toISOString(),
+      });
       const releases = buildChatChannel({ id: 12, name: 'releases', label: '#releases' });
       let state: 'pending' | 'redeemed' = 'pending';
       const fetchSpy = answerFetch({
@@ -500,6 +503,8 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect a new channel…' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), '#releases');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
       expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toHaveValue(
         'connect aixle-7F3K9QXM',
       );
@@ -530,9 +535,12 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       renderPage(<TriggerFormPanel {...baseProps({ editing: buildChatTrigger({ id: 9 }), chatProviders: [slack] })} />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect a new channel…' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), '#deploys');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
 
-      expect(await screen.findByRole('textbox', { name: 'Message to post' })).toBeInTheDocument();
-      expect(bodyOf(fetchSpy, 'POST')).toEqual({ provider: 'slack', trigger_id: 9 });
+      expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toBeInTheDocument();
+      expect(bodyOf(fetchSpy, 'POST')).toEqual({ provider: 'slack', channel: '#deploys', trigger_id: 9 });
     });
   });
 

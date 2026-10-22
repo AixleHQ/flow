@@ -143,6 +143,14 @@ module Chat
       Teams::Notifier.post(conversation, text: text, thread_id: data["targeted"] ? nil : data["thread_id"]).to_h["id"]
     end
 
+    # Teams cannot show an answer to a mention to one person only, so a refusal
+    # is said at most once a minute per person per conversation.
+    def reply_privately(event, text)
+      data = event.data.to_h
+      key = "chat:private-reply:#{data.dig('conversation', 'id')}:#{data.dig('actor', 'id')}"
+      reply(event, text) if Rails.cache.write(key, true, expires_in: 1.minute, unless_exist: true)
+    end
+
     # The message the code was posted in, whose thread holds the confirmation.
     def permalink(event, _message_id) = event.data.to_h["url"]
 

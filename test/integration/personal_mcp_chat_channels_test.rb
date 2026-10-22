@@ -39,7 +39,7 @@ class PersonalMCPChatChannelsTest < ActionDispatch::IntegrationTest
   test "create_chat_connect_code hands out a code for a trigger, and get_chat_connect_code follows it" do
     trigger = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, enabled: false, chat_channel: nil)
 
-    body = call_tool("create_chat_connect_code", { project_id: @project.id, provider: "slack", trigger_id: trigger.id })
+    body = call_tool("create_chat_connect_code", { project_id: @project.id, provider: "slack", channel: "deploys", trigger_id: trigger.id })
 
     assert_not tool_error?(body), text(body)
     code = payload(body)
@@ -52,7 +52,7 @@ class PersonalMCPChatChannelsTest < ActionDispatch::IntegrationTest
   end
 
   test "a code is refused for a messenger the company has not connected" do
-    body = call_tool("create_chat_connect_code", { project_id: @project.id, provider: "teams" })
+    body = call_tool("create_chat_connect_code", { project_id: @project.id, provider: "teams", channel: "Sales / General" })
 
     assert tool_error?(body)
     assert_includes text(body), "Connect Microsoft Teams on the Integrations page first"

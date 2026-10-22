@@ -57,7 +57,7 @@ module Slack
         [ text, blocks ]
       end
 
-      def catalog_line(binding, project)
+      def catalog_line(binding, company)
         workflow = Chat::HelpCatalog.workflow_name(binding)
         pattern = Chat::HelpCatalog.pattern(binding)
         label = Chat::HelpCatalog.label(binding)
@@ -66,7 +66,7 @@ module Slack
         else
           "• *#{escape_mrkdwn(label)}* — #{escape_mrkdwn(workflow)} (#{escape_mrkdwn(pattern)})"
         end
-        project.present? ? "#{base} _[#{escape_mrkdwn(project)}]_" : base
+        company.present? ? "#{base} _[#{escape_mrkdwn(company)}]_" : base
       end
 
       def section_block(mrkdwn)

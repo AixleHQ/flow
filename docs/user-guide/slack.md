@@ -77,19 +77,29 @@ the channel, by someone who is in it.
    - in a chat trigger, next to **Channel**: **Connect a new channel…**;
    - on the Slack row of the **Integrations** page: **Connect a channel**, for a
      channel that workflows only post to, such as one for reports.
+
+   Say which channel the code is for: its name, with or without `#`.
 2. Invite the app to the channel if it is not there yet: `/invite @<app>`. The
    dialog shows the app's name.
 3. In the channel, type `@<app>`, pick the app from the list, and paste the
    rest of the line the dialog shows: `connect aixle-7F3K9QXM`.
-4. The app answers in the thread, for everyone in the channel to see: which
-   company the channel is now connected to, who asked for the code and who
-   posted it, and, when the code came from a trigger, that the trigger listens
-   there. The dialog in Flow shows the channel as connected.
+4. The app answers in the thread, for everyone in the channel to see, which
+   company the channel is now connected to and, when the code came from a
+   trigger, what starts it there (`@<app> deploy`). It names no person and no
+   project: a channel may hold guests and other organizations. The dialog in
+   Flow shows the channel as connected.
 
-A code works once, for ten minutes. Anyone who can change a project can ask for
-one. Whoever posts it must be in the channel, which is what makes the
-connection the channel's own choice; a code passed on to someone in the channel
-works too, and the app's answer stays in the channel as the record.
+A code works once, for ten minutes, and only in the channel it names. Posted
+anywhere else it connects nothing, and still works in its own channel. Anyone
+who can change a project can ask for one. Whoever posts it must be in the
+channel, which is what makes the connection the channel's own choice; a code
+passed on to someone in that channel works too, and the app's answer stays in
+the channel as the record.
+
+When a code cannot be used, the app tells only the person who posted it, and
+the dialog in Flow says why. Checking the channel's name needs the app's
+`channels:read` and `groups:read` scopes; a workspace that installed the app
+before them reinstalls it once (**Connect → Slack**).
 
 A connection belongs to the company, so every project in it can use the
 channel. It stays when the person who posted the code leaves the channel.
@@ -392,7 +402,8 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 | The row is **inactive** | The app was uninstalled in Slack, or its tokens were revoked | **Connect → Slack** again |
 | A mention gets no reply at all | The row is not active, the app is not in the channel, or (self-hosted) the signing secret or event subscription is wrong | Check the row; invite the app; check step 3 and `SLACK_SIGNING_SECRET` |
 | *"No Slack triggers configured for this channel."* | No enabled Slack trigger, in any of the company's projects, listens in this channel | Check the trigger's **Channel** and that it is enabled |
-| The app answers *"This code is not valid here or has expired."* | The code was already used, is older than ten minutes, is for Teams, or belongs to a company that has not connected this workspace | Ask for a new code in Flow; the dialog shows why the last attempt was refused |
+| The app answers, to you only, *"This code is not valid here or has expired."* | The code is for another channel, was already used, is older than ten minutes, is for Teams, or belongs to a company that has not connected this workspace | Post it in the channel it names, or ask for a new code; the dialog shows why the last attempt was refused |
+| The dialog says *"…did not say what this channel is called — reinstall the app…"* | The install predates the `channels:read` and `groups:read` scopes | **Connect → Slack** again, then post the code again |
 | The app answers *"Post the code in the channel you want to connect…"* | The code was sent in a direct message | Post it in the channel |
 | `@<app> connect …` gets no answer | The app is not in the channel, or the mention was typed as plain text | Invite the app, then type `@` and pick it from the list |
 | Saving a trigger fails with *"Chat channel is required…"* | The trigger has no channel and is being switched on | Pick a channel, or connect one with **Connect a new channel…** |

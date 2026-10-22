@@ -15,13 +15,13 @@ class Api::V1::Projects::ChatConnectCodesTest < ActionDispatch::IntegrationTest
   end
 
   test "a code comes with what to post where, once; its state is followed until it is used" do
-    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack" }, as: :json
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
 
     assert_response :created
     body = response.parsed_body
     assert_match(/\Aconnect aixle-[0-9A-HJKMNP-TV-Z]{8}\z/, body["command"])
-    assert_equal [ "pending", "aixle-flow", "@aixle-flow", "/invite @aixle-flow" ],
-                 body.values_at("state", "bot_name", "mention", "invite")
+    assert_equal [ "pending", "#deploys", "aixle-flow", "@aixle-flow", "/invite @aixle-flow" ],
+                 body.values_at("state", "channel_name", "bot_name", "mention", "invite")
     record = ChatConnectCode.find(body["id"])
     assert_equal [ @company, @owner ], [ record.company, record.requested_by ]
     assert_not_equal body["code"], record.code_digest
@@ -40,22 +40,30 @@ class Api::V1::Projects::ChatConnectCodesTest < ActionDispatch::IntegrationTest
     @slack.update!(settings: { "team_id" => "T1" })
     stub_slack_client!.bot_name = "aixle-staging"
 
-    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack" }, as: :json
-    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack" }, as: :json
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys" }, as: :json
 
     assert_equal "@aixle-staging", response.parsed_body["mention"]
     assert_equal 1, fake_slack.auth_tests.size
     assert_equal "aixle-staging", @slack.reload.settings["bot_name"]
   end
 
+  test "a code is always for a channel named up front" do
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: " # " }, as: :json
+
+    assert_response :unprocessable_entity
+    assert_equal [ "Name the channel to connect: its name, such as #deploys" ], response.parsed_body["errors"]
+    assert_equal 0, ChatConnectCode.count
+  end
+
   test "a messenger the company has not connected, or a trigger of another project, gets no code" do
-    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "teams" }, as: :json
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "teams", channel: "Sales / General" }, as: :json
     assert_response :unprocessable_entity
     assert_equal [ "Connect Microsoft Teams on the Integrations page first" ], response.parsed_body["errors"]
 
     other = create(:project, company: @company, owner: @owner)
     trigger = create(:trigger_binding, project: other, workflow: create(:workflow, scope: other), created_by: @owner)
-    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", trigger_id: trigger.id }, as: :json
+    post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: "#deploys", trigger_id: trigger.id }, as: :json
     assert_response :not_found
     assert_equal 0, ChatConnectCode.count
   end

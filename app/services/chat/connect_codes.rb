@@ -5,13 +5,18 @@ module Chat
   # card, the API and MCP (docs/design/shared-chat-workspaces.md §8.1).
   module ConnectCodes
     Refused = Class.new(StandardError)
+    CHANNEL_HINT = {
+      "slack" => "its name, such as #deploys",
+      "teams" => "Team / Channel, such as Sales / General, or a group chat's name"
+    }.freeze
 
     module_function
 
     # [record, payload]. The payload carries the code, which is never shown again.
-    def issue!(project:, provider:, user:, trigger_binding: nil)
+    def issue!(project:, provider:, user:, channel:, trigger_binding: nil)
       provider = provider.to_s
       raise Refused, "Unknown messenger #{provider.inspect}" unless Chat::PROVIDERS.key?(provider)
+      raise Refused, "Name the channel to connect: #{CHANNEL_HINT.fetch(provider)}" if channel.to_s.delete("#/").squish.blank?
       unless Integration.active.visible_for_project(project).exists?(provider: provider)
         raise Refused, "Connect #{Chat.provider(provider).label} on the Integrations page first"
       end
@@ -19,7 +24,8 @@ module Chat
         raise Refused, "That trigger does not listen to #{Chat.provider(provider).label}"
       end
 
-      record, code = ChatConnectCode.issue!(project: project, provider: provider, user: user, trigger_binding: trigger_binding)
+      record, code = ChatConnectCode.issue!(project: project, provider: provider, user: user, channel: channel,
+                                            trigger_binding: trigger_binding)
       [ record, describe(record, project: project, code: code) ]
     rescue ActiveRecord::RecordInvalid => e
       raise Refused, e.record.errors.full_messages.to_sentence
@@ -32,6 +38,7 @@ module Chat
       conversation = record.chat_channel_connection&.chat_conversation
       {
         id: record.id, provider: record.provider, state: record.state, expires_at: record.expires_at.iso8601,
+        channel_name: record.channel_label,
         trigger_id: record.trigger_binding_id, failure_reason: record.failure_reason,
         bot_name: bot, mention: mention, invite: invite(record.provider, mention),
         command: code && "connect #{code}", code: code,

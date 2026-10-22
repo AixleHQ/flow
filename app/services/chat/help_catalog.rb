@@ -19,7 +19,7 @@ module Chat
         .joins(:workflow).merge(Workflow.active).merge(TriggerBinding.listening_in(event))
         .includes(:workflow, project: :company)
         .select { |binding| TriggerFilter.match?(binding.filter_predicate.to_h.except("text", "channel"), data) }
-        .sort_by { |binding| [ binding.project&.company&.name.to_s, binding.project&.name.to_s, label(binding) ] }
+        .sort_by { |binding| [ binding.project&.company&.name.to_s, label(binding) ] }
     end
 
     def listening_projects(data)
@@ -27,13 +27,12 @@ module Chat
       Project.where(company_id: installs ? installs.select(:company_id) : [])
     end
 
-    # Where a listed trigger lives: its project, and its company too when the
-    # list spans several.
+    # Whose a listed trigger is, when the list spans several companies. Never
+    # its project: the channel may hold guests and other organizations.
     def place(binding, bindings)
-      project = binding.project&.name
-      return project if bindings.map { |b| b.project&.company_id }.uniq.size < 2
+      return nil if bindings.map { |b| b.project&.company_id }.uniq.size < 2
 
-      [ binding.project&.company&.name, project ].compact.join(" · ")
+      binding.project&.company&.name
     end
 
     def label(binding)

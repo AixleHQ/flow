@@ -7,7 +7,7 @@ require "test_helper"
 # companies that connected its channel, each through an event of its own.
 class Chat::WorkspaceRouterTest < ActiveJob::TestCase
   setup do
-    stub_slack_client!
+    stub_slack_client!.channel_names = { "C0NEWCHAN1" => "newchan" }
     @acme = company_with_slack("Acme")
     @globex = company_with_slack("Globex")
     @endpoint = WebhookEndpoint.find_by!(slug: "slack-team-T1")
@@ -92,14 +92,15 @@ class Chat::WorkspaceRouterTest < ActiveJob::TestCase
     replies = fake_slack.posted_messages.select { |m| m[:channel] == "C0SHARED01" }
     assert_equal 1, replies.size
     text = replies.sole[:text]
-    assert_includes text, "_[Acme · Acme ops]_"
-    assert_includes text, "_[Globex · Globex ops]_"
+    assert_includes text, "_[Acme]_"
+    assert_includes text, "_[Globex]_"
+    assert_not_includes text, "ops", "projects are not named where guests may read"
     assert_not_includes text, "secret"
     assert_equal 0, TriggerEvent.count
   end
 
   test "a code either company asked for connects the channel to that company only" do
-    _record, code = ChatConnectCode.issue!(project: @globex[:project], provider: "slack", user: @globex[:owner])
+    _record, code = ChatConnectCode.issue!(project: @globex[:project], provider: "slack", user: @globex[:owner], channel: "newchan")
 
     mention("connect #{code}", channel: "C0NEWCHAN1")
 

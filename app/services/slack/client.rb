@@ -62,6 +62,12 @@ module Slack
         }.compact)
       end
 
+      # A message only `user` sees, in the channel (and thread) given. Requires chat:write.
+      def post_ephemeral(token:, channel:, user:, text:, thread_ts: nil)
+        post_json("chat.postEphemeral", token: token, payload: { channel: channel, user: user, text: text,
+                                                                 thread_ts: thread_ts }.compact)
+      end
+
       # Edit a message the bot posted, addressed by its `ts`. Slack replaces the
       # whole message: fields left nil are dropped from it, so a text-only update
       # of a Block Kit message clears its blocks. Requires the chat:write scope.

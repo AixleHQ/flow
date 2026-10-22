@@ -3,7 +3,7 @@
 # In-memory fake for the Slack boundary. A real object implementing
 # Slack::Client's public class-method interface (exchange_code, post_message,
 # update_message, delete_message, conversation_replies, upload_files,
-# download_file, auth_test, conversation_info, permalink) as INSTANCE methods (R3,
+# download_file, auth_test, conversation_info, permalink, post_ephemeral) as INSTANCE methods (R3,
 # docs/testing.md §4).
 # Callers stub Slack::Client onto one of these via
 # SlackTestHelper#stub_slack_client!.
@@ -42,7 +42,7 @@ class FakeSlackClient
 
   attr_reader :oauth_exchanges, :posted_messages, :uploaded_files, :downloads,
               :updated_messages, :deleted_messages, :replies_reads, :opened_views, :openid_exchanges,
-              :auth_tests
+              :auth_tests, :ephemeral_messages
   # Let a test tailor the shared canned values (e.g. a specific team_id) without
   # reaching into the response builders.
   attr_accessor :team_id, :team_name, :bot_token, :bot_user_id, :bot_name, :scope, :file_body
@@ -76,6 +76,7 @@ class FakeSlackClient
     @channel_names = {}
     @conversation_info_error = nil
     @auth_tests  = []
+    @ephemeral_messages = []
     @scope       = DEFAULT_SCOPE
     @file_body   = DEFAULT_FILE_BODY
 
@@ -213,6 +214,12 @@ class FakeSlackClient
       "ok" => true, "url" => "https://#{WORKSPACE_HOST}/", "team" => team_name, "user" => bot_name,
       "team_id" => team_id, "user_id" => bot_user_id, "bot_id" => DEFAULT_BOT_ID, "is_enterprise_install" => false
     }
+  end
+
+  # chat.postEphemeral — { ok, message_ts }.
+  def post_ephemeral(token:, channel:, user:, text:, thread_ts: nil)
+    @ephemeral_messages << { token: token, channel: channel, user: user, text: text, thread_ts: thread_ts }
+    { "ok" => true, "message_ts" => next_ts }
   end
 
   # chat.getPermalink — { ok, channel, permalink }.
