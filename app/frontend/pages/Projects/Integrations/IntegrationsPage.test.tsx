@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { Integration } from '@/types/generated';
 import { buildIntegration } from 'test/factories/integration';
-import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import IntegrationsPage from './IntegrationsPage';
@@ -68,13 +67,12 @@ describe('Projects/Integrations/IntegrationsPage', () => {
   // A company-wide install (Slack) has no page of its own: a company admin
   // removes it from any project, and nobody else sees the control.
   it('offers removal of a company-wide integration only to a company admin', async () => {
-    answerFetch({ 'GET /api/v1/projects/7/chat_channels': { channels: [] } });
     const slack = integration({ id: 9, name: 'acme-slack', provider: 'slack', scopeIndicator: 'company' });
 
     const { unmount } = renderAuthedPage(<IntegrationsPage />, {
       props: { project, integrations: [slack], projectPermissions: { canExecute: true, canManage: true } },
     });
-    expect(await screen.findByText(/No channel is connected yet/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Channels for acme-slack' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     unmount();
 
@@ -86,7 +84,6 @@ describe('Projects/Integrations/IntegrationsPage', () => {
       },
     });
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
-    expect(await screen.findByText(/No channel is connected yet/)).toBeInTheDocument();
   });
 
   it('confirms removal of a project integration and fires router.delete', async () => {
