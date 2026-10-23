@@ -87,6 +87,12 @@ class Web::ApplicationController < ApplicationController
   def trial_share
     return nil unless Deployment.saas?
     return nil if current_company.nil? || current_company.billing_active?
+    # Everything below is the free allowance and the card that replaces it,
+    # and an AWS Marketplace workspace has neither: no allowance was ever
+    # offered, and Checkout refuses that payer anyway, so the button led to a
+    # refusal. What such a workspace should be told instead is its own banner,
+    # which does not exist yet (§10).
+    return nil if current_company.billing_payer.aws_marketplace?
 
     max_sessions = SessionConcurrencyLimit.for_company(current_company.id)
     {

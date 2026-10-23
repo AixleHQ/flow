@@ -111,4 +111,28 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
 
     assert_nil trial_prop
   end
+  # Seen on the first real subscription: a workspace AWS bills was told it had
+  # spent 100 free worker-hours and should add a card. It was never offered an
+  # allowance, and Checkout refuses that payer, so the button led to a refusal.
+  test "a workspace AWS bills is told nothing about an allowance" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+
+    assert_nil trial_prop
+  end
+
+  test "nor when its subscription has ended" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "canceled")
+
+    assert_nil trial_prop
+  end
+
+  # The Stripe side is untouched: the same states still say what undoes them.
+  test "a workspace we bill still is" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE,
+                     billing_state: "blocked", billing_block_reason: "allowance")
+
+    assert_equal "allowance", trial_prop[:status]
+  end
 end
