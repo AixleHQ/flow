@@ -51,8 +51,8 @@ module ContainerRuntime
       assert_equal "2", JSON.parse(result.channel(3)).dig("details", "causes", 0, "message")
     end
 
-    # The replaced client allocated ~12 objects per byte received (12.66M for a
-    # 1 MB tar in production). Reading in chunks costs a few objects per frame.
+    # The replaced client allocated ~27 objects per byte received against this
+    # server (28M for this test). Reading in chunks costs a few per frame.
     test "reading a megabyte allocates per chunk, not per byte" do
       output = Random.bytes(1024 * 1024)
       @server = FakeKubernetesExecServer.new { |_command, _stdin| [ output, "", 0 ] }.start

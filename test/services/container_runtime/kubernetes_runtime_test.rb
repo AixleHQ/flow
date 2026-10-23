@@ -289,7 +289,7 @@ module ContainerRuntime
       end
     end
 
-    # Production measured 12.66M allocations and 13 s for one 1 MB read_file
+    # The byte-at-a-time client this replaced allocated 28M objects here
     # (PALAD-AI-RAILS-45); the bound leaves a wide margin over today's cost.
     test "read_file of a megabyte allocates per chunk, not per byte" do
       tar = build_test_tar("workspace/blob", Random.bytes(1024 * 1024))

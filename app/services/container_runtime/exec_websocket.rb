@@ -10,10 +10,10 @@ module ContainerRuntime
   # block #connect yields, before the socket opens, and run on the reader thread.
   #
   # Not websocket-client-simple: it reads the socket one byte at a time and runs
-  # the frame parser on every byte — about 12 Ruby allocations per byte, all of
-  # it holding the GVL. Copying a 1 MB file out of a pod cost 12.6M allocations
-  # and 13 s, and every other request on the same Puma process stalled behind it
-  # (PALAD-AI-RAILS-45).
+  # the frame parser on every byte — about 30 Ruby allocations per byte, all of
+  # it holding the GVL. Against a real API server, copying a 1 MB file out of a
+  # pod took 7 s of CPU and 31M allocations, and every other request on the same
+  # Puma process stalled behind it (PALAD-AI-RAILS-45).
   class ExecWebsocket
     READ_CHUNK_BYTES = 64 * 1024
     HEADER_END = "\r\n\r\n"
