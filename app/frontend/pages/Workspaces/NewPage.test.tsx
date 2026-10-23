@@ -24,6 +24,23 @@ const signedIn = {
 };
 
 describe('New workspace page', () => {
+  describe('what the form promises about cost', () => {
+    it('offers the free allowance when there is one', () => {
+      renderPage(<NewWorkspacePage />, { props: stranger });
+
+      expect(screen.getByText(/100 worker-hours are free/)).toBeInTheDocument();
+    });
+
+    // A buyer arriving from AWS Marketplace is billed from the first minute, so
+    // the allowance is not theirs to be offered.
+    it('promises nothing free when nobody is giving anything away', () => {
+      renderPage(<NewWorkspacePage />, { props: { ...stranger, freeQueueHours: null } });
+
+      expect(screen.queryByText(/worker-hours are free/)).not.toBeInTheDocument();
+      expect(screen.getByText(/You become its first administrator/)).toBeInTheDocument();
+    });
+  });
+
   describe('a stranger', () => {
     it('asks for the address the workspace will be owned with', () => {
       renderPage(<NewWorkspacePage />, { props: stranger });

@@ -209,6 +209,15 @@ gem "aws-sdk-bedrock", "~> 1.95"
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
 gem "aws-sdk-marketplacemetering", "~> 1.106"
+
+# Asked at registration what state the agreement is already in, because the
+# event that would say so races the buyer's arrival on the fulfilment page.
+gem "aws-sdk-marketplaceagreement", "~> 1.50"
+
+# The queue a rule in the seller account delivers SaaS subscription events into.
+# Unlike the metering call above, that queue is in THIS account, so it is read
+# with the pod's own identity rather than the seller role.
+gem "aws-sdk-sqs", "~> 1.100"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 

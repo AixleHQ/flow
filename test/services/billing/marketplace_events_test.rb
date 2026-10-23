@@ -1,0 +1,143 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
+  setup do
+    @meter = Minitest::Mock.new
+    @events = Billing::MarketplaceEvents.new(final_meter: @meter)
+  end
+
+  test "an event for another source is not ours and is not stored" do
+    assert_nil @events.record(envelope(source: "aws.marketplacecatalog"))
+    assert_equal 0, MarketplaceSubscriptionEvent.count
+  end
+
+  test "a type we do not handle is not stored" do
+    assert_nil @events.record(envelope(detail_type: "Spend Threshold Reached"))
+    assert_equal 0, MarketplaceSubscriptionEvent.count
+  end
+
+  # SQS promises at-least-once. The same event arriving twice is one event.
+  test "a redelivered event is the same row" do
+    first = @events.record(envelope)
+    second = @events.record(envelope)
+
+    assert_equal first.id, second.id
+    assert_equal 1, MarketplaceSubscriptionEvent.count
+  end
+
+  test "an agreement event is stored under its agreement, a licence event under its ARN" do
+    agreement = @events.record(envelope(detail_type: Billing::MarketplaceEvents::CREATED))
+    licence = @events.record(
+      envelope(id: "ev-2", detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+               detail: { "license" => { "arn" => "arn:lic:1" } })
+    )
+
+    assert_equal "agmt-1", agreement.agreement_id
+    assert_nil agreement.license_arn, "agreement events carry no licence ARN at all"
+    assert_equal "arn:lic:1", licence.license_arn
+  end
+
+  # The race this table exists for: the agreement is created when the buyer
+  # subscribes, the licence row when they reach the fulfilment page.
+  test "an event with nothing to apply it to is kept, not dropped" do
+    @events.record(envelope)
+
+    assert_equal 0, @events.apply_pending
+    assert_equal 1, MarketplaceSubscriptionEvent.unapplied.count
+  end
+
+  test "it applies the moment the licence appears" do
+    @events.record(envelope)
+    license = create(:marketplace_license, agreement_id: "agmt-1")
+
+    assert_equal 1, @events.apply_pending
+    assert license.reload.active?
+    assert MarketplaceSubscriptionEvent.sole.applied?
+  end
+
+  test "a licence created later has its waiting events replayed for it" do
+    @events.record(envelope)
+    license = create(:marketplace_license, agreement_id: "agmt-1")
+
+    assert @events.apply_for(license).active?
+  end
+
+  test "an ended agreement closes the licence and stops the company" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    @events.apply_pending
+
+    assert license.reload.ending?, "ending, not ended: the final window has not opened yet"
+    assert license.meterable?, "the last hour is still reportable"
+    assert company.reload.billing_blocked?
+  end
+
+  # The sharp one. AWS opens a one-hour window on this event and the hourly
+  # schedule cannot serve it, so the usage goes before the state moves.
+  test "a deprovisioned licence is metered before it is ended" do
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
+
+    metered_while_meterable = nil
+    @meter.expect(:call, []) { |arg| metered_while_meterable = arg.meterable?; arg == license }
+
+    @events.apply_pending
+
+    assert metered_while_meterable, "metered after finish! the usage would be refused"
+    assert license.reload.ended?
+    @meter.verify
+  end
+
+  # Out of order is normal, and the machine is what refuses it.
+  test "a creation that arrives after an ending does not reopen the licence" do
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1")
+    license.close!
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::CREATED))
+
+    @events.apply_pending
+
+    assert license.reload.ending?
+  end
+
+  test "an amendment moves the offer identifier and nothing else" do
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1")
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::AMENDED,
+               detail: { "agreement" => { "id" => "agmt-1" }, "offer" => { "id" => "offer-new" } })
+    )
+
+    @events.apply_pending
+
+    assert_equal "offer-new", license.reload.offer_identifier
+    assert license.active?
+  end
+
+  test "a failure leaves the event for the next sweep, with the reason on it" do
+    create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
+    @meter.expect(:call, nil) { raise "AWS said no" }
+
+    assert_equal 0, @events.apply_pending
+
+    event = MarketplaceSubscriptionEvent.sole
+    assert_not event.applied?
+    assert_equal "AWS said no", event.failure
+  end
+
+  private
+
+  def envelope(id: "ev-1", source: Billing::MarketplaceEvents::SOURCE,
+               detail_type: Billing::MarketplaceEvents::CREATED, detail: nil)
+    {
+      "id" => id,
+      "source" => source,
+      "detail-type" => detail_type,
+      "time" => "2026-10-23T10:00:00Z",
+      "detail" => detail || { "agreement" => { "id" => "agmt-1" } }
+    }
+  end
+end

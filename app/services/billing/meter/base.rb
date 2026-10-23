@@ -15,6 +15,11 @@ module Billing
 
       def provider = self.class.provider
 
+      # Whether this provider should be run at all on this installation. A
+      # disabled one claims no ledger row, so an installation that does not sell
+      # the listing does not accumulate an hourly row nobody can ever deliver.
+      def enabled? = true
+
       # @param report [CapacityMeterReport] the claimed row for this hour
       # @return [String] the provider's identifier for the accepted record
       def deliver(report)

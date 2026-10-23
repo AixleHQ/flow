@@ -718,6 +718,25 @@ trial:
 # buyer's subscription issued.
 aws_marketplace:
   product_code: <%= ENV['AWS_MARKETPLACE_PRODUCT_CODE'] %>
+  # The SaaS listing, which we sell and host, as against the container product
+  # above which a buyer runs in their own account. Both empty everywhere but the
+  # one installation that sells each, and empty is what stops the adapter
+  # dialling out at all.
+  #
+  # The role lives in the seller account and is assumed from here, because a SaaS
+  # metering call must be signed by the account that owns the listing while this
+  # application runs in another. Neither value is a secret — an account id and a
+  # product code — so both belong in configuration rather than in a secret.
+  saas:
+    product_code: <%= ENV['AWS_MARKETPLACE_SAAS_PRODUCT_CODE'] %>
+    seller_role_arn: <%= ENV['AWS_MARKETPLACE_SELLER_ROLE_ARN'] %>
+    # The listing's region, not the cluster's.
+    region: <%= ENV['AWS_MARKETPLACE_SAAS_REGION'] %>
+    # Subscription events, delivered here by a rule in the seller account. This
+    # queue is in THIS account, so it is read with the pod's own identity and
+    # not with the role above — the one call in this feature that is not signed
+    # as the seller. Empty leaves the reader idle and metering unaffected.
+    events_queue_url: <%= ENV['AWS_MARKETPLACE_EVENTS_QUEUE_URL'] %>
 
 stripe:
   secret_key: <%= ENV['STRIPE_SECRET_KEY'] %>

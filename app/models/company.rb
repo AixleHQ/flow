@@ -39,6 +39,10 @@ class Company < ApplicationRecord
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
   has_many :billing_cancellations, dependent: :delete_all
+  # Nullified rather than destroyed: deleting a workspace does not cancel an AWS
+  # subscription, and a licence that outlives its company is exactly the state
+  # somebody has to see — AWS is still billing and nobody can reach the product.
+  has_one :marketplace_license, dependent: :nullify
   has_many :feature_flag_overrides, dependent: :delete_all
   # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
   # No `dependent:` — the row's before_destroy would abort destroying a metered company.
@@ -71,7 +75,27 @@ class Company < ApplicationRecord
   # an ended subscription both need a new card through Checkout, while a failed
   # payment needs its open invoice paid — a second subscription would bill the
   # same metered minutes twice.
-  BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed].freeze
+  # `awaiting_subscription` is not a problem to be fixed: a Marketplace workspace
+  # exists from the moment its buyer registers, and AWS confirms the agreement
+  # separately. Metering records sent before that confirmation are discarded, so
+  # the workspace waits rather than runs.
+  BILLING_BLOCK_REASONS = %w[allowance canceled payment_failed awaiting_subscription].freeze
+
+  # Who sends this company its invoice. One installation can hold more than one
+  # answer, which is why this is a column rather than a deployment mode: the
+  # hosted product bills some companies through Stripe and carries others, and
+  # AWS will bill a third kind.
+  #
+  # `none` is both a company we carry and one nobody has ever charged. The two
+  # are told apart by `managed_by_aixle`, which answers a different question —
+  # whether we forgive the bill, not who sends it.
+  BILLING_PROVIDER_NONE = "none"
+  BILLING_PROVIDER_STRIPE = "stripe"
+  BILLING_PROVIDER_AWS_MARKETPLACE = "aws_marketplace"
+
+  BILLING_PROVIDERS = [
+    BILLING_PROVIDER_NONE, BILLING_PROVIDER_STRIPE, BILLING_PROVIDER_AWS_MARKETPLACE
+  ].freeze
 
   # What a company we carry (`managed_by_aixle`) is given when it is made. Its
   # admins cannot change it; we can, from the admin.
@@ -94,6 +118,7 @@ class Company < ApplicationRecord
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
   validates :billing_state, inclusion: { in: BILLING_STATES }
   validates :billing_block_reason, inclusion: { in: BILLING_BLOCK_REASONS }, allow_nil: true
+  validates :billing_provider, inclusion: { in: BILLING_PROVIDERS }
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
@@ -112,6 +137,10 @@ class Company < ApplicationRecord
   before_validation :keep_managed_company_running, if: :managed_by_aixle?
   before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
   before_validation :forget_billing_block, unless: :billing_blocked?
+  # Three paths write a Stripe customer — Checkout, the webhook, the admin — and
+  # the column has to be true for all of them or the admin shows `none` beside a
+  # company that is paying.
+  before_validation :record_stripe_as_the_payer, if: :acquiring_a_stripe_customer?
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }
@@ -121,6 +150,8 @@ class Company < ApplicationRecord
   def billing_blocked? = billing_state == "blocked"
 
   def billing_cancellation_scheduled? = billing_active? && billing_cancels_at.present?
+
+  def billing_payer = Billing::Payer.for(self)
 
   # The one word the billing screen and the banner are written against.
   def billing_status
@@ -235,6 +266,17 @@ class Company < ApplicationRecord
 
   # A company that is running again has no reason to be stopped, and an unpaid
   # invoice it was pointed at belongs to the stop that has just been undone.
+  def acquiring_a_stripe_customer?
+    # Only from nothing: a company AWS bills must never be re-pointed by a
+    # customer id left over from before.
+    stripe_customer_id.present? && will_save_change_to_stripe_customer_id? &&
+      billing_provider == BILLING_PROVIDER_NONE
+  end
+
+  def record_stripe_as_the_payer
+    self.billing_provider = BILLING_PROVIDER_STRIPE
+  end
+
   def forget_billing_block
     self.billing_block_reason = nil
     self.billing_unpaid_invoice_url = nil
@@ -267,7 +309,7 @@ class Company < ApplicationRecord
                    "is required: this installation meters its capacity to AWS Marketplace, " \
                    "where unlimited cannot be expressed")
       # Where we host, unlimited is free, and free is only for a company we carry.
-      elsif Deployment.saas? && !managed_by_aixle? && !leaving_management?
+      elsif billing_payer.bills? && !leaving_management?
         errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY)
       end
       return
@@ -278,7 +320,7 @@ class Company < ApplicationRecord
     end
 
     requested = @session_concurrency_limit.to_i
-    return if requested >= Deployment.minimum_workers || requested == SessionConcurrencyLimit.for_company(id)
+    return if requested >= billing_payer.minimum_workers || requested == SessionConcurrencyLimit.for_company(id)
 
     errors.add(:session_concurrency_limit, SessionConcurrencyLimit.below_minimum_workers)
   end

@@ -33,6 +33,37 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Company settings**: a workspace billed through AWS Marketplace follows the
+  subscription itself. Cancelling in AWS stops the workspace, and the usage from
+  the last partial hour is reported inside the one hour AWS allows for it rather
+  than waiting for the next hourly run, which would miss it. Notifications that
+  arrive before the workspace exists are kept and applied when it does, and one
+  that arrives late or twice cannot move a finished subscription backwards.
+  Operators: this needs `AWS_MARKETPLACE_EVENTS_QUEUE_URL`; without it metering
+  still runs but cancellations are never noticed.
+- **Sign-in & onboarding**: a workspace created from an AWS Marketplace
+  subscription can be billed from the moment it exists. Flow asks AWS what state
+  the agreement is in while the buyer is registering, instead of waiting to be
+  told, so the hours between subscribing and the notification arriving are no
+  longer lost. A subscription AWS does not confirm leaves the workspace waiting
+  rather than running unbilled. Operators: this needs
+  `aws-marketplace:DescribeAgreement` on the seller role.
+- **Sign-in & onboarding**: a buyer who subscribes to Aixle Flow on AWS
+  Marketplace is sent to a page of ours that sets their workspace up. They are
+  signed out first and create a new workspace, confirming the address by email
+  as any other signup does — the subscription proves the purchase, not the
+  address. Returning from Manage subscriptions reaches the workspace they
+  already made rather than making a second one. The new workspace is billed by
+  AWS, is not offered our free worker-hours, and waits until AWS confirms the
+  agreement before it runs. Operators: this needs
+  `AWS_MARKETPLACE_SAAS_PRODUCT_CODE` and `AWS_MARKETPLACE_SELLER_ROLE_ARN`;
+  without them the page answers 404 and nothing else changes.
+- **Admin**: a company's page and the companies list show which system bills it
+  — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
+  It is read-only: the value follows from a subscription existing, so it is not
+  something to type. Existing companies are filled in by a migration, with one
+  that Aixle carries counted as billed by nobody even if Stripe still holds a
+  customer for it.
 
 ### Changed
 - **Triggers & gates**: a chat trigger listens in exactly one channel connected
@@ -52,6 +83,12 @@ governance, community health — carry none.
   them (and the `channel_rename` and `group_rename` events) to the Slack app, and
   set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
   app once to pick them up.
+
+- **Company settings**: a workspace billed through AWS Marketplace is no longer
+  offered a card. Adding one would be a second bill for capacity AWS already
+  charges for; the billing screens say where to manage it instead. A workspace
+  that acquires a Stripe customer now records Stripe as its payer, so the admin
+  shows who bills it rather than `none`.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.
