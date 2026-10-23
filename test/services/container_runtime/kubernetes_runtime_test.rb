@@ -126,7 +126,7 @@ module ContainerRuntime
         client
       end
 
-      WebSocket::Client::Simple.stub(:connect, connect) do
+      ExecWebsocket.stub(:connect, connect) do
         assert @runtime.write_file(handle, "/tmp/file.txt", "hello")
       end
 
@@ -150,7 +150,7 @@ module ContainerRuntime
 
       result = nil
       logs = capture_rails_log do
-        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+        ExecWebsocket.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
       end
 
       assert_equal [ [ "partial\n" ], [], 0 ], result
@@ -173,7 +173,7 @@ module ContainerRuntime
 
       result = nil
       logs = capture_rails_log do
-        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+        ExecWebsocket.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
       end
 
       assert_equal 0, result[2]
@@ -188,7 +188,7 @@ module ContainerRuntime
       @runtime.stubs(:websocket_headers).returns({})
 
       cancelled_in_connect = ->(_url, **_options, &_block) { raise Temporalio::Error::CanceledError, "Activity canceled" }
-      WebSocket::Client::Simple.stub(:connect, cancelled_in_connect) do
+      ExecWebsocket.stub(:connect, cancelled_in_connect) do
         assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
       end
 
@@ -199,7 +199,7 @@ module ContainerRuntime
         client.trigger(:message, [ 3 ].pack("C") + { status: "Success" }.to_json)
         client
       end
-      WebSocket::Client::Simple.stub(:connect, cancelled_in_close) do
+      ExecWebsocket.stub(:connect, cancelled_in_close) do
         assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
       end
     end
@@ -239,8 +239,8 @@ module ContainerRuntime
         trigger(:message, [ 3 ].pack("C") + status)
       end
 
-      def open?
-        @open
+      def closed?
+        !@open
       end
 
       def close
@@ -270,6 +270,92 @@ module ContainerRuntime
       @runtime.expects(:copy_from).with("handle", "/workspace/note.txt").returns(tar_bytes)
 
       assert_equal "file body", @runtime.read_file("handle", "/workspace/note.txt")
+    end
+
+    # == Exec against a stand-in API server ==
+    #
+    # FakeKubernetesExecServer speaks the real channel.k8s.io protocol over a
+    # socket, and the runtime reaches it through its ordinary kubeconfig path.
+
+    test "read_file copies a megabyte of binary out of the pod byte for byte" do
+      content = Random.bytes(1024 * 1024)
+      pod = lambda do |command, _stdin|
+        assert_equal [ "/bin/sh", "-c", "tar -cf - -C / workspace/e2e/report.tar.gz" ], command
+        [ build_test_tar("workspace/e2e/report.tar.gz", content), "", 0 ]
+      end
+
+      with_exec_server(pod) do
+        assert_equal content, @runtime.read_file(exec_handle, "/workspace/e2e/report.tar.gz")
+      end
+    end
+
+    # Production measured 12.66M allocations and 13 s for one 1 MB read_file
+    # (PALAD-AI-RAILS-45); the bound leaves a wide margin over today's cost.
+    test "read_file of a megabyte allocates per chunk, not per byte" do
+      tar = build_test_tar("workspace/blob", Random.bytes(1024 * 1024))
+
+      with_exec_server(->(_command, _stdin) { [ tar, "", 0 ] }) do
+        before = GC.stat(:total_allocated_objects)
+        @runtime.read_file(exec_handle, "/workspace/blob")
+
+        assert_operator GC.stat(:total_allocated_objects) - before, :<, 100_000
+      end
+    end
+
+    test "write_file streams the archive over stdin, closes only stdin, and reads the exit status" do
+      content = Random.bytes(300 * 1024)
+      written = {}
+      pod = lambda do |command, stdin|
+        assert_equal [ "/bin/sh", "-c", "tar -xf - -C /" ], command
+        Gem::Package::TarReader.new(StringIO.new(stdin)) do |tar|
+          tar.each { |entry| written[entry.full_name] = [ entry.header.mode, entry.read ] }
+        end
+        [ "", "", 0 ]
+      end
+
+      server = with_exec_server(pod) do
+        assert @runtime.write_file(exec_handle, "/workspace/.aixle/payload.bin", content, mode: 0o600)
+      end
+
+      assert_equal({ "workspace/.aixle/payload.bin" => [ 0o600, content ] }, written)
+      assert_equal "v5.channel.k8s.io", server.execs.last.protocol
+    end
+
+    test "exec reports the command's stdout, stderr and non-zero exit code" do
+      with_exec_server(->(_command, _stdin) { [ "first\nsecond\n", "oops\n", 3 ] }) do
+        assert_equal [ [ "first\n", "second\n" ], [ "oops\n" ], 3 ], @runtime.exec(exec_handle, [ "false" ], timeout: 5)
+      end
+    end
+
+    test "an exec whose connection drops before the exit status fails instead of reading as success" do
+      with_exec_server(->(_command, _stdin) { [ "partial", "", 0 ] }, ending: :eof_before_status) do
+        assert_equal 1, @runtime.exec(exec_handle, [ "true" ], timeout: 5).last
+      end
+    end
+
+    test "an exec the API server never answers times out and hangs up" do
+      listener = TCPServer.new("127.0.0.1", 0)
+      hung_up = Queue.new
+      silent = Thread.new do
+        socket = listener.accept
+        socket.read # returns only once the client closes its end
+        hung_up << true
+      end
+
+      with_kubeconfig("http://127.0.0.1:#{listener.addr[1]}") do
+        assert_equal 1, @runtime.exec(exec_handle, [ "true" ], timeout: 1).last
+      end
+
+      assert hung_up.pop(timeout: 5), "the exec left its connection open"
+    ensure
+      silent&.kill
+      listener&.close
+    end
+
+    test "a connection that drops after the exit status keeps the command's result" do
+      with_exec_server(->(_command, _stdin) { [ "done\n", "", 0 ] }, ending: :eof_after_status) do
+        assert_equal [ [ "done\n" ], [], 0 ], @runtime.exec(exec_handle, [ "true" ], timeout: 5)
+      end
     end
 
     test "remove_image is no-op" do
@@ -1241,6 +1327,35 @@ module ContainerRuntime
     ensure
       acceptor&.kill
       server&.close
+    end
+
+    def exec_handle
+      OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+    end
+
+    def with_exec_server(pod, **options)
+      server = FakeKubernetesExecServer.new(**options, &pod).start
+      with_kubeconfig(server.base_url) { yield server }
+      assert_empty server.errors
+      server
+    ensure
+      server&.stop
+    end
+
+    def with_kubeconfig(server_url)
+      kubeconfig = Tempfile.new([ "kubeconfig", ".yml" ])
+      kubeconfig.write({
+        "apiVersion" => "v1", "kind" => "Config", "current-context" => "fake",
+        "clusters" => [ { "name" => "fake", "cluster" => { "server" => server_url } } ],
+        "contexts" => [ { "name" => "fake", "context" => { "cluster" => "fake", "user" => "fake" } } ],
+        "users" => [ { "name" => "fake", "user" => {} } ]
+      }.to_yaml)
+      kubeconfig.flush
+      Settings.kubernetes.stubs(:service_account_token_path).returns("/nonexistent/token")
+      Settings.kubernetes.stubs(:kubeconfig_path).returns(kubeconfig.path)
+      yield
+    ensure
+      kubeconfig&.close!
     end
 
     def capture_rails_log

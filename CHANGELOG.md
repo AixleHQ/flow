@@ -59,6 +59,10 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Tasks**: agents can attach files of several megabytes to a task, and an
+  attachment no longer slows other agents down. Reading a file out of an agent's
+  container cost seconds of server CPU per megabyte, so a file over about 4 MB
+  timed out unattached, and every tool call served alongside it waited.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address
