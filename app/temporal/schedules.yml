@@ -233,6 +233,22 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Drains the AWS Marketplace subscription queue: agreements created and ended,
+  # licences updated and deprovisioned.
+  #
+  # Every minute, because one of those events opens a one-hour window to report
+  # a cancelling customer's last usage and the rest of that hour is spent
+  # measuring and sending. The cost of the cadence is one long-polled receive
+  # against an empty queue.
+  #
+  # SKIP overlap: two drains would read the same messages inside one visibility
+  # timeout and apply the same events twice. Both halves are idempotent, so an
+  # overlap would be safe rather than wrong -- but it would also be pointless.
+  - workflow: marketplace_events_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Usage rollup for the tenant report. Five minutes after metering, because each
   # hour copies the ledger row the meter writes. It revisits the last three hours,
   # so a late ledger row or a late transition still lands, and measures any hour

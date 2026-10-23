@@ -17,6 +17,12 @@ workflows:
       - name: billing_report_capacity_activity
         task_queue: aixle_ruby
 
+  - name: marketplace_events_workflow
+    owner: aixle_ruby
+    activities:
+      - name: billing_drain_marketplace_events_activity
+        task_queue: aixle_ruby
+
   - name: usage_rollup_workflow
     owner: aixle_ruby
     activities:

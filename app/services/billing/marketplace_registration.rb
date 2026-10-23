@@ -8,11 +8,12 @@ module Billing
   # Manage subscriptions whenever they like, with a fresh token each time, and an
   # arrival that made a second workspace would split their data in two.
   class MarketplaceRegistration
-    def initialize(client: MarketplaceSellerClient.new)
+    def initialize(client: MarketplaceSellerClient.new, events: MarketplaceEvents.new)
       @client = client
+      @events = events
     end
 
-    attr_reader :client
+    attr_reader :client, :events
 
     def configured? = client.configured?
 
@@ -58,7 +59,10 @@ module Billing
       license.offer_identifier = agreement.offer_id if agreement.offer_id.present?
       license.confirm if agreement.live? && license.may_confirm?
       license.save!
-      license
+      # Anything AWS sent before this row existed, in the order it happened.
+      # A cancellation that beat the buyer here closes the licence now rather
+      # than a minute later, which matters when the minute is billable.
+      events.apply_for(license)
     end
   end
 end
