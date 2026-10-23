@@ -36,6 +36,11 @@ module Billing
         refused = outcomes.reject(&:accepted?)
         raise ::Billing::MarketplaceSellerClient::Error, refusal(refused) if refused.any?
 
+        # Written here rather than returned, because the contract every adapter
+        # shares is one summary line. AWS's own receipt for each record is
+        # worth more than that line: it is the only evidence of acceptance that
+        # is not our own word.
+        report.update!(receipts: receipts(outcomes))
         summary(report, outcomes, unbillable)
       end
 
@@ -77,6 +82,13 @@ module Billing
           .where(companies: { billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE })
           .pluck(:company_id, :license_arn, :customer_aws_account_id)
           .to_h { |company_id, arn, account| [ company_id, [ arn, account ] ] }
+      end
+
+      # Licence -> what AWS called the record. A duplicate carries no id of its
+      # own, so it is marked as the duplicate it is rather than left looking
+      # like a record that went missing.
+      def receipts(outcomes)
+        outcomes.to_h { |o| [ o.license_arn, o.metering_record_id || (o.duplicate? ? "duplicate" : nil) ] }
       end
 
       # Carried on the ledger row so an hour reads afterwards as what it was: a

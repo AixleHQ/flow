@@ -772,6 +772,32 @@ installation: counted, deliberately not sent.
 
 ---
 
+## 8.5 Keep what AWS calls the record
+
+`BatchMeterUsage` answers every accepted record with a `MeteringRecordId`. The
+adapter read it and threw it away, so "the hour was billed" rested on our own
+reading of a `Success` and the next independent check was the customer's
+invoice, hours behind. On 23 October that gap cost an afternoon: two hours were
+accepted and nothing outside this application could confirm it.
+
+Kept now. The hourly path writes `{license_arn => MeteringRecordId}` into
+`capacity_meter_reports.receipts`; the final meter appends `receipt=` to the
+line it records on the event. A replay carries no new id, so it is written as
+`duplicate` rather than left blank, which would read like a record that went
+missing.
+
+`external_id` still carries our own summary. The distinction is the point:
+one is what we believe happened, the other is what the service says.
+
+**Who puts this in the buyer's bill.** Nothing of ours. AWS Marketplace turns
+accepted metering records into line items on the buyer's account, which reach
+their Cost and Usage Report and, from there, Cost Explorer. The queue in this
+design is inbound only -- subscription events -- and has no part in billing.
+The lag between an accepted record and a visible charge is that pipeline's,
+which is why a receipt held here is worth more than a view of theirs.
+
+---
+
 ## 8.4 The final meter answers for itself
 
 The hourly meter leaves a ledger row per hour carrying its state, its attempts
