@@ -68,7 +68,8 @@ class Web::ApplicationController < ApplicationController
         },
         # Present only while a free allowance is running or spent, so every screen
         # can say so rather than leaving a person to work out why nothing starts.
-        trial: InertiaRails.always { trial_share }
+        trial: InertiaRails.always { trial_share },
+        marketplace: InertiaRails.always { marketplace_share }
       )
     else
       shared
@@ -79,6 +80,21 @@ class Web::ApplicationController < ApplicationController
 
   # Nil everywhere but the hosted product, and nil there for a company somebody
   # is paying for.
+  # What a workspace AWS bills is told while it is stopped. The allowance
+  # banner withholds itself from this payer -- it has no allowance and the card
+  # it offers is refused -- so without this such a workspace says nothing at
+  # all, and sessions that never start look like a fault.
+  #
+  # Nothing while it is running: the subscription lives in the buyer's AWS
+  # account and there is no number of ours worth putting on every screen.
+  def marketplace_share
+    return nil unless Deployment.saas?
+    return nil if current_company.nil? || current_company.billing_active?
+    return nil unless current_company.billing_payer.aws_marketplace?
+
+    { status: current_company.billing_status }
+  end
+
   def trial_share
     return nil unless Deployment.saas?
     return nil if current_company.nil? || current_company.billing_active?
