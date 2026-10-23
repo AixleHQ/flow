@@ -100,6 +100,8 @@ governance, community health — carry none.
   how many sessions need input and names them on hover, and the drawer starts
   in **Interactive** instead. A Custom run can no longer start such a session
   automatically, whether from the drawer or the API.
+- **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
+  Slack, and describes the `/help` list as the app sends it, naming no project.
 
 ## [1.5.0] - 2026-10-20
 
