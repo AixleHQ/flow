@@ -128,6 +128,35 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert_equal "AWS said no", event.failure
   end
 
+  # The bug the first real subscription found: the workspace is created blocked
+  # when the licence is still pending, and nothing lifted it. The customer paid
+  # and the workspace never started.
+  test "a confirmation starts the workspace that was waiting for it" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                               billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+    create(:marketplace_license, agreement_id: "agmt-1", company: company)
+    @events.record(envelope)
+
+    @events.apply_pending
+
+    assert company.reload.billing_active?
+    assert_nil company.billing_block_reason
+  end
+
+  # Only that reason. A company stopped for an unpaid invoice or a spent
+  # allowance is not started by an agreement message.
+  test "a confirmation does not start a workspace blocked for another reason" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                               billing_state: "blocked", billing_block_reason: "payment_failed")
+    create(:marketplace_license, agreement_id: "agmt-1", company: company)
+    @events.record(envelope)
+
+    @events.apply_pending
+
+    assert company.reload.billing_blocked?
+    assert_equal "payment_failed", company.billing_block_reason
+  end
+
   private
 
   def envelope(id: "ev-1", source: Billing::MarketplaceEvents::SOURCE,

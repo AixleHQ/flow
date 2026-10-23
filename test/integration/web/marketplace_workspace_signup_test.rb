@@ -91,8 +91,11 @@ class Web::MarketplaceWorkspaceSignupTest < ActionDispatch::IntegrationTest
   end
 
   # AWS discards metering for an agreement it has not confirmed, so a workspace
-  # that ran in that window would be free to its buyer and costly to us.
-  test "a workspace waits until AWS confirms the agreement" do
+  # that ran in that window would be free to its buyer and costly to us. What
+  # decides it is the agreement's own status, asked at registration -- not the
+  # arrival, which proves only that somebody pressed a button.
+  test "a workspace waits while AWS has not confirmed the agreement" do
+    @client.agreement_status = "AWAITING_ACCEPTANCE"
     arrive_from_marketplace
 
     perform_enqueued_jobs { fill_in_the_form }
@@ -102,6 +105,20 @@ class Web::MarketplaceWorkspaceSignupTest < ActionDispatch::IntegrationTest
     assert company.billing_blocked?
     assert_equal "awaiting_subscription", company.billing_block_reason
     assert_equal "awaiting_subscription", company.billing_status
+  end
+
+  # The usual case, and the one the first real subscription got wrong: by the
+  # time the buyer fills this in, the agreement is live and asking says so. A
+  # workspace created blocked here had nothing to unblock it.
+  test "a workspace whose agreement is already live starts at once" do
+    arrive_from_marketplace
+
+    perform_enqueued_jobs { fill_in_the_form }
+    get confirm_workspace_path(token: emailed_token)
+
+    company = Company.last
+    assert company.billing_active?
+    assert_nil company.billing_block_reason
   end
 
   test "a Marketplace workspace is never put on our own free allowance" do

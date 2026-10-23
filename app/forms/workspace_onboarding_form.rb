@@ -80,14 +80,17 @@ class WorkspaceOnboardingForm
   # AWS bills a Marketplace workspace, so it has no allowance to spend; and it
   # waits rather than runs until AWS confirms the agreement, because metering
   # sent before that confirmation is discarded.
+  # Blocked only while AWS has not confirmed the agreement. It usually has by
+  # now -- registration asks DescribeAgreement rather than waiting for the
+  # event -- and a workspace created blocked with nothing to unblock it is a
+  # customer who pays and cannot start.
   def billing_terms
     return { billing_state: "trialing" } if marketplace_license.nil?
 
-    {
-      billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
-      billing_state: "blocked",
-      billing_block_reason: "awaiting_subscription"
-    }
+    terms = { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE }
+    return terms.merge(billing_state: "active") if marketplace_license.active?
+
+    terms.merge(billing_state: "blocked", billing_block_reason: "awaiting_subscription")
   end
 
   # The controller sends a bound licence to sign-in instead, so reaching here
