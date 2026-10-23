@@ -733,6 +733,11 @@ aws_marketplace:
   # product code — so both belong in configuration rather than in a secret.
   saas:
     product_code: <%= ENV['AWS_MARKETPLACE_SAAS_PRODUCT_CODE'] %>
+    # The same listing's catalogue id. Needed beside the code because the two
+    # halves of the event stream name the product differently: agreement events
+    # carry only the id, licence events carry both. Without it every other
+    # product this seller account sells arrives and is kept forever.
+    product_id: <%= ENV['AWS_MARKETPLACE_SAAS_PRODUCT_ID'] %>
     seller_role_arn: <%= ENV['AWS_MARKETPLACE_SELLER_ROLE_ARN'] %>
     # The listing's region, not the cluster's.
     region: <%= ENV['AWS_MARKETPLACE_SAAS_REGION'] %>
