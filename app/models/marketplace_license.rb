@@ -6,6 +6,9 @@
 # Concurrent Agreements one account may hold several live agreements for the same
 # product, and `CustomerIdentifier` is no longer populated at all.
 class MarketplaceLicense < ApplicationRecord
+  # State machine (pending -> active, close, finish); `ended` is terminal.
+  include MarketplaceLicenseStateMachine
+
   belongs_to :company, optional: true
 
   REGISTRATION_VALID_FOR = 15.minutes
@@ -13,20 +16,14 @@ class MarketplaceLicense < ApplicationRecord
   # POST holds no session to put it in (SameSite withholds the cookie).
   generates_token_for :registration, expires_in: REGISTRATION_VALID_FOR
 
-  # Nothing here moves it yet: rows are created `pending` by the column default
-  # and the events that advance them arrive over SQS, which this does not read.
-  #
   #   pending  resolved at registration; AWS discards metering sent now
   #   active   confirmed, and metering is accepted
   #   ending   closing, with about one hour left to report the last usage
   #   ended    over; AWS accepts nothing further
   #
-  # When that reader is built this belongs in app/state_machines, and the reason
-  # is the delivery rather than the shape: SQS does not order messages and
-  # redelivers them, so a stale `active` can arrive after `ended`. Assigned, it
-  # would be applied in silence -- and this column decides whether an hour is
-  # billed, so applying it means charging for an hour nobody ran, or dropping
-  # the last one. A machine refuses the transition instead.
+  # Which moves are legal is MarketplaceLicenseStateMachine's; this list is what
+  # the column itself will hold, so a write that goes round the machine still
+  # cannot invent a state.
   STATES = %w[pending active ending ended].freeze
 
   validates :license_arn, presence: true, uniqueness: true
@@ -39,11 +36,6 @@ class MarketplaceLicense < ApplicationRecord
   # Somebody is being billed and has no way into the product. The first report of
   # that must not be theirs.
   scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
-
-  def pending? = subscription_state == "pending"
-  def active? = subscription_state == "active"
-  def ending? = subscription_state == "ending"
-  def ended? = subscription_state == "ended"
 
   def bound? = company_id.present?
 
