@@ -27,23 +27,40 @@ module Billing
 
     attr_reader :client
 
-    # Answers the outcomes AWS gave, or [] when there was nothing to send.
+    NOTHING = "nothing to send"
+
+    # Answers a line saying what it did, which the caller records against the
+    # event that caused it. The hourly meter has a ledger row for this; without
+    # one here, whether the last hour of a cancelling customer was billed could
+    # only be read off their own invoice, hours later.
+    #
     # Deliberately does not raise on a refusal: the caller's next step is to end
     # the licence, and a licence left open because its last minutes were refused
     # would go on being billed by the schedule for an entitlement AWS has
-    # already revoked.
+    # already revoked. The refusal goes in the line instead.
     def call(license)
-      return [] unless license.meterable? && client.configured?
+      return NOTHING unless license.meterable? && client.configured?
 
       usages = usages_for(license)
-      return [] if usages.empty?
+      return NOTHING if usages.empty?
 
-      client.batch_meter_usage(usages)
-    rescue MarketplaceSellerClient::Error
-      []
+      summary(usages, client.batch_meter_usage(usages))
+    rescue MarketplaceSellerClient::Error => e
+      "refused: #{e.message}"
     end
 
     private
+
+    # Minutes as well as counts: the whole point of this path is the part-hour
+    # the schedule cannot reach, and a reader needs to see that it was not zero.
+    def summary(usages, outcomes)
+      already = outcomes.count(&:duplicate?)
+      refused = outcomes.reject(&:accepted?)
+      line = "sent=#{outcomes.size - already}:already=#{already}:minutes=#{usages.sum(&:quantity)}"
+      return line if refused.empty?
+
+      "#{line}:refused=#{refused.map(&:status).join(',')}"
+    end
 
     def usages_for(license)
       now = Time.current.utc

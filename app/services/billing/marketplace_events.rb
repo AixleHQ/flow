@@ -76,8 +76,7 @@ module Billing
       license = license_for(event)
       return false if license.nil?
 
-      move(license, event)
-      event.applied!(license)
+      event.applied!(license, metered: move(license, event))
       true
     rescue StandardError => e
       event.failed!(e.message)
@@ -112,6 +111,7 @@ module Billing
       MarketplaceLicense.find_by(agreement_id: event.agreement_id) if event.agreement_id.present?
     end
 
+    # Answers what was metered, if anything, so the caller can record it.
     def move(license, event)
       case event.detail_type
       when CREATED then confirm(license, event)
@@ -155,9 +155,10 @@ module Billing
     # same thing for Stripe in its first line; this path was written again and
     # walked into it.
     def close(license)
-      final_meter.call(license)
+      metered = final_meter.call(license)
       license.close! if license.may_close?
       block(license.company)
+      metered
     end
 
     # The one hour AWS allows starts here, and the hourly schedule cannot serve
@@ -169,9 +170,10 @@ module Billing
     # hour. AWS answers the second copy DuplicateRecord, which the adapter
     # counts as accepted.
     def deprovision(license)
-      final_meter.call(license)
+      metered = final_meter.call(license)
       license.finish! if license.may_finish?
       block(license.company)
+      metered
     end
 
     def block(company)

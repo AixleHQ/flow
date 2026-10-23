@@ -63,6 +63,16 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     assert_empty @client.recorded.select { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
   end
 
+  # Minutes as well as counts: this path exists for the part-hour the schedule
+  # cannot reach, and a reader needs to see it was not zero.
+  test "it says what it sent" do
+    change(2, Time.utc(2026, 10, 23, 8))
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      assert_equal "sent=2:already=0:minutes=160", @meter.call(@license)
+    end
+  end
+
   test "a licence AWS no longer accepts usage for is not metered" do
     @license.finish!
     change(5, Time.utc(2026, 10, 23, 8))
@@ -75,7 +85,7 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
   test "an installation that sells nothing meters nothing" do
     @client.configured = false
 
-    assert_empty @meter.call(@license)
+    assert_equal Billing::MarketplaceFinalMeter::NOTHING, @meter.call(@license)
   end
 
   # The caller's next step is to end the licence. A refusal that propagated
@@ -86,7 +96,8 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     @client.failure = Billing::MarketplaceSellerClient::Error.new("AWS said no")
 
     travel_to Time.utc(2026, 10, 23, 10, 20) do
-      assert_empty @meter.call(@license)
+      assert_equal "refused: AWS said no", @meter.call(@license),
+                   "the refusal has to be legible afterwards: nothing else records this path"
     end
   end
 end
