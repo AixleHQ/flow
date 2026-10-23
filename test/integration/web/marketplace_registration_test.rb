@@ -134,4 +134,21 @@ class Web::MarketplaceRegistrationTest < ActionDispatch::IntegrationTest
       assert_match(/expired/i, flash[:alert])
     end
   end
+  # AWS fetches the fulfilment URL before it will accept it and refuses
+  # anything that is not a 200, so the POST-only route could never have been
+  # given to them. It answers without a session, because whoever opens it has
+  # none.
+  test "the fulfilment URL answers a plain visit with a page" do
+    get "/marketplace/aws/register"
+
+    assert_response :success
+  end
+
+  test "it answers even when nothing is configured, because AWS checks it first" do
+    Settings.stubs(:aws_marketplace).returns(Hashie::Mash.new(saas: {}))
+
+    get "/marketplace/aws/register"
+
+    assert_response :success
+  end
 end
