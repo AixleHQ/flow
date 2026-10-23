@@ -1010,13 +1010,15 @@ marketing copy.
   but the premise behind "the key is LicenseArn, not CustomerIdentifier" was taken
   from the documentation and has never been confirmed for this listing. Worth
   settling before the keying is relied on for anything else.
-- **What a Marketplace workspace is told when it is stopped.** Nothing, as of
-  23 October, and that is the fix rather than the answer. It used to be told it had
-  spent its hundred free worker-hours and should add a card -- an allowance it was never
-  offered, and a Checkout its payer is refused. The allowance banner now withholds
-  itself from a payer AWS bills, which stops the lie; what should appear instead --
-  "waiting for AWS to confirm", "your AWS subscription ended, resubscribe in
-  Marketplace" -- is the customer-facing payer display, still unbuilt.
+- ~~**What a Marketplace workspace is told when it is stopped.**~~ Answered 23 October.
+  It was being told it had spent its hundred free worker-hours and should add a card --
+  an allowance it was never offered, and a Checkout its payer is refused. The allowance
+  banner now withholds itself from a payer AWS bills, and a banner of its own stands
+  beside it: *waiting* while AWS has not confirmed the subscription, which says plainly
+  that nothing needs doing and offers no action; *ended* when it has lapsed, with a link
+  to the buyer's own AWS Marketplace subscriptions. Silent while the workspace runs --
+  the subscription is managed in the buyer's account and no number of ours belongs on
+  every screen.
 - **Where a subscribed-but-unregistered customer is shown**, and who is expected to look.
   **Seen for real on 23 October, on the first subscription.** The buyer's domain already
   had a workspace, so `domain_is_free` refused them with "ask someone there to invite
