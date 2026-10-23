@@ -704,6 +704,34 @@ anywhere. It is stored (§6) and otherwise ignored.
 
 ---
 
+## 8.1 What the first paying customer proved, 23 October
+
+Metering works end to end. The hour `11:00Z` went as `sent=1` against a real
+licence, which is the one link no test could reach: capacity measured, company
+matched to its licence, the seller role assumed from production, and
+`BatchMeterUsage` accepted by AWS.
+
+**The replay window is not theoretical.** The hour `10:00Z` failed at 12:05 on
+a usage record missing the buyer's account id. After the fix shipped, the next
+run picked it up out of the ledger and sent it -- `attempts: 1`, `sent=1`,
+inside the six hours AWS still accepts. A defect found and fixed the same day
+cost no billable hour at all. That is what the window was for, and it had never
+been exercised against a real refusal.
+
+**The subscription's status in the buyer console tracks the first usage
+record.** It read `Pending` for three hours while metering kept failing, beside
+a third-party SaaS subscription in the same account reading `Active`, and
+turned `Active` by itself the moment a record landed. Nothing was done to it.
+So that label is a downstream signal of metering rather than of the agreement,
+which is `ACTIVE` from both sides throughout -- useful to know, because a
+seller watching only the console would read a working subscription as broken,
+and a broken one as merely slow.
+
+`unbilled=4` in every summary is the four Stripe companies on the same
+installation: counted, deliberately not sent.
+
+---
+
 ## 9. Where this is tested
 
 Staging, and it is already shaped for it — `DEPLOYMENT_MODE: saas`,
