@@ -341,6 +341,18 @@ that turns hyphens into underscores. The controller therefore reads
 The token is single-use and short-lived, so the exchange happens on arrival; what is
 carried onward is the resolved licence, not the token.
 
+**Staging's own front door is in the way, and only for the POST.** The public
+entrypoint there sits behind HTTP basic auth, and the request AWS sends is a
+form POST from the *buyer's browser* -- which is why `SameSite` governs its
+cookie at all. A password prompt in the middle of that POST leaves whether the
+body survives the retry up to the browser, and a lost body is not "try again":
+the token is spent, so the buyer has to return to Marketplace for another. So
+the two paths above skip the prompt and nothing else does. The buyer meets it
+at the next step, where the request is an ordinary GET that a retry costs
+nothing, and whoever is testing knows the password. What that opens is bounded:
+both actions answer an invalid token with a redirect to the sign-in page, which
+is itself behind the prompt, and the POST is rate-limited per IP.
+
 `ResolveCustomer` answers with `LicenseArn`, `CustomerAWSAccountId`, `ProductCode`,
 `metadata.agreement_id` — and `CustomerIdentifier`, which §3.1 says is **not populated**
 for a product on Concurrent Agreements. Nothing may key off it.
@@ -849,7 +861,7 @@ marketing copy.
 | 3 | `Billing::Meter::AwsMarketplaceSaas` | Independent of 2 — can be proved against a hand-bound licence row. An earlier version of this table put the assumed-role client here; it belongs in slice 2, because `ResolveCustomer` is a call to the same service and must be signed the same way, so the registration endpoint cannot exist without it |
 | 4 | Two providers in one run of `CapacityMeter` | Separated from 3 so a metering bug and an orchestration bug cannot be confused |
 | 5 | EventBridge consumption, the licence states **as a machine in `app/state_machines`**, and the immediate final meter on `License Deprovisioned - Manufacturer` | Needs the rule and queue, which is infrastructure work. The one-hour window (§8) makes this the slice that decides whether a cancelling customer's last hour is billed at all |
-| 6 | Staging ingress, config, and a live run against the real listing held at **Limited** visibility | The first time any of it meets AWS. Limited means the product is visible only to allowlisted AWS accounts, so we subscribe to our own product from our own account: a real agreement, real events, a real `LicenseArn`, at $0.01 a dimension. An earlier version of this row assumed a second `[TEST]` listing; the allowlist makes one unnecessary |
+| 6 | The fulfilment URL's route, config, and a live run against the real listing held at **Limited** visibility | The first time any of it meets AWS. Limited means the product is visible only to allowlisted AWS accounts, so we subscribe to our own product from our own account: a real agreement, real events, a real `LicenseArn`, at $0.01 a dimension. An earlier version of this row assumed a second `[TEST]` listing; the allowlist makes one unnecessary |
 
 Slices 1, 3 and 4 are provable in the test suite. Slices 2, 5 and 6 are not finished until
 they have run on staging against a real subscription.
