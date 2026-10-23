@@ -111,6 +111,11 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Sign-in & onboarding**: a workspace created from an AWS Marketplace
+  subscription now starts as soon as AWS has confirmed the agreement, which is
+  usually before the buyer finishes signing up. It previously waited for a
+  confirmation nothing ever acted on, so the workspace stayed stopped however
+  long you left it.
 - **Sign-in & onboarding**: opening the AWS Marketplace setup link directly now
   explains where to go instead of answering with an error. The page AWS sends a
   buyer to after subscribing is unchanged; this is what anyone else sees, and
