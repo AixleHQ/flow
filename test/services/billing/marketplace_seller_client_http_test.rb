@@ -234,4 +234,13 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
     assert_not_kind_of Billing::MarketplaceSellerClient::InvalidToken, error
     assert_match(/DisabledApiException/, error.message)
   end
+  # Reachable without credentials by design, so an empty POST is anyone's to
+  # send. It must refuse like a stale link rather than raise out of the SDK.
+  test "a missing token is refused here, before the SDK is asked" do
+    assert_raises(Billing::MarketplaceSellerClient::InvalidToken) do
+      Billing::MarketplaceSellerClient.new.resolve_customer(registration_token: nil)
+    end
+
+    assert_not_requested :post, METERING_ENDPOINT
+  end
 end

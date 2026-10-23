@@ -67,6 +67,13 @@ module Billing
     end
 
     def resolve_customer(registration_token:)
+      # The SDK answers a nil required parameter with ArgumentError, which is
+      # outside the error tree every caller rescues -- so an arrival with no
+      # token at all became a 500 rather than the same refusal a stale one
+      # gets. The endpoint is reachable without credentials by design, so that
+      # is anyone's to trigger.
+      raise InvalidToken, "no registration token" if registration_token.blank?
+
       api do
         answer = client.resolve_customer(registration_token: registration_token)
 
