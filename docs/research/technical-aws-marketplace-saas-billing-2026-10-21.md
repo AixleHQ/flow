@@ -74,6 +74,24 @@ adapter's constant character for character, and it is a **new** constant beside
 `Billing::Meter::AwsMarketplace::DIMENSION` rather than that constant changed — the
 container product's `queue_minute` is published and cannot move.
 
+**Corrected on 23 October, against the real listing.** `LicenseArn` is the key,
+but it is not sufficient on its own: a usage record carrying only `LicenseArn`
+comes back
+
+```
+ValidationException: CustomerIdentifier or CustomerAWSAccountId is required in Usage record
+```
+
+so the buyer's account id travels beside it. That is not the second keying this
+section warns about -- `ProductCode` is -- and it does not double-bill: the
+account says who, the licence says which of their agreements. `ResolveCustomer`
+returns it and §6 already stores it, so nothing new had to be learned about the
+customer; the adapter simply was not sending what it already had.
+
+This was invisible to every test. The contract test asserted the record we
+*intended* to send, and the fake answered whatever it was given. Only the live
+call could say that AWS wanted more.
+
 ---
 
 ## 2. Why this is not a deployment mode

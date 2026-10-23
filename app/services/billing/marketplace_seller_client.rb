@@ -52,8 +52,11 @@ module Billing
     SUCCESS = "Success"
     DUPLICATE = "DuplicateRecord"
 
-    # One licence's usage for one hour, as this adapter takes it.
-    Usage = Data.define(:license_arn, :dimension, :quantity, :occurred_at)
+    # One licence's usage for one hour, as this adapter takes it. Both keys
+    # travel: AWS refuses a record carrying neither CustomerIdentifier nor
+    # CustomerAWSAccountId, and the account alone cannot say which agreement
+    # the hour belongs to when one buyer holds several.
+    Usage = Data.define(:license_arn, :customer_aws_account_id, :dimension, :quantity, :occurred_at)
 
     # What came back for it, without the vendor's types.
     Outcome = Data.define(:license_arn, :status, :metering_record_id) do
@@ -133,12 +136,19 @@ module Billing
     # licence instead and refuses the other keying. Sending both would not be
     # refused — the one-record-per-hour limit counts each keying separately — it
     # would bill the hour twice.
+    #
+    # The buyer's account id is not optional in practice, whatever the schema
+    # says. Measured on 23 October against the real listing: a record carrying
+    # only LicenseArn comes back `CustomerIdentifier or CustomerAWSAccountId is
+    # required in Usage record`. It is not a second keying — it names the buyer
+    # while the licence names which of their agreements the hour is for.
     def usage_record(usage)
       {
         timestamp: usage.occurred_at,
         dimension: usage.dimension,
         quantity: usage.quantity,
-        license_arn: usage.license_arn
+        license_arn: usage.license_arn,
+        customer_aws_account_id: usage.customer_aws_account_id
       }
     end
 

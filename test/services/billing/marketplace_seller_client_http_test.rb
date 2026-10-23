@@ -155,7 +155,7 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
 
   def usage(license_arn: LICENSE_ARN, quantity: 60)
     Billing::MarketplaceSellerClient::Usage.new(
-      license_arn: license_arn, dimension: "worker_minute",
+      license_arn: license_arn, customer_aws_account_id: "444455556666", dimension: "worker_minute",
       quantity: quantity, occurred_at: Time.utc(2026, 10, 22, 9)
     )
   end
@@ -178,6 +178,9 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
 
       body["ProductCode"].nil? && record["LicenseArn"] == LICENSE_ARN &&
         record["Dimension"] == "worker_minute" && record["Quantity"] == 60 &&
+        # Measured against the real listing: without it AWS answers
+        # "CustomerIdentifier or CustomerAWSAccountId is required".
+        record["CustomerAWSAccountId"] == "444455556666" &&
         record["CustomerIdentifier"].nil?
     end
   end
