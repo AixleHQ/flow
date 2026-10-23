@@ -127,7 +127,15 @@ module Billing
     # Not the metering deadline, whatever it looks like: AWS opens the final
     # window on the deprovisioning event, not here. The company loses access
     # now and the licence stays meterable until that event arrives.
+    #
+    # But the usage goes first, because stopping the company is what makes it
+    # unmeasurable: CapacityWindow offers a blocked company nothing, and it
+    # does so for the WHOLE hour, including the part it was running. Measured
+    # afterwards there is nothing left to find. Billing::FinalUsage says the
+    # same thing for Stripe in its first line; this path was written again and
+    # walked into it.
     def close(license)
+      final_meter.call(license)
       license.close! if license.may_close?
       block(license.company)
     end
@@ -136,6 +144,10 @@ module Billing
     # it: an hour reported at five past the next hour is already outside the
     # window for any licence deprovisioned after its first five minutes. So the
     # usage goes now, before the state moves -- `finish!` makes it unmeterable.
+    # Metered again, and that is not waste: the two events arrive seconds apart
+    # and in one drain, so whichever runs first is the one that catches the
+    # hour. AWS answers the second copy DuplicateRecord, which the adapter
+    # counts as accepted.
     def deprovision(license)
       final_meter.call(license)
       license.finish! if license.may_finish?

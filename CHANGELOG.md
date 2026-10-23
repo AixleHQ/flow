@@ -111,6 +111,10 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Company settings**: cancelling an AWS Marketplace subscription now reports
+  the part-hour the workspace was still running, instead of losing it. Stopping
+  the workspace is what made that time unmeasurable, and it was being stopped
+  first.
 - **Company settings**: a workspace billed through AWS Marketplace is no longer
   told it has spent free worker-hours it was never given, or offered a card it
   cannot add — its subscription is paid through AWS.

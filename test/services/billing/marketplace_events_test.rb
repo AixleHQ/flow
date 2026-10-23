@@ -68,6 +68,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
     license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
     @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+    @meter.expect(:call, []) { |_| true }
 
     @events.apply_pending
 
@@ -155,6 +156,41 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
 
     assert company.reload.billing_blocked?
     assert_equal "payment_failed", company.billing_block_reason
+  end
+
+  # The failure the first cancellation found. Both events arrive seconds apart
+  # and apply in one pass, so by the time the deprovisioning is handled the
+  # company is already stopped -- and a stopped company is measured as having
+  # offered nothing for the whole hour, including the part it was running.
+  test "the last usage is metered while the company can still be measured" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    measured_while_billable = nil
+    @meter.expect(:call, []) { |arg| measured_while_billable = arg.company.billing_active?; arg == license }
+
+    @events.apply_pending
+
+    assert measured_while_billable, "metered after the block, CapacityWindow finds nothing"
+    @meter.verify
+  end
+
+  # Both events meter. The second copy is answered DuplicateRecord, which costs
+  # nothing; a missed first copy costs the hour.
+  test "both halves of a cancellation meter" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    @events.record(envelope(id: "ev-end", detail_type: Billing::MarketplaceEvents::ENDED))
+    @events.record(envelope(id: "ev-dep", detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
+
+    metered = 0
+    2.times { @meter.expect(:call, []) { |_| metered += 1 } }
+
+    @events.apply_pending
+
+    assert_equal 2, metered
+    @meter.verify
   end
 
   private

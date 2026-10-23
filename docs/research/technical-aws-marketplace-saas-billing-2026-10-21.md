@@ -704,6 +704,46 @@ anywhere. It is stored (§6) and otherwise ignored.
 
 ---
 
+## 8.2 What the first cancellation found, 23 October
+
+All four events arrived and applied, seconds apart:
+
+```
+12:36:18  Purchase Agreement Ended - Proposer
+12:36:49  License Deprovisioned - Manufacturer
+```
+
+and the licence went `ending` then `ended`, the company stopped. The inbound
+path is proved in full, licence events included.
+
+**The final meter sent nothing, and the hour was lost.** Thirty-six minutes of
+a running workspace went unbilled -- in the one hour AWS gives for exactly
+this.
+
+The two events apply in a single drain, in order. `Ended` stopped the company
+first; `Deprovisioned` then metered a company that `CapacityWindow` answers for
+with nothing -- and answers so **for the whole hour**, including the part it
+was running, because the window reads the billing state as it is now rather
+than as it was. Measured against the row afterwards: `billed: {}` and
+`offered: {}`, while the capacity record (`1` worker since 09:45) and the
+session limit were both untouched.
+
+**The same trap was already understood for Stripe.** `Billing::FinalUsage`
+opens with "MEASURED BEFORE THE COMPANY IS STOPPED ... a stopped company is
+offered nothing and billed for none of it". That path avoids it; this one was
+written separately and walked straight in.
+
+Fixed by metering before stopping, in both handlers. `Ended` now meters first,
+and `Deprovisioned` still meters -- the second copy comes back
+`DuplicateRecord`, which costs nothing, while a missed first copy costs the
+hour.
+
+**No test could have caught it.** The deprovisioning test asserted the meter
+was called on a `meterable?` licence, and it was. What the test did not know is
+that the previous event had already made the company unmeasurable.
+
+---
+
 ## 8.1 What the first paying customer proved, 23 October
 
 Metering works end to end. The hour `11:00Z` went as `sent=1` against a real
