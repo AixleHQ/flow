@@ -736,6 +736,11 @@ aws_marketplace:
     seller_role_arn: <%= ENV['AWS_MARKETPLACE_SELLER_ROLE_ARN'] %>
     # The listing's region, not the cluster's.
     region: <%= ENV['AWS_MARKETPLACE_SAAS_REGION'] %>
+    # Subscription events, delivered here by a rule in the seller account. This
+    # queue is in THIS account, so it is read with the pod's own identity and
+    # not with the role above — the one call in this feature that is not signed
+    # as the seller. Empty leaves the reader idle and metering unaffected.
+    events_queue_url: <%= ENV['AWS_MARKETPLACE_EVENTS_QUEUE_URL'] %>
 
 stripe:
   secret_key: <%= ENV['STRIPE_SECRET_KEY'] %>

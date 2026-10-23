@@ -15,8 +15,41 @@ class Billing::MarketplaceRegistrationTest < ActiveSupport::TestCase
     assert_equal "111122223333", license.customer_aws_account_id
     assert_equal FakeMarketplaceSellerClient::PRODUCT_CODE, license.product_code
     assert license.agreement_id.present?
-    assert license.pending?, "a licence starts unconfirmed: AWS discards metering until it says otherwise"
+    assert license.active?, "the agreement is live, and we asked rather than waiting to be told"
     assert_not license.bound?
+  end
+
+  # The race this exists to remove: Purchase Agreement Created fires when the
+  # buyer subscribes, the licence row is written when they reach this page, and
+  # whichever happens first is luck. Asking leaves nothing to the queue.
+  test "the agreement is asked about, not waited for" do
+    license = @registration.call(registration_token: "tok")
+
+    assert_equal [ license.agreement_id ], @client.described
+    assert_equal "offer-#{license.agreement_id}", license.offer_identifier
+  end
+
+  # Fail towards billing nobody: a licence that stays pending is not meterable,
+  # and the company it belongs to stays blocked until something says otherwise.
+  test "an agreement that is not live leaves the licence pending" do
+    @client.agreement_status = "CANCELLED"
+
+    assert @registration.call(registration_token: "tok").pending?
+  end
+
+  test "an agreement that cannot be read leaves the licence pending" do
+    @client.agreement_status = nil
+
+    assert @registration.call(registration_token: "tok").pending?
+  end
+
+  # A buyer returning from Manage subscriptions after cancelling must not
+  # reopen their own subscription by arriving at the page again.
+  test "re-registering does not reopen a closing licence" do
+    license = @registration.call(registration_token: "tok")
+    license.close!
+
+    assert @registration.call(registration_token: "tok").ending?
   end
 
   # The whole point. A buyer can come back from Manage subscriptions whenever
