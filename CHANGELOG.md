@@ -63,6 +63,10 @@ governance, community health — carry none.
   attachment no longer slows other agents down. Reading a file out of an agent's
   container cost seconds of server CPU per megabyte, so a file over about 4 MB
   timed out unattached, and every tool call served alongside it waited.
+- **Admin**: a super admin can sign out. Every admin page has a **Sign out**
+  button that ends the session and returns to the admin sign-in; before, the
+  admin had none, and a sign-out request sent a super admin back into the admin
+  still signed in. **Back to app** now shows only while impersonating someone.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address
