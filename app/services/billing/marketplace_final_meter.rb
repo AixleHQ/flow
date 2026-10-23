@@ -54,6 +54,7 @@ module Billing
 
         MarketplaceSellerClient::Usage.new(
           license_arn: license.license_arn,
+          customer_aws_account_id: license.customer_aws_account_id,
           dimension: Meter::AwsMarketplaceSaas::DIMENSION,
           quantity: minutes,
           occurred_at: hour
