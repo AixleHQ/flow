@@ -37,6 +37,16 @@ module Billing
     # BatchMeterUsage takes at most 25 usage records per call.
     BATCH_SIZE = 25
 
+    # What DescribeAgreement answers, of which only the status is load-bearing.
+    # `status` is a free string in the SDK model, not an enum, so it is compared
+    # rather than matched.
+    Agreement = Data.define(:id, :status, :offer_id, :acceptor_account_id) do
+      # The one value that means AWS will accept metering. Everything else --
+      # cancelled, expired, superseded, or a spelling we have not seen -- leaves
+      # the licence where it was, which bills nobody.
+      def live? = status == "ACTIVE"
+    end
+
     # What AWS answers per record. `DuplicateRecord` means the hour is already
     # held, which is a success for a replay rather than a failure to retry.
     SUCCESS = "Success"
@@ -72,6 +82,27 @@ module Billing
           customer_identifier: answer.customer_identifier.presence
         )
       end
+    end
+
+    # Asked at registration, because the event that would say the same thing
+    # races the buyer's arrival here and loses about half the time. Answers nil
+    # rather than raising when the agreement cannot be read: a licence that stays
+    # `pending` bills nobody, which is the safe direction to fail in.
+    def describe_agreement(agreement_id:)
+      return nil if agreement_id.blank?
+
+      api do
+        answer = agreement_client.describe_agreement(agreement_id: agreement_id)
+
+        Agreement.new(
+          id: answer.agreement_id,
+          status: answer.status,
+          offer_id: answer.proposal_summary&.offer_id,
+          acceptor_account_id: answer.acceptor&.account_id
+        )
+      end
+    rescue Error
+      nil
     end
 
     # Up to 25 records a call, as AWS counts them. Returns one Outcome per record
@@ -134,6 +165,13 @@ module Billing
       @client ||= ::Aws::MarketplaceMetering::Client.new(region: region, credentials: credentials)
     end
 
+    # A different service from the metering one, and so a different client, but
+    # the same assumed seller identity: an agreement is readable only by the
+    # account that proposed it.
+    def agreement_client
+      @agreement_client ||= ::Aws::MarketplaceAgreement::Client.new(region: region, credentials: credentials)
+    end
+
     def credentials
       @credentials ||= ::Aws::AssumeRoleCredentials.new(
         client: ::Aws::STS::Client.new(region: region),
@@ -153,7 +191,8 @@ module Billing
       raise InvalidToken, "#{e.class.name.demodulize}: #{e.message}"
     rescue ::Aws::STS::Errors::ServiceError => e
       raise CredentialsError, "cannot assume #{seller_role_arn}: #{e.class.name.demodulize}: #{e.message}"
-    rescue ::Aws::MarketplaceMetering::Errors::ServiceError => e
+    rescue ::Aws::MarketplaceMetering::Errors::ServiceError,
+           ::Aws::MarketplaceAgreement::Errors::ServiceError => e
       raise Error, "#{e.class.name.demodulize}: #{e.message}"
     end
   end

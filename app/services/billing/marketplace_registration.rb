@@ -19,7 +19,8 @@ module Billing
     # The adapter's errors come through unchanged: an expired token and a role
     # we cannot assume need different things said to different people.
     def call(registration_token:, offer_type: nil)
-      record(client.resolve_customer(registration_token: registration_token), offer_type)
+      license = record(client.resolve_customer(registration_token: registration_token), offer_type)
+      confirm(license)
     end
 
     private
@@ -39,6 +40,25 @@ module Billing
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
       # Two tabs, one buyer. A failure with no row behind it is a real one.
       MarketplaceLicense.find_by(license_arn: customer.license_arn) || raise(e)
+    end
+
+    # The agreement is already live by the time the buyer reaches this page, but
+    # the event that says so arrives on its own schedule and loses the race
+    # about half the time. Asked here instead, so a licence is meterable from
+    # the moment it exists rather than from whenever the queue is drained.
+    #
+    # Anything short of a live agreement leaves the licence alone: a `pending`
+    # licence bills nobody, which is the direction to fail in. The same applies
+    # to a licence already closing -- a re-registration does not reopen it, and
+    # `may_confirm?` is what says so.
+    def confirm(license)
+      agreement = client.describe_agreement(agreement_id: license.agreement_id)
+      return license if agreement.nil?
+
+      license.offer_identifier = agreement.offer_id if agreement.offer_id.present?
+      license.confirm if agreement.live? && license.may_confirm?
+      license.save!
+      license
     end
   end
 end

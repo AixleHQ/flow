@@ -33,6 +33,13 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Sign-in & onboarding**: a workspace created from an AWS Marketplace
+  subscription can be billed from the moment it exists. Flow asks AWS what state
+  the agreement is in while the buyer is registering, instead of waiting to be
+  told, so the hours between subscribing and the notification arriving are no
+  longer lost. A subscription AWS does not confirm leaves the workspace waiting
+  rather than running unbilled. Operators: this needs
+  `aws-marketplace:DescribeAgreement` on the seller role.
 - **Sign-in & onboarding**: a buyer who subscribes to Aixle Flow on AWS
   Marketplace is sent to a page of ours that sets their workspace up. They are
   signed out first and create a new workspace, confirming the address by email

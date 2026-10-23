@@ -15,8 +15,8 @@
 class FakeMarketplaceSellerClient
   PRODUCT_CODE = "saastestproductcode00000"
 
-  attr_reader :tokens, :recorded, :metered, :refusals
-  attr_accessor :configured, :failure, :customer
+  attr_reader :tokens, :recorded, :metered, :refusals, :described
+  attr_accessor :configured, :failure, :customer, :agreement, :agreement_status
 
   def initialize(configured: true)
     @configured = configured
@@ -25,6 +25,11 @@ class FakeMarketplaceSellerClient
     @recorded = []
     @metered = []
     @refusals = {}
+    @described = []
+    @agreement = nil
+    # Live by default, because that is what an agreement is when a buyer has
+    # just arrived from Marketplace. A test wanting the other case says so.
+    @agreement_status = "ACTIVE"
   end
 
   def configured?
@@ -49,6 +54,23 @@ class FakeMarketplaceSellerClient
   end
 
   def last_token = tokens.last
+
+  # Answers for whatever agreement it is asked about. `agreement = nil` with a
+  # status of nil is the unreadable case the real client answers nil for.
+  def describe_agreement(agreement_id:)
+    return nil if agreement_id.blank?
+
+    described << agreement_id
+    return @agreement if @agreement
+    return nil if @agreement_status.nil?
+
+    Billing::MarketplaceSellerClient::Agreement.new(
+      id: agreement_id,
+      status: @agreement_status,
+      offer_id: "offer-#{agreement_id}",
+      acceptor_account_id: "111122223333"
+    )
+  end
 
   # One Outcome per record, as AWS answers. A licence already metered for an
   # hour comes back DuplicateRecord rather than failing, which is what makes
