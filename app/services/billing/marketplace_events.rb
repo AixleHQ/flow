@@ -106,6 +106,17 @@ module Billing
     def confirm(license, event)
       store(license, event)
       license.confirm! if license.may_confirm?
+      start(license.company)
+    end
+
+    # The workspace is created blocked when the licence is still pending, which
+    # happens when the buyer reaches the page before AWS will say the agreement
+    # is live. Nothing else lifts that, so a confirmation arriving afterwards
+    # has to -- otherwise the customer pays for a workspace that never starts.
+    def start(company)
+      return if company.nil? || company.billing_block_reason != "awaiting_subscription"
+
+      company.update!(billing_state: "active", billing_block_reason: nil)
     end
 
     def store(license, event)
