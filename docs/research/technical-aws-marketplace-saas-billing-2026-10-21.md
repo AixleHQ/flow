@@ -837,6 +837,13 @@ marketing copy.
 - ~~**The exact dimension identifier.**~~ `worker_minute`, decided 22 October. Already the
   adapter's constant. Immutable once the listing is published, so from that moment the two
   can only be changed together by creating a second dimension.
+- **What a Marketplace workspace is told when it is stopped.** Nothing, as of
+  23 October, and that is the fix rather than the answer. It used to be told it had
+  spent its hundred free worker-hours and should add a card -- an allowance it was never
+  offered, and a Checkout its payer is refused. The allowance banner now withholds
+  itself from a payer AWS bills, which stops the lie; what should appear instead --
+  "waiting for AWS to confirm", "your AWS subscription ended, resubscribe in
+  Marketplace" -- is the customer-facing payer display, still unbuilt.
 - **Where a subscribed-but-unregistered customer is shown**, and who is expected to look.
   **Seen for real on 23 October, on the first subscription.** The buyer's domain already
   had a workspace, so `domain_is_free` refused them with "ask someone there to invite
