@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -353,6 +353,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140000) do
     t.string "state", default: "pending", null: false
     t.integer "unbounded_companies", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.jsonb "receipts", default: {}, null: false
     t.index ["provider", "period_start"], name: "index_capacity_meter_reports_on_provider_and_period_start", unique: true
     t.index ["state", "period_start"], name: "index_capacity_meter_reports_on_state_and_period_start"
   end

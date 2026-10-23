@@ -63,13 +63,14 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     assert_empty @client.recorded.select { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
   end
 
-  # Minutes as well as counts: this path exists for the part-hour the schedule
-  # cannot reach, and a reader needs to see it was not zero.
-  test "it says what it sent" do
+  # Minutes as well as counts, and AWS's own receipt beside them: this path
+  # exists for the part-hour the schedule cannot reach, nothing else records
+  # it, and "sent" on our own word is weaker than an id the service issued.
+  test "it says what it sent, and what AWS called it" do
     change(2, Time.utc(2026, 10, 23, 8))
 
     travel_to Time.utc(2026, 10, 23, 10, 20) do
-      assert_equal "sent=2:already=0:minutes=160", @meter.call(@license)
+      assert_equal "sent=2:already=0:minutes=160:receipt=mr-1,mr-2", @meter.call(@license)
     end
   end
 

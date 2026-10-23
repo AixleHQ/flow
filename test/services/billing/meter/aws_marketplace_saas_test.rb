@@ -135,4 +135,26 @@ class Billing::Meter::AwsMarketplaceSaasTest < ActiveSupport::TestCase
 
     assert_empty @client.recorded
   end
+  # `external_id` is what we believe happened; this is what AWS says. Without
+  # it the next independent check on a billed hour is the customer's invoice.
+  test "AWS's own receipt for each record is kept" do
+    company, license, seconds = marketplace_company(minutes: 60)
+    row = report(company.id => seconds)
+
+    @adapter.deliver(row)
+
+    assert_equal({ license.license_arn => "mr-1" }, row.reload.receipts)
+  end
+
+  # A replay carries no new id. Marked as the duplicate it is, so it does not
+  # read like a record that went missing.
+  test "a replayed hour is marked rather than left blank" do
+    company, license, seconds = marketplace_company(minutes: 60)
+    row = report(company.id => seconds)
+
+    @adapter.deliver(row)
+    @adapter.deliver(row)
+
+    assert_equal({ license.license_arn => "duplicate" }, row.reload.receipts)
+  end
 end
