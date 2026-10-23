@@ -772,6 +772,33 @@ installation: counted, deliberately not sent.
 
 ---
 
+## 8.3 The queue is not ours alone
+
+The rule in the seller account matches `source` and `detail-type`. It does not
+match a product, and it cannot: a rule filters the bus, and the bus carries
+every agreement that account transacts. So this queue receives the agreement
+traffic of every listing the seller sells -- other products, other buyers,
+other teams.
+
+Seen on 23 October: a stranger's subscription to another vendor's product
+(`prod-5xwbgb7premi2`, "Easy Cloud Assurance", buyer `474939504552`) was
+recorded here and sat unapplied. It names no licence of ours and never will,
+so every sweep would have reconsidered it for ever, and the table would have
+grown with the seller account's whole business.
+
+Filtered on arrival instead. The two halves of the stream name the product
+differently -- agreement events carry `detail.product.id`, licence events
+carry `code` and `id` both -- so the application knows the listing by **both**
+identifiers now (`AWS_MARKETPLACE_SAAS_PRODUCT_ID` beside the code). An event
+naming no product at all is still kept: better a row nobody matches than a
+dropped one that was ours.
+
+**Rows recorded before this are still there** and will not match. They are
+harmless beyond the work of reconsidering them, and a one-off delete is all
+they need.
+
+---
+
 ## 9. Where this is tested
 
 Staging, and it is already shaped for it — `DEPLOYMENT_MODE: saas`,

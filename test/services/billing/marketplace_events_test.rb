@@ -3,7 +3,13 @@
 require "test_helper"
 
 class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
+  OUR_PRODUCT_ID = "prod-ours"
+  OUR_PRODUCT_CODE = "codeofours0000000000000"
+
   setup do
+    Settings.stubs(:aws_marketplace).returns(
+      Hashie::Mash.new(saas: { product_id: OUR_PRODUCT_ID, product_code: OUR_PRODUCT_CODE })
+    )
     @meter = Minitest::Mock.new
     @events = Billing::MarketplaceEvents.new(final_meter: @meter)
   end
@@ -193,6 +199,35 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     @meter.verify
   end
 
+  # The rule in the seller account matches a source and a detail type, not a
+  # product, so every listing that account sells arrives here. Seen for real:
+  # a stranger's subscription to "Easy Cloud Assurance" sat unapplied in our
+  # table, and every sweep would have retried it for ever.
+  test "another listing on the same seller account is not ours" do
+    assert_nil @events.record(
+      envelope(detail: { "agreement" => { "id" => "agmt-theirs" },
+                         "product" => { "id" => "prod-someone-else", "title" => "Easy Cloud Assurance" } })
+    )
+    assert_equal 0, MarketplaceSubscriptionEvent.count
+  end
+
+  # Licence events name the product by code, agreement events by id. Either
+  # spelling of ours is ours.
+  test "the product is recognised by code as well as by id" do
+    event = @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+               detail: { "license" => { "arn" => "arn:lic:1" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert event
+  end
+
+  # Better a row nobody matches than a dropped one that was ours.
+  test "an event naming no product at all is kept" do
+    assert @events.record(envelope(detail: { "agreement" => { "id" => "agmt-1" } }))
+  end
+
   private
 
   def envelope(id: "ev-1", source: Billing::MarketplaceEvents::SOURCE,
@@ -202,7 +237,10 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
       "source" => source,
       "detail-type" => detail_type,
       "time" => "2026-10-23T10:00:00Z",
-      "detail" => detail || { "agreement" => { "id" => "agmt-1" } }
+      "detail" => detail || {
+        "agreement" => { "id" => "agmt-1" },
+        "product" => { "id" => OUR_PRODUCT_ID }
+      }
     }
   end
 end

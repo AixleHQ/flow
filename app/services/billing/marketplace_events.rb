@@ -36,6 +36,7 @@ module Billing
       return nil unless envelope["detail-type"].in?(HANDLED)
 
       detail = envelope["detail"] || {}
+      return nil unless ours?(detail)
 
       MarketplaceSubscriptionEvent.create!(
         event_id: envelope["id"],
@@ -84,6 +85,25 @@ module Billing
     end
 
     private
+
+    # The rule in the seller account matches a source and a detail type, not a
+    # product, so every agreement this account sells arrives here -- other
+    # listings, other buyers, other teams. Theirs would never match a licence
+    # and would be retried by every sweep for ever.
+    #
+    # An event that names no product at all is kept: better a row nobody
+    # matches than a dropped one that was ours.
+    def ours?(detail)
+      product = detail["product"] || {}
+      named = product.values_at("id", "code").compact
+      return true if named.empty?
+
+      named.intersect?([ product_id, product_code ].compact)
+    end
+
+    def settings = ::Settings.aws_marketplace&.saas || Hashie::Mash.new
+    def product_id = settings.product_id.presence
+    def product_code = settings.product_code.presence
 
     def license_for(event)
       by_arn = MarketplaceLicense.find_by(license_arn: event.license_arn) if event.license_arn.present?
