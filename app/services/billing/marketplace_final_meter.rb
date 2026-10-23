@@ -57,6 +57,11 @@ module Billing
       already = outcomes.count(&:duplicate?)
       refused = outcomes.reject(&:accepted?)
       line = "sent=#{outcomes.size - already}:already=#{already}:minutes=#{usages.sum(&:quantity)}"
+      # AWS's own receipt, which is the only evidence of acceptance that is not
+      # our own word. One line is enough here: this path sends a licence's last
+      # hour or two, never a batch.
+      receipts = outcomes.filter_map(&:metering_record_id)
+      line += ":receipt=#{receipts.join(',')}" if receipts.any?
       return line if refused.empty?
 
       "#{line}:refused=#{refused.map(&:status).join(',')}"
