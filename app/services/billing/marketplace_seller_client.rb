@@ -24,9 +24,12 @@ module Billing
 
     # What ResolveCustomer answers, without the vendor's types.
     #
-    # `customer_identifier` is nil under Concurrent Agreements — AWS stopped
-    # populating it — and is carried only so an old integration's question has an
-    # answer. Nothing may key on it.
+    # `customer_identifier` IS populated, measured against the real listing on
+    # 23 October. The documentation says Concurrent Agreements stopped sending
+    # it; this product receives it. Nothing keys on it all the same — one buyer
+    # may hold several agreements and only the licence tells them apart — but
+    # it is a value, not an absence, and whether this product is on Concurrent
+    # Agreements at all is now an open question (§10).
     Customer = Data.define(
       :license_arn, :aws_account_id, :product_code, :agreement_id, :customer_identifier
     )

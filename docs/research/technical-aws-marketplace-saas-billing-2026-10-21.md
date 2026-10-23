@@ -704,6 +704,74 @@ anywhere. It is stored (§6) and otherwise ignored.
 
 ---
 
+## 8.2 What the first cancellation found, 23 October
+
+All four events arrived and applied, seconds apart:
+
+```
+12:36:18  Purchase Agreement Ended - Proposer
+12:36:49  License Deprovisioned - Manufacturer
+```
+
+and the licence went `ending` then `ended`, the company stopped. The inbound
+path is proved in full, licence events included.
+
+**The final meter sent nothing, and the hour was lost.** Thirty-six minutes of
+a running workspace went unbilled -- in the one hour AWS gives for exactly
+this.
+
+The two events apply in a single drain, in order. `Ended` stopped the company
+first; `Deprovisioned` then metered a company that `CapacityWindow` answers for
+with nothing -- and answers so **for the whole hour**, including the part it
+was running, because the window reads the billing state as it is now rather
+than as it was. Measured against the row afterwards: `billed: {}` and
+`offered: {}`, while the capacity record (`1` worker since 09:45) and the
+session limit were both untouched.
+
+**The same trap was already understood for Stripe.** `Billing::FinalUsage`
+opens with "MEASURED BEFORE THE COMPANY IS STOPPED ... a stopped company is
+offered nothing and billed for none of it". That path avoids it; this one was
+written separately and walked straight in.
+
+Fixed by metering before stopping, in both handlers. `Ended` now meters first,
+and `Deprovisioned` still meters -- the second copy comes back
+`DuplicateRecord`, which costs nothing, while a missed first copy costs the
+hour.
+
+**No test could have caught it.** The deprovisioning test asserted the meter
+was called on a `meterable?` licence, and it was. What the test did not know is
+that the previous event had already made the company unmeasurable.
+
+---
+
+## 8.1 What the first paying customer proved, 23 October
+
+Metering works end to end. The hour `11:00Z` went as `sent=1` against a real
+licence, which is the one link no test could reach: capacity measured, company
+matched to its licence, the seller role assumed from production, and
+`BatchMeterUsage` accepted by AWS.
+
+**The replay window is not theoretical.** The hour `10:00Z` failed at 12:05 on
+a usage record missing the buyer's account id. After the fix shipped, the next
+run picked it up out of the ledger and sent it -- `attempts: 1`, `sent=1`,
+inside the six hours AWS still accepts. A defect found and fixed the same day
+cost no billable hour at all. That is what the window was for, and it had never
+been exercised against a real refusal.
+
+**The subscription's status in the buyer console tracks the first usage
+record.** It read `Pending` for three hours while metering kept failing, beside
+a third-party SaaS subscription in the same account reading `Active`, and
+turned `Active` by itself the moment a record landed. Nothing was done to it.
+So that label is a downstream signal of metering rather than of the agreement,
+which is `ACTIVE` from both sides throughout -- useful to know, because a
+seller watching only the console would read a working subscription as broken,
+and a broken one as merely slow.
+
+`unbilled=4` in every summary is the four Stripe companies on the same
+installation: counted, deliberately not sent.
+
+---
+
 ## 9. Where this is tested
 
 Staging, and it is already shaped for it — `DEPLOYMENT_MODE: saas`,
@@ -855,6 +923,15 @@ marketing copy.
 - ~~**The exact dimension identifier.**~~ `worker_minute`, decided 22 October. Already the
   adapter's constant. Immutable once the listing is published, so from that moment the two
   can only be changed together by creating a second dimension.
+- **Whether this product is on Concurrent Agreements at all.** The whole keying
+  argument in §3.1 rests on it, and two measurements on 23 October point the other
+  way: `ResolveCustomer` returned a populated `CustomerIdentifier` (`Ea8AMTG8jb1`),
+  which this document says the programme stopped sending, and `BatchMeterUsage`
+  refused a record keyed on `LicenseArn` alone, asking for a customer key. Neither
+  changes what we now send — the account id and the licence ARN work either way —
+  but the premise behind "the key is LicenseArn, not CustomerIdentifier" was taken
+  from the documentation and has never been confirmed for this listing. Worth
+  settling before the keying is relied on for anything else.
 - **What a Marketplace workspace is told when it is stopped.** Nothing, as of
   23 October, and that is the fix rather than the answer. It used to be told it had
   spent its hundred free worker-hours and should add a card -- an allowance it was never
