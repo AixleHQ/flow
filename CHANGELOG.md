@@ -33,6 +33,10 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Sign-in & onboarding**: opening the AWS Marketplace setup link directly now
+  explains where to go instead of answering with an error. The page AWS sends a
+  buyer to after subscribing is unchanged; this is what anyone else sees, and
+  what AWS itself checks before accepting the link.
 - **Company settings**: a workspace billed through AWS Marketplace follows the
   subscription itself. Cancelling in AWS stops the workspace, and the usage from
   the last partial hour is reported inside the one hour AWS allows for it rather
