@@ -855,6 +855,15 @@ marketing copy.
 - ~~**The exact dimension identifier.**~~ `worker_minute`, decided 22 October. Already the
   adapter's constant. Immutable once the listing is published, so from that moment the two
   can only be changed together by creating a second dimension.
+- **Whether this product is on Concurrent Agreements at all.** The whole keying
+  argument in §3.1 rests on it, and two measurements on 23 October point the other
+  way: `ResolveCustomer` returned a populated `CustomerIdentifier` (`Ea8AMTG8jb1`),
+  which this document says the programme stopped sending, and `BatchMeterUsage`
+  refused a record keyed on `LicenseArn` alone, asking for a customer key. Neither
+  changes what we now send — the account id and the licence ARN work either way —
+  but the premise behind "the key is LicenseArn, not CustomerIdentifier" was taken
+  from the documentation and has never been confirmed for this listing. Worth
+  settling before the keying is relied on for anything else.
 - **What a Marketplace workspace is told when it is stopped.** Nothing, as of
   23 October, and that is the fix rather than the answer. It used to be told it had
   spent its hundred free worker-hours and should add a card -- an allowance it was never
