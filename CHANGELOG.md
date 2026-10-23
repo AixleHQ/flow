@@ -111,6 +111,11 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Company settings**: a workspace billed through AWS Marketplace now says why
+  it is stopped — waiting for AWS to confirm the subscription, or the
+  subscription having ended, with a link to renew it in AWS Marketplace. It
+  previously said nothing at all, so sessions that never started looked like a
+  fault.
 - **Company settings**: the identifier AWS issues for each accepted metering
   record is now kept, so an operator can show a charge was accepted without
   waiting for the customer's invoice.

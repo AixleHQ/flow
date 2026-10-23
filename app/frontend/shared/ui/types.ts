@@ -63,6 +63,15 @@ export interface SharedTrial {
   canPay: boolean;
 }
 
+/**
+ * Sent only to a workspace AWS Marketplace bills, and only while it is stopped.
+ * There is no allowance here and no card to add: the subscription is managed in
+ * the buyer's own AWS account.
+ */
+export interface SharedMarketplace {
+  status?: BillingStatus | 'awaiting_subscription';
+}
+
 export interface SharedProps {
   currentUser: CurrentUser | null;
   // Most flash entries are strings (notice/alert). `needs_setup` is a list of
@@ -77,5 +86,6 @@ export interface SharedProps {
    * useFeatureFlag. Partial and optional: a page served by an older pod may not send it, or not know a flag yet.
    */
   features?: Partial<Features>;
+  marketplace?: SharedMarketplace | null;
   [key: string]: unknown;
 }
