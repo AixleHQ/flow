@@ -46,11 +46,11 @@ module Billing
         unbillable = 0
 
         usages = report.breakdown_minutes.filter_map do |company_id, minutes|
-          license_arn = licenses[company_id.to_i]
+          license = licenses[company_id.to_i]
           # `next` without a value, deliberately: inside filter_map a `next x`
           # keeps x, so the counting idiom Meter::Stripe uses inside `each`
           # would put the running total into the records.
-          if license_arn.blank?
+          if license.nil?
             unbillable += 1
             next
           end
@@ -59,8 +59,8 @@ module Billing
           next if quantity.zero?
 
           ::Billing::MarketplaceSellerClient::Usage.new(
-            license_arn: license_arn, dimension: DIMENSION,
-            quantity: quantity, occurred_at: report.period_start
+            license_arn: license.first, customer_aws_account_id: license.last,
+            dimension: DIMENSION, quantity: quantity, occurred_at: report.period_start
           )
         end
 
@@ -75,8 +75,8 @@ module Billing
           .where(company_id: report.breakdown_minutes.keys, subscription_state: %w[active ending])
           .joins(:company)
           .where(companies: { billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE })
-          .pluck(:company_id, :license_arn)
-          .to_h
+          .pluck(:company_id, :license_arn, :customer_aws_account_id)
+          .to_h { |company_id, arn, account| [ company_id, [ arn, account ] ] }
       end
 
       # Carried on the ledger row so an hour reads afterwards as what it was: a
