@@ -7,7 +7,7 @@ class Web::SessionsController < Web::ApplicationController
 
   skip_before_action :enforce_onboarding
   skip_before_action :enforce_company_auth_policy
-  skip_before_action :redirect_super_admin_to_admin_panel, only: %i[omniauth failure]
+  skip_before_action :redirect_super_admin_to_admin_panel, only: %i[omniauth failure destroy]
 
   # NO membership at all, which is a signup — not "no ACTIVE membership", which
   # is an invitation awaiting an admin and must keep waiting for one. Only where
@@ -94,9 +94,12 @@ class Web::SessionsController < Web::ApplicationController
 
   # clear_history drops the key the browser's encrypted history entries were
   # sealed with, so Back after signing out cannot show the pages of the session.
+  # An operator goes back to their own door: /login offers nothing to an address
+  # no workspace claims.
   def destroy
+    target = true_user&.super_admin? ? admin_login_path : login_path
     sign_out
-    redirect_to login_path, inertia: { clear_history: true }
+    redirect_to target, inertia: { clear_history: true }
   end
 
   def omniauth
