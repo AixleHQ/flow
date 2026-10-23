@@ -100,6 +100,10 @@ Rails.application.routes.draw do
   # must stay reachable without authentication of any kind.
   post "marketplace/aws/register", to: "web/marketplace_registrations#create",
                                    as: :marketplace_registration_landing
+  # The same path on GET. AWS fetches the fulfilment URL when it is set and
+  # refuses one that does not answer 200, so a POST-only route cannot be given
+  # to them at all -- and anyone who keeps the link arrives this way too.
+  get "marketplace/aws/register", to: "web/marketplace_registrations#landing"
   get "marketplace/aws/continue", to: "web/marketplace_registrations#show",
                                   as: :marketplace_registration
 

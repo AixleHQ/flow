@@ -32,6 +32,13 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
             "in AWS Marketplace and choose Set up your account again."
   UNAVAILABLE = "Something went wrong setting your subscription up. We have been told; please try again shortly."
 
+  # GET on the fulfilment URL, which is not how a buyer arrives: AWS posts them
+  # here. It exists because AWS fetches the URL before accepting it and refuses
+  # anything that is not a 200, and because a kept link lands here.
+  def landing
+    render inertia: "Marketplace/LandingPage"
+  end
+
   # POST, from aws.amazon.com.
   def create
     return head :not_found unless registration.configured?
