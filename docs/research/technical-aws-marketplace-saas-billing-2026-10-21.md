@@ -838,6 +838,14 @@ marketing copy.
   adapter's constant. Immutable once the listing is published, so from that moment the two
   can only be changed together by creating a second dimension.
 - **Where a subscribed-but-unregistered customer is shown**, and who is expected to look.
+  **Seen for real on 23 October, on the first subscription.** The buyer's domain already
+  had a workspace, so `domain_is_free` refused them with "ask someone there to invite
+  you" -- a rule written for self-serve signup, applied to somebody who has already paid.
+  The subscription stays bound to nobody and the buyer has no way forward at all. The
+  rule itself is right: colleagues from one domain belong in one workspace. What is
+  missing is the branch for a paying arrival, and the likely answer is neither a second
+  workspace nor a refusal but **binding the licence to the workspace that already holds
+  the domain** -- which needs somebody there to accept it, and so needs a screen.
 - ~~**One service account or two**~~ for the right to assume the seller role. One: the
   infrastructure applied on 22 October attaches the Marketplace policy to the role the
   web and worker pods already carry, rather than introducing a second service account that
