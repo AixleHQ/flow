@@ -121,6 +121,22 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
   end
 
+  # Seen on staging: the tab was drawn for a workspace AWS bills, and opening
+  # it only produced the refusal below. `bills?` is right that somebody pays
+  # them -- the tab asks the narrower question of whether there is billing to
+  # manage here.
+  test "a company AWS bills has no billing tab either" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    get company_settings_billing_path
+
+    assert_redirected_to company_settings_path
+    assert_match(/AWS Marketplace/, flash[:alert])
+
+    get company_settings_path
+    assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
+  end
+
   private
 
   def billing_props
