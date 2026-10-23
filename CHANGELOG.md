@@ -33,6 +33,14 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
+- **Company settings**: a workspace billed through AWS Marketplace follows the
+  subscription itself. Cancelling in AWS stops the workspace, and the usage from
+  the last partial hour is reported inside the one hour AWS allows for it rather
+  than waiting for the next hourly run, which would miss it. Notifications that
+  arrive before the workspace exists are kept and applied when it does, and one
+  that arrives late or twice cannot move a finished subscription backwards.
+  Operators: this needs `AWS_MARKETPLACE_EVENTS_QUEUE_URL`; without it metering
+  still runs but cancellations are never noticed.
 - **Sign-in & onboarding**: a workspace created from an AWS Marketplace
   subscription can be billed from the moment it exists. Flow asks AWS what state
   the agreement is in while the buyer is registering, instead of waiting to be

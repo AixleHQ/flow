@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_140100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -914,10 +914,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_140100) do
     t.datetime "ended_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["agreement_id"], name: "index_marketplace_licenses_on_agreement_id"
     t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"
     t.index ["license_arn"], name: "index_marketplace_licenses_on_license_arn", unique: true
     t.index ["subscription_state"], name: "index_marketplace_licenses_on_subscription_state"
+  end
+
+  create_table "marketplace_subscription_events", force: :cascade do |t|
+    t.string "event_id", null: false
+    t.string "detail_type", null: false
+    t.string "agreement_id"
+    t.string "license_arn"
+    t.bigint "marketplace_license_id"
+    t.datetime "occurred_at", null: false
+    t.datetime "applied_at"
+    t.jsonb "detail", default: {}, null: false
+    t.string "failure"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agreement_id"], name: "index_marketplace_subscription_events_on_agreement_id"
+    t.index ["applied_at", "occurred_at"], name: "idx_on_applied_at_occurred_at_9b9f6d64f1"
+    t.index ["event_id"], name: "index_marketplace_subscription_events_on_event_id", unique: true
+    t.index ["marketplace_license_id"], name: "idx_on_marketplace_license_id_bbeb7c9440"
   end
 
   create_table "mcp_servers", force: :cascade do |t|
@@ -2158,6 +2177,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_140100) do
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
+  add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
