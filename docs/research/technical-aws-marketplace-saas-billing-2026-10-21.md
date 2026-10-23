@@ -772,6 +772,31 @@ installation: counted, deliberately not sent.
 
 ---
 
+## 8.4 The final meter answers for itself
+
+The hourly meter leaves a ledger row per hour carrying its state, its attempts
+and its error. That is how a refused usage record on 23 October was seen and
+fixed inside the hour.
+
+The final meter -- the one that runs on deprovisioning, inside the window AWS
+allows and nowhere else -- left nothing at all. When the first cancellation was
+tested, whether it had billed the customer's last twenty-seven minutes could
+not be answered from this side: the only evidence was the buyer's own invoice,
+hours behind. A billing path whose success is unknowable is not finished.
+
+It now answers with a line, and the event that ran it records it:
+`sent=1:already=0:minutes=27`, or `refused: <what AWS said>`, or
+`nothing to send`. Minutes as well as counts, because the point of this path is
+the part-hour the schedule cannot reach and a reader needs to see it was not
+zero.
+
+Still deliberately not raised. The caller's next step is to end the licence,
+and one left open because its last minutes were refused would go on being
+billed by the schedule for an entitlement AWS has already revoked. The refusal
+goes in the line instead of into the control flow.
+
+---
+
 ## 8.3 The queue is not ours alone
 
 The rule in the seller account matches `source` and `detail-type`. It does not

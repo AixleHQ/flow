@@ -74,7 +74,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
     license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
     @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
-    @meter.expect(:call, []) { |_| true }
+    @meter.expect(:call, "nothing to send") { |_| true }
 
     @events.apply_pending
 
@@ -90,7 +90,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     @events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
 
     metered_while_meterable = nil
-    @meter.expect(:call, []) { |arg| metered_while_meterable = arg.meterable?; arg == license }
+    @meter.expect(:call, "sent=1:minutes=27") { |arg| metered_while_meterable = arg.meterable?; arg == license }
 
     @events.apply_pending
 
@@ -174,7 +174,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
 
     measured_while_billable = nil
-    @meter.expect(:call, []) { |arg| measured_while_billable = arg.company.billing_active?; arg == license }
+    @meter.expect(:call, "sent=1:minutes=27") { |arg| measured_while_billable = arg.company.billing_active?; arg == license }
 
     @events.apply_pending
 
@@ -191,7 +191,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     @events.record(envelope(id: "ev-dep", detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
 
     metered = 0
-    2.times { @meter.expect(:call, []) { |_| metered += 1 } }
+    2.times { @meter.expect(:call, "nothing to send") { |_| metered += 1 } }
 
     @events.apply_pending
 
@@ -226,6 +226,29 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
   # Better a row nobody matches than a dropped one that was ours.
   test "an event naming no product at all is kept" do
     assert @events.record(envelope(detail: { "agreement" => { "id" => "agmt-1" } }))
+  end
+
+  # The hourly meter leaves a ledger row; this path left nothing, so whether a
+  # cancelling customer's last hour was billed could only be read off their own
+  # invoice hours later.
+  test "what the final meter sent is recorded against the event that ran it" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
+    @meter.expect(:call, "sent=1:already=0:minutes=27") { |_| true }
+
+    @events.apply_pending
+
+    assert_equal "sent=1:already=0:minutes=27", MarketplaceSubscriptionEvent.sole.metered
+  end
+
+  test "an event that meters nothing records nothing" do
+    create(:marketplace_license, agreement_id: "agmt-1", company: create(:company))
+    @events.record(envelope)
+
+    @events.apply_pending
+
+    assert_nil MarketplaceSubscriptionEvent.sole.metered
   end
 
   private
