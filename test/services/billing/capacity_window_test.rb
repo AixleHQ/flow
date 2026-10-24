@@ -114,6 +114,18 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_minutes 420, window
   end
 
+  # The overcharge the third live AWS subscription found. A workspace created at
+  # 04:26 was billed for the whole of 04:00: it has no entry at the top of the
+  # hour, so the fallback above read its live row back to a time it did not
+  # exist. That is every new customer's first hour.
+  test "a company whose first entry lands mid-hour is billed only from then" do
+    SessionConcurrencyLimit.set!(scope: @acme, max_sessions: 7)
+    CompanyCapacityChange.delete_all
+    change(@acme, 7, @hour + 26.minutes)
+
+    assert_minutes 238, window, "34 minutes at seven, not the whole hour"
+  end
+
   # How an internal organisation is free today: it has no limit row at all, so it
   # is unbounded AND contributes nothing to the metered quantity. The two facts
   # are the same absence, which is what makes the arrangement fragile — a paying
@@ -181,6 +193,19 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       assert_includes result.offered_per_company, @acme.id
       assert_not_includes result.per_company, @acme.id
       assert_minutes 300, result, "only the paying company reaches the provider"
+    end
+
+    # Why the newborn is left out of the opening rather than opened at zero: a
+    # zero means "no limit set", and `offered` answers that with the ceiling —
+    # so a zero would have billed the ceiling for the part of the hour before
+    # the company existed, which is the same bug wearing the other hat.
+    test "a company whose first entry lands mid-hour is not measured at its ceiling before it" do
+      @acme.update!(billing_state: "trialing")
+      SessionConcurrencyLimit.set!(scope: @acme, max_sessions: 7)
+      CompanyCapacityChange.delete_all
+      change(@acme, 7, @hour + 26.minutes)
+
+      assert_equal 238, window.offered_per_company[@acme.id] / 60
     end
 
     test "a company we carry is measured but not billed" do

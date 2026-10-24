@@ -212,6 +212,9 @@ governance, community health — carry none.
   button that ends the session and returns to the admin sign-in; before, the
   admin had none, and a sign-out request sent a super admin back into the admin
   still signed in. **Back to app** now shows only while impersonating someone.
+- **Company settings**: a new workspace is no longer billed for the part of its
+  first hour that came before it was created. A workspace set up at 04:26 was
+  charged for the whole of 04:00; it is now charged from 04:26.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address
