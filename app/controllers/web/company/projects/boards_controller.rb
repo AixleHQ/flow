@@ -24,8 +24,11 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   # per card would put a join behind every ticket on the board.
   def serialize_board_tasks(tasks)
     tasks = tasks.to_a
-    waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
-    tasks.map { |task| BoardTaskResource.new(task, params: { waiting_runs: waiting }).to_h }
+    recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
+    waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
+    tasks.map do |task|
+      BoardTaskResource.new(task, params: { waiting_runs: waiting, recent_runs: recent, without_description: true }).to_h
+    end
   end
 
   def render_board_page(board)
@@ -44,13 +47,8 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
         board.board_tasks
              .active
              .first_per_column(BoardTask::PAGE_SIZE)
-             .select(Arel.sql(<<~SQL))
-               board_tasks.*,
-               (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
-               (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
-               (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
-             SQL
-             .includes(:assignee, :workflow_runs, :gates)
+             .with_card_counts
+             .includes(:assignee, :gates)
              .in_board_order.then { |tasks| serialize_board_tasks(tasks) }
       },
       tasks_page_size: BoardTask::PAGE_SIZE,

@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Tasks**: a board that agents keep changing refreshes once per burst of
+  changes, and at least every few seconds, instead of once per change, and each
+  refresh carries about half the data. The REST endpoint that lists board tasks
+  takes `view=card` to leave task descriptions out.
+
 ### Fixed
 - A web server's memory no longer grows with every page it serves until the
   process is killed for memory; on a busy deployment that happened about once

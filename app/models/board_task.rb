@@ -50,6 +50,16 @@ class BoardTask < ApplicationRecord
   # Board ordering. `position` is only unique-ish within a column, so the id keeps
   # offset pagination from re-serving or skipping a row between pages.
   scope :in_board_order, -> { order(:position, :id) }
+  # The counts a card shows, read in the same query instead of loading every comment,
+  # child task and asset behind them (BoardTaskResource reads these columns when present).
+  scope :with_card_counts, -> {
+    select(Arel.sql(<<~SQL))
+      board_tasks.*,
+      (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
+      (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
+      (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
+    SQL
+  }
 
   # Reading order for a flat listing that spans columns: columns left to right,
   # tasks top to bottom inside each one. `in_board_order` cannot do this job by

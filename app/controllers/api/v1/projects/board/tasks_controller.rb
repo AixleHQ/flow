@@ -10,18 +10,23 @@ module Api
           # This is the board's per-column pagination endpoint: a column asks for
           # `board_column_id` + `limit`/`offset` and reads the column's unpaginated
           # total from the `X-Total-Count` response header, so it can show the real
-          # count while holding only the pages it has scrolled to.
+          # count while holding only the pages it has scrolled to. `view=card` returns
+          # what a card shows: `description` comes back null.
           def index
             scope = filtered_tasks
             response.set_header("X-Total-Count", scope.count.to_s)
 
             tasks = scope
-              .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
+              .with_card_counts
+              .includes(:assignee, :gates)
               .then { |s| exact_number_search? ? s.reorder(exact_number_first, :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
-            waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
-            render json: tasks.map { |t| BoardTaskResource.new(t, params: { waiting_runs: waiting }).to_h }
+            tasks = tasks.to_a
+            recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
+            waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
+            card_params = { waiting_runs: waiting, recent_runs: recent, without_description: params[:view] == "card" }
+            render json: tasks.map { |t| BoardTaskResource.new(t, params: card_params).to_h }
           end
 
           def show
