@@ -18,6 +18,10 @@ governance, community health — carry none.
   changes, and at least every few seconds, instead of once per change, and each
   refresh carries about half the data. The REST endpoint that lists board tasks
   takes `view=card` to leave task descriptions out.
+- Request logs name who made the request: the signed-in user (`user=`), and for
+  an MCP call the personal token's user or the agent session (`session=`). Web,
+  MCP, job and Temporal worker processes log their memory every five minutes as
+  `[memory]` lines.
 
 ### Fixed
 - A web server's memory no longer grows with every page it serves until the
