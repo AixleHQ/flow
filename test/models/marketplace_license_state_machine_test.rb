@@ -22,6 +22,42 @@ class MarketplaceLicenseStateMachineTest < ActiveSupport::TestCase
     assert license.ended?
   end
 
+  # Both columns existed from the first migration and nothing wrote either, so
+  # a licence carried a subscription date of nil for its whole life and an end
+  # date of nil after it ended.
+  test "the dates are stamped as the licence moves" do
+    license = create(:marketplace_license)
+
+    travel_to(Time.utc(2026, 10, 24, 4, 24)) { license.confirm! }
+    assert_equal Time.utc(2026, 10, 24, 4, 24), license.reload.subscribed_at
+    assert_nil license.ended_at
+
+    travel_to(Time.utc(2026, 10, 24, 5, 12)) { license.finish! }
+    assert_equal Time.utc(2026, 10, 24, 5, 12), license.reload.ended_at
+  end
+
+  # `confirm` accepts its own result so a redelivery is a no-op, and a no-op
+  # must not move the date a bill may later be read against.
+  test "a redelivered confirmation does not move the subscription date" do
+    license = create(:marketplace_license)
+    travel_to(Time.utc(2026, 10, 24, 4, 24)) { license.confirm! }
+
+    travel_to(Time.utc(2026, 10, 24, 6)) { license.confirm! }
+
+    assert_equal Time.utc(2026, 10, 24, 4, 24), license.reload.subscribed_at
+  end
+
+  # The close can arrive before the creation ever did, and the licence then goes
+  # straight to ended without a confirmation to stamp a start.
+  test "a licence that ends without ever being confirmed still records its end" do
+    license = create(:marketplace_license)
+
+    travel_to(Time.utc(2026, 10, 24, 5, 12)) { license.finish! }
+
+    assert_nil license.reload.subscribed_at
+    assert_equal Time.utc(2026, 10, 24, 5, 12), license.ended_at
+  end
+
   # The one that costs money: a licence AWS has deprovisioned must not be
   # revived by a creation message that overtook the deprovisioning, because
   # `active` is what makes the next hour billable.
