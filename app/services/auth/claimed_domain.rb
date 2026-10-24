@@ -23,6 +23,23 @@ module Auth
       company && new(company, tried: tried)
     end
 
+    # For somebody who has typed an address rather than proved one, which is the
+    # only thing an AWS Marketplace buyer has: §5.1 signs them out on arrival,
+    # because whoever pressed Subscribe in AWS is usually not whoever will use
+    # the product. There is no user to check memberships against — not being
+    # signed in is the whole of what is known — so this answers the narrower
+    # question of whether the domain is taken.
+    #
+    # Only ever for a buyer. Telling an arbitrary visitor whether a domain has a
+    # workspace, and what it is called, is not ours to give away on a typed
+    # address; a paid subscription is what makes them not arbitrary.
+    def self.for_email(email)
+      return nil if email.blank?
+
+      company = Company.find_by_email_domain(email.to_s)
+      company && new(company)
+    end
+
     def initialize(company, tried: nil)
       @company = company
       @tried = tried

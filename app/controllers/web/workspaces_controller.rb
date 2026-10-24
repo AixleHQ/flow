@@ -33,7 +33,7 @@ class Web::WorkspacesController < Web::ApplicationController
     form = WorkspaceOnboardingForm.new(
       user: current_user, marketplace_license: marketplace_license, **workspace_params.to_h.symbolize_keys
     )
-    return refuse(**form.errors.to_hash(true)) unless form.valid?
+    return refuse_signup(form) unless form.valid?
 
     return refuse(base: EMAIL_SIGNUP_UNAVAILABLE) unless signed_in? || emailed_proof_accepted?
 
@@ -119,6 +119,18 @@ class Web::WorkspacesController < Web::ApplicationController
     redirect_to new_workspace_path, inertia: { errors: errors }
   end
 
+  # The address goes back into the URL rather than only into the form, so the
+  # next render can work out whether the domain is already taken. Without it a
+  # buyer who is not signed in gets "already has a workspace — ask someone there
+  # to invite you" on a field, which is advice for a stranger and wrong for
+  # somebody who has just paid.
+  #
+  # Separate from `refuse` rather than a keyword on it: `email` is itself one of
+  # the error keys this form produces, and a keyword would swallow it.
+  def refuse_signup(form)
+    redirect_to new_workspace_path(email: form.email), inertia: { errors: form.errors.to_hash(true) }
+  end
+
   def props
     form = WorkspaceOnboardingForm.new(user: current_user)
     {
@@ -133,14 +145,28 @@ class Web::WorkspacesController < Web::ApplicationController
       # A stranger types the address they will own the workspace with; someone
       # signed in has already proved theirs and is not asked again.
       needs_email: !signed_in?,
-      # Where the signed-in person's domain already has a workspace, which is the
-      # whole of that screen: the form could only be refused.
-      claimed_domain: (Auth::ClaimedDomain.for(current_user)&.to_h if signed_in?),
+      # Where the domain already has a workspace, which is the whole of that
+      # screen: the form could only be refused, so what the person needs is the
+      # way into the workspace that exists.
+      claimed_domain: claimed_domain&.to_h,
+      # A buyer reaching that screen has paid for a subscription that now has no
+      # workspace to attach to, and the screen has to say so.
+      marketplace_subscription: marketplace_license.present?,
       # What they get before anyone asks them for a card, which is the part of
       # the bargain the form was silent about. Nil for a Marketplace buyer: AWS
       # bills them from the first minute, so there is no allowance to promise.
       free_queue_hours: (Billing::Trial.queue_hours if marketplace_license.nil?)
     }
+  end
+
+  # Read off a proved address for somebody signed in, and off the typed one for
+  # a Marketplace buyer, who is signed out on purpose and has nothing else. Not
+  # for anyone else: see Auth::ClaimedDomain.for_email.
+  def claimed_domain
+    return Auth::ClaimedDomain.for(current_user) if signed_in?
+    return nil if marketplace_license.nil?
+
+    Auth::ClaimedDomain.for_email(safe_email_param)
   end
 
   # The /how-it-works calculator works out how many workers a workload needs and
