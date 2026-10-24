@@ -11,6 +11,13 @@ type Expect<T extends true> = T;
 export type AgentTypeMatchesServer = Expect<SameUnion<AgentType, NonNullable<CurrentUser['defaultAgentRuntime']>>>;
 export type UserRoleMatchesServer = Expect<SameUnion<UserRole, NonNullable<CurrentUser['currentRole']>>>;
 
+// The flags declared `client: true` in config/feature_flags.yml, camelized as the `features` shared
+// prop names them, so a misspelled flag fails tsc. Kept here by hand, like the two lists above
+// (Typelizer writes no file for a resource without attributes, which is what an empty registry
+// gives); test/config/feature_flag_name_test.rb fails the moment this list and the registry differ.
+// One quoted name per member (`'boardAiSummary' | 'newSidebar'`), and `never` while there is none.
+export type FeatureFlagName = never;
+
 export interface ProjectPermissions {
   canExecute: boolean;
   canManage: boolean;
@@ -72,5 +79,7 @@ export interface SharedProps {
   permissions?: SharedPermissions;
   settings: SharedSettings;
   trial?: SharedTrial | null;
+  /** Server-resolved `client: true` flags; read them with useFeatureFlag. Optional: a page served by an older pod does not send it. */
+  features?: Partial<Record<FeatureFlagName, boolean>>;
   [key: string]: unknown;
 }
