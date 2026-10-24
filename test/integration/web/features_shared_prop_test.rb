@@ -23,6 +23,17 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     user.companies.first
   end
 
+  # An Inertia visit to +path+; with +only+, a partial reload asking for those
+  # props alone, as a cable-triggered `router.reload({ only: [...] })` does.
+  def inertia_props(path, only: nil, component: nil)
+    headers = { "X-Inertia" => "true" }
+    headers.merge!("X-Inertia-Partial-Component" => component, "X-Inertia-Partial-Data" => only) if only
+    get path, headers: headers
+
+    assert_response :success
+    response.parsed_body
+  end
+
   test "a client: false flag never reaches the page" do
     signed_in_company
 
@@ -55,6 +66,20 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
       features = features_prop(login_path)
 
       assert_equal({ "boardAiSummary" => true }, features.to_h)
+    end
+  end
+
+  test "a partial reload that does not ask for features still re-evaluates them" do
+    company = signed_in_company
+
+    page = inertia_props(company_projects_path)
+    assert_equal({ "boardAiSummary" => false }, page.dig("props", "features"))
+
+    with_feature(:board_ai_summary, true, company: company) do
+      props = inertia_props(company_projects_path, only: "flash", component: page.fetch("component")).fetch("props")
+
+      assert_not props.key?("settings"), "the reload should have been partial"
+      assert_equal({ "boardAiSummary" => true }, props["features"])
     end
   end
 end
