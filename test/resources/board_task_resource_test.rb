@@ -64,4 +64,25 @@ class BoardTaskResourceTest < ActiveSupport::TestCase
 
     assert_equal [ "queued" ], states
   end
+
+  test "a list caller's runs are the ones the card shows" do
+    create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user, board_task: @task,
+                                      created_at: 2.hours.ago)
+    newer = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user, board_task: @task,
+                                              created_at: 1.hour.ago)
+    recent = WorkflowRun.recent_by_task([ @task.id ], limit: 1)
+
+    runs = BoardTaskResource.new(@task.reload, params: { recent_runs: recent, waiting_runs: Set.new }).to_h["recentWorkflowRuns"]
+
+    assert_equal [ newer.id ], runs.map { |r| r[:id] || r["id"] }
+  end
+
+  test "a card can leave the description out while the task drawer keeps it" do
+    @task.update!(description: "Steps to reproduce")
+
+    assert_nil BoardTaskResource.new(@task, params: { without_description: true }).to_h["description"]
+    assert_equal "Steps to reproduce", BoardTaskResource.new(@task).to_h["description"]
+    assert_equal "Steps to reproduce",
+                 TaskDetailResource.new(@task, params: { without_description: true }).to_h["description"]
+  end
 end
