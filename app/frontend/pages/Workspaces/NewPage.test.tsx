@@ -168,6 +168,49 @@ describe('New workspace page', () => {
 
       expect(router.delete).toHaveBeenCalledWith('/logout');
     });
+
+    // The AWS Marketplace fulfilment page signs the buyer out on arrival, on
+    // purpose: whoever pressed Subscribe in AWS is usually not whoever will use
+    // the product. So this screen reaches somebody with no session at all.
+    describe('and who has just paid for it through AWS Marketplace', () => {
+      const buyer = (over = {}) => ({
+        ...claimed(over),
+        needsEmail: true,
+        freeQueueHours: null,
+        marketplaceSubscription: true,
+      });
+
+      // The question they came with. Left unanswered, the screen reads as "you
+      // paid and got nothing".
+      it('says the subscription is held rather than lost, and where to ask', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer() });
+
+        expect(screen.getByText(/subscription is recorded/)).toHaveTextContent('we will attach it to Northwind');
+      });
+
+      it('names no workspace it has not proved, and still answers the question', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({ workspaceName: null, joinMethods: [] }) });
+
+        expect(screen.getByText(/subscription is recorded/)).toHaveTextContent('the workspace at your domain');
+      });
+
+      it('offers the sign-in screen, because there is no session to sign out of', async () => {
+        renderPage(<NewWorkspacePage />, { props: buyer() });
+
+        expect(screen.queryByRole('button', { name: /Sign out/ })).not.toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: 'Go to sign in' }));
+
+        expect(router.visit).toHaveBeenCalledWith('/login');
+      });
+
+      // Somebody signed in reaching the same screen is not a buyer and must not
+      // be told anything about a subscription.
+      it('says nothing about a subscription to somebody who has none', () => {
+        renderPage(<NewWorkspacePage />, { props: claimed() });
+
+        expect(screen.queryByText(/subscription is recorded/)).not.toBeInTheDocument();
+      });
+    });
   });
 
   // The contract that broke: the fields are posted NESTED under `workspace`,

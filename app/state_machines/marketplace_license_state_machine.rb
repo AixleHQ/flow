@@ -26,7 +26,10 @@ module MarketplaceLicenseStateMachine
 
       # Purchase Agreement Created - Proposer. Not from `ending` or `ended`: an
       # agreement that has closed is not reopened by a message that overtook it.
-      event :confirm do
+      #
+      # `before` (not `after`) so the timestamp is persisted in the same save as
+      # the state change.
+      event :confirm, before: :set_subscribed_at do
         transitions from: %i[pending active], to: :active
       end
 
@@ -38,7 +41,7 @@ module MarketplaceLicenseStateMachine
 
       # License Deprovisioned - Manufacturer, after the last usage has been
       # reported. Deliberately not from `ended`.
-      event :finish do
+      event :finish, before: :set_ended_at do
         transitions from: %i[pending active ending], to: :ended
       end
     end

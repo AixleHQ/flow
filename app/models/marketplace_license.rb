@@ -42,4 +42,20 @@ class MarketplaceLicense < ApplicationRecord
   # `ending` counts: the hour AWS allows after an agreement closes is exactly
   # when the last usage has to go.
   def meterable? = bound? && (active? || ending?)
+
+  private
+
+  # When AWS first confirmed the agreement. `||=` because `confirm` accepts its
+  # own result, so a redelivered creation must not move the date.
+  def set_subscribed_at
+    self.subscribed_at ||= Time.current
+  end
+
+  # When the licence was finished here, which is within a minute or so of AWS
+  # deprovisioning it rather than AWS's own timestamp. Nothing bills off this —
+  # the last usage is bounded by the final meter's own `until_time` — so it is
+  # a record of what happened, not an input to it.
+  def set_ended_at
+    self.ended_at = Time.current
+  end
 end
