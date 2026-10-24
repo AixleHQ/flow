@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { FeatureFlagName } from 'shared/ui/types';
 import { inertiaState } from 'test/inertiaMock';
 import { renderHook } from 'test/renderPage';
+
+import type { FeatureFlagName } from 'shared/ui/types';
 
 import { useFeatureFlag } from './useFeatureFlag';
 
