@@ -3,7 +3,7 @@ import { Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@man
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
-import { howItWorksPath, logoutPath, workspacePath } from 'shared/routes';
+import { howItWorksPath, loginPath, logoutPath, workspacePath } from 'shared/routes';
 import { BrandLockup, PageShell } from 'shared/ui';
 
 import classes from './NewPage.module.css';
@@ -22,8 +22,10 @@ interface PageProps {
   needsEmail: boolean;
   /** Worker-hours the workspace may spend before anyone asks it for a card. Null where AWS bills from the start. */
   freeQueueHours: number | null;
-  /** Set when a signed-in person's domain already has a workspace, so there is nothing here to create. */
+  /** Set when the domain already has a workspace, so there is nothing here to create. */
   claimedDomain?: ClaimedDomain | null;
+  /** Set while an AWS Marketplace subscription is waiting for a workspace to attach to. */
+  marketplaceSubscription: boolean;
   /**
    * Server-side refusals. The keys arrive camelCased — the Inertia
    * prop_transformer runs over every prop, errors included — while the form's
@@ -105,9 +107,20 @@ const SentScreen = ({ address }: { address: string }) => (
   </section>
 );
 
-// Signing out is the way to the sign-in screen, where the methods named here
-// are offered.
-const ClaimedScreen = ({ claim }: { claim: ClaimedDomain }) => (
+// Reached two ways. Someone signed in gets here from their own proved address,
+// and signing out is their way to the sign-in screen where the methods named
+// here are offered. A Marketplace buyer was signed out on arrival, so there is
+// nothing to sign out of and the sign-in screen is a link away — and their
+// subscription has nowhere to attach, which is the part they came to find out.
+const ClaimedScreen = ({
+  claim,
+  signedIn,
+  subscriptionHeld,
+}: {
+  claim: ClaimedDomain;
+  signedIn: boolean;
+  subscriptionHeld: boolean;
+}) => (
   <PageShell variant="centered">
     <Head title="Your domain already has a workspace" />
     <div className={classes.form}>
@@ -119,9 +132,24 @@ const ClaimedScreen = ({ claim }: { claim: ClaimedDomain }) => (
         Each domain has one workspace, so there is no second one to create for yours.
       </Text>
       <ClaimedDomainNotice claim={claim} />
-      <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
-        {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
-      </Button>
+      {subscriptionHeld && (
+        <Text size="sm" c="var(--app-text-secondary)" mt="md">
+          Your AWS Marketplace subscription is recorded and is not attached to a workspace yet. Nothing has been lost
+          and you are not paying twice. Write to the support contact shown on the subscription in AWS Marketplace, and
+          we will attach it to {claim.workspaceName ?? 'the workspace at your domain'}.
+        </Text>
+      )}
+      {signedIn ? (
+        <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
+          {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
+        </Button>
+      ) : (
+        claim.joinMethods.length > 0 && (
+          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.visit(loginPath())}>
+            Go to sign in
+          </Button>
+        )
+      )}
     </div>
   </PageShell>
 );
@@ -136,6 +164,7 @@ const NewWorkspacePage = () => {
     suggestedEmail,
     freeQueueHours,
     claimedDomain,
+    marketplaceSubscription,
     errors = {},
   } = usePage<PageProps>().props;
 
@@ -165,7 +194,8 @@ const NewWorkspacePage = () => {
     .filter(([key]) => !drawnFields.includes(key))
     .flatMap(([, refusal]) => refusal);
 
-  if (claimedDomain) return <ClaimedScreen claim={claimedDomain} />;
+  if (claimedDomain)
+    return <ClaimedScreen claim={claimedDomain} signedIn={!needsEmail} subscriptionHeld={marketplaceSubscription} />;
 
   return (
     <div className={classes.page}>

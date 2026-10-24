@@ -235,6 +235,65 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_workspace_path
   end
 
+  # -- A buyer arriving from AWS Marketplace ---------------------------------
+  #
+  # They have paid, and they are signed out: the fulfilment URL signs out
+  # whoever was on the browser, because in AWS the subscribe button is usually
+  # pressed by somebody who will never open the product. So this is the one
+  # person who reaches the form with money down and no session.
+
+  # Driven through the real fulfilment URL rather than by writing the session,
+  # because being signed out is half of what this has to cope with and the
+  # controller is what does the signing out.
+  def arrive_from_marketplace
+    Billing::MarketplaceSellerClient.stubs(:new).returns(FakeMarketplaceSellerClient.new)
+    post marketplace_registration_landing_path, params: { "x-amzn-marketplace-token" => "tok" }
+    follow_redirect!
+    follow_redirect!
+  end
+
+  # Without this they are refused on a field with "already has a workspace — ask
+  # someone there to invite you", which is advice for a stranger and the wrong
+  # thing to tell somebody who has just paid.
+  test "a buyer whose domain already has a workspace is shown that, not a field error" do
+    create(:company, email_domain: "acme-robotics.example")
+    arrive_from_marketplace
+
+    post workspace_path, params: valid_params
+    follow_redirect!
+
+    assert_inertia_props do |props|
+      assert_equal "acme-robotics.example", props.dig(:claimedDomain, :domain)
+      assert props[:marketplaceSubscription], "the screen has to say what became of the subscription"
+      assert_equal "dana@acme-robotics.example", props[:suggestedEmail],
+                   "the address has to survive the refusal, or the next render cannot work the domain out"
+    end
+  end
+
+  # Telling a visitor whether a domain has a workspace, and what it is called, is
+  # not ours to give away on an address they merely typed. A paid subscription is
+  # what makes a buyer not an arbitrary visitor.
+  test "a stranger typing the same address is told nothing about the domain" do
+    create(:company, email_domain: "acme-robotics.example")
+
+    post workspace_path, params: valid_params
+    follow_redirect!
+
+    assert_inertia_props do |props|
+      assert_nil props[:claimedDomain]
+      assert_not props[:marketplaceSubscription]
+    end
+  end
+
+  test "a buyer at a free domain still gets the form" do
+    arrive_from_marketplace
+
+    assert_inertia_props do |props|
+      assert_nil props[:claimedDomain]
+      assert props[:marketplaceSubscription]
+    end
+  end
+
   # -- Where this is not the product -----------------------------------------
 
   # The screens ship before the product is ready to take strangers, so they are

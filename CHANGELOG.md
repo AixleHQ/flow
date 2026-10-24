@@ -215,6 +215,19 @@ governance, community health — carry none.
 - **Company settings**: a new workspace is no longer billed for the part of its
   first hour that came before it was created. A workspace set up at 04:26 was
   charged for the whole of 04:00; it is now charged from 04:26.
+- **Sign-in & onboarding**: a buyer arriving from AWS Marketplace whose email
+  domain already has a workspace is now shown that workspace and the ways into
+  it, and told that their subscription is recorded and not yet attached to
+  anything. They were previously refused on a form field with advice written
+  for a stranger, and left with no idea what had become of what they had paid
+  for.
+- **Company settings**: the record of an AWS Marketplace subscription now
+  carries the dates it started and ended. Both columns existed and neither was
+  ever written.
+- **Company settings**: the final metering call made when a subscription ends
+  no longer reports an hour the hourly run has already had accepted, which made
+  its summary read as though those minutes were newly billed when they were
+  not.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address
