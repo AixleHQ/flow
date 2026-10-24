@@ -17,6 +17,8 @@ interface Props {
   messenger: string;
   signInLabel: string;
   account?: { name: string | null; email: string | null } | null;
+  // `other_company`: not one name but the visitor's companies that connected the messenger workspace
+  // ("Acme or Globex"), or a phrase when none of theirs did.
   workspace?: string;
   signInUrl?: string;
   loginUrl?: string;
@@ -59,8 +61,8 @@ function ChatLink({ state, provider, messenger, signInLabel, account, workspace,
             </>
           )}
           {state === 'other_company' && (
-            <Message title={`Switch to ${workspace}`}>
-              This {messenger} workspace is connected to the Aixle workspace {workspace}. Switch to it, then open the
+            <Message title="Switch company in Aixle">
+              This {messenger} workspace is connected to Aixle through {workspace}. Switch to it in Aixle, then open the
               link again.
             </Message>
           )}

@@ -1,6 +1,18 @@
 # frozen_string_literal: true
 
 class WorkflowRun < ApplicationRecord
+  # The newest `limit` runs of each task, newest first, keyed by task id — what a page
+  # of cards shows, without loading every task's whole run history.
+  def self.recent_by_task(task_ids, limit:)
+    return {} if task_ids.blank?
+
+    ranked = where(board_task_id: task_ids).select(
+      "workflow_runs.*, ROW_NUMBER() OVER (PARTITION BY board_task_id ORDER BY created_at DESC, id DESC) AS task_rank"
+    )
+    from(ranked, :workflow_runs).where("task_rank <= ?", limit).order(created_at: :desc, id: :desc)
+                                .group_by(&:board_task_id)
+  end
+
   # A run whose step is waiting for a session slot is itself `running`: queueing
   # is a property of the child. A board card that reads the run state therefore
   # claims work is happening while nothing is — so the runs that are actually

@@ -161,6 +161,23 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_equal [ "teams", "lifecycle" ], [ installed.chat_provider, installed.status_reporting ]
   end
 
+  test "a chat trigger's channel stays with its company: not exported, and dropped from an older template" do
+    create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+    create(:trigger_binding, project: @source, workflow: @source.workflows.first, enabled: false, chat_provider: "teams",
+                             filter_predicate: { "text" => "deploy" })
+
+    result = export
+
+    entry = result.package.definition["triggers"].find { |t| t["kind"] == "chat" }
+    assert_equal({ "text" => "deploy" }, entry["filter_predicate"])
+    assert_match(/its channel is not exported; the installer connects one/, result.notes.join)
+
+    entry["filter_predicate"] = { "channel" => "19:leaked@thread.tacv2", "conversation.type" => "direct", "text" => "deploy" }
+    installed = TriggerBinding.find_by!(project: install(result.package).project, event_type: "chat.message")
+    assert_equal [ { "text" => "deploy", "provider" => "teams" }, nil, false ],
+                 [ installed.filter_predicate, installed.chat_conversation, installed.enabled ]
+  end
+
   test "a workflow using a tracker tool exports a tracker requirement the installer can resolve" do
     tool = create(:tool, :system, name: "tracker_update_issue", requires_integration: Trackers::CAPABILITY)
     step = @source.workflows.sole.steps.order(:position).first

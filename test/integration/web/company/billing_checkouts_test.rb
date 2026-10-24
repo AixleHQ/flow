@@ -17,7 +17,7 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
   end
 
   test "an administrator is sent to Stripe's page" do
-    post company_billing_checkout_path
+    post company_billing_checkout_path, headers: { "X-Inertia" => "true" }
 
     # 409 + X-Inertia-Location: an Inertia visit is an XHR and cannot follow a
     # cross-origin redirect, so the client is told to leave the application.

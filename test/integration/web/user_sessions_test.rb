@@ -86,4 +86,17 @@ class Web::UserSessionsTest < ActionDispatch::IntegrationTest
     assert first.reload.revoked_at
     assert_equal 1, UserSession.live.where(user: @user).count
   end
+
+  test "signing in removes sessions that ended long ago, with the methods they proved" do
+    sign_in_as(@user)
+    ended = UserSession.sole
+    assert ended.proofs.exists?, "a password sign-in records how the person signed in"
+    delete logout_path
+
+    travel(UserSession::KEEP_ENDED + 1.day) do
+      sign_in_as(@user)
+    end
+
+    assert_not UserSession.exists?(ended.id)
+  end
 end

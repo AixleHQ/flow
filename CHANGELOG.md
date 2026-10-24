@@ -13,7 +13,42 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-24
+
+### Changed
+- **Tasks**: a board that agents keep changing refreshes once per burst of
+  changes, and at least every few seconds, instead of once per change, and each
+  refresh carries about half the data. The REST endpoint that lists board tasks
+  takes `view=card` to leave task descriptions out.
+- Request logs name who made the request: the signed-in user (`user=`), and for
+  an MCP call the personal token's user or the agent session (`session=`). Web,
+  MCP, job and Temporal worker processes log their memory every five minutes as
+  `[memory]` lines.
+
+### Fixed
+- A web server's memory no longer grows with every page it serves until the
+  process is killed for memory; on a busy deployment that happened about once
+  a day, failing the requests in flight.
+- **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
+  Slack, and describes the `/help` list as the app sends it, naming no project.
+
+## [1.6.0] - 2026-10-24
+
 ### Added
+- **Integrations**: several companies can connect the same Slack workspace or
+  Microsoft 365 organization, as peers. Each reaches only the channels connected
+  to it, a shared channel starts each company's own triggers and answers `/help`
+  once, `/run` offers the workflows of every company of yours that connected the
+  workspace, and an agent changes only the bot messages posted for its company.
+  Disconnecting one company leaves the others working; uninstalling the app in
+  Slack stops it for all of them, and reinstalling from any restores it.
+- **Integrations**: Slack and Microsoft Teams channels are connected to a
+  company from inside the channel: ask for a code in Flow for a named channel,
+  then mention the app with `connect <code>` there, and the app confirms it in
+  the channel, naming the company and what starts the trigger. Posted in any
+  other channel the code connects nothing, and a refused code is shown only to
+  whoever posted it. A channel can be connected for posting only, and
+  disconnected from the Slack or Teams row.
 - **Admin**: a Feature flags page lists every declared flag with where its
   value comes from. Super admins can set a flag's global value, turn it off
   everywhere, and add or remove company overrides, each with a required reason
@@ -21,6 +56,23 @@ governance, community health — carry none.
   A company's admin page lists its feature overrides.
 
 ### Changed
+- **Triggers & gates**: a chat trigger listens in exactly one channel connected
+  to the company and cannot be switched on without one; a channel id can no
+  longer be typed, and conditions cannot name a channel. Existing triggers keep
+  their channel; one that fired from several channels is split into one trigger
+  per channel, and one that never fired, or listened to Slack direct messages,
+  is switched off as "Needs a channel". A 1:1 Teams chat starts no trigger;
+  `/run` still works there.
+- **Workflows**: agents post, read, edit and delete chat messages only in
+  channels connected to the company and in the thread their run came from. When
+  Slack rate-limits the app, `chat_*` tools answer `rate_limited` with
+  `retry_after` instead of a plain failure.
+- **Integrations**: Slack asks for `channels:read` and `groups:read` to show a
+  connected channel's name, and `users:read` to name the app the way Slack
+  completes a mention of it and to name who connected a channel. Operators: add
+  them (and the `channel_rename` and `group_rename` events) to the Slack app, and
+  set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
+  app once to pick them up.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.
@@ -28,6 +80,27 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Tasks**: agents can attach files of several megabytes to a task, and an
+  attachment no longer slows other agents down. Reading a file out of an agent's
+  container cost seconds of server CPU per megabyte, so a file over about 4 MB
+  timed out unattached, and every tool call served alongside it waited.
+- **Admin**: a super admin can sign out. Every admin page has a **Sign out**
+  button that ends the session and returns to the admin sign-in; before, the
+  admin had none, and a sign-out request sent a super admin back into the admin
+  still signed in. **Back to app** now shows only while impersonating someone.
+- **Repositories**: an agent's first commit no longer fails with "Author
+  identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
+  commit is authored and committed by **Aixle Flow** with the address
+  `noreply@<DOMAIN>` of your deployment, instead of a name the agent chose.
+- **Triggers & gates**: an agent can gate a task on a GitLab merge request's
+  pipeline without help. `pull_request_checks` now returns the merge request's
+  head pipeline with its id, which `gitlab_pipeline_completed` takes, and links
+  each CI job to its job page instead of leaving the link empty.
+- **Admin**: **Permanently delete** on a user's page works again. It was refused
+  with "a database constraint prevented removal" for anyone who had signed in
+  since sign-in methods began to be recorded per session.
+- **Sign-in & onboarding**: signing in no longer fails with a server error once
+  one of your earlier sessions ended more than 30 days ago.
 - **Admin**: in the dark theme, form fields stay dark after moving between
   admin pages; they turned white with light grey text, so typed values were
   barely readable. The "No limit — unbilled" badge and the permanent-delete
@@ -718,7 +791,9 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.5.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.7.0...develop
+[1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/AixleHQ/flow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0

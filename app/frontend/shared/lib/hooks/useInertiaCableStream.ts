@@ -9,6 +9,8 @@ interface Options {
   except?: string[];
   enabled?: boolean;
   debounceMs?: number;
+  /** Reload no later than this after the first refresh of a burst, however long it keeps coming. */
+  maxWaitMs?: number;
 }
 
 /**
@@ -22,12 +24,13 @@ interface Options {
  * to avoid visual flickering from multiple near-simultaneous refreshes.
  */
 export function useInertiaCableStream(signedStreamName: string | undefined, options: Options = {}) {
-  const { only, except, enabled = true, debounceMs = 150 } = options;
+  const { only, except, enabled = true, debounceMs = 150, maxWaitMs } = options;
 
   const subRef = useRef<Subscription | null>(null);
   const optionsRef = useRef({ only, except });
   optionsRef.current = { only, except };
   const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const burstStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!signedStreamName || !enabled) return;
@@ -37,14 +40,21 @@ export function useInertiaCableStream(signedStreamName: string | undefined, opti
 
     const scheduleReload = () => {
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      const now = Date.now();
+      burstStartedAtRef.current ??= now;
+      const delay =
+        maxWaitMs === undefined
+          ? debounceMs
+          : Math.max(0, Math.min(debounceMs, burstStartedAtRef.current + maxWaitMs - now));
       reloadTimerRef.current = setTimeout(() => {
         reloadTimerRef.current = null;
+        burstStartedAtRef.current = null;
         const opts = optionsRef.current;
         router.reload({
           ...(opts.only ? { only: opts.only } : {}),
           ...(opts.except ? { except: opts.except } : {}),
         });
-      }, debounceMs);
+      }, delay);
     };
 
     const timer = setTimeout(() => {
@@ -77,10 +87,11 @@ export function useInertiaCableStream(signedStreamName: string | undefined, opti
         clearTimeout(reloadTimerRef.current);
         reloadTimerRef.current = null;
       }
+      burstStartedAtRef.current = null;
       if (subRef.current) {
         subRef.current.unsubscribe();
         subRef.current = null;
       }
     };
-  }, [signedStreamName, enabled, debounceMs]);
+  }, [signedStreamName, enabled, debounceMs, maxWaitMs]);
 }

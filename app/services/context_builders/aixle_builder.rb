@@ -169,6 +169,10 @@ module ContextBuilders
         on its board — is assigned, or gets a comment), or `event`.
         - Unattended kinds (chat, schedule, webhook, event, tracker, and an `auto`
           column trigger) need `allow_non_interactive` on every step.
+        - A chat trigger listens in one channel connected to the company
+          (`chat_channel_id` from `list_chat_channels`). To connect another, call
+          `create_chat_connect_code` and give the user its `invite`, `mention` and
+          `command` to post in that channel.
         - A tracker trigger usually wants `subject_policy: find_or_create_task`, so
           every event about one issue lands on the same board task. Moving the
           issue on is the workflow's job, with the tracker_* tools.

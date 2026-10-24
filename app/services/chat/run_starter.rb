@@ -13,6 +13,8 @@ module Chat
     # `dedup_key` names the request in the messenger: a retried delivery of it
     # must not start a second run.
     def start!(integration:, user:, entry:, source:, subject:, data:, dedup_key:)
+      integration = RunCatalog.install_for(integration, entry.project)
+      data = data.merge("integration_id" => integration.id) if data.key?("integration_id")
       event = record(integration, user, entry, source, subject, data, dedup_key)
       run = TriggerEngine.fire_workflow(workflow: entry.workflow, project: entry.project, actor: user, event: event,
                                         source: ACTION_SOURCE)

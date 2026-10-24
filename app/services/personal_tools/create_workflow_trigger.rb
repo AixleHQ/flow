@@ -59,11 +59,15 @@ module PersonalTools
                                             "/workspace/tracker/. Off by default."
       param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
                             description: "kind=chat: the messenger to listen to. Required for kind=chat."
+      param :chat_channel_id, type: :integer,
+                              description: "kind=chat: the one channel the trigger listens to, from list_chat_channels. " \
+                                           "Required to enable a chat trigger. A channel not listed there is connected " \
+                                           "with create_chat_connect_code; create the trigger with enabled=false until then."
       param :filter_predicate, type: :object,
                                description: "Only fire when the event data contains these key/value pairs, " \
-                                            "e.g. {\"channel\": \"C123\"}, {\"conversation.type\": \"direct\"} or " \
-                                            "{\"text\": {\"op\": \"starts_with\", \"value\": \"deploy\"}}. A chat " \
-                                            "message's text has the bot's mention removed. Empty means every event of this type."
+                                            "e.g. {\"text\": {\"op\": \"starts_with\", \"value\": \"deploy\"}}. A chat " \
+                                            "message's text has the bot's mention removed. A chat trigger's channel is " \
+                                            "chat_channel_id, never a condition. Empty means every event of this type."
       param :schedule_config, type: :object,
                               description: "Required for kind=schedule: {\"cron\": \"0 9 * * 1-5\", \"timezone\": " \
                                            "\"Europe/Berlin\"}. ALWAYS pass timezone explicitly — an empty timezone " \

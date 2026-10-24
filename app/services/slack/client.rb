@@ -7,6 +7,18 @@ module Slack
   class Client
     class Error < StandardError; end
 
+    # Slack's answer to a call over its limit: HTTP 429 with `ratelimited` and
+    # how many seconds to wait. One app's limits are shared by every company
+    # that connected the workspace.
+    class RateLimited < Error
+      attr_reader :retry_after
+
+      def initialize(retry_after)
+        @retry_after = retry_after
+        super("ratelimited")
+      end
+    end
+
     BASE = "https://slack.com/api"
 
     class << self
@@ -50,6 +62,12 @@ module Slack
         }.compact)
       end
 
+      # A message only `user` sees, in the channel (and thread) given. Requires chat:write.
+      def post_ephemeral(token:, channel:, user:, text:, thread_ts: nil)
+        post_json("chat.postEphemeral", token: token, payload: { channel: channel, user: user, text: text,
+                                                                 thread_ts: thread_ts }.compact)
+      end
+
       # Edit a message the bot posted, addressed by its `ts`. Slack replaces the
       # whole message: fields left nil are dropped from it, so a text-only update
       # of a Block Kit message clears its blocks. Requires the chat:write scope.
@@ -73,6 +91,28 @@ module Slack
         post("conversations.replies", token: token, params: {
           channel: channel, ts: ts, limit: limit, cursor: cursor
         })
+      end
+
+      # Who the token is: the bot's own user id and username. Needs no scope.
+      def auth_test(token:)
+        post("auth.test", token: token)
+      end
+
+      # One member of the workspace, the bot included, with the names Slack
+      # shows for them. Requires users:read.
+      def user_info(token:, user:)
+        post("users.info", token: token, params: { user: user })
+      end
+
+      # A link to one message. Needs no scope.
+      def permalink(token:, channel:, message_ts:)
+        post("chat.getPermalink", token: token, params: { channel: channel, message_ts: message_ts })
+      end
+
+      # One conversation's details, its name among them. Requires channels:read
+      # for public channels and groups:read for private ones.
+      def conversation_info(token:, channel:)
+        post("conversations.info", token: token, params: { channel: channel })
       end
 
       # Upload one or more files and share them in a SINGLE Slack message. Each
@@ -185,6 +225,7 @@ module Slack
       # Slack always returns HTTP 200 with an { "ok": bool, "error": "..." } body.
       def parse!(resp)
         body = JSON.parse(resp.body.to_s)
+        raise RateLimited, resp.headers["Retry-After"].to_i.clamp(1, 600) if body["error"] == "ratelimited"
         raise Error, (body["error"].presence || "slack_api_error") unless body["ok"]
 
         body

@@ -131,7 +131,12 @@ class Workflow < ApplicationRecord
   def unarchive!(enable_trigger_ids: [])
     transaction do
       update!(deleted_at: nil)
-      trigger_bindings.where(id: enable_trigger_ids).find_each { |binding| binding.update!(enabled: true) }
+      trigger_bindings.where(id: enable_trigger_ids).find_each do |binding|
+        # Its channel may have been disconnected meanwhile; it waits for a new one.
+        next if binding.chat? && !binding.chat_channel_usable?
+
+        binding.update!(enabled: true)
+      end
     end
   end
 

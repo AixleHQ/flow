@@ -41,17 +41,14 @@ module Aixle
     ]
     config.lograge.custom_options = lambda do |event|
       return if event.name.include?("action_cable")
+
+      options = { host: event.payload[:host], ip: event.payload[:ip], ff: event.payload[:ff],
+                  user: event.payload[:user], session: event.payload[:session] }
       # MCP tool calls and the three credential endpoints post secrets in bodies
       # whose keys no parameter filter can predict; their params are never logged.
-      return if event.payload[:path].to_s.match?(%r{\A/(mcp|action_mcp|agents/credentials|agents/git/credentials|cloud/aws/credentials|azure/git/credentials)(/|\?|\z)})
+      return options if event.payload[:path].to_s.match?(%r{\A/(mcp|action_mcp|agents/credentials|agents/git/credentials|cloud/aws/credentials|azure/git/credentials)(/|\?|\z)})
 
-      {
-        host: event.payload[:host],
-        ip: event.payload[:ip],
-        ff: event.payload[:ff],
-        user: event.payload[:user],
-        params: event.payload[:params].except("controller", "action", "format", "utf8")
-      }
+      options.merge(params: event.payload[:params].except("controller", "action", "format", "utf8"))
     end
 
     # Please, add to the `ignore` list any other `lib` subdirectories that do

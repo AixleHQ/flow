@@ -10,6 +10,7 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
 
   test "moves the project and everything it owns into the target, keeping every id" do
     task_numbers = [ @s.parent_task.reload.number, @s.child_task.reload.number ]
+    ChatConnectCode.issue!(project: @s.project, provider: "slack", user: @s.owner, channel: "#deploys")
 
     report = move(member_policy: "add")
 
@@ -23,6 +24,9 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal @s.parent_task, @s.comment.reload.board_task
     assert_equal "launchpad-deploy", @s.webhook_endpoint.reload.slug
     assert_equal [ @s.schedule_binding.id, @s.chat_binding.id ].sort, TriggerBinding.where(project: project).ids.sort
+    assert_equal [ false, nil ], [ @s.chat_binding.reload.enabled, @s.chat_binding.chat_conversation ],
+                 "a channel is the source company's, so the chat trigger waits for one of the target's"
+    assert_equal 0, ChatConnectCode.where(project: project).count
     assert_equal "completed", @s.completed_run.reload.state
     assert_equal "DEPLOY_TOKEN", @s.config_item.reload.name
 

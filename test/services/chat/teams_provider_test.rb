@@ -8,9 +8,11 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     @company = @user.companies.first
     @project = create(:project, owner: @user, company: @company)
     @workflow = create(:workflow, scope: @project)
+    @teams = Integration.create!(provider: :teams, company: @company, name: "Contoso", status: :active,
+                                 settings: { "tenant_id" => TEAMS_CUSTOMER_TENANT })
     @endpoint = create(:webhook_endpoint, slug: "teams-tenant-#{TEAMS_CUSTOMER_TENANT}", provider: :teams,
                                           verification_strategy: :none, secret: nil, company: @company,
-                                          config: { "integration_id" => 42 })
+                                          config: { "integration_id" => @teams.id })
   end
 
   def normalized(activity)
@@ -31,7 +33,7 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
     assert_equal "deploy staging", data["text"]
     assert_equal "<at>Aixle Flow</at> deploy  staging", data["raw_text"]
     assert_equal TEAMS_SERVICE_URL, data["service_url"]
-    assert_equal 42, data["integration_id"]
+    assert_equal @teams.id, data["integration_id"]
   end
 
   test "a message links back to itself the way Teams documents deep links" do

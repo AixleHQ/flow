@@ -3,7 +3,9 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Integration } from '@/types/generated';
+import { buildChatChannel, buildChatConnectCode, buildConnectedChatChannel } from 'test/factories/chatChannel';
 import { buildIntegration } from 'test/factories/integration';
+import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { IntegrationsContent } from './IntegrationsContent';
@@ -1502,6 +1504,190 @@ describe('IntegrationsContent', () => {
     expect(
       screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
     ).toBeInTheDocument();
+  });
+
+  describe('the channels of a Slack or Teams connection', () => {
+    const CHANNELS = '/api/v1/projects/1/chat_channels';
+    const CODES = '/api/v1/projects/1/chat_connect_codes';
+    const acmeSlack = makeIntegration({ id: 8, name: 'Acme Slack', provider: 'slack' });
+
+    const openChannels = async (name = 'Acme Slack') => {
+      await userEvent.click(screen.getByRole('button', { name: `Channels for ${name}` }));
+      return screen.findByRole('dialog', { name: /channels$/ });
+    };
+
+    const renderProject = (integrations: Integration[], props: Record<string, unknown> = {}) =>
+      renderPage(
+        <IntegrationsContent
+          title="Integrations"
+          basePath="/company/projects/1/integrations"
+          projectId={1}
+          slack={{ enabled: true }}
+          teams={{ enabled: true }}
+          integrations={integrations}
+        />,
+        { props: { ...settingsProps, ...props } },
+      );
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("opens the company's channels in that messenger from one connection, with who connected them", async () => {
+      const fetchSpy = answerFetch({
+        [`GET ${CHANNELS}`]: {
+          channels: [
+            buildConnectedChatChannel(),
+            buildConnectedChatChannel({ id: 12, name: 'ops', label: '#ops', requested_by: null, posted_by: 'Olo' }),
+          ],
+        },
+      });
+      renderProject([
+        acmeSlack,
+        makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
+      ]);
+
+      expect(screen.queryByRole('list', { name: 'Slack channels' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Channels for Ops Slack' })).not.toBeInTheDocument();
+      const dialog = await openChannels();
+      expect(dialog).toHaveAccessibleName('Slack channels');
+
+      const list = await within(dialog).findByRole('list', { name: 'Slack channels' });
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+      expect(within(list).getByText('#deploys')).toBeInTheDocument();
+      expect(within(list).getByText(/^connected by Jane Doe · posted by ivan · /)).toBeInTheDocument();
+      expect(within(list).getByText(/^posted by Olo · /)).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack`, expect.anything());
+    });
+
+    it("links to the bot's confirmation in the channel, where the server has one", async () => {
+      const permalink = 'https://acme.slack.com/archives/C042/p1761123456000100';
+      answerFetch({
+        [`GET ${CHANNELS}`]: {
+          channels: [
+            buildConnectedChatChannel({ confirmation_url: permalink }),
+            buildConnectedChatChannel({ id: 12, name: 'ops', label: '#ops' }),
+          ],
+        },
+      });
+      const { unmount } = renderProject([acmeSlack]);
+
+      const list = await within(await openChannels()).findByRole('list', { name: 'Slack channels' });
+      const [deploys, ops] = within(list).getAllByRole('listitem');
+      const link = within(deploys).getByRole('link', { name: 'View in Slack' });
+      expect(link).toHaveAttribute('href', permalink);
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noreferrer');
+      expect(within(ops).queryByRole('link')).not.toBeInTheDocument();
+      unmount();
+
+      const message = 'https://teams.microsoft.com/l/message/19%3Aabc%40thread.tacv2/1761123456000';
+      answerFetch({
+        [`GET ${CHANNELS}`]: {
+          channels: [
+            buildConnectedChatChannel({
+              id: 21,
+              name: 'General',
+              label: 'General',
+              team_name: 'Sales',
+              provider: 'teams',
+              confirmation_url: message,
+            }),
+          ],
+        },
+      });
+      renderProject([makeIntegration({ id: 5, name: 'Microsoft Teams', provider: 'teams' })]);
+
+      const teamsDialog = await openChannels('Microsoft Teams');
+      const teamsList = await within(teamsDialog).findByRole('list', { name: 'Microsoft Teams channels' });
+      expect(within(teamsList).getByRole('link', { name: 'View in Teams' })).toHaveAttribute('href', message);
+    });
+
+    it('lists none for a Teams connection still waiting for approval, nor without a project', () => {
+      const pendingTeams = makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' });
+      const { unmount } = renderProject([pendingTeams]);
+
+      expect(screen.queryByRole('button', { name: /^Channels for/ })).not.toBeInTheDocument();
+      unmount();
+
+      renderPage(
+        <IntegrationsContent title="Integrations" basePath="/company/integrations" integrations={[acmeSlack]} />,
+        {
+          props: settingsProps,
+        },
+      );
+      expect(screen.queryByRole('button', { name: /^Channels for/ })).not.toBeInTheDocument();
+    });
+
+    it('connects a channel with a code posted in it, and lists it', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const issued = buildChatConnectCode({ expires_at: new Date(Date.now() + 600_000).toISOString() });
+      let channels: ReturnType<typeof buildConnectedChatChannel>[] = [];
+      let state: 'pending' | 'redeemed' = 'pending';
+      const fetchSpy = answerFetch({
+        [`GET ${CHANNELS}`]: () => ({ channels }),
+        [`POST ${CODES}`]: jsonResponse(issued, 201),
+        [`GET ${CODES}/31`]: () => ({
+          ...issued,
+          state,
+          ...(state === 'redeemed' ? { channel: buildChatChannel() } : {}),
+        }),
+      });
+      renderProject([acmeSlack]);
+
+      const channelsDialog = await openChannels();
+      expect(await within(channelsDialog).findByText(/No channel is connected yet/)).toBeInTheDocument();
+      await userEvent.click(within(channelsDialog).getByRole('button', { name: 'Connect a channel' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), 'deploys');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
+      expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toHaveValue(
+        'connect aixle-7F3K9QXM',
+      );
+      const request = fetchSpy.mock.calls.find(([url, init]) => url === CODES && init?.method === 'POST');
+      expect(JSON.parse(request?.[1]?.body as string)).toEqual({ provider: 'slack', channel: 'deploys' });
+
+      channels = [buildConnectedChatChannel()];
+      state = 'redeemed';
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+
+      expect(await within(dialog).findByText('Connected to #deploys')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+      const back = await screen.findByRole('dialog', { name: 'Slack channels' });
+      expect(await within(back).findByRole('list', { name: 'Slack channels' })).toHaveTextContent('#deploys');
+    });
+
+    it('disconnects a channel only after saying what that switches off', async () => {
+      const fetchSpy = answerFetch({
+        [`GET ${CHANNELS}`]: { channels: [buildConnectedChatChannel()] },
+        [`DELETE ${CHANNELS}/11`]: new Response(null, { status: 204 }),
+      });
+      renderProject([acmeSlack]);
+
+      const channelsDialog = await openChannels();
+      await userEvent.click(await within(channelsDialog).findByRole('button', { name: 'Disconnect #deploys' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Disconnect channel' });
+      expect(within(dialog).getByText(/Chat triggers listening there switch off/)).toBeInTheDocument();
+      expect(fetchSpy).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'DELETE' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}/11`, expect.objectContaining({ method: 'DELETE' })),
+      );
+      expect(await screen.findByText(/No channel is connected yet/)).toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Slack channels' })).not.toBeInTheDocument();
+    });
+
+    it('shows the channels to a read-only member without the controls', async () => {
+      answerFetch({ [`GET ${CHANNELS}`]: { channels: [buildConnectedChatChannel()] } });
+      renderProject([acmeSlack], { projectPermissions: { canExecute: false, canManage: false } });
+
+      const dialog = await openChannels();
+      expect(await within(dialog).findByText('#deploys')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Connect a channel' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Disconnect #deploys' })).not.toBeInTheDocument();
+    });
   });
 
   describe('Atlassian entry and Bitbucket', () => {

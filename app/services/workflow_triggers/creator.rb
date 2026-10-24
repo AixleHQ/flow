@@ -21,7 +21,7 @@ module WorkflowTriggers
 
     BINDING_KEYS = %i[name trigger_mode enabled cooldown_seconds status_reporting subject_policy
                       subject_column_id subject_title_template filter_predicate schedule_config
-                      project_tracker_id aixle_changes copy_attachments].freeze
+                      project_tracker_id aixle_changes copy_attachments chat_channel_id].freeze
 
     def self.call(...) = new(...).call
 

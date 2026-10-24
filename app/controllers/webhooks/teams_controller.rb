@@ -24,7 +24,8 @@ class Webhooks::TeamsController < ActionController::API
     # A tenant no company has connected is acknowledged; someone asking the bot
     # for something there is told so, at most daily, and nothing is stored.
     endpoint = endpoint_for(activity.dig("channelData", "tenant", "id") || activity.dig("conversation", "tenantId"))
-    integration = Integration.active.find_by(id: endpoint&.config.to_h["integration_id"], provider: :teams)
+    integration = endpoint&.chat_install
+    integration = nil unless integration&.teams?
     if integration.nil?
       Teams::UnboundTenantHintJob.hint_once(activity) if addressed?(activity)
       return head :ok
@@ -80,7 +81,7 @@ class Webhooks::TeamsController < ActionController::API
     if activity["action"].to_s.start_with?("remove")
       # Removed from a team, the app is gone from every channel of it.
       rows = if conversation.team_external_id.present?
-        ChatConversation.where(integration: integration, team_external_id: conversation.team_external_id)
+        ChatConversation.in_workspace_of(integration.id).where(team_external_id: conversation.team_external_id)
       else
         ChatConversation.where(id: conversation.id)
       end
@@ -97,7 +98,7 @@ class Webhooks::TeamsController < ActionController::API
   def file_consent(integration, activity)
     value = activity["value"].to_h
     context = Teams::FileSender.consent_verifier.verified(value.dig("context", "token")).to_h
-    conversation = ChatConversation.find_by(id: context["conversation_id"], integration: integration)
+    conversation = ChatConversation.in_workspace_of(integration.id).find_by(id: context["conversation_id"])
     from_there = conversation && conversation.external_id == activity.dig("conversation", "id").to_s.split(";messageid=", 2).first
     if from_there && value["action"] == "accept"
       upload = value["uploadInfo"].to_h.slice("uploadUrl", "contentUrl", "name", "uniqueId", "fileType")

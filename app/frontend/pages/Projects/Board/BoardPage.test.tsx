@@ -146,7 +146,7 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByText('Second page task')).toBeInTheDocument();
     expect(screen.getByText('Third page task')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/v1/projects/7/tasks?board_column_id=100&limit=1&offset=1',
+      '/api/v1/projects/7/tasks?board_column_id=100&limit=1&offset=1&view=card',
       expect.anything(),
     );
     // Nothing left to fetch, so the control goes away.

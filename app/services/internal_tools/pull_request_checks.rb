@@ -8,7 +8,9 @@ module InternalTools
       display_name "Pull Requests: CI Checks"
       description "Read the CI status of a pull request's head commit. `state` is pending, passed, failed, or none " \
                   "when no CI has reported yet. To wait for CI to finish without polling, create a board gate " \
-                  "instead. Returns JSON: {repository_id, checks: {state, head_sha, items: [{name, status, url}]}}."
+                  "instead. Returns JSON: {repository_id, checks: {state, head_sha, items: [{name, status, url}], " \
+                  "pipeline}}. On GitLab `pipeline` is the merge request's head pipeline {id, status, url}; its " \
+                  "id is the pipeline_id a gitlab_pipeline_completed gate takes. Elsewhere it is null."
       tags :pull_requests
       inject_when :pull_request_repositories_attached
       user_attachable false

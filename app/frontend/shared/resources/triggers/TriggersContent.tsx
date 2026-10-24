@@ -199,7 +199,6 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
             <TriggerCards
               triggers={shown}
               trackers={trackers}
-              chatProviders={chatProviders}
               readOnly={readOnly}
               onEdit={(t) => setPanel({ editing: t })}
               onDelete={remove}

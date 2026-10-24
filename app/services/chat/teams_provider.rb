@@ -23,6 +23,8 @@ module Chat
       kind = CONVERSATION_TYPES.fetch(conversation["conversationType"].to_s, "group")
       conversation_id, root_id = conversation["id"].to_s.split(";messageid=", 2)
       channel_data = activity["channelData"].to_h
+      # The key the conversation registry keeps a channel under (ChatConversation.record_teams!).
+      conversation_id = channel_data.dig("channel", "id").presence || conversation_id if kind == "channel"
       tenant_id = channel_data.dig("tenant", "id") || conversation["tenantId"]
       files, file_refs = attached_files(endpoint, activity, kind)
       {
@@ -68,7 +70,7 @@ module Chat
       return "#{base}?context=%7B%22contextType%22:%22chat%22%7D" unless kind == "channel"
 
       channel_data = activity["channelData"].to_h
-      group = ChatConversation.where(integration_id: endpoint.config.to_h["integration_id"], external_id: conversation_id)
+      group = ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).where(external_id: conversation_id)
                               .pick(:team_aad_group_id)
       query = { tenantId: channel_data.dig("tenant", "id"), groupId: group, parentMessageId: root_id || activity["id"],
                 teamName: channel_data.dig("team", "name"), channelName: channel_data.dig("channel", "name") }.compact
@@ -131,6 +133,40 @@ module Chat
       actor.to_h["name"].presence
     end
 
+    # The connect flow's answer. A targeted message cannot be answered in its
+    # thread, so its answer starts a new post in the channel.
+    def reply(event, text)
+      data = event.data.to_h
+      conversation = Teams::Notifier.conversation_for(data["integration_id"], data.dig("conversation", "id"))
+      return nil if conversation.nil?
+
+      Teams::Notifier.post(conversation, text: text, thread_id: data["targeted"] ? nil : data["thread_id"]).to_h["id"]
+    end
+
+    # Teams cannot show an answer to a mention to one person only, so a refusal
+    # is said at most once a minute per person per conversation.
+    def reply_privately(event, text)
+      data = event.data.to_h
+      key = "chat:private-reply:#{data.dig('conversation', 'id')}:#{data.dig('actor', 'id')}"
+      reply(event, text) if Rails.cache.write(key, true, expires_in: 1.minute, unless_exist: true)
+    end
+
+    # The message the code was posted in, whose thread holds the confirmation.
+    def permalink(event, _message_id) = event.data.to_h["url"]
+
+    def strong(text) = "**#{escape(text)}**"
+
+    def escape(text) = Teams::Notifier.escape(text)
+
+    def bot_mention(_event) = strong(Teams::AppPackage::NAME)
+
+    def person_name(_integration, actor) = actor.to_h["name"].presence
+
+    # Every addressed activity is recorded before it is processed, so the row exists.
+    def conversation_for(event, integration)
+      Teams::Notifier.conversation_for(integration.id, event.data.to_h.dig("conversation", "id"))
+    end
+
     # Microsoft's rule: the mention is an entity, and its own `text` is what to
     # remove — a name typed by hand is not a mention and stays in the request.
     def request_text(activity)
@@ -178,8 +214,8 @@ module Chat
     end
 
     def graph_files(endpoint, activity, kind)
-      conversation = ChatConversation.find_by(integration_id: endpoint.config.to_h["integration_id"],
-                                              external_id: activity.dig("conversation", "id").to_s.split(";messageid=", 2).first)
+      external_id = activity.dig("conversation", "id").to_s.split(";messageid=", 2).first
+      conversation = ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).find_by(external_id: external_id)
       return [ nil, nil ] if conversation.nil?
 
       path = message_path(conversation, activity, kind)

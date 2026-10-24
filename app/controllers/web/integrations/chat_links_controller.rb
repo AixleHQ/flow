@@ -12,21 +12,21 @@ class Web::Integrations::ChatLinksController < Web::ApplicationController
     integration = claim && link.integration_for(claim)
     return render_link(state: "expired") if integration.nil?
     return render_link(state: "sign_in", login_url: login_path) unless signed_in?
-    unless current_membership&.company_id == integration.company_id
-      return render_link(state: "other_company", workspace: integration.company.name)
+    unless linkable?(integration)
+      return render_link(state: "other_company", workspace: linkable_company_names(integration))
     end
 
     session[session_key] = params[:token]
     linked = ChatIdentity.exists?(provider: provider_key, workspace_id: claim[workspace_claim],
                                   external_user_id: claim[user_claim], user_id: current_user.id)
-    render_link(state: linked ? "linked" : "ready", workspace: integration.company.name,
+    render_link(state: linked ? "linked" : "ready", workspace: current_membership.company.name,
                 sign_in_url: sign_in_path_for(params[:token]))
   end
 
   def sign_in
     claim = link.claim(params[:token])
     integration = claim && link.integration_for(claim)
-    unless signed_in? && integration && current_membership&.company_id == integration.company_id
+    unless signed_in? && integration && linkable?(integration)
       return redirect_to(show_path_for(params[:token]))
     end
 
@@ -51,6 +51,20 @@ class Web::Integrations::ChatLinksController < Web::ApplicationController
   end
 
   private
+
+  # Any company of the person's that connected the workspace may link them, as
+  # long as it is the one they are working in.
+  def linkable?(integration)
+    current_membership.present? && integration.chat_peers.exists?(company_id: current_membership.company_id)
+  end
+
+  # Only the person's own companies are named: the others that connected the
+  # same workspace stay unseen (docs/design/shared-chat-workspaces.md, decision 17).
+  def linkable_company_names(integration)
+    names = Company.where(id: current_user.company_memberships.active.select(:company_id))
+                   .where(id: integration.chat_peers.select(:company_id)).order(:name).pluck(:name)
+    names.to_sentence(two_words_connector: " or ", last_word_connector: " or ").presence || "a company that connected it"
+  end
 
   def render_link(state:, **props)
     render inertia: "Integrations/ChatLink", props: {

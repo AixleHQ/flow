@@ -27,20 +27,24 @@ class Web::Company::Projects::TriggersControllerTest < ActionDispatch::Integrati
     end
   end
 
-  test "the chat form offers the connected messengers and the conversations the Teams bot knows" do
-    create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+  test "the chat form offers the connected messengers and the channels connected to the company" do
+    create(:integration, provider: :slack, status: :active, company: @company, project: nil,
+                         settings: { "bot_name" => "aixle-flow" })
     teams = create(:integration, provider: :teams, status: :active, company: @company, project: nil)
     create(:integration, provider: :teams, status: :active, company: create(:company), project: nil)
-    teams.chat_conversations.create!(provider: "teams", external_id: "19:a@thread.tacv2", kind: "channel",
-                                     name: "Onboarding", team_name: "Sales")
+    onboarding = connect_chat_channel(company: @company, provider: "teams", integration: teams,
+                                      external_id: "19:a@thread.tacv2", name: "Onboarding")
+    onboarding.update!(team_name: "Sales")
+    teams.chat_conversations.create!(provider: "teams", external_id: "19:b@thread.tacv2", kind: "channel", name: "Unconnected")
     teams.chat_conversations.create!(provider: "teams", external_id: "a:1dm", kind: "direct")
 
     get company_project_triggers_path(@project)
 
     assert_inertia_props do |props|
-      props[:chatProviders].map { |p| p[:key] } == %w[slack teams] &&
+      props[:chatProviders].map { |p| p.values_at(:key, :botName) } == [ %w[slack aixle-flow], [ "teams", "Aixle Flow" ] ] &&
         props[:chatProviders].last[:conversations] ==
-          [ { "id" => "19:a@thread.tacv2", "name" => "Onboarding", "kind" => "channel", "teamName" => "Sales" } ]
+          [ { "id" => onboarding.id, "name" => "Onboarding", "label" => "Onboarding", "kind" => "channel",
+              "teamName" => "Sales", "provider" => "teams" } ]
     end
   end
 end

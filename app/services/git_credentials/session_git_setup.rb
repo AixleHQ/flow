@@ -22,7 +22,17 @@ module GitCredentials
     # The runtime's exec default (30 s on Kubernetes) is shorter than a large
     # repository takes to clone.
     CLONE_TIMEOUT = 120
+    COMMIT_NAME = "Aixle Flow"
     HelperNotInstalled = Class.new(StandardError)
+
+    # Every agent commits as the deployment's own bot. Environment rather than git
+    # config: it covers every repository in the container, including ones the agent
+    # clones itself, and git ranks it above a `-c user.email=…` the agent adds.
+    def self.identity_env
+      email = "noreply@#{Settings.domain.to_s.split(':').first}"
+      { "GIT_AUTHOR_NAME" => COMMIT_NAME, "GIT_AUTHOR_EMAIL" => email,
+        "GIT_COMMITTER_NAME" => COMMIT_NAME, "GIT_COMMITTER_EMAIL" => email }
+    end
 
     def self.container_env(session)
       return {} unless Array(session.repositories).any? { |r| Vendor::PROVIDERS.include?(r.integration&.provider.to_s) }

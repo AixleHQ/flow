@@ -15,6 +15,12 @@ class MCPController < ActionController::API
     render plain: Array(body).join, status: status
   end
 
+  def append_info_to_payload(payload)
+    super
+    payload[:user] = @logged_user_id
+    payload[:session] = @logged_session_id
+  end
+
   private
 
   # Two principals on one endpoint, split by credential shape: an
@@ -29,11 +35,13 @@ class MCPController < ActionController::API
       return nil if user.nil?
 
       user.note_mcp_token_use!
+      @logged_user_id = user.id
       Tools::PersonalMCPRequestHandler.new(user)
     else
       session = MCP::SessionKey.session_for(key) || TerminalSession.find_by(mcp_key: key)
       return nil unless session&.active? && session.owner_entitled?
 
+      @logged_session_id = session.id
       Tools::MCPRequestHandler.new(session)
     end
   end

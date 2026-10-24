@@ -34,6 +34,11 @@ With a repository linked and an integration connected, a run can:
 Nothing in Flow rewrites your Git history behind your back: agents work on
 branches, and what lands is what your review process lets land.
 
+Every commit an agent makes has **Aixle Flow** as its author and committer,
+with the address `noreply@<your Flow domain>` (`noreply@flow.example.com` when
+Flow runs at `flow.example.com`), on every code host and whoever started the
+run.
+
 > warning Access is inherited by every step that lists the repository. If a
 > workflow should not be able to push, do not give its steps the repo — that is
 > the control, not an agent instruction asking it politely.

@@ -17,8 +17,8 @@ module Chat
   # as tracker tools require Trackers::CAPABILITY.
   CAPABILITY = "chat"
 
-  # Answered before any trigger runs, so no trigger may claim it as its command.
-  RESERVED_COMMAND = %r{\A/?help\z}i
+  # Answered before any trigger runs, so no trigger may claim them as its command.
+  RESERVED_COMMAND = %r{\A/?(?:help|connect)\z}i
 
   # Event data that routes a message rather than describing it.
   TRANSPORT_KEYS = %w[provider workspace conversation thread_id message_id actor file_refs url targeted requester].freeze
@@ -39,6 +39,15 @@ module Chat
 
     key = event.data.to_h["provider"].to_s
     key == event.source.to_s.split(":", 2).first ? provider(key) : nil
+  end
+
+  # `connect <code>`: answered before help and before any trigger (Chat::ChannelConnect).
+  def connect_request?(event)
+    provider_for(event).present? && ChannelConnect.request?(event)
+  end
+
+  def answer_connect(event)
+    ChannelConnect.call(event)
   end
 
   def help_request?(event)
@@ -67,18 +76,31 @@ module Chat
   end
 
   # What the trigger form offers: the messengers the project's company has
-  # connected, and the conversations each one's bot knows by name. Direct chats
-  # are one person's each, so the form offers them as a kind, not one by one.
+  # connected, and the channels connected to the company in each.
   def trigger_options(project)
     integrations = Integration.active.visible_for_project(project).where(provider: PROVIDERS.keys).to_a
-    known = ChatConversation.where(integration: integrations).where.not(kind: "direct")
-                            .order(:team_name, :name).group_by(&:provider)
+    known = ChannelAccess.channels(project).group_by(&:provider)
     integrations.map { |integration| integration.provider.to_s }.uniq.sort.map do |key|
-      { key: key, label: provider(key).label,
-        conversations: Array(known[key]).map do |row|
-          { id: row.external_id, name: row.name, kind: row.kind.to_s, team_name: row.team_name }
-        end }
+      { key: key, label: provider(key).label, bot_name: bot_name(key, project, fetch: false),
+        conversations: Array(known[key]).map { |row| ChannelAccess.describe(row) } }
     end
+  end
+
+  # The name people type to mention the bot, for instructions shown in Aixle.
+  # Slack's comes from the install, read once and kept; Teams' is the app's. `fetch: false` never calls Slack, for a page render.
+  def bot_name(key, project, fetch: true)
+    return Teams::AppPackage::NAME if key.to_s == TeamsProvider::KEY
+
+    integration = Slack::InstallResolver.call(company_id: project.company_id, project_id: project.id)
+    return nil if integration.nil?
+
+    integration.settings.to_h["bot_name"].presence || (remember_slack_bot_name(integration) if fetch)
+  end
+
+  def remember_slack_bot_name(integration)
+    name = SlackProvider.bot_name(integration.credentials_data["bot_token"])
+    integration.update_column(:settings, integration.settings.to_h.merge("bot_name" => name)) if name
+    name
   end
 
   def origin(run) = run&.shared_context.to_h["chat"].presence

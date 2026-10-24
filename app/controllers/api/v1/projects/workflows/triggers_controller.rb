@@ -97,7 +97,7 @@ module Api
             params.require(:trigger).permit(
               :name, :trigger_mode, :enabled, :cooldown_seconds, :status_reporting,
               :subject_policy, :subject_column_id, :subject_title_template, :project_tracker_id, :aixle_changes,
-              :copy_attachments,
+              :copy_attachments, :chat_channel_id,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )
           end
@@ -109,7 +109,7 @@ module Api
           # ---- serialization ----
 
           def serialized_triggers
-            bindings = current_workflow.trigger_bindings.includes(:created_by, :workflow).order(:created_at).to_a
+            bindings = current_workflow.trigger_bindings.includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a
             event_serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(bindings))
             column_bindings.includes(:board_column, :created_by, :workflow).map { |b| serializer.column(b) } +
               bindings.map { |b| event_serializer.binding(b) }

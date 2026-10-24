@@ -83,9 +83,14 @@ module InternalTools
       return target_error if target_error
 
       thread = slack_thread(channel)
-      result = Slack::Notifier.post(integration: integration, channel: channel, text: params[:text].presence,
-                                    blocks: blocks.presence, files: files.presence, thread_ts: thread)
+      result, call_error = slack_call do
+        Slack::Notifier.post(integration: integration, channel: channel, text: params[:text].presence,
+                             blocks: blocks.presence, files: files.presence, thread_ts: thread, raise_rate_limit: true)
+      end
+      return call_error if call_error
       return error("Failed to send to Slack") if result.nil?
+
+      remember_message(slack_conversation(integration, channel), result.ts)
       return error("Partially sent to #{channel} (ts #{result.ts}) — #{result.error_message}") unless result.ok?
 
       success({ provider: "slack", conversation: channel, thread: thread || result.ts, message_id: result.ts }.to_json)
@@ -111,6 +116,7 @@ module InternalTools
       if params[:text].present? || card
         posted = Teams::Messages.post(conversation, thread_id: thread, new_thread: params[:new_thread],
                                                     text: params[:text], card: card)
+        remember_message(conversation, posted&.message_id)
       end
       if files.any?
         sent = Teams::FileSender.deliver(conversation, thread_id: posted&.thread_id || thread, files: files, project: project,

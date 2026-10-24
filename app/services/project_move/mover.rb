@@ -103,6 +103,10 @@ module ProjectMove
                     .update_all(status: "detached", primary: false, updated_at: Time.current)
       Integration.where(id: preflight.deactivated_integrations.map(&:first).map(&:id))
                  .update_all(status: "inactive", updated_at: Time.current)
+      # A channel is connected to the old company, not to the project, and so is
+      # every code asked for to connect one.
+      TriggerBinding.release_chat_channels!(TriggerBinding.where(project_id: @project.id))
+      ChatConnectCode.where(project_id: @project.id).delete_all
     end
 
     def reparent!(preflight)
