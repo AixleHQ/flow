@@ -11,9 +11,15 @@ module Billing
   # that is event-driven rather than periodic.
   #
   # Sending an hour the schedule will send again is safe and expected: AWS keys
-  # a record on (licence, dimension, hour) and answers DuplicateRecord for the
-  # second, which the adapter counts as accepted. Sending nothing is the
-  # failure that cannot be recovered, because the window does not reopen.
+  # a record on (licence, dimension, hour), so the repeat bills nothing.
+  # Sending nothing is the failure that cannot be recovered, because the window
+  # does not reopen. So this errs towards sending.
+  #
+  # What it does not do is send an hour we already hold AWS's receipt for.
+  # Observed on 24 October: AWS answered such a repeat with `Success` and the
+  # *same* `MeteringRecordId` rather than `DuplicateRecord`, so the line read
+  # `sent=2:already=0:minutes=72` when sixty of those minutes had already been
+  # billed. The receipt is the only thing that tells the two apart.
   class MarketplaceFinalMeter
     # The hour under way and the one before it. The earlier one is included
     # because the schedule may not have reached it yet -- it reports an hour at
@@ -69,8 +75,12 @@ module Billing
 
     def usages_for(license)
       now = Time.current.utc
+      wanted = hours(now)
+      done = receipted_hours(license, wanted)
 
-      hours(now).filter_map do |hour|
+      wanted.filter_map do |hour|
+        next if done.include?(hour.to_i)
+
         minutes = minutes_for(license.company_id, hour, now)
         next if minutes.zero?
 
@@ -87,6 +97,26 @@ module Billing
     def hours(now)
       current = now.beginning_of_hour
       (0..HOURS_BACK).map { |back| current - back.hours }
+    end
+
+    # Hours the schedule already holds AWS's receipt for, as epoch seconds —
+    # compared that way because the column comes back as a TimeWithZone and
+    # `Array#-` would not match it against a Time.
+    #
+    # Re-sending such an hour is harmless, which is why it was left alone: AWS
+    # keys a record on (licence, dimension, hour). It is the *line* that was
+    # wrong. On 24 October a cancellation reported `sent=2:already=0:minutes=72`
+    # when only twelve of those minutes were new, because AWS answered the
+    # repeat with the same `MeteringRecordId` and `Success` rather than
+    # `DuplicateRecord`, so `already` never counted it. A reader cannot tell a
+    # replay from a second charge on AWS's answer alone; they can tell it from
+    # the receipt we already hold.
+    def receipted_hours(license, hours)
+      CapacityMeterReport
+        .where(provider: Meter::AwsMarketplaceSaas.provider, period_start: hours, state: "reported")
+        .pluck(:period_start, :receipts)
+        .filter_map { |period_start, receipts| period_start.to_i if receipts[license.license_arn].present? }
+        .to_set
     end
 
     # `until_time` is what makes the hour under way measurable at all: the

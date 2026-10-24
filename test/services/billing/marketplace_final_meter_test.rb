@@ -17,6 +17,15 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     CompanyCapacityChange.record!(company_id: @company.id, max_sessions: max_sessions, occurred_at: at)
   end
 
+  # An hour the schedule has already delivered, carrying AWS's receipt per
+  # licence exactly as the adapter writes it.
+  def reported(hour, receipts:)
+    CapacityMeterReport.create!(
+      provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour,
+      quantity_seconds: 3600, state: "reported", receipts: receipts
+    )
+  end
+
   # The whole point: the minutes since the hour began have not closed and so
   # belong to no scheduled run, yet they are inside the window AWS just opened.
   test "it sends the hour that has not closed yet" do
@@ -72,6 +81,32 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     travel_to Time.utc(2026, 10, 23, 10, 20) do
       assert_equal "sent=2:already=0:minutes=160:receipt=mr-1,mr-2", @meter.call(@license)
     end
+  end
+
+  # AWS answered the repeat of an already-billed hour with `Success` and the
+  # same `MeteringRecordId` rather than `DuplicateRecord`, so a line counting on
+  # its answer read sixty already-billed minutes as newly sent. The receipt we
+  # hold is the only thing that tells a replay from a second charge.
+  test "an hour the schedule already holds a receipt for is not sent again" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    reported(Time.utc(2026, 10, 23, 9), receipts: { @license.license_arn => "mr-earlier" })
+
+    travel_to Time.utc(2026, 10, 23, 10, 2) do
+      assert_equal "sent=1:already=0:minutes=2:receipt=mr-1", @meter.call(@license)
+    end
+
+    assert_equal [ Time.utc(2026, 10, 23, 10) ], @client.recorded.map(&:occurred_at)
+  end
+
+  # Another licence's receipt on the same hour says nothing about this one, and
+  # an hour the schedule tried and failed on is exactly what this path is for.
+  test "an hour reported for somebody else, or not accepted, is still sent" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    reported(Time.utc(2026, 10, 23, 9), receipts: { "arn:aws:license-manager::1:license/l-other" => "mr-other" })
+
+    travel_to(Time.utc(2026, 10, 23, 10, 2)) { @meter.call(@license) }
+
+    assert_includes @client.recorded.map(&:occurred_at), Time.utc(2026, 10, 23, 9)
   end
 
   test "a licence AWS no longer accepts usage for is not metered" do
