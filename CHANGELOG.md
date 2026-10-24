@@ -126,6 +126,9 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Company settings**: a new workspace is no longer billed for the part of its
+  first hour that came before it was created. A workspace set up at 04:26 was
+  charged for the whole of 04:00; it is now charged from 04:26.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address

@@ -100,16 +100,39 @@ module Billing
     end
 
     # What every company's limit was as the hour opened. The log is the source
-    # once a company has ever been written; a company whose limit predates the
-    # log falls back to its live row, which is correct while nothing has changed
-    # and is the only thing available for capacity set before this shipped.
+    # for every company that appears in it at all; one that does not falls back
+    # to its live row, which is the only thing available for capacity set before
+    # the log shipped.
+    #
+    # The fallback is read narrowly on purpose. A company whose first entry lands
+    # *during* this hour is in the log, so it opened the hour at nothing — taking
+    # its live row instead would read today's capacity back to the top of the
+    # hour and bill a customer who signed up at 04:26 for the whole of 04:00.
+    # That is every new customer's first hour, so the narrow reading costs at
+    # most one under-billed hour for a pre-log company whose first change happens
+    # to land between the hour ending and this running, and saves an overcharge
+    # that would otherwise happen every time.
     def opening_limits
       logged = CompanyCapacityChange.state_at(period_start)
       live = SessionConcurrencyLimit.for_companies.pluck(:scope_id, :max_sessions).to_h
 
-      measured_company_ids.index_with do |company_id|
-        logged.key?(company_id) ? logged[company_id].to_i : live[company_id].to_i
+      measured_company_ids.each_with_object({}) do |company_id, limits|
+        if logged.key?(company_id)
+          limits[company_id] = logged[company_id].to_i
+        elsif ever_logged.exclude?(company_id)
+          limits[company_id] = live[company_id].to_i
+        end
       end
+    end
+
+    # Companies the log knows anything about, whenever it was written. One of
+    # these missing from `logged` is left out of the opening entirely rather
+    # than opened at zero, because a zero here means "no limit set", which
+    # `offered` answers with the company's ceiling. It enters the window when
+    # its first change does.
+    def ever_logged
+      @ever_logged ||= CompanyCapacityChange.where(company_id: measured_company_ids)
+                                            .distinct.pluck(:company_id).to_set
     end
 
     def changes_during_window
