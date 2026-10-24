@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-24
+
 ### Changed
 - **Tasks**: a board that agents keep changing refreshes once per burst of
   changes, and at least every few seconds, instead of once per change, and each
@@ -789,7 +791,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.6.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.7.0...develop
+[1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/AixleHQ/flow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
