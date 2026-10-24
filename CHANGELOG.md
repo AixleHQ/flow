@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- A web server's memory no longer grows with every page it serves until the
+  process is killed for memory; on a busy deployment that happened about once
+  a day, failing the requests in flight.
+- **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
+  Slack, and describes the `/help` list as the app sends it, naming no project.
+
 ## [1.6.0] - 2026-10-24
 
 ### Added
@@ -102,8 +109,6 @@ governance, community health — carry none.
   how many sessions need input and names them on hover, and the drawer starts
   in **Interactive** instead. A Custom run can no longer start such a session
   automatically, whether from the drawer or the API.
-- **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
-  Slack, and describes the `/help` list as the app sends it, naming no project.
 
 ## [1.5.0] - 2026-10-20
 
