@@ -106,6 +106,16 @@ Rails.application.routes.draw do
   get "marketplace/aws/register", to: "web/marketplace_registrations#landing"
   get "marketplace/aws/continue", to: "web/marketplace_registrations#show",
                                   as: :marketplace_registration
+  # A buyer whose email domain already has a workspace cannot create a second
+  # one, so instead they ask the administrators of that one to apply the
+  # subscription. The POST only sends a link to the address they typed; the GET
+  # is that link, and opening it is what proves the address and raises the
+  # request. Both are unauthenticated, like the fulfilment URL above: the buyer
+  # was signed out on arrival and has nothing to sign in as yet.
+  post "marketplace/aws/proposal", to: "web/marketplace_proposals#create",
+                                   as: :marketplace_proposal
+  get "marketplace/aws/proposal", to: "web/marketplace_proposals#confirm",
+                                  as: :confirm_marketplace_proposal
 
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.
@@ -571,6 +581,12 @@ Rails.application.routes.draw do
       resource :billing_cancellation, only: %i[create destroy], controller: "billing_cancellations"
       # The invoice whose failed payment stopped the workspace, paid on Stripe's page.
       resource :billing_invoice_payment, only: :create, controller: "billing_invoice_payments"
+      # A subscription somebody bought in AWS Marketplace asking to be applied
+      # to this workspace. `create` accepts it and `destroy` declines: accepting
+      # changes who bills the workspace, so it is an administrator's decision
+      # here and never an automatic consequence of the purchase.
+      resource :marketplace_license_proposal, only: %i[create destroy],
+               controller: "marketplace_license_proposals"
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]

@@ -136,6 +136,14 @@ governance, community health — carry none.
   anything. They were previously refused on a form field with advice written
   for a stranger, and left with no idea what had become of what they had paid
   for.
+- **Company settings**: that buyer can now ask the administrators of the
+  workspace at their domain to apply the subscription to it, and an
+  administrator there accepts or declines it on the Billing tab. Accepting
+  bills the workspace through AWS Marketplace from that moment and stops the
+  card subscription paying for it, with a final invoice for the capacity used
+  up to then; the workspace keeps running throughout. The asking takes a
+  confirmed email address, the workspace is always the one holding the asker's
+  own domain, and nothing moves until somebody there says yes.
 - **Company settings**: the record of an AWS Marketplace subscription now
   carries the dates it started and ended. Both columns existed and neither was
   ever written.

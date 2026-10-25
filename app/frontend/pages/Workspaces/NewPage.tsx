@@ -3,12 +3,15 @@ import { Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@man
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
-import { howItWorksPath, loginPath, logoutPath, workspacePath } from 'shared/routes';
+import { howItWorksPath, loginPath, logoutPath, marketplaceProposalPath, workspacePath } from 'shared/routes';
 import { BrandLockup, PageShell } from 'shared/ui';
 
 import classes from './NewPage.module.css';
 
 type Refusal = string | string[];
+
+/** How far a buyer's request to have their subscription applied has got. */
+type RequestState = 'check-email' | 'pending' | 'accepted' | 'declined' | null;
 
 interface PageProps {
   suggestedDomain: string | null;
@@ -26,6 +29,8 @@ interface PageProps {
   claimedDomain?: ClaimedDomain | null;
   /** Set while an AWS Marketplace subscription is waiting for a workspace to attach to. */
   marketplaceSubscription: boolean;
+  /** How far the buyer's request to have it applied has got, if they made one. */
+  subscriptionRequest: RequestState;
   /**
    * Server-side refusals. The keys arrive camelCased — the Inertia
    * prop_transformer runs over every prop, errors included — while the form's
@@ -107,6 +112,57 @@ const SentScreen = ({ address }: { address: string }) => (
   </section>
 );
 
+// What a buyer may do about a subscription with nowhere to go. The workspace is
+// never named as a choice — it is whichever one holds their own domain — and
+// the asking takes a confirmed address, so this button sends a link rather than
+// raising anything.
+const SubscriptionRequest = ({ claim, state, email }: { claim: ClaimedDomain; state: RequestState; email: string }) => {
+  const workspace = claim.workspaceName ?? 'the workspace at your domain';
+
+  if (state === 'check-email')
+    return (
+      <Text size="sm" c="var(--app-text-secondary)" mt="md">
+        We sent a link to <b>{email}</b>. Opening it confirms the address is yours and puts the request to the
+        administrators of {workspace}. Nobody has been asked anything yet.
+      </Text>
+    );
+
+  if (state === 'pending')
+    return (
+      <Text size="sm" c="var(--app-text-secondary)" mt="md">
+        The administrators of {workspace} have been asked to apply your subscription. They decide whether it is applied,
+        and we will email you either way. Nothing is billed through AWS until one of them accepts.
+      </Text>
+    );
+
+  if (state === 'declined')
+    return (
+      <Text size="sm" c="var(--app-text-secondary)" mt="md">
+        An administrator of {workspace} did not accept the request. Your subscription is unchanged and is attached to
+        nothing. Speak to someone there before asking again, or unsubscribe in AWS Marketplace if you no longer want it.
+      </Text>
+    );
+
+  return (
+    <>
+      <Text size="sm" c="var(--app-text-secondary)" mt="md">
+        Your AWS Marketplace subscription is recorded and is not attached to a workspace yet. Nothing has been lost and
+        you are not paying twice. You can ask the administrators of {workspace} to apply it — they decide, and until one
+        of them accepts nothing about that workspace changes.
+      </Text>
+      <Button
+        fullWidth
+        size="md"
+        mt="md"
+        onClick={() => router.post(marketplaceProposalPath(), { email })}
+        disabled={!email}
+      >
+        Ask them to apply it
+      </Button>
+    </>
+  );
+};
+
 // Reached two ways. Someone signed in gets here from their own proved address,
 // and signing out is their way to the sign-in screen where the methods named
 // here are offered. A Marketplace buyer was signed out on arrival, so there is
@@ -116,10 +172,14 @@ const ClaimedScreen = ({
   claim,
   signedIn,
   subscriptionHeld,
+  requestState,
+  email,
 }: {
   claim: ClaimedDomain;
   signedIn: boolean;
   subscriptionHeld: boolean;
+  requestState: RequestState;
+  email: string;
 }) => (
   <PageShell variant="centered">
     <Head title="Your domain already has a workspace" />
@@ -132,13 +192,7 @@ const ClaimedScreen = ({
         Each domain has one workspace, so there is no second one to create for yours.
       </Text>
       <ClaimedDomainNotice claim={claim} />
-      {subscriptionHeld && (
-        <Text size="sm" c="var(--app-text-secondary)" mt="md">
-          Your AWS Marketplace subscription is recorded and is not attached to a workspace yet. Nothing has been lost
-          and you are not paying twice. Write to the support contact shown on the subscription in AWS Marketplace, and
-          we will attach it to {claim.workspaceName ?? 'the workspace at your domain'}.
-        </Text>
-      )}
+      {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
       {signedIn ? (
         <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
           {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
@@ -165,6 +219,7 @@ const NewWorkspacePage = () => {
     freeQueueHours,
     claimedDomain,
     marketplaceSubscription,
+    subscriptionRequest,
     errors = {},
   } = usePage<PageProps>().props;
 
@@ -195,7 +250,15 @@ const NewWorkspacePage = () => {
     .flatMap(([, refusal]) => refusal);
 
   if (claimedDomain)
-    return <ClaimedScreen claim={claimedDomain} signedIn={!needsEmail} subscriptionHeld={marketplaceSubscription} />;
+    return (
+      <ClaimedScreen
+        claim={claimedDomain}
+        signedIn={!needsEmail}
+        subscriptionHeld={marketplaceSubscription}
+        requestState={subscriptionRequest}
+        email={form.data.email || (suggestedEmail ?? '')}
+      />
+    );
 
   return (
     <div className={classes.page}>

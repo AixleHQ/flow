@@ -1,0 +1,18 @@
+<p>Hello,</p>
+
+<p><strong><%= @asked_by %></strong> has bought an AWS Marketplace subscription to Aixle Flow
+and asks for it to be applied to <strong><%= @company.name %></strong>, where you are an
+administrator.</p>
+
+<p>If you accept, <%= @company.name %> is billed through AWS Marketplace from that moment,
+on AWS account <strong><%= @aws_account_id %></strong>
+<%= " — an account you may not control" if @aws_account_id.present? %>.
+<% if @card_billed %>
+The card subscription paying for it now is stopped in the same step, and a final invoice
+for the capacity used up to then follows.
+<% end %>
+Whoever holds that AWS subscription can end it, and the workspace stops when they do.</p>
+
+<p>If you did not expect this, decline it. Nothing changes until somebody accepts.</p>
+
+<p><%= link_to "Open billing settings", @url %></p>

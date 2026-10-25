@@ -39,15 +39,26 @@ const billing = {
 const render = (
   overrides: Partial<typeof billing> | Record<string, unknown> = {},
   checkoutResult: string | null = null,
+  marketplaceProposal: Record<string, unknown> | null = null,
 ) =>
   renderAuthedPage(<BillingPage />, {
     props: {
       company: { name: 'Acme Robotics' },
       billing: { ...billing, ...overrides },
       checkoutResult,
+      marketplaceProposal,
       permissions: buildSharedPermissions({ canManageBilling: true }),
     },
   });
+
+const proposal = (over = {}) => ({
+  askedBy: 'dana@acme-robotics.example',
+  awsAccountId: '444455556666',
+  askedAt: '2026-10-25T09:00:00Z',
+  replacesCard: false,
+  canDecide: true,
+  ...over,
+});
 
 describe('Company billing page', () => {
   it('shows what this period has come to so far', () => {
@@ -202,5 +213,84 @@ describe('Company billing page', () => {
     render({}, 'cancelled');
 
     expect(screen.getByText(/Nothing was charged/)).toBeInTheDocument();
+  });
+
+  // Somebody else's purchase asking to become this workspace's bill. Accepting
+  // hands billing to an AWS account that may not be ours, and whoever holds
+  // that subscription can stop the workspace by unsubscribing -- so the screen
+  // spells the consequences out rather than summarising them.
+  describe('a request to bill through AWS Marketplace', () => {
+    it('names who asked and which AWS account would be billed', () => {
+      render({}, null, proposal());
+
+      expect(screen.getByText(/bought an AWS Marketplace subscription/)).toHaveTextContent(
+        'dana@acme-robotics.example',
+      );
+      expect(screen.getByText(/would be billed through AWS account/)).toHaveTextContent('444455556666');
+    });
+
+    it('says the subscription holder can stop the workspace', () => {
+      render({}, null, proposal());
+
+      expect(screen.getByText(/can end it/)).toHaveTextContent('this workspace stops when they do');
+    });
+
+    // The admin should not have to work out that two things cannot both bill.
+    it('says the card is stopped too, when there is one', () => {
+      render({}, null, proposal({ replacesCard: true }));
+
+      expect(screen.getByText(/card subscription paying for this workspace/)).toBeInTheDocument();
+    });
+
+    it('says nothing about a card when there is none', () => {
+      render({}, null, proposal());
+
+      expect(screen.queryByText(/card subscription paying for this workspace/)).not.toBeInTheDocument();
+    });
+
+    it('applies it', async () => {
+      const post = vi.spyOn(router, 'post').mockImplementation(() => undefined);
+      render({}, null, proposal());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Apply the subscription' }));
+
+      expect(post).toHaveBeenCalledWith('/company/marketplace_license_proposal', {}, expect.anything());
+    });
+
+    // Separate renders, not two clicks: applying holds the pair while the
+    // request is in flight, which is the point -- an admin must not be able to
+    // decline something they are already applying.
+    it('declines it through the same resource', async () => {
+      const remove = vi.spyOn(router, 'delete').mockImplementation(() => undefined);
+      render({}, null, proposal());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+      expect(remove).toHaveBeenCalledWith('/company/marketplace_license_proposal');
+    });
+
+    it('does not offer a decline while an apply is in flight', async () => {
+      vi.spyOn(router, 'post').mockImplementation(() => undefined);
+      render({}, null, proposal());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Apply the subscription' }));
+
+      expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled();
+    });
+
+    // Moving who bills the workspace is an administrator's decision; everyone
+    // else sees the request and no buttons.
+    it('offers no decision to somebody who cannot make it', () => {
+      render({}, null, proposal({ canDecide: false }));
+
+      expect(screen.queryByRole('button', { name: 'Apply the subscription' })).not.toBeInTheDocument();
+      expect(screen.getByText(/An administrator of Acme Robotics decides this/)).toBeInTheDocument();
+    });
+
+    it('is absent when nobody has asked', () => {
+      render();
+
+      expect(screen.queryByText(/request to bill this workspace/i)).not.toBeInTheDocument();
+    });
   });
 });
