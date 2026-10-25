@@ -2,8 +2,15 @@
 
 # The Billing tab of company settings: where the subscription stands, what this
 # period has cost so far, and the controls that change it.
+#
+# Deliberately NOT under HostedBillingOnly, which the three controllers that
+# *act* on billing still are. A workspace AWS Marketplace bills has nothing to
+# manage here, and turning it away made its billing look missing rather than
+# managed somewhere else. It reads this page instead, which says where its bill
+# comes from and what we have reported towards it, and offers no control that
+# would be a second bill for the same capacity.
 class Web::Company::BillingController < Web::Company::ApplicationController
-  include HostedBillingOnly
+  before_action :require_billing!
 
   def show
     render inertia: "Company/Settings/BillingPage", props: {
@@ -16,11 +23,48 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # admin because the decision moves who bills the workspace, and the one
       # who happens to open this page is not necessarily the one who should
       # answer.
-      marketplace_proposal: marketplace_proposal
+      marketplace_proposal: marketplace_proposal,
+      # Set once AWS bills this workspace, which is what the page shows instead
+      # of controls.
+      marketplace: marketplace
     }
   end
 
   private
+
+  # What HostedBillingOnly refuses, minus the Marketplace case this page now
+  # answers for.
+  def require_billing!
+    unless Deployment.saas?
+      return redirect_to company_settings_path, alert: "Billing is not available on this installation."
+    end
+    return unless current_company.managed_by_aixle?
+
+    redirect_to company_settings_path, alert: "This workspace is managed by Aixle and is not billed."
+  end
+
+  def marketplace
+    return nil unless current_company.billing_payer.aws_marketplace?
+
+    license = current_company.marketplace_license
+    {
+      aws_account_id: license&.customer_aws_account_id,
+      subscribed_at: license&.subscribed_at,
+      ended: license&.ended? || false,
+      # What we have reported towards the AWS bill this calendar month, which is
+      # the period AWS invoices on. Read from our own ledger rather than from
+      # AWS: it is the same minutes, and it is the only figure available before
+      # the invoice exists.
+      reported_minutes: reported_minutes
+    }
+  end
+
+  def reported_minutes
+    seconds = CompanyCapacityUsage.where(company_id: current_company.id)
+                                  .since(Time.current.utc.beginning_of_month)
+                                  .sum(:quantity_seconds)
+    (BigDecimal(seconds) / 60).round(1).to_f
+  end
 
   def marketplace_proposal
     license = Billing::MarketplaceLicenseProposal.pending_for(current_company)

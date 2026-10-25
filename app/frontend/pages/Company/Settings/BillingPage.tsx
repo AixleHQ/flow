@@ -76,11 +76,22 @@ interface MarketplaceProposal {
   canDecide: boolean;
 }
 
+/** Set once AWS Marketplace bills this workspace: what this page shows instead of controls. */
+interface Marketplace {
+  awsAccountId: string | null;
+  subscribedAt: string | null;
+  /** The subscription has ended; the workspace is stopped until somebody renews it in AWS. */
+  ended: boolean;
+  /** Worker-minutes reported towards the AWS bill so far this month. */
+  reportedMinutes: number;
+}
+
 interface Props {
   company: { name: string };
   billing: Billing;
   checkoutResult: 'done' | 'cancelled' | null;
   marketplaceProposal: MarketplaceProposal | null;
+  marketplace: Marketplace | null;
   [key: string]: unknown;
 }
 
@@ -446,8 +457,59 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
   );
 }
 
+const AWS_SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
+
+// A workspace AWS bills has nothing to change here, and the page used to be
+// taken away from it entirely -- which read as billing gone missing rather than
+// billing kept somewhere else. So it says where the bill comes from, and what
+// we have reported towards it, which is the one figure not visible in AWS until
+// the invoice exists.
+function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplace; companyName: string }) {
+  return (
+    <Card withBorder padding="lg">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600}>Billed through AWS Marketplace</Text>
+          <Badge color={marketplace.ended ? 'red' : 'green'}>{marketplace.ended ? 'Ended' : 'Active'}</Badge>
+        </Group>
+        <Text size="sm" c="var(--app-text-secondary)">
+          {marketplace.ended ? (
+            <>
+              The AWS Marketplace subscription for {companyName} has ended, so the workspace is stopped. Renewing it in
+              AWS starts it again.
+            </>
+          ) : (
+            <>
+              {companyName} is paid for through AWS Marketplace
+              {marketplace.awsAccountId && (
+                <>
+                  {' '}
+                  on AWS account <b>{marketplace.awsAccountId}</b>
+                </>
+              )}
+              . Your usage appears on that account&apos;s AWS bill, and the subscription is cancelled there rather than
+              here.
+            </>
+          )}
+        </Text>
+        <List size="sm" spacing={4}>
+          <List.Item>
+            <b>{formatMinutes(marketplace.reportedMinutes)}</b> worker-minutes reported to AWS so far this month.
+          </List.Item>
+          {marketplace.subscribedAt && (
+            <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
+          )}
+        </List>
+        <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
+          Manage the subscription in AWS Marketplace
+        </Anchor>
+      </Stack>
+    </Card>
+  );
+}
+
 const BillingPage = () => {
-  const { company, billing, checkoutResult, marketplaceProposal } = usePage<Props>().props;
+  const { company, billing, checkoutResult, marketplaceProposal, marketplace } = usePage<Props>().props;
   useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
 
   return (
@@ -457,8 +519,14 @@ const BillingPage = () => {
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
           {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
-          <SubscriptionCard billing={billing} />
-          {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
+          {marketplace ? (
+            <MarketplaceCard marketplace={marketplace} companyName={company.name} />
+          ) : (
+            <>
+              <SubscriptionCard billing={billing} />
+              {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
+            </>
+          )}
         </Stack>
       </SettingsTabs>
     </AuthLayout>

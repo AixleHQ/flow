@@ -121,20 +121,38 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
   end
 
-  # Seen on staging: the tab was drawn for a workspace AWS bills, and opening
-  # it only produced the refusal below. `bills?` is right that somebody pays
-  # them -- the tab asks the narrower question of whether there is billing to
-  # manage here.
-  test "a company AWS bills has no billing tab either" do
+  # Seen on staging twice, and fixed from the other end the second time. The tab
+  # was drawn for a workspace AWS bills and opening it only produced a refusal,
+  # so the tab was hidden -- which made that workspace's billing look missing
+  # rather than kept in AWS. Now the refusal is what goes: the page opens and
+  # says where the bill comes from, and the controls that would be a second bill
+  # for the same capacity are the only thing withheld.
+  test "a company AWS bills keeps the tab, and the page says where its bill is" do
     @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
 
     get company_settings_billing_path
 
+    assert_response :success
+    assert_inertia_props do |props|
+      assert props[:marketplace], "the page says AWS bills this workspace"
+      assert props[:permissions][:canViewBilling], "so the tab is offered"
+      assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
+    end
+  end
+
+  # The actions are still refused. Only the page that explains them is not.
+  test "a company AWS bills cannot add a card, cancel, or pay an invoice here" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    post company_billing_checkout_path
     assert_redirected_to company_settings_path
     assert_match(/AWS Marketplace/, flash[:alert])
 
-    get company_settings_path
-    assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
+    post company_billing_cancellation_path
+    assert_redirected_to company_settings_path
+
+    post company_billing_invoice_payment_path
+    assert_redirected_to company_settings_path
   end
 
   private
