@@ -173,25 +173,65 @@ describe('New workspace page', () => {
     // purpose: whoever pressed Subscribe in AWS is usually not whoever will use
     // the product. So this screen reaches somebody with no session at all.
     describe('and who has just paid for it through AWS Marketplace', () => {
-      const buyer = (over = {}) => ({
+      const buyer = (over = {}, props = {}) => ({
         ...claimed(over),
         needsEmail: true,
         freeQueueHours: null,
         marketplaceSubscription: true,
+        suggestedEmail: 'dana@northwind-robotics.example',
+        subscriptionRequest: null,
+        ...props,
       });
 
       // The question they came with. Left unanswered, the screen reads as "you
       // paid and got nothing".
-      it('says the subscription is held rather than lost, and where to ask', () => {
+      it('says the subscription is held rather than lost, and offers the way to ask', () => {
         renderPage(<NewWorkspacePage />, { props: buyer() });
 
-        expect(screen.getByText(/subscription is recorded/)).toHaveTextContent('we will attach it to Northwind');
+        expect(screen.getByText(/subscription is recorded/)).toHaveTextContent(
+          'ask the administrators of Northwind to apply it',
+        );
+        expect(screen.getByRole('button', { name: 'Ask them to apply it' })).toBeInTheDocument();
       });
 
       it('names no workspace it has not proved, and still answers the question', () => {
         renderPage(<NewWorkspacePage />, { props: buyer({ workspaceName: null, joinMethods: [] }) });
 
         expect(screen.getByText(/subscription is recorded/)).toHaveTextContent('the workspace at your domain');
+      });
+
+      // Nothing is raised by pressing it: the address is unproved until a link
+      // sent to it is opened, so this only asks for that link.
+      it('asking sends a link to the address rather than raising anything', async () => {
+        renderPage(<NewWorkspacePage />, { props: buyer() });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Ask them to apply it' }));
+
+        expect(router.post).toHaveBeenCalledWith('/marketplace/aws/proposal', {
+          email: 'dana@northwind-robotics.example',
+        });
+      });
+
+      it('says a link has gone out, and that nobody has been asked yet', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'check-email' }) });
+
+        expect(screen.getByText(/We sent a link/)).toHaveTextContent('Nobody has been asked anything yet');
+        expect(screen.queryByRole('button', { name: 'Ask them to apply it' })).not.toBeInTheDocument();
+      });
+
+      // The decision is somebody else's, and the screen should not imply the
+      // subscription is doing anything in the meantime.
+      it('says the request is waiting, and that nothing is billed until it is answered', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'pending' }) });
+
+        expect(screen.getByText(/have been asked/)).toHaveTextContent('Nothing is billed through AWS until');
+      });
+
+      it('says plainly when it was refused, and that the subscription is untouched', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'declined' }) });
+
+        expect(screen.getByText(/did not accept/)).toHaveTextContent('attached to nothing');
+        expect(screen.queryByRole('button', { name: 'Ask them to apply it' })).not.toBeInTheDocument();
       });
 
       it('offers the sign-in screen, because there is no session to sign out of', async () => {

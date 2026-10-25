@@ -23,6 +23,7 @@ import {
   companyBillingCancellationPath,
   companyBillingCheckoutPath,
   companyBillingInvoicePaymentPath,
+  companyMarketplaceLicenseProposalPath,
 } from 'shared/routes';
 import type { BillingStatus } from 'shared/ui';
 
@@ -63,10 +64,23 @@ interface Billing {
   cancellationReasons: string[];
 }
 
+/** Somebody's AWS Marketplace subscription asking to be applied to this workspace. */
+interface MarketplaceProposal {
+  /** The address the asker proved by opening a link sent to it. */
+  askedBy: string;
+  /** The AWS account that would be billed — and that can end the subscription. */
+  awsAccountId: string;
+  askedAt: string;
+  /** Whether accepting also stops a card subscription paying for this workspace. */
+  replacesCard: boolean;
+  canDecide: boolean;
+}
+
 interface Props {
   company: { name: string };
   billing: Billing;
   checkoutResult: 'done' | 'cancelled' | null;
+  marketplaceProposal: MarketplaceProposal | null;
   [key: string]: unknown;
 }
 
@@ -373,8 +387,67 @@ function useRefreshWhileSettling(settling: boolean) {
   }, [settling]);
 }
 
+// A purchase made somewhere else asking to become this workspace's bill. The
+// consequences are spelled out rather than summarised: accepting hands billing
+// to an AWS account that may belong to somebody else, and whoever holds that
+// subscription can stop the workspace by unsubscribing.
+function MarketplaceProposalCard({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
+  const [deciding, setDeciding] = useState(false);
+
+  return (
+    <Card withBorder padding="lg">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600}>A request to bill this workspace through AWS Marketplace</Text>
+          <Badge color="yellow">Waiting</Badge>
+        </Group>
+        <Text size="sm" c="var(--app-text-secondary)">
+          <b>{proposal.askedBy}</b> bought an AWS Marketplace subscription to Aixle Flow and asks for it to be applied
+          to {companyName}. They confirmed that address on {formatDateMedium(proposal.askedAt)}.
+        </Text>
+        <List size="sm" spacing={4}>
+          <List.Item>
+            {companyName} would be billed through AWS account <b>{proposal.awsAccountId}</b>, which you may not control.
+          </List.Item>
+          <List.Item>Whoever holds that subscription can end it, and this workspace stops when they do.</List.Item>
+          {proposal.replacesCard && (
+            <List.Item>
+              The card subscription paying for this workspace is stopped at the same moment, and a final invoice for the
+              capacity used up to then follows.
+            </List.Item>
+          )}
+        </List>
+        {proposal.canDecide ? (
+          <Group>
+            <Button
+              loading={deciding}
+              onClick={() => {
+                setDeciding(true);
+                router.post(companyMarketplaceLicenseProposalPath(), {}, { onFinish: () => setDeciding(false) });
+              }}
+            >
+              Apply the subscription
+            </Button>
+            <Button
+              variant="default"
+              disabled={deciding}
+              onClick={() => router.delete(companyMarketplaceLicenseProposalPath())}
+            >
+              Decline
+            </Button>
+          </Group>
+        ) : (
+          <Text size="sm" c="var(--app-text-tertiary)">
+            An administrator of {companyName} decides this.
+          </Text>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
 const BillingPage = () => {
-  const { company, billing, checkoutResult } = usePage<Props>().props;
+  const { company, billing, checkoutResult, marketplaceProposal } = usePage<Props>().props;
   useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
 
   return (
@@ -383,6 +456,7 @@ const BillingPage = () => {
       <SettingsTabs active="billing" companyName={company.name}>
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
+          {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
           <SubscriptionCard billing={billing} />
           {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
         </Stack>

@@ -10,6 +10,9 @@ class MarketplaceLicense < ApplicationRecord
   include MarketplaceLicenseStateMachine
 
   belongs_to :company, optional: true
+  # The workspace this licence has asked to be applied to, which is not the one
+  # it belongs to until an administrator there says so.
+  belongs_to :proposed_company, class_name: "Company", optional: true
 
   REGISTRATION_VALID_FOR = 15.minutes
   # Carries the licence from the POST AWS makes to the GET that follows it; the
@@ -26,18 +29,34 @@ class MarketplaceLicense < ApplicationRecord
   # cannot invent a state.
   STATES = %w[pending active ending ended].freeze
 
+  #   pending   raised by the buyer, waiting on an administrator
+  #   accepted  applied; the licence is bound and the workspace bills through AWS
+  #   declined  refused; the licence stays bound to nothing
+  #
+  # A licence holds at most one, and raising a second replaces it, so these are
+  # the state of the current proposal rather than a history of them.
+  PROPOSAL_STATES = %w[pending accepted declined].freeze
+
   validates :license_arn, presence: true, uniqueness: true
   validates :customer_aws_account_id, presence: true
   validates :product_code, presence: true
   validates :subscription_state, inclusion: { in: STATES }
   validates :company_id, uniqueness: true, allow_nil: true
+  validates :proposal_state, inclusion: { in: PROPOSAL_STATES }, allow_nil: true
 
   scope :bound, -> { where.not(company_id: nil) }
+  scope :proposed_to, ->(company) { where(proposed_company: company, proposal_state: "pending") }
   # Somebody is being billed and has no way into the product. The first report of
   # that must not be theirs.
   scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
 
   def bound? = company_id.present?
+
+  def proposal_pending? = proposal_state == "pending"
+
+  # A licence with nothing to apply has nothing to propose: one already bound
+  # belongs somewhere, and one AWS has finished accepts no usage.
+  def proposable? = !bound? && !ended?
 
   # `ending` counts: the hour AWS allows after an agreement closes is exactly
   # when the last usage has to go.
