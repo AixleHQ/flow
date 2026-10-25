@@ -185,7 +185,8 @@
   filter: brightness(0) invert(1);
 }
 
-:root .navigation__scheme {
+:root .navigation__scheme,
+:root .navigation__sign-out button {
   display: block;
   width: 100%;
   margin: 0 0 12px;
@@ -205,7 +206,9 @@
 }
 
 :root .navigation__scheme:not(.link):hover,
-:root .navigation__scheme:not(.link):focus {
+:root .navigation__scheme:not(.link):focus,
+:root .navigation__sign-out button:hover,
+:root .navigation__sign-out button:focus {
   background-color: var(--app-bg-hover);
   color: var(--app-text-primary);
 }

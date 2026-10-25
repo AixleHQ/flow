@@ -458,8 +458,9 @@ admin write ──▶ transaction(update rows + Audit) ──▶ after_commit: S
    4. Overrides off for any company that hits a problem.
 3. **Clean up** (one PR, owned by the flag's owner):
    - Delete the losing branch in code and the registry entry.
-   - The next deploy's `feature_flags:prune` (run from the release task) deletes that key's rows,
-     with an `Audit` row. The admin also lists them as orphaned until then.
+   - The key's rows are inert once it is undeclared. The admin lists them as orphaned, with a
+     delete button. `feature_flags:prune` deletes every orphaned key's rows, with an `Audit` row
+     each, as a manual step once the rollout has replaced the old pods (§11, as decided in #170).
 
 Finding stale flags:
 
@@ -533,8 +534,7 @@ Feature.explain(:board_ai_summary, company: company)
 
   ```ts
   import { usePage } from '@inertiajs/react';
-  import type { SharedProps } from '@/shared/ui/types';
-  import type { FeatureFlagName } from '@/types/generated/featureFlags';
+  import type { FeatureFlagName, SharedProps } from 'shared/ui/types';
 
   /** Server-resolved flag for the current company. Unknown names are a type error. */
   export function useFeatureFlag(name: FeatureFlagName): boolean {
@@ -543,9 +543,17 @@ Feature.explain(:board_ai_summary, company: company)
   ```
 
   - `DeepKeyCamelizer` camelizes keys, so `board_ai_summary` arrives as `boardAiSummary`.
-  - `bin/rails feature_flags:typescript` generates
-    `app/frontend/types/generated/featureFlags.ts` (a union of the camelized `client: true`
-    keys) into the already-prettier-ignored generated directory.
+  - `FeatureFlagName` is hand-written in `app/frontend/shared/ui/types.ts`, next to `AgentType`
+    and `UserRole`: a union of the camelized `client: true` keys (`never` while there are none).
+    `test/config/feature_flag_name_test.rb` keeps it equal to the registry.
+  - It is not generated, because it cannot be yet. Typelizer 0.14 drops an attribute-less
+    resource before writing any file (`Typelizer.interfaces` ends in `.reject(&:empty?)`, and
+    `Interface#empty?` is `meta_fields.empty? && properties.empty?`), with no configuration
+    option to change it. With no `client: true` flag declared, a `FeaturesResource` would
+    generate nothing, so `keyof Features` could not compile. Once the first client flag exists,
+    an Alba resource with the client flags as `typelize :boolean` attributes should replace the
+    hand-written union and its test (`docs/architecture/feature-flags.md`). (Updated after #169,
+    which shipped this instead of the custom generator this section first proposed.)
   - A misspelled flag name in TSX fails `tsc` in `lint_check_all`.
   - `SharedProps` in `app/frontend/shared/ui/types.ts` gains
     `features?: Partial<Record<FeatureFlagName, boolean>>`.
@@ -657,12 +665,12 @@ the same way `catalog_syncs` and `session_admission` do.
 | `config/settings.yml` (+ `docs/reference/configuration.md`, portal copy) | The `feature_flags:` block; `FEATURE_<KEY>`, `FEATURE_FLAGS_REFRESH_INTERVAL`, `FEATURE_FLAGS_MAX_STALENESS` rows |
 | `app/models/feature_flag.rb`, `app/models/feature_flag_override.rb` + migration | Runtime values |
 | `app/services/feature.rb` | The facade: `enabled?`, `explain` |
-| `app/services/feature_flags/{registry,resolver,env_source,snapshot,store,admin,client_payload}.rb` | Core |
+| `app/services/feature_flags.rb` (`client_payload`), `app/services/feature_flags/{registry,resolver,resolution,env_source,snapshot,store,memory_store,version_token,admin,overview,lifecycle}.rb` | Core |
 | `app/models/current.rb` | `attribute :feature_snapshot` |
 | `app/controllers/admin/feature_flags_controller.rb`, `admin/feature_flag_overrides_controller.rb` + views | Admin pages |
 | `app/controllers/web/application_controller.rb` | The `features` shared prop |
 | `app/frontend/shared/lib/hooks/useFeatureFlag.ts` (+ `.test.ts`), `shared/ui/types.ts` | Frontend |
-| `lib/tasks/feature_flags.rake` | `audit`, `prune`, `typescript` |
+| `lib/tasks/feature_flags.rake` | `audit`, `prune` |
 | `test/support/feature_flags_helper.rb`, `test/config/feature_flags_registry_test.rb`, `test/services/feature_flags/*` | Tests |
 | `docs/architecture/feature-flags.md` | How to add, roll out and remove a flag. A living doc, so it is checked by the drift test |
 
@@ -742,8 +750,8 @@ Sizes: S ≈ 1 day, M ≈ 2–3 days. Tasks 1→2→3 are sequential. Tasks 4 an
 | 1 | **Registry, resolver, facade.** `config/feature_flags.yml` with an empty registry and schema validation; `FeatureFlags::Registry`, `EnvSource` (the settings block, value parsing, boot failure on bad values, warning on undeclared keys), `Resolver` (precedence, scope/`company:` rules, `UnknownFlag`), `Feature.enabled?` / `explain`; the test helper and in-memory test store; unit tests for every row of §3.3–3.4; configuration reference rows | M | — |
 | 2 | **Storage and snapshot.** Migration and models with validations; `Company` association and deletion paths; `Snapshot`, `Store` with the `VersionToken` (Redis, plus an in-memory fake for tests), refresh and max-staleness, last-good fallback; `Current.feature_snapshot` pinning; Temporal activity executor check (§5.2); tests against real rows | M | 1 |
 | 3 | **Admin pages and writes.** `FeatureFlags::Admin` (set/clear global, add/remove override, turn off everywhere) with `Audit` in the same transaction; the index and show pages from §7.1; the overrides panel on the company show page; controller tests for super admin only and for ENV-locked controls being disabled | M | 2 |
-| 4 | **Frontend payload.** The `features` shared prop with `client: true` only; the `feature_flags:typescript` generator wired into the existing type generation; `useFeatureFlag` + Vitest; the `SharedProps` type | S | 1 |
-| 5 | **Lifecycle tooling and docs.** The registry CI test (structure, declared ↔ referenced), `feature_flags:audit` and `feature_flags:prune` (called from the release task), the "Feature flags" developer guide (add, roll out, remove), indexed in `docs/index.md` | S | 1 |
+| 4 | **Frontend payload.** The `features` shared prop with `client: true` only; the hand-written `FeatureFlagName` union in `app/frontend/shared/ui/types.ts`, kept equal to the registry by `test/config/feature_flag_name_test.rb` (§6.2); `useFeatureFlag` + Vitest; the `SharedProps` type | S | 1 |
+| 5 | **Lifecycle tooling and docs.** The registry CI test (structure, declared ↔ referenced), `feature_flags:audit` and `feature_flags:prune` (a manual post-rollout step, §11), the "Feature flags" developer guide (add, roll out, remove), indexed in `docs/index.md` | S | 1 |
 | 6 | **Pilot ops flag.** The `env_setting` support in `EnvSource`; move `coder_reap` over; update the Coder guide and portal copy to say it can also be paused from `/admin/feature_flags` | S | 2, 3 |
 | 7 | **Docs fix.** Reword the Config Items "feature flag" row in `docs/user-guide/configuration.md` and its portal copy (§9.3) | XS | 5 |
 
@@ -763,6 +771,9 @@ Sizes: S ≈ 1 day, M ≈ 2–3 days. Tasks 1→2→3 are sequential. Tasks 4 an
 - Where should `feature_flags:prune` run? The release task, or a post-deploy step in the deploy
   pipeline? It must run after the new code is live, never before. While old pods are still
   serving, they may still check the key.
+  **Decided in #170:** a documented manual step (`docs/operations/releasing.md`), run once the
+  rollout has replaced the old pods. Nothing runs it automatically: after a rollback, the old
+  code would declare the pruned flag again and silently fall back to its default.
 - Should the frontend payload be included for anonymous pages (`company: nil`)? The proposal
   says yes, with `client: true` flags only. If no anonymous page needs a flag, leave it out until
   one does.

@@ -14,6 +14,36 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Admin**: `bin/rails feature_flags:audit` lists the feature flags due for
+  removal: release flags past their remove-by date, flags that have had the same
+  value for every company for 30 days, database rows of flags no longer
+  declared, and `FEATURE_*` variables no flag declares. `bin/rails
+  feature_flags:prune` deletes those leftover rows, recording each key in the
+  audit trail; it is an optional manual step once a rollout has replaced every
+  old pod, described in the release guide.
+
+## [1.7.0] - 2026-10-24
+
+### Changed
+- **Tasks**: a board that agents keep changing refreshes once per burst of
+  changes, and at least every few seconds, instead of once per change, and each
+  refresh carries about half the data. The REST endpoint that lists board tasks
+  takes `view=card` to leave task descriptions out.
+- Request logs name who made the request: the signed-in user (`user=`), and for
+  an MCP call the personal token's user or the agent session (`session=`). Web,
+  MCP, job and Temporal worker processes log their memory every five minutes as
+  `[memory]` lines.
+
+### Fixed
+- A web server's memory no longer grows with every page it serves until the
+  process is killed for memory; on a busy deployment that happened about once
+  a day, failing the requests in flight.
+- **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
+  Slack, and describes the `/help` list as the app sends it, naming no project.
+
+## [1.6.0] - 2026-10-24
+
+### Added
 - **Integrations**: several companies can connect the same Slack workspace or
   Microsoft 365 organization, as peers. Each reaches only the channels connected
   to it, a shared channel starts each company's own triggers and answers `/help`
@@ -127,6 +157,14 @@ governance, community health — carry none.
   it shows what the tokens agents consumed cost, not everything you spend.
 
 ### Fixed
+- **Tasks**: agents can attach files of several megabytes to a task, and an
+  attachment no longer slows other agents down. Reading a file out of an agent's
+  container cost seconds of server CPU per megabyte, so a file over about 4 MB
+  timed out unattached, and every tool call served alongside it waited.
+- **Admin**: a super admin can sign out. Every admin page has a **Sign out**
+  button that ends the session and returns to the admin sign-in; before, the
+  admin had none, and a sign-out request sent a super admin back into the admin
+  still signed in. **Back to app** now shows only while impersonating someone.
 - **Company settings**: a new workspace is no longer billed for the part of its
   first hour that came before it was created. A workspace set up at 04:26 was
   charged for the whole of 04:00; it is now charged from 04:26.
@@ -854,7 +892,9 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.5.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.7.0...develop
+[1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/AixleHQ/flow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/AixleHQ/flow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/AixleHQ/flow/compare/v1.2.2...v1.3.0

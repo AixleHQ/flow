@@ -263,9 +263,13 @@ const BoardPage = () => {
 
   const boardUrl = `/company/projects/${project.id}/board`;
 
+  // Agents change cards in quick bursts, one request per change, and every open board reloads on
+  // each: a burst is folded into one reload, and a steady stream still reloads every few seconds.
   useInertiaCableStream(cableStream, {
     only: ['tasks', 'columns', 'recent_activities'],
     enabled: !!board,
+    debounceMs: 1000,
+    maxWaitMs: 3000,
   });
 
   useInertiaCableStream(taskCableStream ?? undefined, {

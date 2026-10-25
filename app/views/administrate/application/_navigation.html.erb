@@ -15,7 +15,11 @@ controller (e.g. catalog syncs) would otherwise be unreachable without knowing i
   <%# Labelled and shown by app/frontend/entrypoints/admin.ts; without it the switch would do nothing. %>
   <button type="button" class="navigation__scheme" data-color-scheme-toggle hidden></button>
 
-  <%= link_to(t("administrate.navigation.back_to_app"), root_url, class: "button button--alt button--nav") if defined?(root_url) %>
+  <%# The sign-in page it lands on is an Inertia page, which Turbo cannot render in place. %>
+  <%= button_to "Sign out", logout_path, method: :delete, form_class: "navigation__sign-out", form: { data: { turbo: false } } %>
+
+  <%# The app sends a super admin straight back here; only an impersonation has an app to go back to. %>
+  <%= link_to(t("administrate.navigation.back_to_app"), root_url, class: "button button--alt button--nav") if impersonated? %>
 
   <%= link_to(
     "Dashboard",

@@ -99,7 +99,7 @@ under weak-copyleft licenses
 | typelizer | 0.12.0 | MIT |
 | virtus | 2.0.0 | MIT |
 | vite_rails | 3.0.19 | MIT |
-| websocket-client-simple | 0.9.0 | MIT |
+| websocket | 1.2.11 | MIT |
 
 ### Notable transitive gems
 
@@ -113,7 +113,6 @@ under weak-copyleft licenses
 | sorbet-runtime | 0.5.x | Apache-2.0 | |
 | domain_name | 0.6.x | BSD-2-Clause / BSD-3-Clause / MPL-2.0 | weak copyleft — see [`NOTICES.md`](NOTICES.md) |
 | llhttp-ffi | 0.5.1 | MPL-2.0 | weak copyleft — see [`NOTICES.md`](NOTICES.md) |
-| event_emitter | 0.2.6 | MIT | see [`NOTICES.md`](NOTICES.md) |
 
 All other transitive gems are MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, or
 Ruby-licensed.

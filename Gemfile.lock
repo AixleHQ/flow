@@ -208,7 +208,6 @@ GEM
     erubi (1.13.1)
     et-orbi (1.4.1)
       tzinfo
-    event_emitter (0.2.6)
     event_stream_parser (1.0.0)
     excon (1.5.0)
       logger
@@ -807,11 +806,6 @@ GEM
       crack (>= 0.3.2)
       hashdiff (>= 0.4.0, < 2.0.0)
     websocket (1.2.11)
-    websocket-client-simple (0.9.0)
-      base64
-      event_emitter
-      mutex_m
-      websocket
     websocket-driver (0.8.2)
       base64
       websocket-extensions (>= 0.1.0)
@@ -932,7 +926,7 @@ DEPENDENCIES
   vite_rails (~> 3.11)
   webauthn (~> 3.4)
   webmock
-  websocket-client-simple (~> 0.3)
+  websocket (~> 1.2)
 
 RUBY VERSION
   ruby 4.0.7

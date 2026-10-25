@@ -18,6 +18,8 @@ if Settings.sentry.temporal_dsn.present? && !Rails.env.development?
   Sentry.init { |config| SentryConfiguration.apply(config, dsn: Settings.sentry.temporal_dsn) }
 end
 
+MemoryStats.start("temporal-worker")
+
 logger = Logger.new($stdout)
 TemporalWorkflowRegistry.workflows_data
 

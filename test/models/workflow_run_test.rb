@@ -12,6 +12,26 @@ class WorkflowRunTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "wrtest-wf-#{SecureRandom.hex(4)}")
   end
 
+  test "recent_by_task gives each task its newest runs, newest first" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    busy = create(:board_task, board: board, board_column: column)
+    quiet = create(:board_task, board: board, board_column: column)
+    run = lambda do |task, at|
+      create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @admin, board_task: task, created_at: at)
+    end
+    run.call(busy, 3.hours.ago)
+    middle = run.call(busy, 2.hours.ago)
+    newest = run.call(busy, 1.hour.ago)
+    only = run.call(quiet, 5.hours.ago)
+
+    recent = WorkflowRun.recent_by_task([ busy.id, quiet.id ], limit: 2)
+
+    assert_equal [ newest.id, middle.id ], recent[busy.id].map(&:id)
+    assert_equal [ only.id ], recent[quiet.id].map(&:id)
+    assert_equal({}, WorkflowRun.recent_by_task([], limit: 2))
+  end
+
   test "an update tells the project's Sessions & Runs list the run's id, and nothing more" do
     run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @admin)
     sent = []

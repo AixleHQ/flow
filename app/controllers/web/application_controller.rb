@@ -38,7 +38,12 @@ class Web::ApplicationController < ApplicationController
         # Whether a stranger may sign a company up here, which is also what
         # decides that /how-it-works — the page that sells it — exists at all.
         self_serve_signup: Deployment.self_serve_signup?
-      }
+      },
+      # Flags declared `client: true` only, read by useFeatureFlag. Always
+      # re-evaluated, so a partial reload picks up a flip. Anonymous pages get
+      # them too, resolved with no company: the payload never carries more than
+      # flags already meant for any browser.
+      features: InertiaRails.always { FeatureFlags.client_payload(company: current_company) }
     }
 
     if signed_in?

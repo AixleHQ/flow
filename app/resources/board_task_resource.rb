@@ -37,7 +37,20 @@ class BoardTaskResource < ApplicationResource
     }
   end
 
-  attributes :id, :number, :title, :description, :task_type, :priority,
+  # How many of a task's runs a card shows, newest first.
+  RECENT_RUNS = 5
+
+  attributes :id, :number, :title
+
+  # `params[:without_description]` leaves it out (null): a card never shows it, and on a
+  # board of long agent-written stories it was half of every reload. The task drawer
+  # reads it from TaskDetailResource.
+  typelize "string | null"
+  attribute :description do |task|
+    task.description unless params[:without_description]
+  end
+
+  attributes :task_type, :priority,
              :assignee_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 
@@ -67,9 +80,16 @@ class BoardTaskResource < ApplicationResource
   end
 
   typelize "Array<{ id: number; state: string; createdAt: string; durationSeconds?: number | null; errorMessage?: string | null }>"
+  # A list caller passes `params[:recent_runs]` (WorkflowRun.recent_by_task) so a page
+  # loads RECENT_RUNS runs per card instead of each task's whole run history.
   attribute :recent_workflow_runs do |task|
-    waiting = params[:waiting_runs] || WorkflowRun.waiting_for_slot_ids(task.workflow_runs.map(&:id))
-    task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
+    runs = if params[:recent_runs]
+      params[:recent_runs].fetch(task.id, [])
+    else
+      task.workflow_runs.sort_by(&:created_at).last(RECENT_RUNS).reverse
+    end
+    waiting = params[:waiting_runs] || WorkflowRun.waiting_for_slot_ids(runs.map(&:id))
+    runs.map do |run|
       { id: run.id, state: waiting.include?(run.id) ? "queued" : run.state, created_at: run.created_at.iso8601,
         duration_seconds: run.execution_seconds, error_message: run.failure_reason&.humanize }
     end

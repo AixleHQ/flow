@@ -12,6 +12,9 @@
 #     scope: company                                             # required: company | global
 #     default: false                                             # required: true | false
 #     client: true                                               # optional, default false
+#                                       # the first client: true flag is the trigger to reconsider
+#                                       # how FeatureFlagName is produced: see the comment above it
+#                                       # in app/frontend/shared/ui/types.ts
 #     introduced: 2026-11-03                                     # optional
 #     remove_by: 2027-01-31                                      # required for kind: release
 #

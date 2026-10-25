@@ -32,14 +32,6 @@ relink them. These components are redistributed unmodified.
 
 ---
 
-## Components with confirmed/clarified licenses
-
-| Component | Note |
-|---|---|
-| **event_emitter** (gem 0.2.6, transitive via `websocket-client-simple`) | rubygems.org lists no license field. The upstream repository (`shokai/event_emitter`) is published under the **MIT License**, confirmed via the GitHub License API. Treated as MIT. |
-
----
-
 ## Development-only component with a non-OSI license
 
 | Component | License | Note |

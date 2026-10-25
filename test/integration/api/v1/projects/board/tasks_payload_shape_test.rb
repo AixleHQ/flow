@@ -41,7 +41,8 @@ class Api::V1::Projects::Board::TasksPayloadShapeTest < ActionDispatch::Integrat
   test "the JSON payload and the board props describe the same task identically" do
     # `age_seconds` is derived from the clock, so both reads have to happen at one instant.
     freeze_time do
-      get api_v1_project_tasks_path(@project), params: { board_column_id: @column.id }, as: :json
+      # The board asks for its columns in the card view, the shape of its own props.
+      get api_v1_project_tasks_path(@project), params: { board_column_id: @column.id, view: "card" }, as: :json
       assert_response :success
       from_api = JSON.parse(response.body).sole
 
@@ -51,6 +52,15 @@ class Api::V1::Projects::Board::TasksPayloadShapeTest < ActionDispatch::Integrat
 
       assert_equal from_props, from_api
     end
+  end
+
+  test "a client that does not ask for the card view still gets the description" do
+    @task.update!(description: "Steps to reproduce")
+
+    get api_v1_project_tasks_path(@project), params: { board_column_id: @column.id }, as: :json
+
+    assert_response :success
+    assert_equal "Steps to reproduce", JSON.parse(response.body).sole["description"]
   end
 
   test "the agent-facing payload keeps the Ruby spelling" do
