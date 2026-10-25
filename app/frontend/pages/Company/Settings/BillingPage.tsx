@@ -91,7 +91,7 @@ interface Props {
   billing: Billing;
   checkoutResult: 'done' | 'cancelled' | null;
   marketplaceProposal: MarketplaceProposal | null;
-  marketplace: Marketplace | null;
+  marketplaceBilling: Marketplace | null;
   [key: string]: unknown;
 }
 
@@ -509,7 +509,7 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
 }
 
 const BillingPage = () => {
-  const { company, billing, checkoutResult, marketplaceProposal, marketplace } = usePage<Props>().props;
+  const { company, billing, checkoutResult, marketplaceProposal, marketplaceBilling } = usePage<Props>().props;
   useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
 
   return (
@@ -519,8 +519,8 @@ const BillingPage = () => {
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
           {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
-          {marketplace ? (
-            <MarketplaceCard marketplace={marketplace} companyName={company.name} />
+          {marketplaceBilling ? (
+            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
           ) : (
             <>
               <SubscriptionCard billing={billing} />

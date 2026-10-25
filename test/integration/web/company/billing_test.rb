@@ -134,7 +134,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_inertia_props do |props|
-      assert props[:marketplace], "the page says AWS bills this workspace"
+      assert props[:marketplaceBilling], "the page says AWS bills this workspace"
       assert props[:permissions][:canViewBilling], "so the tab is offered"
       assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
     end

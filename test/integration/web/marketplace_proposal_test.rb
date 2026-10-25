@@ -208,8 +208,12 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
     assert_inertia_page "Company/Settings/BillingPage"
     assert_inertia_props do |props|
-      assert_equal MarketplaceLicense.last.customer_aws_account_id, props.dig(:marketplace, :awsAccountId)
-      assert_not props.dig(:marketplace, :ended)
+      assert_equal MarketplaceLicense.last.customer_aws_account_id, props.dig(:marketplaceBilling, :awsAccountId)
+      assert_not props.dig(:marketplaceBilling, :ended)
+      # Two meanings, two names. `marketplace` is the shared prop the
+      # stopped-workspace banner reads; a page prop of that name shadows it and
+      # the banner announces an ended subscription to a running workspace.
+      assert_nil props[:marketplace], "the banner has nothing to say about a running workspace"
       assert props[:permissions][:canViewBilling], "the tab is offered"
       assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
     end
@@ -220,7 +224,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
     get company_settings_billing_path
 
-    assert_inertia_props { |props| assert_nil props[:marketplace] }
+    assert_inertia_props { |props| assert_nil props[:marketplaceBilling] }
   end
 
   test "an answered request cannot be answered twice" do

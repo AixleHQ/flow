@@ -40,7 +40,7 @@ const render = (
   overrides: Partial<typeof billing> | Record<string, unknown> = {},
   checkoutResult: string | null = null,
   marketplaceProposal: Record<string, unknown> | null = null,
-  marketplace: Record<string, unknown> | null = null,
+  marketplaceBilling: Record<string, unknown> | null = null,
 ) =>
   renderAuthedPage(<BillingPage />, {
     props: {
@@ -48,7 +48,7 @@ const render = (
       billing: { ...billing, ...overrides },
       checkoutResult,
       marketplaceProposal,
-      marketplace,
+      marketplaceBilling,
       permissions: buildSharedPermissions({ canManageBilling: true, canViewBilling: true }),
     },
   });
