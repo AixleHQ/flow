@@ -105,8 +105,8 @@ Hand them back once, with nothing deleted:
 sudo chown -R "$(id -u):$(id -g)" .
 ```
 
-The Yarn `YN0060` / `YN0086` peer-dependency warnings and the
-`websocket-client-simple` gem notice are unrelated and do not fail setup.
+The Yarn `YN0060` / `YN0086` peer-dependency warnings are unrelated and do
+not fail setup.
 
 ## Common follow-ups
 

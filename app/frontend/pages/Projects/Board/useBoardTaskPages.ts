@@ -151,6 +151,7 @@ export function useBoardTaskPages<T extends PagedTask>({
       params.set('board_column_id', String(columnId));
       params.set('limit', String(limit));
       params.set('offset', String(offset));
+      params.set('view', 'card');
 
       const res = await apiFetch(`${apiV1ProjectTasksPath(projectId)}?${params.toString()}`);
       if (!res.ok) throw new Error(`Failed to load tasks for column ${columnId}`);

@@ -14,7 +14,9 @@ class ApplicationController < ActionController::Base
     payload[:host] = request.host
     payload[:ip] = request.env["HTTP_X_REAL_IP"]
     payload[:ff] = request.env["HTTP_X_FORWARDED_FOR"]
-    # payload[:user] = current_user&.id
+    # Only a user this request already resolved: resolving one here would touch or
+    # forget the session of a request that never asked who was signed in.
+    payload[:user] = @current_user&.id if defined?(@current_user_session)
   end
 
   def q_params

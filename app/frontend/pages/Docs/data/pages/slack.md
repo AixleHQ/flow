@@ -7,10 +7,12 @@ belongs to the company and serves every project in it. From then on:
   message** trigger for Slack);
 - the thread a request came from gets a status card that follows the run;
 - agents in workflow steps post, edit, delete and read messages with the
-  `chat_*` tools.
+  `chat_*` tools;
+- anyone who links their Aixle account starts a workflow as themselves with the
+  **Run workflow** message action or the slash command (see
+  [Starting a workflow yourself](#starting-a-workflow-yourself-run-workflow-and-the-slash-command)).
 
-Flow has no slash commands and no buttons in Slack, so approvals and gates are
-answered in Flow, not in Slack.
+Approvals and gates are answered in Flow, not in Slack.
 
 Any member who can change a project connects Slack from that project's
 **Integrations** page; viewers cannot. Because the install is company-wide, it
@@ -225,7 +227,9 @@ often people can start one, set the trigger's **Cooldown (s)**.
 
 Mention the app with `/help` and nothing else: `@<app> /help`. The app replies
 in the thread with the triggers that listen in that channel, in every project of
-the company. Each entry shows its pattern, its workflow and its project.
+each company that connected it. Each entry shows what to type, its workflow and
+its pattern, and, when several companies listen there, the company. It never
+names a project: the channel may hold guests and other organizations.
 
 The app sends the same reply when a mention matches no trigger. If no trigger
 listens in the channel at all, it replies *"No Slack triggers configured for this
