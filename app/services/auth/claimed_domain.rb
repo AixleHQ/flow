@@ -33,10 +33,16 @@ module Auth
     # Only ever for a buyer. Telling an arbitrary visitor whether a domain has a
     # workspace, and what it is called, is not ours to give away on a typed
     # address; a paid subscription is what makes them not arbitrary.
+    # Any company, not only an active one. `find_by_email_domain` is scoped to
+    # active because its other caller is asking how to get in; this one is
+    # asking why the form refused, and the form (WorkspaceOnboardingForm
+    # #domain_is_free) refuses on every state. Scoped the same way, a domain
+    # held by a suspended or archived workspace refused the buyer and then
+    # explained nothing.
     def self.for_email(email)
       return nil if email.blank?
 
-      company = Company.find_by_email_domain(email.to_s)
+      company = Company.find_by(email_domain: email.to_s.split("@").last)
       company && new(company)
     end
 
@@ -59,7 +65,11 @@ module Auth
 
     private
 
+    # Nothing joins a workspace that is not running, so a suspended or archived
+    # one is named with no way in rather than with one that would be refused.
     def join_methods
+      return [] unless company.active?
+
       Auth::PolicyResolver.allowed_providers(company)
                           .select { |provider| joins?(provider) && provider != @tried }
                           .sort_by { |provider| [ provider.company? ? 1 : 0, provider.display_name ] }
