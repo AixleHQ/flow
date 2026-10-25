@@ -46,20 +46,21 @@ module Billing
     def call
       limits = opening_limits
       seconds = Hash.new(0)
+      payable = Hash.new(0)
       peak = offered_total(limits)
       cursor = period_start
 
       changes_during_window.each do |company_id, max_sessions, occurred_at|
-        accrue(seconds, limits, from: cursor, to: occurred_at)
+        accrue(seconds, payable, limits, from: cursor, to: occurred_at)
         cursor = occurred_at
         limits[company_id] = max_sessions.to_i
         total = offered_total(limits)
         peak = total if total > peak
       end
-      accrue(seconds, limits, from: cursor, to: period_end)
+      accrue(seconds, payable, limits, from: cursor, to: period_end)
 
       offered = seconds.reject { |_, value| value.zero? }
-      billed = offered.slice(*billable_company_ids)
+      billed = payable.slice(*billable_company_ids).reject { |_, value| value.zero? }
 
       Result.new(
         period_start: period_start,
@@ -73,11 +74,42 @@ module Billing
 
     private
 
-    def accrue(seconds, limits, from:, to:)
+    # Two totals from one pass. `seconds` is everything the company was offered,
+    # which is what a free allowance is spent from; `payable` is the part its
+    # current payer owes, which is everything except the time before that payer
+    # took over.
+    def accrue(seconds, payable, limits, from:, to:)
       elapsed = (to - from).round
       return if elapsed <= 0
 
-      limits.each { |company_id, limit| seconds[company_id] += offered(company_id, limit) * elapsed }
+      limits.each do |company_id, limit|
+        rate = offered(company_id, limit)
+        seconds[company_id] += rate * elapsed
+        payable[company_id] += rate * owed_elapsed(company_id, from, to)
+      end
+    end
+
+    # A company that changed payer inside this hour is billed by the new one
+    # only from the moment it took over. The time before belonged to the old
+    # payer: free where the workspace was trialing, and already on the old
+    # payer's final invoice where it was paying -- Billing::FinalUsage measures
+    # up to the switch and settles it. Without this the new payer is sent the
+    # whole hour and that earlier part is charged twice.
+    def owed_elapsed(company_id, from, to)
+      since = payer_since[company_id]
+      return (to - from).round if since.nil?
+
+      (to - [ from, since ].max).round.clamp(0, (to - from).round)
+    end
+
+    # Only the switches that land inside this window. One from before it means
+    # the payer owned the whole hour; one from after has not happened yet, and
+    # the hour is not theirs to be billed for at all -- but that company is not
+    # billable under the new payer yet either, so it never reaches `billed`.
+    def payer_since
+      @payer_since ||= Company.where(id: measured_company_ids,
+                                     billing_provider_since: period_start...period_end)
+                              .pluck(:id, :billing_provider_since).to_h
     end
 
     def offered_total(limits)
