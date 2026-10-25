@@ -69,9 +69,9 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
   end
 
   test "with_feature_registry swaps the declared flags for the block" do
-    with_example_flags { assert FeatureFlags.registry.declared?(:coder_reap) }
+    with_example_flags { assert FeatureFlags.registry.declared?(:board_ai_summary) }
 
-    refute FeatureFlags.registry.declared?(:coder_reap)
+    refute FeatureFlags.registry.declared?(:board_ai_summary)
   end
 
   # Both tests write to the store without cleaning up; whichever runs second

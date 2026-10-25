@@ -5,7 +5,9 @@ require "test_helper"
 class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
   REGISTRY = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
 
-  def env(variables, settings: nil) = FeatureFlags::EnvSource.new(variables, registry: REGISTRY, settings: settings)
+  def env(variables) = FeatureFlags::EnvSource.new(variables, registry: REGISTRY)
+
+  def env_with(settings, variables = {}) = FeatureFlags::EnvSource.new(variables, registry: REGISTRY, settings: settings)
 
   def reap_setting(value) = { coder: { reap_enabled: value } }
 
@@ -80,19 +82,19 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
   # config/settings.yml gives coder.reap_enabled true or false when
   # CODER_REAP_ENABLED is set and nil when it is not.
   test "the legacy env_setting locks the flag only when its variable is set" do
-    source = env({}, settings: reap_setting(false))
+    source = env_with(reap_setting(false))
     assert_equal [ false, "CODER_REAP_ENABLED" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
 
-    source = env({}, settings: reap_setting(true))
+    source = env_with(reap_setting(true))
     assert_equal [ true, "CODER_REAP_ENABLED" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
 
-    source = env({}, settings: reap_setting(nil))
+    source = env_with(reap_setting(nil))
     assert_equal [ nil, nil ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
   end
 
   test "FEATURE_<KEY> wins over the legacy variable when both are set" do
     [ [ "on", false, true ], [ "off", true, false ], [ "off", false, false ] ].each do |feature, legacy, expected|
-      source = env({ "FEATURE_CODER_REAP" => feature }, settings: reap_setting(legacy))
+      source = env_with(reap_setting(legacy), "FEATURE_CODER_REAP" => feature)
 
       assert_equal [ expected, "FEATURE_CODER_REAP" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ],
                    "FEATURE_CODER_REAP=#{feature}, coder.reap_enabled=#{legacy}"
@@ -100,18 +102,18 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
   end
 
   test "string-keyed settings are read too" do
-    assert_equal false, env({}, settings: { "coder" => { "reap_enabled" => false } }).value_for(:coder_reap) # rubocop:disable Minitest/RefuteFalse
+    assert_equal false, env_with({ "coder" => { "reap_enabled" => false } }).value_for(:coder_reap) # rubocop:disable Minitest/RefuteFalse
   end
 
   test "a legacy setting that is not true, false or unset fails boot naming it and its variable" do
-    error = assert_raises(FeatureFlags::InvalidEnv) { env({}, settings: reap_setting("false")) }
+    error = assert_raises(FeatureFlags::InvalidEnv) { env_with(reap_setting("false")) }
 
     assert_match "coder.reap_enabled (CODER_REAP_ENABLED) must be true, false or unset, got \"false\"", error.message
   end
 
   test "an env_setting that names no setting fails boot" do
     [ {}, { coder: {} }, { coder: "on" } ].each do |settings|
-      error = assert_raises(FeatureFlags::InvalidEnv) { env({}, settings: settings) }
+      error = assert_raises(FeatureFlags::InvalidEnv) { env_with(settings) }
 
       assert_match "coder_reap: env_setting coder.reap_enabled is not a setting", error.message
     end
@@ -122,7 +124,7 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
   end
 
   test "merge_settings, merge and with_registry keep the legacy layer" do
-    source = env({}, settings: reap_setting(nil)).merge_settings("coder.reap_enabled" => false)
+    source = env_with(reap_setting(nil)).merge_settings("coder.reap_enabled" => false)
 
     refute source.value_for(:coder_reap)
     refute source.merge("FEATURE_BOARD_AI_SUMMARY" => "on").value_for(:coder_reap)
