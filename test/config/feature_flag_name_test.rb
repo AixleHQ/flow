@@ -26,9 +26,18 @@ class FeatureFlagNameTest < ActiveSupport::TestCase
     shipped = FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH)
     expected = shipped.definitions.select(&:client?).map { |definition| definition.key.to_s.camelize(:lower) }.sort
 
+    # Once a client flag exists, the hand-written list is no longer the only fix: say so where it is read.
+    resource_hint =
+      if expected.any?
+        ". Now that a client flag exists, consider replacing the hand-written list instead: an Alba " \
+          "resource with the client flags as `typelize :boolean` attributes lets Typelizer generate a " \
+          "`Features` interface for `useFeatureFlag(name: keyof Features)`, with no drift test. See the " \
+          "comment above FeatureFlagName in app/frontend/shared/ui/types.ts"
+      end
+
     assert_equal expected, declared_names(TYPES.read),
       "update FeatureFlagName in app/frontend/shared/ui/types.ts to the client: true flags " \
-      "(#{expected.empty? ? 'none: `never`' : expected.map { |name| "'#{name}'" }.join(' | ')})"
+      "(#{expected.empty? ? 'none: `never`' : expected.map { |name| "'#{name}'" }.join(' | ')})#{resource_hint}"
   end
 
   test "a union of names reads as those names, on one line or several" do

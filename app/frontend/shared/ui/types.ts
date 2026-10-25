@@ -16,6 +16,11 @@ export type UserRoleMatchesServer = Expect<SameUnion<UserRole, NonNullable<Curre
 // (Typelizer writes no file for a resource without attributes, which is what an empty registry
 // gives); test/config/feature_flag_name_test.rb fails the moment this list and the registry differ.
 // One quoted name per member (`'boardAiSummary' | 'newSidebar'`), and `never` while there is none.
+// When this list gains its first member, prefer replacing it: an Alba resource declaring the
+// `client: true` flags as `typelize :boolean` attributes makes Typelizer generate a `Features`
+// interface, and `useFeatureFlag(name: keyof Features)` then needs no hand-written list and no drift
+// test, because one class produces both the payload and the type. That is only possible once a flag
+// exists: Typelizer 0.14 drops an attribute-less resource before writing any file.
 export type FeatureFlagName = never;
 
 export interface ProjectPermissions {
