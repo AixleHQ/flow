@@ -135,29 +135,38 @@ const SubscriptionRequest = ({ claim, state, email }: { claim: ClaimedDomain; st
       </Text>
     );
 
-  if (state === 'declined')
-    return (
-      <Text size="sm" c="var(--app-text-secondary)" mt="md">
-        An administrator of {workspace} did not accept the request. Your subscription is unchanged and is attached to
-        nothing. Speak to someone there before asking again, or unsubscribe in AWS Marketplace if you no longer want it.
-      </Text>
-    );
+  const declined = state === 'declined';
 
   return (
     <>
       <Text size="sm" c="var(--app-text-secondary)" mt="md">
-        Your AWS Marketplace subscription is recorded and is not attached to a workspace yet. Nothing has been lost and
-        you are not paying twice. You can ask the administrators of {workspace} to apply it — they decide, and until one
-        of them accepts nothing about that workspace changes.
+        {declined ? (
+          <>
+            An administrator of {workspace} did not accept the request. Your subscription is unchanged and is attached
+            to nothing. Speak to someone there before asking again, or unsubscribe in AWS Marketplace if you no longer
+            want it.
+          </>
+        ) : (
+          <>
+            Your AWS Marketplace subscription is recorded and is not attached to a workspace yet. Nothing has been lost
+            and you are not paying twice. You can ask the administrators of {workspace} to apply it — they decide, and
+            until one of them accepts nothing about that workspace changes.
+          </>
+        )}
       </Text>
+      {/* Offered after a refusal too. A declined request is answered, not
+          final: the buyer has paid, the subscription is still attached to
+          nothing, and telling them to ask again while giving them nothing to
+          ask with leaves them stuck for good. */}
       <Button
         fullWidth
         size="md"
         mt="md"
+        variant={declined ? 'default' : 'filled'}
         onClick={() => router.post(marketplaceProposalPath(), { email })}
         disabled={!email}
       >
-        Ask them to apply it
+        {declined ? 'Ask again' : 'Ask them to apply it'}
       </Button>
     </>
   );

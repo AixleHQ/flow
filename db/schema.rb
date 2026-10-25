@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_25_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_25_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -585,6 +585,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_25_100000) do
     t.boolean "managed_by_aixle", default: false, null: false
     t.datetime "trial_started_at"
     t.string "billing_provider", default: "none", null: false
+    t.datetime "billing_provider_since"
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true

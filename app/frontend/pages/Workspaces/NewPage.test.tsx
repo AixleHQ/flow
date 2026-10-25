@@ -231,7 +231,19 @@ describe('New workspace page', () => {
         renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'declined' }) });
 
         expect(screen.getByText(/did not accept/)).toHaveTextContent('attached to nothing');
-        expect(screen.queryByRole('button', { name: 'Ask them to apply it' })).not.toBeInTheDocument();
+      });
+
+      // A refusal is an answer, not the end. The buyer has paid and the
+      // subscription is still attached to nothing, so a screen that tells them
+      // to ask again and offers nothing to ask with strands them for good.
+      it('still lets them ask again after a refusal', async () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'declined' }) });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Ask again' }));
+
+        expect(router.post).toHaveBeenCalledWith('/marketplace/aws/proposal', {
+          email: 'dana@northwind-robotics.example',
+        });
       });
 
       it('offers the sign-in screen, because there is no session to sign out of', async () => {

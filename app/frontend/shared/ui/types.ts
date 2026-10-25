@@ -50,6 +50,8 @@ export interface SharedPermissions {
   canWrite?: boolean;
   /** An admin, where we host. Optional: a page served by an older pod does not send it. */
   canManageBilling?: boolean;
+  /** Whether the Billing tab is offered at all. Wider than managing it: a workspace AWS bills reads that page but changes nothing there. */
+  canViewBilling?: boolean;
 }
 
 /**

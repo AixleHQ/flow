@@ -197,6 +197,32 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert_equal [ "dana@northwind.example" ], ActionMailer::Base.deliveries.map { |m| m.to.first }
   end
 
+  # Hiding the tab made a workspace's billing look missing rather than managed
+  # somewhere else. It stays, and says where the bill comes from.
+  test "a workspace AWS bills keeps its Billing tab, with no controls on it" do
+    raised
+    sign_in_as(@admin)
+    post company_marketplace_license_proposal_path
+
+    get company_settings_billing_path
+
+    assert_inertia_page "Company/Settings/BillingPage"
+    assert_inertia_props do |props|
+      assert_equal MarketplaceLicense.last.customer_aws_account_id, props.dig(:marketplace, :awsAccountId)
+      assert_not props.dig(:marketplace, :ended)
+      assert props[:permissions][:canViewBilling], "the tab is offered"
+      assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
+    end
+  end
+
+  test "a workspace nobody AWS-bills has no marketplace panel" do
+    sign_in_as(@admin)
+
+    get company_settings_billing_path
+
+    assert_inertia_props { |props| assert_nil props[:marketplace] }
+  end
+
   test "an answered request cannot be answered twice" do
     license = raised
     sign_in_as(@admin)

@@ -40,6 +40,7 @@ const render = (
   overrides: Partial<typeof billing> | Record<string, unknown> = {},
   checkoutResult: string | null = null,
   marketplaceProposal: Record<string, unknown> | null = null,
+  marketplace: Record<string, unknown> | null = null,
 ) =>
   renderAuthedPage(<BillingPage />, {
     props: {
@@ -47,9 +48,18 @@ const render = (
       billing: { ...billing, ...overrides },
       checkoutResult,
       marketplaceProposal,
-      permissions: buildSharedPermissions({ canManageBilling: true }),
+      marketplace,
+      permissions: buildSharedPermissions({ canManageBilling: true, canViewBilling: true }),
     },
   });
+
+const marketplace = (over = {}) => ({
+  awsAccountId: '444455556666',
+  subscribedAt: '2026-10-25T17:44:31Z',
+  ended: false,
+  reportedMinutes: 132.5,
+  ...over,
+});
 
 const proposal = (over = {}) => ({
   askedBy: 'dana@acme-robotics.example',
@@ -291,6 +301,39 @@ describe('Company billing page', () => {
       render();
 
       expect(screen.queryByText(/request to bill this workspace/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // The page used to be taken away from a workspace AWS bills, which read as
+  // billing gone missing rather than billing kept somewhere else.
+  describe('a workspace billed through AWS Marketplace', () => {
+    it('says where the bill comes from, and which account pays it', () => {
+      render({}, null, null, marketplace());
+
+      expect(screen.getByText('Billed through AWS Marketplace')).toBeInTheDocument();
+      expect(screen.getByText(/is paid for through AWS Marketplace/)).toHaveTextContent('444455556666');
+    });
+
+    // The one figure not visible in AWS until the invoice exists.
+    it('shows what has been reported towards that bill', () => {
+      render({}, null, null, marketplace());
+
+      expect(screen.getByText(/worker-minutes reported to AWS/)).toHaveTextContent('132.5');
+    });
+
+    it('offers no card and no cancellation, because neither is ours to do', () => {
+      render({}, null, null, marketplace());
+
+      expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Cancel/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Manage the subscription in AWS Marketplace/ })).toBeInTheDocument();
+    });
+
+    it('says the workspace is stopped once the subscription has ended', () => {
+      render({}, null, null, marketplace({ ended: true }));
+
+      expect(screen.getByText('Ended')).toBeInTheDocument();
+      expect(screen.getByText(/Renewing it in AWS starts it again/)).toBeInTheDocument();
     });
   });
 });
