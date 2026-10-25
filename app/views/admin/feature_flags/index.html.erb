@@ -45,7 +45,7 @@
             <td>
               <% if row.locked? %>
                 <%= feature_flag_value(row.env_value) %>
-                <span class="flag-muted">locked by <code><%= definition.env_var %></code></span>
+                <span class="flag-muted">locked by <code><%= row.env_variable %></code></span>
               <% else %>
                 <span class="flag-muted">not set</span>
               <% end %>

@@ -193,7 +193,7 @@ per-project namespaces and network policies separate them.
 | `CODER_SSH_EXEC_INLINE_BYTES`      | no       | `262144` | Total response budget for one `coder_ssh_exec`; the rest is read back through the tool-result path. |
 | `CODER_SSH_EXEC_CEILING_SECONDS`   | no       | `120`    | Wall-clock ceiling one `coder_ssh_exec` can reach regardless of its own timeout. Longer work must run detached. |
 | `CODER_JOB_STATUS_TAIL_LINES`      | no       | `40`     | Log tail `coder_job_status` returns by default.                          |
-| `CODER_REAP_ENABLED`               | no       | `true`   | `false` disables deletion of dead workspaces. The reaper only ever looks at workspaces the integration's token owns under its machine prefix, and does nothing for an integration without one; a workspace whose last start or stop failed is confirmed twice like a dead one, and one whose delete failed is left for an operator. |
+| `CODER_REAP_ENABLED`               | no       | `true`   | `false` disables deletion of dead workspaces. The reaper only ever looks at workspaces the integration's token owns under its machine prefix, and does nothing for an integration without one; a workspace whose last start or stop failed is confirmed twice like a dead one, and one whose delete failed is left for an operator. It is the ENV lock of the `coder_reap` feature flag: unset, the reaper can be paused at runtime from `/admin/feature_flags`; `FEATURE_CODER_REAP` wins when both are set. |
 | `CODER_REAP_CONFIRMATION_MINUTES`  | no       | `10`     | How far apart the two "this box is dead" observations must be before a workspace is deleted. |
 | `CODER_REAP_MAX_DELETIONS_PER_RUN` | no       | `3`      | Cap on deletions in one reaper sweep, however dead the pool looks.       |
 

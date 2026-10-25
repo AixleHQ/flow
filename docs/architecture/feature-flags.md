@@ -9,7 +9,7 @@ A flag is declared in `config/feature_flags.yml` and read with `Feature.enabled?
 comes from the first layer that is set:
 
 ```
-FEATURE_<KEY> (ENV) > company override > global admin value > declared default
+FEATURE_<KEY> or legacy env_setting (ENV) > company override > global admin value > declared default
 ```
 
 `Feature.explain` returns the value with the layer that decided it and the layers it beat
@@ -117,6 +117,41 @@ never needs an infra change first. `FEATURE_FLAGS_*` is reserved for the system'
 (`FEATURE_FLAGS_REFRESH_INTERVAL`, `FEATURE_FLAGS_MAX_STALENESS`), which is why no key may start
 with `flags`. See [reference/configuration.md](../reference/configuration.md).
 
+### Moving a legacy ENV toggle over: `env_setting`
+
+An existing kill switch with its own variable (for example `CODER_REAP_ENABLED`, read into
+`Settings.coder.reap_enabled`) becomes a flag without renaming the variable:
+
+```yaml
+coder_reap:
+  description: Lets the Coder reaper delete dead workspaces.
+  owner: "@AixleHQ/platform"
+  kind: ops
+  scope: global
+  default: true
+  env_setting: coder.reap_enabled          # the Settings path
+  env_setting_variable: CODER_REAP_ENABLED  # what admin names as the lock
+```
+
+- The setting is a second ENV lock, at the same precedence as `FEATURE_<KEY>`.
+  `FeatureFlags::EnvSource` reads it once at boot from the settings tree.
+- `config/settings.yml` must leave the setting null while its variable is unset, and give it
+  `true` or `false` once it is set. Only an explicitly set variable locks the flag; with it
+  unset, the flag is controlled from `/admin/feature_flags` and falls back to its default.
+  The read stays in `settings.yml`, so `docs/reference/configuration.md` keeps its row:
+
+  ```yaml
+  reap_enabled: <%= ENV['CODER_REAP_ENABLED'].nil? ? '~' : ENV['CODER_REAP_ENABLED'] == 'true' %>
+  ```
+
+- **Both set: `FEATURE_<KEY>` wins.** It is the flag's own lock, so a deployment that sets it
+  has moved to it; the legacy variable is ignored while it is set. `Feature.explain` and the
+  admin page name the variable that actually decides (`Resolution#env_var`,
+  `EnvSource#variable_for`).
+- A value that is not `true`, `false` or null, or an `env_setting` path that names no setting,
+  fails boot (`FeatureFlags::InvalidEnv`).
+- Replace every read of the setting with `Feature.enabled?(:key)`.
+
 ## Test helpers
 
 `test/support/feature_flags_helper.rb`, included in every test case. No database, Redis or real
@@ -127,14 +162,15 @@ starts from the declared defaults.
 with_feature(:board_ai_summary, true) { ... }                               # global value
 with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
 stub_feature_env(:board_ai_summary, "off") { ... }                          # the FEATURE_* lock
+stub_feature_env_setting(:coder_reap, false) { ... }                        # the legacy env_setting lock
 with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }         # declare test flags
 uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY                  # the same, for a class
 ```
 
 An undeclared key raises `FeatureFlags::UnknownFlag` in development and test, so a test that
-guards on a typo fails. The shipped registry may be empty, which is why tests that need a flag
-declare the two examples of `test/fixtures/files/feature_flags_registry.yml`. Tests of the
-database-backed store and of `FeatureFlags::Admin` run against real rows with
+guards on a typo fails. Tests that need a flag declare the two examples of
+`test/fixtures/files/feature_flags_registry.yml`, so they do not depend on what the shipped
+registry declares. Tests of the database-backed store and of `FeatureFlags::Admin` run against real rows with
 `FakeFeatureFlagVersionToken` instead of Redis. On the frontend, set
 `inertiaState.pageProps = { features: { boardAiSummary: true } }` in a Vitest test.
 

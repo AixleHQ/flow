@@ -57,6 +57,17 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
     end
   end
 
+  test "stub_feature_env_setting locks a flag through its legacy setting for the block" do
+    with_example_flags do
+      stub_feature_env_setting(:coder_reap, false) do
+        assert_equal [ false, :env, "CODER_REAP_ENABLED" ], Feature.explain(:coder_reap).then { |r| [ r.value, r.source, r.env_var ] }
+      end
+
+      assert_equal :default, Feature.explain(:coder_reap).source
+      assert_raises(ArgumentError) { stub_feature_env_setting(:board_ai_summary, false) { flunk } }
+    end
+  end
+
   test "with_feature_registry swaps the declared flags for the block" do
     with_example_flags { assert FeatureFlags.registry.declared?(:coder_reap) }
 

@@ -482,9 +482,13 @@ coder:
   # much one sweep can remove even if the whole pool looks dead. Reaping a dead
   # agent also requires `health_probe_enabled` — without the active probe there
   # is no way to tell a dead box from an unresponsive one — but a workspace
-  # whose last start or stop failed is reaped without a probe. `reap_enabled:
-  # false` is the only switch that stops all deletion.
-  reap_enabled:              <%= ENV.fetch('CODER_REAP_ENABLED', 'true') == 'true' %>
+  # whose last start or stop failed is reaped without a probe. The feature flag
+  # `coder_reap` (config/feature_flags.yml) is the only switch that stops all
+  # deletion: it defaults to on, and an admin can pause it at runtime from
+  # /admin/feature_flags. `reap_enabled` is that flag's legacy ENV lock: null
+  # (`~`) while CODER_REAP_ENABLED is unset, so the default never locks the
+  # flag; true or false once it is set, `true` meaning on as before.
+  reap_enabled:              <%= ENV['CODER_REAP_ENABLED'].nil? ? '~' : ENV['CODER_REAP_ENABLED'] == 'true' %>
   reap_confirmation_minutes: <%= (ENV['CODER_REAP_CONFIRMATION_MINUTES'] || 10).to_i %>
   reap_max_deletions_per_run: <%= (ENV['CODER_REAP_MAX_DELETIONS_PER_RUN'] || 3).to_i %>
 

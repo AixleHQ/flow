@@ -11,11 +11,17 @@ module FeatureFlags
     KINDS = %w[release ops].freeze
     SCOPES = %w[company global].freeze
     REQUIRED = %w[description owner kind scope default].freeze
-    OPTIONAL = %w[client introduced remove_by].freeze
+    OPTIONAL = %w[client introduced remove_by env_setting env_setting_variable].freeze
+    # A legacy Settings path (`coder.reap_enabled`) and the variable config/settings.yml
+    # reads it from (`CODER_REAP_ENABLED`): together, a second ENV lock (EnvSource).
+    SETTING_PATH = /\A[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+\z/
+    SETTING_VARIABLE = /\A[A-Z][A-Z0-9_]*\z/
 
     class Definition < Data.define(:key, :description, :owner, :kind, :scope, :default, :client,
-                                   :introduced, :remove_by)
+                                   :introduced, :remove_by, :env_setting, :env_setting_variable)
       def env_var = "#{EnvSource::PREFIX}#{key.to_s.upcase}"
+      # Every variable that can lock the flag, FEATURE_<KEY> first.
+      def env_vars = [ env_var, env_setting_variable ].compact
       def company_scoped? = scope == :company
       def global? = scope == :global
       def release? = kind == :release
@@ -82,6 +88,27 @@ module FeatureFlags
       elsif attributes.key?("remove_by") && !attributes["remove_by"].is_a?(Date)
         problems << "remove_by must be a date (YYYY-MM-DD)"
       end
+      problems.concat(env_setting_problems(attributes))
+    end
+
+    def env_setting_problems(attributes)
+      path = attributes["env_setting"]
+      variable = attributes["env_setting_variable"]
+      return [] if path.nil? && variable.nil?
+      return [ "env_setting_variable is required with env_setting" ] if variable.nil?
+      return [ "env_setting is required with env_setting_variable" ] if path.nil?
+
+      problems = []
+      if !path.is_a?(String) || !path.match?(SETTING_PATH)
+        problems << "env_setting must be a dotted Settings path (e.g. coder.reap_enabled)"
+      elsif path.start_with?("feature_flags.")
+        problems << "env_setting must not point into the feature_flags settings"
+      end
+      if !variable.is_a?(String) || !variable.match?(SETTING_VARIABLE)
+        problems << "env_setting_variable must be an upper-case variable name"
+      elsif variable.start_with?(EnvSource::PREFIX)
+        problems << "env_setting_variable must not be a FEATURE_* variable"
+      end
       problems
     end
 
@@ -95,7 +122,9 @@ module FeatureFlags
         default: attributes["default"],
         client: attributes.fetch("client", false),
         introduced: attributes["introduced"]&.freeze,
-        remove_by: attributes["remove_by"]&.freeze
+        remove_by: attributes["remove_by"]&.freeze,
+        env_setting: attributes["env_setting"]&.dup&.freeze,
+        env_setting_variable: attributes["env_setting_variable"]&.dup&.freeze
       )
     end
 

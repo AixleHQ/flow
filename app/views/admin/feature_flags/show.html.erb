@@ -23,7 +23,7 @@
 
   <% if locked %>
     <div class="flag-locked" role="status">
-      Locked by <code><%= definition.env_var %></code>: it is <strong><%= feature_flag_audit_value(row.env_value) %></strong>
+      Locked by <code><%= row.env_variable %></code>: it is <strong><%= feature_flag_audit_value(row.env_value) %></strong>
       in every process<%= " for every company, whatever its override" if definition.company_scoped? %>.
       Change the variable and restart to change it; nothing on this page can.
     </div>
@@ -34,7 +34,7 @@
     <table>
       <thead><tr><th>Layer</th><th>Value</th><th></th></tr></thead>
       <tbody>
-        <% [ [ :env, row.env_value, "ENV #{definition.env_var}" ], [ :global, row.global, "Global value" ],
+        <% [ [ :env, row.env_value, "ENV #{row.env_vars.join(' or ')}" ], [ :global, row.global, "Global value" ],
              [ :default, definition.default, "Declared default" ] ].each do |source, value, label| %>
           <tr class="<%= 'flag-winner' if row.resolution.source == source %>">
             <td><%= label %></td>
@@ -107,7 +107,7 @@
                 <td><%= link_to override.company.name, admin_company_path(override.company) %></td>
                 <td>
                   <%= feature_flag_value(override.enabled) %>
-                  <% if locked %><%= feature_flag_badge("shadowed by #{definition.env_var}", "warning") %><% end %>
+                  <% if locked %><%= feature_flag_badge("shadowed by #{row.env_variable}", "warning") %><% end %>
                 </td>
                 <td><%= override.reason %></td>
                 <td><%= override.created_by&.email || "—" %></td>

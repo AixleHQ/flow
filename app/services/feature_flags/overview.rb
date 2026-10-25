@@ -64,7 +64,8 @@ module FeatureFlags
     def row_for(definition)
       flag = @flags[definition.key.to_s]
       resolution = definition.company_scoped? ? @resolver.resolve(definition.key, company: nil) : @resolver.resolve(definition.key)
-      Row.new(definition: definition, flag: flag, env_value: @env.value_for(definition.key), resolution: resolution,
+      Row.new(definition: definition, flag: flag, env_value: @env.value_for(definition.key),
+              env_variable: @env.variable_for(definition.key), resolution: resolution,
               overrides_on: count(flag, true), overrides_off: count(flag, false))
     end
 
