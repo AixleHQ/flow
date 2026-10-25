@@ -40,10 +40,10 @@ class FeatureFlags::LifecycleTest < ActiveSupport::TestCase
       FeatureFlag.create!(key: "coder_reap", enabled: false)
     end
 
-    registry = FeatureFlags::Registry.new(
+    registry = FeatureFlags::Registry.new({
       "board_ai_summary" => { "description" => "AI summary panel.", "owner" => "@AixleHQ/board", "kind" => "release",
                               "scope" => "company", "default" => false, "remove_by" => Date.new(2027, 1, 31) }
-    )
+    })
     report = lifecycle(registry, env: { "FEATURE_OLD_SWITCH" => "on" }).report(today: Date.new(2027, 3, 1))
 
     assert_equal [ :board_ai_summary ], report.past_remove_by.map(&:key)
@@ -60,10 +60,10 @@ class FeatureFlags::LifecycleTest < ActiveSupport::TestCase
 
   test "only release flags are listed as past remove_by, and a recent change is not the same everywhere" do
     travel_to(Time.zone.local(2027, 1, 20)) { FeatureFlag.create!(key: "coder_reap", enabled: false) }
-    registry = FeatureFlags::Registry.new(
+    registry = FeatureFlags::Registry.new({
       "coder_reap" => { "description" => "Reaper.", "owner" => "@AixleHQ/platform", "kind" => "ops",
                         "scope" => "global", "default" => true, "remove_by" => Date.new(2027, 1, 1) }
-    )
+    })
 
     report = lifecycle(registry).report(today: Date.new(2027, 2, 1))
 
@@ -83,10 +83,10 @@ class FeatureFlags::LifecycleTest < ActiveSupport::TestCase
     board = FeatureFlag.create!(key: "board_ai_summary", enabled: true)
     board.overrides.create!(company: @company, enabled: false, reason: "held back")
     FeatureFlag.create!(key: "coder_reap", enabled: false)
-    registry = FeatureFlags::Registry.new(
+    registry = FeatureFlags::Registry.new({
       "coder_reap" => { "description" => "Reaper.", "owner" => "@AixleHQ/platform", "kind" => "ops",
                         "scope" => "global", "default" => true }
-    )
+    })
 
     assert_equal [ "board_ai_summary" ], with_feature_registry(registry) { lifecycle(registry).prune }
 

@@ -87,7 +87,7 @@ class FeatureFlagsRegistryTest < ActiveSupport::TestCase
 
   def example_registry = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
 
-  def problems(files, registry: example_registry) = References.new(registry, files).problems
+  def problems(files) = References.new(example_registry, files).problems
 
   test "every entry of config/feature_flags.yml is valid" do
     assert_nothing_raised { shipped_registry }
