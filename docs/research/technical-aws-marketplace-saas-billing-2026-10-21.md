@@ -888,6 +888,13 @@ marketing copy.
 
 ## 10. Open questions
 
+- ~~**The Stripe subscription left behind.**~~ Answered on 25 October, and the shape is
+  the one this bullet asked for: a person resolves it, and the application's only job is
+  to put the question in front of the right person. See §10.1 below for what was built
+  and for the one thing this bullet got wrong.
+
+  The original text is kept because its reasoning is still the reasoning:
+
 - **The Stripe subscription left behind.** This is what remains of the payer-migration
   question after §1 answered it, and it is the one thing in this document with no
   recommendation I am confident in.
@@ -1039,6 +1046,66 @@ marketing copy.
   the production host **before** public visibility is requested -- because the Seller
   Operations team conduct buyer testing themselves at that point, and would otherwise
   test staging. What they require of the page is still only discoverable by doing it.
+
+## 10.1 How the overlap was resolved, 25 October
+
+The first bullet above asked for the overlap to be surfaced and left to a person. That is
+what shipped, with one correction and one addition the bullet did not foresee.
+
+**What the bullet got wrong.** It assumed §5.2 gives an existing Stripe customer a *new,
+empty* tenant. It does not, whenever the buyer uses an address at their own domain:
+`WorkspaceOnboardingForm#domain_is_free` refuses, because that domain already has a
+workspace. So the customer does not end up with two tenants — they end up stuck on a form
+that tells them to ask someone there for an invitation, which is advice for a stranger
+and the wrong thing to say to somebody who has just paid. The overlap was never invisible;
+it was being reported as a validation error.
+
+The new-empty-tenant case survives only where the buyer uses an address at a *different*
+domain, and there the overlap remains invisible exactly as the bullet says.
+
+**What a person decides.** The buyer asks the administrators of the workspace at their
+domain to apply the subscription; one of them accepts or declines it on the Billing tab.
+Three things make that safe, and all three are load-bearing:
+
+- the workspace is never a parameter — it is whichever one holds the asker's own email
+  domain, so there is nothing through which to aim a request somewhere else;
+- the address is one they proved by opening a link sent to it
+  (`MarketplaceProposalTicket`), not one they typed, so a request cannot be raised
+  against a domain the asker has no mailbox at;
+- an administrator of that workspace still has to agree, through the same Pundit policy
+  that guards the Billing tab's own controls.
+
+**The Stripe subscription, which is what the bullet was actually about.** Accepting
+cancels it in the same transaction — and *immediately*, not at the period's end. The
+bullet's fear was that cancelling sets `billing_state: "blocked"` with reason `canceled`
+and clamps the company to a ceiling of `0`. That fear is correct for a cancellation that
+leaves nobody paying, and does not apply here: AWS becomes the payer inside the same
+transaction, so the stopped state is never reached. Period-end cancellation was
+considered and is wrong for this product — capacity is billed in arrears
+(`Billing::StripeClient#cancel_subscription`), so there is no paid-for remainder to run
+out, and letting it run would bill the same hours to Stripe and to AWS both.
+
+Ordering matters and is fixed: the final usage is measured while the workspace is still
+Stripe's to bill, then Stripe is cancelled, then the licence is bound and the payer
+switched. `stripe_customer_id` is deliberately kept — the final invoice is settled
+through it — and only `stripe_subscription_id` is cleared.
+
+**What this amounts to.** A supported path from Stripe billing to AWS billing for an
+existing workspace, keeping its data, its members and its work. Its limits are worth
+stating because they are easy to overstate: it works only when the buyer's address is on
+the workspace's own domain; only in that direction (the reverse is still the open
+question two bullets down); it attaches a purchase that already exists rather than
+initiating one; and it does not merge two tenants for a customer who already has them.
+
+It also has a commercial consequence that is not a technical one: it is a self-serve way
+for a paying direct customer to move onto Marketplace, where AWS takes its listing fee.
+If that is not wanted, the narrowing is small — the acceptor becomes us rather than the
+workspace's own administrator, which is one policy.
+
+**Deliberately not built.** A history of declined requests (one licence holds one live
+request and a second replaces it; a table buys history nothing needs until somebody
+disputes one). Asking a workspace at a *different* domain — that is an invitation code,
+a different mechanism of trust. Moving a licence from one workspace to another.
 
 ---
 
