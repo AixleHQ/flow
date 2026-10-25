@@ -25,8 +25,12 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # answer.
       marketplace_proposal: marketplace_proposal,
       # Set once AWS bills this workspace, which is what the page shows instead
-      # of controls.
-      marketplace: marketplace
+      # of controls. Deliberately NOT `marketplace`: that name is taken by the
+      # shared prop the stopped-workspace banner reads, and a page prop of the
+      # same name shadows it -- which on 25 October made the banner read this
+      # object, find no `status` on it, and announce a subscription that had
+      # ended to a workspace whose subscription was running.
+      marketplace_billing: marketplace_billing
     }
   end
 
@@ -43,7 +47,7 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     redirect_to company_settings_path, alert: "This workspace is managed by Aixle and is not billed."
   end
 
-  def marketplace
+  def marketplace_billing
     return nil unless current_company.billing_payer.aws_marketplace?
 
     license = current_company.marketplace_license
