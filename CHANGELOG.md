@@ -111,9 +111,12 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
-- **Company settings**: a workspace billed through AWS Marketplace no longer
-  shows a Billing tab it cannot open — its subscription is managed in its own
-  AWS account.
+- **Company settings**: the Billing tab of a workspace billed through AWS
+  Marketplace says which AWS account pays for it, how many worker-minutes have
+  been reported towards that bill this month, and where to manage the
+  subscription. Adding a card, cancelling and paying an invoice are still
+  refused there — any of them would be a second bill for capacity AWS already
+  charges for.
 - **Company settings**: a workspace billed through AWS Marketplace now says why
   it is stopped — waiting for AWS to confirm the subscription, or the
   subscription having ended, with a link to renew it in AWS Marketplace. It
@@ -215,6 +218,14 @@ governance, community health — carry none.
 - **Company settings**: a new workspace is no longer billed for the part of its
   first hour that came before it was created. A workspace set up at 04:26 was
   charged for the whole of 04:00; it is now charged from 04:26.
+- **Company settings**: a workspace that changes who bills it is no longer
+  charged by the new payer for the part of that hour the old one owned. Moving
+  onto AWS Marketplace at 18:36 sent AWS the whole of 18:00, which was free
+  time while the workspace was on its allowance and time already on the final
+  card invoice where it had been paying — charged twice.
+- **Sign-in & onboarding**: a buyer whose request to apply an AWS Marketplace
+  subscription is declined can ask again. They were told to ask again and given
+  no way to, which left a paid subscription attached to nothing for good.
 - **Sign-in & onboarding**: a buyer arriving from AWS Marketplace whose email
   domain already has a workspace is now shown that workspace and the ways into
   it, and told that their subscription is recorded and not yet attached to

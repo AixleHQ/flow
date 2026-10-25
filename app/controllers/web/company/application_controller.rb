@@ -29,6 +29,11 @@ class Web::Company::ApplicationController < Web::ApplicationController
           can_manage_billing: ::Billing::Payer.for(current_company).then { |payer|
             payer.bills? && !payer.aws_marketplace?
           } && (current_membership&.admin? || false),
+          # Seeing it is the wider question. A workspace AWS bills has nothing to
+          # manage here, but hiding the tab made its billing look missing rather
+          # than elsewhere -- so the tab stays and says where it is.
+          can_view_billing: ::Billing::Payer.for(current_company).bills? &&
+            (current_membership&.admin? || false),
           can_write: current_membership.present? && !current_membership.viewer?
         }
       }
