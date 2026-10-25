@@ -84,6 +84,16 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert_equal "accepted", @license.proposal_state
   end
 
+  # What the measurement reads to split the hour the switch happened in. Without
+  # it AWS is sent the whole of that hour, including the part that was free or
+  # already on the old payer's final invoice.
+  test "accepting records when AWS took over" do
+    propose
+    travel_to(Time.utc(2026, 10, 25, 18, 36)) { proposal.accept!(by: @admin) }
+
+    assert_equal Time.utc(2026, 10, 25, 18, 36), @company.reload.billing_provider_since
+  end
+
   # AWS discards metering sent before it confirms the agreement, so a workspace
   # whose licence is still pending waits rather than runs unbilled.
   test "a workspace waits when the subscription is not confirmed yet" do

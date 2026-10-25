@@ -126,6 +126,57 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_minutes 238, window, "34 minutes at seven, not the whole hour"
   end
 
+  # ── Changing payer ────────────────────────────────────────────────────────
+  #
+  # The hour is measured after it closes, against the company as it is then, so
+  # without a mark of when the new payer took over the whole hour goes to them —
+  # including the part the old payer has already invoiced.
+
+  # Found live on 25 October: a workspace that had been trialing all hour moved
+  # onto AWS Marketplace at :36 and the measurement handed AWS the whole hour,
+  # thirty-six free minutes included.
+  test "a company that changed payer mid-hour is billed by the new one only from then" do
+    change(@acme, 2, @hour - 2.hours)
+    @acme.update!(billing_provider_since: @hour + 36.minutes)
+
+    assert_minutes 48, window, "24 minutes at two, not the whole hour"
+  end
+
+  # The sharper half. Where the old payer was Stripe, Billing::FinalUsage
+  # measures up to the switch and puts those minutes on its final invoice, so
+  # billing them again here charges the customer twice for the same capacity.
+  test "the part the old payer already invoiced is not billed again" do
+    change(@acme, 1, @hour - 2.hours)
+    @acme.update!(billing_provider_since: @hour + 45.minutes)
+
+    assert_equal 15, window.per_company[@acme.id] / 60
+    assert_equal 60, window.offered_per_company[@acme.id] / 60,
+                 "what it was offered does not change; only who owes for it does"
+  end
+
+  test "a switch before the hour leaves the whole hour with the payer" do
+    change(@acme, 3, @hour - 2.hours)
+    @acme.update!(billing_provider_since: @hour - 1.minute)
+
+    assert_minutes 180, window
+  end
+
+  test "a switch after the hour does not reach back into it" do
+    change(@acme, 3, @hour - 2.hours)
+    @acme.update!(billing_provider_since: @hour + 1.hour + 1.minute)
+
+    assert_minutes 180, window
+  end
+
+  # Every company that has only ever had one payer, and every company that
+  # existed before this was recorded at all.
+  test "a company that never changed payer is measured as before" do
+    change(@acme, 4, @hour - 2.hours)
+
+    assert_nil @acme.reload.billing_provider_since
+    assert_minutes 240, window
+  end
+
   # How an internal organisation is free today: it has no limit row at all, so it
   # is unbounded AND contributes nothing to the metered quantity. The two facts
   # are the same absence, which is what makes the arrangement fragile — a paying

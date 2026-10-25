@@ -141,6 +141,11 @@ class Company < ApplicationRecord
   # the column has to be true for all of them or the admin shows `none` beside a
   # company that is paying.
   before_validation :record_stripe_as_the_payer, if: :acquiring_a_stripe_customer?
+  # Here rather than in the paths that switch the payer -- there are three, and
+  # a measurement that quietly bills the wrong one is not the kind of mistake a
+  # fourth path should be able to make. See Billing::CapacityWindow for what
+  # reads it.
+  before_save :stamp_the_payer_change, if: -> { persisted? && will_save_change_to_billing_provider? }
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }
@@ -275,6 +280,20 @@ class Company < ApplicationRecord
 
   def record_stripe_as_the_payer
     self.billing_provider = BILLING_PROVIDER_STRIPE
+  end
+
+  # When the payer that bills this company now took over. An hour is measured
+  # after it closes, against the company as it is then, so without this the
+  # whole of the hour a switch happened in goes to the new payer -- including
+  # the part the old one has already invoiced.
+  #
+  # A change, never a birth: `persisted?` keeps this off companies created with
+  # a payer already set. For those the stamp would say the payer took over at
+  # creation, which is true and useless -- nothing before a company exists is
+  # billed anyway (Billing::CapacityWindow#opening_limits) -- and it would clip
+  # the hour a company was created in for a second, unrelated reason.
+  def stamp_the_payer_change
+    self.billing_provider_since = Time.current
   end
 
   def forget_billing_block
