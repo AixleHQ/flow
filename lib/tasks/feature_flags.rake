@@ -6,7 +6,7 @@ namespace :feature_flags do
   desc "List flags due for removal: release flags past remove_by, flags the same for every company for 30+ days, " \
        "orphaned rows and FEATURE_* variables for undeclared keys. Changes nothing."
   task audit: :environment do
-    puts FeatureFlags::Lifecycle.format(FeatureFlags::Lifecycle.new.report)
+    puts FeatureFlags::Lifecycle.describe(FeatureFlags::Lifecycle.new.report)
   end
 
   desc "Delete the rows of keys config/feature_flags.yml no longer declares, with a feature_flag.pruned audit per key. " \

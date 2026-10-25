@@ -46,7 +46,7 @@ module FeatureFlags
     end
 
     # The audit as `feature_flags:audit` prints it: every category, empty or not.
-    def self.format(report, today: Date.current)
+    def self.describe(report, today: Date.current)
       sections = {
         "Release flags past remove_by" => report.past_remove_by.map do |row|
           "#{row.key} (owner #{row.definition.owner}, remove_by #{row.definition.remove_by})"

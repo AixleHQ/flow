@@ -26,7 +26,7 @@ class FeatureFlags::LifecycleTest < ActiveSupport::TestCase
     report = lifecycle(empty_registry).report
 
     assert_predicate report, :empty?
-    text = FeatureFlags::Lifecycle.format(report, today: Date.new(2027, 1, 1))
+    text = FeatureFlags::Lifecycle.describe(report, today: Date.new(2027, 1, 1))
     [ "Release flags past remove_by: 0", "Same value for every company for 30 days+: 0",
       "Orphaned rows (keys no longer declared; remove with feature_flags:prune): 0",
       "FEATURE_* variables for undeclared keys (remove them from the environment): 0" ].each do |heading|
@@ -51,20 +51,24 @@ class FeatureFlags::LifecycleTest < ActiveSupport::TestCase
     assert_equal [ "coder_reap" ], report.orphans.map(&:key)
     assert_equal [ "FEATURE_OLD_SWITCH" ], report.undeclared_env
 
-    text = FeatureFlags::Lifecycle.format(report, today: Date.new(2027, 3, 1))
+    text = FeatureFlags::Lifecycle.describe(report, today: Date.new(2027, 3, 1))
     assert_includes text, "  board_ai_summary (owner @AixleHQ/board, remove_by 2027-01-31)"
     assert_includes text, "  board_ai_summary = on since 2027-01-01 (owner @AixleHQ/board, decided by global)"
     assert_includes text, "  coder_reap (0 company overrides)"
     assert_includes text, "  FEATURE_OLD_SWITCH"
   end
 
-  test "an ops flag is never listed as past remove_by, and a recent change is not the same everywhere" do
+  test "only release flags are listed as past remove_by, and a recent change is not the same everywhere" do
     travel_to(Time.zone.local(2027, 1, 20)) { FeatureFlag.create!(key: "coder_reap", enabled: false) }
+    registry = FeatureFlags::Registry.new(
+      "coder_reap" => { "description" => "Reaper.", "owner" => "@AixleHQ/platform", "kind" => "ops",
+                        "scope" => "global", "default" => true, "remove_by" => Date.new(2027, 1, 1) }
+    )
 
-    report = lifecycle.report(today: Date.new(2027, 2, 1))
+    report = lifecycle(registry).report(today: Date.new(2027, 2, 1))
 
     assert_empty report.past_remove_by
-    assert_not_includes report.same_everywhere.map(&:key), :coder_reap
+    assert_empty report.same_everywhere
   end
 
   test "an override that differs keeps a flag off the same-everywhere list" do
