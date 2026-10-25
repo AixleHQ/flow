@@ -1,0 +1,14 @@
+<p>Hello,</p>
+
+<% if @accepted %>
+  <p>Your AWS Marketplace subscription has been applied to
+  <strong><%= @company.name %></strong>. That workspace is billed through AWS from now on,
+  and your usage appears on your AWS bill.</p>
+<% else %>
+  <p>An administrator of <strong><%= @company.name %></strong> did not accept the request to
+  apply your AWS Marketplace subscription to that workspace.</p>
+
+  <p>Your subscription is unchanged and is not attached to anything. If this was a
+  misunderstanding, speak to someone at <%= @company.email_domain %> and ask again, or
+  unsubscribe in AWS Marketplace if you no longer want it.</p>
+<% end %>

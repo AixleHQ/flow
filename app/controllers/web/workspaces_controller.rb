@@ -152,11 +152,24 @@ class Web::WorkspacesController < Web::ApplicationController
       # A buyer reaching that screen has paid for a subscription that now has no
       # workspace to attach to, and the screen has to say so.
       marketplace_subscription: marketplace_license.present?,
+      # How far their request to have it applied has got, if they made one.
+      subscription_request: subscription_request,
       # What they get before anyone asks them for a card, which is the part of
       # the bargain the form was silent about. Nil for a Marketplace buyer: AWS
       # bills them from the first minute, so there is no allowance to promise.
       free_queue_hours: (Billing::Trial.queue_hours if marketplace_license.nil?)
     }
+  end
+
+  # `check-email` is the only one that comes from the URL, because it is the one
+  # moment nothing has been written yet: a link has gone out and until it is
+  # opened there is no request to read. The rest is read off the licence, so a
+  # reload an hour later says the same thing as the redirect did.
+  def subscription_request
+    return "check-email" if params[:asked] == "check-email"
+    return nil if marketplace_license.nil?
+
+    marketplace_license.proposal_state
   end
 
   # Read off a proved address for somebody signed in, and off the typed one for

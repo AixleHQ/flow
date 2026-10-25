@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -915,10 +915,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.datetime "ended_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "proposed_company_id"
+    t.string "proposed_by_email"
+    t.datetime "proposed_at"
+    t.datetime "proposal_decided_at"
+    t.string "proposal_state"
     t.index ["agreement_id"], name: "index_marketplace_licenses_on_agreement_id"
     t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"
     t.index ["license_arn"], name: "index_marketplace_licenses_on_license_arn", unique: true
+    t.index ["proposed_company_id"], name: "index_marketplace_licenses_on_proposed_company_id"
     t.index ["subscription_state"], name: "index_marketplace_licenses_on_subscription_state"
   end
 
@@ -2179,6 +2185,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
+  add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id"
   add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
