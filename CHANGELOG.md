@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: `bin/rails feature_flags:audit` lists the feature flags due for
+  removal: release flags past their remove-by date, flags that have had the same
+  value for every company for 30 days, database rows of flags no longer
+  declared, and `FEATURE_*` variables no flag declares. `bin/rails
+  feature_flags:prune` deletes those leftover rows, recording each key in the
+  audit trail; it is an optional manual step once a rollout has replaced every
+  old pod, described in the release guide.
+
 ## [1.7.0] - 2026-10-24
 
 ### Changed
