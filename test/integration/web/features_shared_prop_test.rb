@@ -41,7 +41,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
 
     client_keys = FeatureFlags.registry.definitions.select(&:client?).map { |d| d.key.to_s.camelize(:lower) }
     assert_equal client_keys.sort, features.to_h.keys.sort
-    assert_equal false, features["externalRunners"]
+    refute features["externalRunners"]
     assert_not features.key?("coderReap")
     assert_not features.key?("coder_reap")
   end
@@ -50,7 +50,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     company = signed_in_company
 
     with_feature(:external_runners, true, company: company) do
-      assert_equal true, features_prop(company_projects_path)["externalRunners"]
+      assert features_prop(company_projects_path)["externalRunners"]
     end
   end
 
@@ -59,7 +59,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     other = create(:company)
 
     with_feature(:external_runners, true, company: other) do
-      assert_equal false, features_prop(company_projects_path)["externalRunners"]
+      refute features_prop(company_projects_path)["externalRunners"]
     end
   end
 
@@ -67,7 +67,7 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     with_feature(:external_runners, true) do
       features = features_prop(login_path)
 
-      assert_equal true, features["externalRunners"]
+      assert features["externalRunners"]
     end
   end
 
@@ -75,13 +75,13 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     company = signed_in_company
 
     page = inertia_props(company_projects_path)
-    assert_equal false, page.dig("props", "features", "externalRunners")
+    refute page.dig("props", "features", "externalRunners")
 
     with_feature(:external_runners, true, company: company) do
       props = inertia_props(company_projects_path, only: "flash", component: page.fetch("component")).fetch("props")
 
       assert_not props.key?("settings"), "the reload should have been partial"
-      assert_equal true, props.dig("features", "externalRunners")
+      assert props.dig("features", "externalRunners")
     end
   end
 end

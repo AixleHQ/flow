@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 
 import type { Features } from '@/types/generated';
+
 import type { SharedProps } from 'shared/ui/types';
 
 /**
