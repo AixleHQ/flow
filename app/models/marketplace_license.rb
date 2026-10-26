@@ -41,16 +41,25 @@ class MarketplaceLicense < ApplicationRecord
   validates :customer_aws_account_id, presence: true
   validates :product_code, presence: true
   validates :subscription_state, inclusion: { in: STATES }
-  validates :company_id, uniqueness: true, allow_nil: true
+  # Among live ones only. A workspace keeps the licences it has finished with --
+  # which subscription paid for which month is a billing record, not clutter --
+  # so the slot is held by whichever licence bills it now and released when that
+  # one ends. Scoped the same way as the partial unique index behind it.
+  validates :company_id, uniqueness: { conditions: -> { live } }, allow_nil: true, if: :live?
   validates :proposal_state, inclusion: { in: PROPOSAL_STATES }, allow_nil: true
 
   scope :bound, -> { where.not(company_id: nil) }
+  # Everything AWS has not finished with. `ended` is terminal, so this is the
+  # one that can still be billed, cancelled, or stand in the way of another.
+  scope :live, -> { where.not(subscription_state: "ended") }
   scope :proposed_to, ->(company) { where(proposed_company: company, proposal_state: "pending") }
   # Somebody is being billed and has no way into the product. The first report of
   # that must not be theirs.
   scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
 
   def bound? = company_id.present?
+
+  def live? = !ended?
 
   def proposal_pending? = proposal_state == "pending"
 

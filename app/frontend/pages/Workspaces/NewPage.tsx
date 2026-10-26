@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
@@ -182,12 +182,15 @@ const ClaimedScreen = ({
   signedIn,
   subscriptionHeld,
   requestState,
+  refusal,
   email,
 }: {
   claim: ClaimedDomain;
   signedIn: boolean;
   subscriptionHeld: boolean;
   requestState: RequestState;
+  /** Why the last thing they tried was refused. Drawn here because this screen replaces the form that would have drawn it. */
+  refusal?: string;
   email: string;
 }) => (
   <PageShell variant="centered">
@@ -201,6 +204,11 @@ const ClaimedScreen = ({
         Each domain has one workspace, so there is no second one to create for yours.
       </Text>
       <ClaimedDomainNotice claim={claim} />
+      {refusal && (
+        <Alert color="red" mt="md" variant="light">
+          {refusal}
+        </Alert>
+      )}
       {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
       {signedIn ? (
         <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
@@ -265,6 +273,7 @@ const NewWorkspacePage = () => {
         signedIn={!needsEmail}
         subscriptionHeld={marketplaceSubscription}
         requestState={subscriptionRequest}
+        refusal={undrawn.join(' ') || undefined}
         email={form.data.email || (suggestedEmail ?? '')}
       />
     );

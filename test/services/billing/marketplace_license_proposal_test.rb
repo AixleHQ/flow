@@ -59,6 +59,31 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert_equal Billing::MarketplaceLicenseProposal::ALREADY_BILLED, error.message
   end
 
+  # Found for real on 26 October. A workspace keeps the licences it has finished
+  # with, and an ended one went on answering "this workspace already has a
+  # subscription" -- so a customer who cancelled and subscribed again, which is
+  # what our own screen tells them to do, was refused and left paying for
+  # nothing.
+  test "a subscription that ended does not stand in the way of the next one" do
+    create(:marketplace_license, :ended, company: @company)
+
+    propose
+
+    assert_equal @company, @license.reload.proposed_company
+    assert @license.proposal_pending?
+  end
+
+  test "and the next one binds, because the ended one no longer holds the slot" do
+    create(:marketplace_license, :ended, company: @company)
+    propose
+
+    proposal.accept!(by: @admin)
+
+    assert_equal @company, @license.reload.company
+    assert_equal 2, @company.marketplace_licenses.count, "the finished one is kept: it is a billing record"
+    assert_equal @license, @company.reload.marketplace_license, "and `the` licence means the live one"
+  end
+
   # One subscription, one domain, one question. A buyer who asks again is
   # asking the same thing.
   test "proposing again replaces the proposal rather than queueing beside it" do

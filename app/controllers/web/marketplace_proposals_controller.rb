@@ -41,11 +41,11 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     return refuse(EXPIRED) if answers.nil?
 
     proposed = MarketplaceLicense.find_by(id: answers[:license_id])
-    return refuse(NO_SUBSCRIPTION) if proposed.nil?
+    return refuse(NO_SUBSCRIPTION, email: answers[:email]) if proposed.nil?
 
     raise_proposal(proposed, answers[:email])
   rescue Billing::MarketplaceLicenseProposal::Refused => e
-    refuse(e.message)
+    refuse(e.message, email: answers&.dig(:email))
   end
 
   private
@@ -81,7 +81,13 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     end
   end
 
-  def refuse(message)
-    redirect_to new_workspace_path, alert: message
+  # The address goes back with it, so the person lands on the screen that
+  # explains their domain rather than on a form they cannot use -- and the
+  # reason travels as an error, because that screen draws errors and the flash
+  # it used to carry was drawn nowhere. A buyer who saw neither was left on an
+  # empty form with no trace of what they had just done.
+  def refuse(message, email: nil)
+    redirect_to new_workspace_path(email: email || address),
+                inertia: { errors: { base: message } }
   end
 end
