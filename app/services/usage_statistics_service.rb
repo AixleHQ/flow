@@ -166,16 +166,8 @@ class UsageStatisticsService
   # folds each batch in with a single upsert, and PostgreSQL serialises concurrent
   # batches for one session on the unique index.
   def find_sessions(tokens)
-    sessions = {}
-
-    tokens.each do |token|
-      terminal_session = TerminalSession.find_by(route_token: token)
-      return nil unless terminal_session
-
-      sessions[token] = terminal_session
-    end
-
-    sessions
+    sessions = TerminalSession.where(route_token: tokens).index_by(&:route_token)
+    sessions.size == tokens.size ? sessions : nil
   end
 
   def adapter_for(terminal_session)

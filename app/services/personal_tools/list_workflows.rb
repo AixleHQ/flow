@@ -15,9 +15,12 @@ module PersonalTools
       project = find_project!
       authorize!(project, :index?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
 
-      rows = Workflow.visible_for_project(project).order(:name).limit(100).map do |wf|
+      workflows = Workflow.visible_for_project(project).order(:name).limit(100).to_a
+      step_counts = Step.not_deleted.unscope(:order).where(workflow_id: workflows.map(&:id)).group(:workflow_id).count
+
+      rows = workflows.map do |wf|
         { id: wf.id, name: wf.name, description: wf.description,
-          scope: wf.scope_type, steps_count: wf.steps.not_deleted.count }
+          scope: wf.scope_type, steps_count: step_counts.fetch(wf.id, 0) }
       end
       success(project_id: project.id, workflows: rows)
     end
