@@ -30,6 +30,16 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_includes names, @workflow.name
   end
 
+  test "list_workflows counts steps with a single grouped query" do
+    other = create(:workflow, scope: @project)
+    create(:step, workflow: other)
+    create(:step, workflow: @workflow)
+
+    assert_queries_match(/GROUP BY "steps"\."workflow_id"/, count: 1) do
+      call_tool("list_workflows", { project_id: @project.id })
+    end
+  end
+
   test "create_workflow then get_workflow and create_workflow_step" do
     created = payload(call_tool("create_workflow", { project_id: @project.id, name: "Built by MCP" }))
     wf_id = created["id"]

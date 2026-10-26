@@ -17,7 +17,11 @@ module FeatureFlags
   #
   # `settings` is the settings tree (`Settings.to_h`); without it (the suite's
   # default) no legacy lock is read. With it, an env_setting path that names no
-  # setting raises InvalidEnv, so a typo in the registry fails boot.
+  # setting raises InvalidEnv, so a typo in the registry fails boot. Only the
+  # values at the declared env_setting paths are kept: the full tree holds
+  # secrets (secret_key_base, DB and OAuth credentials) that must not live on in
+  # this process-wide object or show up in its #inspect. Copies (#merge,
+  # #merge_settings, #with_registry) start from those kept values.
   class EnvSource
     PREFIX = "FEATURE_"
     RESERVED_PREFIX = "FEATURE_FLAGS_"
@@ -31,7 +35,7 @@ module FeatureFlags
                 .select { |name, _| name.start_with?(PREFIX) && !name.start_with?(RESERVED_PREFIX) }
                 .freeze
       @registry = registry
-      @settings = settings
+      @settings = nil
       @values = {}
       @variables = {}
       undeclared = []
@@ -53,10 +57,11 @@ module FeatureFlags
         end
       end
 
-      read_settings(errors) unless settings.nil?
+      @settings = read_settings(settings, errors) unless settings.nil?
 
       raise InvalidEnv, errors.join("; ") if errors.any?
 
+      @settings&.freeze
       @values.freeze
       @variables.freeze
       @undeclared = undeclared.sort.freeze
@@ -88,24 +93,28 @@ module FeatureFlags
       @variables[definition.key] = variable
     end
 
-    def read_settings(errors)
-      @registry.definitions.each do |definition|
-        next if definition.env_setting.nil?
+    # Locks the flags whose legacy setting is set, and returns the tree reduced
+    # to the declared env_setting paths: the only part of `settings` kept.
+    def read_settings(settings, errors)
+      @registry.definitions.reduce({}) do |kept, definition|
+        next kept if definition.env_setting.nil?
 
-        found, value = dig(definition.env_setting)
+        found, value = dig(settings, definition.env_setting)
         if !found
           errors << "#{definition.key}: env_setting #{definition.env_setting} is not a setting"
         elsif ![ true, false, nil ].include?(value)
           errors << "#{definition.env_setting} (#{definition.env_setting_variable}) must be true, false or unset, got #{value.inspect}"
-        elsif !value.nil? && !@values.key?(definition.key)
-          lock(definition, value, definition.env_setting_variable)
+        else
+          lock(definition, value, definition.env_setting_variable) if !value.nil? && !@values.key?(definition.key)
+          kept = put(kept, definition.env_setting.split("."), value)
         end
+        kept
       end
     end
 
     # [found, value]: a nil value is a setting whose variable is unset.
-    def dig(path)
-      path.split(".").reduce([ true, @settings ]) do |(_, node), segment|
+    def dig(tree, path)
+      path.split(".").reduce([ true, tree ]) do |(_, node), segment|
         return [ false, nil ] unless node.respond_to?(:key?)
 
         name = [ segment.to_sym, segment ].find { |candidate| node.key?(candidate) }

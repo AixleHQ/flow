@@ -24,7 +24,10 @@ class Web::OnboardingController < Web::ApplicationController
     active_auth_sessions = current_user.terminal_sessions
                                        .auth_sessions
                                        .active
-                                       .includes(:session_admission)
+                                       .with_cached_resource_counts
+                                       .includes(:user, :project, :session_admission,
+                                                 :tools, :skills, :mcp_servers, :config_items,
+                                                 :input_assets, :repositories)
                                        .where(company_id: current_membership.company_id)
 
     viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?
