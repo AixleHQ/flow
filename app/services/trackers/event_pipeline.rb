@@ -17,7 +17,6 @@ module Trackers
     MAX_CHAIN_DEPTH = 5
     ISSUE_BUDGET = 10
     ATTRIBUTION_WINDOW = 10.minutes
-    TEXT_ESCAPES = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;" }.freeze
 
     # A create names its issue only once the tracker answers, and the tracker's
     # event can arrive first. Such an event is retried — WRITE_RETRY_ATTEMPTS
@@ -242,12 +241,13 @@ module Trackers
     end
 
     # Gumbo raises past 400 attributes or 400 levels of nesting, and prose like
-    # `a <b` plus a long pasted log is such a tag. Strip whole tags in linear time
-    # and encode the rest the way the sanitizer's serializer does.
+    # `a <b` plus a long pasted log is such a tag. Strip whole tags in linear time,
+    # escape every `<` left, and sanitize again: text with no tags cannot trip the
+    # limits, and its entities come out the way the first pass would write them.
     def plain_text(html)
       ActionView::Base.full_sanitizer.sanitize(html)
     rescue ArgumentError
-      CGI.unescapeHTML(html.gsub(%r{</?[a-zA-Z][^<>]*>}, "")).gsub(/[&<>]/, TEXT_ESCAPES)
+      ActionView::Base.full_sanitizer.sanitize(html.gsub(%r{</?[a-zA-Z][^<>]*>}, "").gsub("<", "&lt;"))
     end
 
     def bounded(text)
