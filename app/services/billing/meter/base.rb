@@ -20,6 +20,21 @@ module Billing
       # the listing does not accumulate an hourly row nobody can ever deliver.
       def enabled? = true
 
+      # Which of the hour's companies are this provider's to bill, asked when
+      # the row is CLAIMED rather than when it is delivered.
+      #
+      # Two reasons. A row that carries every company's minutes states a total
+      # that is not this provider's -- the AWS row said what Stripe's customers
+      # were offered as well, and a reader of either row could not tell which
+      # part of it was theirs. And a delivery happens minutes after the
+      # measurement, so a payer that moves in between would have the hour
+      # attributed to whoever holds the company at delivery time, rather than
+      # to whoever held it during the hour.
+      #
+      # The default is everyone: an installation with one provider has nothing
+      # to divide.
+      def companies_billed(company_ids) = company_ids
+
       # @param report [CapacityMeterReport] the claimed row for this hour
       # @return [String] the provider's identifier for the accepted record
       def deliver(report)

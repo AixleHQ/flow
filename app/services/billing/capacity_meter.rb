@@ -80,14 +80,27 @@ module Billing
 
     private
 
+    # One row per provider per hour, carrying that provider's share and no more.
+    # It used to carry the whole installation's: the AWS row stated what Stripe's
+    # customers were offered, and a reader of either row could not tell which
+    # part of its total was theirs.
+    #
+    # Asking here also freezes the attribution. A delivery happens minutes after
+    # the measurement, and a payer that moves in between would otherwise have
+    # the hour claimed by whoever holds the company at delivery time rather than
+    # by whoever held it during the hour.
+    #
+    # `peak_concurrent` stays installation-wide: it is what an operator reads to
+    # size a cluster, and the cluster does not have one per payer.
     def claim(adapter, window)
       report = CapacityMeterReport.find_or_initialize_by(provider: adapter.provider, period_start: window.period_start)
       return report if report.persisted?
 
+      breakdown = window.per_company.slice(*adapter.companies_billed(window.per_company.keys))
       report.update!(
-        quantity_seconds: window.quantity_seconds,
+        quantity_seconds: breakdown.values.sum,
         peak_concurrent: window.peak_concurrent,
-        breakdown: window.per_company,
+        breakdown: breakdown,
         unbounded_companies: window.unbounded_companies,
         state: "pending"
       )

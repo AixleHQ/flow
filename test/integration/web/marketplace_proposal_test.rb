@@ -84,13 +84,37 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert_equal [ @admin.email, other.email ].sort, ActionMailer::Base.deliveries.map { |m| m.to.first }.sort
   end
 
+  # The link lives two hours and the buyer has it in front of them, so opening
+  # it twice is a double click or a returned-to tab. Raising again would mail
+  # every administrator a second time -- the one route the rate limit on asking
+  # does not cover.
+  test "opening the link again is a reload, not a second ask" do
+    other = create(:user, :admin, :onboarding_completed, company: @company)
+    arrive_from_marketplace
+    ask
+    perform_enqueued_jobs
+    token = link_from_mail
+
+    get confirm_marketplace_proposal_path(token: token)
+    perform_enqueued_jobs
+    ActionMailer::Base.deliveries.clear
+
+    get confirm_marketplace_proposal_path(token: token)
+    perform_enqueued_jobs
+
+    assert_redirected_to new_workspace_path(email: "dana@northwind.example")
+    assert_empty ActionMailer::Base.deliveries, "the administrators were asked once"
+    assert_not_nil other
+    assert MarketplaceLicense.last.proposal_pending?, "and the request still stands"
+  end
+
   # The address is the whole of the proof, so a link that was tampered with,
   # signed elsewhere, or has simply expired raises nothing.
-  # The refusal used to travel as a flash, which that page draws nowhere, so a
-  # buyer who was refused landed on an empty form -- one their claimed domain
-  # makes unusable anyway -- with no trace of what they had just done. Seen on
-  # 26 October: the only sensible thing left to try was subscribing a third
-  # time.
+  #
+  # The refusal has to reach the page that draws it. Sent as a flash, which
+  # that page draws nowhere, it left a refused buyer on an empty form -- one
+  # their claimed domain makes unusable anyway -- with no trace of what they had
+  # just done, and nothing sensible left to try but subscribing again.
   test "a token that is not ours raises nothing, and says so where it can be read" do
     get confirm_marketplace_proposal_path(token: "not-a-token")
 

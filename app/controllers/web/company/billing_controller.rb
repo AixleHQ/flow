@@ -27,9 +27,9 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # Set once AWS bills this workspace, which is what the page shows instead
       # of controls. Deliberately NOT `marketplace`: that name is taken by the
       # shared prop the stopped-workspace banner reads, and a page prop of the
-      # same name shadows it -- which on 25 October made the banner read this
-      # object, find no `status` on it, and announce a subscription that had
-      # ended to a workspace whose subscription was running.
+      # same name shadows it: the banner then reads this object, finds no
+      # `status` on it, and announces an ended subscription to a workspace whose
+      # subscription is running.
       marketplace_billing: marketplace_billing
     }
   end
@@ -59,9 +59,8 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       subscribed_at: license&.subscribed_at,
       ended: license&.ended? || false,
       # What we have reported towards the AWS bill this calendar month, which is
-      # the period AWS invoices on. Read from our own ledger rather than from
-      # AWS: it is the same minutes, and it is the only figure available before
-      # the invoice exists.
+      # the period AWS invoices on. The only figure available before the invoice
+      # exists, so it has to be the one AWS was actually sent — see below.
       reported_minutes: reported_minutes
     }
   end
@@ -74,11 +73,33 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     (BigDecimal(seconds) / 60).round(1).to_f
   end
 
+  # What AWS has actually been sent, hour by hour, and only where AWS answered
+  # with a receipt for this workspace's licence.
+  #
+  # Not CompanyCapacityUsage, which is the ledger of what the workspace was
+  # OFFERED. That figure is three things at once on a workspace that moved
+  # payers mid-month: minutes the card was billed for before the handover,
+  # minutes from hours the meter has measured but not sent, and minutes counted
+  # to four decimal places where a record carries whole ones. A customer
+  # checking this against their AWS bill would find three different reasons for
+  # it not to match.
+  #
+  # Floored per hour, because that is what the adapter sends: a record carries a
+  # whole number and the remainder of each hour is dropped, not carried.
   def reported_minutes
-    seconds = CompanyCapacityUsage.where(company_id: current_company.id)
-                                  .since(Time.current.utc.beginning_of_month)
-                                  .sum(:quantity_seconds)
-    (BigDecimal(seconds) / 60).round(1).to_f
+    arns = current_company.marketplace_licenses.pluck(:license_arn)
+    return 0.0 if arns.empty?
+
+    CapacityMeterReport
+      .where(provider: Billing::Meter::AwsMarketplaceSaas.provider)
+      .where(period_start: Time.current.utc.beginning_of_month..)
+      .pluck(:breakdown, :receipts)
+      .sum { |breakdown, receipts| arns.any? { |arn| receipts[arn].present? } ? hour_minutes(breakdown) : 0 }
+      .to_f
+  end
+
+  def hour_minutes(breakdown)
+    (BigDecimal(breakdown[current_company.id.to_s].to_s.presence || "0") / 60).floor
   end
 
   def marketplace_proposal

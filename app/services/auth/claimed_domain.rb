@@ -20,7 +20,7 @@ module Auth
       return nil if user.super_admin? || user.company_memberships.exists?
 
       company = Company.find_by_email_domain(user.email.to_s)
-      company && new(company, tried: tried)
+      company && new(company, tried: tried, proved: true)
     end
 
     # For somebody who has typed an address rather than proved one, which is the
@@ -30,9 +30,12 @@ module Auth
     # signed in is the whole of what is known — so this answers the narrower
     # question of whether the domain is taken.
     #
-    # Only ever for a buyer. Telling an arbitrary visitor whether a domain has a
-    # workspace, and what it is called, is not ours to give away on a typed
-    # address; a paid subscription is what makes them not arbitrary.
+    # Only ever for a buyer, and answered narrowly even then -- see #to_h. A
+    # subscription is what makes a visitor not arbitrary, but a pay-as-you-go
+    # one costs nothing to take out, so it is a door and not a vouching: enough
+    # to be told why the form refused, not enough to be read a workspace's name
+    # and its ways in, one typed address at a time.
+    #
     # Any company, not only an active one. `find_by_email_domain` is scoped to
     # active because its other caller is asking how to get in; this one is
     # asking why the form refused, and the form (WorkspaceOnboardingForm
@@ -43,18 +46,26 @@ module Auth
       return nil if email.blank?
 
       company = Company.find_by(email_domain: email.to_s.split("@").last)
-      company && new(company)
+      company && new(company, proved: false)
     end
 
-    def initialize(company, tried: nil)
+    def initialize(company, tried: nil, proved: true)
       @company = company
       @tried = tried
+      @proved = proved
     end
 
-    # The workspace is named, and its ways in listed, only for a proved domain.
-    # An unproved claim may be somebody else's, and auto-join does not run for it
-    # whatever the method, so an invitation is the only way in.
+    # The workspace is named, and its ways in listed, only for an address its
+    # owner has proved. A typed one may be anybody's: auto-join does not run for
+    # it whatever the method, so naming the workspace buys the person nothing
+    # they can act on and hands a stranger its name, its sign-ins and whether
+    # joining needs approval -- for any domain they care to type.
+    #
+    # The narrow answer still says the one thing the screen exists for: this
+    # domain is taken, which is why the form refused.
     def to_h
+      return { domain: company.email_domain, workspace_name: nil, join_methods: [], approval_required: false } unless proved?
+
       {
         domain: company.email_domain,
         workspace_name: (company.branded_name if company.domain_verified?),
@@ -62,6 +73,8 @@ module Auth
         approval_required: !company.auto_accept_users
       }
     end
+
+    def proved? = @proved
 
     private
 

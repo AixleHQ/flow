@@ -25,6 +25,15 @@ class Web::WorkspacesController < Web::ApplicationController
   rate_limit to: 10, within: 1.hour, only: :create, by: -> { request.remote_ip }, if: -> { !signed_in? },
              with: -> { refuse(base: "Too many attempts. Try again in an hour.") }
 
+  # `new` answers a question about a domain the visitor typed -- whether it has
+  # a workspace -- so repeated with a different address each time it is a probe.
+  # What it discloses is narrow (Auth::ClaimedDomain#to_h) but the fact itself
+  # is worth something, and a Marketplace subscription costs nothing to take
+  # out. Generous, because a buyer who mistypes their address and tries again is
+  # the ordinary case; it bounds the sweep, not the person.
+  rate_limit to: 30, within: 1.hour, only: :new, by: -> { request.remote_ip }, if: -> { !signed_in? },
+             with: -> { redirect_to login_path(error: "too_many_attempts") }
+
   def new
     render inertia: "Workspaces/NewPage", props: props
   end
@@ -101,10 +110,16 @@ class Web::WorkspacesController < Web::ApplicationController
 
   # From the session a Marketplace arrival left behind, or from the emailed link
   # when it is opened somewhere that session is not.
+  #
+  # The ticket first, the session second. The ticket is a signed statement of
+  # which subscription this particular arrival is about; the session is whatever
+  # was left there last. They differ when a buyer opens a confirmation link for
+  # one subscription in a browser that still holds another -- and the session
+  # winning meant the wrong subscription was bound to the new workspace.
   def marketplace_license
     return @marketplace_license if defined?(@marketplace_license)
 
-    id = session[:marketplace_license_id] || ticket_answers&.dig(:marketplace_license_id)
+    id = ticket_answers&.dig(:marketplace_license_id) || session[:marketplace_license_id]
     @marketplace_license = id && MarketplaceLicense.find_by(id: id)
   end
 
@@ -203,9 +218,14 @@ class Web::WorkspacesController < Web::ApplicationController
 
   # A Marketplace buyer is not a stranger signing up: the subscription is the
   # authorisation that REGISTRATION_ENABLED withholds from everyone else.
+  #
+  # A LIVE subscription. One that has ended authorises nothing -- AWS has
+  # finished with it and will accept no usage against it -- so a stale licence
+  # left in a session was a way past the switch, and the workspace it made was
+  # blocked for want of a subscription from the moment it existed.
   def require_self_serve_signup
     return if Deployment.self_serve_signup?
-    return if marketplace_license.present?
+    return if marketplace_license&.live?
 
     redirect_to login_path(error: "no_workspace")
   end

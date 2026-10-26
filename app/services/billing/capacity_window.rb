@@ -28,23 +28,20 @@ module Billing
       def quantity_minutes = (BigDecimal(quantity_seconds) / 60).round(4)
     end
 
-    def self.for_hour(period_start, until_time: nil, company_ids: nil, settling: nil)
-      new(period_start, until_time: until_time, company_ids: company_ids, settling: settling).call
+    def self.for_hour(period_start, until_time: nil, company_ids: nil)
+      new(period_start, until_time: until_time, company_ids: company_ids).call
     end
 
     # `until_time` cuts the hour short — a company cancelling at 14:20 is billed
     # 14:00–14:20 and nothing after. `company_ids` narrows the measurement to
-    # them; everyone else is left out, not counted as zero. `settling` names
-    # companies billable whatever state they are in now — see
-    # #billable_company_ids.
-    def initialize(period_start, until_time: nil, company_ids: nil, settling: nil)
+    # them; everyone else is left out, not counted as zero.
+    def initialize(period_start, until_time: nil, company_ids: nil)
       @period_start = period_start.utc.beginning_of_hour
       @period_end = [ @period_start + 1.hour, until_time&.utc ].compact.min
       @company_ids = company_ids
-      @settling = Array(settling)
     end
 
-    attr_reader :period_start, :period_end, :settling
+    attr_reader :period_start, :period_end
 
     def call
       limits = opening_limits
@@ -87,11 +84,23 @@ module Billing
       return if elapsed <= 0
 
       limits.each do |company_id, limit|
-        rate = offered(limit, states[company_id])
+        state = states[company_id]
+        rate = offered(limit, state)
         seconds[company_id] += rate * elapsed
-        payable[company_id] += rate * owed_elapsed(company_id, from, to)
+        payable[company_id] += rate * owed_elapsed(company_id, from, to) if owed?(state)
       end
     end
+
+    # Only an active workspace owes for what it was offered. A trialing one is
+    # spending a free allowance, and a blocked one was offered nothing anyway.
+    #
+    # Read from the state it was IN at that moment, which is the whole reason
+    # the log exists. Decided here rather than by filtering the live row
+    # afterwards: that filter asked what the company is at five past the next
+    # hour, so a trial that took a card in those five minutes had its free hour
+    # charged, and a workspace stopped by a cancellation lost the minutes it ran
+    # before it.
+    def owed?(state) = !Deployment.saas? || state == "active"
 
     # A company that changed payer inside this hour is billed by the new one
     # only from the moment it took over. The time before belonged to the old
@@ -232,27 +241,14 @@ module Billing
     # billing for capacity that cannot be occupied overcharges, and metering a
     # company that can still run would make suspending one a way to keep the
     # capacity and stop paying for it.
-    # Read from the live row, which is a statement about now and not about the
-    # hour. That is tolerable for the two things it decides -- a company Aixle
-    # carries, and one on a free allowance -- because neither changes in the
-    # five minutes between an hour closing and its measurement.
-    #
-    # It is not tolerable for a company being settled. Cancelling stops the
-    # workspace, and stopping it would otherwise erase the minutes it ran before
-    # the cancellation -- the usage AWS opens its final window for. So the
-    # caller may name those companies, and the walk decides the amount: it
-    # offers a stopped company nothing for the time it was stopped, so naming
-    # one here cannot bill for that time, while leaving it out loses the time it
-    # was running.
+    # What is left to read from the live row, now that the billing state is read
+    # from the log instead: a company Aixle carries, which is a standing
+    # arrangement and not a thing an hour can change.
     def billable_company_ids
       @billable_company_ids ||= begin
         scope = Company.active
-        # A company spending its free allowance, or stopped for having spent it,
-        # is offered capacity and invoiced for none of it. The usage is still
-        # recorded — that is what the allowance is counted from — but it is not
-        # what a provider is sent.
-        scope = scope.billing_billable if Deployment.saas?
-        (scope.pluck(:id) + settling).uniq
+        scope = scope.where(managed_by_aixle: false) if Deployment.saas?
+        scope.pluck(:id)
       end
     end
 

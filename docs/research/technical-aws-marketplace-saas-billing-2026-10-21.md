@@ -1,7 +1,7 @@
 # AWS Marketplace SaaS: a second payer on the hosted installation
 
-**Status:** settled design, no implementation
-**Date:** 2026-10-21
+**Status:** implemented; §10 records what live testing changed about the design
+**Date:** 2026-10-21, last revised 2026-10-26
 **Scope:** selling the hosted product as an AWS Marketplace **SaaS** listing — buyer
 registration through `ResolveCustomer`, binding a Marketplace customer to a company,
 metering with `BatchMeterUsage`, and consuming subscription notifications. The

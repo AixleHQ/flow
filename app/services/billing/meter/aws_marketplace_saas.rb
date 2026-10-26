@@ -29,18 +29,28 @@ module Billing
 
       def enabled? = client.configured?
 
+      # Only companies the column says AWS bills. A licence that is not live yet
+      # still belongs here: the hour is this provider's and is counted unbilled,
+      # rather than falling to Stripe, which has no customer for it either.
+      def companies_billed(company_ids)
+        ::Company.where(id: company_ids, billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE).pluck(:id)
+      end
+
       def deliver(report)
         usages, unbillable = usages_for(report)
         outcomes = client.batch_meter_usage(usages)
 
-        refused = outcomes.reject(&:accepted?)
-        raise ::Billing::MarketplaceSellerClient::Error, refusal(refused) if refused.any?
+        # Written BEFORE anything is raised, and merged rather than replaced.
+        # AWS answers each record separately, so one refusal among twenty does
+        # not mean the other nineteen were not billed -- and dropping their
+        # receipts to raise on the one would leave the retry unable to tell
+        # which. The receipt is the only evidence of acceptance that is not our
+        # own word; it is also what stops the retry sending them again.
+        report.update!(receipts: report.receipts.merge(receipts(outcomes)))
 
-        # Written here rather than returned, because the contract every adapter
-        # shares is one summary line. AWS's own receipt for each record is
-        # worth more than that line: it is the only evidence of acceptance that
-        # is not our own word.
-        report.update!(receipts: receipts(outcomes))
+        retryable = outcomes.select(&:retryable?)
+        raise ::Billing::MarketplaceSellerClient::Error, refusal(retryable) if retryable.any?
+
         summary(report, outcomes, unbillable)
       end
 
@@ -52,6 +62,11 @@ module Billing
 
         usages = report.breakdown_minutes.filter_map do |company_id, minutes|
           license = licenses[company_id.to_i]
+          # Already receipted on an earlier attempt at this same hour. Sending
+          # it again would be answered `Success` with the id AWS already
+          # issued, which reads afterwards as a second charge that never
+          # happened.
+          next if license && report.receipts[license.first].present?
           # `next` without a value, deliberately: inside filter_map a `next x`
           # keeps x, so the counting idiom Meter::Stripe uses inside `each`
           # would put the running total into the records.
@@ -94,11 +109,17 @@ module Billing
       # Carried on the ledger row so an hour reads afterwards as what it was: a
       # replay rather than a second charge, and companies nobody bills rather
       # than companies we failed to bill.
+      # `disputed` rather than `already`: a duplicate is an hour AWS refused
+      # because it had already been told a different number for it, so it is
+      # unbilled and somebody has to look. Counting it as sent was what hid
+      # that.
       def summary(report, outcomes, unbillable)
-        already = outcomes.count(&:duplicate?)
+        disputed = outcomes.count(&:duplicate?)
+        line = "aws_saas:#{report.period_start.utc.iso8601}:" \
+               "sent=#{outcomes.count(&:accepted?)}:unbilled=#{unbillable}"
+        return line if disputed.zero?
 
-        "aws_saas:#{report.period_start.utc.iso8601}:" \
-          "sent=#{outcomes.size - already}:already=#{already}:unbilled=#{unbillable}"
+        "#{line}:disputed=#{disputed}"
       end
 
       def refusal(refused)

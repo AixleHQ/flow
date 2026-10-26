@@ -16,10 +16,10 @@ module Billing
   # does not reopen. So this errs towards sending.
   #
   # What it does not do is send an hour we already hold AWS's receipt for.
-  # Observed on 24 October: AWS answered such a repeat with `Success` and the
-  # *same* `MeteringRecordId` rather than `DuplicateRecord`, so the line read
-  # `sent=2:already=0:minutes=72` when sixty of those minutes had already been
-  # billed. The receipt is the only thing that tells the two apart.
+  # Measured against the real listing: AWS answers such a repeat with `Success`
+  # and the *same* `MeteringRecordId` rather than `DuplicateRecord`, so a line
+  # counting what it sent reports minutes that were already billed. The receipt
+  # is the only thing that tells a replay from a charge.
   class MarketplaceFinalMeter
     # The hour under way and the one before it. The earlier one is included
     # because the schedule may not have reached it yet -- it reports an hour at
@@ -104,13 +104,12 @@ module Billing
     # compared that way because the column comes back as a TimeWithZone and
     # `Array#-` would not match it against a Time.
     #
-    # Re-sending such an hour is harmless, which is why it was left alone: AWS
-    # keys a record on (licence, dimension, hour). It is the *line* that was
-    # wrong. On 24 October a cancellation reported `sent=2:already=0:minutes=72`
-    # when only twelve of those minutes were new, because AWS answered the
-    # repeat with the same `MeteringRecordId` and `Success` rather than
-    # `DuplicateRecord`, so `already` never counted it. A reader cannot tell a
-    # replay from a second charge on AWS's answer alone; they can tell it from
+    # Re-sending such an hour is harmless in itself: AWS keys a record on
+    # (licence, dimension, hour). It is the *line* that misleads. AWS answers
+    # the repeat with the same `MeteringRecordId` and `Success` rather than
+    # `DuplicateRecord`, so a count of what was sent includes minutes that were
+    # already billed. A reader cannot tell a replay from a second charge on
+    # AWS's answer alone; they can tell it from
     # the receipt we already hold.
     def receipted_hours(license, hours)
       CapacityMeterReport
@@ -122,12 +121,8 @@ module Billing
 
     # `until_time` is what makes the hour under way measurable at all: the
     # window otherwise measures a closed hour, and this one has not closed.
-    # `settling` because the company may already be stopped: the cancellation
-    # that opened this window is what stopped it, and the minutes it ran before
-    # that are exactly what is being sent.
     def minutes_for(company_id, hour, now)
-      window = CapacityWindow.for_hour(hour, until_time: now, company_ids: [ company_id ],
-                                             settling: [ company_id ])
+      window = CapacityWindow.for_hour(hour, until_time: now, company_ids: [ company_id ])
 
       (window.per_company[company_id].to_i / 60.0).floor
     end

@@ -82,7 +82,10 @@ class FakeMarketplaceSellerClient
     usages.map do |usage|
       key = [ usage.license_arn, usage.occurred_at, usage.dimension ]
       status = metered.include?(key) ? Billing::MarketplaceSellerClient::DUPLICATE : status_for(usage)
-      metered << key
+      # Only what AWS honoured. A record it refused was not metered, so sending
+      # it again is a first attempt and not a duplicate -- which is the whole
+      # of what a retry after a refusal does.
+      metered << key if status == Billing::MarketplaceSellerClient::SUCCESS
 
       recorded << usage if status == Billing::MarketplaceSellerClient::SUCCESS
       Billing::MarketplaceSellerClient::Outcome.new(

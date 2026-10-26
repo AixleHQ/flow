@@ -60,6 +60,16 @@ module Billing
         "stripe:#{report.period_start.utc.iso8601}:sent=#{sent}:already=#{already}:unbilled=#{unbilled}"
       end
 
+      # Everyone the card bills, which is everyone AWS does not. A company with
+      # no customer yet is still this provider's -- its minutes go on the row
+      # and it is counted as unbilled, which is what says "nobody has paid for
+      # this yet" rather than "somebody else did".
+      def companies_billed(company_ids)
+        ::Company.where(id: company_ids)
+                 .where.not(billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+                 .pluck(:id)
+      end
+
       private
 
       # Narrowed rather than re-keyed: the rule is still "has a Stripe customer",

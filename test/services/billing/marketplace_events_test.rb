@@ -313,13 +313,13 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
   end
 
   # The rule in the seller account matches a source and a detail type, not a
-  # product, so every listing that account sells arrives here. Seen for real:
-  # a stranger's subscription to "Easy Cloud Assurance" sat unapplied in our
-  # table, and every sweep would have retried it for ever.
+  # product, so every listing that account sells arrives here -- including
+  # strangers' subscriptions to other vendors' products, which sit unapplied and
+  # which every sweep would otherwise retry for ever.
   test "another listing on the same seller account is not ours" do
     assert_nil @events.record(
       envelope(detail: { "agreement" => { "id" => "agmt-theirs" },
-                         "product" => { "id" => "prod-someone-else", "title" => "Easy Cloud Assurance" } })
+                         "product" => { "id" => "prod-someone-else", "title" => "Another Vendor's Product" } })
     )
     assert_equal 0, MarketplaceSubscriptionEvent.count
   end

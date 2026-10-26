@@ -93,16 +93,53 @@ class Billing::Meter::AwsMarketplaceSaasTest < ActiveSupport::TestCase
     assert_equal license.license_arn, @client.recorded.sole.license_arn
   end
 
-  test "an hour already held comes back as a duplicate rather than a second charge" do
+  # An hour we already hold AWS's receipt for is not sent again at all. AWS
+  # answers an honest replay `Success` with the id it issued the first time, so
+  # re-sending reads afterwards as a second charge that never happened.
+  test "an hour already receipted is not sent a second time" do
     company, _, seconds = marketplace_company(minutes: 60)
     row = report(company.id => seconds)
 
     first = @adapter.deliver(row)
     second = @adapter.deliver(row)
 
-    assert_match(/sent=1:already=0/, first)
-    assert_match(/sent=0:already=1/, second)
+    assert_match(/sent=1/, first)
+    assert_match(/sent=0/, second)
     assert_equal 1, @client.recorded.size, "a replay must not record a second time"
+  end
+
+  # Not a replay of ours -- those carry the same quantity and come back
+  # `Success`. A duplicate is AWS saying it was told a DIFFERENT number for this
+  # hour and has honoured neither this one nor, necessarily, the right one. It
+  # is unbilled, and no retry can settle it.
+  test "a disputed hour is reported as disputed, not as sent, and is not retried" do
+    company, license, seconds = marketplace_company(minutes: 60)
+    @client.refuse(license.license_arn, status: Billing::MarketplaceSellerClient::DUPLICATE)
+
+    line = @adapter.deliver(report(company.id => seconds))
+
+    assert_match(/sent=0/, line)
+    assert_match(/disputed=1/, line)
+  end
+
+  # One refusal among several is one refusal, not a failed hour. The receipts of
+  # the records AWS did honour are kept, so the retry sends only what is left.
+  test "a refusal keeps the receipts of the records that were honoured" do
+    billed, honoured, billed_seconds = marketplace_company(minutes: 60)
+    refused_company, refused_license, refused_seconds = marketplace_company(minutes: 30)
+    @client.refuse(refused_license.license_arn)
+    row = report(billed.id => billed_seconds, refused_company.id => refused_seconds)
+
+    assert_raises(Billing::MarketplaceSellerClient::Error) { @adapter.deliver(row) }
+
+    assert_equal "mr-1", row.reload.receipts[honoured.license_arn], "it was billed; the hour is not lost"
+    assert_nil row.receipts[refused_license.license_arn]
+
+    @client.refusals.delete(refused_license.license_arn)
+    @adapter.deliver(row)
+
+    assert_equal [ refused_license.license_arn ], @client.recorded.drop(1).map(&:license_arn),
+                 "the retry sends only the record that was refused"
   end
 
   test "a licence AWS refuses fails the hour instead of reporting it sent" do
@@ -146,15 +183,14 @@ class Billing::Meter::AwsMarketplaceSaasTest < ActiveSupport::TestCase
     assert_equal({ license.license_arn => "mr-1" }, row.reload.receipts)
   end
 
-  # A replay carries no new id. Marked as the duplicate it is, so it does not
-  # read like a record that went missing.
-  test "a replayed hour is marked rather than left blank" do
+  # Marked as the duplicate it is, so it does not read like a record that went
+  # missing -- an hour AWS refused looks the same as one we never sent.
+  test "a disputed hour is marked rather than left blank" do
     company, license, seconds = marketplace_company(minutes: 60)
-    row = report(company.id => seconds)
+    @client.refuse(license.license_arn, status: Billing::MarketplaceSellerClient::DUPLICATE)
 
-    @adapter.deliver(row)
-    @adapter.deliver(row)
+    @adapter.deliver(report(company.id => seconds))
 
-    assert_equal({ license.license_arn => "duplicate" }, row.reload.receipts)
+    assert_equal({ license.license_arn => "duplicate" }, CapacityMeterReport.sole.receipts)
   end
 end

@@ -59,6 +59,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Your session ended before the link finished, so nothing was linked. Sign in, then link the method again from Profile → Security.',
   no_workspace: 'No workspace matches that email address. Please contact your administrator.',
   domain_has_workspace: 'Your email domain already has a workspace, and signing in that way did not add you to it.',
+  too_many_attempts: 'Too many attempts from this connection. Try again in an hour.',
 };
 
 function NoWorkspaceScreen() {

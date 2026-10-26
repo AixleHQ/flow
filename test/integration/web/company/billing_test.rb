@@ -121,10 +121,9 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| props[:permissions][:canManageBilling] == false }
   end
 
-  # Seen on staging twice, and fixed from the other end the second time. The tab
-  # was drawn for a workspace AWS bills and opening it only produced a refusal,
-  # so the tab was hidden -- which made that workspace's billing look missing
-  # rather than kept in AWS. Now the refusal is what goes: the page opens and
+  # Hiding the tab from a workspace AWS bills made its billing look missing
+  # rather than kept in AWS; drawing the tab but refusing the page was no
+  # better. So the refusal is what goes: the page opens and
   # says where the bill comes from, and the controls that would be a second bill
   # for the same capacity are the only thing withheld.
   test "a company AWS bills keeps the tab, and the page says where its bill is" do
@@ -138,6 +137,35 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
       assert props[:marketplaceBilling], "the page says AWS bills this workspace"
       assert props[:permissions][:canViewBilling], "so the tab is offered"
       assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
+    end
+  end
+
+  # The figure a customer checks against their AWS bill, so it has to be what
+  # AWS was sent and not what the workspace was offered. The two differ on every
+  # workspace that moved payers mid-month, on every hour measured but not yet
+  # sent, and on the remainder of every hour -- a record carries whole minutes.
+  test "the AWS panel counts the minutes AWS has a receipt for, not the minutes offered" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, company: @company)
+    hour = Time.current.utc.beginning_of_month + 3.hours
+
+    # Sent, and AWS answered: 90.6 minutes offered, 90 on the record.
+    CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour,
+                                quantity_seconds: 5436, state: "reported",
+                                breakdown: { @company.id.to_s => 5436 },
+                                receipts: { license.license_arn => "mr-1" })
+    # Measured and not sent. Real minutes, on no AWS bill yet.
+    CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour + 1.hour,
+                                quantity_seconds: 3600, state: "pending",
+                                breakdown: { @company.id.to_s => 3600 }, receipts: {})
+    # The offered ledger holds both, and that is what this used to read.
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: hour, quantity_seconds: 5436)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: hour + 1.hour, quantity_seconds: 3600)
+
+    get company_settings_billing_path
+
+    assert_inertia_props do |props|
+      assert_in_delta 90.0, props.dig(:marketplaceBilling, :reportedMinutes)
     end
   end
 
