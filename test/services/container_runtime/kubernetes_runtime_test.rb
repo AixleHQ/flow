@@ -906,6 +906,100 @@ module ContainerRuntime
       assert_equal [ "terminal-auth", "my-pod-upload-strip" ], upload[:middlewares].map { |mw| mw[:name] }
     end
 
+    test "a Service create whose answer timed out is sent again" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Net::ReadTimeout).then.to_return { |request| kube_created(request) }
+
+        assert_equal service_handle, @runtime.start_container(service_handle)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 2
+    end
+
+    test "a reset connection and an overloaded API server are retried too" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES)
+          .to_raise(Errno::ECONNRESET)
+          .then.to_return(kube_status(503, "ServiceUnavailable", "the server is currently unable to handle the request"))
+          .then.to_return { |request| kube_created(request) }
+
+        assert_equal service_handle, @runtime.start_container(service_handle)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 3
+    end
+
+    test "a pod create that timed out after the API server applied it is verified instead of failed" do
+      pods = "#{KUBE_API}/namespaces/#{Settings.kubernetes.namespace}/pods"
+      applied = nil
+
+      with_kube_api do
+        stub_request(:post, pods).to_raise(Net::ReadTimeout).then.to_return do |request|
+          applied = JSON.parse(request.body)
+          kube_status(409, "AlreadyExists", 'pods "my-pod" already exists')
+        end
+        stub_request(:get, "#{pods}/my-pod").to_return { json_response(applied.deep_merge("metadata" => { "uid" => "pod-uid" })) }
+
+        handle = @runtime.create_container(image: "alpine:latest", container_name: "my-pod", env_vars: [], labels: {}, host_config: {})
+
+        assert_equal "my-pod", handle.pod_name
+      end
+
+      assert_requested :post, pods, times: 2
+      assert_requested :get, "#{pods}/my-pod", times: 1
+    end
+
+    test "a create gives up once every attempt has timed out" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Net::ReadTimeout)
+
+        error = assert_raises(Kubeclient::HttpError) { @runtime.start_container(service_handle) }
+        assert_match(/Timed out reading data from server/, error.message)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: KubernetesRuntime::CREATE_ATTEMPTS
+    end
+
+    test "a quota refusal is not retried and still waits for capacity" do
+      pods = "#{KUBE_API}/namespaces/#{Settings.kubernetes.namespace}/pods"
+
+      with_kube_api do
+        stub_request(:post, pods).to_return(
+          kube_status(403, "Forbidden", 'pods "my-pod" is forbidden: exceeded quota: aixle-resource-quota')
+        )
+
+        error = assert_raises(CapacityError) do
+          @runtime.create_container(image: "alpine:latest", container_name: "my-pod", env_vars: [], labels: {}, host_config: {})
+        end
+        assert_equal "namespace_quota", error.reason
+      end
+
+      assert_requested :post, pods, times: 1
+    end
+
+    test "an invalid object fails at once" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_return(
+          kube_status(422, "Invalid", 'Service "my-pod" is invalid: spec.ports[0].port: Invalid value: 0')
+        )
+
+        error = assert_raises(Kubeclient::HttpError) { @runtime.start_container(service_handle) }
+        assert_equal 422, error.error_code
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 1
+    end
+
+    test "a cancelled activity stops a create instead of retrying it" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Temporalio::Error::CanceledError.new("Activity canceled"))
+
+        assert_raises(Temporalio::Error::CanceledError) { @runtime.start_container(service_handle) }
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 1
+    end
+
     test "remove_container tears down ingressroute, middlewares, service, and pod" do
       handle = OpenStruct.new(
         pod_name: "my-pod",
@@ -1356,6 +1450,41 @@ module ContainerRuntime
       yield
     ensure
       kubeconfig&.close!
+    end
+
+    KUBE_API = "http://kube.test/api/v1"
+    KUBE_SERVICES = "#{KUBE_API}/namespaces/default/services".freeze
+
+    # The runtime's own client against a WebMock'd API server, so a timeout
+    # reaches the runtime the way kubeclient really raises it.
+    def with_kube_api(&)
+      Settings.kubernetes.stubs(:ready_interval).returns(0)
+      stub_request(:get, KUBE_API).to_return(json_response({
+        kind: "APIResourceList", groupVersion: "v1",
+        resources: [
+          { name: "pods", singularName: "", namespaced: true, kind: "Pod", verbs: %w[create get] },
+          { name: "services", singularName: "", namespaced: true, kind: "Service", verbs: %w[create get] }
+        ]
+      }))
+      with_kubeconfig("http://kube.test", &)
+    end
+
+    def service_handle
+      OpenStruct.new(pod_name: "my-pod", namespace: "default", service_name: "my-pod", route_token: nil,
+                     service_ports: [ 7681 ])
+    end
+
+    def kube_created(request)
+      json_response(JSON.parse(request.body).deep_merge("metadata" => { "uid" => "created-uid" }), status: 201)
+    end
+
+    def kube_status(code, reason, message)
+      json_response({ kind: "Status", apiVersion: "v1", metadata: {}, status: "Failure",
+                      message: message, reason: reason, code: code }, status: code)
+    end
+
+    def json_response(body, status: 200)
+      { status: status, body: body.to_json, headers: { "Content-Type" => "application/json" } }
     end
 
     def capture_rails_log

@@ -22,6 +22,28 @@ governance, community health — carry none.
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
 
+### Changed
+- Sentry gets an agent login refresh failure only when repeated failures that
+  may be the platform's own, such as network errors, mark the login as needing
+  a new sign-in — not for a single failure, and not for a login the vendor
+  ended, whose owner is already emailed. Every failed refresh is still logged as
+  an `[AgentCredential] refresh failed` line.
+
+### Fixed
+- **Trackers**: a tracker comment or issue description whose text looks to an
+  HTML parser like one tag with hundreds of attributes (for example `a <b`
+  followed by a long pasted log) no longer drops the whole delivery, so its
+  triggers fire; a delivery that fails unexpectedly is now marked failed
+  instead of staying received.
+- **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
+  a filter hash (for example `?q=foo`) instead of failing with a server error.
+- **Sessions & Runs**: an agent session on Kubernetes no longer fails to start
+  when the Kubernetes API answers one request too slowly or drops the
+  connection; the request is retried a few times before the session fails.
+- The queue health check no longer warns "Admission queue is not moving" while a
+  pool is simply full of sessions that are still running. It warns when a slot
+  is free but not granted, or held by a session that ended over 30 minutes ago.
+
 ## [1.7.0] - 2026-10-24
 
 ### Changed

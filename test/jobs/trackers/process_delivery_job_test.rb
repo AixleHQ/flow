@@ -71,6 +71,32 @@ class Trackers::ProcessDeliveryJobTest < ActiveJob::TestCase
     assert_equal [ "processed", nil ], [ delivery.reload.status, TriggerEvent.sole.data["origin"] ]
   end
 
+  test "an issue whose description the HTML parser reads as one tag with hundreds of attributes is still processed" do
+    @jira.add_issue(id: "10100", key: "ENG-1", summary: "It breaks", status_id: "10004", project: FakeJira::Api::PROJECTS[0],
+                    description: "See <b " + (1..500).map { |i| "w#{i}" }.join(" "))
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @project.owner,
+                             event_type: "tracker.issue.status_changed", subject_policy: :none)
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+    delivery = deliver([ { field: "status", from: "To Do", to: "Ready for AI", from_id: "1", to_id: "10004" } ])
+
+    Trackers::ProcessDeliveryJob.perform_now(delivery.id)
+
+    assert_equal "processed", delivery.reload.status
+    assert TriggerEvent.sole.data["text"].start_with?("It breaks")
+  end
+
+  test "a delivery that fails unexpectedly is marked failed and the error still surfaces" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @project.owner,
+                             event_type: "tracker.issue.status_changed", subject_policy: :none)
+    TriggerEngine.stubs(:publish).raises(RuntimeError, "boom")
+    delivery = deliver([ { field: "status", from: "To Do", to: "Ready for AI", from_id: "1", to_id: "10004" } ])
+
+    assert_raises(RuntimeError) { Trackers::ProcessDeliveryJob.perform_now(delivery.id) }
+
+    delivery.reload
+    assert_equal [ "failed", "RuntimeError", "boom" ], [ delivery.status, delivery.detail["error"], delivery.detail["message"] ]
+  end
+
   test "a delivery for a connection that is no longer active is skipped" do
     delivery = deliver([ { field: "status", from: "To Do", to: "Done" } ])
     @integration.update!(status: :error)

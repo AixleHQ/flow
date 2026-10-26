@@ -58,6 +58,16 @@ module ContainerRuntime
     # (ContainerTicket), traded for the one-time ticket in a container URL.
     TERMINAL_AUTH_RESPONSE_COOKIES = [ ContainerTicket::COOKIE ].freeze
 
+    # Retrying a POST is safe here: a create whose answer was lost may already
+    # have been applied, and the next attempt then gets the 409 that
+    # #create_or_find_identical verifies.
+    CREATE_ATTEMPTS = 3
+    # Kubeclient raises a timeout or a broken connection as an HttpError without
+    # a status, which reads as 0.
+    TRANSIENT_API_STATUSES = [ 0, 429, 500, 502, 503, 504 ].freeze
+    # Net::HTTP raises these unwrapped, so they never become an HttpError.
+    TRANSIENT_CONNECTION_ERRORS = [ Errno::ECONNREFUSED, Errno::ECONNRESET ].freeze
+
     # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
@@ -591,6 +601,23 @@ module ContainerRuntime
     end
 
     def create_or_verify(client, kind, plural, resource)
+      attempt = 1
+      begin
+        create_or_find_identical(client, kind, plural, resource)
+      rescue Kubeclient::HttpError, *TRANSIENT_CONNECTION_ERRORS => e
+        raise unless attempt < CREATE_ATTEMPTS && transient_api_error?(e)
+
+        sleep ready_interval * attempt
+        attempt += 1
+        retry
+      end
+    end
+
+    def transient_api_error?(error)
+      !error.is_a?(Kubeclient::HttpError) || TRANSIENT_API_STATUSES.include?(error.error_code.to_i)
+    end
+
+    def create_or_find_identical(client, kind, plural, resource)
       case kind
       when "Service" then client.create_service(resource)
       when "Pod" then client.create_pod(resource)

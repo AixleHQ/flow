@@ -17,6 +17,11 @@ module Trackers
       delivery.update!(status: "processed", detail: outside.positive? ? { "outside_scope" => outside } : {})
     rescue Trackers::Error => e
       delivery&.update!(status: "failed", detail: { "error" => e.code, "message" => e.message.to_s.truncate(300) })
+    rescue EventPipeline::WriteInFlight
+      raise
+    rescue StandardError => e
+      delivery&.update!(status: "failed", detail: { "error" => e.class.name, "message" => e.message.to_s.truncate(300) })
+      raise
     end
 
     private

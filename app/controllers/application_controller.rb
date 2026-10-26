@@ -19,8 +19,10 @@ class ApplicationController < ActionController::Base
     payload[:user] = @current_user&.id if defined?(@current_user_session)
   end
 
+  # A bare `?q=foo` (or `q[]=`) is not a ransack query; ignore it rather than dig into it.
   def q_params
-    params[:q] || {}
+    q = params[:q]
+    q.respond_to?(:permit) ? q : {}
   end
 
   # Param paths whose hash values should not have keys underscored.

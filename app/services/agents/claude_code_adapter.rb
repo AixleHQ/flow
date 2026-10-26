@@ -363,9 +363,10 @@ module Agents
     # (BaseAdapter#refresh!).
     # @param credential [AgentCredential]
     # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
-    #   permanent: Boolean, persisted: Boolean } — `permanent` is true only when the
-    #   BASE login is the block the server rejected; a dead add-on (designOauth)
-    #   leaves the credential usable.
+    #   permanent: Boolean, sign_in_required: Boolean, persisted: Boolean } — `permanent`
+    #   is true only when the BASE login is the block the server rejected; a dead add-on
+    #   (designOauth) leaves the credential usable. `sign_in_required` is true when any
+    #   block was rejected (AgentCredential.sign_in_required?).
     # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
     #   uses the default; a session launch passes its own, larger, threshold so the
     #   container starts with a token that outlives the session.
@@ -447,7 +448,8 @@ module Agents
       # the same pass — reporting :refreshed there would clear the error the user
       # has to act on.
       if error && (permanent || refreshed_blocks.empty?)
-        return { status: :error, detail: error, permanent: permanent, persisted: written }
+        return { status: :error, detail: error, permanent: permanent,
+                 sign_in_required: invalidated_blocks.any?, persisted: written }
       end
 
       # partial failure (add-on block failed, base rotated) still counts as refreshed

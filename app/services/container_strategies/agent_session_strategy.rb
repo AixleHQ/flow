@@ -239,7 +239,7 @@ module ContainerStrategies
 
       return unless result.is_a?(Hash) && result[:status] == :error
 
-      # AgentCredential#renew! has already recorded and reported the failure.
+      # AgentCredential#renew! has already recorded the failure, and reported it if it may be ours.
       raise AgentCredential::PreflightError, credential if AgentCredential.permanent_failure?(result)
 
       Rails.logger.warn("[AgentSession] Pre-launch token refresh failed for credential " \
