@@ -54,6 +54,30 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert_equal 1, MarketplaceSubscriptionEvent.unapplied.count
   end
 
+  # The seller account sells more than this listing, and the rule that feeds
+  # this table matches a source and a detail type rather than a product. So the
+  # agreement traffic of every other listing lands here and never matches
+  # anything -- and every sweep would reconsider all of it, for ever.
+  test "an event nothing has claimed for a week stops being swept" do
+    @events.record(envelope)
+    MarketplaceSubscriptionEvent.sole.update!(occurred_at: 8.days.ago)
+    create(:marketplace_license, agreement_id: "agmt-1")
+
+    assert_equal 0, @events.apply_pending
+    assert_not MarketplaceSubscriptionEvent.sole.applied?, "kept, as the evidence that this happens"
+  end
+
+  # Only the blind sweep gives up. A licence that appears late still replays the
+  # events that named it, because there the match is certain rather than hoped
+  # for.
+  test "but a licence appearing late still replays its own" do
+    @events.record(envelope)
+    MarketplaceSubscriptionEvent.sole.update!(occurred_at: 8.days.ago)
+    license = create(:marketplace_license, agreement_id: "agmt-1")
+
+    assert @events.apply_for(license).active?
+  end
+
   test "it applies the moment the licence appears" do
     @events.record(envelope)
     license = create(:marketplace_license, agreement_id: "agmt-1")
@@ -83,6 +107,66 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert company.reload.billing_blocked?
   end
 
+  # A call that never reached AWS has sent nothing, and the part-hour it was
+  # carrying is the one the schedule can no longer reach. Swallowing it stopped
+  # the workspace and lost the minutes: the next attempt found a stopped
+  # workspace and measured zero.
+  class FailingMeter
+    def call(_license) = raise(Billing::MarketplaceSellerClient::Error, "cannot assume the seller role")
+  end
+
+  class RecordingMeter
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def call(license)
+      @calls << license
+      "sent=1:already=0:minutes=30"
+    end
+  end
+
+  test "a final meter that could not reach AWS stops the workspace and is tried again" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    travel_to Time.utc(2026, 10, 23, 10, 30) do
+      Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).apply_pending
+    end
+
+    event = MarketplaceSubscriptionEvent.sole
+    assert_not event.applied?, "nothing was sent, so the sweep has to come back to it"
+    assert_equal "cannot assume the seller role", event.failure
+    assert company.reload.billing_blocked?, "the customer has cancelled; the workspace stops either way"
+    assert license.reload.ending?
+
+    meter = RecordingMeter.new
+    travel_to Time.utc(2026, 10, 23, 10, 35) do
+      Billing::MarketplaceEvents.new(final_meter: meter).apply_pending
+    end
+
+    assert_equal [ license ], meter.calls
+    assert MarketplaceSubscriptionEvent.sole.applied?, "sent at last, inside the window AWS gave"
+  end
+
+  # Bounded by the window itself: once it has shut no record can be accepted,
+  # so the attempt stops rather than being made every minute for ever.
+  test "once the one-hour window has shut the event stops being retried" do
+    create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
+    Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    travel_to Time.utc(2026, 10, 23, 11, 30) do
+      Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).apply_pending
+    end
+
+    event = MarketplaceSubscriptionEvent.sole
+    assert event.applied?
+    assert_match(/window shut/, event.metered)
+  end
+
   # The sharp one. AWS opens a one-hour window on this event and the hourly
   # schedule cannot serve it, so the usage goes before the state moves.
   test "a deprovisioned licence is metered before it is ended" do
@@ -97,6 +181,35 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert metered_while_meterable, "metered after finish! the usage would be refused"
     assert license.reload.ended?
     @meter.verify
+  end
+
+  # AWS fires Created for a renewal and a replacement as well as for a new
+  # purchase, and a renewal carries a NEW agreement id naming the one it
+  # supersedes. Matched only on the new id, it finds nothing, and the licence
+  # goes on answering to an agreement that no longer exists.
+  test "a renewal reaches the licence it renews and re-points it" do
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::CREATED,
+               detail: { "agreement" => { "id" => "agmt-2", "intent" => "RENEW", "previousAgreementId" => "agmt-1" },
+                         "product" => { "id" => OUR_PRODUCT_ID } })
+    )
+
+    assert_equal 1, @events.apply_pending
+    assert_equal "agmt-2", license.reload.agreement_id
+    assert license.active?
+  end
+
+  # The other half: having moved, the licence no longer answers to the old
+  # agreement, so its ending stops nobody.
+  test "the ending of the agreement a renewal replaced does not stop the customer" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-2", company: company)
+    @events.record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    assert_equal 0, @events.apply_pending, "it names agmt-1, which nothing holds any more"
+    assert license.reload.active?
+    assert company.reload.billing_active?
   end
 
   # Out of order is normal, and the machine is what refuses it.
@@ -200,13 +313,13 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
   end
 
   # The rule in the seller account matches a source and a detail type, not a
-  # product, so every listing that account sells arrives here. Seen for real:
-  # a stranger's subscription to "Easy Cloud Assurance" sat unapplied in our
-  # table, and every sweep would have retried it for ever.
+  # product, so every listing that account sells arrives here -- including
+  # strangers' subscriptions to other vendors' products, which sit unapplied and
+  # which every sweep would otherwise retry for ever.
   test "another listing on the same seller account is not ours" do
     assert_nil @events.record(
       envelope(detail: { "agreement" => { "id" => "agmt-theirs" },
-                         "product" => { "id" => "prod-someone-else", "title" => "Easy Cloud Assurance" } })
+                         "product" => { "id" => "prod-someone-else", "title" => "Another Vendor's Product" } })
     )
     assert_equal 0, MarketplaceSubscriptionEvent.count
   end

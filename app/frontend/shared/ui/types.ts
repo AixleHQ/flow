@@ -83,11 +83,11 @@ export interface SharedProps {
   permissions?: SharedPermissions;
   settings: SharedSettings;
   trial?: SharedTrial | null;
-  marketplace?: SharedMarketplace | null;
   /**
    * Server-resolved `client: true` flags (FeaturesResource, which Typelizer turns into `Features`); read them with
    * useFeatureFlag. Partial and optional: a page served by an older pod may not send it, or not know a flag yet.
    */
   features?: Partial<Features>;
+  marketplace?: SharedMarketplace | null;
   [key: string]: unknown;
 }

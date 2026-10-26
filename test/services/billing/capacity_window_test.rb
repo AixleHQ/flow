@@ -119,10 +119,9 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_minutes 420, window
   end
 
-  # The overcharge the third live AWS subscription found. A workspace created at
-  # 04:26 was billed for the whole of 04:00: it has no entry at the top of the
-  # hour, so the fallback above read its live row back to a time it did not
-  # exist. That is every new customer's first hour.
+  # A workspace created at 04:26 was billed for the whole of 04:00: it has no
+  # entry at the top of the hour, so the fallback above read its live row back
+  # to a time it did not exist. That is every new customer's first hour.
   test "a company whose first entry lands mid-hour is billed only from then" do
     SessionConcurrencyLimit.set!(scope: @acme, max_sessions: 7)
     CompanyCapacityChange.delete_all
@@ -137,9 +136,8 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
   # without a mark of when the new payer took over the whole hour goes to them —
   # including the part the old payer has already invoiced.
 
-  # Found live on 25 October: a workspace that had been trialing all hour moved
-  # onto AWS Marketplace at :36 and the measurement handed AWS the whole hour,
-  # thirty-six free minutes included.
+  # A workspace that had been trialing all hour and moved onto AWS Marketplace
+  # at :36 handed AWS the whole hour, thirty-six free minutes included.
   test "a company that changed payer mid-hour is billed by the new one only from then" do
     change(@acme, 2, @hour - 2.hours)
     @acme.update!(billing_provider_since: @hour + 36.minutes)
@@ -166,11 +164,18 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_minutes 180, window
   end
 
-  test "a switch after the hour does not reach back into it" do
+  # The hour is measured at five past the next one, so a switch made in those
+  # five minutes is "after the hour" and still lands in this measurement -- and
+  # the breakdown goes to the payer the company has by then, which is the new
+  # one. It owes nothing: the hour belongs to the payer that held it, who has
+  # already been sent it.
+  test "a switch after the hour leaves the new payer owing nothing for it" do
     change(@acme, 3, @hour - 2.hours)
     @acme.update!(billing_provider_since: @hour + 1.hour + 1.minute)
 
-    assert_minutes 180, window
+    assert_minutes 0, window
+    assert_equal 180, window.offered_per_company[@acme.id] / 60,
+                 "what it was offered does not change; only who owes for it does"
   end
 
   # Every company that has only ever had one payer, and every company that
@@ -236,6 +241,27 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       state(@acme, "active", @hour + 47.minutes)
 
       assert_minutes 26, window, "13 minutes at two, and nothing while it was stopped"
+    end
+
+    # The hour is free whoever reads it afterwards. It used to be decided by
+    # filtering the company's live row at five past the next hour, so a trial
+    # that became a paying workspace in those five minutes had its free hour
+    # invoiced.
+    test "an hour a workspace spent on free capacity is billed to nobody" do
+      change(@acme, 2, @hour - 2.hours)
+      state(@acme, "trialing", @hour - 2.hours)
+
+      assert_minutes 0, window, "the allowance paid for it"
+      assert_equal 120, window.offered_per_company[@acme.id] / 60,
+                   "and it is still counted, because that is what the allowance is spent from"
+    end
+
+    test "a trial that starts paying mid-hour owes only from then" do
+      change(@acme, 2, @hour - 2.hours)
+      state(@acme, "trialing", @hour - 2.hours)
+      state(@acme, "active", @hour + 30.minutes)
+
+      assert_minutes 60, window, "two workers for the half hour it was paying for"
     end
 
     test "a workspace stopped mid-hour is billed up to then" do

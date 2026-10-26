@@ -84,11 +84,23 @@ module Billing
       return if elapsed <= 0
 
       limits.each do |company_id, limit|
-        rate = offered(limit, states[company_id])
+        state = states[company_id]
+        rate = offered(limit, state)
         seconds[company_id] += rate * elapsed
-        payable[company_id] += rate * owed_elapsed(company_id, from, to)
+        payable[company_id] += rate * owed_elapsed(company_id, from, to) if owed?(state)
       end
     end
+
+    # Only an active workspace owes for what it was offered. A trialing one is
+    # spending a free allowance, and a blocked one was offered nothing anyway.
+    #
+    # Read from the state it was IN at that moment, which is the whole reason
+    # the log exists. Decided here rather than by filtering the live row
+    # afterwards: that filter asked what the company is at five past the next
+    # hour, so a trial that took a card in those five minutes had its free hour
+    # charged, and a workspace stopped by a cancellation lost the minutes it ran
+    # before it.
+    def owed?(state) = !Deployment.saas? || state == "active"
 
     # A company that changed payer inside this hour is billed by the new one
     # only from the moment it took over. The time before belonged to the old
@@ -103,13 +115,19 @@ module Billing
       (to - [ from, since ].max).round.clamp(0, (to - from).round)
     end
 
-    # Only the switches that land inside this window. One from before it means
-    # the payer owned the whole hour; one from after has not happened yet, and
-    # the hour is not theirs to be billed for at all -- but that company is not
-    # billable under the new payer yet either, so it never reaches `billed`.
+    # Every switch from the start of this window onwards. One from before it is
+    # absent, so `owed_elapsed` charges the payer for the whole hour.
+    #
+    # One from *after* the window counts as much as one inside it: the hour is
+    # measured at five past the next, and `per_company` goes to whichever payer
+    # the company has by then -- so a switch made in those five minutes left the
+    # hour owed in full by a payer who had not held it for any of it, while the
+    # one who did had already invoiced it. `owed_elapsed` clamps it to zero; the
+    # earlier payer is settled by FinalUsage going out, the final meter coming
+    # back, and free trial time either way.
     def payer_since
-      @payer_since ||= Company.where(id: measured_company_ids,
-                                     billing_provider_since: period_start...period_end)
+      @payer_since ||= Company.where(id: measured_company_ids)
+                              .where(billing_provider_since: period_start..)
                               .pluck(:id, :billing_provider_since).to_h
     end
 
@@ -142,10 +160,15 @@ module Billing
     end
 
     # What every company's billing state was as the hour opened, read the same
-    # way as its capacity and with the same narrow fallback: a company the log
-    # knows nothing about is taken from its live row, and one whose first entry
-    # lands inside this hour opened it at whatever that entry replaced — which
-    # the walk below applies from the moment it happened.
+    # way as its capacity.
+    #
+    # The fallback to the live row is a safety net and not the normal path: a
+    # migration seeded one entry per company when the log shipped, so a company
+    # the log knows nothing about is one created since — and a company created
+    # mid-hour is logged on creation, which this reads before the walk applies
+    # it. Trusting the live row for a company whose first entry lands *inside*
+    # the hour is what the net cannot do correctly, because nothing records what
+    # that entry replaced; the seed is what makes that case not arise.
     def opening_states
       logged = CompanyBillingStateChange.state_at(period_start)
       live = Company.where(id: measured_company_ids).pluck(:id, :billing_state).to_h
@@ -215,14 +238,13 @@ module Billing
     # billing for capacity that cannot be occupied overcharges, and metering a
     # company that can still run would make suspending one a way to keep the
     # capacity and stop paying for it.
+    # What is left to read from the live row, now that the billing state is read
+    # from the log instead: a company Aixle carries, which is a standing
+    # arrangement and not a thing an hour can change.
     def billable_company_ids
       @billable_company_ids ||= begin
         scope = Company.active
-        # A company spending its free allowance, or stopped for having spent it,
-        # is offered capacity and invoiced for none of it. The usage is still
-        # recorded — that is what the allowance is counted from — but it is not
-        # what a provider is sent.
-        scope = scope.billing_billable if Deployment.saas?
+        scope = scope.where(managed_by_aixle: false) if Deployment.saas?
         scope.pluck(:id)
       end
     end

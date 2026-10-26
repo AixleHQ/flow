@@ -24,8 +24,8 @@ module Billing
 
     # What ResolveCustomer answers, without the vendor's types.
     #
-    # `customer_identifier` IS populated, measured against the real listing on
-    # 23 October. The documentation says Concurrent Agreements stopped sending
+    # `customer_identifier` IS populated, measured against the real listing.
+    # The documentation says Concurrent Agreements stopped sending
     # it; this product receives it. Nothing keys on it all the same — one buyer
     # may hold several agreements and only the licence tells them apart — but
     # it is a value, not an absence, and whether this product is on Concurrent
@@ -62,9 +62,21 @@ module Billing
     Usage = Data.define(:license_arn, :customer_aws_account_id, :dimension, :quantity, :occurred_at)
 
     # What came back for it, without the vendor's types.
+    #
+    # `DuplicateRecord` is NOT acceptance, whatever the word suggests. AWS:
+    # "the UsageRecord was invalid and not honored. A previously metered
+    # UsageRecord had the same customer, dimension, and time, but a DIFFERENT
+    # quantity." An honest replay of the same quantity comes back `Success`
+    # with the id already issued, measured against the real listing, so a
+    # duplicate is never a replay of ours. It is two different
+    # answers to what one hour was worth, and the hour went unbilled.
     Outcome = Data.define(:license_arn, :status, :metering_record_id) do
-      def accepted? = status == SUCCESS || status == DUPLICATE
+      def accepted? = status == SUCCESS
       def duplicate? = status == DUPLICATE
+
+      # Worth retrying: the customer may yet appear to AWS. A duplicate is not
+      # -- the quantity that lost will lose every time.
+      def retryable? = !accepted? && !duplicate?
     end
 
     # Every installation but the one that sells the listing.
@@ -141,8 +153,8 @@ module Billing
     # would bill the hour twice.
     #
     # The buyer's account id is not optional in practice, whatever the schema
-    # says. Measured on 23 October against the real listing: a record carrying
-    # only LicenseArn comes back `CustomerIdentifier or CustomerAWSAccountId is
+    # says. Measured against the real listing: a record carrying only
+    # LicenseArn comes back `CustomerIdentifier or CustomerAWSAccountId is
     # required in Usage record`. It is not a second keying — it names the buyer
     # while the licence names which of their agreements the hour is for.
     def usage_record(usage)

@@ -21,6 +21,7 @@ module Billing
 
     NOT_PROPOSABLE = "That subscription is already set up, or has ended."
     NOT_PENDING = "That request has already been answered."
+    NOT_CONFIRMED = "AWS has not confirmed that subscription yet. Try again in a few minutes."
     DOMAIN_FREE = "There is no workspace at that domain to apply it to."
     ALREADY_BILLED = "That workspace already has an AWS Marketplace subscription."
 
@@ -46,15 +47,41 @@ module Billing
     # Applied in one go, with the Stripe subscription that was paying for the
     # workspace stopped in the same breath. See #hand_over_from_stripe for why
     # it is not left to run out.
+    #
+    # Only a subscription AWS has confirmed. Accepting a pending one cancels the
+    # card in the same breath and leaves the workspace `awaiting_subscription`,
+    # which nothing but a confirmation lifts -- and it cannot take a card again
+    # either, because a pending licence is a live one. A subscription AWS never
+    # confirms would strand a workspace that was paying perfectly well.
+    #
+    # Declining stays open whatever the state: an administrator may always say
+    # no, and a request nobody can answer is worse than one answered no.
     def accept!(by:)
       refuse_unless_answerable!
-      raise Refused, ALREADY_BILLED if company.marketplace_license.present?
+      raise Refused, NOT_CONFIRMED unless license.active?
+      raise Refused, ALREADY_BILLED if Payer.for(company).subscribed_through_aws?
 
       cancellation = nil
       company.with_lock do
-        cancellation = hand_over_from_stripe(by: by) if company.stripe_subscription_id.present?
+        # Measured first, while the workspace is still the card's: FinalUsage
+        # reads what it was offered, and a workspace already moved is offered
+        # nothing. Memoised, so #record! below reports the same measurement.
+        subscription_id = company.stripe_subscription_id
+        final_usage = FinalUsage.new(company, until_time: Time.current) if subscription_id.present?
+        billed = final_usage&.billed
+
+        # Then every local write that can fail -- a validation, the partial
+        # unique index on a live licence -- and only after them the call to
+        # Stripe. The other order cancelled the card first and rolled the
+        # transaction back around it, leaving a customer with no subscription,
+        # no final invoice and a workspace still looking card-billed.
+        note_the_debt_it_leaves_behind
         company.update!(**billing_terms)
         license.update!(company: company, proposal_state: "accepted", proposal_decided_at: Time.current)
+        if subscription_id.present?
+          cancellation = hand_over_from_stripe(by: by, subscription_id: subscription_id,
+                                               final_usage: final_usage, billed: billed)
+        end
       end
       # Outside the lock: the final invoice is settled against Stripe, which is
       # a conversation with another service and no business holding a row.
@@ -94,31 +121,46 @@ module Billing
     # one question to answer.
     def propose!(company:, email:)
       raise Refused, NOT_PROPOSABLE unless license.proposable?
-      raise Refused, ALREADY_BILLED if company.marketplace_license.present?
+      raise Refused, ALREADY_BILLED if Payer.for(company).subscribed_through_aws?
 
       license.update!(proposed_company: company, proposed_by_email: email.to_s.downcase,
                       proposed_at: Time.current, proposal_decided_at: nil, proposal_state: "pending")
       license
     end
 
-    # The same measurement and the same final invoice an ordinary cancellation
-    # makes, because the minutes Stripe has not counted are owed to whoever
-    # billed the hour they happened in.
+    # A workspace stopped for an unpaid card invoice starts again here, and the
+    # link to that invoice goes with the block: `forget_billing_block` clears
+    # the field on every save of a company that is not blocked. Starting it
+    # again is the same rule the rest of this path follows -- AWS pays for the
+    # workspace now, so a card that failed for capacity AWS no longer bills must
+    # not stop it -- and the debt is not forgiven, only invisible here. Said out
+    # loud rather than lost between two writes.
+    def note_the_debt_it_leaves_behind
+      url = company.billing_unpaid_invoice_url
+      return if url.blank?
+
+      Rails.logger.warn(
+        "[MarketplaceLicenseProposal] company #{company.id} moves to AWS Marketplace owing an unpaid Stripe " \
+        "invoice (#{url}); the workspace starts again and Stripe goes on collecting it"
+      )
+    end
+
+    # The same measurement and final invoice an ordinary cancellation makes:
+    # the minutes Stripe has not counted are owed to whoever billed the hour
+    # they happened in. Immediate, not at the period's end -- capacity is billed
+    # in arrears for every hour it is offered, so letting it run out would bill
+    # the same hours twice, once by Stripe and once by AWS.
     #
-    # Immediate, not at the period's end. Capacity is billed in arrears for
-    # every hour it is offered (Billing::StripeClient#cancel_subscription), so
-    # there is no paid-for remainder to run out — letting it run would bill the
-    # same hours twice, once by Stripe and once by AWS.
+    # `stripe_customer_id` is kept, because the settlement reaches Stripe
+    # through it; only the subscription id goes, which is why it is passed in
+    # rather than read off the company that #billing_terms has just cleared.
     #
-    # `stripe_customer_id` is deliberately kept: the settlement puts the last
-    # metered hours on the final invoice and reaches Stripe through it. Only the
-    # subscription id goes, so nothing later mistakes this for a card-billed
-    # workspace.
-    def hand_over_from_stripe(by:)
-      final_usage = FinalUsage.new(company, until_time: Time.current)
-      billed = final_usage.billed
+    # Called with the measurement taken and the local rows written, so the only
+    # thing left that can fail is Stripe -- and a failure there rolls back a
+    # transaction that has touched nothing of theirs.
+    def hand_over_from_stripe(by:, subscription_id:, final_usage:, billed:)
       response = StripeClient.new.cancel_subscription(
-        subscription_id: company.stripe_subscription_id, reason: nil, comment: nil
+        subscription_id: subscription_id, reason: nil, comment: nil
       )
       ended_at = SubscriptionState.from(response).ended_at || Time.current
 
@@ -137,15 +179,15 @@ module Billing
     # What the workspace becomes. A block for an unpaid Stripe invoice is lifted
     # with the rest — the workspace has a payer again, and the invoice is still
     # owed in Stripe, which is where it is collected.
+    # Always active: #accept! refuses anything AWS has not confirmed, so there
+    # is no longer a case where the workspace has to wait. It used to have one,
+    # and the wait had no end -- nothing but a confirmation lifted it, and the
+    # workspace could not take a card again either.
     def billing_terms
-      terms = { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
-                stripe_subscription_id: nil, billing_cancels_at: nil,
-                billing_unpaid_invoice_url: nil, billing_event_at: Time.current }
-      return terms.merge(billing_state: "active", billing_block_reason: nil) if license.active?
-
-      # AWS discards metering sent before it confirms the agreement, so a
-      # workspace whose licence is still pending waits rather than runs unbilled.
-      terms.merge(billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+      { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+        stripe_subscription_id: nil, billing_cancels_at: nil,
+        billing_unpaid_invoice_url: nil, billing_event_at: Time.current,
+        billing_state: "active", billing_block_reason: nil }
     end
   end
 end

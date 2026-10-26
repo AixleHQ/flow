@@ -185,15 +185,20 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
     end
   end
 
-  test "an hour AWS already holds is accepted rather than retried" do
+  # AWS: "the UsageRecord was invalid and not honored. A previously metered
+  # UsageRecord had the same customer, dimension, and time, but a DIFFERENT
+  # quantity." So it is neither acceptance nor something a retry can settle --
+  # the quantity that lost will lose every time.
+  test "a duplicate is not acceptance and is not worth retrying" do
     stub_meter(body: { "Results" => [
       { "UsageRecord" => { "LicenseArn" => LICENSE_ARN }, "MeteringRecordId" => nil, "Status" => "DuplicateRecord" }
     ], "UnprocessedRecords" => [] })
 
     outcome = Billing::MarketplaceSellerClient.new.batch_meter_usage([ usage ]).sole
 
-    assert outcome.accepted?
+    assert_not outcome.accepted?
     assert outcome.duplicate?
+    assert_not outcome.retryable?
   end
 
   # A record AWS could not process comes back under its own key. Dropping it

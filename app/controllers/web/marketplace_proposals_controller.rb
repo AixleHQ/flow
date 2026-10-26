@@ -42,6 +42,13 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
 
     proposed = MarketplaceLicense.find_by(id: answers[:license_id])
     return refuse(NO_SUBSCRIPTION, email: answers[:email]) if proposed.nil?
+    # Opening the link again inside its two hours is a reload, not a second ask:
+    # a buyer who double-clicks it, or returns to the tab. Raising again would
+    # replace a request that is already waiting and mail every administrator a
+    # second time, which is the one thing the rate limit on #create does not
+    # cover. Asking again after a decision is still offered -- that takes a new
+    # link, which is a new ask.
+    return redirect_to(new_workspace_path(email: answers[:email])) if already_asked?(proposed, answers[:email])
 
     raise_proposal(proposed, answers[:email])
   rescue Billing::MarketplaceLicenseProposal::Refused => e
@@ -49,6 +56,13 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
   end
 
   private
+
+  # The same request, already standing. Matched on the address too: a different
+  # one is a different ask, and replacing a pending request is what the design
+  # says a second proposal does.
+  def already_asked?(proposed, email)
+    proposed.proposal_pending? && proposed.proposed_by_email == email.to_s.downcase
+  end
 
   def raise_proposal(proposed, email)
     Billing::MarketplaceLicenseProposal.raise!(license: proposed, email: email)

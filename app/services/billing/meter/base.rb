@@ -20,6 +20,13 @@ module Billing
       # the listing does not accumulate an hourly row nobody can ever deliver.
       def enabled? = true
 
+      # Which of the hour's companies are this provider's to bill, asked when the
+      # row is CLAIMED rather than when it is delivered: a row carrying every
+      # company's minutes states a total that is not this provider's, and a
+      # payer that moves between measurement and delivery would be billed for an
+      # hour it did not hold. Everyone, for an installation with one provider.
+      def companies_billed(company_ids) = company_ids
+
       # @param report [CapacityMeterReport] the claimed row for this hour
       # @return [String] the provider's identifier for the accepted record
       def deliver(report)

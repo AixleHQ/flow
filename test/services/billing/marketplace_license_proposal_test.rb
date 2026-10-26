@@ -59,11 +59,10 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert_equal Billing::MarketplaceLicenseProposal::ALREADY_BILLED, error.message
   end
 
-  # Found for real on 26 October. A workspace keeps the licences it has finished
-  # with, and an ended one went on answering "this workspace already has a
-  # subscription" -- so a customer who cancelled and subscribed again, which is
-  # what our own screen tells them to do, was refused and left paying for
-  # nothing.
+  # A workspace keeps the licences it has finished with. An ended one that still
+  # answered "this workspace already has a subscription" refused the customer
+  # who cancelled and subscribed again -- which is what our own screen tells
+  # them to do -- and left them paying for nothing.
   test "a subscription that ended does not stand in the way of the next one" do
     create(:marketplace_license, :ended, company: @company)
 
@@ -121,18 +120,43 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
 
   # AWS discards metering sent before it confirms the agreement, so a workspace
   # whose licence is still pending waits rather than runs unbilled.
-  test "a workspace waits when the subscription is not confirmed yet" do
+  # Accepting cancels the card in the same breath, and only a confirmation
+  # starts the workspace again. A subscription AWS never confirms would leave a
+  # workspace that was paying perfectly well with nothing paying for it and no
+  # way to add a card, because a pending licence is a live one.
+  test "a subscription AWS has not confirmed cannot be applied yet" do
+    @license.update!(subscription_state: "pending")
+    @company.update!(stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
+    propose
+
+    error = assert_raises(Billing::MarketplaceLicenseProposal::Refused) { proposal.accept!(by: @admin) }
+
+    assert_equal Billing::MarketplaceLicenseProposal::NOT_CONFIRMED, error.message
+    assert @company.reload.billing_active?, "the workspace it was paying for is untouched"
+    assert_equal "sub_1", @company.stripe_subscription_id, "and so is the card paying for it"
+    assert @license.reload.proposal_pending?, "the request stands; it is answerable once AWS confirms"
+  end
+
+  # The request is still a request. An administrator may always say no, and one
+  # nobody can answer is worse than one answered no.
+  test "an unconfirmed subscription can still be declined" do
     @license.update!(subscription_state: "pending")
     propose
 
-    proposal.accept!(by: @admin)
+    proposal.decline!(by: @admin)
 
-    assert @company.reload.billing_blocked?
-    assert_equal "awaiting_subscription", @company.billing_block_reason
+    assert_equal "declined", @license.reload.proposal_state
   end
 
-  # The workspace has a payer again, so what stopped it no longer holds. The
-  # unpaid invoice is still owed, in Stripe, which is where it is collected.
+  # The workspace has a payer again, so what stopped it no longer holds: AWS
+  # pays for it now, and a card that failed for capacity AWS no longer bills
+  # must not keep it stopped -- the same rule the Stripe webhook follows.
+  #
+  # The debt is not forgiven. Stripe goes on collecting it and it is still owed
+  # there; what the workspace loses is the link to it, because
+  # `forget_billing_block` clears that field on every save of a company that is
+  # not blocked. Deliberate, logged, and the one part of this a customer can
+  # fairly complain about.
   test "a workspace stopped for an unpaid invoice runs again" do
     @company.update!(billing_state: "blocked", billing_block_reason: "payment_failed",
                      billing_unpaid_invoice_url: "https://invoice.example/1")

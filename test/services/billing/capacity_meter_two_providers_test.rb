@@ -19,15 +19,19 @@ class Billing::CapacityMeterTwoProvidersTest < ActiveSupport::TestCase
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
   end
 
-  # A real adapter over the real interface rather than a stub of the meter: the
-  # Stripe one needs a Stripe key this suite has no business holding.
-  class FakeStripeMeter < Billing::Meter::Base
+  # The real adapter with only its delivery replaced: it needs a Stripe key
+  # this suite has no business holding, but everything else about it is what is
+  # under test -- including which companies it claims when the row is written,
+  # which a stand-in subclassing Base would silently answer "all of them".
+  class FakeStripeMeter < Billing::Meter::Stripe
     attr_reader :delivered
 
+    # Named by the class it stands in for, not by its own name, which is what
+    # the ledger row is keyed on.
     def self.provider = Billing::Meter::Stripe.provider
 
     def initialize
-      super()
+      super(client: nil)
       @delivered = []
     end
 
@@ -65,9 +69,13 @@ class Billing::CapacityMeterTwoProvidersTest < ActiveSupport::TestCase
     assert_not_nil aws_row
     assert_equal "reported", stripe_row.state
     assert_equal "reported", aws_row.state
-    # One measurement: both rows describe the same hour and the same capacity.
-    assert_equal stripe_row.quantity_seconds, aws_row.quantity_seconds
-    assert_equal BigDecimal("300"), stripe_row.quantity_minutes, "five workers for an hour"
+    # One measurement, but each row carries its own share of it. A row stating
+    # the whole installation's total says a number that is not this provider's,
+    # and a reader of either could not tell which part of it was theirs.
+    assert_equal BigDecimal("120"), stripe_row.quantity_minutes, "two workers for an hour"
+    assert_equal BigDecimal("180"), aws_row.quantity_minutes, "three workers for an hour"
+    assert_equal 2, [ stripe_row.breakdown.keys, aws_row.breakdown.keys ].flatten.uniq.size,
+                 "and no company is on both rows"
     assert_equal 2, result[:sent]
     assert_equal 0, result[:failed]
   end

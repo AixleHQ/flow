@@ -16,10 +16,10 @@ module Billing
   # does not reopen. So this errs towards sending.
   #
   # What it does not do is send an hour we already hold AWS's receipt for.
-  # Observed on 24 October: AWS answered such a repeat with `Success` and the
-  # *same* `MeteringRecordId` rather than `DuplicateRecord`, so the line read
-  # `sent=2:already=0:minutes=72` when sixty of those minutes had already been
-  # billed. The receipt is the only thing that tells the two apart.
+  # Measured against the real listing: AWS answers such a repeat with `Success`
+  # and the *same* `MeteringRecordId` rather than `DuplicateRecord`, so a line
+  # counting what it sent reports minutes that were already billed. The receipt
+  # is the only thing that tells a replay from a charge.
   class MarketplaceFinalMeter
     # The hour under way and the one before it. The earlier one is included
     # because the schedule may not have reached it yet -- it reports an hour at
@@ -40,10 +40,13 @@ module Billing
     # one here, whether the last hour of a cancelling customer was billed could
     # only be read off their own invoice, hours later.
     #
-    # Deliberately does not raise on a refusal: the caller's next step is to end
-    # the licence, and a licence left open because its last minutes were refused
-    # would go on being billed by the schedule for an entitlement AWS has
-    # already revoked. The refusal goes in the line instead.
+    # Raises when the call did not happen -- credentials, throttling, anything
+    # that leaves AWS not having heard of these minutes. It used to answer
+    # "refused: ..." instead, so that the caller could go on to end the licence;
+    # but the caller ends it either way now, and swallowing the failure here
+    # meant the last part-hour was measured once, lost, and never sent. A
+    # refusal of a *record* is not this: AWS answers those in the batch, and
+    # they go in the line.
     def call(license)
       return NOTHING unless license.meterable? && client.configured?
 
@@ -51,8 +54,6 @@ module Billing
       return NOTHING if usages.empty?
 
       summary(usages, client.batch_meter_usage(usages))
-    rescue MarketplaceSellerClient::Error => e
-      "refused: #{e.message}"
     end
 
     private
@@ -103,13 +104,12 @@ module Billing
     # compared that way because the column comes back as a TimeWithZone and
     # `Array#-` would not match it against a Time.
     #
-    # Re-sending such an hour is harmless, which is why it was left alone: AWS
-    # keys a record on (licence, dimension, hour). It is the *line* that was
-    # wrong. On 24 October a cancellation reported `sent=2:already=0:minutes=72`
-    # when only twelve of those minutes were new, because AWS answered the
-    # repeat with the same `MeteringRecordId` and `Success` rather than
-    # `DuplicateRecord`, so `already` never counted it. A reader cannot tell a
-    # replay from a second charge on AWS's answer alone; they can tell it from
+    # Re-sending such an hour is harmless in itself: AWS keys a record on
+    # (licence, dimension, hour). It is the *line* that misleads. AWS answers
+    # the repeat with the same `MeteringRecordId` and `Success` rather than
+    # `DuplicateRecord`, so a count of what was sent includes minutes that were
+    # already billed. A reader cannot tell a replay from a second charge on
+    # AWS's answer alone; they can tell it from
     # the receipt we already hold.
     def receipted_hours(license, hours)
       CapacityMeterReport

@@ -114,9 +114,9 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
 
     assert_nil trial_prop
   end
-  # Seen on the first real subscription: a workspace AWS bills was told it had
-  # spent 100 free worker-hours and should add a card. It was never offered an
-  # allowance, and Checkout refuses that payer, so the button led to a refusal.
+  # A workspace AWS bills was never offered an allowance, and Checkout refuses
+  # that payer -- so telling it that it had spent its free worker-hours offered
+  # a button that could only lead to a refusal.
   test "a workspace AWS bills is told nothing about an allowance" do
     @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
                      billing_state: "blocked", billing_block_reason: "awaiting_subscription")

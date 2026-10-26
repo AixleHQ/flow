@@ -30,6 +30,35 @@ governance, community health — carry none.
   trigger. A retry links to the run it repeats. `get_workflow_run`,
   `list_workflow_runs` and the admin run page show both.
 
+- **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
+  who subscribes is sent to a page of ours that sets their workspace up: they
+  are signed out first and create a new workspace, confirming the address by
+  email as any other signup does — the subscription proves the purchase, not the
+  address. Returning from Manage subscriptions reaches the workspace they
+  already made. The workspace is billed by AWS rather than by card, is not
+  offered our free worker-hours, and runs as soon as AWS confirms the agreement;
+  capacity is reported hourly, and cancelling in AWS stops the workspace and
+  reports the part-hour it was still running. Operators: this needs
+  `AWS_MARKETPLACE_SAAS_PRODUCT_CODE`, `AWS_MARKETPLACE_SAAS_PRODUCT_ID`,
+  `AWS_MARKETPLACE_SELLER_ROLE_ARN` and `AWS_MARKETPLACE_EVENTS_QUEUE_URL`, and
+  `aws-marketplace:DescribeAgreement` on the seller role. Without them the
+  registration page answers 404 and nothing else changes; without the queue,
+  metering still runs but cancellations are never noticed.
+- **Company settings**: a buyer whose email domain already has a workspace can
+  ask its administrators to apply the subscription to it, instead of being left
+  with a subscription attached to nothing. The workspace is never chosen — it is
+  whichever one holds the asker's own domain — the address is proved by a link
+  sent to it, and an administrator still decides. Accepting stops the card that
+  was paying for that workspace, with a final invoice for the capacity it has
+  not been billed for yet; the screen says how much that is before anyone
+  decides. A workspace AWS bills keeps its Billing tab, which says where its
+  bill is rather than offering controls that would be a second bill.
+- **Admin**: a company's page and the companies list show which system bills it
+  — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
+  It is read-only: the value follows from a subscription existing. Existing
+  companies are filled in by a migration, with one that Aixle carries counted as
+  billed by nobody even if Stripe still holds a customer for it.
+
 ### Changed
 - **Sessions & Runs**: an automatic Kiro session shows Kiro's full terminal
   interface, so its live terminal shows each tool call with its output and can
@@ -50,6 +79,15 @@ governance, community health — carry none.
   printed.
 
 ### Fixed
+- **Company settings**: a workspace is no longer billed for parts of an hour it
+  did not owe for — before it was created, while it was stopped, while it was on
+  free capacity, or before it changed who bills it. An hour is measured after it
+  closes, and it used to be measured against the workspace as it was at that
+  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
+  at :47 for the whole hour, and one that changed payer in the five minutes
+  before the measurement was billed for the hour by a payer who had not held it
+  for any of it. The hour is now measured against the states the workspace was
+  actually in during it.
 - **Trackers**: a tracker comment or issue description whose text looks to an
   HTML parser like one tag with hundreds of attributes (for example `a <b`
   followed by a long pasted log) no longer drops the whole delivery, so its

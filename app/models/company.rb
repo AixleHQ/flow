@@ -46,8 +46,8 @@ class Company < ApplicationRecord
   # The one that bills it now. A workspace keeps every licence it has had --
   # which subscription paid for which month is a billing record -- so "the
   # licence" has to mean the live one, or a workspace whose subscription ended
-  # reads as still subscribed. That is what refused a customer's second
-  # subscription on 26 October: they were told the workspace already had one.
+  # reads as still subscribed -- and a customer who subscribes again is refused
+  # for already having what they have just lost.
   has_one :marketplace_license, -> { live }, class_name: "MarketplaceLicense", inverse_of: :company
   has_many :feature_flag_overrides, dependent: :delete_all
   # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
@@ -155,7 +155,23 @@ class Company < ApplicationRecord
   # After commit, like the capacity log beside it: the measurement reads this
   # for an hour that has closed, so an entry for a state that was rolled back
   # would bill against something that never happened.
-  after_commit :record_billing_state_change, if: :saved_change_to_billing_state?
+  #
+  # Creation is logged unconditionally. A company whose state came from the
+  # column default reports no change to it, so keying creation on one left every
+  # new company out of the log entirely -- and a company the log does not know
+  # is read from its live row, which is the snapshot this exists to stop
+  # trusting. The first hour of its first state change was billed at whatever it
+  # had become.
+  #
+  # Neither fires on destroy, which also commits and also reports the state as
+  # changed: the entry would name a company that no longer exists, and its own
+  # `belongs_to` refuses it.
+  # One callback, not two: a second `after_commit` naming the same method
+  # replaces the first rather than joining it, so the pair that reads as
+  # "creation always, updates when the state moved" silently becomes only the
+  # second of them.
+  after_commit :record_billing_state_change, on: %i[create update],
+                                             if: -> { previously_new_record? || saved_change_to_billing_state? }
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }

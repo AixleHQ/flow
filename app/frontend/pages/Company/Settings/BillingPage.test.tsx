@@ -67,6 +67,7 @@ const proposal = (over = {}) => ({
   askedAt: '2026-10-25T09:00:00Z',
   replacesCard: false,
   finalInvoiceMinutes: null,
+  confirmed: true,
   canDecide: true,
   ...over,
 });
@@ -168,6 +169,15 @@ describe('Company billing page', () => {
 
     expect(screen.getByText(/the subscription ended/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  // A workspace handed over to AWS Marketplace keeps the period end of the
+  // Stripe subscription it left, and that date is in the future.
+  it('names no date for an ended subscription it has no cancellation for', () => {
+    render({ status: 'canceled', cancelsAt: null, usage: null });
+
+    expect(screen.getByText(/^The subscription has ended, so no new sessions start\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Nov 1, 2026/)).not.toBeInTheDocument();
   });
 
   describe('the final invoice after cancelling', () => {
@@ -286,6 +296,17 @@ describe('Company billing page', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
 
       expect(remove).toHaveBeenCalledWith('/company/marketplace_license_proposal');
+    });
+
+    // Applying cancels the card in the same breath, and only a confirmation
+    // starts the workspace again — so before AWS has confirmed, the button
+    // would stop the card and leave nothing paying for the workspace.
+    it('will not let it be applied before AWS has confirmed it', () => {
+      render({}, null, proposal({ confirmed: false }));
+
+      expect(screen.getByRole('button', { name: 'Apply the subscription' })).toBeDisabled();
+      expect(screen.getByText(/AWS has not confirmed this subscription yet/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled();
     });
 
     it('does not offer a decline while an apply is in flight', async () => {

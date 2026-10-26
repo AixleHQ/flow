@@ -75,6 +75,8 @@ interface MarketplaceProposal {
   replacesCard: boolean;
   /** Worker-minutes the card has not been billed for yet, which accepting puts on its final invoice. */
   finalInvoiceMinutes: number | null;
+  /** AWS has confirmed the agreement. Until it has, applying is refused: it would stop the card and leave nothing paying. */
+  confirmed: boolean;
   canDecide: boolean;
 }
 
@@ -235,6 +237,14 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
   const [busy, setBusy] = useState(false);
   const badge = STATUS_BADGE[billing.status];
   const endsOn = formatDateMedium(billing.cancelsAt ?? billing.periodEndsAt);
+  // Only a cancellation we recorded dates an ending. `periodEndsAt` stands in
+  // while the subscription is still running towards one, but it outlives the
+  // subscription: a workspace handed over to AWS Marketplace keeps the period
+  // end of the Stripe subscription it left, which is in the future.
+  const endedOn = billing.cancelsAt && formatDateMedium(billing.cancelsAt);
+  const ended = endedOn
+    ? `On ${endedOn} the subscription ended, so no new sessions start.`
+    : 'The subscription has ended, so no new sessions start.';
 
   const post = (path: string) => {
     setBusy(true);
@@ -302,12 +312,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
       break;
     case 'canceled':
       if (billing.hasUnpaidInvoice) {
-        body = (
-          <>
-            On {endsOn} the subscription ended, so no new sessions start. Your data is kept. The final invoice is
-            unpaid: pay it to add a card again.
-          </>
-        );
+        body = <>{ended} Your data is kept. The final invoice is unpaid: pay it to add a card again.</>;
         action = (
           <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
             Pay final invoice
@@ -315,11 +320,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
         );
         break;
       }
-      body = (
-        <>
-          On {endsOn} the subscription ended, so no new sessions start. Your data is kept. Add a card to restore access.
-        </>
-      );
+      body = <>{ended} Your data is kept. Add a card to restore access.</>;
       action = addCard;
       break;
     case 'payment_failed':
@@ -439,10 +440,17 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
             </List.Item>
           )}
         </List>
+        {!proposal.confirmed && (
+          <Alert color="gray" title="Waiting for AWS">
+            AWS has not confirmed this subscription yet, so it cannot be applied. This usually takes a few minutes.
+            Applying it before then would stop the card and leave the workspace with nothing paying for it.
+          </Alert>
+        )}
         {proposal.canDecide ? (
           <Group>
             <Button
               loading={deciding}
+              disabled={!proposal.confirmed}
               onClick={() => {
                 setDeciding(true);
                 router.post(companyMarketplaceLicenseProposalPath(), {}, { onFinish: () => setDeciding(false) });
