@@ -63,9 +63,9 @@ camelized key, and a misspelled name fails `tsc`.
 
 `FeaturesResource` (`app/resources/features_resource.rb`) builds the `features` shared prop in
 `Web::ApplicationController`, the way `CurrentUserResource` builds `current_user`. It declares
-one `typelize :boolean` attribute per `client: true` flag, read from the registry when the class
-loads, and resolves each with `FeatureFlags.client_value` (through `Feature`, so a company's
-override is what its pages see). Typelizer turns it into the generated `Features` type
+one `typelize :boolean` attribute per `client: true` flag, read from the shipped
+`config/feature_flags.yml`, and resolves each with `FeatureFlags.client_value` (through `Feature`,
+so a company's override is what its pages see). Typelizer turns it into the generated `Features` type
 (`app/frontend/types/generated/Features.ts`), and `useFeatureFlag(name: keyof Features)` takes
 its names from there. One class produces both the payload and the type, so there is no
 hand-written list of names and no test keeping one in sync. Commit the regenerated
@@ -76,9 +76,14 @@ Only `client: true` flags reach the browser, so the name and value of an ops or 
 never ship. The frontend only reads the resolved boolean. The server decides every write
 whatever it shows.
 
-`FeaturesResource` reads the shipped registry once, so a test that swaps the registry
-(`with_feature_registry`) does not change the prop's attributes: a test of the shared prop runs
-against `config/feature_flags.yml`.
+The attribute list is a build-time artifact (Typelizer generates `Features.ts` from it), so it is
+read from the registry **file**, never from the swappable `FeatureFlags.registry`, and does not
+depend on load order. The values are resolved per request against the current registry, and a key
+that registry does not declare is left out of the payload rather than raised; `SharedProps.features`
+is `Partial<Features>`, so an absent key is type-correct. A test that swaps the registry
+(`with_feature_registry`) therefore renders pages normally, with only the flags both registries
+declare in `features`. `test/resources/features_resource_test.rb` checks that the attributes are
+exactly the shipped `client: true` keys.
 
 ## Rolling it out
 
@@ -202,9 +207,10 @@ Skipping it is safe. The step is also listed in
   declared flag is not read anywhere in `app/` or `lib/`, and when `Feature.enabled?(:x`,
   `Feature.explain(:x` or `useFeatureFlag('x')` names an undeclared flag (or, for
   `useFeatureFlag`, one not declared `client: true`). Comments and test files do not count as
-  reads. The generated `Features.ts` names every client flag, so for a client flag the
-  "nothing reads it" half never fails: `bin/rails feature_flags:audit` and a search for
-  `useFeatureFlag('name')` are what find an unused one. It deliberately never fails on dates.
+  reads, and neither does generated code (`app/frontend/types/generated/`, where `Features.ts`
+  names every client flag). A flag declared ahead of its first reader goes in the test's
+  `ALLOWED_UNREAD`, with the task that will read it; the entry expires, because the test fails
+  once that flag is read and the entry has to be removed. It deliberately never fails on dates.
 - **`bin/rails feature_flags:audit`** changes nothing and prints four lists: release flags past
   `remove_by`; flags whose value has been the same for every company for 30 days or more (from
   the row's `updated_at`, or `introduced` for a flag with no row), which are candidates for

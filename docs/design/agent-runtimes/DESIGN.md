@@ -1476,12 +1476,12 @@ none of these surfaces render, the controllers answer `404`, and the API refuses
 `runner_id`. The server decides every write; the frontend only hides.
 
 - **How the frontend reads it.** Both flags are `client: true`. They reach the browser
-  resolved server-side, through the `features` shared prop (`FeatureFlags.client_payload`),
-  and components read them with `useFeatureFlag` (`externalRunners`,
+  resolved server-side, through the `features` shared prop (`FeaturesResource`, each value
+  resolved by `FeatureFlags.client_value`), and components read them with `useFeatureFlag` (`externalRunners`,
   `externalRunnersKubernetes`). The Runners tab, the Project → Runners page, the three
   selects and the "Runs on" badge are wrapped in `useFeatureFlag('externalRunners')`.
-- **Known consequence, owned by the task that adds the flag.** `external_runners` is the
-  **first** `client: true` flag in the registry. Per the comment on the `client:` line of
+- **Known consequence, owned by the task that adds the flag (done in 1a).** `external_runners`
+  is the **first** `client: true` flag in the registry. Per the comment on the `client:` line of
   `config/feature_flags.yml`, the comment above `FeatureFlagName` in
   `app/frontend/shared/ui/types.ts`, and "When the first client flag exists, prefer a
   resource" in `docs/architecture/feature-flags.md`, that is the trigger to replace the
@@ -1492,6 +1492,8 @@ none of these surfaces render, the controllers answer `404`, and the API refuses
   that declares the flag.** It is not a later discovery, and the flag does not land with a
   hand-edited `FeatureFlagName` first. It is platform cleanup triggered by the first client
   flag, not runner work, so it is reviewed on its own, apart from the runner models (1b).
+  Task 1a made that switch: `FeatureFlagName` and its test are gone, and `Features` is
+  generated from `FeaturesResource`.
 
 ---
 
