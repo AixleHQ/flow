@@ -75,6 +75,8 @@ class Webhooks::StripeController < ActionController::API
   end
 
   def activate(company, session)
+    return refuse_second_payer(company, session.subscription) if aws_bills?(company)
+
     company.update!(
       stripe_customer_id: session.customer.presence || company.stripe_customer_id,
       stripe_subscription_id: session.subscription.presence || company.stripe_subscription_id,
@@ -93,7 +95,9 @@ class Webhooks::StripeController < ActionController::API
   # `invoice.payment_failed`, in no promised order, and the two must agree or the
   # company flips between running and stopped on delivery order.
   def follow(company, subscription)
-    if subscription.running?
+    if subscription.running? && aws_bills?(company)
+      refuse_second_payer(company, subscription.id)
+    elsif subscription.running?
       company.update!(billing_state: "active", stripe_subscription_id: subscription.id,
                       billing_cancels_at: subscription.cancels_at, **period_of(subscription), **applied)
     elsif !current_subscription?(company, subscription.id)
@@ -194,6 +198,27 @@ class Webhooks::StripeController < ActionController::API
   def applied
     @event_at ? { billing_event_at: @event_at } : {}
   end
+
+  # The narrow race the two guards in front of Checkout leave open: a card
+  # entered while no licence was bound, and a Marketplace subscription applied
+  # before Stripe said the card had gone through. Adopting it here would leave
+  # the workspace with a live subscription on each side -- not billed twice,
+  # because the meter follows `billing_provider` and that is one column, but one
+  # of them running on with nobody to cancel it.
+  #
+  # So it is cancelled rather than adopted, and the company is left exactly as
+  # AWS bills it. A refusal that cannot reach Stripe is logged and raised: the
+  # webhook is retried, and a subscription nobody cancelled is worse than a
+  # retry.
+  def refuse_second_payer(company, subscription_id)
+    Rails.logger.warn("[Webhooks::Stripe] company #{company.id}: AWS Marketplace bills it, " \
+                      "cancelling Stripe subscription #{subscription_id}")
+    return if subscription_id.blank?
+
+    client.cancel_subscription(subscription_id: subscription_id, reason: nil, comment: nil)
+  end
+
+  def aws_bills?(company) = company.marketplace_license.present?
 
   def ignore(company, what)
     Rails.logger.info("[Webhooks::Stripe] company #{company.id}: ignored #{what}")

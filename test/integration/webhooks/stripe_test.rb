@@ -79,6 +79,27 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
     assert_equal "sub_1", @company.stripe_subscription_id
   end
 
+  # The narrow race the guards in front of Checkout leave open: a card entered
+  # while no licence was bound, and a Marketplace subscription applied before
+  # Stripe said the card had gone through. Adopting it would leave a live
+  # subscription on each side, one of them with nobody to cancel it.
+  test "a card that arrives for a workspace AWS now bills is cancelled, not adopted" do
+    create(:marketplace_license, :active, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    # A real client with one method replaced: the controller verifies the
+    # webhook signature through this same object, so a bare mock would refuse
+    # the request before reaching what is being tested.
+    client = Billing::StripeClient.new
+    client.expects(:cancel_subscription).with(subscription_id: "sub_1", reason: nil, comment: nil)
+    Billing::StripeClient.stubs(:new).returns(client)
+
+    deliver("checkout.session.completed", checkout_object)
+
+    assert_response :ok
+    assert_nil @company.reload.stripe_subscription_id, "it is not the company's subscription"
+    assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.billing_provider
+  end
+
   test "a company blocked for spending its allowance starts again on payment" do
     @company.update!(billing_state: "blocked")
 

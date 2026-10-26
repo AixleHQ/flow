@@ -66,6 +66,14 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     }
   end
 
+  # Nil unless a card is actually paying: there is no final invoice otherwise.
+  def final_invoice_minutes
+    return nil if current_company.stripe_subscription_id.blank?
+
+    seconds = Billing::FinalUsage.new(current_company, until_time: Time.current).billed.values.sum
+    (BigDecimal(seconds) / 60).round(1).to_f
+  end
+
   def reported_minutes
     seconds = CompanyCapacityUsage.where(company_id: current_company.id)
                                   .since(Time.current.utc.beginning_of_month)
@@ -84,6 +92,11 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # What accepting would stop. The admin should not have to work out that
       # the card goes away from the fact that two things cannot both bill.
       replaces_card: current_company.stripe_subscription_id.present?,
+      # And what that costs: the capacity the card has not been billed for yet,
+      # which accepting puts on its final invoice. An ordinary cancellation
+      # shows this on a screen of its own; deciding this one blind was the
+      # difference.
+      final_invoice_minutes: final_invoice_minutes,
       can_decide: current_membership&.admin? || false
     }
   end
