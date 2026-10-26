@@ -97,6 +97,10 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # shows this on a screen of its own; deciding this one blind was the
       # difference.
       final_invoice_minutes: final_invoice_minutes,
+      # Accepting is refused until AWS confirms the agreement, so the card says
+      # so rather than letting an administrator press a button that cannot
+      # work. Declining is offered either way.
+      confirmed: license.active?,
       can_decide: current_membership&.admin? || false
     }
   end

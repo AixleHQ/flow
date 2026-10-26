@@ -75,6 +75,8 @@ interface MarketplaceProposal {
   replacesCard: boolean;
   /** Worker-minutes the card has not been billed for yet, which accepting puts on its final invoice. */
   finalInvoiceMinutes: number | null;
+  /** AWS has confirmed the agreement. Until it has, applying is refused: it would stop the card and leave nothing paying. */
+  confirmed: boolean;
   canDecide: boolean;
 }
 
@@ -438,10 +440,17 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
             </List.Item>
           )}
         </List>
+        {!proposal.confirmed && (
+          <Alert color="gray" title="Waiting for AWS">
+            AWS has not confirmed this subscription yet, so it cannot be applied. This usually takes a few minutes.
+            Applying it before then would stop the card and leave the workspace with nothing paying for it.
+          </Alert>
+        )}
         {proposal.canDecide ? (
           <Group>
             <Button
               loading={deciding}
+              disabled={!proposal.confirmed}
               onClick={() => {
                 setDeciding(true);
                 router.post(companyMarketplaceLicenseProposalPath(), {}, { onFinish: () => setDeciding(false) });

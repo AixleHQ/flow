@@ -67,6 +67,7 @@ const proposal = (over = {}) => ({
   askedAt: '2026-10-25T09:00:00Z',
   replacesCard: false,
   finalInvoiceMinutes: null,
+  confirmed: true,
   canDecide: true,
   ...over,
 });
@@ -295,6 +296,17 @@ describe('Company billing page', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
 
       expect(remove).toHaveBeenCalledWith('/company/marketplace_license_proposal');
+    });
+
+    // Applying cancels the card in the same breath, and only a confirmation
+    // starts the workspace again — so before AWS has confirmed, the button
+    // would stop the card and leave nothing paying for the workspace.
+    it('will not let it be applied before AWS has confirmed it', () => {
+      render({}, null, proposal({ confirmed: false }));
+
+      expect(screen.getByRole('button', { name: 'Apply the subscription' })).toBeDisabled();
+      expect(screen.getByText(/AWS has not confirmed this subscription yet/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled();
     });
 
     it('does not offer a decline while an apply is in flight', async () => {

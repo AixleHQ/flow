@@ -121,14 +121,32 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
 
   # AWS discards metering sent before it confirms the agreement, so a workspace
   # whose licence is still pending waits rather than runs unbilled.
-  test "a workspace waits when the subscription is not confirmed yet" do
+  # Accepting cancels the card in the same breath, and only a confirmation
+  # starts the workspace again. A subscription AWS never confirms would leave a
+  # workspace that was paying perfectly well with nothing paying for it and no
+  # way to add a card, because a pending licence is a live one.
+  test "a subscription AWS has not confirmed cannot be applied yet" do
+    @license.update!(subscription_state: "pending")
+    @company.update!(stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
+    propose
+
+    error = assert_raises(Billing::MarketplaceLicenseProposal::Refused) { proposal.accept!(by: @admin) }
+
+    assert_equal Billing::MarketplaceLicenseProposal::NOT_CONFIRMED, error.message
+    assert @company.reload.billing_active?, "the workspace it was paying for is untouched"
+    assert_equal "sub_1", @company.stripe_subscription_id, "and so is the card paying for it"
+    assert @license.reload.proposal_pending?, "the request stands; it is answerable once AWS confirms"
+  end
+
+  # The request is still a request. An administrator may always say no, and one
+  # nobody can answer is worse than one answered no.
+  test "an unconfirmed subscription can still be declined" do
     @license.update!(subscription_state: "pending")
     propose
 
-    proposal.accept!(by: @admin)
+    proposal.decline!(by: @admin)
 
-    assert @company.reload.billing_blocked?
-    assert_equal "awaiting_subscription", @company.billing_block_reason
+    assert_equal "declined", @license.reload.proposal_state
   end
 
   # The workspace has a payer again, so what stopped it no longer holds. The

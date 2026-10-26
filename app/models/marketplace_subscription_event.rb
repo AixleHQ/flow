@@ -19,10 +19,27 @@ class MarketplaceSubscriptionEvent < ApplicationRecord
   validates :detail_type, presence: true
   validates :occurred_at, presence: true
 
+  # How long the sweep keeps reconsidering an event it has nothing to apply to.
+  # A buyer reaches the fulfilment page within minutes of subscribing, so a week
+  # is generous for ours; what it bounds is everyone else's.
+  SWEPT_FOR = 7.days
+
   scope :unapplied, -> { where(applied_at: nil) }
   # Oldest first: the order AWS says they happened in, which is not the order
   # the queue hands them over in.
   scope :in_order, -> { order(:occurred_at, :id) }
+
+  # What the blind sweep looks at. The rule in the seller account matches a
+  # source and a detail type rather than a product, and the agreement events
+  # carry no product at all, so this table receives the agreement traffic of
+  # every listing that account sells. None of it will ever match a licence of
+  # ours, and without a bound every sweep reconsiders all of it, for ever,
+  # against a table that only grows.
+  #
+  # The rows are kept -- one of them is the evidence that this is what happens.
+  # Only the looking stops, and only for the sweep: #awaiting is unbounded, so a
+  # licence that appears late still replays its own events when it is created.
+  scope :worth_sweeping, -> { unapplied.where(occurred_at: SWEPT_FOR.ago..) }
 
   # Everything still waiting for the licence it names to exist. Matched on
   # either key, because agreement events carry no licence ARN and licence events

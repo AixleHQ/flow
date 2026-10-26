@@ -19,7 +19,28 @@ module Billing
 
     def none? = provider == Company::BILLING_PROVIDER_NONE
     def stripe? = provider == Company::BILLING_PROVIDER_STRIPE
+
+    # Who this company's hours are SENT to. Read by the two meters, and by
+    # nothing that decides what a screen offers.
     def aws_marketplace? = provider == Company::BILLING_PROVIDER_AWS_MARKETPLACE
+
+    # Whether a card would be a SECOND bill for capacity somebody is already
+    # being charged for. Read by every screen and refusal that turns a card
+    # away, and by the Stripe webhook when it decides whether an event is about
+    # a subscription this workspace has left behind.
+    #
+    # A different question from #aws_marketplace?, and they disagree exactly
+    # where it matters. A licence that has ended leaves the column saying `aws`
+    # until a card moves it back, and nothing is subscribed through AWS any
+    # more -- so a card must be offered. A licence AWS has not confirmed yet is
+    # live, and is not metered: the column says `aws` and no hour is sent.
+    # Asking one of these when the other was meant is how a workspace ends up
+    # offered a second payer, or billed by neither.
+    def subscribed_through_aws?
+      return false if company.nil?
+
+      company.marketplace_license.present?
+    end
 
     # Not `!none?`: a company that has never paid is still billable — its minutes
     # go on the ledger row and the provider reports it as unbilled — so reading

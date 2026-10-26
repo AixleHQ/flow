@@ -229,7 +229,7 @@ class Webhooks::StripeController < ActionController::API
     client.cancel_subscription(subscription_id: subscription_id, reason: nil, comment: nil)
   end
 
-  def aws_bills?(company) = company.marketplace_license.present?
+  def aws_bills?(company) = ::Billing::Payer.for(company).subscribed_through_aws?
 
   # Adopting a running subscription is where "Stripe pays for this now" becomes
   # true, so it is where the payer is pointed at Stripe.

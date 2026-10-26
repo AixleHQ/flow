@@ -60,7 +60,7 @@ module Billing
     def apply_pending
       applied = 0
 
-      MarketplaceSubscriptionEvent.unapplied.in_order.find_each do |event|
+      MarketplaceSubscriptionEvent.worth_sweeping.in_order.find_each do |event|
         applied += 1 if apply(event)
       end
 
@@ -111,8 +111,21 @@ module Billing
     def license_for(event)
       by_arn = MarketplaceLicense.find_by(license_arn: event.license_arn) if event.license_arn.present?
       return by_arn if by_arn
+      return nil if event.agreement_id.blank?
 
-      MarketplaceLicense.find_by(agreement_id: event.agreement_id) if event.agreement_id.present?
+      MarketplaceLicense.find_by(agreement_id: event.agreement_id) || by_previous_agreement(event)
+    end
+
+    # AWS fires `Purchase Agreement Created` for a renewal and for a
+    # replacement as well as for a new purchase, and a renewal is a NEW
+    # agreement id for the subscription we already hold -- the old one is named
+    # in `previousAgreementId`. Matched only on the new id, such an event finds
+    # nothing, and the licence goes on pointing at an agreement that has been
+    # superseded: the renewal is never recorded, and an `Ended` for the old
+    # agreement stops a customer who has just renewed.
+    def by_previous_agreement(event)
+      previous = event.detail.dig("agreement", "previousAgreementId")
+      MarketplaceLicense.find_by(agreement_id: previous) if previous.present?
     end
 
     # Answers what was metered, if anything, so the caller can record it.
@@ -143,9 +156,18 @@ module Billing
       company.update!(billing_state: "active", billing_block_reason: nil)
     end
 
+    # The offer, and the agreement the subscription is on now. Re-pointing the
+    # agreement is what makes a renewal stick: afterwards the licence answers to
+    # the new id, and an `Ended` for the one it replaced matches nothing and
+    # stops nobody.
     def store(license, event)
+      changes = {}
       offer = event.detail.dig("offer", "id")
-      license.update!(offer_identifier: offer) if offer.present? && offer != license.offer_identifier
+      changes[:offer_identifier] = offer if offer.present? && offer != license.offer_identifier
+      agreement = event.agreement_id
+      changes[:agreement_id] = agreement if agreement.present? && agreement != license.agreement_id
+
+      license.update!(**changes) if changes.any?
     end
 
     # Not the metering deadline, whatever it looks like: AWS opens the final

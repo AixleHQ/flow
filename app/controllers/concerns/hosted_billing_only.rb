@@ -30,7 +30,7 @@ module HostedBillingOnly
     # the final metering window is still open, and `active` for the obvious
     # reason. Once it has ended nothing more reaches AWS, and a card is the only
     # way left to pay.
-    return if current_company.marketplace_license.nil?
+    return unless ::Billing::Payer.for(current_company).subscribed_through_aws?
 
     redirect_to company_settings_path,
                 alert: "This workspace is billed through AWS Marketplace. Manage it in your AWS account."
