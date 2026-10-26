@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -604,6 +604,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
     t.index ["company_id", "identity_provider_id"], name: "index_company_auth_policies_unique_pair", unique: true
     t.index ["company_id"], name: "index_company_auth_policies_on_company_id"
     t.index ["identity_provider_id"], name: "index_company_auth_policies_on_identity_provider_id"
+  end
+
+  create_table "company_billing_state_changes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.string "billing_state", null: false
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "occurred_at"], name: "index_billing_state_changes_on_company_and_time"
+    t.index ["company_id"], name: "index_company_billing_state_changes_on_company_id"
+    t.index ["occurred_at"], name: "index_company_billing_state_changes_on_occurred_at"
   end
 
   create_table "company_capacity_changes", force: :cascade do |t|
@@ -2150,6 +2161,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
+  add_foreign_key "company_billing_state_changes", "companies"
   add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
