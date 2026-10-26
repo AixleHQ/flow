@@ -71,7 +71,7 @@ and test fall back to fixed non-secret values.
 | Variable                  | Purpose                                                       |
 | ------------------------- | ------------------------------------------------------------- |
 | `CREDENTIALS_SECRET_KEY`  | Encrypts user agent credentials at rest.                      |
-| `CONFIG_ITEMS_SECRET_KEY` | Encrypts config items (project/company secrets).              |
+| `CONFIG_ITEMS_SECRET_KEY` | Encrypts config items (project secrets).                      |
 | `INTEGRATIONS_SECRET_KEY` | Encrypts git host and other integration tokens.               |
 | `OAUTH_SECRET_KEY`        | Encrypts OAuth client secrets and stored provider tokens.     |
 | `CREDENTIALS_SECRET_KEY_PREVIOUS`  | Optional. Retired `CREDENTIALS_SECRET_KEY` value(s), comma-separated, still read during a rotation. |
