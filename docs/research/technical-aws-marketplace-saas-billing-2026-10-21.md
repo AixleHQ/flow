@@ -992,6 +992,12 @@ marketing copy.
   converts ends in a blocked company holding real work, and the only thing that brings it
   back is the buyer purchasing. Whatever we say to them at that moment is a product
   decision nobody has made.
+- ~~**The reverse: a Marketplace customer who wants to pay by card.**~~ Answered on
+  26 October, and the sentence this bullet guessed at turned out to be the right one once
+  it was checked against the unsubscribe states. See §10.2.
+
+  The original, because its reasoning is what shaped the answer:
+
 - **The reverse: a Marketplace customer who wants to pay by card.** Closed by §1 in one
   direction only — they cannot attach a card while AWS bills them. What they do after
   unsubscribing, when their company is `blocked` and the Checkout refusal is still in
@@ -1106,6 +1112,72 @@ workspace's own administrator, which is one policy.
 request and a second replaces it; a table buys history nothing needs until somebody
 disputes one). Asking a workspace at a *different* domain — that is an invitation code,
 a different mechanism of trust. Moving a licence from one workspace to another.
+
+## 10.2 Leaving a subscription, and the hour it is left in, 26 October
+
+Two things this document never asked, both found by cancelling on staging rather
+than by reasoning, and both reachable in production the day the listing goes
+public.
+
+**A cancelled subscription could not be replaced — by anything.** The refusal on
+a card was keyed on `billing_provider`, and nothing re-points that on a
+cancellation, so a customer who unsubscribed kept an AWS payer for ever:
+workspace stopped, data intact, no card accepted. Worse, they could not
+re-subscribe in AWS either, which is what the product's own banner tells them to
+do. `Company#marketplace_license` was a bare `has_one`, so the finished licence
+went on answering as the workspace's and the request was refused with "that
+workspace already has an AWS Marketplace subscription" — said to a workspace
+stopped for want of one.
+
+The rule this document guessed at holds, once checked against the states §8
+produces:
+
+| licence | card | why |
+| --- | --- | --- |
+| `pending` | refuse | AWS may still confirm it, and then both would bill |
+| `active` | refuse | obvious |
+| `ending` | refuse | the final metering window is open; AWS is still owed the last hour |
+| `ended` | allow | nothing more reaches AWS; a card is the only way left to pay |
+
+So: `has_one :marketplace_license, -> { live }`, the unique index on `company_id`
+narrowed to live licences, and the workspace keeps every licence it has had —
+which subscription paid for which month is a billing record. The payer moves
+back when a running Stripe subscription is **adopted**, not when a Stripe
+customer appears: a workspace leaving Marketplace keeps the customer it had, so
+the customer id never changes, and keying on it left a running workspace that
+Stripe skipped for being AWS's and AWS skipped for having no live licence —
+billed by nobody.
+
+**And the hour, three times over.** An hour is measured after it closes, against
+the company as it is at that moment, and that snapshot overcharged three
+different ways: a workspace created mid-hour, one that changed payer mid-hour,
+and one unblocked mid-hour were each billed for the whole of it. The third was
+the worst and the best hidden — the hourly run excludes a stopped company
+entirely, so it showed nothing wrong, and the error lived only in the final
+meter, which looks an hour back and runs *before* the company is stopped. On
+26 October it reported 116 worker-minutes for nine minutes of service.
+
+The first two were closed with a timestamp apiece (`born_after_open` by way of
+the capacity log, then `companies.billing_provider_since`). The third would have
+been a third timestamp, so it got what capacity already had: a log
+(`company_billing_state_changes`), read for the hour being measured. Capacity and
+billing state now move on one timeline and both totals follow — what a payer
+owes, and what a free allowance is spent from.
+
+**Confirmed from AWS's side.** With `cloudtrail:LookupEvents` on the seller role,
+`BatchMeterUsage` can be read as AWS saw it: the records sent, the quantities,
+and the `Success` per record. That is how the third overcharge was proved rather
+than argued — a 60-minute record stamped on an hour the workspace stood stopped.
+It is also the fastest answer to "did it reach AWS": seconds, against a day and
+a half for the buyer's Cost Explorer.
+
+**Still open here.** Whether the product is on Concurrent Agreements, which the
+keying rests on and nobody has verified. Where a subscribed-but-unregistered
+customer is shown, and who is expected to look — the state is reachable and the
+scope exists, but no screen does. And an asymmetry worth a product decision
+rather than a fix: AWS bills per worker-minute, Stripe per 60-minute pack
+rounded down, so the part-hour at every handover is free on the card and is not
+on AWS.
 
 ---
 
