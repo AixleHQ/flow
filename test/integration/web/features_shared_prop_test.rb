@@ -4,9 +4,9 @@ require "test_helper"
 
 # The `features` shared prop is the only way a page learns about flags, so it
 # must carry the client flags as the backend resolves them and nothing else.
+# FeaturesResource takes its attributes from the shipped registry, so this runs
+# against config/feature_flags.yml: external_runners (client) and coder_reap (not).
 class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
-  uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY
-
   def features_prop(path)
     get path
     captured = {}
@@ -39,7 +39,9 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
 
     features = features_prop(company_projects_path)
 
-    assert_equal({ "boardAiSummary" => false }, features.to_h)
+    client_keys = FeatureFlags.registry.definitions.select(&:client?).map { |d| d.key.to_s.camelize(:lower) }
+    assert_equal client_keys.sort, features.to_h.keys.sort
+    assert_equal false, features["externalRunners"]
     assert_not features.key?("coderReap")
     assert_not features.key?("coder_reap")
   end
@@ -47,8 +49,8 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
   test "a company override is what that company's users see" do
     company = signed_in_company
 
-    with_feature(:board_ai_summary, true, company: company) do
-      assert_equal({ "boardAiSummary" => true }, features_prop(company_projects_path).to_h)
+    with_feature(:external_runners, true, company: company) do
+      assert_equal true, features_prop(company_projects_path)["externalRunners"]
     end
   end
 
@@ -56,16 +58,16 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     signed_in_company
     other = create(:company)
 
-    with_feature(:board_ai_summary, true, company: other) do
-      assert_equal({ "boardAiSummary" => false }, features_prop(company_projects_path).to_h)
+    with_feature(:external_runners, true, company: other) do
+      assert_equal false, features_prop(company_projects_path)["externalRunners"]
     end
   end
 
   test "an anonymous page gets the client flags at their global value" do
-    with_feature(:board_ai_summary, true) do
+    with_feature(:external_runners, true) do
       features = features_prop(login_path)
 
-      assert_equal({ "boardAiSummary" => true }, features.to_h)
+      assert_equal true, features["externalRunners"]
     end
   end
 
@@ -73,13 +75,13 @@ class Web::FeaturesSharedPropTest < ActionDispatch::IntegrationTest
     company = signed_in_company
 
     page = inertia_props(company_projects_path)
-    assert_equal({ "boardAiSummary" => false }, page.dig("props", "features"))
+    assert_equal false, page.dig("props", "features", "externalRunners")
 
-    with_feature(:board_ai_summary, true, company: company) do
+    with_feature(:external_runners, true, company: company) do
       props = inertia_props(company_projects_path, only: "flash", component: page.fetch("component")).fetch("props")
 
       assert_not props.key?("settings"), "the reload should have been partial"
-      assert_equal({ "boardAiSummary" => true }, props["features"])
+      assert_equal true, props.dig("features", "externalRunners")
     end
   end
 end

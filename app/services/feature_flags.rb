@@ -101,19 +101,16 @@ module FeatureFlags
       Resolver.new(registry: registry, env: env_source, snapshot: snapshot)
     end
 
-    # The `features` shared prop: the resolved value of every flag declared
-    # `client: true`, and of nothing else, so internal and ops flag names never
-    # reach a browser. Resolved through Feature like any backend check, so a
-    # company's override is what that company's pages see. `company: nil` (an
-    # anonymous page) reads company-scoped flags at their global value.
-    def client_payload(company:)
-      registry.definitions.select(&:client?).to_h do |definition|
-        value = if definition.company_scoped?
-          Feature.enabled?(definition.key, company: company)
-        else
-          Feature.enabled?(definition.key)
-        end
-        [ definition.key, value ]
+    # A `client: true` flag as the `features` shared prop (FeaturesResource)
+    # sends it to a browser. Resolved through Feature like any backend check, so
+    # a company's override is what that company's pages see. `company: nil` (an
+    # anonymous page) reads a company-scoped flag at its global value; a global
+    # flag is read without the company, which would raise.
+    def client_value(definition, company:)
+      if definition.company_scoped?
+        Feature.enabled?(definition.key, company: company)
+      else
+        Feature.enabled?(definition.key)
       end
     end
 

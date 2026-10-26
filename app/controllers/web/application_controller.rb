@@ -43,7 +43,7 @@ class Web::ApplicationController < ApplicationController
       # re-evaluated, so a partial reload picks up a flip. Anonymous pages get
       # them too, resolved with no company: the payload never carries more than
       # flags already meant for any browser.
-      features: InertiaRails.always { FeatureFlags.client_payload(company: current_company) }
+      features: InertiaRails.always { FeaturesResource.new(current_company).to_h }
     }
 
     if signed_in?
