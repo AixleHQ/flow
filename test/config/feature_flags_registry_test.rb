@@ -15,25 +15,37 @@ class FeatureFlagsRegistryTest < ActiveSupport::TestCase
   SOURCES = %w[app lib].freeze
   SOURCE_FILES = "**/*.{rb,rake,erb,ts,tsx}"
   # Tests are not readers: a flag only a test mentions is unused, and a test may
-  # spell a name wrong on purpose.
-  NOT_READERS = %r{(?:\.test\.tsx?\z|\Aapp/frontend/test/)}
+  # spell a name wrong on purpose. Nor is generated code: Typelizer's Features.ts
+  # names every client flag, so counting it would mean no client flag is ever unread.
+  NOT_READERS = %r{(?:\.test\.tsx?\z|\Aapp/frontend/test/|\Aapp/frontend/types/generated/)}
+  # Flags declared ahead of their first reader, each with the task that adds it.
+  # An entry expires: "allowed unread flags are still unread" fails once the flag
+  # is read (or removed), and the entry has to go.
+  ALLOWED_UNREAD = {
+    external_runners: "task 3 of docs/design/agent-runtimes/DESIGN.md §15 adds useFeatureFlag('externalRunners')"
+  }.freeze
 
   # Every problem the registry has against `files` (`{ path => source }`).
   class References
-    def initialize(registry, files)
+    def initialize(registry, files, allowed_unread: {})
       @registry = registry
       @files = files.transform_values { |source| code_only(source) }
+      @allowed_unread = allowed_unread
     end
 
     def problems = unreferenced + undeclared_backend + undeclared_frontend
 
     def unreferenced
-      @registry.definitions.filter_map do |definition|
+      unread.reject { |definition| @allowed_unread.key?(definition.key) }.map do |definition|
+        "#{definition.key} is declared but nothing in app/ or lib/ reads it: remove the entry, or the leftover check"
+      end
+    end
+
+    def unread
+      @registry.definitions.reject do |definition|
         names = [ definition.key.to_s ]
         names << definition.key.to_s.camelize(:lower) if definition.client?
-        next if names.any? { |name| @files.values.any? { |source| source.match?(/\b#{Regexp.escape(name)}\b/) } }
-
-        "#{definition.key} is declared but nothing in app/ or lib/ reads it: remove the entry, or the leftover check"
+        names.any? { |name| @files.values.any? { |source| source.match?(/\b#{Regexp.escape(name)}\b/) } }
       end
     end
 
@@ -94,10 +106,18 @@ class FeatureFlagsRegistryTest < ActiveSupport::TestCase
   end
 
   test "every declared flag is read, and every flag read is declared" do
-    problems = References.new(shipped_registry, readers).problems
+    problems = References.new(shipped_registry, readers, allowed_unread: ALLOWED_UNREAD).problems
 
     assert_empty problems, "config/feature_flags.yml and the code disagree " \
                            "(docs/architecture/feature-flags.md):\n#{problems.join("\n")}"
+  end
+
+  test "allowed unread flags are still declared and still unread" do
+    unread = References.new(shipped_registry, readers).unread.map(&:key)
+    expired = ALLOWED_UNREAD.keys - unread
+
+    assert_empty expired, "ALLOWED_UNREAD lists flags that are read now, or no longer declared: remove them " \
+                          "(#{expired.map { |key| "#{key}: #{ALLOWED_UNREAD[key]}" }.join("; ")})"
   end
 
   test "an invalid entry fails" do
@@ -156,5 +176,10 @@ class FeatureFlagsRegistryTest < ActiveSupport::TestCase
   test "test files are not readers" do
     assert_not readers.keys.any? { |path| path.end_with?(".test.ts", ".test.tsx") }
     assert readers.key?("app/services/feature.rb")
+  end
+
+  test "generated types are not readers" do
+    assert Rails.root.join("app/frontend/types/generated/Features.ts").exist?
+    assert_not readers.keys.any? { |path| path.start_with?("app/frontend/types/generated/") }
   end
 end
