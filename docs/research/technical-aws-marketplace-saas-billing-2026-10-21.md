@@ -832,7 +832,8 @@ traffic of every listing the seller sells -- other products, other buyers,
 other teams.
 
 Seen on 23 October: a stranger's subscription to another vendor's product
-(`prod-5xwbgb7premi2`, "Easy Cloud Assurance", buyer `474939504552`) was
+-- a product id and a buyer account that are neither of them ours, and
+are left out here because they belong to a third party -- was
 recorded here and sat unapplied. It names no licence of ours and never will,
 so every sweep would have reconsidered it for ever, and the table would have
 grown with the seller account's whole business.
