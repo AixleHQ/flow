@@ -175,6 +175,7 @@ end
 # reach.
 class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
+  include ActionMailer::TestHelper
 
   setup do
     @license = create(:marketplace_license, :active)
@@ -221,6 +222,22 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
 
     assert_equal "cus_1", @company.reload.stripe_customer_id
     assert_enqueued_with(job: Billing::SettleCancellationJob)
+  end
+
+  # The same rule an ordinary cancellation follows: only the admin who pressed
+  # the button had read that the card would be stopped.
+  test "every administrator hears that the card was stopped, not just the one who accepted" do
+    expect_cancellation
+    deciding = create(:user, :admin, :onboarding_completed, company: @company)
+    create(:user, :admin, :onboarding_completed, company: @company)
+    propose
+
+    # Counted rather than delivered: the settlement job is enqueued beside the
+    # mail and would carry on talking to Stripe, which this suite mocks for the
+    # cancellation alone. Two is the whole assertion -- one would be the bug.
+    assert_enqueued_emails 2 do
+      proposal.accept!(by: deciding)
+    end
   end
 
   test "the minutes Stripe has not counted are recorded against the cancellation" do
