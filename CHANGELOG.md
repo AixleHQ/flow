@@ -23,6 +23,11 @@ governance, community health — carry none.
   old pod, described in the release guide.
 
 ### Fixed
+- **Trackers**: a tracker comment or issue description whose text looks to an
+  HTML parser like one tag with hundreds of attributes (for example `a <b`
+  followed by a long pasted log) no longer drops the whole delivery, so its
+  triggers fire; a delivery that fails unexpectedly is now marked failed
+  instead of staying received.
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.
 
