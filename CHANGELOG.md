@@ -211,6 +211,11 @@ governance, community health — carry none.
   Marketplace has since begun billing is cancelled rather than adopted. The two
   could not both be billed — the meter follows one payer — but one of them
   would have run on with nobody to cancel it.
+- **Company settings**: a card taken out after an AWS Marketplace subscription
+  ended is what bills the workspace from then on. The workspace keeps the
+  Stripe customer it had, so nothing about it changed when the card came back
+  and the payer stayed pointed at AWS — leaving a running workspace that
+  neither side billed.
 - **Company settings**: a workspace whose AWS Marketplace subscription has
   ended can pay by card. The refusal was keyed on its payer, which a
   cancellation never changes, so the workspace was stopped with no way to pay
