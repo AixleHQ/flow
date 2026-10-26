@@ -423,8 +423,13 @@ module Agents
     #
     # `--trust-all-tools` is what makes the container the sandbox, as it is for every
     # other runtime here; its startup confirmation is pre-answered in CLI_SETTINGS.
+    #
+    # `--trust-workspace` answers the "Trust this workspace?" screen 2.33.0 put in front
+    # of every interactive V3 session; neither `--trust-all-tools` nor any CLI_SETTINGS
+    # key skips it (checked live on 2.34.0). The flag only exists from 2.34.0 — older
+    # releases refuse the whole command — so it moves with the pin.
     def session_command(mode:, model: nil)
-      flags = [ "--trust-all-tools" ]
+      flags = [ "--trust-all-tools", "--trust-workspace" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?
       flags << "--no-interactive" if mode.to_s == "non_interactive"
 

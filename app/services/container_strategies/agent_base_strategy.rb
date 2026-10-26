@@ -44,7 +44,7 @@ module ContainerStrategies
       # V3 is Kiro's current engine and still opt-in behind --v3 as of CLI 2.21.0.
       # Overridden by Agents::KiroCliAdapter#session_command; this entry is the
       # fallback the base strategy reads when no adapter command is resolved.
-      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools"
+      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools --trust-workspace"
     }.freeze
 
     # == before_create_container ==
