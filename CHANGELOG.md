@@ -22,6 +22,13 @@ governance, community health — carry none.
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
 
+### Fixed
+- **Trackers**: a tracker comment or issue description whose text looks to an
+  HTML parser like one tag with hundreds of attributes (for example `a <b`
+  followed by a long pasted log) no longer drops the whole delivery, so its
+  triggers fire; a delivery that fails unexpectedly is now marked failed
+  instead of staying received.
+
 ## [1.7.0] - 2026-10-24
 
 ### Changed

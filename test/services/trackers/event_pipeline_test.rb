@@ -140,6 +140,20 @@ class Trackers::EventPipelineTest < ActiveSupport::TestCase
     assert_equal [ true, "@Aixle please look" ], [ event.data.dig("comment", "mentions_me"), event.data.dig("comment", "text") ]
   end
 
+  test "a comment the HTML parser reads as one tag with hundreds of attributes still makes an event" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "tracker.comment.created")
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+
+    text = "Please look <b " + (1..500).map { |i| "w#{i}" }.join(" ")
+    notification = Trackers::Notification.build(kind: :comment_created, scope_id: @scope, issue_id: "11", revision: 9,
+                                                comment_text: text, actor: { name: "Ada" })
+    comment = pipeline.process(notification).sole.data.dig("comment", "text")
+
+    assert comment.start_with?("Please look"), comment
+    assert_not_includes comment, "<"
+    assert_operator comment.length, :<=, Trackers::EventPipeline::TEXT_LIMIT
+  end
+
   test "a comment is Aixle's only when the ledger names it, so someone's comment right after one of Aixle's still fires" do
     @integration.update!(settings: @integration.settings.merge("tracker_identity" => { "id" => "me-1", "name" => "Aixle" }))
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,

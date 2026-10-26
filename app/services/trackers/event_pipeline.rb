@@ -17,6 +17,7 @@ module Trackers
     MAX_CHAIN_DEPTH = 5
     ISSUE_BUDGET = 10
     ATTRIBUTION_WINDOW = 10.minutes
+    TEXT_ESCAPES = { "&" => "&amp;", "<" => "&lt;", ">" => "&gt;" }.freeze
 
     # A create names its issue only once the tracker answers, and the tracker's
     # event can arrive first. Such an event is retried — WRITE_RETRY_ATTEMPTS
@@ -103,7 +104,7 @@ module Trackers
       {
         "id" => notification.comment_id, "author" => notification.actor[:name],
         "mentions_me" => @provider.mentions_self?(Trackers.without_code(text)),
-        "text" => bounded(ActionView::Base.full_sanitizer.sanitize(text))
+        "text" => bounded(plain_text(text))
       }.compact
     end
 
@@ -228,7 +229,7 @@ module Trackers
     def event_text(event_type, issue, extra)
       return extra.dig("comment", "text") if event_type == "tracker.comment.created"
 
-      bounded([ issue.title, ActionView::Base.full_sanitizer.sanitize(issue.description.to_s) ].compact_blank.join("\n\n"))
+      bounded([ issue.title, plain_text(issue.description.to_s) ].compact_blank.join("\n\n"))
     end
 
     # Keyed by the external identity, not by the delivery: two connections to the
@@ -238,6 +239,15 @@ module Trackers
       Digest::SHA256.hexdigest(
         [ tracker.project_id, tracker.provider, @provider.instance, issue.id, event_type, discriminator ].join(":")
       )
+    end
+
+    # Gumbo raises past 400 attributes or 400 levels of nesting, and prose like
+    # `a <b` plus a long pasted log is such a tag. Strip whole tags in linear time
+    # and encode the rest the way the sanitizer's serializer does.
+    def plain_text(html)
+      ActionView::Base.full_sanitizer.sanitize(html)
+    rescue ArgumentError
+      CGI.unescapeHTML(html.gsub(%r{</?[a-zA-Z][^<>]*>}, "")).gsub(/[&<>]/, TEXT_ESCAPES)
     end
 
     def bounded(text)
