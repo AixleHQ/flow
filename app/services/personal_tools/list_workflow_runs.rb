@@ -22,7 +22,7 @@ module PersonalTools
       scope = scope.where(workflow_id: params[:workflow_id]) if params[:workflow_id].present?
 
       rows = scope.limit(limit).map do |run|
-        { id: run.id, workflow_id: run.workflow_id, state: run.state,
+        { id: run.id, workflow_id: run.workflow_id, state: run.state, source: run.source,
           started_at: run.started_at, completed_at: run.completed_at, created_at: run.created_at }
       end
       success(project_id: project.id, runs: rows)
