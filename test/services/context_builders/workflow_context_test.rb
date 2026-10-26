@@ -190,6 +190,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_includes content, "mark_sub_step"
     assert_includes content, "in_progress"
     assert_includes content, "completed"
+    assert_includes content, "Mark sub-steps yourself, never from a subagent"
   end
 
   test "no sub-steps section when step has no sub-steps" do

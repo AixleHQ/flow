@@ -42,6 +42,12 @@ module ContextBuilders
         **Calling one of them is the last thing you do, every time. There is no third
         option, and no "I'm done" sentence substitutes for the call.**
 
+        **Only you call them, never a subagent.** A subagent you start shares these
+        tools, and its `finish_session` ends this whole session at once: the container
+        stops and every change not yet pushed is lost. Tell each subagent in its brief
+        not to call `finish_session` or `fail_session` and to report back to you; call
+        one yourself once you have its result.
+
         If you end your turn without calling either:
         - the container keeps running and burning budget until a sweeper reaps it,
         - a workflow step waiting on this session stalls for that entire time,

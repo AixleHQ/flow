@@ -4,7 +4,7 @@ module InternalTools
   class FinishSession < Base
     tool do
       display_name "Finish Session"
-      description "Signal successful completion of a non-interactive session. This terminates the session. Call only after ALL work is done and output files are saved."
+      description "Signal successful completion of a non-interactive session. This terminates the session. Call only after ALL work is done and output files are saved. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
       tags :session_lifecycle
       inject_when :non_interactive_session
       user_attachable false
