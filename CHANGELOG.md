@@ -30,6 +30,9 @@ governance, community health — carry none.
   instead of staying received.
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.
+- **Sessions & Runs**: an agent session on Kubernetes no longer fails to start
+  when the Kubernetes API answers one request too slowly or drops the
+  connection; the request is retried a few times before the session fails.
 
 ## [1.7.0] - 2026-10-24
 
