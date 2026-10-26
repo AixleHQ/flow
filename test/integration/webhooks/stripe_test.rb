@@ -100,6 +100,25 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
     assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.billing_provider
   end
 
+  # Leaving AWS Marketplace keeps the Stripe customer -- Checkout reuses it --
+  # so the id never changes and the callback that watches it never fires. The
+  # payer has to move here instead, or the workspace falls between the two
+  # meters: Stripe skips it for being AWS's, AWS skips it for having no live
+  # licence, and nobody bills a workspace that is running.
+  test "a card taken out after a Marketplace subscription ended makes Stripe the payer" do
+    create(:marketplace_license, :ended, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    deliver("checkout.session.completed", checkout_object)
+
+    assert_response :ok
+    @company.reload
+    assert_equal Company::BILLING_PROVIDER_STRIPE, @company.billing_provider
+    assert_equal "sub_1", @company.stripe_subscription_id
+    assert @company.billing_active?
+    assert @company.billing_provider_since.present?, "and the hour of the switch splits between them"
+  end
+
   test "a company blocked for spending its allowance starts again on payment" do
     @company.update!(billing_state: "blocked")
 

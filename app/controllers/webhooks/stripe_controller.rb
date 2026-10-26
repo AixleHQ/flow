@@ -82,6 +82,7 @@ class Webhooks::StripeController < ActionController::API
       stripe_subscription_id: session.subscription.presence || company.stripe_subscription_id,
       billing_state: "active",
       billing_cancels_at: nil,
+      **now_paid_by_card,
       **applied
     )
     Rails.logger.info("[Webhooks::Stripe] company #{company.id} is paying")
@@ -99,7 +100,8 @@ class Webhooks::StripeController < ActionController::API
       refuse_second_payer(company, subscription.id)
     elsif subscription.running?
       company.update!(billing_state: "active", stripe_subscription_id: subscription.id,
-                      billing_cancels_at: subscription.cancels_at, **period_of(subscription), **applied)
+                      billing_cancels_at: subscription.cancels_at, **now_paid_by_card,
+                      **period_of(subscription), **applied)
     elsif !current_subscription?(company, subscription.id)
       ignore(company, "subscription #{subscription.id} #{subscription.status}, not its current one")
     elsif subscription.unpaid?
@@ -219,6 +221,20 @@ class Webhooks::StripeController < ActionController::API
   end
 
   def aws_bills?(company) = company.marketplace_license.present?
+
+  # Adopting a running subscription is where "Stripe pays for this now" becomes
+  # true, so it is where the payer is pointed at Stripe.
+  #
+  # Company#acquiring_a_stripe_customer? cannot carry this alone: it keys on the
+  # customer id changing, and a workspace that leaves AWS Marketplace keeps the
+  # customer it had -- Checkout reuses it. The id never changes, the payer never
+  # moves, and the company falls between the two meters: Stripe skips it for
+  # being AWS's, AWS skips it for having no live licence, and nobody bills a
+  # workspace that is running.
+  #
+  # Reached only past `aws_bills?`, which refuses a card while a subscription
+  # can still bill, so there is no live licence to contradict here.
+  def now_paid_by_card = { billing_provider: ::Company::BILLING_PROVIDER_STRIPE }
 
   def ignore(company, what)
     Rails.logger.info("[Webhooks::Stripe] company #{company.id}: ignored #{what}")
