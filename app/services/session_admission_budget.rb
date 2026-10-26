@@ -16,14 +16,16 @@ class SessionAdmissionBudget
 
   # @param pool_keys [Array<String>] the pools this pass will visit, so their
   #   companies resolve in one query rather than one per pool
-  def initialize(pool_keys = [])
+  # @param occupied [ActiveRecord::Relation] the admissions that count as
+  #   holding a slot
+  def initialize(pool_keys = [], occupied: SessionAdmission.occupied)
     @project_reservations = SessionConcurrencyLimit.for_projects.pluck(:scope_id, :max_sessions).to_h
     # Not the configured limit but the one the company may actually use: where we
     # host, a free allowance caps it and spending the allowance ends it. The meter
     # reads the same number, so nobody is billed for a slot the drain refuses.
     @company_limits = Billing::EffectiveCapacity.for_companies
-    @occupied_by_key = SessionAdmission.occupied.joins(:session_admission_pool)
-                                       .group("session_admission_pools.key").count
+    @occupied_by_key = occupied.joins(:session_admission_pool)
+                               .group("session_admission_pools.key").count
     @project_company = resolve_companies(pool_keys)
 
     @company_headroom = {}
