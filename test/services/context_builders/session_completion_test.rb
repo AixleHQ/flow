@@ -36,6 +36,16 @@ class ContextBuilders::SessionCompletionTest < ActiveSupport::TestCase
     assert_includes content, "Partial work is a `fail_session`"
   end
 
+  test "the mandate keeps the ending calls with the top-level agent" do
+    session = create(:terminal_session, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
+
+    content = ContextBuilders::SessionCompletion.new(session).build.first.content
+
+    assert_includes content, "Only you call them, never a subagent"
+    assert_includes content, "not to call `finish_session` or `fail_session` and to report back to you"
+  end
+
   test "interactive session is not applicable" do
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "interactive")
