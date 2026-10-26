@@ -170,6 +170,15 @@ describe('Company billing page', () => {
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
   });
 
+  // A workspace handed over to AWS Marketplace keeps the period end of the
+  // Stripe subscription it left, and that date is in the future.
+  it('names no date for an ended subscription it has no cancellation for', () => {
+    render({ status: 'canceled', cancelsAt: null, usage: null });
+
+    expect(screen.getByText(/^The subscription has ended, so no new sessions start\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Nov 1, 2026/)).not.toBeInTheDocument();
+  });
+
   describe('the final invoice after cancelling', () => {
     const canceled = { status: 'canceled' as const, cancelsAt: '2026-10-12T14:20:00Z', usage: null };
 
