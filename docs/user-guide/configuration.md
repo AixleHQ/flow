@@ -11,7 +11,7 @@ host integrations.
 See [reference/configuration.md](../reference/configuration.md) for the
 complete list of supported variables.
 
-## 2. Config Items — company / project level
+## 2. Config Items — project level
 
 Inside the app, **Config Items** (the **Secrets & Variables** section)
 are encrypted at rest and injected into:
@@ -23,6 +23,12 @@ are encrypted at rest and injected into:
 This is where you put things like a third-party API key that an MCP
 server needs to call. **Never** put these in `.env` files — they belong
 in Config Items so they live with the project, not the deployment.
+
+Config Items are values your agents read, such as a URL or a flag in
+your own code. They are not platform feature flags. Platform feature
+flags are switches for Aixle Flow itself, and only platform (super)
+admins manage them, at `/admin/feature_flags`. See
+[docs/architecture/feature-flags.md](../architecture/feature-flags.md) for details.
 
 ## 3. Per-user — Profile
 
@@ -44,6 +50,6 @@ team members.
 | GitHub App private key                | `.env.development` (host)              |
 | GitLab / Coder access token           | **Project → Integrations** (in-app)    |
 | Anthropic / OpenAI / etc. API keys    | **Profile → Agent Credentials** (per-user) |
-| Third-party API key for an MCP server | **Config Items** (project or company)  |
-| Project-specific URL or feature flag  | **Config Items**                       |
+| Third-party API key for an MCP server | **Config Items** (project)             |
+| A value your agents read, e.g. a URL or a flag in your code | **Config Items** |
 | LLM model preference                  | **Profile**, or `preferred_model` on a Step |
