@@ -28,6 +28,13 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert_nil Tools::Registry.fetch("nope_not_a_tool")
   end
 
+  test "session lifecycle and sub-step tools are reserved to the top-level agent" do
+    %w[finish_session fail_session mark_sub_step].each do |name|
+      assert_includes Tools::Registry.fetch(name).description,
+        "Only the top-level agent may call this: a subagent reports back", name
+    end
+  end
+
   test "injectable covers the auto-injection rule groups" do
     rules = Tools::Registry.injectable.flat_map(&:inject_rules).uniq.sort
 

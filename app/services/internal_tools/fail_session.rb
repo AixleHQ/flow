@@ -4,7 +4,7 @@ module InternalTools
   class FailSession < Base
     tool do
       display_name "Fail Session"
-      description "Signal that a non-interactive session has failed. This terminates the session with an error. Use when the task cannot be completed."
+      description "Signal that a non-interactive session has failed. This terminates the session with an error. Use when the task cannot be completed. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
       tags :session_lifecycle
       inject_when :non_interactive_session
       user_attachable false

@@ -194,6 +194,8 @@ module ContextBuilders
       lines << ""
       lines << "Track progress: call `mark_sub_step` with the sub-step `id` shown above."
       lines << "Mark `in_progress` when starting, `completed` when done."
+      lines << "Mark sub-steps yourself, never from a subagent: tell a subagent not to call `mark_sub_step`, " \
+               "and mark the sub-step once it reports back."
       lines.join("\n")
     end
 
