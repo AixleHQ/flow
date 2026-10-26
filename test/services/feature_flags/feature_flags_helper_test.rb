@@ -4,99 +4,137 @@ require "test_helper"
 
 # The helpers every test uses to set a flag: they must leave no trace on the next test.
 class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
-  setup { @company = Company.new(id: 7) }
+  setup { @company = create(:company) }
 
-  def with_example_flags(&) = with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY, &)
-
-  test "with_feature sets the global value for the block only" do
-    with_example_flags do
-      with_feature(:coder_reap, false) { assert_equal :global, Feature.explain(:coder_reap).source }
-
-      assert_equal :default, Feature.explain(:coder_reap).source
+  test "with_feature sets the global value as a row, for the block only" do
+    with_feature(:coder_reap, false) do
+      assert_equal :global, Feature.explain(:coder_reap).source
+      assert_equal false, FeatureFlag.find_by!(key: "coder_reap").enabled # rubocop:disable Minitest/RefuteFalse
     end
+
+    assert_equal :default, Feature.explain(:coder_reap).source
   end
 
   test "with_feature(..., company:) sets one company's override" do
-    with_example_flags do
-      with_feature(:board_ai_summary, true, company: @company) do
-        assert Feature.enabled?(:board_ai_summary, company: @company)
-        refute Feature.enabled?(:board_ai_summary, company: Company.new(id: 42))
+    with_feature(:external_runners, true, company: @company) do
+      assert Feature.enabled?(:external_runners, company: @company)
+      refute Feature.enabled?(:external_runners, company: create(:company))
+    end
+
+    refute Feature.enabled?(:external_runners, company: @company)
+  end
+
+  test "nested with_feature blocks unwind in order" do
+    with_feature(:external_runners, true, company: @company) do
+      with_feature(:external_runners, false, company: @company) do
+        refute Feature.enabled?(:external_runners, company: @company)
       end
 
-      refute Feature.enabled?(:board_ai_summary, company: @company)
+      assert Feature.enabled?(:external_runners, company: @company)
     end
   end
 
-  test "with_feature restores the store when the block raises" do
-    with_example_flags do
-      assert_raises(RuntimeError) { with_feature(:coder_reap, false) { raise "boom" } }
+  test "with_feature restores the value when the block raises" do
+    assert_raises(RuntimeError) { with_feature(:coder_reap, false) { raise "boom" } }
 
-      assert Feature.enabled?(:coder_reap)
-    end
+    assert Feature.enabled?(:coder_reap)
   end
 
   test "with_feature refuses what the resolver would refuse" do
-    with_example_flags do
-      assert_raises(FeatureFlags::UnknownFlag) { with_feature(:board_ai_sumary, true) { flunk } }
-      assert_raises(ArgumentError) { with_feature(:coder_reap, false, company: @company) { flunk } }
-      assert_raises(ArgumentError) { with_feature(:board_ai_summary, true, company: nil) { flunk } }
-      assert_raises(ArgumentError) { with_feature(:board_ai_summary, "on") { flunk } }
+    assert_raises(FeatureFlags::UnknownFlag) { with_feature(:external_runner, true) { flunk } }
+    assert_raises(ArgumentError) { with_feature(:coder_reap, false, company: @company) { flunk } }
+    assert_raises(ArgumentError) { with_feature(:external_runners, true, company: nil) { flunk } }
+    assert_raises(ArgumentError) { with_feature(:external_runners, "on") { flunk } }
+  end
+
+  # Both tests write a row without cleaning up; whichever runs second still
+  # starts with none, because the test transaction rolled it back.
+  2.times do |run|
+    test "every test starts from the declared defaults (#{run + 1})" do
+      assert_empty FeatureFlag.load_snapshot
+      assert_nil Current.feature_snapshot
+
+      FeatureFlag.create!(key: "coder_reap", enabled: false)
+      Feature.enabled?(:coder_reap)
     end
   end
 
   test "stub_feature_env locks the flag for the block without touching ENV" do
-    with_example_flags do
-      env_before = ENV.to_h
+    env_before = ENV.to_h
+    stub_feature_env(:coder_reap, "off") do
+      assert_equal [ :env, "FEATURE_CODER_REAP" ], Feature.explain(:coder_reap).then { |r| [ r.source, r.env_var ] }
+      assert_equal env_before, ENV.to_h
+    end
+
+    assert_equal :default, Feature.explain(:coder_reap).source
+    assert_raises(FeatureFlags::InvalidEnv) { stub_feature_env(:coder_reap, "maybe") { flunk } }
+  end
+
+  test "stub_feature_env simulates a flag's own env: variable" do
+    stub_feature_env(:coder_reap, "false", variable: "CODER_REAP_ENABLED") do
+      assert_equal [ false, :env, "CODER_REAP_ENABLED" ], Feature.explain(:coder_reap).then { |r| [ r.value, r.source, r.env_var ] }
+    end
+
+    assert_equal :default, Feature.explain(:coder_reap).source
+    assert_raises(ArgumentError) { stub_feature_env(:external_runners, "on", variable: "CODER_REAP_ENABLED") { flunk } }
+  end
+
+  test "a lock cannot outlive its block, even when the block raises" do
+    assert_raises(RuntimeError) do
       stub_feature_env(:coder_reap, "off") do
         assert_equal :env, Feature.explain(:coder_reap).source
-        assert_equal env_before, ENV.to_h
+        raise "boom"
       end
-
-      assert_equal :default, Feature.explain(:coder_reap).source
-      assert_raises(FeatureFlags::InvalidEnv) { stub_feature_env(:coder_reap, "maybe") { flunk } }
     end
+
+    assert_equal :default, Feature.explain(:coder_reap).source
   end
 
-  test "stub_feature_env_setting locks a flag through its legacy setting for the block" do
-    with_example_flags do
-      stub_feature_env_setting(:coder_reap, false) do
-        assert_equal [ false, :env, "CODER_REAP_ENABLED" ], Feature.explain(:coder_reap).then { |r| [ r.value, r.source, r.env_var ] }
+  test "nested locks unwind in order, and the block's value is returned" do
+    result = stub_feature_env(:coder_reap, "off") do
+      stub_feature_env(:external_runners, "on") do
+        assert_equal [ false, true ], [ Feature.enabled?(:coder_reap), Feature.enabled?(:external_runners, company: nil) ]
       end
+      assert_nil FeatureFlags.env_source.value_for(:external_runners)
+      :done
+    end
 
-      assert_equal :default, Feature.explain(:coder_reap).source
-      assert_raises(ArgumentError) { stub_feature_env_setting(:board_ai_summary, false) { flunk } }
+    assert_equal :done, result
+    assert_empty FeatureFlags.env_source.raw
+  end
+
+  test "a lock is visible on this fiber only, never on another thread" do
+    stub_feature_env(:coder_reap, "off") do
+      assert_equal({}, Thread.new { FeatureFlags.env_source.raw }.value)
+      assert_equal :env, Feature.explain(:coder_reap).source
     end
   end
 
-  test "with_feature_registry swaps the declared flags for the block" do
-    with_example_flags { assert FeatureFlags.registry.declared?(:board_ai_summary) }
-
-    refute FeatureFlags.registry.declared?(:board_ai_summary)
-  end
-
-  test "with_feature_registry returns what its block returns" do
-    assert_equal :done, with_example_flags { :done }
-  end
-
-  # Both tests write to the store without cleaning up; whichever runs second
-  # still starts empty, because setup resets it.
-  2.times do |run|
-    test "every test starts from an empty store (#{run + 1})" do
-      assert_same FeatureFlags::Snapshot::EMPTY, FeatureFlags.store.snapshot
-
-      FeatureFlags.store.set_global(:coder_reap, false)
-      FeatureFlags.store.set_override(:board_ai_summary, 7, true)
-    end
-  end
-
-  test "the test settings drop FEATURE_* variables from the process environment" do
-    saved = ENV.fetch("FEATURE_CODER_REAP", nil)
+  test "the test settings drop FEATURE_* and env: variables from the process environment" do
+    saved = ENV.to_h.slice("FEATURE_CODER_REAP", "CODER_REAP_ENABLED")
     ENV["FEATURE_CODER_REAP"] = "off"
+    ENV["CODER_REAP_ENABLED"] = "false"
     settings = Config.load_files(Rails.root.join("config/settings.yml"), Rails.root.join("config/settings/test.yml"))
 
     assert_empty settings.feature_flags.env.to_h
   ensure
-    saved.nil? ? ENV.delete("FEATURE_CODER_REAP") : ENV["FEATURE_CODER_REAP"] = saved
+    %w[FEATURE_CODER_REAP CODER_REAP_ENABLED].each { |name| saved.key?(name) ? ENV[name] = saved[name] : ENV.delete(name) }
+  end
+
+  test "config/settings.yml collects FEATURE_* variables and the variables flags declare as env:" do
+    saved = ENV.to_h.slice("FEATURE_CODER_REAP", "CODER_REAP_ENABLED", "CODER_REAP_CONFIRMATION_MINUTES")
+    ENV["FEATURE_CODER_REAP"] = "off"
+    ENV["CODER_REAP_ENABLED"] = "false"
+    ENV["CODER_REAP_CONFIRMATION_MINUTES"] = "5"
+    settings = Config.load_files(Rails.root.join("config/settings.yml"))
+
+    assert_equal({ "FEATURE_CODER_REAP" => "off", "CODER_REAP_ENABLED" => "false" },
+                 settings.feature_flags.env.to_h.transform_keys(&:to_s).slice("FEATURE_CODER_REAP", "CODER_REAP_ENABLED", "CODER_REAP_CONFIRMATION_MINUTES"))
+    assert_not settings.coder.to_h.key?(:reap_enabled)
+  ensure
+    %w[FEATURE_CODER_REAP CODER_REAP_ENABLED CODER_REAP_CONFIRMATION_MINUTES].each do |name|
+      saved.key?(name) ? ENV[name] = saved[name] : ENV.delete(name)
+    end
   end
 
   test "the suite boots with an empty ENV layer" do
@@ -104,136 +142,7 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
     assert_empty FeatureFlags.env_source.raw
   end
 
-  test "the suite boots with the test environment's infrastructure" do
-    assert_kind_of FeatureFlags::MemoryStore, FeatureFlags.store
-    assert_kind_of FakeFeatureFlagVersionToken, FeatureFlags.version_token
-  end
-
   test "nothing can assign the composed graph's parts" do
-    %i[registry= env_source= store= version_token=].each do |writer|
-      refute_respond_to FeatureFlags, writer
-    end
-  end
-
-  def stray_graph
-    FeatureFlags.compose(settings: nil, store: FeatureFlags::MemoryStore.new, version_token: FakeFeatureFlagVersionToken.new)
-  end
-
-  test "reset_feature_flags! re-installs the suite's graph after a stray boot!" do
-    stray = FeatureFlags.boot!(stray_graph)
-    assert_same stray.store, FeatureFlags.store
-
-    reset_feature_flags!
-
-    assert_same FeatureFlagsHelper::SUITE_GRAPH, FeatureFlags.booted
-    assert_same FeatureFlagsHelper::SUITE_GRAPH.store, FeatureFlags.store
-    assert_same FeatureFlagsHelper::SUITE_GRAPH.version_token, FeatureFlags.version_token
-  ensure
-    FeatureFlags.boot!(FeatureFlagsHelper::SUITE_GRAPH)
-  end
-
-  # The first test boots another graph and leaves it installed; whichever runs
-  # second still starts on the suite's graph, because setup re-installs it.
-  2.times do |run|
-    test "every test starts on the suite's graph (#{run + 1})" do
-      assert_same FeatureFlagsHelper::SUITE_GRAPH, FeatureFlags.booted
-
-      FeatureFlags.boot!(stray_graph)
-    end
-  end
-
-  test "boot! installs a composed graph as it is" do
-    graph = stray_graph
-    assert_same graph, FeatureFlags.boot!(graph)
-    assert_same graph, FeatureFlags.booted
-
-    assert_raises(ArgumentError) { FeatureFlags.boot!(graph, settings: nil) }
-    assert_raises(ArgumentError) { FeatureFlags.boot!(FeatureFlags.store) }
-  ensure
-    FeatureFlags.boot!(FeatureFlagsHelper::SUITE_GRAPH)
-  end
-
-  # Both tests bump the token without cleaning up; whichever runs second still
-  # counts from zero, because setup resets it.
-  2.times do |run|
-    test "every test starts from a fresh version token (#{run + 1})" do
-      token = FeatureFlags.version_token
-      assert_equal [ 0, 0, false, nil ], [ token.bumps, token.reads, token.unavailable, token.on_bump ]
-
-      token.bump
-      token.unavailable = true
-      token.on_bump = -> { }
-    end
-  end
-
-  test "a FEATURE_* lock cannot outlive its block, even when the block raises" do
-    with_example_flags do
-      assert_raises(RuntimeError) do
-        stub_feature_env(:coder_reap, "off") do
-          assert_equal :env, Feature.explain(:coder_reap).source
-          raise "boom"
-        end
-      end
-
-      assert_equal :default, Feature.explain(:coder_reap).source
-    end
-  end
-
-  test "FeatureFlags.with substitutes the registry and the ENV layer, and nests" do
-    store = FeatureFlags.store
-    token = FeatureFlags.version_token
-    shipped = FeatureFlags.registry
-
-    with_example_flags do
-      example = FeatureFlags.registry
-      refute_same shipped, example
-
-      stub_feature_env(:coder_reap, "off") do
-        assert_same example, FeatureFlags.registry, "an ENV substitution keeps the registry"
-        assert_equal :env, Feature.explain(:coder_reap).source
-        assert_equal [ store, token ], [ FeatureFlags.store, FeatureFlags.version_token ]
-      end
-
-      assert_same example, FeatureFlags.registry
-      assert_empty FeatureFlags.env_source.raw
-    end
-
-    assert_same shipped, FeatureFlags.registry
-    assert_raises(ArgumentError) { FeatureFlags.with { flunk } }
-    assert_raises(ArgumentError) { FeatureFlags.with(registry: shipped) }
-  end
-
-  test "a registry given with an ENV layer gets that layer re-read against it" do
-    registry = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
-    env = FeatureFlags::EnvSource.new({ "FEATURE_BOARD_AI_SUMMARY" => "on" }, registry: FeatureFlags::Registry.new({}))
-    assert_equal [ "FEATURE_BOARD_AI_SUMMARY" ], env.undeclared
-
-    FeatureFlags.with(registry: registry, env: env) do
-      assert_equal [ true, :env ], Feature.explain(:board_ai_summary, company: nil).then { |r| [ r.value, r.source ] }
-    end
-  end
-
-  test "a substitution is visible on this fiber only, never on another thread" do
-    with_example_flags do
-      stub_feature_env(:coder_reap, "off") do
-        elsewhere = Thread.new { [ FeatureFlags.registry.declared?(:board_ai_summary), FeatureFlags.env_source.raw ] }.value
-
-        assert_equal [ false, {} ], elsewhere
-        assert FeatureFlags.registry.declared?(:board_ai_summary)
-      end
-    end
-  end
-
-  test "the memory store writes and removes values" do
-    store = FeatureFlags::MemoryStore.new
-    store.set_global(:coder_reap, false)
-    store.set_override(:board_ai_summary, 7, true)
-    store.set_override(:board_ai_summary, 42, false)
-    store.remove_override(:board_ai_summary, 42)
-    store.clear_global(:coder_reap)
-
-    assert_equal({ coder_reap: { global: nil, overrides: {} }, board_ai_summary: { global: nil, overrides: { 7 => true } } },
-                 store.snapshot.to_h)
-    assert_predicate store.snapshot.to_h, :frozen?
+    %i[registry= env_source=].each { |writer| refute_respond_to FeatureFlags, writer }
   end
 end

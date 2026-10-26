@@ -6,22 +6,18 @@ module FeatureFlags
   # the first request that checks it.
   class Registry
     KEY_FORMAT = /\A[a-z][a-z0-9_]*\z/
-    # FEATURE_FLAGS_* is the system's own settings, so no key may map into it.
-    RESERVED_KEY = /\Aflags(_|\z)/
     KINDS = %w[release ops].freeze
     SCOPES = %w[company global].freeze
     REQUIRED = %w[description owner kind scope default].freeze
-    OPTIONAL = %w[client introduced remove_by env_setting env_setting_variable].freeze
-    # A legacy Settings path (`coder.reap_enabled`) and the variable config/settings.yml
-    # reads it from (`CODER_REAP_ENABLED`): together, a second ENV lock (EnvSource).
-    SETTING_PATH = /\A[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+\z/
-    SETTING_VARIABLE = /\A[A-Z][A-Z0-9_]*\z/
+    OPTIONAL = %w[client introduced remove_by env].freeze
+    # `env:` names one more variable that locks the flag (EnvSource).
+    ENV_VARIABLE = /\A[A-Z][A-Z0-9_]*\z/
 
     class Definition < Data.define(:key, :description, :owner, :kind, :scope, :default, :client,
-                                   :introduced, :remove_by, :env_setting, :env_setting_variable)
+                                   :introduced, :remove_by, :env)
       def env_var = "#{EnvSource::PREFIX}#{key.to_s.upcase}"
       # Every variable that can lock the flag, FEATURE_<KEY> first.
-      def env_vars = [ env_var, env_setting_variable ].compact
+      def env_vars = [ env_var, env ].compact
       def company_scoped? = scope == :company
       def global? = scope == :global
       def release? = kind == :release
@@ -48,6 +44,7 @@ module FeatureFlags
           errors.concat(problems.map { |problem| "#{key}: #{problem}" })
         end
       end.freeze
+      errors.concat(shared_env_problems)
 
       raise InvalidRegistry, "#{source} is invalid:\n  #{errors.join("\n  ")}" if errors.any?
 
@@ -61,13 +58,11 @@ module FeatureFlags
     def declared?(key) = @definitions.key?(key.to_s.to_sym)
     def keys = @definitions.keys
     def definitions = @definitions.values
-    def empty? = @definitions.empty?
 
     private
 
     def problems_with(key, attributes)
       return [ "key must match #{KEY_FORMAT.inspect}" ] unless key.match?(KEY_FORMAT)
-      return [ "key maps to the reserved FEATURE_FLAGS_* prefix" ] if key.match?(RESERVED_KEY)
       return [ "must be a mapping of attributes" ] unless attributes.is_a?(Hash)
 
       problems = []
@@ -88,28 +83,20 @@ module FeatureFlags
       elsif attributes.key?("remove_by") && !attributes["remove_by"].is_a?(Date)
         problems << "remove_by must be a date (YYYY-MM-DD)"
       end
-      problems.concat(env_setting_problems(attributes))
+      problems << env_problem(attributes["env"]) if attributes.key?("env")
+      problems.compact
     end
 
-    def env_setting_problems(attributes)
-      path = attributes["env_setting"]
-      variable = attributes["env_setting_variable"]
-      return [] if path.nil? && variable.nil?
-      return [ "env_setting_variable is required with env_setting" ] if variable.nil?
-      return [ "env_setting is required with env_setting_variable" ] if path.nil?
+    def env_problem(variable)
+      return "env must be an upper-case variable name" unless variable.is_a?(String) && variable.match?(ENV_VARIABLE)
 
-      problems = []
-      if !path.is_a?(String) || !path.match?(SETTING_PATH)
-        problems << "env_setting must be a dotted Settings path (e.g. coder.reap_enabled)"
-      elsif path.start_with?("feature_flags.")
-        problems << "env_setting must not point into the feature_flags settings"
+      "env must not be a FEATURE_* variable" if variable.start_with?(EnvSource::PREFIX)
+    end
+
+    def shared_env_problems
+      definitions.select(&:env).group_by(&:env).filter_map do |variable, sharing|
+        "env #{variable} is claimed by #{sharing.map(&:key).join(', ')}" if sharing.size > 1
       end
-      if !variable.is_a?(String) || !variable.match?(SETTING_VARIABLE)
-        problems << "env_setting_variable must be an upper-case variable name"
-      elsif variable.start_with?(EnvSource::PREFIX)
-        problems << "env_setting_variable must not be a FEATURE_* variable"
-      end
-      problems
     end
 
     def build(key, attributes)
@@ -123,8 +110,7 @@ module FeatureFlags
         client: attributes.fetch("client", false),
         introduced: attributes["introduced"]&.freeze,
         remove_by: attributes["remove_by"]&.freeze,
-        env_setting: attributes["env_setting"]&.dup&.freeze,
-        env_setting_variable: attributes["env_setting_variable"]&.dup&.freeze
+        env: attributes["env"]&.dup&.freeze
       )
     end
 

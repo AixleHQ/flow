@@ -2,9 +2,9 @@
 
 module Admin
   # Platform feature flags (config/feature_flags.yml): what each one resolves
-  # to, its global value, turning it off everywhere, and the rows of keys no
-  # longer declared. Every change goes through FeatureFlags::Admin. Not an
-  # Administrate resource: most declared flags have no row.
+  # to, its global value and turning it off everywhere. Every change goes
+  # through FeatureFlags::Admin. Not an Administrate resource: most declared
+  # flags have no row.
   class FeatureFlagsController < Admin::ApplicationController
     COMPANY_MATCHES = 20
 
@@ -49,23 +49,12 @@ module Admin
       redirect_to admin_feature_flag_path(@definition.key), notice: "#{@definition.key} is off everywhere.", status: :see_other
     end
 
-    # Only the rows of a key no flag declares: a declared flag goes back to its
-    # default through "use default".
-    def destroy
-      FeatureFlags::Admin.prune(params[:key], **write_context)
-
-      redirect_to admin_feature_flags_path, notice: "Rows of #{params[:key]} deleted.", status: :see_other
-    end
-
     private
 
     def set_definition
       @definition = FeatureFlags.registry.fetch(params[:key])
     rescue FeatureFlags::UnknownFlag
-      raise ActiveRecord::RecordNotFound, "no feature flag #{params[:key]}" unless FeatureFlag.exists?(key: params[:key])
-
-      redirect_to admin_feature_flags_path, status: :see_other,
-                                            alert: "#{params[:key]} is not declared in config/feature_flags.yml: its rows are listed as orphaned."
+      raise ActiveRecord::RecordNotFound, "no feature flag #{params[:key]}"
     end
 
     def write_context = { actor: true_user, reason: params[:reason], request: request }

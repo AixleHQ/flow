@@ -1,9 +1,8 @@
 # Every flag the app may check, as `Feature.enabled?(:key, ...)`. Loaded and
 # validated once at boot by FeatureFlags::Registry: an invalid entry fails boot.
+# Guide: docs/architecture/feature-flags.md
 #
-# Keys are snake_case (/\A[a-z][a-z0-9_]*\z/); the ENV lock is FEATURE_<KEY>.
-# Keys starting with `flags` are rejected: FEATURE_FLAGS_* is reserved for the
-# system's own settings.
+# Keys are snake_case (/\A[a-z][a-z0-9_]*\z/); FEATURE_<KEY> locks the flag.
 #
 #   board_ai_summary:
 #     description: AI summary panel on the board task drawer.   # required
@@ -17,17 +16,9 @@
 #                                       # useFeatureFlag takes, so no frontend list needs editing
 #     introduced: 2026-11-03                                     # optional
 #     remove_by: 2027-01-31                                      # required for kind: release
-#     env_setting: coder.reap_enabled                            # optional, with env_setting_variable
-#     env_setting_variable: CODER_REAP_ENABLED
-#
-# env_setting moves a legacy ENV toggle over without renaming its variable: the
-# Settings value at that path is a second ENV lock, with the same precedence as
-# FEATURE_<KEY>. config/settings.yml must leave it null while the variable
-# (env_setting_variable, named so admin can say what locks the flag) is unset,
-# so the settings default never locks the flag. When FEATURE_<KEY> and the
-# legacy variable are both set, FEATURE_<KEY> wins.
-#
-# Design: docs/research/technical-feature-flags-system-design-research-2026-10-21.md
+#     env: BOARD_AI_SUMMARY_ENABLED                              # optional
+#                                       # one more variable that locks the flag, parsed like
+#                                       # FEATURE_<KEY>; FEATURE_<KEY> wins when both are set
 
 coder_reap:
   description: Lets the Coder reaper delete dead workspaces.
@@ -36,8 +27,7 @@ coder_reap:
   scope: global
   default: true
   client: false
-  env_setting: coder.reap_enabled
-  env_setting_variable: CODER_REAP_ENABLED
+  env: CODER_REAP_ENABLED
 
 external_runners:
   description: External agent runners — connect a machine, Coder or Kubernetes and run agent sessions there.
