@@ -22,7 +22,15 @@ module HostedBillingOnly
     if current_company.managed_by_aixle?
       return redirect_to company_settings_path, alert: "This workspace is managed by Aixle and is not billed."
     end
-    return unless current_company.billing_payer.aws_marketplace?
+    # A LIVE subscription, not a payer that once was. A customer who cancels in
+    # AWS keeps `billing_provider` -- nothing re-points it -- so keying on the
+    # payer left them unable to pay by card ever again, with the workspace
+    # stopped and their data in it. The refusal belongs on a subscription that
+    # can still bill: `pending` because AWS may yet confirm it, `ending` because
+    # the final metering window is still open, and `active` for the obvious
+    # reason. Once it has ended nothing more reaches AWS, and a card is the only
+    # way left to pay.
+    return if current_company.marketplace_license.nil?
 
     redirect_to company_settings_path,
                 alert: "This workspace is billed through AWS Marketplace. Manage it in your AWS account."

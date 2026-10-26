@@ -26,9 +26,9 @@ class Web::Company::ApplicationController < Web::ApplicationController
           # whether there is billing to manage HERE. Theirs is managed in their
           # own AWS account, and HostedBillingOnly turns them away at the door,
           # so the tab would open on a refusal.
-          can_manage_billing: ::Billing::Payer.for(current_company).then { |payer|
-            payer.bills? && !payer.aws_marketplace?
-          } && (current_membership&.admin? || false),
+          can_manage_billing: ::Billing::Payer.for(current_company).bills? &&
+            current_company.marketplace_license.nil? &&
+            (current_membership&.admin? || false),
           # Seeing it is the wider question. A workspace AWS bills has nothing to
           # manage here, but hiding the tab made its billing look missing rather
           # than elsewhere -- so the tab stays and says where it is.

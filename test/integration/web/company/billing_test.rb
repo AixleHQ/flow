@@ -129,6 +129,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
   # for the same capacity are the only thing withheld.
   test "a company AWS bills keeps the tab, and the page says where its bill is" do
     @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, company: @company)
 
     get company_settings_billing_path
 
@@ -140,9 +141,39 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The other half of the same rule, and the one that was a dead end: a customer
+  # who unsubscribes in AWS keeps `billing_provider`, so keying the refusal on
+  # the payer rather than on a live subscription left them unable to pay by card
+  # ever again -- workspace stopped, data intact, no way out but AWS.
+  test "a company whose subscription ended may pay by card again" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :ended, company: @company)
+
+    get company_settings_billing_path
+
+    assert_response :success
+    assert_inertia_props do |props|
+      assert props[:permissions][:canManageBilling], "the card is how it pays now"
+      assert props.dig(:marketplaceBilling, :ended), "and the panel still says what became of the AWS one"
+    end
+  end
+
+  # The window AWS still meters into. A card started here would bill the same
+  # hour twice.
+  test "a company still inside the final metering window may not" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :ending, company: @company)
+
+    post company_billing_checkout_path
+
+    assert_redirected_to company_settings_path
+    assert_match(/AWS Marketplace/, flash[:alert])
+  end
+
   # The actions are still refused. Only the page that explains them is not.
   test "a company AWS bills cannot add a card, cancel, or pay an invoice here" do
     @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, company: @company)
 
     post company_billing_checkout_path
     assert_redirected_to company_settings_path

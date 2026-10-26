@@ -171,6 +171,20 @@ governance, community health — carry none.
 - **Company settings**: a new workspace is no longer billed for the part of its
   first hour that came before it was created. A workspace set up at 04:26 was
   charged for the whole of 04:00; it is now charged from 04:26.
+- **Company settings**: a workspace is no longer billed for the part of an hour
+  it was stopped. Starting one at :47 billed the whole hour, and a cancellation
+  could bill two hours a stopped workspace had not been running for — 116
+  worker-minutes for nine minutes of service, seen live on 26 October. Billing
+  state is now kept over time, the way capacity already was, so an hour is
+  measured against what the workspace was during it rather than what it has
+  become by the time the hour is measured.
+- **Company settings**: a workspace whose AWS Marketplace subscription has
+  ended can pay by card. The refusal was keyed on its payer, which a
+  cancellation never changes, so the workspace was stopped with no way to pay
+  at all. It is now keyed on a subscription that can still bill: refused while
+  one is live, waiting to be confirmed, or inside its final metering window,
+  and offered once it has ended — beside the panel that says what became of the
+  AWS one.
 - **Company settings**: a workspace that changes who bills it is no longer
   charged by the new payer for the part of that hour the old one owned. Moving
   onto AWS Marketplace at 18:36 sent AWS the whole of 18:00, which was free

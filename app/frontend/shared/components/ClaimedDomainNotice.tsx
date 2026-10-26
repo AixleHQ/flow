@@ -12,7 +12,16 @@ export interface ClaimedDomain {
 
 const oneOf = (items: string[]) => new Intl.ListFormat('en', { type: 'disjunction' }).format(items);
 
-export const ClaimedDomainNotice = ({ claim }: { claim: ClaimedDomain }) => {
+export const ClaimedDomainNotice = ({
+  claim,
+  // A buyer holding a subscription is not looking for an invitation: what they
+  // need is their subscription applied, which the paragraph after this offers.
+  // Two different asks side by side read as contradictory advice.
+  inviteOffered = true,
+}: {
+  claim: ClaimedDomain;
+  inviteOffered?: boolean;
+}) => {
   const { domain, workspaceName, joinMethods, approvalRequired } = claim;
   const workspace = workspaceName ? <b>{workspaceName}</b> : 'that workspace';
 
@@ -39,9 +48,11 @@ export const ClaimedDomainNotice = ({ claim }: { claim: ClaimedDomain }) => {
           )}
         </Text>
       )}
-      <Text size="sm" c="var(--app-text-secondary)">
-        {joinMethods.length > 0 ? 'Or ask' : 'Ask'} an administrator of {workspace} to invite you.
-      </Text>
+      {inviteOffered && (
+        <Text size="sm" c="var(--app-text-secondary)">
+          {joinMethods.length > 0 ? 'Or ask' : 'Ask'} an administrator of {workspace} to invite you.
+        </Text>
+      )}
     </Stack>
   );
 };

@@ -24,6 +24,7 @@ class Billing::Meter::StripeTest < ActiveSupport::TestCase
   test "a company AWS bills is neither charged here nor counted as unbilled" do
     aws = create(:company, stripe_customer_id: "cus_leftover",
                            billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, company: aws)
 
     external_id = @adapter.deliver(report(@acme.id.to_s => 3600, aws.id.to_s => 3600))
 

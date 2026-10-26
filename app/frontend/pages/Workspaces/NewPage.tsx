@@ -203,7 +203,7 @@ const ClaimedScreen = ({
       <Text size="sm" c="var(--app-text-secondary)" mb="md">
         Each domain has one workspace, so there is no second one to create for yours.
       </Text>
-      <ClaimedDomainNotice claim={claim} />
+      <ClaimedDomainNotice claim={claim} inviteOffered={!subscriptionHeld} />
       {refusal && (
         <Alert color="red" mt="md" variant="light">
           {refusal}
