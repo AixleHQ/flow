@@ -172,7 +172,10 @@ registry declares. On the frontend, set
 `FeatureFlags` composes its parts once, in `FeatureFlags.boot!`: the registry, the ENV layer
 validated against it, the store and the version token, as one `FeatureFlags::Graph`. It has no
 writers. `FeatureFlags.compose` builds and validates the same graph without installing it,
-which is how boot-time validation is tested.
+which is how boot-time validation is tested: a test of composition calls `compose`, never
+`boot!`. `boot!` replaces the whole graph for the process, so the suite keeps the graph it
+booted and `reset_feature_flags!` re-installs it before every test if another one is installed.
+A stray `boot!` then lasts until the next test, not for the rest of its worker.
 
 - **Values: the normal lever.** `with_feature` writes the memory store, the mechanism
   production uses. A test that only needs a flag on or off should never need anything else.
@@ -204,6 +207,19 @@ thread (a Capybara server, a thread the test spawns, a parallel test) and a Temp
 which the SDK runs on its own pool thread outside any executor run (the same limit
 `FeatureFlags.snapshot` documents), see the booted graph. A system test that needs a test-only
 flag in the browser therefore cannot declare it through `with_feature_registry`.
+
+The seam does not reach the other way, into code loaded on the test's own fiber while a test
+registry is active. A class that memoises flag names at load time captures whatever registry
+was current when it loaded, and with `eager_load` off (locally, outside CI) the first request
+inside `with_feature_registry` can be the one that autoloads it. The seam cannot prevent that.
+The rule that does: a load-time memoiser reads the registry file,
+`FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH)`, never `FeatureFlags.registry`, and
+resolves values through the facade per call. `FeaturesResource` is the reference: its attribute
+list comes from the file, and each value is resolved per request against the current registry,
+which leaves out a key that registry does not declare.
+
+So the guarantee is this. A substitution cannot reach another thread, another fiber or a request
+served elsewhere. A load-time memoiser has to stay out of its reach by never reading the facade.
 
 ## Removing a flag
 

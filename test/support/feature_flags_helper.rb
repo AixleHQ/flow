@@ -30,20 +30,35 @@ module FeatureFlagsHelper
   end
 
   class_methods do
-    # with_feature_registry around every test of the class, setup and teardown included.
+    # with_feature_registry around every test of the class, setup and teardown
+    # included. The override is built from the booted graph before setup runs,
+    # so the suite's graph is re-installed first here as well.
     def uses_feature_registry(path)
       registry = FeatureFlags::Registry.load(path)
       prepend(Module.new do
-        define_method(:run) { with_feature_registry(registry) { super() } }
+        define_method(:run) do
+          FeatureFlagsHelper.reinstall_suite_graph!
+          with_feature_registry(registry) { super() }
+        end
       end)
     end
   end
 
-  # Empties the store and resets the version token, so every test starts from
-  # the declared defaults and counts its own bumps whatever an earlier test left
-  # behind. The ENV layer needs no reset: it is the booted one, empty in the
-  # suite, outside any stub_feature_env block.
+  # A test of composition calls FeatureFlags.compose. One that calls
+  # FeatureFlags.boot! replaces the suite's graph (a database-backed store, a
+  # Redis token) for the rest of its worker; this puts the suite's back before
+  # the next test, whatever order the tests run in.
+  def self.reinstall_suite_graph!
+    FeatureFlags.boot!(SUITE_GRAPH) unless FeatureFlags.booted.equal?(SUITE_GRAPH)
+  end
+
+  # Re-installs the suite's graph if a test booted another, then empties the
+  # store and resets the version token, so every test starts from the declared
+  # defaults and counts its own bumps whatever an earlier test left behind. The
+  # ENV layer needs no reset: it is the booted one, empty in the suite, outside
+  # any stub_feature_env block.
   def reset_feature_flags!
+    FeatureFlagsHelper.reinstall_suite_graph!
     FeatureFlags.store.reset!
     FeatureFlags.version_token.reset!
     Current.feature_snapshot = nil
@@ -105,5 +120,8 @@ end
 # the store is a MemoryStore and the version token a fake. The ENV layer is
 # empty: config/settings/test.yml drops FEATURE_* variables, and `settings: nil`
 # keeps legacy env_setting variables (CODER_REAP_ENABLED) of the shell out.
-# Parallel workers fork after this and each keeps its own copy.
-FeatureFlags.boot!(settings: nil, store: FeatureFlags::MemoryStore.new, version_token: FakeFeatureFlagVersionToken.new)
+# Parallel workers fork after this and each keeps its own copy. The suite keeps
+# the graph, so reset_feature_flags! can put it back if a test boots another.
+FeatureFlagsHelper::SUITE_GRAPH = FeatureFlags.boot!(
+  settings: nil, store: FeatureFlags::MemoryStore.new, version_token: FakeFeatureFlagVersionToken.new
+)
