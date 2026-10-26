@@ -93,6 +93,11 @@ module FeatureFlags
     # thread a test spawns) and a Temporal activity, which the SDK runs on its
     # own pool thread (see #snapshot), see the booted graph. So nothing that runs
     # or memoises elsewhere while the block is active can pick the test registry up.
+    # Code loaded on this fiber inside the block does see it: a class body that
+    # memoises flag names at load time (autoloaded by the block's first request
+    # when eager_load is off) would keep the test registry's keys. Such a class
+    # reads the shipped file, Registry.load(REGISTRY_PATH), never this facade;
+    # FeaturesResource is the reference.
     #
     # The suite reaches it through test/support/feature_flags_helper.rb
     # (with_feature_registry, stub_feature_env, ...), not directly.
@@ -144,12 +149,24 @@ module FeatureFlags
       end
     end
 
-    # The one composition entry point: composes the graph and installs it for
-    # the process. Called by config/initializers/feature_flags.rb, and once more
-    # by the suite's global setup with its infrastructure (test/support/feature_flags_helper.rb).
-    def boot!(...)
-      @booted = compose(...)
+    # The one composition entry point: composes the graph from `options` (see
+    # #compose), or takes one already composed, installs it for the process and
+    # returns it. Called by config/initializers/feature_flags.rb, and by the
+    # suite's global setup with its infrastructure (test/support/feature_flags_helper.rb),
+    # which also re-installs that graph before every test in case one called this.
+    # A test of composition calls #compose, never this.
+    def boot!(graph = nil, **options)
+      raise ArgumentError, "boot! takes a composed graph or compose options, not both" if graph && options.any?
+      raise ArgumentError, "boot! takes a FeatureFlags::Graph, got #{graph.inspect}" unless graph.nil? || graph.is_a?(Graph)
+
+      @booted = graph || compose(**options)
     end
+
+    # The graph boot! installed, whatever FeatureFlags.with substitutes on this
+    # fiber. A read before boot! composes and installs the default one: boot!
+    # runs after initialization, and an initializer or a rake task can load app
+    # code earlier.
+    def booted = @booted || boot!
 
     # Loads and validates the registry and the ENV layer (FEATURE_* and the
     # legacy env_setting values in `settings`), raising on anything invalid,
@@ -172,10 +189,6 @@ module FeatureFlags
     private
 
     def graph = Thread.current[SCOPED_GRAPH] || booted
-
-    # boot! runs after initialization; a read before it (an initializer, a
-    # rake task loading app code early) composes the default graph.
-    def booted = @booted || boot!
 
     def report_undeclared(env_source)
       env_source.undeclared.each do |variable|

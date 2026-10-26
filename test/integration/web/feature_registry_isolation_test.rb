@@ -8,6 +8,12 @@ require "test_helper"
 # Before, the swap was process-global for the length of the test, and anything
 # that memoised a flag list meanwhile (FeaturesResource's attribute list, task
 # #178) kept test-only keys that raised UnknownFlag on a later request.
+#
+# What it does not cover: code loaded on the test's own fiber inside the block.
+# A class body that memoises flag names at load time, autoloaded by the block's
+# first request (eager_load is off outside CI), sees the test registry. Such a
+# class must read Registry.load(REGISTRY_PATH), never FeatureFlags.registry, as
+# FeaturesResource does; the last test below pins that boundary.
 class Web::FeatureRegistryIsolationTest < ActionDispatch::IntegrationTest
   def shipped_client_flags = FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH).definitions.select(&:client?).map(&:key)
 
@@ -43,5 +49,16 @@ class Web::FeatureRegistryIsolationTest < ActionDispatch::IntegrationTest
     # Every memoised key is declared, so resolving the list on the next request does not raise.
     assert_nothing_raised { memoised.each { |key| FeatureFlags.registry.fetch(key) } }
     assert_equal shipped_client_flags.size, features_prop(login_path).to_h.size
+  end
+
+  test "on the test's own fiber, only a memoiser that reads the registry file stays out of reach" do
+    from_facade, from_file = with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
+      # What a class body autoloaded here would compute at load time.
+      [ FeatureFlags.registry.definitions.select(&:client?).map(&:key),
+        FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH).definitions.select(&:client?).map(&:key) ]
+    end
+
+    assert_includes from_facade, :board_ai_summary, "the seam cannot keep the facade from a load on this fiber"
+    assert_equal shipped_client_flags, from_file
   end
 end

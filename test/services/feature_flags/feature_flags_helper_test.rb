@@ -115,6 +115,44 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
     end
   end
 
+  def stray_graph
+    FeatureFlags.compose(settings: nil, store: FeatureFlags::MemoryStore.new, version_token: FakeFeatureFlagVersionToken.new)
+  end
+
+  test "reset_feature_flags! re-installs the suite's graph after a stray boot!" do
+    stray = FeatureFlags.boot!(stray_graph)
+    assert_same stray.store, FeatureFlags.store
+
+    reset_feature_flags!
+
+    assert_same FeatureFlagsHelper::SUITE_GRAPH, FeatureFlags.booted
+    assert_same FeatureFlagsHelper::SUITE_GRAPH.store, FeatureFlags.store
+    assert_same FeatureFlagsHelper::SUITE_GRAPH.version_token, FeatureFlags.version_token
+  ensure
+    FeatureFlags.boot!(FeatureFlagsHelper::SUITE_GRAPH)
+  end
+
+  # The first test boots another graph and leaves it installed; whichever runs
+  # second still starts on the suite's graph, because setup re-installs it.
+  2.times do |run|
+    test "every test starts on the suite's graph (#{run + 1})" do
+      assert_same FeatureFlagsHelper::SUITE_GRAPH, FeatureFlags.booted
+
+      FeatureFlags.boot!(stray_graph)
+    end
+  end
+
+  test "boot! installs a composed graph as it is" do
+    graph = stray_graph
+    assert_same graph, FeatureFlags.boot!(graph)
+    assert_same graph, FeatureFlags.booted
+
+    assert_raises(ArgumentError) { FeatureFlags.boot!(graph, settings: nil) }
+    assert_raises(ArgumentError) { FeatureFlags.boot!(FeatureFlags.store) }
+  ensure
+    FeatureFlags.boot!(FeatureFlagsHelper::SUITE_GRAPH)
+  end
+
   # Both tests bump the token without cleaning up; whichever runs second still
   # counts from zero, because setup resets it.
   2.times do |run|
