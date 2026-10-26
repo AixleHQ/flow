@@ -21,6 +21,14 @@ governance, community health — carry none.
   feature_flags:prune` deletes those leftover rows, recording each key in the
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
+- **Profile**: the `trigger_workflow` tool of personal access takes an optional
+  `idempotency_key`. A second call with the same key returns the run the first
+  call started instead of starting another, so an agent can retry safely after a
+  timeout.
+- **Sessions & Runs**: a new workflow run records how it was started: from the
+  workflow page, through personal access, as a retry of a failed run, or by a
+  trigger. A retry links to the run it repeats. `get_workflow_run`,
+  `list_workflow_runs` and the admin run page show both.
 
 ### Changed
 - Sentry gets an agent login refresh failure only when repeated failures that

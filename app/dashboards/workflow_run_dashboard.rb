@@ -12,6 +12,8 @@ class WorkflowRunDashboard < Administrate::BaseDashboard
     project: Field::BelongsTo,
     user: Field::BelongsTo,
     board_task: Field::BelongsTo.with_options(optional: true),
+    retried_from_run: Field::BelongsTo.with_options(optional: true),
+    source: Field::String,
     state: Field::String,
     mode: Field::String,
     agent_runtime: Field::String,
@@ -32,6 +34,7 @@ class WorkflowRunDashboard < Administrate::BaseDashboard
     workflow
     project
     user
+    source
     state
     mode
     created_at
@@ -43,6 +46,8 @@ class WorkflowRunDashboard < Administrate::BaseDashboard
     project
     user
     board_task
+    source
+    retried_from_run
     state
     mode
     agent_runtime

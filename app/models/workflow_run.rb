@@ -44,18 +44,23 @@ class WorkflowRun < ApplicationRecord
   belongs_to :user, optional: true
   belongs_to :board_task, optional: true, touch: true
   belongs_to :failed_agent_credential, class_name: "AgentCredential", optional: true
+  belongs_to :retried_from_run, class_name: "WorkflowRun", optional: true
 
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
   has_many :column_transitions, dependent: :nullify
 
   enumerize :mode, in: %i[interactive non_interactive mixed], default: :interactive, predicates: true
+  # How the run was launched. A `trigger` run's event and binding are on its
+  # TriggerDispatch; runs created before this column existed have none.
+  enumerize :source, in: %i[web mcp retry trigger]
 
   def execution_workflow_id
     "workflow-execution-#{id}"
   end
 
   validates :mode, presence: true
+  validates :idempotency_key, length: { maximum: 255 }, allow_nil: true
   # Run assets are copied into every step container and run repositories are
   # cloned with their integration's token, so the ids — posted by a user or
   # carried in by a webhook — must be this project's.
