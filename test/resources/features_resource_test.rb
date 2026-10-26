@@ -29,7 +29,7 @@ class FeaturesResourceTest < ActiveSupport::TestCase
 
   test "external_runners is off for a company without an override" do
     assert_not Feature.enabled?(:external_runners, company: @company)
-    assert_equal false, FeaturesResource.new(@company).to_h["externalRunners"]
+    assert_equal({ "externalRunners" => false }, FeaturesResource.new(@company).to_h.slice("externalRunners"))
   end
 
   test "external_runners is on for a company with the override, and only for it" do
@@ -37,14 +37,14 @@ class FeaturesResourceTest < ActiveSupport::TestCase
 
     with_feature(:external_runners, true, company: @company) do
       assert Feature.enabled?(:external_runners, company: @company)
-      assert_equal true, FeaturesResource.new(@company).to_h["externalRunners"]
-      assert_equal false, FeaturesResource.new(other).to_h["externalRunners"]
+      assert_equal({ "externalRunners" => true }, FeaturesResource.new(@company).to_h.slice("externalRunners"))
+      assert_equal({ "externalRunners" => false }, FeaturesResource.new(other).to_h.slice("externalRunners"))
     end
   end
 
   test "no company reads the global value" do
     with_feature(:external_runners, true) do
-      assert_equal true, FeaturesResource.new(nil).to_h["externalRunners"]
+      assert_equal({ "externalRunners" => true }, FeaturesResource.new(nil).to_h.slice("externalRunners"))
     end
   end
 
