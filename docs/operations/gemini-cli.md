@@ -21,12 +21,16 @@ credentials.
   `--yolo` no longer approves edits to build files (`package.json`, lockfiles,
   `Dockerfile`, `Makefile`, …) — the CLI opens a "Build File Modification" dialog that no
   one answers in a headless session (upstream #29250). From 0.63.0 (#29506) `--yolo` also
-  asks "Untrusted Command Flags" before a build or test command that follows untrusted
-  tool output (shell or MCP output, a web fetch) or a build-file edit; 0.64.0 narrowed it
-  (#29672) but kept the prompt. Neither has a setting, flag or policy rule that turns it
-  off: both override an allow decision, an admin policy's included (checked against 0.64.0
-  on 2026-10-20). The weekly canary keeps reporting the newer release; that is expected
-  until upstream offers a switch.
+  asks "Untrusted Command Flags" before a shell command whose arguments appeared in
+  earlier tool output, and every shell output counts as untrusted, local commands
+  included: a `find` in the workspace followed by `cat` of a file it listed prompts.
+  0.64.0 narrowed it (#29672) but kept the prompt, so nearly every session would stop
+  there. Neither has a setting, flag or policy rule that turns it off: both override an
+  allow decision, an admin policy's included (checked against 0.65.0 on 2026-10-26, live
+  against a scripted model API). Upstream #29833, on `main` but not yet released, limits
+  the second check to external output; the build-file dialog stays even then. The weekly
+  canary keeps reporting the newer release; that is expected until upstream offers a
+  switch.
 - Executable: `gemini`.
 - Authentication: `GEMINI_API_KEY`; personal OAuth is not captured or injected.
 - Configuration: `/home/gemini/.gemini/settings.json`.

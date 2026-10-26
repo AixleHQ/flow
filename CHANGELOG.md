@@ -36,6 +36,13 @@ governance, community health — carry none.
   a new sign-in — not for a single failure, and not for a login the vendor
   ended, whose owner is already emailed. Every failed refresh is still logged as
   an `[AgentCredential] refresh failed` line.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.310, Codex 0.164.0,
+  Cursor CLI 2026.10.22-27dcf5f, Grok 1.0.70, Kiro CLI 2.34.0 and Antigravity
+  CLI 1.4.7. An interactive Kiro session still opens at the prompt: the
+  workspace-trust question Kiro 2.33 added is answered at launch. Gemini CLI
+  stays at 0.60.0: newer releases still stop `--yolo` at a prompt when the
+  agent edits a build file or runs a command on a path an earlier command
+  printed.
 
 ### Fixed
 - **Trackers**: a tracker comment or issue description whose text looks to an
