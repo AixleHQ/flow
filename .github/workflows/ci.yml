@@ -8,6 +8,9 @@ on:
   push:
     branches:
       - develop
+      # The staging environment deploys merge commits on this branch, and that
+      # deployment refuses a commit without a successful CI run of its own.
+      - staging
   pull_request:
   workflow_dispatch:
 
@@ -43,9 +46,11 @@ jobs:
     # cost 2m36s of pure wall clock on every run (31254450213), to save a
     # rebuild that was never expensive.
     #
-    # Only develop pushes write. A pull request's own layers are read by nothing
-    # else, and two check jobs writing one cache in parallel is what made the
-    # cache useless in the first place.
+    # Only pushes to develop write; the `if:` below checks the ref, not just
+    # the event. Other pushed branches (staging) carry unmerged features, and
+    # develop's check jobs would read their layers. A pull request's own layers
+    # are read by nothing else, and two check jobs writing one cache in
+    # parallel is what made the cache useless in the first place.
     #
     # The cache lives in GHCR, not the Actions cache. The Actions cache is
     # capped at 10 GB per repository and this image alone filled it — measured
@@ -54,7 +59,7 @@ jobs:
     # depends on. GHCR is unmetered for public repositories, and a public
     # package is readable anonymously, so a fork's pull request reads the same
     # cache we do without holding any token.
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
