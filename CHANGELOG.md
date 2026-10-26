@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: `bin/rails feature_flags:audit` lists the feature flags due for
+  removal: release flags past their remove-by date, flags that have had the same
+  value for every company for 30 days, database rows of flags no longer
+  declared, and `FEATURE_*` variables no flag declares. `bin/rails
+  feature_flags:prune` deletes those leftover rows, recording each key in the
+  audit trail; it is an optional manual step once a rollout has replaced every
+  old pod, described in the release guide.
+
 ## [1.7.0] - 2026-10-24
 
 ### Changed
@@ -138,6 +147,7 @@ governance, community health — carry none.
   them (and the `channel_rename` and `group_rename` events) to the Slack app, and
   set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
   app once to pick them up.
+
 - **Company settings**: a workspace billed through AWS Marketplace is no longer
   offered a card. Adding one would be a second bill for capacity AWS already
   charges for; the billing screens say where to manage it instead. A workspace

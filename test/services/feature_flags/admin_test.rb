@@ -196,4 +196,24 @@ class FeatureFlags::AdminTest < ActiveSupport::TestCase
     assert_raises(FeatureFlags::WriteRefused) { admin.prune(:coder_reap, actor: @admin, reason: "x") }
     assert flag(:coder_reap)
   end
+
+  test "a flag its legacy variable locks refuses writes, naming that variable" do
+    stub_feature_env_setting(:coder_reap, false) do
+      error = assert_raises(FeatureFlags::EnvLocked) do
+        admin.set_global(:coder_reap, true, actor: @admin, reason: "x")
+      end
+
+      assert_equal "CODER_REAP_ENABLED", error.variable
+      assert_match "coder_reap is locked by CODER_REAP_ENABLED", error.message
+    end
+    assert_equal [ 0, 0 ], [ FeatureFlag.count, Audit.count ]
+  end
+
+  test "with the legacy variable unset the flag is writable" do
+    stub_feature_env_setting(:coder_reap, nil) do
+      admin.set_global(:coder_reap, false, actor: @admin, reason: "incident")
+    end
+
+    assert_equal false, flag(:coder_reap).enabled # rubocop:disable Minitest/RefuteFalse
+  end
 end

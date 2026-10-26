@@ -17,5 +17,24 @@
 #                                       # in app/frontend/shared/ui/types.ts
 #     introduced: 2026-11-03                                     # optional
 #     remove_by: 2027-01-31                                      # required for kind: release
+#     env_setting: coder.reap_enabled                            # optional, with env_setting_variable
+#     env_setting_variable: CODER_REAP_ENABLED
+#
+# env_setting moves a legacy ENV toggle over without renaming its variable: the
+# Settings value at that path is a second ENV lock, with the same precedence as
+# FEATURE_<KEY>. config/settings.yml must leave it null while the variable
+# (env_setting_variable, named so admin can say what locks the flag) is unset,
+# so the settings default never locks the flag. When FEATURE_<KEY> and the
+# legacy variable are both set, FEATURE_<KEY> wins.
 #
 # Design: docs/research/technical-feature-flags-system-design-research-2026-10-21.md
+
+coder_reap:
+  description: Lets the Coder reaper delete dead workspaces.
+  owner: "@AixleHQ/platform"
+  kind: ops
+  scope: global
+  default: true
+  client: false
+  env_setting: coder.reap_enabled
+  env_setting_variable: CODER_REAP_ENABLED
