@@ -86,12 +86,35 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
   # The address is the whole of the proof, so a link that was tampered with,
   # signed elsewhere, or has simply expired raises nothing.
-  test "a token that is not ours raises nothing" do
+  # The refusal used to travel as a flash, which that page draws nowhere, so a
+  # buyer who was refused landed on an empty form -- one their claimed domain
+  # makes unusable anyway -- with no trace of what they had just done. Seen on
+  # 26 October: the only sensible thing left to try was subscribing a third
+  # time.
+  test "a token that is not ours raises nothing, and says so where it can be read" do
     get confirm_marketplace_proposal_path(token: "not-a-token")
 
-    assert_redirected_to new_workspace_path
-    assert_match(/expired/i, flash[:alert])
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/expired/i, props.dig(:errors, :base).to_s) }
     assert_equal 0, MarketplaceLicense.where.not(proposal_state: nil).count
+  end
+
+  # The address goes back with the refusal, so what renders is the screen that
+  # explains the domain rather than a form the person cannot use.
+  test "a refusal returns the buyer to the screen that explains their domain" do
+    arrive_from_marketplace
+    ask
+    perform_enqueued_jobs
+    token = link_from_mail
+    create(:marketplace_license, :active, company: @company)
+
+    get confirm_marketplace_proposal_path(token: token)
+
+    follow_redirect!
+    assert_inertia_props do |props|
+      assert_equal "northwind.example", props.dig(:claimedDomain, :domain)
+      assert_match(/already has an AWS Marketplace subscription/, props.dig(:errors, :base).to_s)
+    end
   end
 
   test "a link stops working once it is old" do
@@ -116,7 +139,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
     get confirm_marketplace_proposal_path(token: link_from_mail)
 
-    assert_redirected_to new_workspace_path
+    assert_redirected_to new_workspace_path(email: "dana@somewhere-else.example")
     assert_nil MarketplaceLicense.last.proposed_company
   end
 
@@ -126,7 +149,8 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
       perform_enqueued_jobs
     end
 
-    assert_match(/cannot find the subscription/i, flash[:alert])
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/cannot find the subscription/i, props.dig(:errors, :base).to_s) }
   end
 
   # -- Answering -------------------------------------------------------------

@@ -50,7 +50,10 @@ class Web::Company::BillingController < Web::Company::ApplicationController
   def marketplace_billing
     return nil unless current_company.billing_payer.aws_marketplace?
 
-    license = current_company.marketplace_license
+    # The most recent, live or not: a workspace whose subscription has ended is
+    # exactly the one that needs this panel, and `marketplace_license` answers
+    # only for the live one.
+    license = current_company.marketplace_licenses.order(:id).last
     {
       aws_account_id: license&.customer_aws_account_id,
       subscribed_at: license&.subscribed_at,

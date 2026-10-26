@@ -42,7 +42,13 @@ class Company < ApplicationRecord
   # Nullified rather than destroyed: deleting a workspace does not cancel an AWS
   # subscription, and a licence that outlives its company is exactly the state
   # somebody has to see — AWS is still billing and nobody can reach the product.
-  has_one :marketplace_license, dependent: :nullify
+  has_many :marketplace_licenses, dependent: :nullify
+  # The one that bills it now. A workspace keeps every licence it has had --
+  # which subscription paid for which month is a billing record -- so "the
+  # licence" has to mean the live one, or a workspace whose subscription ended
+  # reads as still subscribed. That is what refused a customer's second
+  # subscription on 26 October: they were told the workspace already had one.
+  has_one :marketplace_license, -> { live }, class_name: "MarketplaceLicense", inverse_of: :company
   has_many :feature_flag_overrides, dependent: :delete_all
   # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
   # No `dependent:` — the row's before_destroy would abort destroying a metered company.

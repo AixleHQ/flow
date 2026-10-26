@@ -223,6 +223,14 @@ governance, community health — carry none.
   onto AWS Marketplace at 18:36 sent AWS the whole of 18:00, which was free
   time while the workspace was on its allowance and time already on the final
   card invoice where it had been paying — charged twice.
+- **Sign-in & onboarding**: a customer whose AWS Marketplace subscription ended
+  can subscribe again. The finished subscription went on counting as the
+  workspace's one, so the request was refused with "that workspace already has
+  an AWS Marketplace subscription" — about a workspace that was stopped for
+  want of one, and which our own screen had told them to subscribe again for.
+- **Sign-in & onboarding**: a refused request now says why. The reason was
+  carried in a message that page never drew, so the buyer landed on an empty
+  workspace form with no trace of what they had just done.
 - **Sign-in & onboarding**: a buyer whose request to apply an AWS Marketplace
   subscription is declined can ask again. They were told to ask again and given
   no way to, which left a paid subscription attached to nothing for good.
