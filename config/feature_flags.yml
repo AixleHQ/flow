@@ -12,9 +12,9 @@
 #     scope: company                                             # required: company | global
 #     default: false                                             # required: true | false
 #     client: true                                               # optional, default false
-#                                       # the first client: true flag is the trigger to reconsider
-#                                       # how FeatureFlagName is produced: see the comment above it
-#                                       # in app/frontend/shared/ui/types.ts
+#                                       # sent to the browser in the `features` prop; FeaturesResource
+#                                       # turns it into the generated `Features` type that
+#                                       # useFeatureFlag takes, so no frontend list needs editing
 #     introduced: 2026-11-03                                     # optional
 #     remove_by: 2027-01-31                                      # required for kind: release
 #     env_setting: coder.reap_enabled                            # optional, with env_setting_variable
@@ -38,3 +38,13 @@ coder_reap:
   client: false
   env_setting: coder.reap_enabled
   env_setting_variable: CODER_REAP_ENABLED
+
+external_runners:
+  description: External agent runners — connect a machine, Coder or Kubernetes and run agent sessions there.
+  owner: "@AixleHQ/platform"
+  kind: release
+  scope: company
+  default: false
+  client: true
+  introduced: 2026-10-26
+  remove_by: 2027-06-30    # a review checkpoint, not a planned removal date (docs/design/agent-runtimes/DESIGN.md §12.1)
