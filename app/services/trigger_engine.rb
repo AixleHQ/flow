@@ -229,7 +229,7 @@ class TriggerEngine
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
-            workflow: workflow, project: project, user: actor,
+            workflow: workflow, project: project, user: actor, source: :trigger,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
             shared_context: Chat.run_context(event).merge(

@@ -219,7 +219,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     task = create(:board_task, board: board, board_column: column)
 
     WorkflowService.expects(:enqueue).with(
-      has_entries(workflow: @workflow, task: task, mode: :non_interactive)
+      has_entries(workflow: @workflow, task: task, mode: :non_interactive, source: :trigger)
     ).once.returns(build(:workflow_run))
 
     TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: @user)

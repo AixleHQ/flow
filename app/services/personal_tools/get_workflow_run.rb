@@ -25,6 +25,7 @@ module PersonalTools
           started_at: sr.started_at, completed_at: sr.completed_at }
       end
       success(id: run.id, workflow_id: run.workflow_id, state: run.state,
+              source: run.source, retried_from_run_id: run.retried_from_run_id,
               started_at: run.started_at, completed_at: run.completed_at, step_runs: step_runs,
               outputs: outputs(run))
     end
