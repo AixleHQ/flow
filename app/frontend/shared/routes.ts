@@ -492,6 +492,26 @@ export function apiV1ProjectTriggersPath(project_id: ScalarType, options?: objec
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "triggers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /api/v1/projects/:project_id/chat_channels(.:format) */
+export function apiV1ProjectChatChannelsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "chat_channels" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/chat_channels/:id(.:format) */
+export function apiV1ProjectChatChannelPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "chat_channels" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/chat_connect_codes(.:format) */
+export function apiV1ProjectChatConnectCodesPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "chat_connect_codes" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/chat_connect_codes/:id(.:format) */
+export function apiV1ProjectChatConnectCodePath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "chat_connect_codes" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/workflows/:workflow_id/steps/reorder(.:format) */
 export function reorderApiV1ProjectWorkflowStepsPath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "steps" + "/" + "reorder" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
@@ -750,6 +770,21 @@ export function editAdminUserPath(id: ScalarType, options?: object): string {
 /** /admin/users/:id(.:format) */
 export function adminUserPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/companies/:company_id/invitations/:id/resend(.:format) */
+export function resendAdminCompanyInvitationPath(company_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "companies" + "/" + company_id + "/" + "invitations" + "/" + id + "/" + "resend" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_id","id","format"]);
+}
+
+/** /admin/companies/:company_id/invitations(.:format) */
+export function adminCompanyInvitationsPath(company_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "companies" + "/" + company_id + "/" + "invitations" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_id","format"]);
+}
+
+/** /admin/companies/:company_id/invitations/new(.:format) */
+export function newAdminCompanyInvitationPath(company_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "companies" + "/" + company_id + "/" + "invitations" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_id","format"]);
 }
 
 /** /admin/companies(.:format) */
@@ -1427,6 +1462,11 @@ export function linearOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "linear" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/gitlab/oauth/callback(.:format) */
+export function gitlabOauthCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "gitlab" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /integrations/youtrack/connect(.:format) */
 export function youtrackConnectPath(options?: object): string {
   return "/" + "integrations" + "/" + "youtrack" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1842,6 +1882,11 @@ export function linearInspectCompanyProjectIntegrationsPath(project_id: ScalarTy
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "linear_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/gitlab_oauth_start(.:format) */
+export function gitlabOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "gitlab_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/integrations/youtrack_connect(.:format) */
 export function youtrackConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "youtrack_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
@@ -1880,6 +1925,16 @@ export function githubProjectsCompanyProjectIntegrationPath(project_id: ScalarTy
 /** /company/projects/:project_id/integrations/:id/linear_teams(.:format) */
 export function linearTeamsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "linear_teams" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/gitlab_projects(.:format) */
+export function gitlabProjectsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "gitlab_projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/gitlab_boards(.:format) */
+export function gitlabBoardsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "gitlab_boards" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/integrations/:id/jira_webhook(.:format) */

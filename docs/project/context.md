@@ -35,7 +35,7 @@ Versions are not listed here — read them from `.ruby-version`, `Gemfile.lock`,
 - **Auth:** email + password (has_secure_password, no Devise) + OmniAuth (Google) + invitations; Pundit
 - **Storage:** Shrine + AWS S3 + Uppy (frontend uploads)
 - **Container (Docker):** docker-api
-- **Container (K8s):** kubeclient + websocket-client-simple
+- **Container (K8s):** kubeclient + websocket (pod exec through `ContainerRuntime::ExecWebsocket`)
 - **MCP:** mcp gem (official Ruby SDK)
 - **Enums:** enumerize gem (NOT ActiveRecord enums)
 - **State machines:** aasm gem

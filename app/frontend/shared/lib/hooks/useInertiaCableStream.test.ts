@@ -104,6 +104,27 @@ describe('useInertiaCableStream', () => {
     expect(router.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('reloads within maxWaitMs while refreshes keep arriving', () => {
+    renderHook(() => useInertiaCableStream('signed-stream-xyz', { debounceMs: 1000, maxWaitMs: 3000 }));
+    act(() => vi.advanceTimersByTime(50));
+
+    act(() => {
+      for (let i = 0; i < 5; i += 1) {
+        lastHandlers?.received({ type: 'refresh' });
+        vi.advanceTimersByTime(500);
+      }
+    });
+    // A refresh every 500ms keeps pushing a plain 1s debounce back.
+    expect(router.reload).not.toHaveBeenCalled();
+
+    act(() => {
+      lastHandlers?.received({ type: 'refresh' });
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(router.reload).toHaveBeenCalledTimes(1);
+  });
+
   // A refresh broadcast sent while the socket was down never arrives.
   it('reloads after a reconnect, but not on the first connection', () => {
     renderHook(() => useInertiaCableStream('signed-stream-xyz', { only: ['board'] }));

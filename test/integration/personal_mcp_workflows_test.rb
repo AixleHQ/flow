@@ -30,6 +30,16 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_includes names, @workflow.name
   end
 
+  test "list_workflows counts steps with a single grouped query" do
+    other = create(:workflow, scope: @project)
+    create(:step, workflow: other)
+    create(:step, workflow: @workflow)
+
+    assert_queries_match(/GROUP BY "steps"\."workflow_id"/, count: 1) do
+      call_tool("list_workflows", { project_id: @project.id })
+    end
+  end
+
   test "create_workflow then get_workflow and create_workflow_step" do
     created = payload(call_tool("create_workflow", { project_id: @project.id, name: "Built by MCP" }))
     wf_id = created["id"]
@@ -255,6 +265,37 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
     detail = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: run_obj.id }))
     assert_equal "pending", detail["state"]
+  end
+
+  test "trigger_workflow records an MCP launch and starts a repeated idempotency_key only once" do
+    create(:agent_credential, user: @user, company: @company)
+    mock_workflow_execution_start
+    args = { project_id: @project.id, workflow_id: @workflow.id, idempotency_key: "launch-1" }
+
+    first = payload(call_tool("trigger_workflow", args))
+    repeat = nil
+    assert_no_difference("WorkflowRun.count") { repeat = payload(call_tool("trigger_workflow", args)) }
+
+    assert_equal first["run_id"], repeat["run_id"]
+    assert repeat["replayed"]
+    detail = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: first["run_id"] }))
+    assert_equal "mcp", detail["source"]
+    assert_nil detail["retried_from_run_id"]
+  end
+
+  test "trigger_workflow refuses an idempotency_key already spent on another workflow" do
+    create(:agent_credential, user: @user, company: @company)
+    mock_workflow_execution_start
+    call_tool("trigger_workflow", { project_id: @project.id, workflow_id: @workflow.id, idempotency_key: "launch-1" })
+    other = create(:workflow, scope: @project)
+
+    body = nil
+    assert_no_difference("WorkflowRun.count") do
+      body = call_tool("trigger_workflow", { project_id: @project.id, workflow_id: other.id, idempotency_key: "launch-1" })
+    end
+
+    assert error?(body)
+    assert_match(/already started run \d+ of another workflow/, text(body))
   end
 
   test "sub-steps, update, reorder and delete round-trip through workflow authoring tools" do

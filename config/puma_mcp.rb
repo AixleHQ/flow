@@ -20,3 +20,5 @@ environment ENV.fetch("RAILS_ENV") { "development" }
 pidfile ENV.fetch("MCP_PIDFILE") { "tmp/pids/mcp.pid" }
 
 plugin :tmp_restart
+
+after_booted { MemoryStats.start("mcp") }

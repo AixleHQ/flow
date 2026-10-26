@@ -11,7 +11,7 @@ module Api
           # The workflows whose triggers this project can edit (the per-workflow endpoint's).
           workflows = current_project.workflows.active
           bindings = TriggerBinding.where(project_id: current_project.id, workflow: workflows)
-                                   .includes(:created_by, :workflow).order(:created_at).to_a
+                                   .includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a
           columns = ColumnWorkflowBinding.joins(board_column: :board).where(boards: { project_id: current_project.id })
                                          .where(workflow: workflows).includes(:board_column, :created_by, :workflow)
                                          .order(:created_at)

@@ -126,15 +126,10 @@ module Teams
         bound = integration.settings.to_h["tenant_id"]
         raise Refused, "This connection already serves another Microsoft 365 organization" if bound.present? && bound != tenant_id
 
-        endpoint = WebhookEndpoint.find_by(slug: endpoint_slug(tenant_id))
-        if endpoint && endpoint.config.to_h["integration_id"] != integration.id
-          raise Refused, "That Microsoft 365 organization is already connected to an Aixle workspace"
+        if already_connected?(integration, tenant_id)
+          raise Refused, "#{integration.company.name} has already connected that Microsoft 365 organization"
         end
 
-        endpoint ||= WebhookEndpoint.create!(slug: endpoint_slug(tenant_id), provider: :teams, company: integration.company,
-                                             project: nil, verification_strategy: :none, secret: nil,
-                                             config: { "integration_id" => integration.id })
-        endpoint.update!(enabled: true)
         integration.update!(status: "active", name: "Microsoft Teams (#{domain_of(claims) || tenant_id})",
                             settings: integration.settings.to_h.merge(
                               "tenant_id" => tenant_id, "tenant_domain" => domain_of(claims),
@@ -143,10 +138,30 @@ module Teams
                                                  "roles" => roles.map { |r| ADMIN_ROLES[r] } },
                               "approved_at" => Time.current.iso8601
                             ))
+        provision_endpoint(integration, tenant_id)
       end
       integration
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
-      raise Refused, "That Microsoft 365 organization is already connected to an Aixle workspace"
+      raise Refused, "That Microsoft 365 organization was being connected at the same moment — approve again"
+    end
+
+    # Several companies may connect one organization, each once.
+    def already_connected?(integration, tenant_id)
+      integration.company.integrations.active.where(provider: "teams").where.not(id: integration.id)
+                 .where("settings->>'tenant_id' = ?", tenant_id).exists?
+    end
+
+    # The tenant's one endpoint. It keeps hearing through the install it already
+    # names while that serves the same organization.
+    def provision_endpoint(integration, tenant_id)
+      endpoint = WebhookEndpoint.find_or_initialize_by(slug: endpoint_slug(tenant_id))
+      current = endpoint.chat_install if endpoint.persisted?
+      hears = current&.chat_workspace_id.present? && current.chat_workspace_id == integration.chat_workspace_id ? current : integration
+      endpoint.assign_attributes(provider: :teams, company: hears.company, project: nil, verification_strategy: :none,
+                                 secret: nil, enabled: true,
+                                 config: endpoint.config.to_h.merge("integration_id" => hears.id,
+                                                                    "chat_workspace_id" => integration.chat_workspace_id))
+      endpoint.save!
     end
 
     # Microsoft's admin-consent page for the file permission; only a directory

@@ -39,7 +39,9 @@ module PersonalTools
       param :copy_attachments, type: :boolean,
                                description: "kind=tracker: copy the issue's files onto the run's task when a run starts."
       param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,
-                            description: "kind=chat: move the trigger to another messenger."
+                            description: "kind=chat: move the trigger to another messenger. Its channel is dropped."
+      param :chat_channel_id, type: :integer,
+                              description: "kind=chat: the channel to listen to, from list_chat_channels."
       param :filter_predicate, type: :object,
                                description: "Replaces the whole predicate: only fire when the event data contains " \
                                             "these key/value pairs. Pass {} to clear it; a chat trigger keeps its messenger."

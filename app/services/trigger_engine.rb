@@ -113,6 +113,10 @@ class TriggerEngine
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
+      if Chat.connect_request?(event)
+        Chat.answer_connect(event)
+        return []
+      end
       if Chat.help_request?(event)
         Chat.answer_help(event)
         return []
@@ -225,7 +229,7 @@ class TriggerEngine
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
-            workflow: workflow, project: project, user: actor,
+            workflow: workflow, project: project, user: actor, source: :trigger,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
             shared_context: Chat.run_context(event).merge(

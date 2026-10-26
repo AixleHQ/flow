@@ -390,6 +390,11 @@ module Tools
           - A `schedule` trigger needs a cron expression AND an explicit timezone —
             leave the timezone out and Temporal schedules in UTC, which drifts by an
             hour under daylight saving.
+          - A chat trigger listens in exactly one channel: `chat_channel_id`, from
+            `list_chat_channels`. A channel not listed is connected by a person in
+            it: `create_chat_connect_code` (with the trigger's `trigger_id`) returns
+            what they post there; create the trigger with `enabled: false` until
+            `get_chat_connect_code` reports it redeemed.
           - Everything is scoped to what your account can access — a tool that
             returns "not allowed" means your role can't do that in this project.
 

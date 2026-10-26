@@ -7,6 +7,10 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
 
   def env(variables) = FeatureFlags::EnvSource.new(variables, registry: REGISTRY)
 
+  def env_with(settings, variables = {}) = FeatureFlags::EnvSource.new(variables, registry: REGISTRY, settings: settings)
+
+  def reap_setting(value) = { coder: { reap_enabled: value } }
+
   test "on, true and 1 are on; off, false and 0 are off; case and whitespace are ignored" do
     { "on" => true, "TRUE" => true, " 1 " => true, "On" => true,
       "off" => false, "False" => false, "0" => false, " OFF\n" => false }.each do |raw, expected|
@@ -68,5 +72,95 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
 
     assert source.value_for(:coder_reap)
     assert_raises(FeatureFlags::InvalidEnv) { source.merge("FEATURE_CODER_REAP" => "maybe") }
+  end
+
+  test "FEATURE_<KEY> is the variable that locks it" do
+    assert_equal "FEATURE_CODER_REAP", env("FEATURE_CODER_REAP" => "off").variable_for(:coder_reap)
+    assert_nil env({}).variable_for(:coder_reap)
+  end
+
+  # config/settings.yml gives coder.reap_enabled true or false when
+  # CODER_REAP_ENABLED is set and nil when it is not.
+  test "the legacy env_setting locks the flag only when its variable is set" do
+    source = env_with(reap_setting(false))
+    assert_equal [ false, "CODER_REAP_ENABLED" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
+
+    source = env_with(reap_setting(true))
+    assert_equal [ true, "CODER_REAP_ENABLED" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
+
+    source = env_with(reap_setting(nil))
+    assert_equal [ nil, nil ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ]
+  end
+
+  test "FEATURE_<KEY> wins over the legacy variable when both are set" do
+    [ [ "on", false, true ], [ "off", true, false ], [ "off", false, false ] ].each do |feature, legacy, expected|
+      source = env_with(reap_setting(legacy), "FEATURE_CODER_REAP" => feature)
+
+      assert_equal [ expected, "FEATURE_CODER_REAP" ], [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ],
+                   "FEATURE_CODER_REAP=#{feature}, coder.reap_enabled=#{legacy}"
+    end
+  end
+
+  test "string-keyed settings are read too" do
+    assert_equal false, env_with({ "coder" => { "reap_enabled" => false } }).value_for(:coder_reap) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "a legacy setting that is not true, false or unset fails boot naming it and its variable" do
+    error = assert_raises(FeatureFlags::InvalidEnv) { env_with(reap_setting("false")) }
+
+    assert_match "coder.reap_enabled (CODER_REAP_ENABLED) must be true, false or unset, got \"false\"", error.message
+  end
+
+  test "an env_setting that names no setting fails boot" do
+    [ {}, { coder: {} }, { coder: "on" } ].each do |settings|
+      error = assert_raises(FeatureFlags::InvalidEnv) { env_with(settings) }
+
+      assert_match "coder_reap: env_setting coder.reap_enabled is not a setting", error.message
+    end
+  end
+
+  test "without settings no legacy lock is read" do
+    assert_nil env({}).value_for(:coder_reap)
+  end
+
+  test "merge_settings, merge and with_registry keep the legacy layer" do
+    source = env_with(reap_setting(nil)).merge_settings("coder.reap_enabled" => false)
+
+    refute source.value_for(:coder_reap)
+    refute source.merge("FEATURE_BOARD_AI_SUMMARY" => "on").value_for(:coder_reap)
+    refute source.with_registry(REGISTRY).value_for(:coder_reap)
+    assert_equal "FEATURE_CODER_REAP", source.merge("FEATURE_CODER_REAP" => "off").variable_for(:coder_reap)
+  end
+
+  # The settings tree holds secrets; the source lives for the whole process.
+  test "keeps only the declared env_setting values of the settings tree" do
+    settings = { secret_key_base: "not-for-flags", database: { password: "db-secret" },
+                 coder: { reap_enabled: false, url: "https://coder.example" } }
+    source = env_with(settings)
+
+    assert_equal({ coder: { reap_enabled: false } }, source.instance_variable_get(:@settings))
+    [ "not-for-flags", "db-secret", "coder.example" ].each { |value| refute_includes source.inspect, value }
+
+    refute source.with_registry(REGISTRY).value_for(:coder_reap)
+    refute source.merge("FEATURE_BOARD_AI_SUMMARY" => "on").value_for(:coder_reap)
+    assert source.merge_settings("coder.reap_enabled" => true).value_for(:coder_reap)
+    assert_nil env_with(reap_setting(nil).merge(secret_key_base: "x")).with_registry(REGISTRY).value_for(:coder_reap)
+  end
+
+  # Existing deployments keep their meaning: `true` is on, anything else set is
+  # off, and only an unset variable leaves the flag to admin and its default.
+  test "config/settings.yml gives coder.reap_enabled a value only when CODER_REAP_ENABLED is set" do
+    saved = ENV.fetch("CODER_REAP_ENABLED", nil)
+
+    { nil => nil, "true" => true, "false" => false, "no" => false, "" => false }.each do |raw, expected|
+      raw.nil? ? ENV.delete("CODER_REAP_ENABLED") : ENV["CODER_REAP_ENABLED"] = raw
+      settings = Config.load_files(Rails.root.join("config/settings.yml"), Rails.root.join("config/settings/test.yml"))
+      source = FeatureFlags::EnvSource.new({}, registry: REGISTRY, settings: settings.to_h)
+
+      assert_equal [ expected, expected.nil? ? nil : "CODER_REAP_ENABLED" ],
+                   [ source.value_for(:coder_reap), source.variable_for(:coder_reap) ], "CODER_REAP_ENABLED=#{raw.inspect}"
+    end
+  ensure
+    saved.nil? ? ENV.delete("CODER_REAP_ENABLED") : ENV["CODER_REAP_ENABLED"] = saved
   end
 end

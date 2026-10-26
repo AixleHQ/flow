@@ -188,15 +188,20 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
     assert_not WebhookEndpoint.exists?(slug: "teams-tenant-22222222-0000-4000-8000-0000000000dd")
   end
 
-  test "an organization belongs to one workspace" do
-    approve(Teams::Connection.start!(company: @company, user: @user).first)
+  test "several companies may connect one organization, each once, as peers" do
+    ours = Teams::Connection.start!(company: @company, user: @user).first
+    approve(ours)
     other_company = create(:company)
-    other, = Teams::Connection.start!(company: other_company, user: create(:user, :admin, company: other_company))
+    theirs, = Teams::Connection.start!(company: other_company, user: create(:user, :admin, company: other_company))
 
-    error = assert_raises(Teams::Connection::Refused) { approve(other) }
+    approve(theirs)
 
-    assert_match(/already connected/, error.message)
-    assert_equal "inactive", other.reload.status
+    assert theirs.reload.active?
+    assert_equal ours.reload.chat_workspace, theirs.chat_workspace
+    assert_equal ours.id, WebhookEndpoint.find_by!(slug: "teams-tenant-#{TEAMS_CUSTOMER_TENANT}").config["integration_id"]
+    again, = Teams::Connection.start!(company: @company, user: @user)
+    error = assert_raises(Teams::Connection::Refused) { approve(again) }
+    assert_match(/has already connected that Microsoft 365 organization/, error.message)
   end
 
   test "an installation pinned to its own organizations refuses any other" do
@@ -204,6 +209,21 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
     integration, = Teams::Connection.start!(company: @company, user: @user)
 
     assert_raises(Teams::Connection::Refused) { approve(integration) }
+  end
+
+  test "one company disconnecting leaves the organization to the others, and its channels with them" do
+    ours = Teams::Connection.start!(company: @company, user: @user).first
+    approve(ours)
+    other_company = create(:company)
+    theirs, = Teams::Connection.start!(company: other_company, user: create(:user, :admin, company: other_company))
+    approve(theirs)
+    channel = connect_chat_channel(company: other_company, provider: "teams", integration: theirs)
+
+    ours.destroy!
+
+    endpoint = WebhookEndpoint.find_by!(slug: "teams-tenant-#{TEAMS_CUSTOMER_TENANT}")
+    assert_equal [ theirs.id, other_company.id ], [ endpoint.config["integration_id"], endpoint.company_id ]
+    assert ChatChannelConnection.exists?(chat_conversation: channel, company: other_company)
   end
 
   test "disconnecting frees the organization for another workspace" do

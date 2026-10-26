@@ -43,7 +43,16 @@ class Integration < ApplicationRecord
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
   has_many :tracker_subscriptions, dependent: :destroy
-  has_many :chat_conversations, dependent: :delete_all
+  # The Slack workspace or Teams tenant this install links its company to,
+  # shared with every other company that connected it.
+  belongs_to :chat_workspace, optional: true
+  # Rows this install recorded first; they belong to the workspace, so they stay
+  # when it goes.
+  has_many :chat_conversations, dependent: nil
+  # The company's channels there go with it, so its triggers listening in them
+  # switch off first. The channels themselves stay with the workspace.
+  before_destroy :release_chat_triggers, prepend: true, if: -> { slack? || teams? }
+  before_save :attach_chat_workspace, if: -> { (slack? || teams?) && chat_workspace_id.nil? }
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?
@@ -294,6 +303,15 @@ class Integration < ApplicationRecord
     %w[company project connected_by]
   end
 
+
+  # The installs of every company that connected the same workspace, this one
+  # included; just this one when it serves no workspace yet.
+  def chat_peers
+    return Integration.where(id: id) if chat_workspace_id.nil?
+
+    Integration.active.where(chat_workspace_id: chat_workspace_id, provider: provider).or(Integration.where(id: id))
+  end
+
   private
 
   # One installation belongs to one company unless the deployment proves who
@@ -414,14 +432,49 @@ class Integration < ApplicationRecord
   # Deleted rather than disabled: the endpoint is what ties the tenant to this
   # company, and a disconnected organization may connect to another one.
   def release_teams_tenant
-    WebhookEndpoint.where(provider: "teams", company_id: company_id)
-                   .where("config->>'integration_id' = ?", id.to_s).delete_all
+    endpoints = WebhookEndpoint.where(provider: "teams").where("config->>'integration_id' = ?", id.to_s)
+    heir = chat_heir
+    heir ? hand_endpoints_to(endpoints, heir) : endpoints.delete_all
   end
+
+  def attach_chat_workspace
+    external_id = settings.to_h[slack? ? "team_id" : "tenant_id"]
+    return if external_id.blank?
+
+    self.chat_workspace = ChatWorkspace.for!(provider: provider, external_id: external_id,
+                                             name: settings.to_h["team_name"].presence || settings.to_h["tenant_domain"])
+  end
+
+  def release_chat_triggers
+    conversations = ChatConversation.in_workspace_of(id).select(:id)
+    TriggerBinding.release_chat_channels!(
+      TriggerBinding.where(chat_conversation_id: conversations, project_id: Project.where(company_id: company_id).select(:id))
+    )
+    ChatChannelConnection.where(company_id: company_id, chat_conversation_id: conversations).delete_all
+  end
+
 
   def release_slack_workspace
     team_id = settings.to_h["team_id"]
     return if team_id.blank?
 
-    WebhookEndpoint.where(slug: "slack-team-#{team_id}", company_id: company_id).update_all(enabled: false)
+    endpoints = WebhookEndpoint.where(slug: "slack-team-#{team_id}")
+    heir = chat_heir
+    heir ? hand_endpoints_to(endpoints, heir) : endpoints.update_all(enabled: false)
+  end
+
+  # Another company's install of the same workspace, which takes over the
+  # endpoint they share when this one goes.
+  def chat_heir
+    return nil if chat_workspace_id.nil?
+
+    Integration.active.where(chat_workspace_id: chat_workspace_id, provider: provider).where.not(id: id).order(:id).first
+  end
+
+  def hand_endpoints_to(endpoints, heir)
+    endpoints.find_each do |endpoint|
+      endpoint.update_columns(company_id: heir.company_id, config: endpoint.config.to_h.merge("integration_id" => heir.id),
+                              updated_at: Time.current)
+    end
   end
 end

@@ -80,6 +80,7 @@ class Web::Integrations::TeamsLinkTest < ActionDispatch::IntegrationTest
 
     get teams_link_path(@token)
 
-    assert_inertia_props { |props| props[:state] == "other_company" && props[:workspace] == @company.name }
+    # The companies that connected the organization are not the outsider's to see.
+    assert_inertia_props { |props| props[:state] == "other_company" && props[:workspace] == "a company that connected it" }
   end
 end

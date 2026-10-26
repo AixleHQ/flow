@@ -112,7 +112,7 @@ describe('useBoardTaskPages', () => {
 
     await waitFor(() => expect(result.current.tasks).toHaveLength(5));
     expect(urlOf(fetchSpy.mock.calls[0])).toBe(
-      `/api/v1/projects/${PROJECT_ID}/tasks?board_column_id=100&limit=2&offset=2`,
+      `/api/v1/projects/${PROJECT_ID}/tasks?board_column_id=100&limit=2&offset=2&view=card`,
     );
     // Page two lands in Backlog only, and the column is now complete.
     expect(result.current.tasks.filter((t) => t.boardColumnId === 100)).toHaveLength(4);

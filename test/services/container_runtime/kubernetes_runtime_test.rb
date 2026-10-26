@@ -126,7 +126,7 @@ module ContainerRuntime
         client
       end
 
-      WebSocket::Client::Simple.stub(:connect, connect) do
+      ExecWebsocket.stub(:connect, connect) do
         assert @runtime.write_file(handle, "/tmp/file.txt", "hello")
       end
 
@@ -150,7 +150,7 @@ module ContainerRuntime
 
       result = nil
       logs = capture_rails_log do
-        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+        ExecWebsocket.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
       end
 
       assert_equal [ [ "partial\n" ], [], 0 ], result
@@ -173,7 +173,7 @@ module ContainerRuntime
 
       result = nil
       logs = capture_rails_log do
-        WebSocket::Client::Simple.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
+        ExecWebsocket.stub(:connect, connect) { result = @runtime.exec(handle, [ "true" ]) }
       end
 
       assert_equal 0, result[2]
@@ -188,7 +188,7 @@ module ContainerRuntime
       @runtime.stubs(:websocket_headers).returns({})
 
       cancelled_in_connect = ->(_url, **_options, &_block) { raise Temporalio::Error::CanceledError, "Activity canceled" }
-      WebSocket::Client::Simple.stub(:connect, cancelled_in_connect) do
+      ExecWebsocket.stub(:connect, cancelled_in_connect) do
         assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
       end
 
@@ -199,7 +199,7 @@ module ContainerRuntime
         client.trigger(:message, [ 3 ].pack("C") + { status: "Success" }.to_json)
         client
       end
-      WebSocket::Client::Simple.stub(:connect, cancelled_in_close) do
+      ExecWebsocket.stub(:connect, cancelled_in_close) do
         assert_raises(Temporalio::Error::CanceledError) { @runtime.exec(handle, [ "true" ]) }
       end
     end
@@ -239,8 +239,8 @@ module ContainerRuntime
         trigger(:message, [ 3 ].pack("C") + status)
       end
 
-      def open?
-        @open
+      def closed?
+        !@open
       end
 
       def close
@@ -270,6 +270,92 @@ module ContainerRuntime
       @runtime.expects(:copy_from).with("handle", "/workspace/note.txt").returns(tar_bytes)
 
       assert_equal "file body", @runtime.read_file("handle", "/workspace/note.txt")
+    end
+
+    # == Exec against a stand-in API server ==
+    #
+    # FakeKubernetesExecServer speaks the real channel.k8s.io protocol over a
+    # socket, and the runtime reaches it through its ordinary kubeconfig path.
+
+    test "read_file copies a megabyte of binary out of the pod byte for byte" do
+      content = Random.bytes(1024 * 1024)
+      pod = lambda do |command, _stdin|
+        assert_equal [ "/bin/sh", "-c", "tar -cf - -C / workspace/e2e/report.tar.gz" ], command
+        [ build_test_tar("workspace/e2e/report.tar.gz", content), "", 0 ]
+      end
+
+      with_exec_server(pod) do
+        assert_equal content, @runtime.read_file(exec_handle, "/workspace/e2e/report.tar.gz")
+      end
+    end
+
+    # The byte-at-a-time client this replaced allocated 28M objects here
+    # (PALAD-AI-RAILS-45); the bound leaves a wide margin over today's cost.
+    test "read_file of a megabyte allocates per chunk, not per byte" do
+      tar = build_test_tar("workspace/blob", Random.bytes(1024 * 1024))
+
+      with_exec_server(->(_command, _stdin) { [ tar, "", 0 ] }) do
+        before = GC.stat(:total_allocated_objects)
+        @runtime.read_file(exec_handle, "/workspace/blob")
+
+        assert_operator GC.stat(:total_allocated_objects) - before, :<, 100_000
+      end
+    end
+
+    test "write_file streams the archive over stdin, closes only stdin, and reads the exit status" do
+      content = Random.bytes(300 * 1024)
+      written = {}
+      pod = lambda do |command, stdin|
+        assert_equal [ "/bin/sh", "-c", "tar -xf - -C /" ], command
+        Gem::Package::TarReader.new(StringIO.new(stdin)) do |tar|
+          tar.each { |entry| written[entry.full_name] = [ entry.header.mode, entry.read ] }
+        end
+        [ "", "", 0 ]
+      end
+
+      server = with_exec_server(pod) do
+        assert @runtime.write_file(exec_handle, "/workspace/.aixle/payload.bin", content, mode: 0o600)
+      end
+
+      assert_equal({ "workspace/.aixle/payload.bin" => [ 0o600, content ] }, written)
+      assert_equal "v5.channel.k8s.io", server.execs.last.protocol
+    end
+
+    test "exec reports the command's stdout, stderr and non-zero exit code" do
+      with_exec_server(->(_command, _stdin) { [ "first\nsecond\n", "oops\n", 3 ] }) do
+        assert_equal [ [ "first\n", "second\n" ], [ "oops\n" ], 3 ], @runtime.exec(exec_handle, [ "false" ], timeout: 5)
+      end
+    end
+
+    test "an exec whose connection drops before the exit status fails instead of reading as success" do
+      with_exec_server(->(_command, _stdin) { [ "partial", "", 0 ] }, ending: :eof_before_status) do
+        assert_equal 1, @runtime.exec(exec_handle, [ "true" ], timeout: 5).last
+      end
+    end
+
+    test "an exec the API server never answers times out and hangs up" do
+      listener = TCPServer.new("127.0.0.1", 0)
+      hung_up = Queue.new
+      silent = Thread.new do
+        socket = listener.accept
+        socket.read # returns only once the client closes its end
+        hung_up << true
+      end
+
+      with_kubeconfig("http://127.0.0.1:#{listener.addr[1]}") do
+        assert_equal 1, @runtime.exec(exec_handle, [ "true" ], timeout: 1).last
+      end
+
+      assert hung_up.pop(timeout: 5), "the exec left its connection open"
+    ensure
+      silent&.kill
+      listener&.close
+    end
+
+    test "a connection that drops after the exit status keeps the command's result" do
+      with_exec_server(->(_command, _stdin) { [ "done\n", "", 0 ] }, ending: :eof_after_status) do
+        assert_equal [ [ "done\n" ], [], 0 ], @runtime.exec(exec_handle, [ "true" ], timeout: 5)
+      end
     end
 
     test "remove_image is no-op" do
@@ -820,6 +906,100 @@ module ContainerRuntime
       assert_equal [ "terminal-auth", "my-pod-upload-strip" ], upload[:middlewares].map { |mw| mw[:name] }
     end
 
+    test "a Service create whose answer timed out is sent again" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Net::ReadTimeout).then.to_return { |request| kube_created(request) }
+
+        assert_equal service_handle, @runtime.start_container(service_handle)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 2
+    end
+
+    test "a reset connection and an overloaded API server are retried too" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES)
+          .to_raise(Errno::ECONNRESET)
+          .then.to_return(kube_status(503, "ServiceUnavailable", "the server is currently unable to handle the request"))
+          .then.to_return { |request| kube_created(request) }
+
+        assert_equal service_handle, @runtime.start_container(service_handle)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 3
+    end
+
+    test "a pod create that timed out after the API server applied it is verified instead of failed" do
+      pods = "#{KUBE_API}/namespaces/#{Settings.kubernetes.namespace}/pods"
+      applied = nil
+
+      with_kube_api do
+        stub_request(:post, pods).to_raise(Net::ReadTimeout).then.to_return do |request|
+          applied = JSON.parse(request.body)
+          kube_status(409, "AlreadyExists", 'pods "my-pod" already exists')
+        end
+        stub_request(:get, "#{pods}/my-pod").to_return { json_response(applied.deep_merge("metadata" => { "uid" => "pod-uid" })) }
+
+        handle = @runtime.create_container(image: "alpine:latest", container_name: "my-pod", env_vars: [], labels: {}, host_config: {})
+
+        assert_equal "my-pod", handle.pod_name
+      end
+
+      assert_requested :post, pods, times: 2
+      assert_requested :get, "#{pods}/my-pod", times: 1
+    end
+
+    test "a create gives up once every attempt has timed out" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Net::ReadTimeout)
+
+        error = assert_raises(Kubeclient::HttpError) { @runtime.start_container(service_handle) }
+        assert_match(/Timed out reading data from server/, error.message)
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: KubernetesRuntime::CREATE_ATTEMPTS
+    end
+
+    test "a quota refusal is not retried and still waits for capacity" do
+      pods = "#{KUBE_API}/namespaces/#{Settings.kubernetes.namespace}/pods"
+
+      with_kube_api do
+        stub_request(:post, pods).to_return(
+          kube_status(403, "Forbidden", 'pods "my-pod" is forbidden: exceeded quota: aixle-resource-quota')
+        )
+
+        error = assert_raises(CapacityError) do
+          @runtime.create_container(image: "alpine:latest", container_name: "my-pod", env_vars: [], labels: {}, host_config: {})
+        end
+        assert_equal "namespace_quota", error.reason
+      end
+
+      assert_requested :post, pods, times: 1
+    end
+
+    test "an invalid object fails at once" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_return(
+          kube_status(422, "Invalid", 'Service "my-pod" is invalid: spec.ports[0].port: Invalid value: 0')
+        )
+
+        error = assert_raises(Kubeclient::HttpError) { @runtime.start_container(service_handle) }
+        assert_equal 422, error.error_code
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 1
+    end
+
+    test "a cancelled activity stops a create instead of retrying it" do
+      with_kube_api do
+        stub_request(:post, KUBE_SERVICES).to_raise(Temporalio::Error::CanceledError.new("Activity canceled"))
+
+        assert_raises(Temporalio::Error::CanceledError) { @runtime.start_container(service_handle) }
+      end
+
+      assert_requested :post, KUBE_SERVICES, times: 1
+    end
+
     test "remove_container tears down ingressroute, middlewares, service, and pod" do
       handle = OpenStruct.new(
         pod_name: "my-pod",
@@ -1241,6 +1421,70 @@ module ContainerRuntime
     ensure
       acceptor&.kill
       server&.close
+    end
+
+    def exec_handle
+      OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+    end
+
+    def with_exec_server(pod, **options)
+      server = FakeKubernetesExecServer.new(**options, &pod).start
+      with_kubeconfig(server.base_url) { yield server }
+      assert_empty server.errors
+      server
+    ensure
+      server&.stop
+    end
+
+    def with_kubeconfig(server_url)
+      kubeconfig = Tempfile.new([ "kubeconfig", ".yml" ])
+      kubeconfig.write({
+        "apiVersion" => "v1", "kind" => "Config", "current-context" => "fake",
+        "clusters" => [ { "name" => "fake", "cluster" => { "server" => server_url } } ],
+        "contexts" => [ { "name" => "fake", "context" => { "cluster" => "fake", "user" => "fake" } } ],
+        "users" => [ { "name" => "fake", "user" => {} } ]
+      }.to_yaml)
+      kubeconfig.flush
+      Settings.kubernetes.stubs(:service_account_token_path).returns("/nonexistent/token")
+      Settings.kubernetes.stubs(:kubeconfig_path).returns(kubeconfig.path)
+      yield
+    ensure
+      kubeconfig&.close!
+    end
+
+    KUBE_API = "http://kube.test/api/v1"
+    KUBE_SERVICES = "#{KUBE_API}/namespaces/default/services".freeze
+
+    # The runtime's own client against a WebMock'd API server, so a timeout
+    # reaches the runtime the way kubeclient really raises it.
+    def with_kube_api(&)
+      Settings.kubernetes.stubs(:ready_interval).returns(0)
+      stub_request(:get, KUBE_API).to_return(json_response({
+        kind: "APIResourceList", groupVersion: "v1",
+        resources: [
+          { name: "pods", singularName: "", namespaced: true, kind: "Pod", verbs: %w[create get] },
+          { name: "services", singularName: "", namespaced: true, kind: "Service", verbs: %w[create get] }
+        ]
+      }))
+      with_kubeconfig("http://kube.test", &)
+    end
+
+    def service_handle
+      OpenStruct.new(pod_name: "my-pod", namespace: "default", service_name: "my-pod", route_token: nil,
+                     service_ports: [ 7681 ])
+    end
+
+    def kube_created(request)
+      json_response(JSON.parse(request.body).deep_merge("metadata" => { "uid" => "created-uid" }), status: 201)
+    end
+
+    def kube_status(code, reason, message)
+      json_response({ kind: "Status", apiVersion: "v1", metadata: {}, status: "Failure",
+                      message: message, reason: reason, code: code }, status: code)
+    end
+
+    def json_response(body, status: 200)
+      { status: status, body: body.to_json, headers: { "Content-Type" => "application/json" } }
     end
 
     def capture_rails_log

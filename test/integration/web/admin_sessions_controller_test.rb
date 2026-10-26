@@ -47,6 +47,28 @@ class Web::AdminSessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_root_path
   end
 
+  test "a super admin signs out and is sent back to the admin sign-in" do
+    sign_in_as(@operator)
+
+    delete logout_path
+
+    assert_redirected_to admin_login_path
+    assert_empty UserSession.live
+    get admin_root_path
+    assert_redirected_to admin_login_path
+  end
+
+  test "a super admin signing out mid-impersonation ends it and returns to the admin sign-in" do
+    member = create(:user, :admin, :onboarding_completed)
+    sign_in_as(@operator)
+    post impersonate_admin_user_path(member)
+
+    delete logout_path
+
+    assert_redirected_to admin_login_path
+    assert_empty UserSession.live
+  end
+
   test "a wrong password is refused without a session" do
     post admin_login_path, params: { email: @operator.email, password: "wrong" }
 

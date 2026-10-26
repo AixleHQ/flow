@@ -27,10 +27,12 @@ class QueueHealthCheck
   UNSTARTED_RUN_THRESHOLD = 5.minutes
 
   # A long wait for a slot is a full pool — the feature working — for as long as
-  # the pool keeps granting. What is worth seeing is a pool that has granted
-  # nothing for this long while somebody waits: "full of sessions that run for
-  # hours" and "full of reservations nothing will ever release" look identical
-  # from outside, so it is a warning to look at, not an outage.
+  # the pool keeps granting, or is full of sessions that are still running: a
+  # project limited to one session whose runs take hours queues behind them all
+  # day. What is worth seeing is a pool that has granted nothing for this long
+  # while somebody waits AND a slot it could grant is not in live use — capacity
+  # the drain is not handing out, or a reservation whose session ended this long
+  # ago and was never released. A warning to look at, not an outage.
   ADMISSION_WAIT_THRESHOLD = 30.minutes
 
   class << self
@@ -119,13 +121,34 @@ class QueueHealthCheck
 
       moving = SessionAdmission.where(session_admission_pool_id: oldest.keys, admitted_at: since..)
                                .distinct.pluck(:session_admission_pool_id)
-      stalled = oldest.keys - moving
-      occupied = SessionAdmission.occupied.where(session_admission_pool_id: stalled)
+      pools = SessionAdmissionPool.where(id: oldest.keys - moving).order(:id).to_a
+      return [] if pools.empty?
+
+      ids = pools.map(&:id)
+      live = live_occupants(since)
+      held = live.where(session_admission_pool_id: ids).group(:session_admission_pool_id).count
+      occupied = SessionAdmission.occupied.where(session_admission_pool_id: ids)
                                  .group(:session_admission_pool_id).count
-      SessionAdmissionPool.where(id: stalled).order(:id).map do |pool|
+      # The drain's own arithmetic rather than the pool's limit: a pool under its
+      # own cap can be waiting on its company's limit, which live sessions in the
+      # company's other projects fill just as legitimately.
+      budget = SessionAdmissionBudget.new(pools.map(&:key), occupied: live)
+      pools.filter_map do |pool|
+        next unless budget.clamp(pool.limit - held.fetch(pool.id, 0), pool.key).positive?
+
         { key: pool.key, limit: pool.limit, occupied: occupied.fetch(pool.id, 0),
           oldest_wait_seconds: age(oldest[pool.id], now) }
       end
+    end
+
+    # A session that has ended keeps its slot until its container is proven gone,
+    # which can take minutes (Pod deletion, a pinned operation's confirmation
+    # window), so it only stops counting as live once it has been over for the
+    # whole threshold.
+    def live_occupants(since)
+      SessionAdmission.occupied.joins(:terminal_session)
+                      .where("terminal_sessions.state NOT IN (?) OR terminal_sessions.finished_at > ?",
+                             TerminalSession::TERMINAL_STATES, since)
     end
 
     # One structured line every tick so the log pipeline has a series to draw, and

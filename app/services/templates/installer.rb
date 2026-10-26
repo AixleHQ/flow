@@ -376,6 +376,10 @@ module Templates
                                  "cooldown_seconds", "status_reporting", "chat_provider",
                                  "verification_strategy", "aixle_changes", "copy_attachments").symbolize_keys
         attributes[:enabled] = false
+        # Templates published before channels were connected per company still name one.
+        if entry["kind"] == "chat" && attributes[:filter_predicate].is_a?(Hash)
+          attributes[:filter_predicate] = attributes[:filter_predicate].reject { |key, _| TriggerBinding.chat_routing_key?(key) }
+        end
         attributes[:subject_title_template] = substitute(entry["subject_title_template"]) if entry["subject_title_template"]
         attributes[:subject_column_id] = @ids["columns"][entry["subject_column"]] if entry["subject_column"]
         attributes[:schedule_config] = { "cron" => substitute(entry["cron"]), "timezone" => entry["timezone"].presence || "UTC" } if entry["cron"]

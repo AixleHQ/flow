@@ -15,6 +15,11 @@ class TriggerBinding < ApplicationRecord
   # tracker.* events only: the tracker this binding listens to; none means any
   # tracker in the project (what a migration between trackers wants).
   belongs_to :project_tracker, optional: true
+  # chat.message only: the one channel the trigger listens to. It must be
+  # connected to the trigger's company (docs/design/shared-chat-workspaces.md §9).
+  belongs_to :chat_conversation, optional: true
+  # What the API and MCP call it: a connected chat channel.
+  alias_attribute :chat_channel_id, :chat_conversation_id
 
   enumerize :trigger_mode, in: %i[auto manual], default: :auto, predicates: true
   # What board task (if any) a run from this trigger is about. See TriggerEngine.
@@ -34,6 +39,10 @@ class TriggerBinding < ApplicationRecord
   WEBHOOK_EVENT_PREFIX = "webhook."
   SCHEDULE_EVENT_TYPE = "schedule.fired"
 
+  # Where a chat message came from. The trigger's channel says that, so its
+  # conditions may not.
+  CHAT_ROUTING_KEYS = %w[channel conversation workspace team integration_id subject service_url].freeze
+
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
   validate :workflow_accessible_from_project
@@ -47,6 +56,9 @@ class TriggerBinding < ApplicationRecord
   validates :status_reporting, inclusion: { in: %w[none failures], message: "lifecycle is for chat triggers" },
                                unless: :chat?
   before_validation :normalize_chat_trigger
+  validate :chat_conditions_name_no_place, if: -> { chat? && will_save_change_to_filter_predicate? }
+  validate :chat_channel_usable, if: -> { chat? && (enabled? || chat_conversation_id.present?) }
+  before_save :mirror_chat_channel, if: :chat?
   validate :project_tracker_in_project, if: :project_tracker_id?
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
@@ -66,6 +78,7 @@ class TriggerBinding < ApplicationRecord
 
     rel = active.where(event_type: event.event_type)
                 .joins(:workflow).merge(Workflow.active)
+    rel = rel.merge(listening_in(event)) if Chat.event?(event)
     if event.project_id
       rel.where(project_id: event.project_id)
     elsif event.company_id
@@ -119,8 +132,42 @@ class TriggerBinding < ApplicationRecord
     return if key.blank? || !chat?
 
     filter = filter_predicate.to_h
-    filter = filter.except("channel") if chat_provider.present? && chat_provider != key.to_s
+    if chat_provider.present? && chat_provider != key.to_s
+      filter = filter.except("channel")
+      self.chat_conversation = nil
+    end
     self.filter_predicate = filter.merge("provider" => key.to_s)
+  end
+
+  # The chat bindings an event from this conversation may start: bound to it,
+  # and only where the binding's company has the channel connected.
+  def self.listening_in(event)
+    data = event.data.to_h
+    conversations = ChatConversation.in_workspace_of(data["integration_id"]).where(external_id: data["channel"].to_s)
+    where(chat_conversation_id: conversations.select(:id))
+      .where(<<~SQL.squish)
+        EXISTS (SELECT 1 FROM chat_channel_connections connections
+                JOIN projects ON projects.company_id = connections.company_id
+                WHERE connections.chat_conversation_id = trigger_bindings.chat_conversation_id
+                  AND projects.id = trigger_bindings.project_id)
+      SQL
+  end
+
+  # Switches off the chat triggers among `scope` and drops their channel: what
+  # removing a connection, a workspace or a project's company leaves behind.
+  def self.release_chat_channels!(scope)
+    scope.where(event_type: Chat::EVENT_TYPE).where.not(chat_conversation_id: nil)
+         .update_all([ "enabled = FALSE, chat_conversation_id = NULL, filter_predicate = filter_predicate - 'channel', " \
+                       "updated_at = ?", Time.current ])
+  end
+
+  def self.chat_routing_key?(key)
+    CHAT_ROUTING_KEYS.any? { |root| key.to_s == root || key.to_s.start_with?("#{root}.") }
+  end
+
+  # Could this chat trigger be switched on as it stands?
+  def chat_channel_usable?
+    chat_channel_problem.nil?
   end
 
   # save! for a person creating or editing a trigger: refuses to create or switch
@@ -148,11 +195,13 @@ class TriggerBinding < ApplicationRecord
   # equality (scalar values), operator objects ({"op","value"}) and dot-path
   # fields. Empty predicate ⇒ matches any event of this type. See TriggerFilter.
   # A chat message's text compares without regard to case: people type
-  # "Deploy" and "deploy" for the same command.
+  # "Deploy" and "deploy" for the same command. A chat trigger's channel is
+  # matched by .listening_in, before this.
   def matches?(data)
     return false unless tracker_scope_matches?(data) && aixle_change_allowed?(data)
 
-    TriggerFilter.match?(filter_predicate, data, ignore_case: chat? ? %w[text] : [])
+    conditions = chat? ? filter_predicate.to_h.except("channel") : filter_predicate
+    TriggerFilter.match?(conditions, data, ignore_case: chat? ? %w[text] : [])
   end
 
   def webhook?
@@ -164,6 +213,37 @@ class TriggerBinding < ApplicationRecord
   end
 
   private
+
+  def chat_conditions_name_no_place
+    routing = filter_predicate.to_h.keys.map(&:to_s).select { |key| self.class.chat_routing_key?(key) }
+    # The stored copy of the trigger's own channel, sent back unchanged.
+    routing -= [ "channel" ] if chat_conversation && filter_predicate.to_h["channel"].to_s == chat_conversation.external_id
+    return if routing.empty?
+
+    errors.add(:filter_predicate, "can't name where a message comes from (#{routing.join(', ')}) — choose the trigger's channel instead")
+  end
+
+  def chat_channel_usable
+    problem = chat_channel_problem
+    errors.add(:chat_channel, problem) if problem
+  end
+
+  def chat_channel_problem
+    return "is required — connect a channel to this company and choose it" if chat_conversation.nil?
+    return "belongs to another messenger" if chat_conversation.provider.to_s != chat_provider.to_s
+    return "can't be a direct chat" if chat_conversation.direct?
+
+    connected = ChatChannelConnection.exists?(chat_conversation_id: chat_conversation_id, company_id: project&.company_id)
+    connected ? nil : "is not connected to this company"
+  end
+
+  # Kept beside the channel until every running release matches on the
+  # channel itself, not on this condition.
+  def mirror_chat_channel
+    filter = filter_predicate.to_h.except("channel")
+    filter["channel"] = chat_conversation.external_id if chat_conversation
+    self.filter_predicate = filter unless filter == filter_predicate.to_h
+  end
 
   def disable_webhook_endpoint
     return if TriggerBinding.where(project_id: project_id, event_type: event_type).exists?
@@ -267,7 +347,7 @@ class TriggerBinding < ApplicationRecord
     return if value.blank?
 
     if value.match?(Chat::RESERVED_COMMAND)
-      errors.add(:filter_predicate, "can't use help — that word lists available commands")
+      errors.add(:filter_predicate, "can't use #{value.delete_prefix('/').downcase} — Aixle answers that word before any trigger")
     elsif chat_provider == Chat::TeamsProvider::KEY && value.match?(Teams::Commands::RESERVED)
       errors.add(:filter_predicate, "can't use #{value.delete_prefix('/').downcase} — Teams answers it as a command")
     end

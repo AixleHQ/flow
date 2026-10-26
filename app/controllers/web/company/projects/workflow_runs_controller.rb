@@ -31,6 +31,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
       workflow: workflow,
       project: current_project,
       user: current_user,
+      source: :web,
       mode: workflow_run_params[:mode]&.to_sym || :interactive,
       overrides: workflow_run_params[:step_overrides] || {},
       input_asset_ids: workflow_run_params[:input_asset_ids] || [],

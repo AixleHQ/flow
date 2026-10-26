@@ -12,7 +12,7 @@ module Chat
     module_function
 
     def for(user, integration, provider:, conversation_id:)
-      project_ids = RunCatalog.active_projects(integration).select { |project| project.accessible_by?(user) }.map(&:id)
+      project_ids = RunCatalog.active_projects(integration, user).select { |project| project.accessible_by?(user) }.map(&:id)
       WorkflowRun.where(project_id: project_ids, created_at: WINDOW.ago..)
                  .where("shared_context -> 'chat' ->> 'provider' = ?", provider)
                  .where("shared_context -> 'chat' -> 'conversation' ->> 'id' = ?", conversation_id)

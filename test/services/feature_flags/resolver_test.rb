@@ -7,9 +7,9 @@ require "test_helper"
 class FeatureFlags::ResolverTest < ActiveSupport::TestCase
   REGISTRY = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
 
-  def resolver(env: {}, flags: {})
+  def resolver(env: {}, flags: {}, settings: nil)
     FeatureFlags::Resolver.new(registry: REGISTRY,
-                               env: FeatureFlags::EnvSource.new(env, registry: REGISTRY),
+                               env: FeatureFlags::EnvSource.new(env, registry: REGISTRY, settings: settings),
                                snapshot: FeatureFlags::Snapshot.new(flags))
   end
 
@@ -128,5 +128,16 @@ class FeatureFlags::ResolverTest < ActiveSupport::TestCase
 
   test "string keys resolve like symbols" do
     assert_equal :coder_reap, resolver.resolve("coder_reap").key
+  end
+
+  test "the legacy env_setting locks coder_reap over a global value, naming its variable" do
+    global_on = { coder_reap: { global: true } }
+
+    resolution = resolver(flags: global_on, settings: { coder: { reap_enabled: false } }).resolve(:coder_reap)
+    assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ resolution.value, resolution.source, resolution.env_var ]
+    assert_equal [ { source: :global, value: true } ], resolution.shadowed
+
+    resolution = resolver(flags: { coder_reap: { global: false } }, settings: { coder: { reap_enabled: nil } }).resolve(:coder_reap)
+    assert_equal [ false, :global, "FEATURE_CODER_REAP" ], [ resolution.value, resolution.source, resolution.env_var ]
   end
 end

@@ -22,7 +22,7 @@ module FeatureFlags
       layers = set_layers(definition, company)
       winner, *shadowed = layers
       Resolution.new(key: definition.key, value: winner[:value], source: winner[:source],
-                     env_var: definition.env_var, shadowed: shadowed.reject { |layer| layer[:source] == :default }.freeze)
+                     env_var: @env.variable_for(definition.key) || definition.env_var, shadowed: shadowed.reject { |layer| layer[:source] == :default }.freeze)
     end
 
     private

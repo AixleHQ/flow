@@ -12,6 +12,13 @@ class TriggerEngineTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project)
   end
 
+  # A Slack message through the company's install, from the channel the
+  # factory's chat triggers listen in.
+  def slack_message(data = {})
+    { "provider" => "slack", "channel" => ChatChannelTestHelper::SLACK_CHANNEL,
+      "integration_id" => Integration.where(company: @company, provider: :slack).pick(:id) }.merge(data)
+  end
+
   # == publish + dispatch (Slack / webhook path) ==
 
   test "publish dispatches to a matching binding and starts its workflow" do
@@ -25,7 +32,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test", subject: "C1",
-      data: { "provider" => "slack", "channel" => "C1", "text" => "hi" }, project: @project, dedup_key: "evt-1"
+      data: slack_message("channel" => "C1", "text" => "hi"), project: @project, dedup_key: "evt-1"
     )
 
     assert_equal 1, TriggerEvent.where(event_type: "chat.message").count
@@ -42,7 +49,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test",
-      data: { "provider" => "slack", "channel" => "OTHER" }, project: @project, dedup_key: "evt-2"
+      data: slack_message("channel" => "OTHER"), project: @project, dedup_key: "evt-2"
     )
   end
 
@@ -56,7 +63,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test",
-      data: { "provider" => "slack", "channel" => "C1", "text" => "<@B0T> /help" }, project: @project, dedup_key: "evt-help"
+      data: slack_message("channel" => "C1", "text" => "<@B0T> /help"), project: @project, dedup_key: "evt-help"
     )
   end
 
@@ -71,7 +78,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test",
-      data: { "provider" => "slack", "channel" => "C1", "text" => "<@B0T>" }, project: @project, dedup_key: "evt-bare"
+      data: slack_message("channel" => "C1", "text" => "<@B0T>"), project: @project, dedup_key: "evt-bare"
     )
   end
 
@@ -86,7 +93,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test",
-      data: { "provider" => "slack", "channel" => "C1", "text" => "<@B0T> please ship it" }, project: @project, dedup_key: "evt-ship"
+      data: slack_message("channel" => "C1", "text" => "<@B0T> please ship it"), project: @project, dedup_key: "evt-ship"
     )
   end
 
@@ -100,7 +107,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     2.times do
       TriggerEngine.publish(
         event_type: "chat.message", source: "slack:test",
-        data: { "provider" => "slack", "channel" => "C1" }, project: @project, dedup_key: "same-key"
+        data: slack_message("channel" => "C1"), project: @project, dedup_key: "same-key"
       )
     end
 
@@ -113,7 +120,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
     event = TriggerEngine.publish(
       event_type: "chat.message", source: "slack:test",
-      data: { "provider" => "slack", "channel" => "C1" }, project: nil, dedup_key: "evt-3"
+      data: slack_message("channel" => "C1"), project: nil, dedup_key: "evt-3"
     )
 
     assert event.persisted?
@@ -125,7 +132,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
 
     %w[evt-1 evt-2].each do |key|
-      TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: { "provider" => "slack" }, project: @project, dedup_key: key)
+      TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: slack_message, project: @project, dedup_key: key)
     end
 
     assert_equal %w[skipped started], TriggerDispatch.order(:status).pluck(:status)
@@ -151,7 +158,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
   test "a replayed event decides nothing new and announces nothing" do
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
     WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
-    event = TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: { "provider" => "slack" }, project: @project, dedup_key: "e1")
+    event = TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: slack_message, project: @project, dedup_key: "e1")
     clear_enqueued_jobs
 
     TriggerEngine.dispatch(event)
@@ -164,9 +171,9 @@ class TriggerEngineTest < ActiveSupport::TestCase
                              event_type: "chat.message", cooldown_seconds: 60)
     WorkflowService.expects(:enqueue).twice.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
 
-    TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: { "provider" => "slack" }, project: @project, dedup_key: "evt-1")
+    TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: slack_message, project: @project, dedup_key: "evt-1")
     travel 61.seconds do
-      TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: { "provider" => "slack" }, project: @project, dedup_key: "evt-2")
+      TriggerEngine.publish(event_type: "chat.message", source: "slack:test", data: slack_message, project: @project, dedup_key: "evt-2")
     end
 
     assert_equal %w[started started], TriggerDispatch.pluck(:status)
@@ -212,7 +219,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     task = create(:board_task, board: board, board_column: column)
 
     WorkflowService.expects(:enqueue).with(
-      has_entries(workflow: @workflow, task: task, mode: :non_interactive)
+      has_entries(workflow: @workflow, task: task, mode: :non_interactive, source: :trigger)
     ).once.returns(build(:workflow_run))
 
     TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: @user)
@@ -227,7 +234,8 @@ class TriggerEngineTest < ActiveSupport::TestCase
     create(:trigger_binding,
       project: @project, workflow: @workflow, created_by: @user,
       event_type: "chat.message", filter_predicate: {})
-    event = create(:trigger_event, event_type: "chat.message", project: @project, relay_state: "pending")
+    event = create(:trigger_event, event_type: "chat.message", project: @project, relay_state: "pending",
+                                   source: "slack:test", data: slack_message)
 
     WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
 

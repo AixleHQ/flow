@@ -95,6 +95,7 @@ class ActiveSupport::TestCase
   include StubSupport
   include SlackTestHelper
   include TeamsTestHelper
+  include ChatChannelTestHelper
   include AzureDevopsTestHelper
   include BitbucketTestHelper
   include JiraTestHelper

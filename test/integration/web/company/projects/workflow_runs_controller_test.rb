@@ -33,7 +33,8 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     post company_project_workflow_runs_path(@project), params: {
       workflow_run: { workflow_id: @workflow.id, mode: "non_interactive" }
     }
-    assert_response :redirect
+    assert_redirected_to company_project_workflow_run_path(@project, WorkflowRun.sole)
+    assert_equal "web", WorkflowRun.sole.source
   end
 
   test "cancel redirects" do

@@ -51,7 +51,7 @@ class Web::Company::BillingAuthorizationTest < ActionDispatch::IntegrationTest
 
     # 409 + X-Inertia-Location for the allowed: the invoice is on Stripe's domain.
     assert_role_matrix(ADMINS_ONLY_WRITE, transport: :web, allowed_status: :conflict) do
-      post company_billing_invoice_payment_path
+      post company_billing_invoice_payment_path, headers: { "X-Inertia" => "true" }
     end
   end
 end

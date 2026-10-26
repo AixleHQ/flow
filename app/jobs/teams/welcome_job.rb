@@ -24,6 +24,10 @@ module Teams
 
       Teams::Notifier.post(conversation, text: text(conversation))
       conversation.update!(welcomed_at: Time.current)
+    rescue Teams::Error => e
+      raise if e.retryable?
+
+      Rails.logger.warn("[Teams::WelcomeJob] gave up the welcome in conversation ##{conversation_id}: #{e.message}")
     end
 
     # The trigger form's channel list; a refusal here must not cost the welcome.

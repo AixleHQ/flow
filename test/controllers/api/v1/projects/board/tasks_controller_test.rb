@@ -317,6 +317,29 @@ module Api
           assert_equal 2, JSON.parse(response.body).length
         end
 
+        test "index ignores a q that is a plain string instead of failing" do
+          get :index, params: { project_id: @project.id, q: "foo" }
+
+          assert_response :success
+          assert_includes JSON.parse(response.body).map { |t| t["id"] }, @task.id
+          assert_equal "1", response.headers["X-Total-Count"]
+        end
+
+        test "index ignores a q that is an array" do
+          get :index, params: { project_id: @project.id, q: [ "foo" ] }
+
+          assert_response :success
+          assert_includes JSON.parse(response.body).map { |t| t["id"] }, @task.id
+          assert_equal "1", response.headers["X-Total-Count"]
+        end
+
+        test "index ignores an empty q" do
+          get :index, params: { project_id: @project.id, q: "" }
+
+          assert_response :success
+          assert_includes JSON.parse(response.body).map { |t| t["id"] }, @task.id
+        end
+
         test "workflow_runs returns runs json with what each run cost" do
           run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
           session = create(:terminal_session, :agent_session, user: @user, project: @project)

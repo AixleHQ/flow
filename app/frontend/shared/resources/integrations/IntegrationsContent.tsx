@@ -28,6 +28,7 @@ import {
   IconCopy,
   IconDownload,
   IconExternalLink,
+  IconHash,
   IconKey,
   IconLayoutKanban,
   IconLink,
@@ -48,6 +49,7 @@ import { formatDateMedium } from 'shared/lib/formatDate';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
+import { ChatChannelsModal } from 'shared/resources/chat-channels/ChatChannelsModal';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -87,6 +89,8 @@ interface IntegrationsContentProps {
   integrations: Integration[];
   basePath: string;
   title: string;
+  // Absent on the company page.
+  projectId?: number;
   // Absent on the company page and whenever the deployment has Azure DevOps
   // switched off, which is what hides the connect entry entirely.
   azureDevops?: AzureDevopsProps;
@@ -121,6 +125,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   linear: 'Linear',
   youtrack: 'YouTrack',
 };
+
+const CHAT_PROVIDERS = ['slack', 'teams'];
 
 const SCOPE_COLORS: Record<string, string> = {
   company: 'gray',
@@ -161,6 +167,7 @@ export const IntegrationsContent = ({
   integrations,
   basePath,
   title,
+  projectId,
   azureDevops,
   github,
   bitbucket,
@@ -232,6 +239,7 @@ export const IntegrationsContent = ({
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
+  const [channelsProvider, setChannelsProvider] = useState<string | null>(null);
   const linearAvailable = isProjectContext && !!linear;
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
@@ -343,6 +351,17 @@ export const IntegrationsContent = ({
   }, [integrations, search, scopeFilter]);
 
   const hasFilters = !!search || scopeFilter !== 'all';
+
+  // Channels belong to the company, not to one install, so each messenger offers them once.
+  const channelOwners = useMemo(() => {
+    const ids = new Set<number>();
+    if (!isProjectContext) return ids;
+    for (const provider of CHAT_PROVIDERS) {
+      const first = filtered.find((i) => i.provider === provider && i.status === 'active');
+      if (first) ids.add(first.id);
+    }
+    return ids;
+  }, [filtered, isProjectContext]);
 
   const handleDelete = useCallback(
     (integration: Integration) => {
@@ -755,7 +774,7 @@ export const IntegrationsContent = ({
               {filtered.map((integration) => {
                 const readOnly = isProjectContext && integration.scopeIndicator === 'company';
 
-                return (
+                const row = (
                   <Table.Tr key={integration.id}>
                     <Table.Td>
                       <Group gap="sm" wrap="nowrap">
@@ -994,6 +1013,17 @@ export const IntegrationsContent = ({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
+                        {channelOwners.has(integration.id) && (
+                          <Button
+                            aria-label={`Channels for ${integration.name}`}
+                            size="compact-xs"
+                            variant="light"
+                            leftSection={<IconHash size={12} />}
+                            onClick={() => setChannelsProvider(integration.provider)}
+                          >
+                            Channels
+                          </Button>
+                        )}
                         {integration.provider === 'github' && canExecute && !readOnly && (
                           <Tooltip label="Test connection">
                             <ActionIcon
@@ -1306,6 +1336,7 @@ export const IntegrationsContent = ({
                     </Table.Td>
                   </Table.Tr>
                 );
+                return row;
               })}
             </Table.Tbody>
           </Table>
@@ -1405,6 +1436,16 @@ export const IntegrationsContent = ({
         onClose={() => setGitlabTrackersTarget(null)}
         basePath={basePath}
       />
+
+      {projectId !== undefined && (
+        <ChatChannelsModal
+          projectId={projectId}
+          provider={channelsProvider ?? 'slack'}
+          opened={channelsProvider !== null}
+          onClose={() => setChannelsProvider(null)}
+          canEdit={canExecute}
+        />
+      )}
 
       {azureDevops && (
         <AzureDevopsConnectModal

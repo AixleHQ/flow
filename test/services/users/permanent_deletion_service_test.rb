@@ -101,6 +101,35 @@ module Users
       assert_equal session.id, tool_result.reload.terminal_session_id
     end
 
+    # In production every user has rows nearly everywhere, so one unhandled
+    # foreign key fails every deletion. The scenario must keep up with the
+    # schema: a new foreign key that reaches users fails this test until the
+    # scenario has a row behind it.
+    test "deletes a user who has a row behind every foreign key that reaches them" do
+      with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
+        FullyWiredUserScenario.new(user: @user, company: @company, heir: @heir).build
+        references = references_reaching(@user)
+
+        unwired = references.reject { |reference| connection.select_value("SELECT EXISTS (#{reference.rows})") }
+        assert_empty unwired.map(&:to_s), "FullyWiredUserScenario has no row behind these foreign keys"
+        undeclared = User.reflect_on_all_associations.select { |a| a.options[:dependent] && !@user.public_send(a.name).exists? }
+        assert_empty undeclared.map(&:name), "FullyWiredUserScenario has no row in these User associations"
+
+        survivors = references.select(&:nullified_user?).to_h { |reference| [ reference, connection.select_values(reference.rows) ] }
+
+        assert_difference("User.count", -1) do
+          PermanentDeletionService.call(user: @user, actor: @actor)
+        end
+
+        survivors.each do |reference, ids|
+          fk = reference.foreign_key
+          kept = connection.select_values("SELECT id FROM #{connection.quote_table_name(fk.from_table)} " \
+                                          "WHERE id IN (#{ids.join(', ')}) AND #{connection.quote_column_name(fk.column)} IS NULL")
+          assert_equal ids.sort, kept.sort, "#{reference} rows must outlive the user with the reference nullified"
+        end
+      end
+    end
+
     test "transfers owned projects to the company heir admin" do
       project = create(:project, company: @company, owner: @user)
 
@@ -198,6 +227,42 @@ module Users
       assert_equal email, audit.audited_changes["email"]
       assert_equal @actor.id, audit.user_id
       assert_match email, audit.comment
+    end
+
+    Reference = Data.define(:foreign_key, :rows) do
+      def nullified_user? = foreign_key.to_table == "users" && foreign_key.on_delete == :nullify
+      def to_s = "#{foreign_key.from_table}.#{foreign_key.column} -> #{foreign_key.to_table}"
+    end
+
+    # Owned projects are handed to the heir, not deleted with the user.
+    TRANSFERRED = [ %w[projects owner_id] ].freeze
+
+    private
+
+    def connection = ActiveRecord::Base.connection
+
+    # Every foreign key that reaches `user`, with the SQL selecting the rows behind
+    # it: the keys on `users`, then the keys on every table whose rows are deleted
+    # along with the user, recursively. A nullified reference ends the walk.
+    def references_reaching(user)
+      foreign_keys = connection.tables.flat_map { |table| connection.foreign_keys(table) }
+      pending = [ [ "users", user.id.to_s ] ]
+      walked = Set["users"]
+      references = []
+
+      until pending.empty?
+        table, ids = pending.shift
+        foreign_keys.select { |fk| fk.to_table == table }.each do |fk|
+          rows = "SELECT id FROM #{connection.quote_table_name(fk.from_table)} " \
+                 "WHERE #{connection.quote_column_name(fk.column)} IN (#{ids})"
+          references << Reference.new(foreign_key: fk, rows: rows)
+          next if fk.on_delete == :nullify || TRANSFERRED.include?([ fk.from_table, fk.column ]) || walked.include?(fk.from_table)
+
+          walked << fk.from_table
+          pending << [ fk.from_table, rows ]
+        end
+      end
+      references
     end
   end
 end

@@ -164,15 +164,22 @@ class AgentCredential < ApplicationRecord
     result.fetch(:permanent) { result[:detail].to_s.include?("invalid_grant") }
   end
 
+  # Whether only the owner signing in again can repair a failed refresh: the vendor
+  # refused the grant or ended the session. Every permanent failure is one, and so is a
+  # refused add-on block (Claude's designOauth), which is not permanent only because the
+  # base login still works.
+  def self.sign_in_required?(result)
+    result.fetch(:sign_in_required) { permanent_failure?(result) }
+  end
+
   # A renewal that did not happen. Raised into the error reporter, never at the caller:
   # the caller gets the adapter's result Hash and decides what the failure means for it.
   class RefreshFailed < StandardError
-    attr_reader :credential, :source, :permanent
+    attr_reader :credential, :source
 
-    def initialize(credential, source:, detail:, permanent:)
+    def initialize(credential, source:, detail:)
       @credential = credential
       @source = source
-      @permanent = permanent
       super("#{credential.agent_type} credential refresh failed (#{source}): #{detail}")
     end
   end
@@ -389,9 +396,9 @@ class AgentCredential < ApplicationRecord
   # vendor API rejects the token mid-request. It exists so that every renewal records
   # its outcome the same way: success clears the error state, failure counts towards
   # condemning the credential (and mails its owner when it does), and every failure is
-  # reported to Sentry. Before this each caller did its own subset, and the reactive
-  # path did none — 40+ Cursor refreshes a day failed with a 404 and not one of them
-  # was recorded anywhere but an INFO log line.
+  # logged (#report_refresh_failure says which ones Sentry gets). Before this each caller
+  # did its own subset, and the reactive path did none — 40+ Cursor refreshes a day
+  # failed with a 404 and not one of them was recorded anywhere but an INFO log line.
   #
   # `source` names the caller in the report (:sweep, :launch, :unauthorized).
   # Returns the adapter's result Hash; never raises.
@@ -439,17 +446,20 @@ class AgentCredential < ApplicationRecord
     adapter.credential_lifecycle[:rotation] == :rotating
   end
 
+  # Returns whether this failure is the one that condemned the credential.
   def mark_refresh_error!(message, permanent: false)
     was_active = active?
     self.refresh_failure_count = refresh_failure_count.to_i + 1
     self.refresh_error = message.to_s.truncate(500)
     self.status = :error if permanent || refresh_failure_count >= MAX_REFRESH_FAILURES
     save!
+    condemned = was_active && error?
     # Once, on the crossing. A credential that can no longer be renewed needs the person
     # who owns it to sign in again, and until now nothing told them: the row went to
     # error, the profile badge kept saying "Connected", and the first sign was a workflow
     # run that came back empty.
-    notify_refresh_failure if was_active && error?
+    notify_refresh_failure if condemned
+    condemned
   end
 
   def clear_refresh_error!
@@ -562,22 +572,27 @@ class AgentCredential < ApplicationRecord
       # sweep still selects it, one transient failure away from condemning it.
       clear_refresh_error! if active? && expires_at.nil? && refresh_error.present?
     when :error
-      permanent = self.class.permanent_failure?(result)
-      mark_refresh_error!(result[:detail], permanent: permanent)
-      report_refresh_failure(result[:detail], source: source, permanent: permanent)
+      sign_in_required = self.class.sign_in_required?(result)
+      condemned = mark_refresh_error!(result[:detail], permanent: self.class.permanent_failure?(result))
+      Rails.logger.warn("[AgentCredential] refresh failed credential=#{id} agent_type=#{agent_type} source=#{source} " \
+                        "sign_in_required=#{sign_in_required} failures=#{refresh_failure_count} status=#{status} " \
+                        "detail=#{result[:detail]}")
+      report_refresh_failure(result[:detail], source: source) if condemned && !sign_in_required
     end
   end
 
-  # A permanent refusal is the vendor ending the login, which the user is mailed
-  # about and only they can renew; a transient one may be ours.
-  def report_refresh_failure(detail, source:, permanent:)
+  # Sentry gets only a failure that may be ours, and only the one that condemns the
+  # credential. A login the vendor ended — its grant refused, its session over — is not
+  # something we can fix: its owner is mailed and has to sign in again. A single network
+  # blip is usually gone by the next sweep; MAX_REFRESH_FAILURES of them in a row are not.
+  def report_refresh_failure(detail, source:)
     Rails.error.report(
-      RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
+      RefreshFailed.new(self, source: source, detail: detail),
       handled: true,
-      severity: permanent ? :warning : :error,
+      severity: :error,
       source: REFRESH_ERROR_SOURCE,
       context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
-                 permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
+                 failure_count: refresh_failure_count }
     )
   end
 

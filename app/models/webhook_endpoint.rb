@@ -25,6 +25,15 @@ class WebhookEndpoint < ApplicationRecord
 
   scope :active, -> { where(enabled: true) }
 
+  # The install a chat endpoint hears through: the one it names while that is
+  # active, else another company's install of the same workspace.
+  def chat_install
+    install = Integration.find_by(id: config.to_h["integration_id"])
+    return install if install&.active?
+
+    install&.chat_workspace&.posting_integration
+  end
+
   # A workflow's inbound webhook. Unless the caller explicitly chooses otherwise
   # it demands a shared token, generated here, so the URL alone never fires the
   # workflow; the 128-bit slug is an address, not the credential.

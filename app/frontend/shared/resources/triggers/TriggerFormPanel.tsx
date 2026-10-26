@@ -1,11 +1,23 @@
 import { usePage } from '@inertiajs/react';
-import { Button, CopyButton, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core';
-import { IconCheck, IconCopy, IconLock, IconUser, IconX } from '@tabler/icons-react';
+import {
+  Button,
+  type ComboboxData,
+  type ComboboxItem,
+  CopyButton,
+  NumberInput,
+  PasswordInput,
+  Select,
+  Switch,
+  TextInput,
+} from '@mantine/core';
+import { IconCheck, IconCopy, IconLock, IconPlus, IconUser, IconX } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
 import { useCallback, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
+import { ConnectChannelModal } from 'shared/resources/chat-channels/ConnectChannelModal';
+import type { ChatChannel } from 'shared/resources/chat-channels/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import type { SharedProps } from 'shared/ui';
 
@@ -18,7 +30,13 @@ import {
   type TrackerTriggerValue,
 } from './trackerTrigger';
 import { TrackerTriggerFields } from './TrackerTriggerFields';
-import type { ChatProviderOption, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
+import type {
+  ChatConversationOption,
+  ChatProviderOption,
+  Trigger,
+  TriggerColumnOption,
+  TriggerWorkflowOption,
+} from './types';
 
 interface TriggerFormPanelProps {
   projectId: number;
@@ -28,7 +46,7 @@ interface TriggerFormPanelProps {
   workflows?: TriggerWorkflowOption[];
   columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
-  // Messengers the company has connected, with the conversations each bot knows.
+  // Messengers the company has connected, with the channels connected to the company in each.
   chatProviders?: ChatProviderOption[];
   editing: Trigger | null;
   defaultKind: string;
@@ -53,21 +71,40 @@ function describeCron(expr: string): { ok: boolean; text: string } {
   }
 }
 
-const ANYWHERE = '__anywhere__';
-const DIRECT_MESSAGES = '__direct__';
-
-// `where` is a conversation id, DIRECT_MESSAGES, or '' for anywhere the bot is addressed.
-function chatFilterFromPredicate(pred: Record<string, unknown>): { where: string; op: string; value: string } {
-  const where =
-    typeof pred.channel === 'string' ? pred.channel : pred['conversation.type'] === 'direct' ? DIRECT_MESSAGES : '';
+function chatFilterFromPredicate(pred: Record<string, unknown>): { op: string; value: string } {
   const text = pred.text;
   if (text && typeof text === 'object') {
     const t = text as { op?: string; value?: string };
-    return { where, op: t.op ?? 'contains', value: t.value ?? '' };
+    return { op: t.op ?? 'contains', value: t.value ?? '' };
   }
-  if (typeof text === 'string') return { where, op: 'contains', value: text };
-  return { where, op: 'contains', value: '' };
+  if (typeof text === 'string') return { op: 'contains', value: text };
+  return { op: 'contains', value: '' };
 }
+
+// The server refuses a condition on where a message came from — the trigger's channel says that
+// (TriggerBinding::CHAT_ROUTING_KEYS) — so carrying one over would fail the save.
+const CHAT_PLACE_KEYS = ['channel', 'conversation', 'workspace', 'team', 'integration_id', 'subject', 'service_url'];
+
+// Conditions set through the API or MCP that the form has no field for, such as the sender.
+function chatConditionsKept(pred: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(pred).filter(
+      ([key]) =>
+        key !== 'provider' &&
+        key !== 'text' &&
+        !CHAT_PLACE_KEYS.some((root) => key === root || key.startsWith(`${root}.`)),
+    ),
+  );
+}
+
+const conversationOption = (channel: ChatChannel): ChatConversationOption => ({
+  id: channel.id,
+  name: channel.name,
+  label: channel.label,
+  kind: channel.kind,
+  teamName: channel.team_name,
+  provider: channel.provider,
+});
 
 // Builds a ready-to-run curl command for the created webhook, adapting the auth
 // headers to the chosen verification strategy.
@@ -146,7 +183,12 @@ export function TriggerFormPanel({
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
 
   const [chatProvider, setChatProvider] = useState(editing?.chat_provider ?? chatProviders[0]?.key ?? 'slack');
-  const [where, setWhere] = useState(editChat?.where ?? '');
+  const [chatChannelId, setChatChannelId] = useState<number | null>(editing?.chat_channel?.id ?? null);
+  // Channels connected from this form, and the edited trigger's own: the page's list predates both.
+  const [extraChannels, setExtraChannels] = useState<ChatConversationOption[]>(() =>
+    editing?.chat_channel ? [conversationOption(editing.chat_channel)] : [],
+  );
+  const [submitted, setSubmitted] = useState(false);
   const [statusReporting, setStatusReporting] = useState(editing?.status_reporting ?? 'lifecycle');
   const [textContains, setTextContains] = useState(editChat?.value ?? '');
   const [textOp, setTextOp] = useState(editChat?.op ?? 'contains');
@@ -181,12 +223,21 @@ export function TriggerFormPanel({
     { value: 'create_task', label: 'Create a task' },
   ];
   const cronDesc = describeCron(cron);
+  // A new trigger starts switched on, and a chat trigger is only on with a channel.
+  const channelMissing = kind === 'chat' && chatChannelId === null && (!isEdit || enabled);
+
+  const channelConnected = (channel: ChatChannel) => {
+    setExtraChannels((prev) => [...prev.filter((c) => c.id !== channel.id), conversationOption(channel)]);
+    if (channel.provider === chatProvider) setChatChannelId(channel.id);
+  };
 
   const submit = useCallback(async () => {
     if (!workflowId) {
       setError('Choose the workflow this trigger starts');
       return;
     }
+    setSubmitted(true);
+    if (channelMissing) return;
     setSaving(true);
     setError(null);
     const trigger: Record<string, unknown> = isEdit ? {} : { kind };
@@ -201,11 +252,11 @@ export function TriggerFormPanel({
     } else {
       const filter: Record<string, unknown> = {};
       if (kind === 'chat') {
+        Object.assign(filter, chatConditionsKept(editing?.filter_predicate ?? {}));
         filter.provider = chatProvider;
-        if (where === DIRECT_MESSAGES) filter['conversation.type'] = 'direct';
-        else if (where.trim()) filter.channel = where.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
         if (!isEdit) trigger.chat_provider = chatProvider;
+        trigger.chat_channel_id = chatChannelId;
         trigger.status_reporting = statusReporting;
         trigger.cooldown_seconds = chatCooldown === '' ? 0 : chatCooldown;
       } else if (kind === 'webhook') {
@@ -278,7 +329,8 @@ export function TriggerFormPanel({
     cooldown,
     enabled,
     chatProvider,
-    where,
+    chatChannelId,
+    channelMissing,
     statusReporting,
     textContains,
     textOp,
@@ -778,15 +830,20 @@ export function TriggerFormPanel({
               {/* Chat fields */}
               {kind === 'chat' && (
                 <>
-                  <ChatWhereFields
+                  <ChatChannelFields
+                    projectId={projectId}
+                    triggerId={editing && editing.chat_provider === chatProvider ? editing.id : undefined}
                     providers={chatProviders}
                     provider={chatProvider}
                     onProviderChange={(key) => {
                       setChatProvider(key);
-                      setWhere('');
+                      setChatChannelId(null);
                     }}
-                    where={where}
-                    onWhereChange={setWhere}
+                    extraChannels={extraChannels}
+                    channelId={chatChannelId}
+                    onChannelChange={setChatChannelId}
+                    onChannelConnected={channelConnected}
+                    error={submitted && channelMissing ? 'Choose the channel this trigger listens to' : null}
                     isEdit={isEdit}
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12 }}>
@@ -851,7 +908,7 @@ export function TriggerFormPanel({
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4, marginBottom: 12 }}>
                     Matched against the message after the @mention, ignoring case. @mention help lists the commands of a
-                    conversation. The word help can&apos;t be used as a pattern.
+                    conversation. The words help and connect can&apos;t be used as a pattern.
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <NumberInput
@@ -1421,49 +1478,58 @@ function WebhookCreatedView({
   );
 }
 
-interface ChatWhereFieldsProps {
+interface ChatChannelFieldsProps {
+  projectId: number;
+  triggerId?: number;
   providers: ChatProviderOption[];
   provider: string;
   onProviderChange: (key: string) => void;
-  where: string;
-  onWhereChange: (where: string) => void;
+  extraChannels: ChatConversationOption[];
+  channelId: number | null;
+  onChannelChange: (id: number) => void;
+  onChannelConnected: (channel: ChatChannel) => void;
+  error: string | null;
   isEdit: boolean;
 }
 
-// Which messenger, and where in it. Teams channel ids cannot be typed, so Teams
-// offers the conversations its bot has been added to; Slack keeps the channel
-// id field until it has such a list.
-function ChatWhereFields({
+function channelOptions(channels: ChatConversationOption[]): ComboboxData {
+  const ungrouped: ComboboxItem[] = [];
+  const groups = new Map<string, ComboboxItem[]>();
+  for (const c of channels) {
+    const item = { value: String(c.id), label: c.label };
+    const group = c.kind === 'group' ? 'Group chats' : c.teamName;
+    if (group) groups.set(group, [...(groups.get(group) ?? []), item]);
+    else ungrouped.push(item);
+  }
+  return [...ungrouped, ...[...groups.entries()].map(([group, items]) => ({ group, items }))];
+}
+
+// Which messenger, and the one channel in it the trigger listens to. Only
+// channels connected to the company are offered: a channel is connected by
+// posting a code in it, never by typing its id.
+function ChatChannelFields({
+  projectId,
+  triggerId,
   providers,
   provider,
   onProviderChange,
-  where,
-  onWhereChange,
+  extraChannels,
+  channelId,
+  onChannelChange,
+  onChannelConnected,
+  error,
   isEdit,
-}: ChatWhereFieldsProps) {
+}: ChatChannelFieldsProps) {
+  const [connecting, setConnecting] = useState(false);
   const current = providers.find((p) => p.key === provider);
+  const providerLabel = CHAT_PROVIDER_LABELS[provider] ?? provider;
   const providerData = providers.map((p) => ({ value: p.key, label: p.label }));
-  if (!current)
-    providerData.push({ value: provider, label: `${CHAT_PROVIDER_LABELS[provider] ?? provider} (not connected)` });
+  if (!current) providerData.push({ value: provider, label: `${providerLabel} (not connected)` });
 
-  const conversations = current?.conversations ?? [];
-  const groups = new Map<string, { value: string; label: string }[]>();
-  for (const c of conversations) {
-    const group = c.kind === 'channel' ? (c.teamName ?? 'Channels') : 'Group chats';
-    const label = c.name ?? (c.kind === 'channel' ? 'Unnamed channel' : 'Unnamed group chat');
-    groups.set(group, [...(groups.get(group) ?? []), { value: c.id, label }]);
-  }
-  const known = where === '' || where === DIRECT_MESSAGES || conversations.some((c) => c.id === where);
-  const whereData = [
-    {
-      group: 'Anywhere',
-      items: [
-        { value: ANYWHERE, label: 'Anywhere the bot is addressed' },
-        { value: DIRECT_MESSAGES, label: 'Direct messages' },
-      ],
-    },
-    ...[...groups.entries()].map(([group, items]) => ({ group, items })),
-    ...(known ? [] : [{ group: 'Other', items: [{ value: where, label: 'A conversation the bot no longer lists' }] }]),
+  const listed = current?.conversations ?? [];
+  const channels = [
+    ...listed,
+    ...extraChannels.filter((c) => c.provider === provider && !listed.some((l) => l.id === c.id)),
   ];
 
   return (
@@ -1484,25 +1550,46 @@ function ChatWhereFields({
         )}
       </div>
       <div style={{ marginBottom: 12 }}>
-        {provider === 'teams' ? (
-          <Select
-            label="Where"
-            description="Channels and group chats appear here once the app is added to them."
-            data={whereData}
-            value={where === '' ? ANYWHERE : where}
-            onChange={(v) => onWhereChange(!v || v === ANYWHERE ? '' : v)}
-            allowDeselect={false}
-            searchable
-          />
-        ) : (
-          <TextInput
-            label="Channel id"
-            placeholder="C0123ABC (blank = any)"
-            value={where === DIRECT_MESSAGES ? '' : where}
-            onChange={(e) => onWhereChange(e.currentTarget.value)}
-          />
+        <Select
+          label="Channel"
+          description={
+            channels.length > 0
+              ? 'The one channel this trigger listens to. Only channels connected to your company are listed.'
+              : `No ${providerLabel} channel is connected to your company yet.`
+          }
+          placeholder={channels.length > 0 ? 'Choose a channel' : 'No channel connected yet'}
+          data={channelOptions(channels)}
+          value={channelId === null ? null : String(channelId)}
+          onChange={(v) => v && onChannelChange(Number(v))}
+          allowDeselect={false}
+          searchable
+          nothingFoundMessage={
+            channels.length > 0 ? 'No channel matches' : 'Connect a new channel with the button below'
+          }
+          error={error}
+        />
+        {current && (
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            mt={6}
+            leftSection={<IconPlus size={14} />}
+            onClick={() => setConnecting(true)}
+          >
+            Connect a new channel…
+          </Button>
         )}
       </div>
+      {current && (
+        <ConnectChannelModal
+          projectId={projectId}
+          provider={provider}
+          triggerId={triggerId}
+          opened={connecting}
+          onClose={() => setConnecting(false)}
+          onConnected={onChannelConnected}
+        />
+      )}
     </>
   );
 }

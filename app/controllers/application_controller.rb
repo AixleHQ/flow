@@ -14,11 +14,15 @@ class ApplicationController < ActionController::Base
     payload[:host] = request.host
     payload[:ip] = request.env["HTTP_X_REAL_IP"]
     payload[:ff] = request.env["HTTP_X_FORWARDED_FOR"]
-    # payload[:user] = current_user&.id
+    # Only a user this request already resolved: resolving one here would touch or
+    # forget the session of a request that never asked who was signed in.
+    payload[:user] = @current_user&.id if defined?(@current_user_session)
   end
 
+  # A bare `?q=foo` (or `q[]=`) is not a ransack query; ignore it rather than dig into it.
   def q_params
-    params[:q] || {}
+    q = params[:q]
+    q.respond_to?(:permit) ? q : {}
   end
 
   # Param paths whose hash values should not have keys underscored.

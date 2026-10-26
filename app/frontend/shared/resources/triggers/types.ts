@@ -1,3 +1,5 @@
+import type { ChatChannel } from 'shared/resources/chat-channels/types';
+
 // A trigger as the triggers API serializes it (WorkflowTriggers::Serializer).
 // snake_case: it arrives over the JSON API, not as Inertia props.
 export interface Trigger {
@@ -7,6 +9,8 @@ export interface Trigger {
   source?: string;
   // The messenger a chat trigger listens to, e.g. slack.
   chat_provider?: string | null;
+  // The one channel a chat trigger listens to; null until it has one, and it cannot be switched on before.
+  chat_channel?: ChatChannel | null;
   event_type: string;
   name?: string | null;
   trigger_mode?: string;
@@ -49,15 +53,20 @@ export interface TriggerWorkflowOption {
 }
 
 // The trigger form's pickers arrive as Inertia props, so these are camelCase.
+// A channel connected to the company; `id` is the registry id a trigger is saved with.
 export interface ChatConversationOption {
-  id: string;
+  id: number;
   name: string | null;
+  label: string;
   kind: string;
   teamName: string | null;
+  provider: string;
 }
 
 export interface ChatProviderOption {
   key: string;
   label: string;
+  // The bot's name in the messenger; null until a Slack install has reported it.
+  botName: string | null;
   conversations: ChatConversationOption[];
 }

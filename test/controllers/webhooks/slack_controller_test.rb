@@ -92,4 +92,32 @@ class Webhooks::SlackControllerTest < ActionDispatch::IntegrationTest
     assert_not @endpoint.reload.enabled
     assert @integration.reload.inactive?
   end
+
+  test "a renamed connected channel keeps its new name, and nothing is queued for it" do
+    channel = connect_chat_channel(company: @company, integration: @integration, external_id: "C0DEPLOYS1", name: "deploys")
+    raw = { type: "event_callback", team_id: "T1",
+            event: { type: "channel_rename", channel: { id: "C0DEPLOYS1", name: "releases", created: 1_700_000_000 } } }.to_json
+
+    assert_no_enqueued_jobs do
+      post "/webhooks/slack/events", params: raw, headers: slack_headers(raw)
+    end
+
+    assert_response :ok
+    assert_equal "releases", channel.reload.name
+    assert_equal 0, ReceivedWebhook.count
+  end
+
+  test "Slack removing the app switches the workspace off for every company that connected it" do
+    other = create(:user, :with_company)
+    peer = Integration.create!(provider: :slack, company: other.companies.first, connected_by: other, name: "Acme",
+                               status: :active, settings: { "team_id" => "T1" })
+    assert_equal @integration.reload.chat_workspace, peer.chat_workspace
+    raw = { type: "event_callback", team_id: "T1", event: { type: "app_uninstalled" } }.to_json
+
+    post "/webhooks/slack/events", params: raw, headers: slack_headers(raw)
+
+    assert_response :ok
+    assert [ @integration, peer ].map(&:reload).all?(&:inactive?)
+    assert_equal "inactive", peer.chat_workspace.reload.status
+  end
 end

@@ -32,6 +32,10 @@ module SentryConfiguration
     # Sentry as an unhandled crash in `bin/rails`. The exit status is the signal to whatever
     # ran the command; it says nothing about the app, and it carries no useful stacktrace.
     config.excluded_exceptions += %w[SystemExit]
+    # sentry-rails also reports any other exception that ends a `rails runner` process, tagged
+    # source: runner. Nothing deployed runs `rails runner`: these are operators' one-off scripts,
+    # failing in front of them, and as issues they never resolve. Only that hook sets the tag.
+    config.before_send = ->(event, _hint) { scrub_request(event) unless event.tags[:source] == "runner" }
 
     # Off: with it on, events carry the raw request body, every cookie (the Rails
     # session among them) and the Authorization header, and spans carry the
@@ -75,7 +79,6 @@ module SentryConfiguration
       breadcrumb
     end
 
-    config.before_send = ->(event, _hint) { scrub_request(event) }
     config.before_send_transaction = ->(event, _hint) { scrub_request(event) }
   end
 
@@ -101,10 +104,9 @@ Sentry.init { |config| SentryConfiguration.apply(config, dsn: Settings.sentry.ra
 # Sentry only from a source listed here. Turning the global subscriber on instead would
 # also forward everything Rails itself reports through the executor.
 forwarded_error_sources = {
-  # One issue per runtime and failure mode, not one per credential.
+  # One issue per runtime and caller, not one per credential.
   "agent_credential.refresh" => ->(context) {
-    [ "agent_credential.refresh", context[:agent_type], context[:refresh_source],
-      context[:permanent] ? "permanent" : "transient" ]
+    [ "agent_credential.refresh", context[:agent_type], context[:refresh_source] ]
   },
   # One issue per failure mode, not one per catalog row.
   "skills.catalog_backfill" => ->(context) { [ "skills.catalog_backfill", context[:error_class] ] },

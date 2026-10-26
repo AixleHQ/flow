@@ -64,7 +64,18 @@ DELETE /api/v1/projects/:project_id/workflows/:wf_id/steps/:id
 
 Triggers hang off the same path: `GET`/`POST
 /api/v1/projects/:project_id/workflows/:wf_id/triggers` and
-`PATCH`/`DELETE .../triggers/:id`.
+`PATCH`/`DELETE .../triggers/:id`. A chat trigger names its one channel as
+`chat_channel_id`, a channel connected to the project's company:
+
+```
+GET    /api/v1/projects/:project_id/chat_channels          # ?provider=slack|teams
+DELETE /api/v1/projects/:project_id/chat_channels/:id      # disconnect from the company
+POST   /api/v1/projects/:project_id/chat_connect_codes     # {provider, trigger_id?} → code, invite, mention, command
+GET    /api/v1/projects/:project_id/chat_connect_codes/:id # pending | redeemed (with its channel) | expired
+```
+
+A code connects the channel it is posted in (`@<bot> connect <code>`) and is
+returned only by the `POST`.
 
 ### Workflow runs
 

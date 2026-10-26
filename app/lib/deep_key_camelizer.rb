@@ -10,23 +10,32 @@
 # The marker itself never reaches the client.
 module DeepKeyCamelizer
   PRESERVE_MARKER = "_preserveKeys"
+  NOTHING_PRESERVED = [].freeze
+  # Resources camelize their own keys and Inertia's prop transformer walks the same
+  # tree again, so most keys arrive already camelized; those are reused as they are
+  # instead of being rebuilt key by key on every page.
+  ALREADY_CAMEL = /\A[a-z][a-zA-Z0-9]*\z/
 
   def self.call(obj, preserve: false)
     case obj
     when Hash
-      preserved = Set.new(obj[PRESERVE_MARKER] || [])
+      preserved = obj[PRESERVE_MARKER] || NOTHING_PRESERVED
 
       obj.each_with_object({}) do |(k, v), result|
         next if k == PRESERVE_MARKER
 
-        new_key = preserve ? k : k.to_s.camelize(:lower)
-        skip_children = preserved.include?(new_key)
-        result[new_key] = call(v, preserve: skip_children)
+        new_key = preserve ? k : camelize_key(k)
+        result[new_key] = call(v, preserve: preserved.include?(new_key))
       end
     when Array
       obj.map { |item| call(item, preserve: preserve) }
     else
       obj
     end
+  end
+
+  def self.camelize_key(key)
+    name = key.is_a?(Symbol) ? key.name : key.to_s
+    name.match?(ALREADY_CAMEL) ? name : name.camelize(:lower)
   end
 end

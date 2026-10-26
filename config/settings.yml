@@ -396,8 +396,11 @@ slack:
   signing_secret: "<%= ENV['SLACK_SIGNING_SECRET'] %>"
   # Bot scopes requested at install time, comma-separated as Slack's OAuth v2
   # authorize URL expects (Slack::Oauth also accepts spaces here).
-  # `commands` carries the Run workflow shortcut and the slash command.
-  scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write,commands' %>
+  # `commands` carries the Run workflow shortcut and the slash command;
+  # `channels:read` and `groups:read` give a connected channel its name;
+  # `users:read` gives the bot's display name, the only one Slack completes a
+  # mention from, and the name of whoever connected a channel.
+  scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,channels:read,groups:read,users:read,files:read,files:write,chat:write,commands' %>
 
 jira:
   # One Atlassian OAuth 2.0 (3LO) app per deployment, shared by every customer
@@ -479,9 +482,13 @@ coder:
   # much one sweep can remove even if the whole pool looks dead. Reaping a dead
   # agent also requires `health_probe_enabled` — without the active probe there
   # is no way to tell a dead box from an unresponsive one — but a workspace
-  # whose last start or stop failed is reaped without a probe. `reap_enabled:
-  # false` is the only switch that stops all deletion.
-  reap_enabled:              <%= ENV.fetch('CODER_REAP_ENABLED', 'true') == 'true' %>
+  # whose last start or stop failed is reaped without a probe. The feature flag
+  # `coder_reap` (config/feature_flags.yml) is the only switch that stops all
+  # deletion: it defaults to on, and an admin can pause it at runtime from
+  # /admin/feature_flags. `reap_enabled` is that flag's legacy ENV lock: null
+  # (`~`) while CODER_REAP_ENABLED is unset, so the default never locks the
+  # flag; true or false once it is set, `true` meaning on as before.
+  reap_enabled:              <%= ENV['CODER_REAP_ENABLED'].nil? ? '~' : ENV['CODER_REAP_ENABLED'] == 'true' %>
   reap_confirmation_minutes: <%= (ENV['CODER_REAP_CONFIRMATION_MINUTES'] || 10).to_i %>
   reap_max_deletions_per_run: <%= (ENV['CODER_REAP_MAX_DELETIONS_PER_RUN'] || 3).to_i %>
 

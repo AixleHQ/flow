@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -433,11 +433,49 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
   end
 
+  create_table "chat_channel_connections", force: :cascade do |t|
+    t.bigint "chat_conversation_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "requested_by_id"
+    t.string "posted_by_external_id"
+    t.string "posted_by_name"
+    t.string "confirmation_message_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "confirmation_url"
+    t.index ["chat_conversation_id", "company_id"], name: "idx_on_chat_conversation_id_company_id_df284b3410", unique: true
+    t.index ["company_id"], name: "index_chat_channel_connections_on_company_id"
+    t.index ["requested_by_id"], name: "index_chat_channel_connections_on_requested_by_id"
+  end
+
+  create_table "chat_connect_codes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "trigger_binding_id"
+    t.bigint "requested_by_id"
+    t.bigint "chat_channel_connection_id"
+    t.string "provider", null: false
+    t.string "code_digest", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "redeemed_at"
+    t.string "failure_reason"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "channel_name"
+    t.string "team_name"
+    t.index ["chat_channel_connection_id"], name: "index_chat_connect_codes_on_chat_channel_connection_id"
+    t.index ["code_digest"], name: "index_chat_connect_codes_on_code_digest", unique: true
+    t.index ["company_id"], name: "index_chat_connect_codes_on_company_id"
+    t.index ["project_id"], name: "index_chat_connect_codes_on_project_id"
+    t.index ["requested_by_id"], name: "index_chat_connect_codes_on_requested_by_id"
+    t.index ["trigger_binding_id"], name: "index_chat_connect_codes_on_trigger_binding_id"
+  end
+
   create_table "chat_conversations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "external_id", null: false
     t.boolean "installed", default: true, null: false
-    t.bigint "integration_id", null: false
+    t.bigint "integration_id"
     t.string "kind", null: false
     t.datetime "last_activity_at"
     t.string "name"
@@ -449,6 +487,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.string "tenant_id"
     t.datetime "updated_at", null: false
     t.datetime "welcomed_at"
+    t.bigint "chat_workspace_id"
+    t.index ["chat_workspace_id", "external_id"], name: "index_chat_conversations_on_chat_workspace_id_and_external_id", unique: true
+    t.index ["chat_workspace_id"], name: "index_chat_conversations_on_chat_workspace_id"
     t.index ["integration_id", "external_id"], name: "index_chat_conversations_on_integration_id_and_external_id", unique: true
     t.index ["integration_id"], name: "index_chat_conversations_on_integration_id"
   end
@@ -464,6 +505,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.string "workspace_id", null: false
     t.index ["provider", "workspace_id", "external_user_id"], name: "index_chat_identities_on_sender", unique: true
     t.index ["user_id"], name: "index_chat_identities_on_user_id"
+  end
+
+  create_table "chat_messages", force: :cascade do |t|
+    t.bigint "chat_conversation_id", null: false
+    t.bigint "company_id", null: false
+    t.string "message_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chat_conversation_id", "message_id"], name: "index_chat_messages_on_chat_conversation_id_and_message_id", unique: true
+    t.index ["company_id"], name: "index_chat_messages_on_company_id"
+  end
+
+  create_table "chat_workspaces", force: :cascade do |t|
+    t.string "provider", null: false
+    t.string "external_id", null: false
+    t.string "name"
+    t.string "status", default: "active", null: false
+    t.jsonb "settings", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "external_id"], name: "index_chat_workspaces_on_provider_and_external_id", unique: true
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -810,8 +872,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
     t.bigint "bitbucket_installation_id"
+    t.bigint "chat_workspace_id"
     t.index ["azure_devops_installation_id"], name: "index_integrations_on_azure_devops_installation_id"
     t.index ["bitbucket_installation_id"], name: "index_integrations_on_bitbucket_installation_id"
+    t.index ["chat_workspace_id"], name: "index_integrations_on_chat_workspace_id"
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
     t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
@@ -1700,6 +1764,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.boolean "copy_attachments", default: false, null: false
+    t.bigint "chat_conversation_id"
+    t.index ["chat_conversation_id"], name: "index_trigger_bindings_on_chat_conversation_id"
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
@@ -1897,6 +1963,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.datetime "execution_started_at"
     t.bigint "failed_agent_credential_id"
     t.string "failure_reason"
+    t.string "idempotency_key"
     t.jsonb "input_asset_ids", default: []
     t.string "mode", default: "interactive", null: false
     t.bigint "project_id", null: false
@@ -1905,7 +1972,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.string "relay_error"
     t.string "relay_state", default: "dispatched", null: false
     t.jsonb "repository_ids", default: [], null: false
+    t.bigint "retried_from_run_id"
     t.jsonb "shared_context", default: {}
+    t.string "source"
     t.datetime "started_at"
     t.string "state", default: "pending", null: false
     t.jsonb "step_overrides", default: {}, null: false
@@ -1918,8 +1987,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["relay_state", "created_at"], name: "index_workflow_runs_pending_relay", where: "((relay_state)::text = 'pending'::text)"
+    t.index ["retried_from_run_id"], name: "index_workflow_runs_on_retried_from_run_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
+    t.index ["user_id", "idempotency_key"], name: "index_workflow_runs_on_user_id_and_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
     t.index ["workflow_id", "state"], name: "index_workflow_runs_on_workflow_id_and_state"
     t.index ["workflow_id"], name: "index_workflow_runs_on_workflow_id"
@@ -2011,8 +2082,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
   add_foreign_key "boards", "projects", on_delete: :cascade
-  add_foreign_key "chat_conversations", "integrations", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "chat_conversations", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "companies", on_delete: :cascade
+  add_foreign_key "chat_channel_connections", "users", column: "requested_by_id", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "chat_channel_connections", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "companies", on_delete: :cascade
+  add_foreign_key "chat_connect_codes", "projects", on_delete: :cascade
+  add_foreign_key "chat_connect_codes", "trigger_bindings", on_delete: :nullify
+  add_foreign_key "chat_connect_codes", "users", column: "requested_by_id", on_delete: :nullify
+  add_foreign_key "chat_conversations", "chat_workspaces", on_delete: :cascade
+  add_foreign_key "chat_conversations", "integrations", on_delete: :nullify
   add_foreign_key "chat_identities", "users", on_delete: :cascade
+  add_foreign_key "chat_messages", "chat_conversations", on_delete: :cascade
+  add_foreign_key "chat_messages", "companies", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
   add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade
@@ -2053,6 +2135,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict
+  add_foreign_key "integrations", "chat_workspaces", on_delete: :nullify
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
@@ -2143,6 +2226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
   add_foreign_key "tracker_subscriptions", "integrations", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "chat_conversations", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
@@ -2158,7 +2242,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "user_identities", "identity_providers"
   add_foreign_key "user_identities", "users"
   add_foreign_key "user_session_proofs", "identity_providers"
-  add_foreign_key "user_session_proofs", "user_sessions"
+  add_foreign_key "user_session_proofs", "user_sessions", on_delete: :cascade
   add_foreign_key "user_sessions", "users", column: "impersonator_id", on_delete: :nullify
   add_foreign_key "user_sessions", "users", on_delete: :cascade
   add_foreign_key "users", "companies", column: "last_company_id", on_delete: :nullify
@@ -2174,6 +2258,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_120000) do
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
   add_foreign_key "workflow_runs", "projects", on_delete: :cascade
   add_foreign_key "workflow_runs", "users", on_delete: :nullify
+  add_foreign_key "workflow_runs", "workflow_runs", column: "retried_from_run_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "workflows", on_delete: :cascade
   add_foreign_key "workflows", "companies", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_project_company", on_delete: :cascade, validate: false

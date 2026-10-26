@@ -45,6 +45,8 @@ pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
+after_booted { MemoryStats.start("web") }
+
 # Run the Solid Queue supervisor inside Puma, ON BY DEFAULT.
 #
 # Deliberately opt-OUT rather than opt-in: production deployments are managed

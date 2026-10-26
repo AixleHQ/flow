@@ -8,7 +8,6 @@ require "shellwords"
 require "stringio"
 require "tempfile"
 require "uri"
-require "websocket-client-simple"
 
 module ContainerRuntime
   # Implements BaseRuntime using Kubernetes Pods + Services + IngressRoutes.
@@ -58,6 +57,16 @@ module ContainerRuntime
     # The one cookie the gate may hand the browser: the sandbox host's pass
     # (ContainerTicket), traded for the one-time ticket in a container URL.
     TERMINAL_AUTH_RESPONSE_COOKIES = [ ContainerTicket::COOKIE ].freeze
+
+    # Retrying a POST is safe here: a create whose answer was lost may already
+    # have been applied, and the next attempt then gets the 409 that
+    # #create_or_find_identical verifies.
+    CREATE_ATTEMPTS = 3
+    # Kubeclient raises a timeout or a broken connection as an HttpError without
+    # a status, which reads as 0.
+    TRANSIENT_API_STATUSES = [ 0, 429, 500, 502, 503, 504 ].freeze
+    # Net::HTTP raises these unwrapped, so they never become an HttpError.
+    TRANSIENT_CONNECTION_ERRORS = [ Errno::ECONNREFUSED, Errno::ECONNRESET ].freeze
 
     # -- Lifecycle ------------------------------------------------------------
 
@@ -592,6 +601,23 @@ module ContainerRuntime
     end
 
     def create_or_verify(client, kind, plural, resource)
+      attempt = 1
+      begin
+        create_or_find_identical(client, kind, plural, resource)
+      rescue Kubeclient::HttpError, *TRANSIENT_CONNECTION_ERRORS => e
+        raise unless attempt < CREATE_ATTEMPTS && transient_api_error?(e)
+
+        sleep ready_interval * attempt
+        attempt += 1
+        retry
+      end
+    end
+
+    def transient_api_error?(error)
+      !error.is_a?(Kubeclient::HttpError) || TRANSIENT_API_STATUSES.include?(error.error_code.to_i)
+    end
+
+    def create_or_find_identical(client, kind, plural, resource)
       case kind
       when "Service" then client.create_service(resource)
       when "Pod" then client.create_pod(resource)
@@ -760,12 +786,12 @@ module ContainerRuntime
 
       exit_code_parser = method(:exit_code_from_status_payload)
 
-      # Register the callbacks inside the connect block: the gem yields the
-      # client *before* it opens the socket and starts its reader thread.
-      # Registering them on the returned client instead is a race the API server
-      # wins whenever it answers fast — the :error/:close events then land on a
-      # client with no listeners and the exec sits until its timeout expires.
-      ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers) do |client|
+      # Register the callbacks inside the connect block: it yields the client
+      # *before* the socket opens and the reader thread starts. Registering them
+      # on the returned client instead is a race the API server wins whenever it
+      # answers fast — the :error/:close events then land on a client with no
+      # listeners and the exec sits until its timeout expires.
+      ws = ExecWebsocket.connect(url.to_s, headers: headers) do |client|
         client.on(:open) do
           next unless stdin_io
 
@@ -796,12 +822,12 @@ module ContainerRuntime
         end
 
         client.on(:message) do |msg|
-          next if msg.data.to_s.empty?
+          data = msg.data.to_s
+          next if data.empty?
 
-          data = msg.data.bytes
-          channel = data.shift
-          payload = data.pack("C*")
-          payload.force_encoding("utf-8") unless binary
+          channel = data.getbyte(0)
+          payload = data.byteslice(1, data.bytesize - 1)
+          payload.force_encoding(binary ? Encoding::BINARY : Encoding::UTF_8)
 
           case channel
           when 1
@@ -826,14 +852,11 @@ module ContainerRuntime
           end
         end
 
-        # websocket-client-simple re-raises a failed handshake once per byte
-        # still sitting in the HTTP response, so a single 404 from a deleted pod
-        # emitted ~100 :error events — all of them logged, all of them redoing
-        # the same bookkeeping. Handle only the first and tear the connection
-        # down from inside the callback so the reader loop stops immediately.
+        # Only the first error counts, and none once the command's exit status is
+        # in: a connection that drops after the Status lost nothing.
         client.on(:error) do |msg|
           first_error = mutex.synchronize do
-            if error_reported || runtime.send(:websocket_closed?, client, ws_state)
+            if error_reported || status_received || runtime.send(:websocket_closed?, client, ws_state)
               false
             else
               error_reported = true
@@ -853,9 +876,8 @@ module ContainerRuntime
             Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
           end
 
-          # #close runs on this (reader) thread and ends in Thread.kill(self),
-          # so nothing may follow it here — and the mutex must already be
-          # released, because closing emits :close, whose handler takes it.
+          # The mutex must already be released: closing emits :close, whose
+          # handler takes it.
           begin
             client.close
           rescue StandardError
@@ -938,7 +960,7 @@ module ContainerRuntime
       )
     end
 
-    # websocket-client-simple hands us a bare
+    # ExecWebsocket hands over the websocket gem's bare
     # WebSocket::Error::Handshake::InvalidStatusCode with no status attached,
     # and WebSocket::Handshake::Client raises out of #<< before it records the
     # response (its #headers still hold *our* request headers). The raw response
@@ -983,18 +1005,8 @@ module ContainerRuntime
       1
     end
 
-    def websocket_open?(ws)
-      return false if ws.nil?
-      return ws.open? if ws.respond_to?(:open?)
-      return ws.state.to_s == "open" if ws.respond_to?(:state)
-
-      false
-    rescue StandardError
-      false
-    end
-
     def websocket_closed?(ws, ws_state)
-      ws_state[:closed] || !websocket_open?(ws)
+      ws_state[:closed] || ws.nil? || ws.closed?
     end
 
     def build_exec_command(cmd, _tty)

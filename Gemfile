@@ -225,7 +225,7 @@ gem "lograge", "~> 0.15.1"
 # a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
 # file to lift the bearer token and profile ARN its API calls need. Every other runtime
 # hands us JSON and needs nothing here.
-gem "sqlite3", "~> 2.9"
+gem "sqlite3", "~> 2.10"
 
 # Time-based one-time codes: a step-up method in production, not just a test
 # fixture — User#totp_secret and Auth::Methods::Totp both run on it.
@@ -240,7 +240,7 @@ gem "docker-api", "~> 2.3"
 
 # Kubernetes API client for container runtime
 gem "kubeclient", "~> 4.13"
-gem "websocket-client-simple", "~> 0.3"
+gem "websocket", "~> 1.2"
 
 # Temporal (Ruby worker/client)
 # Note: temporal-ruby is early; validate in dev.
