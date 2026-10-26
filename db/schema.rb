@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -604,6 +604,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
     t.index ["company_id", "identity_provider_id"], name: "index_company_auth_policies_unique_pair", unique: true
     t.index ["company_id"], name: "index_company_auth_policies_on_company_id"
     t.index ["identity_provider_id"], name: "index_company_auth_policies_on_identity_provider_id"
+  end
+
+  create_table "company_billing_state_changes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.string "billing_state", null: false
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "occurred_at"], name: "index_billing_state_changes_on_company_and_time"
+    t.index ["company_id"], name: "index_company_billing_state_changes_on_company_id"
+    t.index ["occurred_at"], name: "index_company_billing_state_changes_on_occurred_at"
   end
 
   create_table "company_capacity_changes", force: :cascade do |t|
@@ -2013,6 +2024,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
     t.datetime "execution_started_at"
     t.bigint "failed_agent_credential_id"
     t.string "failure_reason"
+    t.string "idempotency_key"
     t.jsonb "input_asset_ids", default: []
     t.string "mode", default: "interactive", null: false
     t.bigint "project_id", null: false
@@ -2021,7 +2033,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
     t.string "relay_error"
     t.string "relay_state", default: "dispatched", null: false
     t.jsonb "repository_ids", default: [], null: false
+    t.bigint "retried_from_run_id"
     t.jsonb "shared_context", default: {}
+    t.string "source"
     t.datetime "started_at"
     t.string "state", default: "pending", null: false
     t.jsonb "step_overrides", default: {}, null: false
@@ -2034,8 +2048,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["relay_state", "created_at"], name: "index_workflow_runs_pending_relay", where: "((relay_state)::text = 'pending'::text)"
+    t.index ["retried_from_run_id"], name: "index_workflow_runs_on_retried_from_run_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
+    t.index ["user_id", "idempotency_key"], name: "index_workflow_runs_on_user_id_and_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
     t.index ["workflow_id", "state"], name: "index_workflow_runs_on_workflow_id_and_state"
     t.index ["workflow_id"], name: "index_workflow_runs_on_workflow_id"
@@ -2150,6 +2166,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
+  add_foreign_key "company_billing_state_changes", "companies"
   add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
@@ -2306,6 +2323,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_090000) do
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
   add_foreign_key "workflow_runs", "projects", on_delete: :cascade
   add_foreign_key "workflow_runs", "users", on_delete: :nullify
+  add_foreign_key "workflow_runs", "workflow_runs", column: "retried_from_run_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "workflows", on_delete: :cascade
   add_foreign_key "workflows", "companies", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_project_company", on_delete: :cascade, validate: false

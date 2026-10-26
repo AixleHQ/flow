@@ -152,6 +152,10 @@ class Company < ApplicationRecord
   # fourth path should be able to make. See Billing::CapacityWindow for what
   # reads it.
   before_save :stamp_the_payer_change, if: -> { persisted? && will_save_change_to_billing_provider? }
+  # After commit, like the capacity log beside it: the measurement reads this
+  # for an hour that has closed, so an entry for a state that was rolled back
+  # would bill against something that never happened.
+  after_commit :record_billing_state_change, if: :saved_change_to_billing_state?
   after_save :apply_session_concurrency_limit
 
   scope :billing_billable, -> { where(billing_state: "active", managed_by_aixle: false) }
@@ -278,10 +282,15 @@ class Company < ApplicationRecord
   # A company that is running again has no reason to be stopped, and an unpaid
   # invoice it was pointed at belongs to the stop that has just been undone.
   def acquiring_a_stripe_customer?
-    # Only from nothing: a company AWS bills must never be re-pointed by a
-    # customer id left over from before.
-    stripe_customer_id.present? && will_save_change_to_stripe_customer_id? &&
-      billing_provider == BILLING_PROVIDER_NONE
+    return false unless stripe_customer_id.present? && will_save_change_to_stripe_customer_id?
+    return true if billing_provider == BILLING_PROVIDER_NONE
+
+    # A workspace AWS billed until its subscription ended. Nothing re-points
+    # `billing_provider` on a cancellation, so without this a customer who
+    # unsubscribed could never pay by card again. Never while the subscription
+    # is live -- that would be a second bill for the same capacity -- and never
+    # on create, where no licence exists yet to say either way.
+    billing_provider == BILLING_PROVIDER_AWS_MARKETPLACE && persisted? && marketplace_license.nil?
   end
 
   def record_stripe_as_the_payer
@@ -300,6 +309,13 @@ class Company < ApplicationRecord
   # the hour a company was created in for a second, unrelated reason.
   def stamp_the_payer_change
     self.billing_provider_since = Time.current
+  end
+
+  # What Billing::CapacityWindow reads to tell an hour a workspace was stopped
+  # for from one it was running: without it the hour is billed at whatever the
+  # company has become by the time the hour is measured.
+  def record_billing_state_change
+    CompanyBillingStateChange.record!(company_id: id, billing_state: billing_state)
   end
 
   def forget_billing_block

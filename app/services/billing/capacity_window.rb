@@ -45,19 +45,20 @@ module Billing
 
     def call
       limits = opening_limits
+      states = opening_states
       seconds = Hash.new(0)
       payable = Hash.new(0)
-      peak = offered_total(limits)
+      peak = offered_total(limits, states)
       cursor = period_start
 
-      changes_during_window.each do |company_id, max_sessions, occurred_at|
-        accrue(seconds, payable, limits, from: cursor, to: occurred_at)
+      events_during_window.each do |occurred_at, company_id, kind, value|
+        accrue(seconds, payable, limits, states, from: cursor, to: occurred_at)
         cursor = occurred_at
-        limits[company_id] = max_sessions.to_i
-        total = offered_total(limits)
+        kind == :limit ? limits[company_id] = value.to_i : states[company_id] = value
+        total = offered_total(limits, states)
         peak = total if total > peak
       end
-      accrue(seconds, payable, limits, from: cursor, to: period_end)
+      accrue(seconds, payable, limits, states, from: cursor, to: period_end)
 
       offered = seconds.reject { |_, value| value.zero? }
       billed = payable.slice(*billable_company_ids).reject { |_, value| value.zero? }
@@ -78,12 +79,12 @@ module Billing
     # which is what a free allowance is spent from; `payable` is the part its
     # current payer owes, which is everything except the time before that payer
     # took over.
-    def accrue(seconds, payable, limits, from:, to:)
+    def accrue(seconds, payable, limits, states, from:, to:)
       elapsed = (to - from).round
       return if elapsed <= 0
 
       limits.each do |company_id, limit|
-        rate = offered(company_id, limit)
+        rate = offered(limit, states[company_id])
         seconds[company_id] += rate * elapsed
         payable[company_id] += rate * owed_elapsed(company_id, from, to)
       end
@@ -112,23 +113,57 @@ module Billing
                               .pluck(:id, :billing_provider_since).to_h
     end
 
-    def offered_total(limits)
-      limits.sum { |company_id, limit| offered(company_id, limit) }
+    def offered_total(limits, states)
+      limits.sum { |company_id, limit| offered(limit, states[company_id]) }
     end
 
     # What the company could actually run, which is what it may be charged for.
-    # A zero here is a company offered nothing — blocked, or unbounded and
-    # therefore unbillable — and the two are told apart by `ceilings`, not by the
-    # number.
-    def offered(company_id, configured)
-      ceiling = ceilings[company_id]
+    # A zero here is a company offered nothing — stopped, or unbounded and
+    # therefore unbillable — and the two are told apart by the ceiling, not by
+    # the number.
+    #
+    # Takes the state it was in at the moment being measured, not the state it
+    # is in now. A workspace stopped until :47 offered nothing until :47,
+    # whatever it has become by the time the hour is measured at five past the
+    # next one.
+    def offered(configured, state)
+      ceiling = ceiling_for(state)
       return configured.to_i if ceiling.nil?
 
       configured.to_i.zero? ? ceiling : [ configured.to_i, ceiling ].min
     end
 
-    def ceilings
-      @ceilings ||= Billing::EffectiveCapacity.ceilings
+    # Nothing clamps anybody outside the hosted product: nobody is on a free
+    # allowance there and nothing stops a company that owes us nothing.
+    def ceiling_for(state)
+      return nil unless Deployment.saas?
+
+      Trial.ceiling_for(state)
+    end
+
+    # What every company's billing state was as the hour opened, read the same
+    # way as its capacity and with the same narrow fallback: a company the log
+    # knows nothing about is taken from its live row, and one whose first entry
+    # lands inside this hour opened it at whatever that entry replaced — which
+    # the walk below applies from the moment it happened.
+    def opening_states
+      logged = CompanyBillingStateChange.state_at(period_start)
+      live = Company.where(id: measured_company_ids).pluck(:id, :billing_state).to_h
+
+      measured_company_ids.index_with { |company_id| logged[company_id] || live[company_id] }
+    end
+
+    # Capacity and billing state on one timeline, because an hour can hold both
+    # and the order between them decides what was offered in between.
+    def events_during_window
+      limits = changes_during_window.map { |id, max, at| [ at, id, :limit, max ] }
+      states = CompanyBillingStateChange
+               .during(period_start...period_end)
+               .where(company_id: measured_company_ids)
+               .pluck(:company_id, :billing_state, :occurred_at)
+               .map { |id, state, at| [ at, id, :state, state ] }
+
+      (limits + states).sort_by { |at, id, kind, _| [ at, id, kind.to_s ] }
     end
 
     # What every company's limit was as the hour opened. The log is the source

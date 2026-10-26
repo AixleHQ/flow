@@ -15,6 +15,11 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
 
   def window = Billing::CapacityWindow.for_hour(@hour)
 
+  def state(company, billing_state, at)
+    CompanyBillingStateChange.record!(company_id: company.id, billing_state: billing_state, occurred_at: at)
+  end
+
+
   # A whole hour at N is N queue-hours, i.e. N * 60 queue-minutes.
   def assert_minutes(expected, result, message = nil)
     assert_equal BigDecimal(expected.to_s), result.quantity_minutes, message
@@ -225,6 +230,51 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
 
     # The allowance does not shrink the workspace; it is spent at whatever rate
     # the workspace runs.
+    test "a workspace started mid-hour is billed from then, not from the top of the hour" do
+      change(@acme, 2, @hour - 2.hours)
+      state(@acme, "blocked", @hour - 2.hours)
+      state(@acme, "active", @hour + 47.minutes)
+
+      assert_minutes 26, window, "13 minutes at two, and nothing while it was stopped"
+    end
+
+    test "a workspace stopped mid-hour is billed up to then" do
+      change(@acme, 1, @hour - 2.hours)
+      state(@acme, "active", @hour - 2.hours)
+      state(@acme, "blocked", @hour + 20.minutes)
+
+      assert_minutes 20, window
+    end
+
+    # The allowance is spent from what a workspace was offered, and a stopped one
+    # was offered nothing — so being stopped must not quietly spend it either.
+    test "a stopped workspace spends no allowance for the time it was stopped" do
+      change(@acme, 2, @hour - 2.hours)
+      state(@acme, "blocked", @hour - 2.hours)
+      state(@acme, "active", @hour + 30.minutes)
+
+      assert_equal 60, window.offered_per_company[@acme.id] / 60, "two workers for half an hour"
+    end
+
+    # Both can move in one hour, and which came first decides what was offered in
+    # between.
+    test "capacity and billing state move on the same timeline" do
+      change(@acme, 1, @hour - 2.hours)
+      state(@acme, "active", @hour - 2.hours)
+      change(@acme, 6, @hour + 15.minutes)
+      state(@acme, "blocked", @hour + 30.minutes)
+
+      # 15 at one, then 15 at six, then stopped: 15 + 90
+      assert_minutes 105, window
+    end
+
+    test "a workspace whose state never changed in the hour is measured as before" do
+      change(@acme, 3, @hour - 2.hours)
+      state(@acme, "active", @hour - 2.hours)
+
+      assert_minutes 180, window
+    end
+
     test "a trialing company is measured at the limit it asked for" do
       @acme.update!(billing_state: "trialing")
       change(@acme, 10, @hour - 2.hours)
