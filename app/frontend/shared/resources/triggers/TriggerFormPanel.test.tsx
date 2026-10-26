@@ -118,8 +118,8 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByText('Column')).toBeInTheDocument();
     expect(screen.getByText('Mode')).toBeInTheDocument();
     expect(screen.getByText('Cooldown (s)')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Auto' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manual' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Auto' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Manual' })).not.toBeChecked();
     // Footer actions.
     expect(screen.getByRole('button', { name: 'Add trigger' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
@@ -210,7 +210,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
 
     renderPage(<TriggerFormPanel {...baseProps()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Manual' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Manual' }));
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
@@ -721,6 +721,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     // Type is a locked read-only label in edit mode, not a Select.
     expect(screen.getByText('Type is locked when editing')).toBeInTheDocument();
     expect(screen.getByText('Task enters column')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Manual' })).toBeChecked();
     // A column edit has no Trigger enabled switch (that only shows for non-column kinds).
     expect(screen.queryByRole('switch', { name: 'Trigger enabled' })).not.toBeInTheDocument();
 

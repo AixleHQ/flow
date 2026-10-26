@@ -6,6 +6,7 @@ import {
   CopyButton,
   NumberInput,
   PasswordInput,
+  SegmentedControl,
   Select,
   Switch,
   TextInput,
@@ -597,38 +598,15 @@ export function TriggerFormPanel({
                       >
                         Mode
                       </label>
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          background: 'var(--app-bg-paper)',
-                          border: '1px solid var(--app-border-default)',
-                          borderRadius: 8,
-                          padding: 3,
-                          gap: 2,
-                        }}
-                      >
-                        {['auto', 'manual'].map((m) => (
-                          <button
-                            key={m}
-                            onClick={() => setMode(m)}
-                            style={{
-                              padding: '6px 20px',
-                              fontSize: 12,
-                              fontWeight: 500,
-                              color: mode === m ? 'var(--app-text-primary)' : 'var(--app-text-secondary)',
-                              background: mode === m ? 'var(--app-bg-paper)' : 'transparent',
-                              borderRadius: 4,
-                              border: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.12s',
-                              fontFamily: 'inherit',
-                              textTransform: 'capitalize',
-                            }}
-                          >
-                            {m.charAt(0).toUpperCase() + m.slice(1)}
-                          </button>
-                        ))}
-                      </div>
+                      <SegmentedControl
+                        aria-label="Mode"
+                        value={mode}
+                        onChange={setMode}
+                        data={[
+                          { value: 'auto', label: 'Auto' },
+                          { value: 'manual', label: 'Manual' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label
