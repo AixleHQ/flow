@@ -696,7 +696,9 @@ module Agents
     # @return [Hash] { status: :refreshed | :not_needed | :error | :busy, detail: String | nil,
     #   permanent: Boolean } — `permanent` tells the refresh sweep whether the failure
     #   makes the credential unusable (flip it to `error`, forcing a re-login) or is a
-    #   transient/partial one. :busy means another refresher holds the lease.
+    #   transient/partial one. :busy means another refresher holds the lease. An adapter
+    #   whose refused block can leave the credential usable also says `sign_in_required:`
+    #   (AgentCredential.sign_in_required?).
     # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
     #   refreshing. Only agents that store their own expiry (Claude, with a block per
     #   login) can honour it; single-block agents refresh whenever they are called.
