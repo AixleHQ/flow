@@ -335,5 +335,20 @@ describe('Company billing page', () => {
       expect(screen.getByText('Ended')).toBeInTheDocument();
       expect(screen.getByText(/Renewing it in AWS starts it again/)).toBeInTheDocument();
     });
+
+    // Renewing in AWS is one way out of a stopped workspace; a card is the
+    // other, and withholding it left a cancelled customer with neither.
+    it('offers the card as well, once the subscription has ended', () => {
+      // As the workspace then is: stopped, with no card behind it.
+      render({ status: 'canceled', hasSubscription: false, usage: null }, null, null, marketplace({ ended: true }));
+
+      expect(screen.getByRole('button', { name: /card/i })).toBeInTheDocument();
+    });
+
+    it('offers no card while the subscription is live', () => {
+      render({}, null, null, marketplace());
+
+      expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+    });
   });
 });

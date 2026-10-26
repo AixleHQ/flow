@@ -85,12 +85,27 @@ class Billing::PayerTest < ActiveSupport::TestCase
     assert company.billing_payer.stripe?
   end
 
+  # While AWS can still bill it. A live subscription is what makes a second
+  # payer a second bill for the same capacity.
   test "a customer id left over from before cannot re-point a company AWS bills" do
     company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :active, company: company)
 
     company.update!(stripe_customer_id: "cus_leftover")
 
     assert company.billing_payer.aws_marketplace?
+  end
+
+  # And once it cannot. A customer who unsubscribes keeps `billing_provider` --
+  # nothing re-points it -- so keying the refusal on the payer left them unable
+  # to pay by card ever again, with the workspace stopped and their work in it.
+  test "a workspace whose subscription ended may be paid for by card" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :ended, company: company)
+
+    company.update!(stripe_customer_id: "cus_new")
+
+    assert company.billing_payer.stripe?
   end
 
   test "bounding and the worker minimum follow the installation until a payer changes them" do

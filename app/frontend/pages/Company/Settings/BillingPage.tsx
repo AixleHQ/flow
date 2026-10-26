@@ -494,7 +494,8 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
         </Text>
         <List size="sm" spacing={4}>
           <List.Item>
-            <b>{formatMinutes(marketplace.reportedMinutes)}</b> worker-minutes reported to AWS so far this month.
+            <b>{formatMinutes(marketplace.reportedMinutes)}</b> worker-minutes reported to AWS this calendar month —
+            what the AWS bill for the month is counted from, including any earlier subscription in it.
           </List.Item>
           {marketplace.subscribedAt && (
             <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
@@ -519,9 +520,12 @@ const BillingPage = () => {
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
           {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
-          {marketplaceBilling ? (
-            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
-          ) : (
+          {marketplaceBilling && <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />}
+          {/* Both, once the AWS subscription has ended: the panel says what
+              happened and where to renew, and the card beneath it is the other
+              way to carry on. While the subscription is live there is no card
+              to offer -- it would be a second bill for the same capacity. */}
+          {(!marketplaceBilling || marketplaceBilling.ended) && (
             <>
               <SubscriptionCard billing={billing} />
               {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}

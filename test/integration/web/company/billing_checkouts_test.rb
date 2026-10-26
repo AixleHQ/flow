@@ -16,9 +16,12 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
   end
 
-  # A card here would be a second bill for capacity AWS already charges for.
+  # A card here would be a second bill for capacity AWS already charges for --
+  # while the subscription is live. Once it has ended the card is the only way
+  # left to pay, which is the test below.
   test "a workspace AWS bills is not offered a card" do
     @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE, billing_state: "active")
+    create(:marketplace_license, :active, company: @company)
 
     post company_billing_checkout_path
 
