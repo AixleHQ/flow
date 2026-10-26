@@ -22,6 +22,13 @@ governance, community health — carry none.
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
 
+### Changed
+- Sentry gets an agent login refresh failure only when repeated failures that
+  may be the platform's own, such as network errors, mark the login as needing
+  a new sign-in — not for a single failure, and not for a login the vendor
+  ended, whose owner is already emailed. Every failed refresh is still logged as
+  an `[AgentCredential] refresh failed` line.
+
 ### Fixed
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.

@@ -797,6 +797,7 @@ module Agents
 
       assert_equal :error, result[:status]
       assert_match(/claudeAiOauth refresh failed/, result[:detail])
+      refute result[:sign_in_required], "a failure the vendor did not call a refusal may be ours"
       assert_equal "a", cred.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
 
@@ -876,6 +877,7 @@ module Agents
       assert_equal :error, result[:status]
       assert_match(/designOauth/, result[:detail])
       refute result[:permanent], "a dead add-on block must not condemn the whole credential"
+      assert result[:sign_in_required], "only a new Design login renews a refused block"
       block = cred.reload.config_data["designOauth"]
       refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
       refute_predicate block["refreshToken"], :present?,

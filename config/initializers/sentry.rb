@@ -104,10 +104,9 @@ Sentry.init { |config| SentryConfiguration.apply(config, dsn: Settings.sentry.ra
 # Sentry only from a source listed here. Turning the global subscriber on instead would
 # also forward everything Rails itself reports through the executor.
 forwarded_error_sources = {
-  # One issue per runtime and failure mode, not one per credential.
+  # One issue per runtime and caller, not one per credential.
   "agent_credential.refresh" => ->(context) {
-    [ "agent_credential.refresh", context[:agent_type], context[:refresh_source],
-      context[:permanent] ? "permanent" : "transient" ]
+    [ "agent_credential.refresh", context[:agent_type], context[:refresh_source] ]
   },
   # One issue per failure mode, not one per catalog row.
   "skills.catalog_backfill" => ->(context) { [ "skills.catalog_backfill", context[:error_class] ] },
