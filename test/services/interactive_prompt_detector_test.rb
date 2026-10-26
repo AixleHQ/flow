@@ -76,6 +76,44 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
       ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
   PANE
 
+  # `tmux capture-pane` of Kiro CLI 2.34.0 (`--v3`, TUI) in a 160x45 pane after an MCP
+  # tool failed 7 times in a row. The session's steering said nobody can answer; the
+  # dialog was still on screen 4 minutes later.
+  KIRO_QUESTION_PANE = <<~PANE
+    • flaky_check
+        ╰ attempt=7
+        MCP tool error: ERROR: upstream timeout (503)
+
+    #{"─" * 160}
+     Trust All Tools active, confirmations are off · /quit to exit
+    #{"─" * 160}
+     Question
+     I've been trying to use "tool_call(aixle-tools::flaky_check)" but it's failed 7 times in a row. I'm clearly stuck in a loop.
+
+     What would you like me to do?
+
+     ❯ 1. Cancel
+       2. Keep Iterating
+       Type a different answer…
+    #{"─" * 160}
+       esc to cancel · ↑↓ to navigate · ↵ to submit
+  PANE
+
+  # The same session once someone chose Keep Iterating: the agent is working again.
+  KIRO_WORKING_SCREEN = <<~PANE
+      › Keep Iterating
+    • flaky_check
+        ╰ attempt=8
+        MCP tool error: ERROR: upstream timeout (503)
+    ᗥ Thinking... (esc to cancel)
+    #{"─" * 160}
+     Trust All Tools active, confirmations are off · /quit to exit
+    #{"─" * 160}
+    Default · auto · ◔ 3%                                                                                                                                 /workspace
+
+    ›  Kiro is working · 30s · Type to steer · Ctrl+S to queue
+  PANE
+
   test "detects the Codex workspace-trust prompt and names it in the message" do
     result = InteractivePromptDetector.detect(CODEX_TRUST_PANE, agent_type: "codex")
 
@@ -231,6 +269,29 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
 
   test "does not apply the Claude Code MCP signatures to another agent" do
     result = InteractivePromptDetector.detect(CLAUDE_MCP_URL_PANE, agent_type: "codex")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "detects Kiro waiting on its own Question dialog" do
+    result = InteractivePromptDetector.detect(KIRO_QUESTION_PANE, agent_type: "kiro_cli")
+
+    assert result.blocked?
+    assert_equal :kiro_question, result.prompt_id
+    assert_match(/"Question" dialog/, result.message)
+    assert_operator result.message.length, :<=, InteractivePromptDetector::MAX_MESSAGE_LENGTH
+  end
+
+  test "does not fire once Kiro has moved past its Question dialog" do
+    moved_on = "#{KIRO_QUESTION_PANE}#{KIRO_WORKING_SCREEN}"
+
+    result = InteractivePromptDetector.detect(moved_on, agent_type: "kiro_cli")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "does not apply the Kiro signature to another agent" do
+    result = InteractivePromptDetector.detect(KIRO_QUESTION_PANE, agent_type: "claude_code")
 
     assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
   end
