@@ -86,7 +86,10 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     # plucking both sides and intersecting in Ruby. Memoized per (request,
     # company), so it is constant per request, not per session listed — which is
     # what this guard protects.
-    assert_operator query_count, :<=, 23, "Expected bounded content query count, got #{query_count}"
+    # 23 -> 25 with feature flags read through Rails.cache: the `features` prop
+    # loads the flag rows once per request (two SELECTs). The test cache is a
+    # null store, so the suite counts them; in production they come from Redis.
+    assert_operator query_count, :<=, 25, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────
