@@ -152,14 +152,21 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     assert_empty QueueHealthCheck.problems(stats).grep(/reservations/)
   end
 
-  def admission_in_pool_of_one(admitted_at: nil, waiting_since: nil)
-    with_scope_defaults(project: 1)
-    session = create(:terminal_session, user: @user, project: @project)
+  def admission_in_pool(limit: 1, project: @project, admitted_at: nil, waiting_since: nil, drain: true)
+    with_scope_defaults(project: limit)
+    session = create(:terminal_session, user: @user, project: project)
     admission = SessionAdmissionService.enqueue!(session)
-    SessionAdmissionService.drain!
+    SessionAdmissionService.drain! if drain
     admission.reload
     admission.update_columns(admitted_at: admitted_at) if admitted_at
     admission.update_columns(created_at: waiting_since) if waiting_since
+    admission
+  end
+
+  # A slot granted hours ago, to a session that is now in `state`.
+  def occupant(state:, finished_at: nil, **pool)
+    admission = admission_in_pool(admitted_at: 3.hours.ago, **pool)
+    admission.terminal_session.update_columns(state: state, finished_at: finished_at)
     admission
   end
 
@@ -167,8 +174,8 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # sessions finishing and the next one granted each time, the oldest wait
   # reported as an error every minute all the same.
   test "a long wait in a pool that keeps granting slots is not reported" do
-    admission_in_pool_of_one(admitted_at: 5.minutes.ago)
-    admission_in_pool_of_one(waiting_since: 2.hours.ago)
+    admission_in_pool(admitted_at: 5.minutes.ago)
+    admission_in_pool(waiting_since: 2.hours.ago)
 
     stats = QueueHealthCheck.snapshot
 
@@ -178,16 +185,72 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     assert_empty QueueHealthCheck.warnings(stats)
   end
 
-  test "a pool that has granted nothing while a session waited is a warning, not an error" do
-    admission_in_pool_of_one(admitted_at: 3.hours.ago)
-    admission_in_pool_of_one(waiting_since: 40.minutes.ago)
+  # The production shape of PALAD-AI-RAILS-3S: a project limited to one session
+  # whose runs take hours grants nothing for as long as each one runs, with more
+  # queued behind it all day. Admitted and still launching, or wrapping up, is as
+  # live as running.
+  %w[queued running ready finishing].each do |state|
+    test "a pool full of a #{state} session is not reported however long the queue behind it" do
+      occupant(state: state)
+      admission_in_pool(waiting_since: 2.hours.ago)
+
+      stats = QueueHealthCheck.snapshot
+
+      assert_operator stats[:oldest_admission_wait_seconds], :>=, 2.hours.to_i
+      assert_empty stats[:stalled_pools]
+      assert_empty QueueHealthCheck.warnings(stats)
+    end
+  end
+
+  TerminalSession::TERMINAL_STATES.each do |state|
+    test "a slot still held by a session #{state} long ago is a warning, not an error" do
+      occupant(state: state, finished_at: 40.minutes.ago)
+      admission_in_pool(waiting_since: 40.minutes.ago)
+
+      stats = QueueHealthCheck.snapshot
+
+      assert_equal [ { key: "project:#{@project.id}", limit: 1, occupied: 1 } ],
+                   stats[:stalled_pools].map { |pool| pool.slice(:key, :limit, :occupied) }
+      assert_empty QueueHealthCheck.problems(stats)
+      assert_match(/\Apool project:#{@project.id} has granted no slot for 30 minutes while a session waits \(oldest \d+s, 1\/1 slots occupied\)\z/,
+                   QueueHealthCheck.warnings(stats).sole)
+    end
+  end
+
+  # Its slot comes back only once the container is proven gone, and that can
+  # take minutes after the session itself has ended.
+  test "a session that has only just ended is not reported while its slot is being given back" do
+    occupant(state: "finished", finished_at: 2.minutes.ago)
+    admission_in_pool(waiting_since: 2.hours.ago)
+
+    assert_empty QueueHealthCheck.snapshot[:stalled_pools]
+  end
+
+  test "a free slot nobody is granted while a session waits is a warning" do
+    occupant(state: "running", limit: 2)
+    admission_in_pool(limit: 2, waiting_since: 40.minutes.ago, drain: false)
 
     stats = QueueHealthCheck.snapshot
 
-    assert_equal [ { key: "project:#{@project.id}", limit: 1, occupied: 1 } ],
+    assert_equal [ { key: "project:#{@project.id}", limit: 2, occupied: 1 } ],
                  stats[:stalled_pools].map { |pool| pool.slice(:key, :limit, :occupied) }
-    assert_empty QueueHealthCheck.problems(stats)
-    assert_match(/pool project:#{@project.id} has granted no slot/, QueueHealthCheck.warnings(stats).sole)
+  end
+
+  test "a pool under its own cap waiting on a company limit that running sessions fill is not reported" do
+    with_company_limit(@company, 1)
+    occupant(state: "running", limit: 4, project: create(:project, owner: @user, company: @company))
+    admission_in_pool(limit: 4, waiting_since: 2.hours.ago)
+
+    assert_empty QueueHealthCheck.snapshot[:stalled_pools]
+  end
+
+  test "a company slot held by a session that ended long ago is reported on the pool waiting for it" do
+    with_company_limit(@company, 1)
+    occupant(state: "failed", finished_at: 40.minutes.ago, limit: 4,
+             project: create(:project, owner: @user, company: @company))
+    admission_in_pool(limit: 4, waiting_since: 40.minutes.ago)
+
+    assert_equal [ "project:#{@project.id}" ], QueueHealthCheck.snapshot[:stalled_pools].pluck(:key)
   end
 
   test "call returns the snapshot it reported" do
