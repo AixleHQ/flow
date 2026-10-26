@@ -132,6 +132,21 @@ class FeatureFlags::EnvSourceTest < ActiveSupport::TestCase
     assert_equal "FEATURE_CODER_REAP", source.merge("FEATURE_CODER_REAP" => "off").variable_for(:coder_reap)
   end
 
+  # The settings tree holds secrets; the source lives for the whole process.
+  test "keeps only the declared env_setting values of the settings tree" do
+    settings = { secret_key_base: "not-for-flags", database: { password: "db-secret" },
+                 coder: { reap_enabled: false, url: "https://coder.example" } }
+    source = env_with(settings)
+
+    assert_equal({ coder: { reap_enabled: false } }, source.instance_variable_get(:@settings))
+    [ "not-for-flags", "db-secret", "coder.example" ].each { |value| refute_includes source.inspect, value }
+
+    refute source.with_registry(REGISTRY).value_for(:coder_reap)
+    refute source.merge("FEATURE_BOARD_AI_SUMMARY" => "on").value_for(:coder_reap)
+    assert source.merge_settings("coder.reap_enabled" => true).value_for(:coder_reap)
+    assert_nil env_with(reap_setting(nil).merge(secret_key_base: "x")).with_registry(REGISTRY).value_for(:coder_reap)
+  end
+
   # Existing deployments keep their meaning: `true` is on, anything else set is
   # off, and only an unset variable leaves the flag to admin and its default.
   test "config/settings.yml gives coder.reap_enabled a value only when CODER_REAP_ENABLED is set" do
