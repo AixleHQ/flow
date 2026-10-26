@@ -286,9 +286,7 @@ module Agents
       stub_request(:post, CursorCliAdapter::CURSOR_MODELS_URL).to_return(status: 401, body: "")
       stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 404, body: "<!DOCTYPE html>")
 
-      assert_error_reported(AgentCredential::RefreshFailed) do
-        assert_empty @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
-      end
+      assert_empty @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
 
       assert_equal 1, credential.reload.refresh_failure_count
       assert_match(/404/, credential.refresh_error)

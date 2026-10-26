@@ -21,6 +21,10 @@ module Teams
         content: { uniqueId: upload["uniqueId"], fileType: upload["fileType"] }
       } ])
       ConnectorClient.delete(conversation.teams_reference, consent_activity_id) if consent_activity_id.present?
+    rescue Teams::Error => e
+      raise if e.retryable?
+
+      Rails.logger.warn("[Teams::FileConsentJob] gave up asset ##{asset_id} in conversation ##{conversation_id}: #{e.message}")
     end
   end
 end

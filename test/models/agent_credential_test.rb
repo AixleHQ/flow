@@ -435,7 +435,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
                                                                               "expires_at" => 1.minute.ago.iso8601 } } })
 
     result = nil
-    assert_error_reported(AgentCredential::RefreshFailed) { result = cred.refresh_if_expiring! }
+    assert_no_error_reported { result = cred.refresh_if_expiring! }
 
     assert result[:permanent]
     assert_equal "error", cred.reload.status
@@ -624,34 +624,95 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal 0, cred.refresh_failure_count
   end
 
-  test "renew! condemns a rejected grant and reports it to the error tracker" do
+  # A vendor ending a login is nothing we can fix, so it never becomes an error-tracker
+  # issue: the owner is mailed, and the log line is what is left to investigate it by.
+  test "renew! condemns a grant the vendor refused and mails the owner, logging it without a report" do
     cred = create(:agent_credential, user: @user, agent_type: "claude_code",
                                      config_data: refreshable_claude_config(expires_at: 5.minutes.from_now))
     stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
       .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
                  headers: { "Content-Type" => "application/json" })
+    Rails.logger.stubs(:warn)
+    Rails.logger.expects(:warn).with(all_of(includes("[AgentCredential] refresh failed"), includes("credential=#{cred.id}"),
+                                            includes("agent_type=claude_code"), includes("source=sweep"),
+                                            includes("claudeAiOauth invalid_grant")))
+
+    assert_enqueued_emails 1 do
+      assert_no_error_reported { cred.renew!(source: :sweep) }
+    end
+
+    assert_equal "error", cred.reload.status
+  end
+
+  # The add-on is not permanent — the base login still runs sessions — but its refusal
+  # is just as much the vendor's verdict, which only a new Design login reverses.
+  test "renew! does not report a refused designOauth block" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code", config_data: {
+      "claudeAiOauth" => { "accessToken" => "base-a", "refreshToken" => "base-r",
+                           "expiresAt" => (8.hours.from_now.to_f * 1000).to_i },
+      "designOauth" => { "accessToken" => "d-a", "refreshToken" => "dead", "clientId" => "design-client",
+                         "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
+    })
+    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+      .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+
+    assert_no_error_reported { assert_equal :error, cred.renew!(source: :sweep)[:status] }
+
+    assert_equal "active", cred.reload.status
+  end
+
+  # One blip is usually gone by the next sweep. A run of them long enough to condemn the
+  # credential may be ours, and is reported once — not again on every attempt after it.
+  test "renew! reports a transient failure only on the one that condemns the credential" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_raise(Errno::ECONNRESET)
+
+    (AgentCredential::MAX_REFRESH_FAILURES - 1).times do
+      assert_no_error_reported { cred.renew!(source: :sweep) }
+    end
+    assert_equal "active", cred.reload.status
+    assert_match(/ECONNRESET/, cred.refresh_error)
 
     report = assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :sweep) }
 
     assert_equal "error", cred.reload.status
     assert_equal AgentCredential::REFRESH_ERROR_SOURCE, report.source
-    assert_equal :warning, report.severity
-    assert_equal({ agent_type: "claude_code", refresh_source: "sweep", permanent: true },
-                 report.context.slice(:agent_type, :refresh_source, :permanent))
+    assert_equal :error, report.severity
+    assert_match(/ECONNRESET/, report.error.message)
+    assert_equal({ agent_type: "cursor_cli", refresh_source: "sweep", failure_count: AgentCredential::MAX_REFRESH_FAILURES },
+                 report.context.slice(:agent_type, :refresh_source, :failure_count))
+
+    assert_no_error_reported do
+      cred.renew!(source: :launch)
+      cred.renew!(source: :container)
+    end
+    assert_equal AgentCredential::MAX_REFRESH_FAILURES + 2, cred.reload.refresh_failure_count
   end
 
-  test "renew! turns an adapter that raises into a recorded, reported transient failure" do
+  test "a successful refresh restarts the streak, so the failures either side of it are not reported" do
     cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
                                      config_data: { "accessToken" => "old", "refreshToken" => "r1" })
-    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_raise(Errno::ECONNRESET)
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+      .to_raise(Errno::ECONNRESET).times(2)
+      .then.to_return(status: 200, body: { access_token: "new" }.to_json)
+      .then.to_raise(Errno::ECONNRESET)
 
-    report = assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :launch) }
+    assert_no_error_reported do
+      5.times { cred.renew!(source: :sweep) }
+    end
 
-    assert_equal :error, report.severity
     cred.reload
     assert_equal "active", cred.status
-    assert_equal 1, cred.refresh_failure_count
-    assert_match(/ECONNRESET/, cred.refresh_error)
+    assert_equal 2, cred.refresh_failure_count
+  end
+
+  test "sign_in_required? is every permanent failure and a refused add-on block, never a transient one" do
+    assert AgentCredential.sign_in_required?({ status: :error, detail: "cursor session ended — sign in again", permanent: true })
+    assert AgentCredential.sign_in_required?({ status: :error, detail: "designOauth invalid_grant — reconnection required",
+                                               permanent: false, sign_in_required: true })
+    refute AgentCredential.sign_in_required?({ status: :error, detail: "SocketError: getaddrinfo", permanent: false })
   end
 
   test "without_retired_grants drops a block whose refresh token was replaced and keeps a new one" do
