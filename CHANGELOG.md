@@ -28,6 +28,8 @@ governance, community health — carry none.
   followed by a long pasted log) no longer drops the whole delivery, so its
   triggers fire; a delivery that fails unexpectedly is now marked failed
   instead of staying received.
+- **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
+  a filter hash (for example `?q=foo`) instead of failing with a server error.
 
 ## [1.7.0] - 2026-10-24
 
