@@ -21,13 +21,33 @@ governance, community health — carry none.
   feature_flags:prune` deletes those leftover rows, recording each key in the
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
+- **Profile**: the `trigger_workflow` tool of personal access takes an optional
+  `idempotency_key`. A second call with the same key returns the run the first
+  call started instead of starting another, so an agent can retry safely after a
+  timeout.
+- **Sessions & Runs**: a new workflow run records how it was started: from the
+  workflow page, through personal access, as a retry of a failed run, or by a
+  trigger. A retry links to the run it repeats. `get_workflow_run`,
+  `list_workflow_runs` and the admin run page show both.
 
 ### Changed
+- **Sessions & Runs**: an automatic Kiro session shows Kiro's full terminal
+  interface, so its live terminal shows each tool call with its output and can
+  be steered, as with the other runtimes. If Kiro stops to ask a person what to
+  do after a tool fails 7 times in a row, the session fails with that reason
+  instead of waiting.
 - Sentry gets an agent login refresh failure only when repeated failures that
   may be the platform's own, such as network errors, mark the login as needing
   a new sign-in — not for a single failure, and not for a login the vendor
   ended, whose owner is already emailed. Every failed refresh is still logged as
   an `[AgentCredential] refresh failed` line.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.310, Codex 0.164.0,
+  Cursor CLI 2026.10.22-27dcf5f, Grok 1.0.70, Kiro CLI 2.34.0 and Antigravity
+  CLI 1.4.7. An interactive Kiro session still opens at the prompt: the
+  workspace-trust question Kiro 2.33 added is answered at launch. Gemini CLI
+  stays at 0.60.0: newer releases still stop `--yolo` at a prompt when the
+  agent edits a build file or runs a command on a path an earlier command
+  printed.
 
 ### Fixed
 - **Trackers**: a tracker comment or issue description whose text looks to an
@@ -35,6 +55,8 @@ governance, community health — carry none.
   followed by a long pasted log) no longer drops the whole delivery, so its
   triggers fire; a delivery that fails unexpectedly is now marked failed
   instead of staying received.
+- **Triggers & gates**: the Auto / Manual switch of a column trigger now
+  highlights the selected mode, so it is clear which one a trigger uses.
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.
 - **Sessions & Runs**: an agent session on Kubernetes no longer fails to start

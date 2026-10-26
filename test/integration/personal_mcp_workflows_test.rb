@@ -267,6 +267,37 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_equal "pending", detail["state"]
   end
 
+  test "trigger_workflow records an MCP launch and starts a repeated idempotency_key only once" do
+    create(:agent_credential, user: @user, company: @company)
+    mock_workflow_execution_start
+    args = { project_id: @project.id, workflow_id: @workflow.id, idempotency_key: "launch-1" }
+
+    first = payload(call_tool("trigger_workflow", args))
+    repeat = nil
+    assert_no_difference("WorkflowRun.count") { repeat = payload(call_tool("trigger_workflow", args)) }
+
+    assert_equal first["run_id"], repeat["run_id"]
+    assert repeat["replayed"]
+    detail = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: first["run_id"] }))
+    assert_equal "mcp", detail["source"]
+    assert_nil detail["retried_from_run_id"]
+  end
+
+  test "trigger_workflow refuses an idempotency_key already spent on another workflow" do
+    create(:agent_credential, user: @user, company: @company)
+    mock_workflow_execution_start
+    call_tool("trigger_workflow", { project_id: @project.id, workflow_id: @workflow.id, idempotency_key: "launch-1" })
+    other = create(:workflow, scope: @project)
+
+    body = nil
+    assert_no_difference("WorkflowRun.count") do
+      body = call_tool("trigger_workflow", { project_id: @project.id, workflow_id: other.id, idempotency_key: "launch-1" })
+    end
+
+    assert error?(body)
+    assert_match(/already started run \d+ of another workflow/, text(body))
+  end
+
   test "sub-steps, update, reorder and delete round-trip through workflow authoring tools" do
     s1 = payload(call_tool("create_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, name: "S1" }))
     s2 = payload(call_tool("create_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, name: "S2" }))

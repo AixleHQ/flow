@@ -147,8 +147,8 @@ module Agents
       refute @adapter.auth_complete?("{}")
     end
 
-    # Saved at this point, every later `--no-interactive` session fails with "No
-    # profile selected", so the login is not complete until the profile is stored.
+    # Saved at this point, every later session fails with "No profile selected", so
+    # the login is not complete until the profile is stored.
     test "auth_complete? is false for a login stopped at the profile prompt" do
       refute @adapter.auth_complete?(tokens_without_profile_sqlite_blob)
     end
@@ -335,13 +335,13 @@ module Agents
     # the CLI and nothing else. --v3 selects Kiro's current engine, which is still
     # opt-in as of CLI 2.21.0 and has to come before the subcommand.
     test "session_command launches the V3 engine with no shell plumbing around it" do
-      assert_equal "kiro-cli --v3 chat --trust-all-tools", @adapter.session_command(mode: "interactive")
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace", @adapter.session_command(mode: "interactive")
     end
 
     test "session_command shell-escapes the requested model" do
-      assert_equal "kiro-cli --v3 chat --trust-all-tools --model claude-sonnet-5",
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --model claude-sonnet-5",
                    @adapter.session_command(mode: "interactive", model: "claude-sonnet-5")
-      assert_equal "kiro-cli --v3 chat --trust-all-tools --model a\\ b\\;rm",
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --model a\\ b\\;rm",
                    @adapter.session_command(mode: "interactive", model: "a b;rm")
     end
 
@@ -353,18 +353,11 @@ module Agents
       refute_includes @adapter.session_command(mode: "non_interactive"), "'"
     end
 
-    # The V3 TUI ignores the positional prompt AgentSessionStrategy appends, measured on
-    # 2.21.3 in a real tmux pane with the trust confirmation pre-answered: it comes up
-    # at an empty input and waits, so an automatic session never receives its task.
-    # `--no-interactive` is the only mode that consumes the argument.
-    test "session_command goes headless for an automatic session, so the prompt lands" do
-      assert_equal "kiro-cli --v3 chat --trust-all-tools --no-interactive",
+    # The V3 TUI takes the prompt AgentSessionStrategy appends as its first message, so
+    # an automatic session keeps a terminal worth watching instead of going headless.
+    test "session_command runs the TUI for an automatic session too" do
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace",
                    @adapter.session_command(mode: "non_interactive")
-    end
-
-    # An interactive session carries no prompt, so it keeps the TUI.
-    test "session_command keeps the TUI for an interactive session" do
-      assert_equal "kiro-cli --v3 chat --trust-all-tools", @adapter.session_command(mode: "interactive")
     end
 
     # == MCP ==

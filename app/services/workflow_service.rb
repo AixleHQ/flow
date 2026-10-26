@@ -35,10 +35,14 @@ class WorkflowService
     # (#dispatch_or_leave_to_relay), never inside the transaction — a rolled-back
     # run whose execution already started, or a started run whose row a failed
     # RPC rolled back, is what that ordering produced.
-    def enqueue(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {})
+    def enqueue(workflow:, project:, user:, source:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {},
+                retried_from: nil, idempotency_key: nil)
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
+        source: source,
+        retried_from_run: retried_from,
+        idempotency_key: idempotency_key.presence,
         board_task_id: task&.id,
         mode: mode,
         step_overrides: overrides,
@@ -243,7 +247,9 @@ class WorkflowService
         input_asset_ids: run.input_asset_ids,
         repository_ids: run.repository_ids,
         agent_runtime: run.agent_runtime,
-        shared_context: run.shared_context
+        shared_context: run.shared_context,
+        source: :retry,
+        retried_from: run
       )
 
       unless new_run.persisted?

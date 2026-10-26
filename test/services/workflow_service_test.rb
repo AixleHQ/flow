@@ -20,7 +20,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     create(:agent_credential, user: @user, company: create(:company_membership, user: @user).company)
     TemporalWorkflowRegistry.expects(:start_workflow_execution).never
 
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
 
     assert_not run.persisted?
     assert_equal [ "No agent credentials. Connect an agent in Profile settings to run workflows." ],
@@ -34,13 +34,14 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = WorkflowService.start(
       workflow: @workflow,
       project: @project,
-      user: @user
+      user: @user, source: :web
     )
 
     assert run.persisted?
     assert_equal @workflow.id, run.workflow_id
     assert_equal @project.id, run.project_id
     assert_equal @user.id, run.user_id
+    assert_equal "web", run.source
     assert_equal 2, run.step_runs.count
   end
 
@@ -50,7 +51,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = WorkflowService.start(
       workflow: @workflow,
       project: @project,
-      user: @user,
+      user: @user, source: :web,
       agent_runtime: "claude_code"
     )
 
@@ -68,7 +69,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = WorkflowService.start(
       workflow: @workflow,
       project: @project,
-      user: @user,
+      user: @user, source: :web,
       task: task
     )
 
@@ -82,7 +83,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = WorkflowService.start(
       workflow: @workflow,
       project: @project,
-      user: @user,
+      user: @user, source: :web,
       mode: :non_interactive
     )
 
@@ -95,7 +96,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     TemporalWorkflowRegistry.expects(:start_workflow_execution).never
 
     runs = %i[mixed non_interactive].map do |mode|
-      WorkflowService.start(workflow: @workflow, project: @project, user: @user, mode: mode,
+      WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web, mode: mode,
                             overrides: { @step1.id.to_s => { "auto_run" => true } })
     end
 
@@ -109,7 +110,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     @step1.update!(allow_non_interactive: true)
     TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, mode: :mixed,
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web, mode: :mixed,
                                 overrides: { @step1.id.to_s => { "auto_run" => false }, @step2.id.to_s => { "auto_run" => false } })
 
     assert run.persisted?
@@ -119,7 +120,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     asset = create(:asset, scope: @project, created_by: @user, name: "brief.md")
     @step2.update!(instructions: "Read {{asset:#{asset.id}}}.")
 
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
 
     assert_not run.persisted?
     assert_match(/This workflow would fail: "Step 2" references brief\.md, which is not attached to it\./,
@@ -131,8 +132,8 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     @step1.update!(input_asset_specs: [ { "name" => "brief.md" } ])
     brief = create(:asset, scope: @project, created_by: @user, name: "brief.md")
 
-    refused = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
-    started = WorkflowService.start(workflow: @workflow, project: @project, user: @user, input_asset_ids: [ brief.id ])
+    refused = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
+    started = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web, input_asset_ids: [ brief.id ])
 
     assert_not refused.persisted?
     assert_includes refused.errors.full_messages.to_sentence, "requires brief.md"
@@ -143,14 +144,14 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     DataFlow::Check.stubs(:for_workflow).raises(StandardError, "boom")
 
-    assert WorkflowService.start(workflow: @workflow, project: @project, user: @user).persisted?
+    assert WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web).persisted?
   end
 
   # == cancel ==
 
   test "cancel sends signal and cancels active step runs" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
 
     TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "workflow_cancelled", nil).once
@@ -166,7 +167,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   test "cancel carries the session's diagnosed reason onto the step run" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     TemporalService.stubs(:send_signal)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
     step_run = run.step_runs.first
     session = create(:terminal_session, user: @user, project: @project,
@@ -182,7 +183,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   test "cancel leaves the step run unexplained when the generic reason is all there is" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     TemporalService.stubs(:send_signal)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
     step_run = run.step_runs.first
     session = create(:terminal_session, user: @user, project: @project, error_message: "Workflow cancelled")
@@ -200,7 +201,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     board = create(:board, project: @project)
     column = create(:board_column, board: board)
     task = create(:board_task, board: board, board_column: column)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, task: task)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web, task: task)
 
     assert_difference("BoardActivity.count", 1) do
       WorkflowService.cancel(run: run)
@@ -216,7 +217,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # failed run, which get_workflow_run then shows as a live step on a dead run.
   test "fail marks the run's still-active step runs failed" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
     step_run = run.step_runs.first
     step_run.update!(state: "running")
@@ -230,7 +231,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   test "fail carries the session's diagnosed reason onto the orphaned step run" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
     step_run = run.step_runs.first
     session = create(:terminal_session, :failed, user: @user, project: @project,
@@ -245,7 +246,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   test "fail leaves an already-completed step run untouched" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
     run.start! if run.may_start?
     step_run = run.step_runs.first
     step_run.mark_completed!
@@ -260,7 +261,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   test "start marks the run dispatched once Temporal confirms the execution" do
     TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 
-    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
 
     assert_equal "dispatched", run.reload.relay_state
     assert_equal 1, run.relay_attempts
@@ -278,7 +279,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
       .once.returns(ok: false, error: "storage is (re)initializing")
     Sentry.expects(:capture_exception).with { |e| e.is_a?(WorkflowService::DispatchFailed) && e.message.include?("storage is") }
 
-    returned = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    returned = WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
 
     run = WorkflowRun.sole
     assert_equal run, returned
@@ -295,7 +296,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: false, error: "unavailable")
     Sentry.stubs(:capture_exception)
 
-    WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
 
     run = WorkflowRun.sole
     assert_equal 2, run.step_runs.count
@@ -394,6 +395,8 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal [ repository.id ], new_run.repository_ids
     assert_equal "claude_code", new_run.agent_runtime
     assert_equal "opus", new_run.shared_context["requested_model"]
+    assert_equal "retry", new_run.source
+    assert_equal run, new_run.retried_from_run
 
     # The old failed run is left exactly as it was.
     run.reload
