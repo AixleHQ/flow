@@ -124,7 +124,7 @@ class FeatureFlags::FeatureFlagsHelperTest < ActiveSupport::TestCase
 
       token.bump
       token.unavailable = true
-      token.on_bump = -> {}
+      token.on_bump = -> { }
     end
   end
 
