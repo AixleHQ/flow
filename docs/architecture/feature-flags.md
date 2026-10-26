@@ -57,39 +57,33 @@ The flag ships off everywhere.
 
 ### Adding a flag the frontend reads
 
-`client: true` takes two steps, not one:
+Add `client: true` to the flag in `config/feature_flags.yml`. That is the only step: read it with
+`useFeatureFlag('boardAiSummary')` (`app/frontend/shared/lib/hooks/useFeatureFlag.ts`), the
+camelized key, and a misspelled name fails `tsc`.
 
-1. Add `client: true` to the flag in `config/feature_flags.yml`.
-2. Add its camelized name to `FeatureFlagName` in `app/frontend/shared/ui/types.ts`, next to
-   `AgentType` and `UserRole` (`board_ai_summary` becomes `'boardAiSummary'`).
+`FeaturesResource` (`app/resources/features_resource.rb`) builds the `features` shared prop in
+`Web::ApplicationController`, the way `CurrentUserResource` builds `current_user`. It declares
+one `typelize :boolean` attribute per `client: true` flag, read from the shipped
+`config/feature_flags.yml`, and resolves each with `FeatureFlags.client_value` (through `Feature`,
+so a company's override is what its pages see). Typelizer turns it into the generated `Features` type
+(`app/frontend/types/generated/Features.ts`), and `useFeatureFlag(name: keyof Features)` takes
+its names from there. One class produces both the payload and the type, so there is no
+hand-written list of names and no test keeping one in sync. Commit the regenerated
+`Features.ts` (and `index.ts`) with the registry change; `tsc` only knows a new flag once it is
+there.
 
-`test/config/feature_flag_name_test.rb` fails until both match, and its message names the
-literals it expects. Then read it with `useFeatureFlag('boardAiSummary')`
-(`app/frontend/shared/lib/hooks/useFeatureFlag.ts`); a misspelled name fails `tsc`.
+Only `client: true` flags reach the browser, so the name and value of an ops or internal flag
+never ship. The frontend only reads the resolved boolean. The server decides every write
+whatever it shows.
 
-Only `client: true` flags reach the browser: `FeatureFlags.client_payload` builds the
-`features` shared prop from them alone, so the name and value of an ops or internal flag never
-ship. The frontend only reads the resolved boolean. The server decides every write whatever it
-shows.
-
-### When the first client flag exists, prefer a resource
-
-The hand-written `FeatureFlagName` union is a consequence of the registry being empty, not the
-preferred design. Once any `client: true` flag is declared, replace it: an Alba resource that
-declares the client flags as `typelize :boolean` attributes makes Typelizer generate a
-`Features` interface, and `useFeatureFlag(name: keyof Features)` then needs neither the
-hand-written list nor `test/config/feature_flag_name_test.rb`, because one class produces both
-the payload and the type. That is how `current_user` already works, through
-`CurrentUserResource` inside its `InertiaRails.always` block in
-`Web::ApplicationController`.
-
-It was not done yet because it could not be: Typelizer 0.14 drops a resource with no attributes
-before writing any file (`Typelizer.interfaces` ends in `.reject(&:empty?)`, and
-`Interface#empty?` is `meta_fields.empty? && properties.empty?`), and no option changes that.
-With no client flag declared, a `FeaturesResource` would generate nothing and `keyof Features`
-would not compile. This is a pending step, chosen deliberately. The `types.ts` comment above
-`FeatureFlagName`, the failure message of `test/config/feature_flag_name_test.rb` and the
-`client:` line of the registry header all point here.
+The attribute list is a build-time artifact (Typelizer generates `Features.ts` from it), so it is
+read from the registry **file**, never from the swappable `FeatureFlags.registry`, and does not
+depend on load order. The values are resolved per request against the current registry, and a key
+that registry does not declare is left out of the payload rather than raised; `SharedProps.features`
+is `Partial<Features>`, so an absent key is type-correct. A test that swaps the registry
+(`with_feature_registry`) therefore renders pages normally, with only the flags both registries
+declare in `features`. `test/resources/features_resource_test.rb` checks that the attributes are
+exactly the shipped `client: true` keys.
 
 ## Rolling it out
 
@@ -179,8 +173,8 @@ registry declares. Tests of the database-backed store and of `FeatureFlags::Admi
 In one PR, owned by the flag's owner:
 
 1. Delete the losing branch of every `Feature.enabled?(:key` (and `useFeatureFlag`) check.
-2. Delete the entry from `config/feature_flags.yml` (and, for a client flag, its name from
-   `FeatureFlagName`).
+2. Delete the entry from `config/feature_flags.yml`. For a client flag, regenerate the Typelizer
+   types: `Features` loses the name, and `tsc` points at any `useFeatureFlag` check left behind.
 3. Remove any `FEATURE_<KEY>` from the environments when convenient; it is ignored meanwhile.
 
 The flag's database rows are left behind. They are inert: the resolver never consults an
@@ -213,7 +207,10 @@ Skipping it is safe. The step is also listed in
   declared flag is not read anywhere in `app/` or `lib/`, and when `Feature.enabled?(:x`,
   `Feature.explain(:x` or `useFeatureFlag('x')` names an undeclared flag (or, for
   `useFeatureFlag`, one not declared `client: true`). Comments and test files do not count as
-  reads. It deliberately never fails on dates.
+  reads, and neither does generated code (`app/frontend/types/generated/`, where `Features.ts`
+  names every client flag). A flag declared ahead of its first reader goes in the test's
+  `ALLOWED_UNREAD`, with the task that will read it; the entry expires, because the test fails
+  once that flag is read and the entry has to be removed. It deliberately never fails on dates.
 - **`bin/rails feature_flags:audit`** changes nothing and prints four lists: release flags past
   `remove_by`; flags whose value has been the same for every company for 30 days or more (from
   the row's `updated_at`, or `introduced` for a flag with no row), which are candidates for

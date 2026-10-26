@@ -3,13 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { inertiaState } from 'test/inertiaMock';
 import { renderHook } from 'test/renderPage';
 
-import type { FeatureFlagName } from 'shared/ui/types';
-
 import { useFeatureFlag } from './useFeatureFlag';
 
-// The shipped registry declares no client flag, so FeatureFlagName is `never` until one exists.
-// The name is widened and narrowed back so this test keeps compiling whatever gets declared.
-const flag = 'boardAiSummary' as string as FeatureFlagName;
+const flag = 'externalRunners';
 
 function readFlag() {
   return renderHook(() => useFeatureFlag(flag)).result.current;
@@ -21,13 +17,13 @@ describe('useFeatureFlag', () => {
   });
 
   it('is true when the server resolved the flag on', () => {
-    inertiaState.pageProps = { features: { boardAiSummary: true } };
+    inertiaState.pageProps = { features: { externalRunners: true } };
 
     expect(readFlag()).toBe(true);
   });
 
   it('is false when the server resolved the flag off', () => {
-    inertiaState.pageProps = { features: { boardAiSummary: false } };
+    inertiaState.pageProps = { features: { externalRunners: false } };
 
     expect(readFlag()).toBe(false);
   });
@@ -48,6 +44,6 @@ describe('useFeatureFlag', () => {
     inertiaState.pageProps = { features: {} };
 
     // @ts-expect-error a misspelled flag name is a type error, which `yarn tsc` reports.
-    expect(renderHook(() => useFeatureFlag('boardAiSumary')).result.current).toBe(false);
+    expect(renderHook(() => useFeatureFlag('externalRuners')).result.current).toBe(false);
   });
 });
