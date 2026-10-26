@@ -1,16 +1,41 @@
 # External runners for agent sessions — design
 
-**Status:** proposed, revision 3 (design only, no implementation in this change)
-**Created:** 2026-10-20 · **Revised:** 2026-10-21
+**Status:** proposed, revision 4 (design only, no implementation in this change)
+**Created:** 2026-10-20 · **Revised:** 2026-10-26
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
-**Baseline:** `origin/develop` @ `1f4ca0bd`
+**Baseline:** `origin/develop` @ `d6d08bbc` (the feature flag chain #166–#172 is in)
+
+**Revision 4** applies the decisions of 2026-10-26. Revision 3 (`a7c44d1f`) stands where
+this list does not touch it:
+
+- **Real feature flags.** `Settings.runners.enabled`, `companies.runners_enabled` and
+  `Settings.runners.types` are gone. Two declared flags, `external_runners` and
+  `external_runners_kubernetes`, checked with `Feature.enabled?(..., company:)`, rolled out
+  by per-company overrides from `/admin`. No ENV lock and no kill-switch path are designed;
+  removing a company override is the stop button (§12.1, §12.2 as flag states, §11, §12.3).
+- **A `manual` runner type.** The operator runs `aixle-runner` on a machine they already
+  have, registered with a one-time token, modelled on GitHub self-hosted runners. The
+  platform holds no credential into that machine. It replaces the planned SSH "machine"
+  type, which this design no longer has (§1, §2, §4, §5, §6.3, §7, §9, §10, §11).
+- **Container mode is the only execution mode in v1**, on every type. The finding that
+  drives it is written down in §6.8: the stock image starts five services, and half of the
+  MITM stack has to live in the CLI's own process. Coder `native` mode is dropped. The split
+  mode (services in containers, CLI on the host) moves to the last phase with its cost
+  spelled out, and the CLI-source question goes with it (§6.8, §15).
+- **Setup and cleanup.** Customer pre/post session hooks are not in v1, by decision. Our
+  own per-session preparation and cleanup stays. On `manual`, scrub uses a throwaway OS
+  user per session in host-side execution and the session container in container mode, and
+  `reuse_policy` is defined per type (§7).
+- **Delivery order.** `manual` is the first customer-usable type (phase 3), the
+  interactive tunnel follows (phase 4), then Coder, Kubernetes and the split mode
+  (§12.2, §15). The breakdown is a map: tasks are cut one at a time (§15).
 
 **Revision 3** applies the correction to the revision 2 review. The design no longer
 depends on `aixle-infra`, the infrastructure of our own production and staging
 deployment, which is not part of the product:
 
 - Staging validation names no Coder template. It uses the staging Coder integration
-  configured on the test project and whatever template it offers at test time (§12.4,
+  configured on the test project and whatever template it offers at test time (§12.5,
   task 14).
 - The Kubernetes controller's RBAC is derived from least privilege for what the controller
   does in one namespace, not from our runtime ClusterRole (§9.6).
@@ -40,6 +65,11 @@ workflow or a session declares where it runs, and `hosted`, meaning where it run
 stays the default. The model is GitHub Actions: there is a hosted runner, and users can
 connect their own.
 
+Three runner types are designed: `manual` (a machine the customer already runs, with
+`aixle-runner` installed by the operator), `coder` (workspaces provisioned from a Coder
+template) and `kubernetes` (pods in the customer's cluster, created by an in-cluster
+controller).
+
 The four reasons are network (the agent runs inside the customer's VPC or VPN),
 environment (the customer's image, template and warm disk), load (the customer's capacity
 and bill), and security (code, data and secrets stay inside the customer's perimeter).
@@ -56,7 +86,7 @@ could not close on paper.
 
 ### 1.1 Naming: **Runner**
 
-**Decision:** the entity is a **Runner** with a `type` of `hosted`, `coder` or
+**Decision:** the entity is a **Runner** with a `type` of `hosted`, `manual`, `coder` or
 `kubernetes`. The workflow and session setting is `runner`.
 
 "Runtime" is not just ambiguous here, it is already taken. In this codebase `AgentRuntime`
@@ -73,10 +103,10 @@ The terms used throughout:
 | Term | Meaning |
 | --- | --- |
 | **Runner** | The connected target a user creates, names and selects, e.g. "Prod VPC Coder (EC2 large)". One row in `runners`. |
-| **Runner type** | `hosted`, `coder` or `kubernetes`. Each type has one platform-side **adapter**. |
-| **Environment** | One concrete place where sessions execute: a Coder workspace, or a pod in the customer's cluster. Belongs to a Runner and has its own state machine (§5.2). |
-| **`aixle-runner`** | The binary that lives in an environment and speaks the runner protocol. It runs in three modes: `host` (on a Coder workspace, owns the environment and its containers), `session` (PID 1 of an agent container, or directly on the workspace in `native` mode) and `controller` (in a customer cluster, provisioning pods). |
-| **Execution mode** | How sessions run inside an environment: `docker` (the stock agent image, the default) or `native` (directly on the workspace). A runner setting, not a property of the type (§6.8). |
+| **Runner type** | `hosted`, `manual`, `coder` or `kubernetes`. Each type has one platform-side **adapter**. |
+| **Environment** | One concrete place where sessions execute: a machine registered to a `manual` runner, a Coder workspace, or a pod in the customer's cluster. Belongs to a Runner and has its own state machine (§5.2). |
+| **`aixle-runner`** | The binary that lives in an environment and speaks the runner protocol. It runs in three modes: `host` (on a `manual` machine or a Coder workspace, owns the environment and its session containers), `session` (PID 1 of an agent container) and `controller` (in a customer cluster, provisioning pods). |
+| **Execution mode** | How sessions run inside an environment. v1 has one: `container`, the stock agent image with `aixle-runner --mode session` as PID 1, on every type. The split mode (services in containers, CLI on the host) is the last implementation phase (§6.8). |
 | **Gateway** | The platform endpoint (`/runner/v1/*`) that `aixle-runner` connects to, always outbound from the customer side. |
 
 `hosted` is not a row. It is the absence of a runner reference (`runner_id IS NULL`), so
@@ -111,15 +141,25 @@ for session pods, secrets and service accounts (§9.6). The customer installs, s
 audits it, and it connects out. This answers the open question: **the user installs
 something into their cluster themselves**. We do not take a kubeconfig.
 
+**`manual` has no provisioning at all**, which is the purest form of the security axis.
+The operator already runs the machine. They install `aixle-runner` on it, register it with
+a one-time token, and it connects out. The platform holds no SSH key, no kubeconfig and no
+provider token for it, and it never creates or destroys the machine. The adapter's
+lifecycle methods are no-ops (§5.1), and the environment row is created by registration
+(§5.2). This type replaces the SSH "machine" type (a VM reached over SSH and bootstrapped
+from outside) that the task's idea implied. `manual` serves the same need without a key and
+without inbound access, so there is no SSH-driven type in this design.
+
 Coder keeps outside provisioning. The Coder API is built to be called remotely, a Coder API
 token is limited by Coder's own RBAC to one Coder user's workspaces, and the platform
 already holds exactly that token through the Coder integration (`Integration` provider
 `:coder`, `Coder::Api`). A Coder control plane reachable only inside a VPN is not served in
 v1. It is handled later by running the controller mode with a Coder backend (§16).
 
-The adapter contract (§5) is the same in both cases. It is a platform-side Ruby interface,
-and only its transport differs: the Coder API for `coder`, the controller's channel for
-`kubernetes`.
+The adapter contract (§5) is the same in all three cases. It is a platform-side Ruby
+interface, and only its transport differs: the Coder API for `coder`, the controller's
+channel for `kubernetes`, and nothing at all for `manual`, whose machines arrive by
+registration.
 
 ### 1.3 Reuse what already works: `RunnerRuntime < ContainerRuntime::BaseRuntime`
 
@@ -159,18 +199,18 @@ version, a run or a step.
 | `company_id` | bigint, not null | Tenant. |
 | `project_id` | bigint, null | `NULL` means company runner; set means project runner. Same convention as `integrations` (`company_wide`, `visible_for_project`). |
 | `name` | string, not null | Unique per scope among non-deleted rows: `(company_id, coalesce(project_id, 0), lower(name)) WHERE deleted_at IS NULL`. |
-| `runner_type` | string, not null | `coder` or `kubernetes`, enumerize. `type` is avoided as a column name so Rails does not turn this into STI. The API and UI field is still called `type`. |
+| `runner_type` | string, not null | `manual`, `coder` or `kubernetes`, enumerize. `type` is avoided as a column name so Rails does not turn this into STI. The API and UI field is still called `type`. |
 | `status` | string, not null | §2.5. |
 | `status_reason` | string, null | Human-readable, shown in the UI and in run failures. |
 | `integration_id` | bigint, null | `coder` only: the Coder integration the runner provisions through (§2.6). Check constraint: required when `runner_type = 'coder'`, null otherwise. |
-| `config` | jsonb, not null, default `{}` | Non-secret, per-type schema validated by the adapter (`template_id`, `template_version_policy`, `parameters`, `execution_mode`, `docker`, `namespace`, `image_override`, …). For `coder`, `execution_mode` is `docker` (default) or `native`, and `docker` holds the container options from §6.8. |
-| `encrypted_secrets` | text, null | `Encryptable` column for any type-specific secret. Unused by the two v1 types and kept for later types. |
+| `config` | jsonb, not null, default `{}` | Non-secret, per-type schema validated by the adapter (`template_id`, `template_version_policy`, `parameters`, `docker`, `namespace`, `image_override`, `auto_update`, …). `docker` holds the container options from §6.8 (`manual` and `coder`). `auto_update` (`manual` only, default `true`) is the self-update opt-out (§14.4). There is no `execution_mode` key in v1: container mode is the only one, and the key arrives with the split mode (§6.8). |
+| `encrypted_secrets` | text, null | `Encryptable` column for any type-specific secret. Unused by the three v1 types (`manual` has no secret by design) and kept for later types. |
 | `max_concurrency` | integer, not null | Pool limit for admission (§10). Must be > 0. |
-| `max_environments` | integer, null | Reusable types: environment pool size. Null means equal to `max_concurrency`. |
-| `reuse_policy` | string, not null | `reuse` or `fresh` (§7). The default comes from the type's capability. |
+| `max_environments` | integer, null | `coder`: environment pool size, null means equal to `max_concurrency`. `manual`: always null. Its capacity is the number of registered machines, a physical fact and not a setting (§7.3, §10). Check constraint: null when `runner_type = 'manual'`. |
+| `reuse_policy` | string, not null | `reuse` or `fresh`. What each value does depends on the type (§7.1). The default comes from the type's capability. |
 | `capabilities` | jsonb, not null | Computed by the adapter from type and config (§4), cached for the UI. |
 | `health` | jsonb, not null, default `{}` | Last health-check facts and timestamp. |
-| `last_seen_at` | datetime, null | Last controller heartbeat (`kubernetes`) or last successful health check (`coder`). |
+| `last_seen_at` | datetime, null | Last controller heartbeat (`kubernetes`), last heartbeat of any registered machine (`manual`), or last successful health check (`coder`). |
 | `created_by_id` | bigint, not null | |
 | `disabled_at`, `revoked_at`, `deleted_at` | datetime, null | Soft lifecycle. Rows are never hard-deleted while anything references them. |
 
@@ -180,12 +220,16 @@ version, a run or a step.
 | --- | --- |
 | `runner_id`, `company_id` | |
 | `project_id` | **Bound project**. Set on first assignment and never changed afterwards (§9.4). |
-| `key` | Adapter idempotency key, unique per runner, e.g. `aixle-r12-e7f3a`. It is the Coder workspace name or the pod name. |
-| `external_id` | Coder workspace UUID or pod UID. |
+| `key` | Adapter idempotency key, unique per runner, e.g. `aixle-r12-e7f3a`. It is the Coder workspace name or the pod name. For `manual` it is generated at registration. |
+| `external_id` | Coder workspace UUID or pod UID. Null for `manual`. |
+| `display_name` | `manual`: the name the operator gave in `aixle-runner configure --name` (default: the hostname). Shown on the runner page. Null for the other types. |
+| `origin` | `allocated` (created by `Runners::Allocator`, `coder` and `kubernetes`) or `registered` (created by `POST /runner/v1/register`, `manual`). Decides the entry path into the state machine (§5.2). |
+| `ephemeral` | boolean, default false. Reserved for an ephemeral registration (one session, then the runner exits, §6.3). Always false in v1. |
 | `state` | §5.2. |
 | `reusable` | Copied from the runner's reuse policy when the environment was created. |
-| `runner_version`, `protocol_version`, `os`, `arch` | Reported at check-in. |
-| `facts` | jsonb: prerequisites found, disk free, and per mode either the Docker daemon version and agent images present (`docker`) or `tmux`/`git`/`bash` versions and toolcache contents (`native`). |
+| `runner_version`, `protocol_version`, `os`, `arch` | Reported at check-in or registration. |
+| `facts` | jsonb: prerequisites found, disk free, the Docker daemon version and agent images present. |
+| `auto_update` | `manual`: copied from the runner's `config.auto_update`, overridable per machine with `aixle-runner configure --no-auto-update` (§14.4). |
 | `current_session_id` | The `terminal_sessions` row it is executing. At most one (§7.3). |
 | `last_workflow_id` | Affinity for warm-cache reuse (§7.3). |
 | `last_heartbeat_at`, `checked_in_at`, `sessions_count`, `consecutive_failures` | |
@@ -194,7 +238,8 @@ version, a run or a step.
 ### 2.3 `runner_credentials` and `runner_operations`
 
 `runner_credentials`: `runner_id`, `runner_environment_id` (null for controller-level
-credentials), `kind` (`registration`, `controller`, `bootstrap`, `environment`),
+credentials and for unused `manual` registration tokens), `kind` (`registration`,
+`controller`, `bootstrap`, `environment`),
 `token_digest` (SHA-256, never the token), `family_id` (rotation lineage),
 `expires_at`, `used_at`, `revoked_at`, `last_used_at`, `last_used_ip`, `created_by_id`.
 Token semantics are in §9.2.
@@ -253,6 +298,8 @@ end
 add_check_constraint :runners, "max_concurrency > 0", name: "runners_max_concurrency_positive"
 add_check_constraint :runners,
   "(runner_type = 'coder') = (integration_id IS NOT NULL)", name: "runners_coder_integration"
+add_check_constraint :runners,
+  "runner_type <> 'manual' OR max_environments IS NULL", name: "runners_manual_no_pool_size"
 
 add_reference :workflows, :runner, foreign_key: true          # nullable, no default
 add_reference :workflow_runs, :runner, foreign_key: true
@@ -274,14 +321,23 @@ pending ──health ok──▶ connected ◀──recovers── degraded / un
 ```
 
 - `pending`: created, never verified. Coder: the integration token and template have not
-  been checked yet. Kubernetes: the controller has not connected yet.
+  been checked yet. Kubernetes: the controller has not connected yet. Manual: no machine
+  has registered yet.
 - `connected`: health check passed within the last 5 minutes. For Kubernetes this also
-  requires a controller heartbeat within the last 60 s.
+  requires a controller heartbeat within the last 60 s. For Manual, every registered
+  machine has heartbeated within the last 90 s.
 - `degraded`: reachable, but something is wrong: a template parameter is invalid, the
-  controller reports missing RBAC, or the controller version is below the recommended one.
-  New sessions are still admitted, and the reason is shown.
-- `unreachable`: the health check failed, or the controller has been silent for more than
-  3 minutes. New sessions fail at launch (§8). Running sessions follow §6.7.
+  controller reports missing RBAC, the controller version is below the recommended one, or
+  some (not all) of a manual runner's machines are offline. New sessions are still
+  admitted, and the reason is shown.
+- `unreachable`: the health check failed, the controller has been silent for more than
+  3 minutes, or every machine of a manual runner has been offline for more than 3 minutes.
+  New sessions fail at launch (§8). Running sessions follow §6.7.
+
+For `manual`, the UI also shows each machine as **online** (connected and running a
+session, environment `busy`), **idle** (connected, no session, environment `idle`) or
+**offline** (no heartbeat for 90 s, the `unreachable` overlay of §5.2), in the spirit of
+GitHub's self-hosted runner list.
 - `disabled`: switched off by a user. No new sessions. Running sessions are left to finish.
 - `revoked`: every credential is invalidated immediately and running sessions fail (§9.3).
   This is terminal: to get it back, create a new runner.
@@ -393,24 +449,29 @@ A reference is never cleared automatically and never falls back to `hosted`.
 ## 4. Capability flags
 
 The platform reasons about a runner through `Runners::Capabilities`, never through its
-type. Each adapter returns them from `type + config`. Where a type supports more than
-one execution mode (§6.8), the flags that depend on how the agent runs come from **the
-mode**, not from the type:
+type. Each adapter returns them from `type + config`. Flags that depend on how the agent
+runs come from **the execution mode** (§6.8), not from the type. In v1 every type runs
+container mode, so they are the same across the three external types; the split mode
+(phase 7) will derive its own.
 
-| Flag | `hosted` (today) | `coder`, `docker` mode (default) | `coder`, `native` mode | `kubernetes` | Used by |
+| Flag | `hosted` (today) | `manual` | `coder` | `kubernetes` | Used by |
 | --- | --- | --- | --- | --- | --- |
+| `provisionable` | true | **false**: the platform cannot create a machine | true | true | Allocator step 4 (§7.3), admission copy (§10) |
+| `rebuildable` | n/a | **false**: we do not own the machine | true | n/a (ephemeral) | Reset escalation (§7.2), cross-project rebinding (§9.4) |
 | `reusable` | false | true | true | false (v1) | Lifecycle (§7), affinity, scrub |
-| `persistent_disk` | false | true (mounted volumes only) | true | false (a PVC option is later) | Reset semantics, UI copy |
-| `human_accessible` | false | true (Coder's own SSH, web terminal, IDE) | true | false | "Open in Coder" link on the session |
-| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | false until the tunnel, then true | false until the tunnel, then true | Blocks interactive sessions and steps on the runner |
+| `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
+| `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
+| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Blocks interactive sessions and steps on the runner |
 | `max_concurrency` | admission pools | `runners.max_concurrency` | `runners.max_concurrency` | `runners.max_concurrency` | Admission (§10) |
+| `max_environments` | n/a | number of registered machines (a fact) | `runners.max_environments` (a setting) | `runners.max_concurrency` | Allocation (§7.3) |
 | `concurrency_per_environment` | 1 | 1 | 1 | 1 | Allocation (§7.3) |
-| `agent_runtimes` | all | all | §6.8 allow-list | all | Validation at selection and launch |
-| `provisioning_seconds_p50` | n/a | from history | from history | from history | UI hint, bootstrap timeout |
+| `agent_runtimes` | all | all | all | all | Validation at selection and launch |
+| `provisioning_seconds_p50` | n/a | n/a | from history | from history | UI hint, bootstrap timeout |
 
-In `docker` mode the agent runs in the same image hosted uses. So `agent_runtimes: all`
-follows from the mode, and it would hold for any future type that runs the stock image.
-The allow-list is a property of `native` mode only.
+The agent runs in the same image hosted uses on every type, so `agent_runtimes: all`
+follows from container mode, and it would hold for any future type that runs the stock
+image. `interactive_terminal` is the same flag on every type because the tunnel (phase 4)
+relays ports the image already serves, so it lifts on all types at once.
 
 Validation that uses these flags:
 
@@ -444,7 +505,7 @@ module Runners
     def provision(environment)                       # create; => {external_id:}; raises CapacityError / ProvisionError
     def prepare(environment)                         # ensure started/booted; => :ready | :pending; raises ProvisionError
     def inject_bootstrap(environment, bootstrap)     # deliver aixle-runner + Bootstrap(token:, gateway_url:, version:, sha256:)
-    def reset(environment, level:)                   # level: :reset | :rebuild; idempotent
+    def reset(environment, level:)                   # level: :reset | :rebuild; idempotent. :rebuild only when capabilities.rebuildable
     def teardown(environment)                        # delete; => :gone | :pending
     def observe(environment)                         # => :running | :stopped | :missing | :unknown (provider fact, for reconciliation)
   end
@@ -452,9 +513,13 @@ end
 ```
 
 `Runners::Adapter.for(runner)` is a registry keyed by type
-(`Runners::CoderAdapter`, `Runners::KubernetesAdapter`). Adding a type means adding a
-class, a config schema, and a row in §4. Nothing in sessions, strategies or Temporal
-changes.
+(`Runners::ManualAdapter`, `Runners::CoderAdapter`, `Runners::KubernetesAdapter`). Adding a
+type means adding a class, a config schema, and a row in §4. Nothing in sessions,
+strategies or Temporal changes. A type that cannot do something says so through a
+capability (`provisionable`, `rebuildable`), and the callers branch on the capability, never
+on the type. `reset(level: :rebuild)` on a non-rebuildable type raises
+`Runners::UnsupportedOperation`; the allocator never asks, because it reads `rebuildable`
+first.
 
 **Who owns what: the allocator owns the row, the adapter owns the provider object.**
 `Runners::Allocator` (§7.3) decides that a new environment is needed. It creates the
@@ -469,17 +534,25 @@ transitions belong to the allocator and the reconciler. This split is what keeps
 `provision` idempotent on `key` under Temporal retries. A retried `provision` finds the
 workspace named `key` and returns it, and there is never a second row to reconcile.
 
+**The exception is `manual`: registration owns the row.** There is no provider object to
+create, so the allocator never inserts a `manual` environment. `Runners::Registration`,
+behind `POST /runner/v1/register`, creates the row (`origin: registered`) in the same
+transaction that consumes the registration token, and the row enters the state machine
+directly at check-in (§5.2).
+
 The per-type mapping:
 
-| Method | `coder` (outside, Coder API via `Coder::Api`) | `kubernetes` (via controller ops) |
-| --- | --- | --- |
-| `provision` | `WorkspaceService` create from `config.template_id` with `config.parameters`, name = `key` | `controller.provision {key, image, resources, labels}`. The controller creates Pod, ServiceAccount and Secret (bootstrap) in its namespace |
-| `prepare` | Await build. Start the workspace if it is stopped | Await pod `Ready` (controller reports) |
-| `inject_bootstrap` | `Coder::SshRunner`-style `coder ssh <ws> -- sh -s` with the install script **on stdin**, so the token never appears in argv or `ps`. It installs and starts `aixle-runner --mode host` (§6.8) | No-op: the controller mounts the bootstrap Secret and the pod's init container installs the runner (§9.6) |
-| `reset :reset` | Runner op `env.reset` (§7.2) | n/a (ephemeral) |
-| `reset :rebuild` | Delete and recreate the workspace from the template | n/a |
-| `teardown` | Delete the workspace (or stop it, per `config.on_release`) | `controller.teardown {key}` |
-| `observe` | Workspace build status | Controller's pod list |
+| Method | `manual` (nothing to call) | `coder` (outside, Coder API via `Coder::Api`) | `kubernetes` (via controller ops) |
+| --- | --- | --- | --- |
+| `validate_config` | `config.docker` options only (§6.8) | Template exists, parameters valid, integration visible | Namespace and resources valid |
+| `check_health` | Derived from machine heartbeats (§2.5). No outbound call | Coder API reachable, template valid | Controller heartbeat and its RBAC report |
+| `provision` | **No-op.** Never called: `provisionable: false` | `WorkspaceService` create from `config.template_id` with `config.parameters`, name = `key` | `controller.provision {key, image, resources, labels}`. The controller creates Pod, ServiceAccount and Secret (bootstrap) in its namespace |
+| `prepare` | **No-op**, returns `:ready`: the machine is the operator's and is already running | Await build. Start the workspace if it is stopped | Await pod `Ready` (controller reports) |
+| `inject_bootstrap` | **No-op**: the operator installed the runner (§14.4) | `Coder::SshRunner`-style `coder ssh <ws> -- sh -s` with the install script **on stdin**, so the token never appears in argv or `ps`. It installs and starts `aixle-runner --mode host` (§6.8) | No-op: the controller mounts the bootstrap Secret and the pod's init container installs the runner (§9.6) |
+| `reset :reset` | Runner op `env.reset`: **scrub ops only**, the full wipe of §7.2 | Runner op `env.reset` (§7.2) | n/a (ephemeral) |
+| `reset :rebuild` | **Does not exist** (`rebuildable: false`) | Delete and recreate the workspace from the template | n/a |
+| `teardown` | **No-op** on the machine. Removing a machine is `aixle-runner unregister` or Revoke (§9.3); the platform side only marks the row `gone` | Delete the workspace (or stop it, per `config.on_release`) | `controller.teardown {key}` |
+| `observe` | **Heartbeat-based**: `:running` while heartbeats arrive, `:unknown` after 90 s, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
 
 ### 5.2 Environment state machine
 
@@ -500,9 +573,31 @@ The per-type mapping:
                                                     unreachable (heartbeat lost) ⇄ idle/busy (§6.7)
 ```
 
+**The self-registering entry path (`manual`).** A registered environment has no
+`requested`, `provisioning` or `booting` state, because nothing is provisioned:
+
+```
+   register (registration token consumed, row created, origin: registered)
+  ─────────────────────────────────────────▶ registered ──check-in: prerequisites ok──▶ idle
+                                                 │
+                                                 └──check-in: prerequisites missing──▶ failed
+   idle ── unregister / Revoke ──▶ gone          (no tearing_down: there is nothing to delete)
+   failed ── operator "Return to service" ──▶ resetting ──ok──▶ idle
+```
+
+`registered` lasts as long as it takes the host runner to report its facts, normally
+seconds. A `manual` environment never goes through `tearing_down`: `gone` is set by
+`unregister` or revocation, and the machine itself is left as it is. Release on a
+`manual` environment always takes the `resetting`/scrub arm, never the ephemeral
+teardown arm, whatever `reuse_policy` says (§7.1). The one future exception is an
+`ephemeral` registration (§6.3), which goes from release straight to `gone`.
+
 - One session at a time per environment (`concurrency_per_environment = 1`). `busy` holds
   `current_session_id`.
-- `failed` environments are torn down by the reconciler and never reused.
+- `failed` environments are torn down by the reconciler and never reused, except on
+  `manual`: a failed machine cannot be torn down by us, so it stays `failed`, out of
+  rotation, until the operator fixes it and presses **Return to service**, which runs a
+  reset (§7.2), or unregisters it.
 - `unreachable` is an overlay on `idle` or `busy`, not a separate lifecycle. It is entered
   when heartbeats are missed and left on reconnect (§6.7).
 - The state machine is a `state_machines/` class like the others, and transitions are
@@ -524,9 +619,9 @@ The hosted branch is the existing expression, character for character.
 
 | Phase | Hosted (unchanged) | `RunnerRuntime` |
 | --- | --- | --- |
-| `pull_image` | Pull the image | Once an environment is assigned: `image.ensure` (`docker` mode: pull the agent image by digest) or `toolcache.ensure` (`native` mode, §6.8). On `kubernetes` it is a no-op, because the kubelet pulls |
-| `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or create a `requested` row and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments`, so the **existing** `capacity_wait` loop in V2 handles it |
-| `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats. Raises a diagnosed failure on `bootstrap_timeout`. `docker` mode on Coder then sends `container.start` (§6.8) and waits for the session runner inside the container to report ready |
+| `pull_image` | Pull the image | Once an environment is assigned: `image.ensure`, the host runner pulls the agent image by digest (`manual`, `coder`). On `kubernetes` it is a no-op, because the kubelet pulls |
+| `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or, on a `provisionable` type, create a `requested` row and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments` (or, on `manual`, when every registered machine is busy), so the **existing** `capacity_wait` loop in V2 handles it |
+| `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats (immediate on `manual`, whose machine is already checked in). Raises a diagnosed failure on `bootstrap_timeout`. On `manual` and `coder` the host runner then gets `container.start` (§6.8) and the activity waits for the session runner inside the container to report ready |
 | `exec` | `before_exec` context assembly + tmux launch via `runtime.exec`/`write_file` | Same strategy code. Each primitive is a runner op |
 | (await `container_finished`) | Unchanged | Unchanged. `finish_session` reaches the platform through the runner's proxy (§6.6) |
 | `cleanup` | Collect logs and outputs, remove the pod | Same collection via `read_file`, then `Runners::Allocator.release(environment, outcome)`, which scrubs, resets or tears down (§7) |
@@ -564,8 +659,9 @@ All requests are `Authorization: Bearer <token>`,
 
 | Endpoint | Caller | Purpose |
 | --- | --- | --- |
-| `POST /runner/v1/register` | controller | Exchange a registration token for controller credentials. |
-| `POST /runner/v1/check-in` | session runner | Exchange the bootstrap token for environment credentials. Reports version, os/arch and facts. The response carries config (heartbeat interval, proxy routes, log limits) and `update` (§8.3). |
+| `POST /runner/v1/register` | controller, `manual` host runner | Exchange a registration token for long-lived credentials: controller credentials (`kubernetes`), or environment credentials for the environment the call creates (`manual`). Body: `{name, os, arch, facts, ephemeral: false}`. `ephemeral: true` is defined and refused in v1 with `ephemeral_not_supported` (§6.3). |
+| `DELETE /runner/v1/registration` | `manual` host runner | `aixle-runner unregister`: marks the environment `gone` and revokes its credential family. Refused with `409 busy` while a session runs, unless `--force`, which fails that session. |
+| `POST /runner/v1/check-in` | host runner (`coder`, and `manual` after every start), session runner (`kubernetes` pod) | Coder and Kubernetes: exchange the bootstrap token for environment credentials. `manual`: authenticated with the environment credential, no token exchanged. All: report version, os/arch and facts. The response carries config (heartbeat interval, proxy routes, log limits) and `update` (§14.4). |
 | `POST /runner/v1/token` | both | Refresh-token rotation. |
 | `GET  /runner/v1/ops?after=<seq>&wait=25` | both | Long-poll. Returns ops with `sequence > after`, batched. An empty 200 after `wait` doubles as the heartbeat. |
 | `POST /runner/v1/ops/:id/result` | both | Op outcome. Idempotent on op id. |
@@ -575,13 +671,48 @@ All requests are `Authorization: Bearer <token>`,
 | `ANY  /runner/v1/proxy/:route/*` | session runner | The callback proxy (§6.6). |
 | `GET  /runner/v1/releases/:version/:os-:arch` | both | The binary's documented, stable URL. It answers `302` to the GitHub Release asset and sends the expected SHA-256 in `X-Aixle-Runner-Sha256` (§14.3). |
 | `GET  /runner/v1/releases/:version/checksums` | both | The `sha256  file` list for that version, from `config/runner_release.yml`. |
-| `GET  /runner/v1/install.sh` | bootstrap | Install script used by `inject_bootstrap`. |
+| `GET  /runner/v1/install.sh` | bootstrap | Install script used by `inject_bootstrap` (`coder`). `manual` operators download the binary directly (§6.3). |
 
 ### 6.3 Registration and tokens (summary; full model in §9.2)
 
 - **Kubernetes:** an admin creates the runner, the UI shows a one-time **registration
   token** and a ready-to-paste `helm install` command. The controller calls `register`, the
   token is consumed, and the controller gets an access/refresh pair.
+- **Manual**, modelled on GitHub self-hosted runners, and the same `register` call and
+  credential lineage as the Kubernetes controller. Only the operator-facing instructions
+  differ. "Add machine" on the runner page mints a **short-lived, single-use** registration
+  token (1 h) and shows a copy-paste sequence:
+
+  ```sh
+  # 1. Download and verify (the digest is from config/runner_release.yml, §14.3)
+  curl -fsSLo aixle-runner https://flow.aixle.com/runner/v1/releases/1.4.0/linux-amd64
+  echo "<sha256>  aixle-runner" | sha256sum -c -
+  sudo install -m 0755 aixle-runner /usr/local/bin/aixle-runner
+
+  # 2. Register this machine (consumes the token)
+  sudo aixle-runner configure --url https://flow.aixle.com --token <registration token> --name build-01
+
+  # 3. Run as a service that survives logout and reboot
+  sudo aixle-runner service install && sudo aixle-runner service start
+  ```
+
+  `configure` calls `register`, which consumes the token, creates the environment row
+  (§5.2) and returns an environment access/refresh pair that the runner stores locally
+  (`/var/lib/aixle-runner/credentials`, mode `0600`, owned by the runner's own user).
+  `service install` writes a systemd unit running `aixle-runner --mode host` as a
+  dedicated `aixle-runner` system user, which it creates and adds to the `docker` group
+  (§9.7). A machine needs one token each; a token that leaked after use opens nothing.
+  Removal is `aixle-runner unregister` on the machine, or Revoke on the runner page (§9.3).
+- **Ephemeral registration, defined but not in v1.** `register` takes
+  `ephemeral: true` (`configure --ephemeral`, GitHub's `--ephemeral`): the environment
+  takes one session, then the platform marks it `gone`, revokes its credentials, and the
+  runner exits. That lets a customer script their own scaling (a VM per session from
+  their own autoscaler). v1 refuses the flag, but the field, the `ephemeral` column (§2.2)
+  and the release arm in §5.2 are there, so adding it needs no protocol bump.
+- **No labels or runner groups.** Selection is explicit on the workflow or session (§3.3),
+  and the company/project scope already does what runner groups do. The os/arch/facts
+  report at registration and every check-in stays, so a machine that cannot run the agent
+  image (no Docker daemon, wrong arch) is refused at connection time and not mid-session.
 - **Every environment:** the platform mints a single-use **bootstrap token** bound to that
   environment and hands it to `inject_bootstrap` (Coder) or to the controller (Kubernetes).
   The runner calls `check-in`, the token is consumed, and the runner gets an environment
@@ -601,11 +732,14 @@ Each op is `{id, sequence, op, session_id?, deadline_at, payload}`. Results are
 | `status` | `#container_status` | `running`, `starting`, `terminated` or `missing` for the session's agent process. |
 | `logs` | `#container_logs` | Tail of the terminal-output file. |
 | `session.start` / `session.stop` | The tmux launch and kill done through `exec` today | v1 keeps the strategy's tmux commands (through `exec`). These ops are reserved for when the strategy stops shelling out. |
-| `image.ensure` | `pull_image` | `docker` mode: `{image, digest}`. The host runner pulls the agent image by digest. |
-| `container.start` / `container.stop` | `create_container` + `start_container` / `cleanup` | `docker` mode, host-runner ops: `{image, digest, name, env, mounts, network, pid, resources}`. The runner starts the agent container with `aixle-runner --mode session` as PID 1, or stops and removes it (§6.8). |
-| `toolcache.ensure` | `pull_image` | `native` mode only: `{agent_runtime, cli_version, sha256}` (§6.8). |
-| `env.scrub` / `env.reset` | §7.2 | |
+| `image.ensure` | `pull_image` | Host-runner op (`manual`, `coder`): `{image, digest}`. The host runner pulls the agent image by digest. |
+| `container.start` / `container.stop` | `create_container` + `start_container` / `cleanup` | Host-runner ops (`manual`, `coder`): `{image, digest, name, env, mounts, network, pid, resources}`. The runner starts the agent container with `aixle-runner --mode session` as PID 1, or stops and removes it (§6.8). |
+| `env.scrub` / `env.reset` | §7.2 | Host-runner ops. On `manual` these are the whole reset story, since there is no rebuild. |
 | `provision` / `teardown` / `observe` | Kubernetes adapter | Controller-only ops. |
+
+`toolcache.ensure` (revision 3, for `native` mode) is removed. If the split mode needs it,
+it comes back in phase 7 under a protocol minor addition, which `[N-1, N]` support absorbs
+(§14.4).
 
 The `deadline_at` of an op is the activity's start-to-close timeout. A runner that receives
 an op after its deadline reports `expired` and does not execute it.
@@ -629,7 +763,7 @@ ingest. None of these are reachable from a customer network, and they should not
 public.
 
 **Decision:** the session runner listens on `127.0.0.1:<port>` next to the agent (inside
-the agent container in `docker` mode, on the workspace in `native` mode) and forwards an
+the agent container, on every type) and forwards an
 **allow-list of routes** through `ANY /runner/v1/proxy/:route/*`. The env vars
 the strategy sets (`Settings.mcp.server_url`, `CREDENTIAL_SYNC_URL`,
 `AIXLE_GIT_CREDENTIALS_URL`, …) are rewritten to `http://127.0.0.1:<port>/<route>/…` by
@@ -655,8 +789,8 @@ that environment's credential, and only while that session runs there.
   oldest dropped first and marked with a gap) and queues events.
 - **Op execution is at-most-once:** the runner that holds the environment credential keeps a
   local journal (`~/.aixle-runner/journal`) of the op ids it has executed and their results
-  for 24 h. That is the host runner in `docker` mode on Coder, and the session runner
-  elsewhere. A redelivered op returns the
+  for 24 h. That is the host runner on `manual` and `coder`, and the session runner in a
+  `kubernetes` pod. A redelivered op returns the
   journalled result without re-executing it. This closes the ambiguous "did my exec run?"
   case that kube-exec has.
 - **Resume:** on reconnect the runner refreshes its token if needed, polls with
@@ -670,84 +804,113 @@ that environment's credential, and only while that session runs there.
   minutes"*, and the environment is marked `failed` and torn down if the adapter can still
   reach it. The admission slot stays held until the adapter confirms teardown or `observe`
   returns `missing`, per AD-4 "unknown creation retains capacity", and is otherwise released
-  by the reconciliation sweep.
+  by the reconciliation sweep. On `manual` there is no teardown and `observe` never says
+  `missing`: the slot is released when the machine reconnects and reports the session's
+  container gone (it then gets the automatic reset of §7.2 before it is `idle` again), or
+  when an admin presses Force release on the runner page.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the grace expires.
 
-### 6.8 What runs inside the environment: execution modes
+### 6.8 What runs inside the environment: container mode only in v1
 
-**Decision:** the agent runs in **the stock agent image**
-(`AgentRuntime.fetch(agent_type).image`) wherever the environment can run a container.
-`aixle-runner --mode session` is PID 1 and supervises the image's `entrypoint.sh`. This is
-`config.execution_mode: docker`, and it is the **default** for every type that offers a
-choice. `native` mode, where the agent runs directly on the machine, is a deliberate
-opt-in. The capability flags (§4) are derived from the mode, not from the type.
+**Decision:** in v1 the agent runs in **the stock agent image**
+(`AgentRuntime.fetch(agent_type).image`) on every type, `manual`, `coder` and `kubernetes`
+alike. `aixle-runner --mode session` is PID 1 and supervises the image's `entrypoint.sh`.
+This is **container mode**, and it is the only execution mode in v1. A Docker daemon is a
+prerequisite on `manual` and `coder`, reported at check-in (§8) rather than discovered
+mid-session. Revision 3's Coder `native` mode is dropped (see "Dropped" below).
 
-Why `docker` is the default:
+#### The finding behind it
 
-- **Full parity with hosted out of the box.** tmux, the MITM usage proxy, the watcher and
-  ttyd come with the image, the same way they come with a hosted pod. They do not have to
-  be re-proved on every customer environment.
-- **Every agent runtime works.** `agent_runtimes: all` in `docker` mode. Usage accounting
-  for `cursor_cli` and `grok`, which reads the MITM log, works because the MITM proxy is
-  in the image. The per-type allow-list, the toolcache session kits and prototype P2 drop
-  out of the first iteration (they stay only for `native`).
-- **One prerequisite.** The machine needs a Docker daemon and disk, instead of a glibc,
-  `bash`, `git`, `tmux ≥ 3`, `curl` and `tar` checklist.
-- **It works on common Coder templates as they are.** A Docker daemon is a usual part of
-  a development workspace template. Where a template lacks one, adding it is a template
-  change the customer owns, and the runner reports the missing daemon at check-in
-  (§8) instead of failing mid-session.
-- **Scrub becomes cheap and reliable.** Credentials, the prompt and the agent's home live in
-  the container layer, so removing the container removes them (§7.2).
+A session environment is not "an agent CLI plus a proxy". From the stock image,
+`docker/base/entrypoint.sh` starts **five** things:
 
-**The trade-off, stated plainly:** in `docker` mode, the template's own tools (compilers,
-CLIs, the customer's VPN client, a pre-warmed cache) reach the agent **only through what is
-mounted into the container**. The image decides the agent's userland. A customer whose
-reason for a Coder runner is "the agent must see the tools in my template" either mounts
-them, builds an image `FROM` ours, or picks `native`.
+1. **ttyd, twice**, both attached to the `agent` tmux session: a writable instance
+   (`ttyd -W`) for the session owner, and a read-only one (`ttyd -R`, `tmux attach -r`) for
+   everyone else;
+2. **openvscode-server**, the IDE;
+3. **the file watcher** (`/opt/watcher`, WebSocket + HTTP);
+4. **the tmux session** with `pipe-pane`, which writes the replayable terminal log;
+5. **the MITM stack**, sourced from `/opt/mitm/start-mitm.sh` (`docker/base/logger/`).
+
+And the MITM stack is only half a daemon:
+
+1. `mitmdump` on a port. That part is a service and can live in a container of its own.
+2. A **per-session CA**, deliberately not baked into the image, which must be trusted in
+   **three** stores: Node through `NODE_EXTRA_CA_CERTS`, OpenSSL/curl/git/Python through the
+   rebuilt combined bundle, and the NSS database through `certutil`.
+3. **`http2-logger.js`, loaded into the CLI process** through `NODE_OPTIONS --require`,
+   because some CLIs speak HTTP/2 directly and a forward proxy cannot see that traffic.
+4. **Pane-log redaction**: `redact-stream.py` in the `pipe-pane` sink.
+
+Items 2–4 must live wherever the CLI lives. So "service containers plus the CLI on the
+host" does not remove the host-side burden. It splits it in an unexpected place: the host
+still needs the three CA stores, `certutil`, the HTTP/2 logger inside the CLI's own process,
+and a redaction path.
+
+The second consequence decides it, given that the interactive tunnel is phase 4 (§12.2).
+ttyd, the IDE and the watcher come from the image, so **in container mode the tunnel is a
+pure relay** of ports that already exist inside the container. With the CLI on the host,
+all three would have to be installed and supervised on the host, on a machine we do not
+control.
+
+#### What container mode gives, and what it costs
+
+- **Parity with hosted out of the box.** The five services come with the image exactly as
+  in a hosted pod. They do not have to be re-proved on every customer machine.
+- **Every agent runtime works** (`agent_runtimes: all`, §4), including usage accounting for
+  `cursor_cli` and `grok`, which reads the MITM log.
+- **One prerequisite:** a Docker daemon and disk.
+- **Cheap, reliable scrub.** Credentials, the prompt, the MITM CA and the agent's home live
+  in the container layer, so removing the container removes them (§7.2).
+
+**The trade-off, stated plainly:** the machine's or the template's own tools (compilers,
+CLIs, a VPN client, a pre-warmed cache) reach the agent **only through what is mounted into
+the container**. The image decides the agent's userland.
+
+**Steer customers to mounts first.** This is the cheap answer to the environment axis, and
+the runner form, the runner page and the docs offer it before anything else. The
+`config.docker` options below cover most of "the agent must see my toolchain":
+
+- `extra_mounts` for a toolchain directory (`/opt/toolchains:/opt/toolchains:ro`);
+- `home_mount` for dotfiles and user-installed tools;
+- `cache_mounts` for package caches;
+- `network: host` for a VPN client or an interface on the machine;
+- `pid: host` for the rare tool that has to see host processes.
+
+The second answer is an image built `FROM` ours (`config.image_override`, on every type,
+prerequisites checked at check-in). The split mode is the third, and it is not in v1.
 
 #### Per type
 
-- **Kubernetes:** `docker` mode only. Session pods run the stock image with `aixle-runner`
-  as PID 1. The kubelet is the container runtime, so the mode is a fact of the type, not a
-  setting. `config.image_override` is allowed only for images built `FROM` our base image,
-  and the runner checks the prerequisites at check-in.
-- **Coder, `docker` mode (default):**
-  - `inject_bootstrap` installs `aixle-runner --mode host` on the workspace.
-  - The **host runner** holds the environment credential and the journal, and polls the
-    environment's ops. It executes `image.ensure`, `container.start` / `container.stop`,
-    `env.scrub` and `env.reset` itself. Per session it starts one container named
-    `aixle-<environment key>-<session id>` from the agent image pinned by digest. Its own
-    binary is bind-mounted read-only as the container's PID 1 in `session` mode.
+- **Kubernetes:** session pods run the stock image with `aixle-runner` as PID 1. The kubelet
+  is the container runtime. `config.image_override` is allowed only for images built `FROM`
+  our base image.
+- **`manual` and `coder`: a host runner and a session runner.**
+  - The **host runner** (`aixle-runner --mode host`) is installed by the operator
+    (`manual`, §6.3) or by `inject_bootstrap` (`coder`). It holds the environment credential
+    and the journal, and polls the environment's ops. It executes `image.ensure`,
+    `container.start` / `container.stop`, `env.scrub` and `env.reset` itself. Per session it
+    starts one container named `aixle-<environment key>-<session id>`, labelled
+    `aixle.com/environment=<key>` and `aixle.com/session=<id>`, from the agent image pinned
+    by digest. Its own binary is bind-mounted read-only as the container's PID 1 in
+    `session` mode.
   - The **session runner** in the container runs the session ops (`exec`, `write_file`,
     `read_file`, `status`, `logs`), the live-log tail and the callback proxy (§6.6). It
     reaches the gateway **through the host runner** over a Unix socket mounted into the
     container. The host runner forwards the protocol unchanged and adds the environment
-    credential. So the environment credential never enters the container, and an agent
-    that reads its own filesystem cannot take the runner's identity. That is stricter than
-    `native` mode, where both share a user.
-  - Restarting the host runner (self-update, crash) does not stop the agent. The container
-    keeps running, the session runner buffers, and the host runner reattaches to the
-    socket by container name.
-  - Prerequisites checked at check-in: Linux amd64/arm64, a reachable Docker daemon
-    (`docker version` API ≥ 1.41), and 20 GiB free for images plus the workspace volume.
-    A missing prerequisite makes the environment `failed`, with the reason.
-- **Coder, `native` mode (opt-in):** revision 1's model. Sessions run directly on the
-  workspace under the session runner, so the agent sees the template's tools as installed.
-  - Prerequisites: Linux amd64/arm64 (glibc), `bash`, `git`, `tmux ≥ 3`, `curl`, `tar`,
-    5 GiB free.
-  - The agent CLI comes from a **toolcache** (`~/.aixle-runner/tools/<runtime>/<cli_version>/`),
-    filled from per-runtime session kits built from `config/agent_runtimes.json` pins.
-  - `agent_runtimes` is limited to `claude_code`, `codex`, `gemini_cli`, `antigravity_cli`
-    and `kiro_cli`. These are the runtimes whose usage accounting works without the MITM
-    proxy (see the cost table in `app/frontend/pages/Docs/data/pages/runtimes.md`).
-  - There is no ttyd or watcher until they are packaged for the host.
-  - `native` is **not in the first customer-usable slice.** It ships after `docker` mode
-    (task 18, §15).
+    credential. So the environment credential never enters the container, and an agent that
+    reads its own filesystem cannot take the runner's identity.
+  - Restarting the host runner (self-update, crash, `systemctl restart`) does not stop the
+    agent. The container keeps running, the session runner buffers, and the host runner
+    reattaches to the socket by container name.
+  - Prerequisites checked at registration (`manual`) and at every check-in: Linux
+    amd64/arm64, a reachable Docker daemon (`docker version` API ≥ 1.41), and 20 GiB free
+    for images plus the workspace volume. A missing prerequisite makes the environment
+    `failed`, with the reason.
 
-#### Container options in `docker` mode (`config.docker`)
+#### Container options (`config.docker`, `manual` and `coder`)
 
 Access from the container to the machine is **explicit**. Nothing is shared unless the
 runner's config says so. The adapter validates these options, and the runner page lists
@@ -756,51 +919,139 @@ them, because each one widens what the agent can touch:
 | Option | Default | Effect |
 | --- | --- | --- |
 | `workspace_volume` | on | A per-environment named volume `aixle-ws-<key>` mounted at `/workspace`. This is what keeps repository checkouts warm across sessions (§7.1). |
-| `cache_mounts` | `[]` | Extra named volumes or host paths for package caches, e.g. `~/.cache/pip:/home/agent/.cache/pip`. |
-| `home_mount` | off | Bind-mounts the workspace user's `$HOME` (read-only by default) to give the agent the template's dotfiles and tools. |
-| `docker_socket` | off | Mounts `/var/run/docker.sock`. This **gives the agent root on the workspace**. The form says so, and it is refused unless the runner is explicitly flagged `allow_privileged_mounts`. |
-| `network` | `bridge` | `host` drops network isolation, for customers who need the agent on the workspace's own interfaces (a VPN client on the host). |
+| `cache_mounts` | `[]` | Extra named volumes (`aixle-cache-<key>-<name>`) or host paths for package caches, e.g. `~/.cache/pip:/home/agent/.cache/pip`. |
+| `home_mount` | off | Bind-mounts a home directory of the machine (`path`; on `coder` the workspace user's `$HOME` by default, on `manual` required) read-only by default, to give the agent its dotfiles and tools. |
+| `docker_socket` | off | Mounts `/var/run/docker.sock`. This **gives the agent root on the machine**. The form says so, and it is refused unless the runner is explicitly flagged `allow_privileged_mounts`. |
+| `network` | `bridge` | `host` drops network isolation, for customers who need the agent on the machine's own interfaces (a VPN client on the host). |
 | `pid` | `private` | `host` drops PID isolation. |
-| `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. |
-| `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the workspace. |
+| `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. Read-only unless `:rw` is written out. |
+| `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the machine. |
 
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback URLs rewritten to the session runner's local proxy (§6.6). How
 that env is assembled is a `RunnerRuntime` concern, so there is no strategy change.
 
-**Image size.** Agent images are pulled from GHCR on the workspace (or through the
-customer's registry mirror) and kept on the workspace disk between sessions, so only the
-first session on an environment pays for the pull. `image.ensure` reports the pull time,
-and the bootstrap timeout counts it. The staging template prunes the Docker **build**
-cache. Before phase 3 it should be checked that this does not also remove pulled images
-(§12.4).
+**Image size.** Agent images are pulled from GHCR on the machine (or through the customer's
+registry mirror) and kept on its disk between sessions, so only the first session on an
+environment pays for the pull. `image.ensure` reports the pull time, and the bootstrap
+timeout counts it. If a Coder template prunes Docker images on a schedule, the warm-image
+check of §12.5 is read with that counted.
+
+#### Deferred to the last phase (7): the split mode
+
+Services in containers, the CLI on the host. It is what a customer needs when the agent has
+to run the machine's own toolchain *as installed* and mounts are not enough. Its cost,
+written out:
+
+- the agent CLI installed and supervised on the host;
+- CA trust in the three stores on the host (Node, the OpenSSL bundle, NSS through
+  `certutil`), with the CA **generated by the host runner and passed into the MITM
+  container**, the reverse of today, where the container makes its own;
+- the `NODE_OPTIONS --require http2-logger.js` instrumentation in the host CLI process;
+- host-side ttyd (both instances), openvscode-server and the watcher, so the tunnel has
+  something to relay;
+- a redaction path for the host pane log;
+- a throwaway OS user per session (`aixle-s<session_id>`, §7.2) for isolation and scrub.
+
+It is **a second execution path through everything a session does, not a configuration
+switch**: every `BaseRuntime` primitive, scrub, the tunnel and usage accounting get a second
+implementation and a second test matrix, the same reasoning as the hosted debt in §12.3.
+`config.execution_mode` (`container` | `split`) arrives with it; until then there is no
+setting. What would bring it forward: a customer whose toolchain cannot be mounted or baked
+into an image `FROM` ours.
+
+**Dropped: pure `native` mode** (everything on the host, no Docker), revision 3's Coder
+opt-in. The split mode dominates it: the same host access, with usage accounting still
+working for every runtime because `mitmdump` stays in a container. Reinstate it only if a
+customer turns up with no Docker daemon.
+
+#### The CLI-source question, deferred with the split mode
+
+In container mode the CLI comes from the image, pinned by `config/agent_runtimes.json`, so
+the question does not arise. That is one of the reasons for deferring the split mode. When
+it arrives:
+
+- `cli_source: managed | template`, default **`managed`**: kits built on the
+  `config/agent_runtimes.json` pins, because a silent version drift is the failure that is
+  hardest to debug;
+- `template` as an opt-in, with a check-in report of the version found against the pin;
+- **prototype first** extracting the CLI from the stock image onto the host
+  (`docker create` + `docker cp`), the option that reuses the existing pins with no second
+  publish lane.
+
+The toolcache session kits and prototype P2 (§16) move to phase 7 with it.
 
 ---
 
 ## 7. Lifecycle and reset
 
-### 7.1 Fresh vs. reused
+### 7.1 Fresh vs. reused, and what `reuse_policy` means per type
 
-- `kubernetes`: **fresh per session** (ephemeral pod). The image provides the warm state.
-- `coder`: **the workspace is reused by default** (`reuse_policy: reuse`). Workspaces keep
-  their disk. In `docker` mode the agent container is always fresh per session, and what
-  stays warm is the pulled agent image, the `/workspace` volume with its repository clones,
-  and any configured cache mounts. In `native` mode, clones, package caches and the
-  toolcache stay on the workspace disk. `reuse_policy: fresh` rebuilds the workspace per
-  session for customers who want hosted-like isolation and accept the cold start.
+The agent container (or pod) is **fresh per session on every type**. `reuse_policy` decides
+what survives around it, and that differs per type:
 
-### 7.2 Scrub, reset, rebuild
+| Type | `reuse` | `fresh` |
+| --- | --- | --- |
+| `kubernetes` | Not offered | Always: a new pod per session. The image provides the warm state. |
+| `coder` | Default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | A new workspace is created per session and destroyed after it, for hosted-like isolation with the cold start accepted. |
+| `manual` | Default. The machine keeps the pulled images, the workspace volume and the cache volumes. Scrub after every session. | **Cannot mean a new machine.** It means the full wipe scope per session: a new container (always), a **Reset** of the workspace and cache volumes after every session instead of a scrub (§7.2), and, once host-side execution exists (phase 7), a new OS user. Pulled images stay; they are public, pinned by digest and identical for every session. The form says: "Fresh on a manual runner wipes everything Aixle put on the machine after every session. It does not give you a new machine." |
+
+### 7.2 Setup, cleanup, scrub, reset, rebuild
+
+**Decision: customer-defined pre/post session hooks are not in v1.** Customers prepare the
+machine through what they already own (the Coder template, their configuration management
+on a `manual` machine, an image `FROM` ours) and steer the rest through agent instructions
+(skills, step prompts). The absence is deliberate. A hook runs customer code with a
+session's credentials in scope, at a point where its failure semantics (fail the session,
+retry, skip) and its place relative to scrub would need a design of their own. Revisit when a
+customer shows a preparation step that neither the image or template nor the instructions
+can express.
+
+**Our own per-session preparation and cleanup is not deferrable.** Preparation is
+`SessionContextService`, unchanged (§1.3). Cleanup is the levels below. Between them they
+cover credentials, prompt and context, MCP config, outputs, the workspace, MITM state (the
+per-session CA and its logs), the session's processes and its tmux server.
 
 | Level | What it wipes | What it keeps | When |
 | --- | --- | --- | --- |
-| **Scrub** (`env.scrub`) | `docker` mode: the session container (removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp` and every process with it), `/workspace/outputs` on the volume, and anything the strategy wrote to a writable cache or home mount. `native` mode: agent credential files and the agent home config the strategy wrote, the MCP config, the session prompt and context files, `/workspace/outputs`, `/tmp/aixle-*`, the session's tmux server and every process the session started (process group), and the env the runner exported | Repository checkouts, package caches, pulled images (`docker`), toolcache (`native`) | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to rebuild |
-| **Reset** (`env.reset`) | Scrub, plus the whole workspace (`docker`: the `aixle-ws-<key>` volume and cache volumes; `native`: `/workspace`, including repository checkouts) | Pulled images or toolcache, OS-level caches outside the workspace | Manually ("Reset" on an environment); forced for one run ("Start from a clean workspace" on the run drawer or session form, sets `reset_requested=reset` on the assigned environment before `exec`); **automatically after a failed session** on that environment |
-| **Rebuild** (adapter `reset level: :rebuild`) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment, or when the environment is needed by another project (§9.4) |
+| **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` |
+| **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Manually ("Reset" on an environment); forced for one run ("Start from a clean workspace" on the run drawer or session form, sets `reset_requested=reset` on the assigned environment before `exec`); **automatically after a failed session** on that environment; on `manual` with `reuse_policy: fresh`, after every session |
+| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment, or when the environment is needed by another project (§9.4) |
 
 The repository bootstrap that `SessionContextService` already does (clone, or fetch and
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
 to the requested ref, not trusted as-is. `Coder::RepoBootstrap` exists for the same reason
 on the MCP-tool path.
+
+#### `manual`: an airtight scrub without a rebuild
+
+On a machine we do not own, `rebuild` does not exist, so scrub and reset carry the whole
+guarantee. The mechanism:
+
+- **Scope by ownership, never by enumeration.** Scrub and reset act only on what Aixle
+  created, selected by label and name: containers labelled `aixle.com/environment=<key>`,
+  volumes `aixle-ws-<key>` and `aixle-cache-<key>-*`. They never walk the filesystem
+  looking for what an agent might have written.
+- **Container mode (v1): the session container is the unit.** Everything a session does
+  happens inside it, so `docker rm -f` is the scrub, and the label check confirms it.
+- **Host-side execution (split mode, phase 7): a throwaway OS user per session**,
+  `aixle-s<session_id>`, with its own `$HOME`. The host-side CLI, ttyd, IDE and watcher
+  run as that user, in a transient systemd scope with a private `/tmp`. Cleanup kills that
+  user's process tree (`pkill -KILL -u`, repeated until `pgrep -u` is empty), stops the
+  scope, and deletes the user and its home (`userdel -r`). The user can write only to its
+  home, its private `/tmp` and the workspace we hand it, so deleting those three is
+  complete without enumerating files. It also isolates credentials: the host runner keeps
+  its own `aixle-runner` user and its `0600` credential file, which the session user cannot
+  read. That is the host-side equivalent of the Unix-socket relay in container mode (§6.8).
+- **Writable host mounts are outside the guarantee**, and the form says so. A writable
+  `home_mount`, an `extra_mounts` entry with `:rw` or a host-path `cache_mounts` entry lets
+  the agent write to the machine outside Aixle's labels. Scrub removes what the strategy
+  wrote there, not what the agent wrote. The defaults are off or read-only, and on `manual`
+  the form requires an explicit acknowledgement for each writable host mount.
+- **Escalation stops at reset.** A failed scrub triggers a reset. A failed reset, or
+  `runners.max_consecutive_failures` failed sessions in a row, takes the machine out of
+  rotation (`failed`, §5.2) with the reason. The runner page asks the operator to look at
+  the machine and press **Return to service**, which runs a reset first.
 
 ### 7.3 Allocation and concurrency on reused environments
 
@@ -811,18 +1062,24 @@ rows:
    `last_workflow_id = session.workflow_id` (warm-cache affinity).
 2. Otherwise any `idle` environment bound to this project.
 3. Otherwise any `idle` unbound environment.
-4. Otherwise, if `count(non-gone environments) < max_environments`, insert a new
-   `runner_environments` row in `requested`, bound to the session's project, in the same
-   transaction. After commit, call `adapter.provision` for it (§5.1).
+4. Otherwise, **only if the runner is `provisionable`** and
+   `count(non-gone environments) < max_environments`, insert a new `runner_environments`
+   row in `requested`, bound to the session's project, in the same transaction. After
+   commit, call `adapter.provision` for it (§5.1).
 5. Otherwise raise `CapacityError`, and the session waits in the existing admission
    capacity wait.
+
+**On `manual`, step 4 does not exist.** The allocator cannot create a machine, so when
+every registered machine bound to (or available to) the project is busy, offline or
+`failed`, the session **queues** in step 5 until one comes back to `idle`. Capacity is
+exactly the machines the operator connected (§10).
 
 **Two overlapping runs of the same workflow:** the second one gets **another environment**
 (step 2–4), never the same one. If the pool is full it **queues**. It is never refused, and
 it never falls back to `hosted`. That answers the open question with "fall back to a fresh
-environment while there is room, then queue". Refusing would turn a capacity condition into
-a user-visible error. Sharing one disk between two agents would corrupt checkouts. Hosted
-fallback is ruled out by §8.
+environment while there is room, then queue". On `manual` "room" means another idle
+machine. Refusing would turn a capacity condition into a user-visible error. Sharing one
+disk between two agents would corrupt checkouts. Hosted fallback is ruled out by §8.
 
 ---
 
@@ -842,7 +1099,12 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
 | `provision` fails (template error, image pull, RBAC) | `create_container` | Diagnosed failure, environment `failed` | Provider message, e.g. "Coder: template parameter `instance_type` invalid" |
 | Runner never checks in | `start_container` after `runners.bootstrap_timeout` (default 10 min, 15 for `coder`) | Fails, environment `failed`, teardown | "Environment started but aixle-runner did not check in within 10 min. Check egress to flow.aixle.com:443." plus the last bootstrap output the adapter captured |
-| Prerequisites missing | Check-in | Fails, environment `failed` | `docker` mode: "Workspace has no reachable Docker daemon." `native` mode: "Workspace is missing tmux ≥ 3." |
+| Prerequisites missing | Registration (`manual`) or check-in | Refused or fails, environment `failed` | "Machine build-01 has no reachable Docker daemon (aixle-runner needs Docker API ≥ 1.41)." |
+| External runners not enabled for the company (no `external_runners` override, §12.1) | Selection, launch, every gateway request | Refused; launches fail with `runner_unavailable`; the gateway answers `403 runners_disabled` | "External runners are not enabled for this company." |
+| `manual`: no machine registered yet, or every machine offline | Launch | Fails, `runner_unreachable` | "Runner "X" has no machine online. Last seen: build-01 at 14:02." |
+| `manual`: every machine busy | `create_container` | `capacity_wait`, wait reason `runner_capacity` | "Waiting for a free machine on runner "X" (2 of 2 busy)." |
+| `manual`: registration token expired or already used | `register` | Refused, `401 registration_token_invalid` | Printed by `aixle-runner configure`: "This registration token has expired or was already used. Create a new one on the runner page." |
+| `manual`: reset fails on a machine | Release | Environment `failed`, out of rotation | Runner page: "build-01 failed to reset: <reason>. Fix the machine and press Return to service." |
 | Agent image cannot be pulled | `pull_image` (`image.ensure`) | Diagnosed failure, environment stays `idle` | "Could not pull ghcr.io/aixlehq/…@sha256:…: <registry error>. The workspace needs to reach ghcr.io or a configured mirror." |
 | Runner protocol or version unsupported | Check-in | Refused, environment `failed` | "aixle-runner 1.2.0 is no longer supported (minimum 1.4.0)." |
 | Connection lost mid-session | Heartbeat | Grace, then fails (§6.7) | "Runner environment lost contact for 15 minutes." |
@@ -875,10 +1137,11 @@ credentials, config items not attached to the session (still only through
 
 | Token | Issued | Lifetime | Grants | Storage |
 | --- | --- | --- | --- | --- |
-| Registration (Kubernetes) | Runner creation, or "Rotate" in the UI. Shown once | Single use, expires in 24 h if unused | Calling `register` once for this runner | Digest only |
+| Registration (Kubernetes) | Runner creation, or "Rotate" in the UI. Shown once | Single use, expires in 24 h if unused (a GitOps `helm install` can take a review cycle) | Calling `register` once for this runner | Digest only |
+| Registration (`manual`) | "Add machine" on the runner page. Shown once, inside the copy-paste command | **Single use, expires in 1 h** if unused | Calling `register` once, which creates **one** environment of this runner | Digest only. One token per machine |
 | Controller access / refresh | `register` | Access 1 h. Refresh rotates on every use and becomes invalid after 30 days idle | Polling **controller ops of this runner** (provision, teardown, observe); posting results; minting nothing | Digest only. Refresh-token reuse detection revokes the whole family and marks the runner `degraded` ("credential reuse detected") |
 | Bootstrap | Per environment, at `provision` | Single use, 30 min (or `bootstrap_timeout`, whichever is longer) | Calling `check-in` for **this environment** | Digest only. Delivered by Coder SSH stdin or by a k8s Secret the controller deletes after check-in |
-| Environment access / refresh | `check-in` | Access 1 h, rotating refresh. Invalid the moment the environment leaves `idle`/`busy`/`resetting` or the runner is revoked | Polling **this environment's ops**; posting logs, events and results for the session **currently assigned** to it; the proxy for that session only | Digest only |
+| Environment access / refresh | `check-in` (`coder`, `kubernetes`), `register` (`manual`) | Access 1 h, rotating refresh. Invalid the moment the environment becomes `gone` or the runner is revoked. On `coder` and `kubernetes` also when it leaves `idle`/`busy`/`resetting`; a `failed` `manual` machine keeps its credential so it can be returned to service. A `manual` refresh token becomes invalid after 30 days without use, like the controller's | Polling **this environment's ops**; posting logs, events and results for the session **currently assigned** to it; the proxy for that session only | Digest only. On `manual`, stored by the runner in `/var/lib/aixle-runner/credentials` (`0600`, the runner's own user). Reuse detection revokes the family and marks the machine `failed` ("credential reuse detected") |
 
 Every request re-checks the runner's status (cached for ≤ 5 s), so revocation takes effect
 within seconds and does not wait for tokens to expire.
@@ -890,6 +1153,11 @@ within seconds and does not wait for tokens to expire.
   currently assigned, while it is live. It **cannot** pull work. Ops are pushed by
   assignment, and there is no "give me any job" call. It cannot address another
   environment's ops, read other sessions, or mint tokens.
+- **A `manual` machine's credential** is an environment credential and reaches exactly
+  the above. A leaked, unused registration token opens one new environment of that runner
+  for up to an hour, which then only receives sessions an admin's runner selection sends
+  it, in the scope the runner already has. The runner page lists every registered machine
+  with its first-seen IP, so an unexpected one is visible and revocable.
 - **A controller credential:** it can see provision requests for its runner and fake
   results. The bootstrap tokens it handles each open one environment's check-in, and those
   environments still only get ops assigned to them. Controller compromise is equivalent to
@@ -908,6 +1176,19 @@ After commit, adapter `teardown` is attempted best-effort for every environment.
 says plainly that Coder workspaces and pods the platform cannot reach must be removed by
 the customer, and lists them. "Disable" is the soft version: no new work, running sessions
 finish, credentials stay valid.
+
+On `manual` there is nothing for us to tear down. A revoked machine's runner gets `401`
+on its next request, stops its session containers, removes the Aixle-labelled containers
+and volumes it created (§7.2), and exits; the systemd unit is left installed and disabled.
+The runner page tells the operator to finish with `aixle-runner service uninstall`.
+Revoke also works **per machine** (the machines table on the runner page), which revokes
+that environment's credential family only. `aixle-runner unregister` is the same thing
+initiated from the machine.
+
+Removing the `external_runners` override for a company (§12.1) is not a revocation.
+Credentials stay valid, the gateway refuses every request of that company's runners with
+`403 runners_disabled`, running sessions fail at their next poll, and runners back off and
+retry. Putting the override back lets them reconnect with no re-registration.
 
 A user who leaves the company does not revoke runners they created. Runners belong to the
 company or the project, like integrations, and `created_by` is audit only.
@@ -938,6 +1219,14 @@ to B. If B needs capacity and A's environments are idle at `max_environments`, t
 allocator rebuilds A's least-recently-used idle environment (wipe and unbind) and binds it
 to B. Capacity is shared at the runner level. Disks are not.
 
+**On `manual` there is no rebuild, so there is no automatic rebinding.** A reset wipes
+what Aixle created, not the machine, and that is not enough to hand a disk from one
+project to another. A machine on a company `manual` runner is bound to the first project
+that uses it. Moving it is an explicit admin action, **Release to company**, which runs a
+reset, clears the binding, and asks for confirmation that says the rest of the machine is
+not wiped. If B needs capacity while every machine is bound to A, B queues. The runner form
+recommends project scope for `manual` runners for this reason.
+
 ### 9.5 Network surface
 
 The guarantee this design makes is about **inbound** connections. That is what carries the
@@ -951,7 +1240,7 @@ platform holds no credential that reaches into it.
   constraint we commit to keeping short:**
   - the platform host on 443 (gateway, proxy, the release redirect);
   - `github.com` / `objects.githubusercontent.com` for runner binaries (§14.3);
-  - `ghcr.io` for agent images and the runner image (`docker` mode and Kubernetes);
+  - `ghcr.io` for agent images and the runner image (every type);
   - the git hosts of attached repositories;
   - the model provider, or the customer's Bedrock through their cloud connection;
   - whatever the agent's own work needs.
@@ -1013,6 +1302,24 @@ Session pods get:
 The `<version>` comes from the platform in the `provision` op, so pods always run the
 platform-recommended runner whatever version the controller is.
 
+### 9.7 A `manual` machine: what the operator takes on
+
+The platform holds nothing into the machine, so the trust questions move to the operator,
+and the runner page and the user documentation say so plainly:
+
+- **Agent sessions are a persistent tenant on that machine.** Every session assigned to it
+  runs there, with its repository checkouts on the workspace volume between sessions.
+- **The launching user's agent login lands there** (§9.1), as on every external type. The
+  §3.2 permissions and the §11 disclosure on the run drawer and session form apply
+  unchanged.
+- **Environments stay bound to one project** (§9.4), and there is no automatic rebinding.
+- **The `docker` group is root-equivalent.** `service install` puts the `aixle-runner`
+  system user in it, because the host runner starts containers. Anyone who controls that
+  user controls the machine.
+- **Recommendation:** a dedicated machine for the runner, not a shared developer box; or,
+  once it exists, the ephemeral mode (§6.3), with one fresh VM per session from the
+  customer's own automation.
+
 ---
 
 ## 10. Session admission
@@ -1036,6 +1343,13 @@ changes is the pool an external session belongs to:
     the provider, with the reservation kept, as for `namespace_quota` today.
 
   The session page shows which one applies.
+- **`manual` capacity is a physical fact, not elastic.** There is no provisioning step, so
+  `runner_capacity` on a `manual` runner means "every connected machine is busy", and it
+  ends only when one frees up or the operator connects another machine. Nothing the
+  platform or a setting does raises it. The effective concurrency is
+  `min(max_concurrency, machines idle or busy)`. `max_concurrency` stays a ceiling the
+  operator can set lower than the machine count. The runner page and the queued-session
+  message say "2 of 2 machines busy" rather than suggesting that capacity is being created.
 - **Release** follows AD-4 and the confirmed-release rule. The slot is freed when cleanup
   completes (scrub ok and the environment back to `idle`, or teardown confirmed). An
   environment the platform lost contact with keeps the slot until `observe` says `missing`
@@ -1054,16 +1368,34 @@ changes is the pool an external session belongs to:
 | --- | --- |
 | **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, environments busy/total, last seen. "New runner" for admins. |
 | **Project → Settings → Runners** (new page next to Integrations) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
-| **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry, so a new type shows up without UI work). Step 2: the type's form generated from `config_schema` — Coder: integration select (visible ones), template, parameters, execution mode (`docker` preselected, `native` with the trade-off spelled out) and the `docker` options from §6.8, reuse policy, max environments; Kubernetes: namespace, resources, image override. Step 3: limits. Then **Connect**: Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller with a live status. |
-| **Runner page** | Status and health facts, capabilities, execution mode and the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild / Force release), workflows using it, Disable / Revoke / Rotate token / Delete. |
+| **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `docker` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `docker` options, reuse policy, max environments. Kubernetes: namespace, resources, image override. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
+| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), workflows using it, Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4) or incompatible with an interactive step (§4). |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
 | **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`. |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
 | **Admin (Administrate)** | Runners and environments dashboards for support. |
 
-Everything ships behind the flag (§12.1). With the flag off none of these surfaces render,
-and the API refuses `runner_id`.
+**Everything ships behind `external_runners` (§12.1).** For a company without the flag
+none of these surfaces render, the controllers answer `404`, and the API refuses
+`runner_id`. The server decides every write; the frontend only hides.
+
+- **How the frontend reads it.** Both flags are `client: true`. They reach the browser
+  resolved server-side, through the `features` shared prop (`FeatureFlags.client_payload`),
+  and components read them with `useFeatureFlag` (`externalRunners`,
+  `externalRunnersKubernetes`). The Runners tab, the Project → Runners page, the three
+  selects and the "Runs on" badge are wrapped in `useFeatureFlag('externalRunners')`.
+- **Known consequence, owned by the task that adds the flag.** `external_runners` is the
+  **first** `client: true` flag in the registry. Per the comment on the `client:` line of
+  `config/feature_flags.yml`, the comment above `FeatureFlagName` in
+  `app/frontend/shared/ui/types.ts`, and "When the first client flag exists, prefer a
+  resource" in `docs/architecture/feature-flags.md`, that is the trigger to replace the
+  hand-written `FeatureFlagName` union with an Alba `FeaturesResource` that declares the
+  client flags as `typelize :boolean` attributes, so Typelizer generates `Features` and
+  `useFeatureFlag(name: keyof Features)` needs neither the list nor
+  `test/config/feature_flag_name_test.rb`. **That switch is part of task 1 (§15), the task
+  that declares the flag.** It is not a later discovery, and the flag does not land with a
+  hand-edited `FeatureFlagName` first.
 
 ---
 
@@ -1071,74 +1403,114 @@ and the API refuses `runner_id`.
 
 ### 12.1 Flags
 
-- **Deployment:** `Settings.runners.enabled` (`RUNNERS_ENABLED`, default `false`), read
-  through `Settings` per the `NoEnvInApp` cop. It gates the gateway routes, the UI props and
-  the API fields.
-- **Per company:** `companies.runners_enabled` (boolean, default `false`), following the
-  per-tenant column precedent (`managed_by_aixle`, `steps.bmad_enabled`). Toggled from
-  Administrate. Both flags must be on.
-- **Per type:** `Settings.runners.types` (default `["coder"]`), so Kubernetes can ship dark
-  after Coder.
+Two declared flags in `config/feature_flags.yml`, in the registry's format. Nothing else
+gates the feature: there is no `Settings` toggle, no `companies` column and no type list
+in settings.
 
-### 12.2 Delivery order
+```yaml
+external_runners:
+  description: External agent runners — connect a machine, Coder or Kubernetes and run agent sessions there.
+  owner: "@AixleHQ/platform"
+  kind: release
+  scope: company
+  default: false
+  client: true
+  introduced: 2026-11-02   # placeholder: the date the first implementation PR (task 1) is opened
+  remove_by: 2027-06-30
 
-Each phase leaves `develop` releasable and the hosted path untouched.
+external_runners_kubernetes:
+  description: The kubernetes runner type, shipped dark after the other types.
+  owner: "@AixleHQ/platform"
+  kind: release
+  scope: company
+  default: false
+  client: true
+  remove_by: 2027-08-31
+```
 
-1. **Model and CRUD, no execution.** Tables, policies, the runners pages, the builder,
-   drawer and form selects. A run with an external runner fails with "runner execution not
-   enabled". This validates the scopes, permissions and failure messages before any code
-   runs remotely.
-2. **Protocol, gateway, `aixle-runner` (`host` and `session` modes).**
-   - The protocol is written down as a specification, `runner-protocol/PROTOCOL.md`.
-   - **The conformance fixtures are committed in this phase** (`runner-protocol/fixtures/v1/`,
-     §14.1), and the gateway's Rails tests run them from the first PR. They are the contract
-     the Go implementation is written against, and what makes the later extract safe. So
-     they are not deferred, even while only the Ruby side runs them.
-   - Separate CI lanes for the Go code (`go test`, lint, the Go side of conformance) **may
-     be deferred**. Until they exist, `runner/` is built and tested locally and in the
-     release lane only.
-   - A dev-only `local` adapter starts a host runner as a container on the Compose network,
-     with the Docker socket of the dev machine. The whole path is then testable in Docker,
-     with no Coder needed.
-3. **Coder adapter in `docker` mode, end to end**, for non-interactive workflow steps, all
-   agent runtimes. Staging validation (§12.4). This is the first customer-usable slice.
-4. **Interactive tunnel:** a WebSocket from the session runner, through the host runner,
-   relaying ttyd, the IDE and the watcher, with the session page connecting to the platform
-   instead of Traefik. `interactive_terminal: true`.
-5. **Kubernetes controller and Helm chart** (in `AixleHQ/aixle-runner`, §14.1).
-   Prerequisite: document the agent image sizes and pull times from GHCR for customer
-   clusters, and the mirror option.
-6. **Coder `native` mode:** toolcache session kits, the native allow-list, and a request
-   logger for MITM-log-based usage if `cursor_cli` and `grok` are wanted natively. Then GA
-   and user docs (`pages/Docs`).
-7. **Later, not proposed now:** hosted onto the interface (§13).
+- **The check** is `Feature.enabled?(:external_runners, company:)`, always with the
+  runner's or the session's company, in the literal shape the registry test looks for:
+  - the company and project Runners controllers, and every controller or API endpoint that
+    accepts `runner_id` (a company without the flag gets `404` or the field refused);
+  - `Runners::Resolver.resolve!` at launch, so a workflow that still names a runner fails
+    with the §8 message and never falls back to `hosted`;
+  - the gateway, on every `/runner/v1/*` request, together with the runner status check
+    (§9.2) and with the same ≤ 5 s cache;
+  - the adapter registry's type list.
+- **`external_runners_kubernetes`** is checked only where the `kubernetes` type itself is
+  involved: the type list, creating a `kubernetes` runner, and `register` from a
+  controller. It is declared in phase 6, not before (§12.2).
+- **No hosted code path reads either flag.** `ContainerRuntime.for_session` branches on
+  `session.runner_id`, which can only be set while the flag is on (§12.3).
+- **`remove_by`.** The guide's "about eight weeks out" fits a flag that guards one PR. These
+  guard a seven-phase delivery, so the dates sit at the end of the plan up to the type each
+  one gates: `external_runners` after phase 5 (Coder), `external_runners_kubernetes` after
+  phase 6. Each phase boundary reviews the date, and only a PR that says why moves it.
+- **No ENV mechanism.** The design does not rely on `FEATURE_<KEY>` and builds nothing
+  around it. The rollout is `default: false` plus company overrides set from
+  `/admin/feature_flags` (super admins only, a reason required, an `Audit` row per change).
+- **No incident kill-switch path.** This feature is used by our own people in a controlled
+  environment. Removing a company's override is the stop button: launches fail, the gateway
+  refuses that company's runners, and running sessions end at their next poll (§9.3).
+- **Ownership composes with §3.2 as it is.** The flag decides whether external runners
+  exist for a company at all, a platform decision made from `/admin`. Inside a company where
+  it is on, §3.2 decides who may create and edit a runner.
+- **`config/runner_release.yml` stays a `Settings` file** (§14.2). It holds the runner
+  version pins, which are a pin, not a toggle, and it never becomes a flag.
 
-**Interactive sessions: decided.** The first customer-usable slice (phase 3) is
-**non-interactive only**, enforced by `interactive_terminal: false` (§4). The tunnel
-**moves up to phase 4**, ahead of Kubernetes. In revision 1 it was phase 5, after
-Kubernetes.
+### 12.2 Delivery order, as flag states
 
-- **Why v1 can ship without it.** The reasons for a runner (private network, the
-  customer's environment, capacity, perimeter) are about the work an agent does. Today
-  that work arrives through workflow steps: board-column automation, tracker and chat
-  triggers. Those are non-interactive. A customer can put its automated SDLC workflows on
-  its own Coder runner without ever opening a terminal. On Coder, `human_accessible: true`
-  also gives a debugging path that the platform does not need to build: Coder's own web
-  terminal and SSH into the workspace, and `docker exec` into the session container.
-- **Why the tunnel moves ahead of Kubernetes.**
-  - In `docker` mode ttyd, the IDE server and the watcher already run inside the session
-    container, exactly as in a hosted pod. The tunnel is only a relay: one WebSocket out
-    from the runner, and a platform endpoint the session page connects to in place of the
-    Traefik IngressRoute. It does not depend on the runner type, so building it once serves
-    Coder now and Kubernetes later.
-  - Kubernetes is a second type. The tunnel completes the first one. A Coder customer
-    reaches parity with hosted (interactive and standalone sessions) before a second type
-    is added.
-  - Without the tunnel, every interactive step in a workflow blocks that workflow from
-    being published on a runner (§4). Mixed workflows are common enough that this would be
-    the first support question.
-- **What would change this order.** If the first non-staging customer needs Kubernetes and
-  not Coder, swap phases 4 and 5. The two phases are independent, so the swap costs
+Each phase leaves `develop` releasable and the hosted path untouched. "Test company" is our
+own staging test company; "named companies" are companies given an override from `/admin`,
+one at a time, each with a reason. The flags never go `default: true` before removal.
+
+| Phase | Content | `external_runners` | `external_runners_kubernetes` | Who sees the client-side surfaces |
+| --- | --- | --- | --- | --- |
+| 1 | Model and CRUD, no execution. A run with an external runner fails with "runner execution not enabled". This validates scopes, permissions and failure messages before any code runs remotely | Declared. `default: false`. Override **on for the test company only** | Not declared | Members of the test company: the Runners pages (Manual type card only), the builder, drawer and session-form selects, the badge |
+| 2 | Protocol, gateway, `aixle-runner` (`host` and `session` modes), the conformance fixtures, the dev `local` adapter | Unchanged: test company only | Not declared | Test company. Developers locally, through the `local` adapter and the test helpers |
+| 3 | **`manual` type, container mode, end to end**, non-interactive. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner | Not declared | Members of those companies. Type cards: Manual |
+| 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false` | Unchanged (same overrides) | Not declared | Same companies. Interactive sessions and steps become selectable on runners |
+| 5 | **Coder adapter**: provisioning, pooling, warm disk. Staging validation (§12.5) | Unchanged. Coder becomes available to every company that already has the override; no new flag | Not declared | Same companies. Type cards: Manual, Coder |
+| 6 | **Kubernetes controller, Helm chart**, the second flag | Unchanged | **Declared.** `default: false`. Override on for the test company, then named companies | Kubernetes card only for companies with both overrides |
+| 7 | **Split mode** (services in containers, CLI on the host), toolcache kits, P2 (§6.8) | Unchanged | Unchanged | The `execution_mode` option appears on `manual` and `coder` runner forms of companies with the override |
+| GA, then removal | Docs, then the flags are removed | Global on from `/admin`, then a removal PR (§ "Removing a flag" in `docs/architecture/feature-flags.md`) before `remove_by` | Same, after its own GA | Everyone |
+| later | Hosted onto the same interface (§13) | Gone | Gone | — |
+
+Phase 2 details that stay from revision 3:
+
+- The protocol is written down as a specification, `runner-protocol/PROTOCOL.md`.
+- **The conformance fixtures are committed in this phase** (`runner-protocol/fixtures/v1/`,
+  §14.1), and the gateway's Rails tests run them from the first PR. They are the contract
+  the Go implementation is written against, and what makes the later extract safe.
+- Separate CI lanes for the Go code (`go test`, lint, the Go side of conformance) **may be
+  deferred**. Until they exist, `runner/` is built and tested locally and in the release
+  lane only.
+- A dev-only `local` adapter starts a host runner as a container on the Compose network,
+  with the Docker socket of the dev machine. The whole path is then testable in Docker, with
+  no machine and no Coder needed. It is a `manual`-like adapter (registration, no
+  provisioning) with a scripted `configure`, so phase 3 starts from a working path.
+
+**Why `manual` is the first type.** It has no provisioning, so phase 3 is only the runner,
+the protocol and container mode, the parts every later type reuses. It is also the purest
+form of the security axis: the platform holds nothing into the customer's machine. Coder
+adds provisioning, pooling and warm disks on top of a path that already works.
+
+**Why the tunnel is phase 4.** Runners have to give the same user experience as hosted, and
+that is only true once the live terminal, the IDE and the watcher work. In container mode
+it is a relay of ports the image already serves (§6.8), so it does not depend on the runner
+type and is built once for all of them. It is developed against the `local` adapter from
+phase 2, so it does not wait on a provider.
+
+- **Why phase 3 can ship without it.** The reasons for a runner are about the work an agent
+  does, and that work mostly arrives through non-interactive workflow steps (board-column
+  automation, tracker and chat triggers). `human_accessible: true` on `manual` means the
+  operator can debug on their own machine (`docker exec` into the session container)
+  without anything from us.
+- **What it costs to wait without it.** Every interactive step in a workflow blocks that
+  workflow from being published on a runner (§4), which is the first support question for
+  mixed workflows. That is why it comes before any second type.
+- **What would change this order.** If the first named company needs Coder before it needs
+  interactive sessions, swap phases 4 and 5. They are independent, so the swap costs
   nothing.
 
 ### 12.3 The hosted runtime is not touched
@@ -1151,9 +1523,13 @@ Every change to a shared file is a guarded branch whose hosted arm is today's co
 - the env-var rewrite, which lives in `RunnerRuntime`;
 - nullable columns.
 
-Phase 1 adds a test that runs the existing hosted admission and launch tests with the flag
-**on** and asserts the same Kubernetes calls are made, so "unchanged" is checked by a test
-and not assumed.
+Phase 1 adds a regression test that runs the existing hosted admission and launch tests
+with `external_runners` **enabled for the test's company**, through the helpers in
+`test/support/feature_flags_helper.rb`
+(`with_feature(:external_runners, true, company: company) { ... }`), and asserts that the
+same Kubernetes calls are made as with the flag off. "Unchanged" is then checked by a test
+and not assumed. In phase 6 the same test runs with `external_runners_kubernetes` enabled
+for that company too.
 
 **Tech debt this creates, with its exit condition.** Leaving hosted untouched means **two
 execution models live side by side for an open-ended period**: outside-in for hosted
@@ -1179,7 +1555,55 @@ reasoned about, and tested, twice: once for each model, including the ways each 
   carries this trigger, so it is reviewed when the protocol is declared stable and not left
   open-ended.
 
-### 12.4 Validating the first Coder runner on staging
+### 12.4 Validating the first `manual` runner on staging (phase 3)
+
+Precondition: the `external_runners` override is on for the staging test company (§12.2,
+phase 1). The machine is any Linux host with Docker that we control and that can reach the
+staging platform host outbound. A workspace from the staging Coder integration is a
+convenient choice, used here as a plain machine: nothing is provisioned through Coder, and
+the operator steps are done by hand in its terminal, exactly as a customer would. The
+machine used is recorded in the validation task's result.
+
+1. Create a project runner of type `manual` on the staging test project. "Add machine"
+   shows the download, the SHA-256 line, `configure` and `service install`. Follow them:
+   the checksum verifies, `configure` registers, the machine appears **idle** within
+   seconds, and the runner goes `connected`.
+2. Reuse the same registration token on a second machine: refused with the §8 message.
+   Wait an hour with an unused token: refused as expired.
+3. A one-step non-interactive workflow (`claude_code`, a repository attached) runs on the
+   runner. The machine shows **online**; the session page shows the runner badge, the live
+   log streams, `finish_session` completes the step, outputs and logs are collected, cost
+   is recorded.
+4. Run it again: same machine, the agent image is not re-pulled, the clone on the
+   workspace volume is fetched rather than re-cloned, and no `aixle.com/session`-labelled
+   container is left (`docker ps -a --filter label=aixle.com/environment=<key>`).
+5. Start two runs at once with one machine: the second **queues** with `runner_capacity`
+   ("1 of 1 machines busy") and runs when the first finishes. Nothing is provisioned.
+6. Set `reuse_policy: fresh`: after a session the workspace volume is gone and recreated
+   empty for the next one; the pulled image stays.
+7. Repeat step 3 with `cursor_cli` and with `grok`: usage is recorded from the MITM log
+   exactly as on hosted.
+8. Stop the Docker daemon and restart the runner: the machine goes `failed` at check-in
+   with the Docker message. Start Docker, press Return to service: it resets and goes idle.
+9. Block outbound traffic to the platform host for 2 min mid-session: the agent continues
+   and the logs back-fill. For 20 min: the session fails with the grace message, and the
+   machine resets on reconnect.
+10. `sudo systemctl restart aixle-runner` mid-session: the session container keeps running
+    and the session completes.
+11. Reboot the machine while idle: the service comes back and the machine is idle again
+    with no operator action.
+12. Remove the `external_runners` override for the test company mid-session from `/admin`:
+    the session fails at the next poll, the Runners pages disappear, and a new launch of a
+    workflow that names the runner fails with the §8 message, without falling back to
+    `hosted`. Put the override back: the machine reconnects without re-registering.
+13. `aixle-runner unregister`: the machine disappears from the list and its credential
+    gets `401`. Register again and Revoke from the UI: the runner on the machine stops and
+    cleans up its containers and volumes.
+14. Point a run from a second project at the project runner by id through the API: 403.
+15. Selecting `hosted` or nothing on the same project behaves exactly as before. The hosted
+    pods are created as before, verified on the cluster.
+
+### 12.5 Validating the first Coder runner on staging (phase 5)
 
 Validation runs against **the staging Coder integration already configured on the test
 project**, with whatever workspace template that integration offers at the time of
@@ -1188,7 +1612,7 @@ a property of our staging environment and will drift, and the runner has to work
 template the design never saw, which is also the customer case. What the validation needs
 from the chosen template is checked at test time, not assumed here:
 
-- it can run a Docker daemon, which is the only `docker`-mode prerequisite (§6.8). If it
+- it can run a Docker daemon, which is the only container-mode prerequisite (§6.8). If it
   cannot, the runner reports that at check-in, which is itself a check of the §8 message;
 - its disk covers an agent image plus the workspace volume (§6.8);
 - if it prunes images or build cache on a schedule, the warm-image result of step 5 is
@@ -1198,8 +1622,9 @@ The template used, and the answers to these three, are recorded in the validatio
 result, so a later re-run knows what it is comparing against.
 
 1. Create a project runner on the staging test project over its existing Coder
-   integration: one of the templates the integration offers, `execution_mode: docker`
-   (the default), `max_environments: 2`.
+   integration: one of the templates the integration offers, `max_environments: 2`.
+   The steps of §12.4 already proved the runner, the protocol and container mode, so this
+   validation concentrates on what Coder adds: provisioning, pooling and the warm disk.
 2. Health goes `connected`. Revoking the integration token turns it `unreachable` with the
    integration named.
 3. A one-step non-interactive workflow (`claude_code`, a repository attached) runs. Check:
@@ -1215,7 +1640,7 @@ result, so a later re-run knows what it is comparing against.
    the scrub left no session container and no credential files on the volume (check over
    Coder SSH with `docker ps -a` and a file search).
 6. Repeat step 3 with `cursor_cli` and with `grok`: usage is recorded from the MITM log
-   exactly as on hosted, which confirms `agent_runtimes: all` in `docker` mode.
+   exactly as on hosted, which confirms `agent_runtimes: all` on a provisioned type.
 7. Kill the runner's connection (block the workspace's outbound traffic to the platform
    host, for example with a firewall rule on the workspace) for 2 min
    mid-session: the agent continues and the logs back-fill on reconnect. Block it for 20
@@ -1238,7 +1663,7 @@ Not proposed now. Shown so that nothing in the contract excludes it.
 | --- | --- |
 | `provision` | `KubernetesRuntime#create_container`, the same pod spec |
 | `prepare` | `start_container` + `wait_for_ready` |
-| `inject_bootstrap` | Step A: no-op, keep exec through `KubernetesRuntime`. Step B: the pod gets `aixle-runner` as PID 1, as on customer Kubernetes and in Coder `docker` mode, and connects to the gateway from inside the cluster |
+| `inject_bootstrap` | Step A: no-op, keep exec through `KubernetesRuntime`. Step B: the pod gets `aixle-runner` as PID 1, as on customer Kubernetes and on `manual` and `coder`, and connects to the gateway from inside the cluster |
 | `reset` | n/a (ephemeral) |
 | `teardown` | `cleanup_session` |
 | `observe` | `container_status` |
@@ -1287,9 +1712,9 @@ these happens:
 
 **Where the Helm chart lives.** The chart belongs with the runner. Trigger 2 is expected
 right after phase 3, the first customer-usable slice, so **the extract is expected before
-the Kubernetes adapter ships in phase 5**. So the chart lane is built in
+the Kubernetes adapter ships in phase 6**. So the chart lane is built in
 `AixleHQ/aixle-runner` from the start, and **`charts/` is never created in `flow`**. If the
-extract slips past the start of phase 5 after all, the chart goes under `runner/chart/`.
+extract slips past the start of phase 6 after all, the chart goes under `runner/chart/`.
 That is inside the extract path, so it moves with the runner and still never becomes a
 top-level directory of the application.
 
@@ -1382,7 +1807,7 @@ mentions any change to that file.
   one of the extract triggers (§14.1).
 - The agent images and the runner image are pulled from GHCR by the customer's Docker
   daemon or kubelet. That is documented on the runner page (§9.5), and it needs no
-  special story beyond that. Agent image size is a phase 5 prerequisite for Kubernetes
+  special story beyond that. Agent image size is a phase 6 prerequisite for Kubernetes
   (§12.2).
 
 ### 14.4 Skew, self-update and where the runner lands
@@ -1392,14 +1817,19 @@ mentions any change to that file.
   message (§8). **A run never starts on an unsupported runner, and it is never killed
   because a newer runner came out.**
 - **Self-update:**
-  - **Runners on reusable environments self-update.** That means the host runner in Coder
-    `docker` mode, and the session runner in `native` mode. When the check-in response or
+  - **Runners on reusable environments self-update by default.** That means the host
+    runner on `manual` machines and on Coder workspaces. When the check-in response or
     an idle poll carries `update: {version, url, sha256}`, the runner downloads from the
     release URL, verifies the digest, and re-execs. This happens only while the
     environment is `idle`, never during a session, and only towards
-    `recommended_version`. The session runner inside a `docker`-mode container is the host
+    `recommended_version`. The session runner inside a session container is the host
     runner's own binary, so it is updated with it. Ephemeral pods never need an update,
     because the platform picks their version (§9.6).
+  - **`manual` opt-out.** Customers who manage the machine through their own configuration
+    management (Ansible, Puppet, a golden image) turn self-update off, per runner
+    (`config.auto_update: false`) or per machine (`configure --no-auto-update`). Such a
+    runner reports its version like the controller does: "update available" and `degraded`
+    below `recommended_version` on the runner page, and refused below `min_version`, so an unmanaged skew still surfaces at check-in and never mid-session.
   - **The controller does not self-update.** It is Helm-managed, and customers running
     GitOps would see that as drift. It reports its version, and the runner page shows
     "update available" (`degraded` if below `recommended`, refused if below `min`). A
@@ -1409,9 +1839,14 @@ mentions any change to that file.
   - **Coder:** `inject_bootstrap` pipes `install.sh` over `coder ssh` stdin. The script
     fetches the binary through the platform's release URL (302 to the GitHub asset),
     verifies its SHA-256, installs it to `~/.aixle-runner/bin`, and starts it detached in
-    `host` mode (or `session` mode for `native`). It uses `setsid`, and a systemd user
+    `host` mode. It uses `setsid`, and a systemd user
     unit where available, so the runner survives the SSH session. On a reused workspace a
     live runner is detected and not re-installed.
+  - **`manual`:** the operator downloads the binary from the platform's release URL,
+    verifies the SHA-256 shown next to it, and installs it with `configure` and
+    `service install` (§6.3). The systemd unit runs as the `aixle-runner` system user and
+    survives logout and reboot. Self-update replaces the binary in place and restarts the
+    unit while the machine is idle.
   - **Kubernetes:** the init container and image as in §9.6.
   - **New type:** its adapter implements `inject_bootstrap` with whatever "run this script
     once" primitive the provider has. That is the only per-type part of distribution.
@@ -1420,50 +1855,67 @@ mentions any change to that file.
 
 ## 15. Implementation breakdown
 
-Each item is independently reviewable and lands behind the flags. The number is the phase
-from §12.2.
+**This is a map, not a batch of tickets.** Implementation tasks are cut one at a time from
+this list, and each is taken to a merge in `develop` before the next one is written, so
+every task is written against the code as it actually is. Each item is independently
+reviewable and lands behind the flags. The number in the second column is the phase from
+§12.2.
 
 | # | Phase | Task |
 | --- | --- | --- |
-| 1 | 1 | Migrations and models: `runners`, `runner_environments`, `runner_credentials`, nullable `runner_id` refs, `Encryptable :runners_key`, status state machine, `visible_for_project`, flags (`Settings.runners`, `companies.runners_enabled`). |
-| 2 | 1 | Policies and controllers: company and project runners CRUD with §3.2 rules, `Runners::Adapter` registry + `config_schema`, `CoderAdapter#validate_config`/`check_health` only. |
-| 3 | 1 | Frontend: Company Settings → Runners tab, Project → Runners page, new-runner form generated from schema, runner page (without environments). |
-| 4 | 1 | Selection: `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks and §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. |
-| 5 | 2 | Gateway process type, `runner_operations` queue with LISTEN/NOTIFY long-poll, token issuance and rotation (`runner_credentials`), rate limits. |
-| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: check-in, poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: environment credential and journal, `image.ensure`, `container.start`/`stop`, the Unix-socket relay for the in-container session runner, scrub and reset. |
-| 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
+| 1 | 1 | **Flag and models.** Declare `external_runners` in `config/feature_flags.yml` exactly as in §12.1 (`introduced` set to the PR's date), and **in the same task** replace the hand-written `FeatureFlagName` with an Alba `FeaturesResource` and `useFeatureFlag(name: keyof Features)`, retiring `test/config/feature_flag_name_test.rb` (§11). Migrations and models: `runners` (with the `manual` check constraint), `runner_environments` (`origin`, `display_name`, `ephemeral`), `runner_credentials`, nullable `runner_id` refs, `Encryptable :runners_key`, status state machine, `visible_for_project`. Override on for the test company from `/admin`. |
+| 2 | 1 | Policies and controllers: company and project runners CRUD with §3.2 rules and the `Feature.enabled?(:external_runners, company:)` check, `Runners::Adapter` registry + `config_schema` + capabilities (`provisionable`, `rebuildable`), `ManualAdapter#validate_config`/`check_health` only. |
+| 3 | 1 | Frontend behind `useFeatureFlag('externalRunners')`: Company Settings → Runners tab, Project → Runners page, new-runner form generated from schema (Manual card), runner page (without machines). |
+| 4 | 1 | Selection: `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. The "hosted unchanged with the flag enabled" regression test of §12.3. |
+| 5 | 2 | Gateway process type, `runner_operations` queue with LISTEN/NOTIFY long-poll, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
+| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
+| 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
 | 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. |
-| 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions, the "hosted unchanged with flag on" regression test. |
-| 10 | 3 | `Runners::Allocator` and environment state machine: affinity, project binding, `max_environments`, scrub, reset and rebuild, reconciliation pass. |
-| 11 | 3 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, teardown, observe over `Coder::Api`/`WorkspaceService`; `execution_mode` and `config.docker` schema and validation (§6.8), with capabilities derived from the mode; install script with SHA-256 verify and the `verify` hook; Docker prerequisite check. |
-| 12 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
-| 13 | 3 | Runner page environments table and actions (Reset, Rebuild, Force release), connection-lost banner, revoke flow, Administrate dashboards. |
-| 14 | 3 | Staging validation per §12.4 in `docker` mode (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.4 checks (Docker daemon, disk, pruning) in the result. |
+| 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
+| 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
+| 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
+| 12 | 3 | `manual` end to end: heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). |
+| 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
+| 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
-| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd, the IDE and the watcher through the host runner, plus session page routing. Lifts `interactive_terminal: false`. |
-| 17 | 5 | Kubernetes: `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
-| 18 | 6 | Coder `native` mode: toolcache session kits from `config/agent_runtimes.json` pins, the `toolcache.ensure` op, the native allow-list. Optionally a runner request logger for `cursor_cli`/`grok` natively (P2). User docs. |
+| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. |
+| 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; `config.docker` schema and validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. |
+| 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
+| 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
+| 20 | 7 | Split mode (§6.8): `config.execution_mode`, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. |
 
 ---
 
 ## 16. Open items and what would settle them
 
 - **P1, latency of op-per-primitive context assembly.** Recommendation: `batch` coalescing
-  (§6.4). Settled by measuring a real `before_exec` against a staging Coder workspace in
-  task 8: the target is under 5 s added over hosted. If it misses, move
+  (§6.4). Settled by measuring a real `before_exec` against the `local` adapter in task 8
+  and against the staging `manual` machine in task 14: the target is under 5 s added over
+  hosted. If it misses, move
   `SessionContextService` writes to one tarball op. The protocol already allows that.
-- **P2, usage parity without the MITM proxy in `native` mode.** This no longer blocks the
-  first iteration. `docker` mode carries the image's MITM proxy, so every agent runtime is
-  accounted for as on hosted (§6.8, checked in §12.4 step 6). It matters only if
-  `cursor_cli` or `grok` are wanted in `native` mode. That is settled by a prototype in
-  task 18, and until then the native allow-list applies.
+- **P2, usage parity for a CLI on the host.** Not a v1 question: container mode carries the
+  image's MITM stack, so every agent runtime is accounted for as on hosted (§6.8, checked in
+  §12.4 step 7). It returns with the split mode, where `mitmdump` stays in a container but
+  the CA trust, the HTTP/2 logger and redaction move to the host. Settled by a prototype in
+  task 20.
+- **The CLI source in the split mode.** Deferred with it (§6.8). Recommendation:
+  `cli_source: managed` by default. Settled by the `docker create` + `docker cp` prototype in
+  task 20: if extracting the pinned CLI from the stock image works across the runtimes,
+  there is no second publish lane.
+- **Customer pre/post session hooks.** Not in v1, by decision (§7.2). Revisit when a
+  customer shows a preparation step that neither the image or template nor the agent
+  instructions can express.
+- **Ephemeral registration for `manual`.** Defined in the protocol and refused in v1
+  (§6.3). Settled by the first customer who wants to script their own scaling; adding it
+  needs no protocol bump.
 - **Coder control planes not reachable from the platform.** Not served in v1.
   Recommendation: the controller mode with a Coder backend (provisioning from inside, the
   same adapter contract). Settled by the first customer who asks for it.
 - **Step-level runner.** Deliberately out of scope (§3.3). Revisit if users split
   workflows only to change network.
-- **Interactive sessions in the first slice.** Decided in §12.2: the first slice is
-  non-interactive only, and the tunnel moves up to phase 4, ahead of Kubernetes.
+- **Interactive sessions in the first slice.** Decided in §12.2: the first slice
+  (`manual`, phase 3) is non-interactive only, and the tunnel is phase 4, ahead of every
+  second type.
 - **Billing for external sessions.** Still an open product decision, not a design one.
   The design keeps every answer possible:
   - `runner_id` is recorded on sessions and usage rows;
