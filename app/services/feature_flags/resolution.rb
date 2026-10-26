@@ -3,7 +3,8 @@
 module FeatureFlags
   # One resolved flag: the value, the layer that decided it (:env, :company,
   # :global, :default, or :unknown for an undeclared key in production), the
-  # FEATURE_* variable that would lock it, and the set layers it beat, highest
+  # variable that locks it (FEATURE_<KEY> unless its legacy env_setting_variable
+  # does) or would lock it, and the set layers it beat, highest
   # first, as `{ source:, value: }`. The declared default is never listed as shadowed.
   Resolution = Data.define(:key, :value, :source, :env_var, :shadowed) do
     def self.unknown(key)

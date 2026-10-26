@@ -68,12 +68,15 @@ class FeatureTest < ActiveSupport::TestCase
     assert_equal %w[board_ai_sumary old_flag], reports.map { |report| report.context[:flag] }
   end
 
-  test "with the shipped empty registry nothing is declared" do
-    assert_predicate FeatureFlags.registry, :empty?
+  test "the shipped registry declares coder_reap, on by default" do
+    assert FeatureFlags.registry.declared?(:coder_reap)
+    assert Feature.enabled?(:coder_reap)
   end
 
   def boot!(env: {}, registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY)
-    with_example_flags { FeatureFlags.boot!(registry_path: registry_path, env: env) }
+    with_example_flags do
+      FeatureFlags.boot!(registry_path: registry_path, env: env, settings: { coder: { reap_enabled: nil } })
+    end
   end
 
   test "boot! warns for each FEATURE_* variable no flag declares, and boots" do
@@ -104,6 +107,27 @@ class FeatureTest < ActiveSupport::TestCase
   test "a boot! inside with_feature_registry is undone after the block" do
     boot!
 
-    assert_predicate FeatureFlags.registry, :empty?
+    assert_not FeatureFlags.registry.declared?(:board_ai_summary)
+  end
+
+  test "boot! reads the legacy env_setting lock from the settings" do
+    with_example_flags do
+      FeatureFlags.boot!(registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY, env: {},
+                         settings: { coder: { reap_enabled: false } })
+
+      resolution = Feature.explain(:coder_reap)
+      assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ resolution.value, resolution.source, resolution.env_var ]
+    end
+  end
+
+  test "boot! fails on a legacy setting that is not true, false or unset" do
+    error = assert_raises(FeatureFlags::InvalidEnv) do
+      with_example_flags do
+        FeatureFlags.boot!(registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY, env: {},
+                           settings: { coder: { reap_enabled: "no" } })
+      end
+    end
+
+    assert_match "coder.reap_enabled (CODER_REAP_ENABLED) must be true, false or unset", error.message
   end
 end

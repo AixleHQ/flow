@@ -8,7 +8,7 @@ module FeatureFlags
   # the bump must find the change, and a write that failed must not cost every
   # process a reload.
   #
-  # Refusals raise WriteRefused (EnvLocked for a flag FEATURE_<KEY> decides)
+  # Refusals raise WriteRefused (EnvLocked for a flag an ENV variable decides)
   # before anything is written.
   module Admin
     AUDIT_ACTIONS = %w[global_set global_cleared override_set override_removed turned_off_everywhere pruned]
@@ -113,7 +113,8 @@ module FeatureFlags
 
         definition = FeatureFlags.registry.fetch(key)
         raise WriteRefused, "#{key} is global: it has no company overrides" if company_scoped && definition.global?
-        raise EnvLocked.new(key, definition.env_var) unless FeatureFlags.env_source.value_for(key).nil?
+        variable = FeatureFlags.env_source.variable_for(key)
+        raise EnvLocked.new(key, variable) unless variable.nil?
       end
 
       def check_orphaned!(key)

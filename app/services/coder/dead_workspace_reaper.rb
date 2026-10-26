@@ -29,7 +29,8 @@ module Coder
   #      and it answered — it is alive and stays. A probe that fails on OUR side
   #      (no `coder` CLI, auth) resolves to `:unknown` and blocks the deletion,
   #      as does disabling `health_probe_enabled` — which stops this path only;
-  #      a failed build (below) never probes, and `reap_enabled` stops both.
+  #      a failed build (below) never probes, and the `coder_reap` feature
+  #      flag stops both.
   #   5. All of the above held once before, at least `confirmation_minutes` ago.
   #      One sighting is a snapshot; two, spaced apart, with anything alive in
   #      between clearing the marker, is a diagnosis. Same doctrine as
@@ -274,8 +275,12 @@ module Coder
 
     # ----- config + reporting -----
 
+    # `coder_reap` (config/feature_flags.yml): on by default, paused at runtime
+    # from /admin/feature_flags, locked by CODER_REAP_ENABLED or
+    # FEATURE_CODER_REAP. Checked once per integration sweep, so a pause takes
+    # effect within the flag store's refresh interval.
     def enabled?
-      Settings.coder&.reap_enabled != false
+      Feature.enabled?(:coder_reap)
     end
 
     def confirmation_minutes

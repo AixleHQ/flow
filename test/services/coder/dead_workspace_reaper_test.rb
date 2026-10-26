@@ -436,17 +436,33 @@ module Coder
     test "the reaper does nothing at all when it is switched off" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
 
-      original = Settings.coder.reap_enabled
-      Settings.coder.reap_enabled = false
-      begin
+      with_feature(:coder_reap, false) do
         result = build_reaper(workspace_service: service).reap
 
         assert_equal false, result[:enabled] # rubocop:disable Minitest/RefuteFalse
         assert_equal 0, result[:checked]
+        assert_empty service.list_calls
         assert_nil marker_for("aixle-prod-1")
-      ensure
-        Settings.coder.reap_enabled = original
       end
+    end
+
+    test "CODER_REAP_ENABLED=false still switches the reaper off" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      stub_feature_env_setting(:coder_reap, false) do
+        result = build_reaper(workspace_service: service).reap
+
+        assert_equal false, result[:enabled] # rubocop:disable Minitest/RefuteFalse
+        assert_empty service.list_calls
+      end
+    end
+
+    test "the reaper runs at the declared default when nothing sets coder_reap" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+
+      result = build_reaper(workspace_service: service).reap
+
+      assert result[:enabled]
+      assert_equal 1, result[:checked]
     end
 
     # ---------- the cross-integration sweep ----------

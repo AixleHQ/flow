@@ -1,5 +1,5 @@
-# The two example flags of the feature flags design (§4.1), for tests: the
-# shipped config/feature_flags.yml is empty.
+# The two example flags of the feature flags design (§4.1), for tests, so they
+# do not depend on what config/feature_flags.yml happens to declare.
 board_ai_summary:
   description: AI summary panel on the board task drawer.
   owner: "@AixleHQ/board"
@@ -16,3 +16,5 @@ coder_reap:
   kind: ops
   scope: global
   default: true
+  env_setting: coder.reap_enabled
+  env_setting_variable: CODER_REAP_ENABLED

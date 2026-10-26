@@ -11,9 +11,11 @@ module FeatureFlags
     SAME_EVERYWHERE_FOR = 30.days
 
     # `resolution` is the value a company without an override gets.
-    Row = Data.define(:definition, :flag, :env_value, :resolution, :overrides_on, :overrides_off) do
+    Row = Data.define(:definition, :flag, :env_value, :env_variable, :resolution, :overrides_on, :overrides_off) do
       def key = definition.key
       def locked? = !env_value.nil?
+      # The variable that locks it, or every variable that could.
+      def env_vars = locked? ? [ env_variable ] : definition.env_vars
       def global = flag&.enabled
       def overrides_count = overrides_on + overrides_off
       def past_remove_by?(today = Date.current) = !definition.remove_by.nil? && definition.remove_by < today
@@ -64,7 +66,8 @@ module FeatureFlags
     def row_for(definition)
       flag = @flags[definition.key.to_s]
       resolution = definition.company_scoped? ? @resolver.resolve(definition.key, company: nil) : @resolver.resolve(definition.key)
-      Row.new(definition: definition, flag: flag, env_value: @env.value_for(definition.key), resolution: resolution,
+      Row.new(definition: definition, flag: flag, env_value: @env.value_for(definition.key),
+              env_variable: @env.variable_for(definition.key), resolution: resolution,
               overrides_on: count(flag, true), overrides_off: count(flag, false))
     end
 

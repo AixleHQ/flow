@@ -29,8 +29,8 @@ an exception to.
               <td>
                 <% if definition %>
                   <%= link_to key, admin_feature_flag_path(key) %>
-                  <% unless FeatureFlags.env_source.value_for(key).nil? %>
-                    — shadowed by <code><%= definition.env_var %></code>
+                  <% if (variable = FeatureFlags.env_source.variable_for(key)) %>
+                    — shadowed by <code><%= variable %></code>
                   <% end %>
                 <% else %>
                   <code><%= key %></code> — no longer declared
