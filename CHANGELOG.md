@@ -22,6 +22,10 @@ governance, community health — carry none.
   audit trail; it is an optional manual step once a rollout has replaced every
   old pod, described in the release guide.
 
+### Fixed
+- **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
+  a filter hash (for example `?q=foo`) instead of failing with a server error.
+
 ## [1.7.0] - 2026-10-24
 
 ### Changed
