@@ -31,6 +31,11 @@ governance, community health — carry none.
   `list_workflow_runs` and the admin run page show both.
 
 ### Changed
+- **Sessions & Runs**: an automatic Kiro session shows Kiro's full terminal
+  interface, so its live terminal shows each tool call with its output and can
+  be steered, as with the other runtimes. If Kiro stops to ask a person what to
+  do after a tool fails 7 times in a row, the session fails with that reason
+  instead of waiting.
 - Sentry gets an agent login refresh failure only when repeated failures that
   may be the platform's own, such as network errors, mark the login as needing
   a new sign-in — not for a single failure, and not for a login the vendor

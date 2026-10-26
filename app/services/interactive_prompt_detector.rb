@@ -97,6 +97,20 @@ class InteractivePromptDetector
                "cannot fill in: the tool call waits for a person to Accept or Decline. " \
                "Give the MCP server what it asks for in its configuration, or run the " \
                "step interactively."
+    },
+    {
+      # Kiro's agent server opens this itself when a tool has failed 7 times in a row
+      # (2.34.0, FailureDetectionNode), whatever the session's instructions say; the
+      # model has no part in it and no setting turns it off. Headless mode would carry
+      # on without an answer, the TUI waits for a person.
+      id: :kiro_question,
+      agent_types: %w[kiro_cli],
+      markers: [ /^\s*Question$/ ],
+      footer: /\A\s*esc to cancel · ↑↓ to navigate · ↵ to submit\z/,
+      message: 'Kiro is blocked on its "Question" dialog, which a non_interactive ' \
+               "session cannot answer. Kiro asks on its own after a tool fails 7 times " \
+               "in a row and waits for a person to choose Cancel or Keep Iterating; the " \
+               "failing tool call is just above the dialog in the session's terminal."
     }
   ].freeze
 

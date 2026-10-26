@@ -304,8 +304,8 @@ module Agents
     # An organisation (IAM Identity Center) login has a fourth state: the token is
     # written, then the CLI asks the user to pick a profile and only then writes the
     # PROFILE_STATE_KEY row. Completing on the token alone closed the terminal at that
-    # prompt and saved a login every later `--no-interactive` session rejects with
-    # "No profile selected". So every marker must be present, here and in the watcher.
+    # prompt and saved a login every later session rejects with "No profile
+    # selected". So every marker must be present, here and in the watcher.
     AUTH_MARKERS = [ "__contains__:access_token", "__contains__:refresh_token",
                      "__contains__:#{PROFILE_STATE_KEY}" ].freeze
 
@@ -404,34 +404,27 @@ module Agents
       }
     end
 
-    # An interactive session gets the TUI; an automatic one has to be headless, and
-    # that is not a preference — it is the only mode in which the prompt arrives.
+    # Both modes run the TUI, so an automatic session can be watched and steered in its
+    # terminal like every other runtime's. The V3 TUI takes the prompt
+    # AgentSessionStrategy appends as its first message (measured on 2.32.0 and 2.34.0;
+    # 2.21.3 ignored it, which is why automatic sessions used to run `--no-interactive`,
+    # whose pane shows only `[tool] status:` lines).
     #
-    # `chat --help` documents a positional `[INPUT]` ("the first question to ask"), and
-    # every other runtime here is driven that way: AgentSessionStrategy appends the
-    # prompt to the launch command. On V3 the interactive TUI **ignores** it.
-    # Measured on 2.21.3 in a real tmux pane, with the trust confirmation pre-answered
-    # so nothing else could swallow it: `kiro-cli --v3 chat --trust-all-tools "…"`
-    # comes up at an empty "ask a question or describe a task" prompt and waits. A
-    # workflow step launched that way never receives its task and sits at `ready` until
-    # a watchdog closes it. With `--no-interactive` the same argument is consumed and
-    # answered.
-    #
-    # The cost is that an automatic session has no TUI to attach to — the same trade
-    # Antigravity's `--print` makes. Interactive sessions are unaffected: they carry no
-    # prompt, so nothing is lost by leaving them in the TUI.
+    # What the TUI brings with it is the agent server's own stop-and-ask: after a tool
+    # fails 7 times in a row it opens a "Question" dialog for a person, whatever the
+    # session's instructions say, where headless mode carries on without an answer.
+    # InteractivePromptDetector fails an automatic session parked on that dialog.
     #
     # `--trust-all-tools` is what makes the container the sandbox, as it is for every
     # other runtime here; its startup confirmation is pre-answered in CLI_SETTINGS.
     #
     # `--trust-workspace` answers the "Trust this workspace?" screen 2.33.0 put in front
-    # of every interactive V3 session; neither `--trust-all-tools` nor any CLI_SETTINGS
+    # of every V3 TUI session; neither `--trust-all-tools` nor any CLI_SETTINGS
     # key skips it (checked live on 2.34.0). The flag only exists from 2.34.0 — older
     # releases refuse the whole command — so it moves with the pin.
     def session_command(mode:, model: nil)
       flags = [ "--trust-all-tools", "--trust-workspace" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?
-      flags << "--no-interactive" if mode.to_s == "non_interactive"
 
       "kiro-cli #{V3_FLAG} chat #{flags.join(' ')}"
     end
