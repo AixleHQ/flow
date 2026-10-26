@@ -58,7 +58,10 @@ module Billing
       end
       # Outside the lock: the final invoice is settled against Stripe, which is
       # a conversation with another service and no business holding a row.
-      SettleCancellationJob.perform_later(cancellation.id) if cancellation
+      if cancellation
+        SettleCancellationJob.perform_later(cancellation.id)
+        notify_admins_of_the_cancellation(cancellation)
+      end
       license
     end
 
@@ -69,6 +72,17 @@ module Billing
     end
 
     private
+
+    # Every administrator, the one who accepted included -- the same rule an
+    # ordinary cancellation follows, and for the same reason: a workspace whose
+    # subscription stops without the others hearing of it is a support ticket
+    # the day it does. Only the admin who pressed the button had read that the
+    # card would be stopped.
+    def notify_admins_of_the_cancellation(cancellation)
+      company.billing_admins.find_each do |admin|
+        BillingMailer.subscription_cancelled(cancellation, admin).deliver_later
+      end
+    end
 
     def refuse_unless_answerable!
       raise Refused, NOT_PENDING unless license.proposal_pending?

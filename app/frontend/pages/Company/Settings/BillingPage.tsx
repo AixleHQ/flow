@@ -73,6 +73,8 @@ interface MarketplaceProposal {
   askedAt: string;
   /** Whether accepting also stops a card subscription paying for this workspace. */
   replacesCard: boolean;
+  /** Worker-minutes the card has not been billed for yet, which accepting puts on its final invoice. */
+  finalInvoiceMinutes: number | null;
   canDecide: boolean;
 }
 
@@ -423,8 +425,17 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
           <List.Item>Whoever holds that subscription can end it, and this workspace stops when they do.</List.Item>
           {proposal.replacesCard && (
             <List.Item>
-              The card subscription paying for this workspace is stopped at the same moment, and a final invoice for the
-              capacity used up to then follows.
+              The card subscription paying for this workspace is stopped at the same moment, and a final invoice follows
+              {proposal.finalInvoiceMinutes != null ? (
+                <>
+                  {' '}
+                  for the <b>{formatMinutes(proposal.finalInvoiceMinutes)}</b> worker-minutes it has not been billed for
+                  yet
+                </>
+              ) : (
+                <> for the capacity used up to then</>
+              )}
+              .
             </List.Item>
           )}
         </List>

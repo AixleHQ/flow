@@ -66,6 +66,7 @@ const proposal = (over = {}) => ({
   awsAccountId: '444455556666',
   askedAt: '2026-10-25T09:00:00Z',
   replacesCard: false,
+  finalInvoiceMinutes: null,
   canDecide: true,
   ...over,
 });
@@ -250,6 +251,14 @@ describe('Company billing page', () => {
       render({}, null, proposal({ replacesCard: true }));
 
       expect(screen.getByText(/card subscription paying for this workspace/)).toBeInTheDocument();
+    });
+
+    // Deciding this blind was the difference from an ordinary cancellation,
+    // which shows what the final invoice will be on a screen of its own.
+    it('says what the final card invoice will be for', () => {
+      render({}, null, proposal({ replacesCard: true, finalInvoiceMinutes: 184.5 }));
+
+      expect(screen.getByText(/card subscription paying for this workspace/)).toHaveTextContent('184.5');
     });
 
     it('says nothing about a card when there is none', () => {

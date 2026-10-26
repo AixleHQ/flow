@@ -178,6 +178,17 @@ governance, community health — carry none.
   state is now kept over time, the way capacity already was, so an hour is
   measured against what the workspace was during it rather than what it has
   become by the time the hour is measured.
+- **Company settings**: every administrator is told when applying an AWS
+  Marketplace subscription stops the card paying for the workspace, as they
+  already are for an ordinary cancellation. Only the one who pressed the button
+  had read that it would happen.
+- **Company settings**: the request to apply an AWS Marketplace subscription
+  says how many worker-minutes the card's final invoice will be for, instead of
+  asking an administrator to decide that blind.
+- **Company settings**: a card that completes checkout for a workspace AWS
+  Marketplace has since begun billing is cancelled rather than adopted. The two
+  could not both be billed — the meter follows one payer — but one of them
+  would have run on with nobody to cancel it.
 - **Company settings**: a workspace whose AWS Marketplace subscription has
   ended can pay by card. The refusal was keyed on its payer, which a
   cancellation never changes, so the workspace was stopped with no way to pay
