@@ -62,6 +62,10 @@ governance, community health — carry none.
 - **Sessions & Runs**: an agent session on Kubernetes no longer fails to start
   when the Kubernetes API answers one request too slowly or drops the
   connection; the request is retried a few times before the session fails.
+- **Sessions & Runs**: an automatic session's agent is told that only it may
+  end the session or mark sub-steps, and that a subagent it starts must report
+  back instead. A subagent that called `finish_session` used to end the step
+  mid-work, losing changes that were not pushed yet.
 - The queue health check no longer warns "Admission queue is not moving" while a
   pool is simply full of sessions that are still running. It warns when a slot
   is free but not granted, or held by a session that ended over 30 minutes ago.
