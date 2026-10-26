@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Runtime values of the flags declared in config/feature_flags.yml
-# (docs/research/technical-feature-flags-system-design-research-2026-10-21.md §4.2).
+# (docs/architecture/feature-flags.md).
 # Rows are created the first time an admin sets a value, so a fresh install has none.
 class CreateFeatureFlags < ActiveRecord::Migration[8.1]
   def change
@@ -9,7 +9,7 @@ class CreateFeatureFlags < ActiveRecord::Migration[8.1]
       t.string :key, null: false, index: { unique: true }
       # NULL is "use the declared default".
       t.boolean :enabled
-      # Reserved for percentage rollout (§4.4): no UI, never evaluated.
+      # Reserved for percentage rollout: no UI, never evaluated.
       t.integer :rollout_percent
       t.references :updated_by, foreign_key: { to_table: :users, on_delete: :nullify }
       t.timestamps

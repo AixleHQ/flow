@@ -18,11 +18,13 @@ class FeatureFlags::RegistryTest < ActiveSupport::TestCase
     assert_raises(FeatureFlags::InvalidRegistry) { registry(entries) }.message
   end
 
-  test "the shipped registry loads, with coder_reap locked by its legacy variable too" do
+  OPS = VALID.except("remove_by").merge("kind" => "ops", "scope" => "global").freeze
+
+  test "the shipped registry loads, with coder_reap locked by its own env: variable too" do
     flag = FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH).fetch(:coder_reap)
 
     assert_equal [ :ops, :global, true, false ], [ flag.kind, flag.scope, flag.default, flag.client? ]
-    assert_equal [ "coder.reap_enabled", "CODER_REAP_ENABLED" ], [ flag.env_setting, flag.env_setting_variable ]
+    assert_equal "CODER_REAP_ENABLED", flag.env
     assert_equal %w[FEATURE_CODER_REAP CODER_REAP_ENABLED], flag.env_vars
   end
 
@@ -31,12 +33,12 @@ class FeatureFlags::RegistryTest < ActiveSupport::TestCase
       file.write("# nothing declared yet\n")
       file.flush
 
-      assert_predicate FeatureFlags::Registry.load(file.path), :empty?
+      assert_empty FeatureFlags::Registry.load(file.path).keys
     end
   end
 
   test "loads a declaration with its attributes, frozen" do
-    registry = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
+    registry = registry("board_ai_summary" => VALID.merge("client" => true), "coder_reap" => OPS)
     flag = registry.fetch(:board_ai_summary)
 
     assert_equal %i[board_ai_summary coder_reap], registry.keys
@@ -58,13 +60,6 @@ class FeatureFlags::RegistryTest < ActiveSupport::TestCase
     %w[BoardAiSummary board-ai-summary 1st_flag _flag].each do |key|
       assert_match "#{key}: key must match", invalid(key => VALID)
     end
-  end
-
-  test "keys may not map to the reserved FEATURE_FLAGS_* prefix" do
-    %w[flags flags_refresh_interval].each do |key|
-      assert_match "#{key}: key maps to the reserved FEATURE_FLAGS_* prefix", invalid(key => VALID)
-    end
-    assert registry("flagship" => VALID).declared?(:flagship)
   end
 
   test "description, owner, kind, scope and default are required" do
@@ -95,28 +90,29 @@ class FeatureFlags::RegistryTest < ActiveSupport::TestCase
     end
   end
 
-  ENV_SETTING = { "env_setting" => "coder.reap_enabled", "env_setting_variable" => "CODER_REAP_ENABLED" }.freeze
+  test "env: names one more variable that locks the flag, and is checked" do
+    flag = registry("coder_reap" => OPS.merge("env" => "CODER_REAP_ENABLED")).fetch(:coder_reap)
 
-  test "env_setting and env_setting_variable come together and are checked" do
-    ops = VALID.except("remove_by").merge("kind" => "ops")
-    flag = registry("coder_reap" => ops.merge(ENV_SETTING)).fetch(:coder_reap)
-
-    assert_equal [ "coder.reap_enabled", "CODER_REAP_ENABLED" ], [ flag.env_setting, flag.env_setting_variable ]
-    assert_nil registry("coder_reap" => ops).fetch(:coder_reap).env_setting
-    assert_equal %w[FEATURE_CODER_REAP], registry("coder_reap" => ops).fetch(:coder_reap).env_vars
+    assert_equal "CODER_REAP_ENABLED", flag.env
+    assert_predicate flag.env, :frozen?
+    assert_nil registry("coder_reap" => OPS).fetch(:coder_reap).env
+    assert_equal %w[FEATURE_CODER_REAP], registry("coder_reap" => OPS).fetch(:coder_reap).env_vars
 
     {
-      ENV_SETTING.except("env_setting_variable") => "env_setting_variable is required with env_setting",
-      ENV_SETTING.except("env_setting") => "env_setting is required with env_setting_variable",
-      ENV_SETTING.merge("env_setting" => "reap_enabled") => "env_setting must be a dotted Settings path",
-      ENV_SETTING.merge("env_setting" => "Coder.reap-enabled") => "env_setting must be a dotted Settings path",
-      ENV_SETTING.merge("env_setting" => true) => "env_setting must be a dotted Settings path",
-      ENV_SETTING.merge("env_setting" => "feature_flags.env") => "env_setting must not point into the feature_flags settings",
-      ENV_SETTING.merge("env_setting_variable" => "coder_reap_enabled") => "env_setting_variable must be an upper-case variable name",
-      ENV_SETTING.merge("env_setting_variable" => "FEATURE_CODER_REAP") => "env_setting_variable must not be a FEATURE_* variable"
-    }.each do |change, message|
-      assert_match message, invalid("coder_reap" => ops.merge(change))
+      "coder_reap_enabled" => "env must be an upper-case variable name",
+      "CODER-REAP" => "env must be an upper-case variable name",
+      true => "env must be an upper-case variable name",
+      nil => "env must be an upper-case variable name",
+      "FEATURE_CODER_REAP" => "env must not be a FEATURE_* variable"
+    }.each do |variable, message|
+      assert_match "coder_reap: #{message}", invalid("coder_reap" => OPS.merge("env" => variable))
     end
+  end
+
+  test "no two flags may claim the same env: variable" do
+    message = invalid("coder_reap" => OPS.merge("env" => "REAP"), "other_reap" => OPS.merge("env" => "REAP"))
+
+    assert_match "env REAP is claimed by coder_reap, other_reap", message
   end
 
   test "every problem is listed at once" do

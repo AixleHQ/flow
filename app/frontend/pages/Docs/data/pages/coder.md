@@ -187,7 +187,7 @@ the admin page shows the flag as locked by `CODER_REAP_ENABLED`.
 | `CODER_SSH_EXEC_CEILING_SECONDS` | `120` | Longest a foreground `coder_ssh_exec` call can run. |
 | `CODER_SSH_EXEC_INLINE_BYTES` | `262144` | Output one `coder_ssh_exec` call returns. |
 | `CODER_JOB_STATUS_TAIL_LINES` | `40` | Log lines `coder_job_status` returns by default. |
-| `CODER_REAP_ENABLED` | `true` | `false` stops Flow deleting dead workspaces. Leave it unset to pause and resume deletion from `/admin/feature_flags` instead. |
+| `CODER_REAP_ENABLED` | `true` | `false` stops Flow deleting dead workspaces. Takes `on`/`off`, `true`/`false` or `1`/`0`; any other value stops Flow at boot. Leave it unset to pause and resume deletion from `/admin/feature_flags` instead. |
 | `CODER_REAP_CONFIRMATION_MINUTES` | `10` | How far apart the two checks before a deletion must be. |
 | `CODER_REAP_MAX_DELETIONS_PER_RUN` | `3` | Most workspaces deleted in one check. |
 

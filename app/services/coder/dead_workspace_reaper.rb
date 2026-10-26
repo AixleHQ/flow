@@ -278,7 +278,7 @@ module Coder
     # `coder_reap` (config/feature_flags.yml): on by default, paused at runtime
     # from /admin/feature_flags, locked by CODER_REAP_ENABLED or
     # FEATURE_CODER_REAP. Checked once per integration sweep, so a pause takes
-    # effect within the flag store's refresh interval.
+    # effect on the next sweep.
     def enabled?
       Feature.enabled?(:coder_reap)
     end

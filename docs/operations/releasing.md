@@ -65,16 +65,6 @@ a release is a move, not an archaeology session. PR titles are Conventional Comm
 (checked by `pr-title.yml`), because the squash-merged title is the line the release
 notes list for that PR.
 
-## After a rollout
-
-- **Feature flag rows (optional).** Once the rollout has replaced every pod running the
-  previous code, `bin/rails feature_flags:prune` deletes the database rows of flags the
-  release removed from `config/feature_flags.yml`, with one `feature_flag.pruned` audit per
-  key. Never run it earlier: an old pod may still check a key whose rows it deletes. Nothing
-  runs it automatically, and skipping it is safe: orphaned rows are inert, and
-  `/admin/feature_flags` lists them with a delete button. See
-  [architecture/feature-flags.md](../architecture/feature-flags.md#where-prune-runs).
-
 ## Rolling back
 
 Deploy the previous version's images. Two things decide whether that is safe:

@@ -3,10 +3,7 @@
 require "test_helper"
 
 class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
-  uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY
-
   setup do
-    @token = FeatureFlags.version_token
     @company = create(:company, name: "Northwind")
     @admin = create(:user, :super_admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
   end
@@ -18,7 +15,7 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
   end
 
   test "company admins and employees get the rejection the rest of /admin gives" do
-    set_override(:board_ai_summary, @company, true)
+    set_override(:external_runners, @company, true)
     FeatureFlag.create!(key: "coder_reap")
     audits = Audit.count
 
@@ -28,87 +25,70 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
 
       get admin_feature_flags_path
       assert_redirected_to admin_login_path
-      get admin_feature_flag_path(:board_ai_summary)
+      get admin_feature_flag_path(:external_runners)
       assert_redirected_to admin_login_path
       patch admin_feature_flag_path(:coder_reap), params: { value: "off", reason: "x" }
       assert_redirected_to admin_login_path
-      post turn_off_everywhere_admin_feature_flag_path(:board_ai_summary), params: { reason: "x" }
+      post turn_off_everywhere_admin_feature_flag_path(:external_runners), params: { reason: "x" }
       assert_redirected_to admin_login_path
-      post admin_feature_flag_overrides_path(:board_ai_summary), params: { company_id: @company.id, value: "off", reason: "x" }
+      post admin_feature_flag_overrides_path(:external_runners), params: { company_id: @company.id, value: "off", reason: "x" }
       assert_redirected_to admin_login_path
-      delete admin_feature_flag_override_path(:board_ai_summary, @company.id), params: { reason: "x" }
-      assert_redirected_to admin_login_path
-      delete admin_feature_flag_path(:coder_reap), params: { reason: "x" }
+      delete admin_feature_flag_override_path(:external_runners, @company.id), params: { reason: "x" }
       assert_redirected_to admin_login_path
     end
 
     assert_nil flag(:coder_reap).enabled
-    assert_equal [ true ], flag(:board_ai_summary).overrides.pluck(:enabled)
+    assert_equal [ true ], flag(:external_runners).overrides.pluck(:enabled)
     assert_equal audits, Audit.count
-  end
-
-  test "the index renders with no flags declared" do
-    sign_in_as(@admin)
-
-    with_feature_registry(FeatureFlags::Registry.new({})) do
-      get admin_feature_flags_path
-    end
-
-    assert_response :success
-    assert_includes response.body, "No feature flags are declared."
   end
 
   test "the index lists every declared flag, with or without rows" do
     sign_in_as(@admin)
-    set_override(:board_ai_summary, @company, true)
+    set_override(:external_runners, @company, true)
 
     stub_feature_env(:coder_reap, "off") do
       get admin_feature_flags_path
     end
 
     assert_response :success
-    assert_select "a[href=?]", admin_feature_flag_path(:board_ai_summary)
+    assert_select "a[href=?]", admin_feature_flag_path(:external_runners)
     assert_select "a[href=?]", admin_feature_flag_path(:coder_reap)
-    assert_includes response.body, "AI summary panel on the board task drawer."
+    assert_includes response.body, "External agent runners"
     assert_includes response.body, "1 on, 0 off"
     assert_match(/locked by <code>FEATURE_CODER_REAP<\/code>/, response.body)
   end
 
-  test "orphaned rows are listed and can be deleted with a reason" do
+  test "a release flag past its remove_by is badged on the index" do
     sign_in_as(@admin)
-    set_override(:board_ai_summary, @company, true)
 
-    with_feature_registry(FeatureFlags::Registry.new({})) do
+    get admin_feature_flags_path
+    assert_not_includes response.body, "past remove-by"
+
+    travel_to FeatureFlags.registry.fetch(:external_runners).remove_by + 1.day do
       get admin_feature_flags_path
-      assert_includes response.body, "Orphaned rows"
-      assert_includes response.body, "board_ai_summary"
-
-      get admin_feature_flag_path(:board_ai_summary)
-      assert_redirected_to admin_feature_flags_path
-
-      delete admin_feature_flag_path(:board_ai_summary), params: { reason: "" }
-      assert_redirected_to admin_feature_flags_path
-      assert flag(:board_ai_summary)
-
-      delete admin_feature_flag_path(:board_ai_summary), params: { reason: "flag removed" }
-      assert_redirected_to admin_feature_flags_path
-      assert_nil flag(:board_ai_summary)
-      assert Audit.exists?(action: "feature_flag.pruned", comment: "flag removed")
     end
+    assert_select ".flag-badge--danger", text: "past remove-by", count: 1
   end
 
-  test "an unknown key with no rows is not found" do
+  test "an undeclared key is not found, even with rows left from its declaration" do
     sign_in_as(@admin)
+    FeatureFlag.new(key: "removed_flag", enabled: true).save!(validate: false)
 
     get admin_feature_flag_path(:no_such_flag)
-
     assert_response :not_found
+
+    get admin_feature_flag_path(:removed_flag)
+    assert_response :not_found
+
+    get admin_feature_flags_path
+    assert_response :success
+    assert_not_includes response.body, "removed_flag"
   end
 
   test "the show page renders for a flag with no rows" do
     sign_in_as(@admin)
 
-    get admin_feature_flag_path(:board_ai_summary)
+    get admin_feature_flag_path(:external_runners)
     assert_response :success
     assert_includes response.body, "No company is an exception."
     assert_includes response.body, "Nobody has changed this flag."
@@ -131,7 +111,6 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
 
     audit = Audit.where(auditable: flag(:coder_reap)).order(:id).last
     assert_equal [ "feature_flag.global_cleared", @admin, "fixed" ], [ audit.action, audit.user, audit.comment ]
-    assert_equal 2, @token.bumps
 
     follow_redirect!
     assert_includes response.body, "reaper misfiring"
@@ -144,74 +123,74 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_feature_flag_path(:coder_reap)
     assert_equal "A reason is required", flash[:alert]
 
-    post admin_feature_flag_overrides_path(:board_ai_summary), params: { company_id: @company.id, value: "on" }
-    post turn_off_everywhere_admin_feature_flag_path(:board_ai_summary)
+    post admin_feature_flag_overrides_path(:external_runners), params: { company_id: @company.id, value: "on" }
+    post turn_off_everywhere_admin_feature_flag_path(:external_runners)
 
-    assert_equal [ 0, 0, 0 ], [ FeatureFlag.count, Audit.count, @token.bumps ]
+    assert_equal [ 0, 0 ], [ FeatureFlag.count, Audit.count ]
   end
 
   test "an ENV-locked flag shows its controls disabled and the writes refuse it" do
     sign_in_as(@admin)
-    set_override(:board_ai_summary, @company, true)
+    set_override(:external_runners, @company, true)
     audits = Audit.count
 
-    stub_feature_env(:board_ai_summary, "off") do
-      get admin_feature_flag_path(:board_ai_summary)
+    stub_feature_env(:external_runners, "off") do
+      get admin_feature_flag_path(:external_runners)
       assert_response :success
-      assert_match(/Locked by <code>FEATURE_BOARD_AI_SUMMARY<\/code>/, response.body)
-      assert_includes response.body, "shadowed by FEATURE_BOARD_AI_SUMMARY"
-      assert_select "tr.flag-winner td", text: "ENV FEATURE_BOARD_AI_SUMMARY"
+      assert_match(/Locked by <code>FEATURE_EXTERNAL_RUNNERS<\/code>/, response.body)
+      assert_includes response.body, "shadowed by FEATURE_EXTERNAL_RUNNERS"
+      assert_select "tr.flag-winner td", text: "ENV FEATURE_EXTERNAL_RUNNERS"
       assert_select "fieldset[disabled] input[type=submit][value=?]", "Save global value"
       assert_select "fieldset[disabled] input[type=submit][value=?]", "Turn off everywhere"
       assert_select "fieldset[disabled] input[type=submit][value=?]", "Remove"
 
-      patch admin_feature_flag_path(:board_ai_summary), params: { value: "on", reason: "x" }
-      assert_redirected_to admin_feature_flag_path(:board_ai_summary)
-      assert_match(/locked by FEATURE_BOARD_AI_SUMMARY/, flash[:alert])
-      post turn_off_everywhere_admin_feature_flag_path(:board_ai_summary), params: { reason: "x" }
-      post admin_feature_flag_overrides_path(:board_ai_summary), params: { company_id: create(:company).id, value: "on", reason: "x" }
-      delete admin_feature_flag_override_path(:board_ai_summary, @company.id), params: { reason: "x" }
+      patch admin_feature_flag_path(:external_runners), params: { value: "on", reason: "x" }
+      assert_redirected_to admin_feature_flag_path(:external_runners)
+      assert_match(/locked by FEATURE_EXTERNAL_RUNNERS/, flash[:alert])
+      post turn_off_everywhere_admin_feature_flag_path(:external_runners), params: { reason: "x" }
+      post admin_feature_flag_overrides_path(:external_runners), params: { company_id: create(:company).id, value: "on", reason: "x" }
+      delete admin_feature_flag_override_path(:external_runners, @company.id), params: { reason: "x" }
     end
 
-    assert_nil flag(:board_ai_summary).enabled
-    assert_equal [ @company.id ], flag(:board_ai_summary).overrides.pluck(:company_id)
+    assert_nil flag(:external_runners).enabled
+    assert_equal [ @company.id ], flag(:external_runners).overrides.pluck(:company_id)
     assert_equal audits, Audit.count
   end
 
   test "turning off everywhere removes the overrides" do
     sign_in_as(@admin)
-    set_override(:board_ai_summary, @company, true)
+    set_override(:external_runners, @company, true)
 
-    post turn_off_everywhere_admin_feature_flag_path(:board_ai_summary), params: { reason: "incident 42" }
+    post turn_off_everywhere_admin_feature_flag_path(:external_runners), params: { reason: "incident 42" }
 
-    assert_redirected_to admin_feature_flag_path(:board_ai_summary)
-    assert_equal false, flag(:board_ai_summary).enabled # rubocop:disable Minitest/RefuteFalse
-    assert_empty flag(:board_ai_summary).overrides
+    assert_redirected_to admin_feature_flag_path(:external_runners)
+    assert_equal false, flag(:external_runners).enabled # rubocop:disable Minitest/RefuteFalse
+    assert_empty flag(:external_runners).overrides
     assert Audit.exists?(action: "feature_flag.turned_off_everywhere", comment: "incident 42")
   end
 
   test "a company is found, checked, given an override and has it removed" do
     sign_in_as(@admin)
 
-    get admin_feature_flag_path(:board_ai_summary, company_query: "north")
+    get admin_feature_flag_path(:external_runners, company_query: "north")
     assert_response :success
     assert_select "select[name=company_id] option[value=?]", @company.id.to_s
     assert_select "td", text: "declared default"
 
-    post admin_feature_flag_overrides_path(:board_ai_summary), params: { company_id: @company.id, value: "on", reason: "pilot" }
-    assert_redirected_to admin_feature_flag_path(:board_ai_summary)
-    override = flag(:board_ai_summary).overrides.sole
+    post admin_feature_flag_overrides_path(:external_runners), params: { company_id: @company.id, value: "on", reason: "pilot" }
+    assert_redirected_to admin_feature_flag_path(:external_runners)
+    override = flag(:external_runners).overrides.sole
     assert_equal [ @company, true, "pilot", @admin ], [ override.company, override.enabled, override.reason, override.created_by ]
 
-    get admin_feature_flag_path(:board_ai_summary, company_query: "north")
+    get admin_feature_flag_path(:external_runners, company_query: "north")
     assert_select "td", text: "company override"
     assert_select "a[href=?]", admin_company_path(@company)
 
-    delete admin_feature_flag_override_path(:board_ai_summary, @company.id), params: { reason: "pilot over" }
-    assert_redirected_to admin_feature_flag_path(:board_ai_summary)
-    assert_empty flag(:board_ai_summary).overrides
+    delete admin_feature_flag_override_path(:external_runners, @company.id), params: { reason: "pilot over" }
+    assert_redirected_to admin_feature_flag_path(:external_runners)
+    assert_empty flag(:external_runners).overrides
     assert_equal %w[feature_flag.override_removed feature_flag.override_set],
-                 Audit.where(auditable: flag(:board_ai_summary)).order(id: :desc).pluck(:action)
+                 Audit.where(auditable: flag(:external_runners)).order(id: :desc).pluck(:action)
   end
 
   test "a global flag takes no override" do
@@ -226,20 +205,20 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
 
   test "the company page lists the company's feature overrides" do
     sign_in_as(@admin)
-    set_override(:board_ai_summary, @company, false)
+    set_override(:external_runners, @company, false)
 
     get admin_company_path(@company)
 
     assert_response :success
     assert_select "h2", text: "Feature overrides"
-    assert_select "a[href=?]", admin_feature_flag_path(:board_ai_summary)
+    assert_select "a[href=?]", admin_feature_flag_path(:external_runners)
     assert_includes response.body, "pilot customer"
   end
 
   test "CODER_REAP_ENABLED locks coder_reap, and admin names it" do
     sign_in_as(@admin)
 
-    stub_feature_env_setting(:coder_reap, false) do
+    stub_feature_env(:coder_reap, "false", variable: "CODER_REAP_ENABLED") do
       get admin_feature_flags_path
       assert_match(/locked by <code>CODER_REAP_ENABLED<\/code>/, response.body)
 
@@ -260,15 +239,13 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
   test "with CODER_REAP_ENABLED unset, coder_reap can be paused from admin" do
     sign_in_as(@admin)
 
-    stub_feature_env_setting(:coder_reap, nil) do
-      get admin_feature_flag_path(:coder_reap)
-      assert_select "tr td", text: "ENV FEATURE_CODER_REAP or CODER_REAP_ENABLED"
-      assert_select "fieldset[disabled]", count: 0
+    get admin_feature_flag_path(:coder_reap)
+    assert_select "tr td", text: "ENV FEATURE_CODER_REAP or CODER_REAP_ENABLED"
+    assert_select "fieldset[disabled]", count: 0
 
-      patch admin_feature_flag_path(:coder_reap), params: { value: "off", reason: "incident: reaper misfiring" }
-      assert_redirected_to admin_feature_flag_path(:coder_reap)
-      assert_equal false, flag(:coder_reap).enabled # rubocop:disable Minitest/RefuteFalse
-      assert_equal [ false, :global ], FeatureFlags::Overview.new.row(:coder_reap).resolution.then { |r| [ r.value, r.source ] }
-    end
+    patch admin_feature_flag_path(:coder_reap), params: { value: "off", reason: "incident: reaper misfiring" }
+    assert_redirected_to admin_feature_flag_path(:coder_reap)
+    assert_equal false, flag(:coder_reap).enabled # rubocop:disable Minitest/RefuteFalse
+    assert_equal [ false, :global ], FeatureFlags::Overview.new.row(:coder_reap).resolution.then { |r| [ r.value, r.source ] }
   end
 end

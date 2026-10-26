@@ -7,8 +7,6 @@
 # reference from a deleted row.
 #
 #   FullyWiredUserScenario.new(user:, company:, heir:).build
-#
-# Feature flag rows need a registry: build it inside `with_feature_registry`.
 class FullyWiredUserScenario
   include FactoryBot::Syntax::Methods
 
@@ -97,7 +95,7 @@ class FullyWiredUserScenario
     conversation = ChatChannelTestHelper.connect_chat_channel(company: @company)
     ChatChannelConnection.find_by!(chat_conversation: conversation, company: @company).update!(requested_by: @user)
     ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "#deploys")
-    flag = FeatureFlag.create!(key: "board_ai_summary", enabled: true, updated_by: @user)
+    flag = FeatureFlag.create!(key: "external_runners", enabled: true, updated_by: @user)
     flag.overrides.create!(company: @company, enabled: false, reason: "asked to wait", created_by: @user)
   end
 

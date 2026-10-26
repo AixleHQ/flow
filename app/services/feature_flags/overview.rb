@@ -1,45 +1,20 @@
 # frozen_string_literal: true
 
 module FeatureFlags
-  # What /admin/feature_flags reports for every declared flag, and the rows no
-  # flag declares any more.
-  #
-  # Resolved against the rows as committed now, not this process's snapshot:
-  # that can lag a write by the store's refresh interval (its max staleness
-  # while Redis is down), and an admin must see the change they just made.
+  # What /admin/feature_flags reports for every declared flag, resolved against
+  # the rows as committed now rather than the cached values, so an admin sees
+  # the change they just made.
   class Overview
-    SAME_EVERYWHERE_FOR = 30.days
-
     # `resolution` is the value a company without an override gets.
     Row = Data.define(:definition, :flag, :env_value, :env_variable, :resolution, :overrides_on, :overrides_off) do
-      def key = definition.key
       def locked? = !env_value.nil?
       # The variable that locks it, or every variable that could.
       def env_vars = locked? ? [ env_variable ] : definition.env_vars
       def global = flag&.enabled
-      def overrides_count = overrides_on + overrides_off
-      def past_remove_by?(today = Date.current) = !definition.remove_by.nil? && definition.remove_by < today
-
-      # The date since which every company gets one value, or nil when an
-      # override differs or nothing says how long it has been. Every admin write
-      # touches the flag's row; a flag with no row has had its default since
-      # it was introduced.
-      def same_everywhere_since
-        differing = resolution.value ? overrides_off : overrides_on
-        return if !locked? && definition.company_scoped? && differing.positive?
-
-        flag ? flag.updated_at.to_date : definition.introduced
-      end
-
-      def same_everywhere_long?(today = Date.current)
-        since = same_everywhere_since
-        !since.nil? && since <= today - SAME_EVERYWHERE_FOR
-      end
+      def past_remove_by?(today = Date.current) = definition.release? && definition.remove_by < today
     end
 
-    Orphan = Data.define(:flag, :overrides_count) do
-      def key = flag.key
-    end
+    attr_reader :resolver
 
     def initialize(registry: FeatureFlags.registry, env: FeatureFlags.env_source)
       @registry = registry
@@ -49,27 +24,17 @@ module FeatureFlags
       @counts = FeatureFlagOverride.group(:feature_flag_id, :enabled).count
     end
 
-    attr_reader :resolver
+    def rows = @registry.definitions.sort_by { |definition| definition.key.to_s }.map { |definition| row(definition.key) }
 
-    def rows = @registry.definitions.sort_by { |definition| definition.key.to_s }.map { |definition| row_for(definition) }
-
-    def row(key) = row_for(@registry.fetch(key))
-
-    def orphans
-      @flags.values.reject { |flag| @registry.declared?(flag.key) }.sort_by(&:key).map do |flag|
-        Orphan.new(flag: flag, overrides_count: count(flag, true) + count(flag, false))
-      end
+    def row(key)
+      definition = @registry.fetch(key)
+      flag = @flags[definition.key.to_s]
+      resolution = definition.company_scoped? ? @resolver.resolve(key, company: nil) : @resolver.resolve(key)
+      Row.new(definition: definition, flag: flag, env_value: @env.value_for(key), env_variable: @env.variable_for(key),
+              resolution: resolution, overrides_on: count(flag, true), overrides_off: count(flag, false))
     end
 
     private
-
-    def row_for(definition)
-      flag = @flags[definition.key.to_s]
-      resolution = definition.company_scoped? ? @resolver.resolve(definition.key, company: nil) : @resolver.resolve(definition.key)
-      Row.new(definition: definition, flag: flag, env_value: @env.value_for(definition.key),
-              env_variable: @env.variable_for(definition.key), resolution: resolution,
-              overrides_on: count(flag, true), overrides_off: count(flag, false))
-    end
 
     def count(flag, enabled) = flag ? @counts.fetch([ flag.id, enabled ], 0) : 0
   end
