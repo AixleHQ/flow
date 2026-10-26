@@ -76,16 +76,10 @@ class Web::Company::BillingController < Web::Company::ApplicationController
   # What AWS has actually been sent, hour by hour, and only where AWS answered
   # with a receipt for this workspace's licence.
   #
-  # Not CompanyCapacityUsage, which is the ledger of what the workspace was
-  # OFFERED. That figure is three things at once on a workspace that moved
-  # payers mid-month: minutes the card was billed for before the handover,
-  # minutes from hours the meter has measured but not sent, and minutes counted
-  # to four decimal places where a record carries whole ones. A customer
-  # checking this against their AWS bill would find three different reasons for
-  # it not to match.
-  #
-  # Floored per hour, because that is what the adapter sends: a record carries a
-  # whole number and the remainder of each hour is dropped, not carried.
+  # Not CompanyCapacityUsage, which is what the workspace was OFFERED: that
+  # holds minutes the card was billed for before a mid-month handover, minutes
+  # measured but not yet sent, and fractions where a record carries whole
+  # numbers. Floored per hour for the same reason -- that is what is sent.
   def reported_minutes
     arns = current_company.marketplace_licenses.pluck(:license_arn)
     return 0.0 if arns.empty?

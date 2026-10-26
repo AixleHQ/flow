@@ -75,6 +75,7 @@ module Billing
         # Stripe. The other order cancelled the card first and rolled the
         # transaction back around it, leaving a customer with no subscription,
         # no final invoice and a workspace still looking card-billed.
+        note_the_debt_it_leaves_behind
         company.update!(**billing_terms)
         license.update!(company: company, proposal_state: "accepted", proposal_decided_at: Time.current)
         if subscription_id.present?
@@ -127,24 +128,36 @@ module Billing
       license
     end
 
-    # The same measurement and the same final invoice an ordinary cancellation
-    # makes, because the minutes Stripe has not counted are owed to whoever
-    # billed the hour they happened in.
+    # A workspace stopped for an unpaid card invoice starts again here, and the
+    # link to that invoice goes with the block: `forget_billing_block` clears
+    # the field on every save of a company that is not blocked. Starting it
+    # again is the same rule the rest of this path follows -- AWS pays for the
+    # workspace now, so a card that failed for capacity AWS no longer bills must
+    # not stop it -- and the debt is not forgiven, only invisible here. Said out
+    # loud rather than lost between two writes.
+    def note_the_debt_it_leaves_behind
+      url = company.billing_unpaid_invoice_url
+      return if url.blank?
+
+      Rails.logger.warn(
+        "[MarketplaceLicenseProposal] company #{company.id} moves to AWS Marketplace owing an unpaid Stripe " \
+        "invoice (#{url}); the workspace starts again and Stripe goes on collecting it"
+      )
+    end
+
+    # The same measurement and final invoice an ordinary cancellation makes:
+    # the minutes Stripe has not counted are owed to whoever billed the hour
+    # they happened in. Immediate, not at the period's end -- capacity is billed
+    # in arrears for every hour it is offered, so letting it run out would bill
+    # the same hours twice, once by Stripe and once by AWS.
     #
-    # Immediate, not at the period's end. Capacity is billed in arrears for
-    # every hour it is offered (Billing::StripeClient#cancel_subscription), so
-    # there is no paid-for remainder to run out — letting it run would bill the
-    # same hours twice, once by Stripe and once by AWS.
+    # `stripe_customer_id` is kept, because the settlement reaches Stripe
+    # through it; only the subscription id goes, which is why it is passed in
+    # rather than read off the company that #billing_terms has just cleared.
     #
-    # `stripe_customer_id` is deliberately kept: the settlement puts the last
-    # metered hours on the final invoice and reaches Stripe through it. Only the
-    # subscription id goes, so nothing later mistakes this for a card-billed
-    # workspace -- which is why the id is passed in here rather than read off
-    # the company, whose copy #billing_terms has just cleared.
-    #
-    # Called with the measurement already taken and the local rows already
-    # written, so the only thing left that can fail is Stripe -- and a failure
-    # there rolls back a transaction that has touched nothing of theirs.
+    # Called with the measurement taken and the local rows written, so the only
+    # thing left that can fail is Stripe -- and a failure there rolls back a
+    # transaction that has touched nothing of theirs.
     def hand_over_from_stripe(by:, subscription_id:, final_usage:, billed:)
       response = StripeClient.new.cancel_subscription(
         subscription_id: subscription_id, reason: nil, comment: nil

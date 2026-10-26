@@ -148,8 +148,15 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert_equal "declined", @license.reload.proposal_state
   end
 
-  # The workspace has a payer again, so what stopped it no longer holds. The
-  # unpaid invoice is still owed, in Stripe, which is where it is collected.
+  # The workspace has a payer again, so what stopped it no longer holds: AWS
+  # pays for it now, and a card that failed for capacity AWS no longer bills
+  # must not keep it stopped -- the same rule the Stripe webhook follows.
+  #
+  # The debt is not forgiven. Stripe goes on collecting it and it is still owed
+  # there; what the workspace loses is the link to it, because
+  # `forget_billing_block` clears that field on every save of a company that is
+  # not blocked. Deliberate, logged, and the one part of this a customer can
+  # fairly complain about.
   test "a workspace stopped for an unpaid invoice runs again" do
     @company.update!(billing_state: "blocked", billing_block_reason: "payment_failed",
                      billing_unpaid_invoice_url: "https://invoice.example/1")

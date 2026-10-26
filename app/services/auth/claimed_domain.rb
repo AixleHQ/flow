@@ -23,25 +23,15 @@ module Auth
       company && new(company, tried: tried, proved: true)
     end
 
-    # For somebody who has typed an address rather than proved one, which is the
-    # only thing an AWS Marketplace buyer has: §5.1 signs them out on arrival,
-    # because whoever pressed Subscribe in AWS is usually not whoever will use
-    # the product. There is no user to check memberships against — not being
-    # signed in is the whole of what is known — so this answers the narrower
-    # question of whether the domain is taken.
+    # For a typed address rather than a proved one, which is all an AWS
+    # Marketplace buyer has: they are signed out on arrival, so there is no user
+    # to check memberships against. Answered narrowly even so -- see #to_h -- a
+    # pay-as-you-go subscription costs nothing to take out, so it is a door and
+    # not a vouching.
     #
-    # Only ever for a buyer, and answered narrowly even then -- see #to_h. A
-    # subscription is what makes a visitor not arbitrary, but a pay-as-you-go
-    # one costs nothing to take out, so it is a door and not a vouching: enough
-    # to be told why the form refused, not enough to be read a workspace's name
-    # and its ways in, one typed address at a time.
-    #
-    # Any company, not only an active one. `find_by_email_domain` is scoped to
-    # active because its other caller is asking how to get in; this one is
-    # asking why the form refused, and the form (WorkspaceOnboardingForm
-    # #domain_is_free) refuses on every state. Scoped the same way, a domain
-    # held by a suspended or archived workspace refused the buyer and then
-    # explained nothing.
+    # Any company, not only an active one. The form refuses the domain whatever
+    # state its workspace is in (WorkspaceOnboardingForm#domain_is_free), so
+    # scoping this to active would refuse the buyer and then explain nothing.
     def self.for_email(email)
       return nil if email.blank?
 

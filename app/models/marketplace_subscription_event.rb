@@ -1,17 +1,11 @@
 # frozen_string_literal: true
 
 # One notification AWS sent about a subscription, kept rather than acted on and
-# forgotten.
-#
-# It is kept for two reasons, and the second is the one that costs money if it
-# is missed. The obvious one is that SQS delivers at least once and in no
-# particular order, so an event has to be recognisable as one already seen.
-#
-# The other is that an event can arrive before there is anything to apply it to.
-# `Purchase Agreement Created` fires when the buyer subscribes, and the licence
-# row is written when they reach the fulfilment page, which may be minutes
-# later or never. Applied and dropped, such an event leaves a paying customer
-# unbilled; held here, it is applied the moment the licence appears.
+# forgotten. SQS delivers at least once and in no order, so an event has to be
+# recognisable as one already seen -- and an event can arrive before there is
+# anything to apply it to, because `Purchase Agreement Created` fires when the
+# buyer subscribes and the licence row is written when they reach the fulfilment
+# page. Dropped, such an event leaves a paying customer unbilled.
 class MarketplaceSubscriptionEvent < ApplicationRecord
   belongs_to :marketplace_license, optional: true
 
@@ -29,15 +23,14 @@ class MarketplaceSubscriptionEvent < ApplicationRecord
   # the queue hands them over in.
   scope :in_order, -> { order(:occurred_at, :id) }
 
-  # What the blind sweep looks at. The rule in the seller account matches a
-  # source and a detail type rather than a product, and the agreement events
-  # carry no product at all, so this table receives the agreement traffic of
-  # every listing that account sells. None of it will ever match a licence of
-  # ours, and without a bound every sweep reconsiders all of it, for ever,
-  # against a table that only grows.
+  # What the blind sweep looks at. The seller account's rule matches a source
+  # and a detail type rather than a product, so this table receives the
+  # agreement traffic of every listing that account sells -- none of which will
+  # ever match a licence of ours, and all of which an unbounded sweep would
+  # reconsider for ever.
   #
-  # The rows are kept -- one of them is the evidence that this is what happens.
-  # Only the looking stops, and only for the sweep: #awaiting is unbounded, so a
+  # The rows are kept; only the looking stops, and only for the sweep.
+  # #awaiting is unbounded, so a
   # licence that appears late still replays its own events when it is created.
   scope :worth_sweeping, -> { unapplied.where(occurred_at: SWEPT_FOR.ago..) }
 

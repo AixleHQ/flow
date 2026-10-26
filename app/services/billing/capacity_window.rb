@@ -115,19 +115,16 @@ module Billing
       (to - [ from, since ].max).round.clamp(0, (to - from).round)
     end
 
-    # Every switch from the start of this window onwards. One from before it
-    # means the payer owned the whole hour, so it is absent and `owed_elapsed`
-    # charges for all of it.
+    # Every switch from the start of this window onwards. One from before it is
+    # absent, so `owed_elapsed` charges the payer for the whole hour.
     #
-    # One from *after* the window matters as much as one inside it, which is
-    # what the upper bound used to miss. The hour is measured at five past the
-    # next one, and `per_company` is delivered to whichever payer the company
-    # has at that moment -- so a switch made in those five minutes left the hour
-    # owed in full by a payer who did not hold it for any of it, while the payer
-    # who did had already invoiced it. `owed_elapsed` clamps such a switch to
-    # zero. What the earlier payer owes is settled elsewhere in every direction:
-    # Stripe's FinalUsage going out, the final meter coming back, and free trial
-    # time either way.
+    # One from *after* the window counts as much as one inside it: the hour is
+    # measured at five past the next, and `per_company` goes to whichever payer
+    # the company has by then -- so a switch made in those five minutes left the
+    # hour owed in full by a payer who had not held it for any of it, while the
+    # one who did had already invoiced it. `owed_elapsed` clamps it to zero; the
+    # earlier payer is settled by FinalUsage going out, the final meter coming
+    # back, and free trial time either way.
     def payer_since
       @payer_since ||= Company.where(id: measured_company_ids)
                               .where(billing_provider_since: period_start..)
