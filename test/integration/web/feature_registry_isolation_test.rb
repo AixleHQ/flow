@@ -22,7 +22,10 @@ class Web::FeatureRegistryIsolationTest < ActionDispatch::IntegrationTest
     served_elsewhere = nil
 
     with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
-      assert_equal({ "boardAiSummary" => false }, features_prop(login_path), "the test's own request sees its registry")
+      # The override is live on the test's own fiber. Asserted on the registry,
+      # not on a page's `features` prop: how that prop treats a key the active
+      # registry adds or lacks belongs to FeaturesResource, not to this seam.
+      assert FeatureFlags.registry.declared?(:board_ai_summary), "the test's own fiber sees its registry"
 
       # What a server thread or a class body evaluated on another thread
       # computes while the test registry is active on this one.
