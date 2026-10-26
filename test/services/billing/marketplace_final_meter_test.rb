@@ -124,16 +124,34 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     assert_equal Billing::MarketplaceFinalMeter::NOTHING, @meter.call(@license)
   end
 
-  # The caller's next step is to end the licence. A refusal that propagated
-  # would leave it open, and the schedule would go on billing an entitlement
-  # AWS has already revoked.
-  test "a refusal is swallowed so the licence can still be ended" do
+  # A call that never reached AWS has sent nothing, and the minutes it was
+  # carrying are the ones the schedule can no longer reach. Swallowing it here
+  # measured them once and lost them: the licence closed, the workspace stopped,
+  # and the next attempt found a stopped workspace and measured zero. So it
+  # propagates, and Billing::MarketplaceEvents ends the licence either way and
+  # leaves the event to be tried again.
+  test "a call that did not reach AWS raises rather than reporting a refusal" do
     change(1, Time.utc(2026, 10, 23, 8))
     @client.failure = Billing::MarketplaceSellerClient::Error.new("AWS said no")
 
     travel_to Time.utc(2026, 10, 23, 10, 20) do
-      assert_equal "refused: AWS said no", @meter.call(@license),
-                   "the refusal has to be legible afterwards: nothing else records this path"
+      error = assert_raises(Billing::MarketplaceSellerClient::Error) { @meter.call(@license) }
+
+      assert_equal "AWS said no", error.message
     end
+  end
+
+  # The other half of that: a workspace stopped by the cancellation still has
+  # the minutes it ran before it, and those are what the window was opened for.
+  test "a stopped workspace is still measured for the time it was running" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    @license.company.update!(billing_state: "blocked", billing_block_reason: "canceled")
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      @meter.call(@license)
+    end
+
+    partial = @client.recorded.find { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
+    assert_equal 20, partial&.quantity, "one queue for the twenty minutes before it was stopped"
   end
 end

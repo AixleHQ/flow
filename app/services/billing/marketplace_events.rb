@@ -22,6 +22,10 @@ module Billing
 
     HANDLED = [ CREATED, AMENDED, ENDED, LICENSE_UPDATED, LICENSE_DEPROVISIONED ].freeze
 
+    # What AWS allows for reporting a cancelling customer's last usage, counted
+    # from the event. After it, a record is refused however correct it is.
+    FINAL_WINDOW = 1.hour
+
     def initialize(final_meter: MarketplaceFinalMeter.new)
       @final_meter = final_meter
     end
@@ -116,8 +120,8 @@ module Billing
       case event.detail_type
       when CREATED then confirm(license, event)
       when AMENDED, LICENSE_UPDATED then store(license, event)
-      when ENDED then close(license)
-      when LICENSE_DEPROVISIONED then deprovision(license)
+      when ENDED then close(license, event)
+      when LICENSE_DEPROVISIONED then deprovision(license, event)
       end
     end
 
@@ -154,11 +158,11 @@ module Billing
     # afterwards there is nothing left to find. Billing::FinalUsage says the
     # same thing for Stripe in its first line; this path was written again and
     # walked into it.
-    def close(license)
-      metered = final_meter.call(license)
+    def close(license, event)
+      meter_the_last_usage(license, event)
+    ensure
       license.close! if license.may_close?
       block(license.company)
-      metered
     end
 
     # The one hour AWS allows starts here, and the hourly schedule cannot serve
@@ -169,11 +173,28 @@ module Billing
     # and in one drain, so whichever runs first is the one that catches the
     # hour. AWS answers the second copy DuplicateRecord, which the adapter
     # counts as accepted.
-    def deprovision(license)
-      metered = final_meter.call(license)
+    def deprovision(license, event)
+      meter_the_last_usage(license, event)
+    ensure
       license.finish! if license.may_finish?
       block(license.company)
-      metered
+    end
+
+    # AWS gives one hour from the event, and a call that never reached AWS has
+    # sent nothing -- so it is raised, which leaves the event unapplied and the
+    # next sweep tries again a minute later. The state still moves, through the
+    # `ensure` above: a customer who has cancelled does not keep the workspace
+    # because our credentials are broken.
+    #
+    # Bounded by the window itself. Once it has shut no retry can be accepted,
+    # so the attempt stops and says so rather than being made every minute for
+    # ever.
+    def meter_the_last_usage(license, event)
+      final_meter.call(license)
+    rescue MarketplaceSellerClient::Error => e
+      raise if event.occurred_at > FINAL_WINDOW.ago
+
+      "unsent: #{e.message} (the one-hour window shut)"
     end
 
     def block(company)

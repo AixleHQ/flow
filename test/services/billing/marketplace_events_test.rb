@@ -83,6 +83,66 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert company.reload.billing_blocked?
   end
 
+  # A call that never reached AWS has sent nothing, and the part-hour it was
+  # carrying is the one the schedule can no longer reach. Swallowing it stopped
+  # the workspace and lost the minutes: the next attempt found a stopped
+  # workspace and measured zero.
+  class FailingMeter
+    def call(_license) = raise(Billing::MarketplaceSellerClient::Error, "cannot assume the seller role")
+  end
+
+  class RecordingMeter
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def call(license)
+      @calls << license
+      "sent=1:already=0:minutes=30"
+    end
+  end
+
+  test "a final meter that could not reach AWS stops the workspace and is tried again" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    travel_to Time.utc(2026, 10, 23, 10, 30) do
+      Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).apply_pending
+    end
+
+    event = MarketplaceSubscriptionEvent.sole
+    assert_not event.applied?, "nothing was sent, so the sweep has to come back to it"
+    assert_equal "cannot assume the seller role", event.failure
+    assert company.reload.billing_blocked?, "the customer has cancelled; the workspace stops either way"
+    assert license.reload.ending?
+
+    meter = RecordingMeter.new
+    travel_to Time.utc(2026, 10, 23, 10, 35) do
+      Billing::MarketplaceEvents.new(final_meter: meter).apply_pending
+    end
+
+    assert_equal [ license ], meter.calls
+    assert MarketplaceSubscriptionEvent.sole.applied?, "sent at last, inside the window AWS gave"
+  end
+
+  # Bounded by the window itself: once it has shut no record can be accepted,
+  # so the attempt stops rather than being made every minute for ever.
+  test "once the one-hour window has shut the event stops being retried" do
+    create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
+    Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).record(envelope(detail_type: Billing::MarketplaceEvents::ENDED))
+
+    travel_to Time.utc(2026, 10, 23, 11, 30) do
+      Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).apply_pending
+    end
+
+    event = MarketplaceSubscriptionEvent.sole
+    assert event.applied?
+    assert_match(/window shut/, event.metered)
+  end
+
   # The sharp one. AWS opens a one-hour window on this event and the hourly
   # schedule cannot serve it, so the usage goes before the state moves.
   test "a deprovisioned licence is metered before it is ended" do

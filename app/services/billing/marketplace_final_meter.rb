@@ -40,10 +40,13 @@ module Billing
     # one here, whether the last hour of a cancelling customer was billed could
     # only be read off their own invoice, hours later.
     #
-    # Deliberately does not raise on a refusal: the caller's next step is to end
-    # the licence, and a licence left open because its last minutes were refused
-    # would go on being billed by the schedule for an entitlement AWS has
-    # already revoked. The refusal goes in the line instead.
+    # Raises when the call did not happen -- credentials, throttling, anything
+    # that leaves AWS not having heard of these minutes. It used to answer
+    # "refused: ..." instead, so that the caller could go on to end the licence;
+    # but the caller ends it either way now, and swallowing the failure here
+    # meant the last part-hour was measured once, lost, and never sent. A
+    # refusal of a *record* is not this: AWS answers those in the batch, and
+    # they go in the line.
     def call(license)
       return NOTHING unless license.meterable? && client.configured?
 
@@ -51,8 +54,6 @@ module Billing
       return NOTHING if usages.empty?
 
       summary(usages, client.batch_meter_usage(usages))
-    rescue MarketplaceSellerClient::Error => e
-      "refused: #{e.message}"
     end
 
     private
@@ -121,8 +122,12 @@ module Billing
 
     # `until_time` is what makes the hour under way measurable at all: the
     # window otherwise measures a closed hour, and this one has not closed.
+    # `settling` because the company may already be stopped: the cancellation
+    # that opened this window is what stopped it, and the minutes it ran before
+    # that are exactly what is being sent.
     def minutes_for(company_id, hour, now)
-      window = CapacityWindow.for_hour(hour, until_time: now, company_ids: [ company_id ])
+      window = CapacityWindow.for_hour(hour, until_time: now, company_ids: [ company_id ],
+                                             settling: [ company_id ])
 
       (window.per_company[company_id].to_i / 60.0).floor
     end

@@ -166,11 +166,18 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_minutes 180, window
   end
 
-  test "a switch after the hour does not reach back into it" do
+  # The hour is measured at five past the next one, so a switch made in those
+  # five minutes is "after the hour" and still lands in this measurement -- and
+  # the breakdown goes to the payer the company has by then, which is the new
+  # one. It owes nothing: the hour belongs to the payer that held it, who has
+  # already been sent it.
+  test "a switch after the hour leaves the new payer owing nothing for it" do
     change(@acme, 3, @hour - 2.hours)
     @acme.update!(billing_provider_since: @hour + 1.hour + 1.minute)
 
-    assert_minutes 180, window
+    assert_minutes 0, window
+    assert_equal 180, window.offered_per_company[@acme.id] / 60,
+                 "what it was offered does not change; only who owes for it does"
   end
 
   # Every company that has only ever had one payer, and every company that

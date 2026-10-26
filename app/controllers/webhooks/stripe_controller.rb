@@ -105,13 +105,14 @@ class Webhooks::StripeController < ActionController::API
     elsif !current_subscription?(company, subscription.id)
       ignore(company, "subscription #{subscription.id} #{subscription.status}, not its current one")
     elsif subscription.unpaid?
-      block(company, "payment_failed", "subscription #{subscription.status}") unless company.billing_status == "canceled"
+      block(company, "payment_failed", "subscription #{subscription.status}") unless aws_bills?(company) || company.billing_status == "canceled"
     elsif subscription.ended?
       ended(company, subscription)
     end
   end
 
   def ended(company, subscription)
+    return ignore(company, "end of #{subscription.id}, which AWS Marketplace replaced") if aws_bills?(company)
     return ignore(company, "end of #{subscription.id}, not its current one") unless current_subscription?(company, subscription.id)
 
     block(company, "canceled", "subscription ended",
@@ -121,6 +122,12 @@ class Webhooks::StripeController < ActionController::API
   def payment_failed(company, invoice)
     subscription_id = subscription_of(invoice)
     return ignore(company, "failed invoice for #{subscription_id}, not its current one") unless current_subscription?(company, subscription_id)
+    # The last invoice of the card a Marketplace workspace left. It is a real
+    # debt and Stripe collects it, but it buys nothing here and must not stop a
+    # workspace AWS is paying for. Not recorded on the company either:
+    # `billing_unpaid_invoice_url` survives only on a blocked one, and the
+    # invoice already has a home on the BillingCancellation the handover wrote.
+    return ignore(company, "failed invoice #{invoice.id}, for the card AWS Marketplace replaced") if aws_bills?(company)
     return final_invoice_unpaid(company, invoice) if company.billing_status == "canceled"
 
     block(company, "payment_failed", "invoice #{invoice.id} unpaid",
@@ -146,6 +153,8 @@ class Webhooks::StripeController < ActionController::API
 
   def paid(company, invoice)
     return unless current_subscription?(company, subscription_of(invoice))
+    # Nothing to restore: it was never stopped for this, and AWS is paying.
+    return ignore(company, "paid invoice #{invoice.id}, for the card AWS Marketplace replaced") if aws_bills?(company)
 
     case company.billing_status
     when "payment_failed"

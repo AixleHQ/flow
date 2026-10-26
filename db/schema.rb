@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -2166,7 +2166,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
-  add_foreign_key "company_billing_state_changes", "companies"
+  add_foreign_key "company_billing_state_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
@@ -2203,7 +2203,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
-  add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id"
+  add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify
   add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
