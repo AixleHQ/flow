@@ -73,60 +73,60 @@ class FeatureTest < ActiveSupport::TestCase
     assert Feature.enabled?(:coder_reap)
   end
 
-  def boot!(env: {}, registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY)
-    with_example_flags do
-      FeatureFlags.boot!(registry_path: registry_path, env: env, settings: { coder: { reap_enabled: nil } })
-    end
+  # boot! is compose plus installing the result; compose installs nothing, so
+  # boot-time validation and reporting are tested on the graph it returns.
+  def compose(env: {}, registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY, settings: { coder: { reap_enabled: nil } })
+    FeatureFlags.compose(registry_path: registry_path, env: env, settings: settings)
   end
 
-  test "boot! warns for each FEATURE_* variable no flag declares, and boots" do
+  test "compose warns for each FEATURE_* variable no flag declares, and composes" do
+    graph = nil
     reports = capture_error_reports(FeatureFlags::UndeclaredEnv) do
-      boot!(env: { "FEATURE_OLD_FLAG" => "on", "FEATURE_BOARD_AI_SUMARY" => "1", "FEATURE_CODER_REAP" => "off" })
+      graph = compose(env: { "FEATURE_OLD_FLAG" => "on", "FEATURE_BOARD_AI_SUMARY" => "1", "FEATURE_CODER_REAP" => "off" })
     end
 
     assert_equal %w[FEATURE_BOARD_AI_SUMARY FEATURE_OLD_FLAG], reports.map { |report| report.context[:variable] }
     assert_equal [ :warning, FeatureFlags::UNDECLARED_ENV_SOURCE ], [ reports.first.severity, reports.first.source ]
+    assert_equal false, graph.env_source.value_for(:coder_reap) # rubocop:disable Minitest/RefuteFalse
   end
 
-  test "boot! fails on an invalid ENV value for a declared flag" do
-    error = assert_raises(FeatureFlags::InvalidEnv) { boot!(env: { "FEATURE_CODER_REAP" => "maybe" }) }
+  test "compose fails on an invalid ENV value for a declared flag" do
+    error = assert_raises(FeatureFlags::InvalidEnv) { compose(env: { "FEATURE_CODER_REAP" => "maybe" }) }
 
     assert_match "FEATURE_CODER_REAP", error.message
   end
 
-  test "boot! fails on an invalid registry" do
+  test "compose fails on an invalid registry" do
     Tempfile.create([ "feature_flags", ".yml" ]) do |file|
       file.write("coder_reap:\n  description: Reaper\n  kind: ops\n  scope: global\n  default: true\n")
       file.flush
 
-      error = assert_raises(FeatureFlags::InvalidRegistry) { boot!(registry_path: file.path) }
+      error = assert_raises(FeatureFlags::InvalidRegistry) { compose(registry_path: file.path) }
       assert_match "coder_reap: missing owner", error.message
     end
   end
 
-  test "a boot! inside with_feature_registry is undone after the block" do
-    boot!
+  test "compose installs nothing" do
+    store = FeatureFlags.store
+    graph = compose
 
+    assert graph.registry.declared?(:board_ai_summary)
     assert_not FeatureFlags.registry.declared?(:board_ai_summary)
+    assert_same store, FeatureFlags.store
+    assert_kind_of FeatureFlags::Store, graph.store
+    assert_kind_of FeatureFlags::VersionToken, graph.version_token
   end
 
-  test "boot! reads the legacy env_setting lock from the settings" do
-    with_example_flags do
-      FeatureFlags.boot!(registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY, env: {},
-                         settings: { coder: { reap_enabled: false } })
+  test "compose reads the legacy env_setting lock from the settings" do
+    graph = compose(settings: { coder: { reap_enabled: false } })
 
-      resolution = Feature.explain(:coder_reap)
-      assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ resolution.value, resolution.source, resolution.env_var ]
-    end
+    resolution = FeatureFlags::Resolver.new(registry: graph.registry, env: graph.env_source,
+                                            snapshot: FeatureFlags::Snapshot::EMPTY).resolve(:coder_reap)
+    assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ resolution.value, resolution.source, resolution.env_var ]
   end
 
-  test "boot! fails on a legacy setting that is not true, false or unset" do
-    error = assert_raises(FeatureFlags::InvalidEnv) do
-      with_example_flags do
-        FeatureFlags.boot!(registry_path: FeatureFlagsHelper::EXAMPLE_REGISTRY, env: {},
-                           settings: { coder: { reap_enabled: "no" } })
-      end
-    end
+  test "compose fails on a legacy setting that is not true, false or unset" do
+    error = assert_raises(FeatureFlags::InvalidEnv) { compose(settings: { coder: { reap_enabled: "no" } }) }
 
     assert_match "coder.reap_enabled (CODER_REAP_ENABLED) must be true, false or unset", error.message
   end

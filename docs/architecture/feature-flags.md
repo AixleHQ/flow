@@ -170,9 +170,46 @@ uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY                  # th
 An undeclared key raises `FeatureFlags::UnknownFlag` in development and test, so a test that
 guards on a typo fails. Tests that need a flag declare the two examples of
 `test/fixtures/files/feature_flags_registry.yml`, so they do not depend on what the shipped
-registry declares. Tests of the database-backed store and of `FeatureFlags::Admin` run against real rows with
-`FakeFeatureFlagVersionToken` instead of Redis. On the frontend, set
+registry declares. On the frontend, set
 `inertiaState.pageProps = { features: { boardAiSummary: true } }` in a Vitest test.
+
+### What a test may substitute, and where
+
+`FeatureFlags` composes its parts once, in `FeatureFlags.boot!`: the registry, the ENV layer
+validated against it, the store and the version token, as one `FeatureFlags::Graph`. It has no
+writers. `FeatureFlags.compose` builds and validates the same graph without installing it,
+which is how boot-time validation is tested.
+
+- **Values: the normal lever.** `with_feature` writes the memory store, the mechanism
+  production uses. A test that only needs a flag on or off should never need anything else.
+- **Infrastructure: the test environment, not a test.** The suite's global setup
+  (`test/support/feature_flags_helper.rb`) boots with a `FeatureFlags::MemoryStore`, a
+  `FakeFeatureFlagVersionToken` (CI has no Redis) and an empty ENV layer
+  (`config/settings/test.yml` drops `FEATURE_*`, and no legacy `env_setting` variable is read).
+  `reset_feature_flags!` empties the store and resets the fake before every test, so a test that
+  asserts bumps reads `FeatureFlags.version_token.bumps` and sets `unavailable` / `on_bump` on
+  that instance. The database-backed `FeatureFlags::Store` is tested by building one with its
+  own token (`test/services/feature_flags/store_test.rb`); nothing is installed on the module.
+- **Schema and ENV locks: one scoped seam.** `with_feature_registry`, `uses_feature_registry`,
+  `stub_feature_env` and `stub_feature_env_setting` go through `FeatureFlags.with(registry:, env:)
+  { ... }`, which resolves checks inside the block against the given registry and ENV layer and
+  drops them when the block exits. A registry without `env:` gets the current ENV layer re-read
+  against it. The store and the token are never substituted. Production code must not call it.
+- **Semantics: no globals at all.** `Registry`, `EnvSource`, `Resolver`, `Overview` and
+  `Lifecycle` take their dependencies as constructor arguments, so unknown keys, scope rules,
+  ENV locks and defaults are tested on objects the test builds:
+  `FeatureFlags::Resolver.new(registry: FeatureFlags::Registry.load(fixture), env: ..., snapshot: ...)`.
+  A test registry through `FeatureFlags.with` is for tests that go through the facade
+  (`Feature.enabled?`, a model, a web request) with a flag production does not declare.
+
+Values rather than schema are the lever because a schema swap changes what every caller in the
+process believes exists: anything that reads the registry once (a memoised attribute list, a
+class body) keeps what it saw. The override is fiber-local, so it reaches the test's own
+requests, which Rails integration tests serve on the test's thread, and nothing else: another
+thread (a Capybara server, a thread the test spawns, a parallel test) and a Temporal activity,
+which the SDK runs on its own pool thread outside any executor run (the same limit
+`FeatureFlags.snapshot` documents), see the booted graph. A system test that needs a test-only
+flag in the browser therefore cannot declare it through `with_feature_registry`.
 
 ## Removing a flag
 
