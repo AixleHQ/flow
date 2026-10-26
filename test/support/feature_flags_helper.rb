@@ -44,8 +44,8 @@ module FeatureFlagsHelper
       override.update!(enabled: enabled, reason: "test")
     end
 
-    # A test runs inside one executor run, so the values its first check read
-    # would otherwise hide the row written here.
+    # Inside an executor run the values its first check read would otherwise
+    # hide the row written here.
     Current.feature_snapshot = nil
     yield
   ensure

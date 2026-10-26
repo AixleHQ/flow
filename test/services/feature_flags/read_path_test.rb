@@ -3,54 +3,61 @@
 require "test_helper"
 
 # The read path: Rails.cache with a short TTL, memoised in Current for one
-# request or job. A test runs inside one executor run, so `Current.reset` stands
-# in for the next request, as the executor resets Current between runs.
+# executor run (a request or a job). A test body runs outside any executor run,
+# so `in_request` wraps one the way Rails does for every request.
 class FeatureFlags::ReadPathTest < ActiveSupport::TestCase
-  setup do
-    @cache = ActiveSupport::Cache::MemoryStore.new
-    Rails.stubs(:cache).returns(@cache)
-    @admin = create(:user, :super_admin)
+  setup { @admin = create(:user, :super_admin) }
+
+  def in_request(&) = Rails.application.executor.wrap(&)
+
+  def use_cache(cache) = cache.tap { Rails.stubs(:cache).returns(cache) }
+
+  test "a request or job reads the values once, however many checks it makes" do
+    use_cache(ActiveSupport::Cache::NullStore.new)
+    FeatureFlag.expects(:load_snapshot).twice.returns({})
+
+    in_request { 3.times { assert Feature.enabled?(:coder_reap) } }
+    in_request { 3.times { assert Feature.enabled?(:coder_reap) } }
   end
 
-  def next_request = Current.reset
+  test "the next request reads the cache, not the database" do
+    cache = use_cache(ActiveSupport::Cache::MemoryStore.new)
+    FeatureFlag.expects(:load_snapshot).once.returns({})
 
-  test "a request reads the values once, however many checks it makes" do
-    assert_queries_count(2) { Feature.enabled?(:coder_reap) }
-    assert_queries_count(0) { 3.times { Feature.enabled?(:coder_reap) } }
-
-    next_request
-    assert_queries_count(0) { Feature.enabled?(:coder_reap) }
-    assert @cache.exist?(FeatureFlags::CACHE_KEY)
+    in_request { assert Feature.enabled?(:coder_reap) }
+    in_request { assert Feature.enabled?(:coder_reap) }
+    assert cache.exist?(FeatureFlags::CACHE_KEY)
   end
 
   test "a write is visible on the next request, in every process" do
-    assert Feature.enabled?(:coder_reap)
+    use_cache(ActiveSupport::Cache::MemoryStore.new)
 
-    FeatureFlags::Admin.set_global(:coder_reap, false, actor: @admin, reason: "paused")
-    assert Feature.enabled?(:coder_reap), "one request keeps the values its first check read"
+    in_request do
+      assert Feature.enabled?(:coder_reap)
+      FeatureFlags::Admin.set_global(:coder_reap, false, actor: @admin, reason: "paused")
+      assert Feature.enabled?(:coder_reap), "one request keeps the values its first check read"
+    end
 
-    next_request
-    refute Feature.enabled?(:coder_reap)
+    in_request { refute Feature.enabled?(:coder_reap) }
   end
 
   test "a change that never dropped the key is visible once the TTL has passed" do
-    assert Feature.enabled?(:coder_reap)
+    use_cache(ActiveSupport::Cache::MemoryStore.new)
+    in_request { assert Feature.enabled?(:coder_reap) }
     FeatureFlag.create!(key: "coder_reap", enabled: false)
 
-    next_request
-    assert Feature.enabled?(:coder_reap)
-
-    travel FeatureFlags::CACHE_TTL + 1.second do
-      next_request
-      refute Feature.enabled?(:coder_reap)
+    in_request { assert Feature.enabled?(:coder_reap) }
+    travel(FeatureFlags::CACHE_TTL + 1.second) do
+      in_request { refute Feature.enabled?(:coder_reap) }
     end
   end
 
   test "outside an executor run nothing is memoised" do
-    Rails.application.executor.stubs(:active?).returns(false)
-    Rails.stubs(:cache).returns(ActiveSupport::Cache::NullStore.new)
+    use_cache(ActiveSupport::Cache::NullStore.new)
+    FeatureFlag.expects(:load_snapshot).twice.returns({})
 
-    assert_queries_count(4) { 2.times { Feature.enabled?(:coder_reap) } }
+    assert_not Rails.application.executor.active?
+    2.times { assert Feature.enabled?(:coder_reap) }
     assert_nil Current.feature_snapshot
   end
 end

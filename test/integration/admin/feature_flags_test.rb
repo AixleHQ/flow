@@ -65,8 +65,10 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "past remove-by"
 
     travel_to FeatureFlags.registry.fetch(:external_runners).remove_by + 1.day do
+      sign_in_as(@admin)
       get admin_feature_flags_path
     end
+    assert_response :success
     assert_select ".flag-badge--danger", text: "past remove-by", count: 1
   end
 
