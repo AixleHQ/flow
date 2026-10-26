@@ -7,10 +7,15 @@ class FeatureFlags::OverviewTest < ActiveSupport::TestCase
 
   setup { @company = create(:company) }
 
+  # An overview of a registry that declares nothing, built directly: the
+  # registry is a constructor argument, so no test registry is installed.
+  def empty_overview
+    registry = FeatureFlags::Registry.new({})
+    FeatureFlags::Overview.new(registry: registry, env: FeatureFlags::EnvSource.new({}, registry: registry))
+  end
+
   test "with no flags declared there is nothing to list" do
-    with_feature_registry(FeatureFlags::Registry.new({})) do
-      assert_empty FeatureFlags::Overview.new.rows
-    end
+    assert_empty empty_overview.rows
   end
 
   test "a flag with no rows resolves to its declared default" do
@@ -73,11 +78,9 @@ class FeatureFlags::OverviewTest < ActiveSupport::TestCase
   test "rows of keys no flag declares are orphans" do
     FeatureFlag.create!(key: "board_ai_summary", enabled: true).overrides.create!(company: @company, enabled: true, reason: "pilot")
 
-    with_feature_registry(FeatureFlags::Registry.new({})) do
-      orphans = FeatureFlags::Overview.new.orphans
+    orphans = empty_overview.orphans
 
-      assert_equal [ [ "board_ai_summary", 1 ] ], orphans.map { |orphan| [ orphan.key, orphan.overrides_count ] }
-    end
+    assert_equal [ [ "board_ai_summary", 1 ] ], orphans.map { |orphan| [ orphan.key, orphan.overrides_count ] }
     assert_empty FeatureFlags::Overview.new.orphans
   end
 

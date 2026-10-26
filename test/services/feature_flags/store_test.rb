@@ -2,7 +2,9 @@
 
 require "test_helper"
 
-# The database-backed store, against real rows and the in-memory version token.
+# The database-backed store, against real rows and its own in-memory version
+# token. The store is built here and asserted against directly: nothing is
+# installed on FeatureFlags, whose suite store is a MemoryStore.
 class FeatureFlags::StoreTest < ActiveSupport::TestCase
   REFRESH = 5
   STALENESS = 60
@@ -31,16 +33,15 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     flag.overrides.create!(company: company, enabled: enabled, reason: "pilot")
   end
 
-  # Feature.enabled? against this store, as a request would see it.
-  def with_store(store)
-    previous = FeatureFlags.store
-    FeatureFlags.store = store
-    Current.feature_snapshot = nil
-    yield
-  ensure
-    FeatureFlags.store = previous
-    Current.feature_snapshot = nil
+  # What Feature.explain would answer against this snapshot.
+  def resolve(snapshot, key, env: FeatureFlags.env_source, **)
+    FeatureFlags::Resolver.new(registry: FeatureFlags.registry, env: env, snapshot: snapshot).resolve(key, **)
   end
+
+  # The same against the store's current snapshot, as the next request would see it.
+  def explain(store, key, **) = resolve(store.snapshot, key, **)
+
+  def value_and_source(store, key, **) = explain(store, key, **).then { |resolution| [ resolution.value, resolution.source ] }
 
   test "the snapshot holds every row: global values and per-company overrides" do
     set_global(:coder_reap, false)
@@ -57,10 +58,8 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     store = build_store
 
     assert_empty store.snapshot.to_h
-    with_store(store) do
-      assert_equal :default, Feature.explain(:coder_reap).source
-      assert_equal :default, Feature.explain(:board_ai_summary, company: @company).source
-    end
+    assert_equal :default, explain(store, :coder_reap).source
+    assert_equal :default, explain(store, :board_ai_summary, company: @company).source
   end
 
   test "a flag check performs no database query and no Redis call" do
@@ -69,13 +68,10 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     store.snapshot
     reads = @token.reads
 
-    with_store(store) do
-      assert_no_queries do
-        20.times do
-          Current.feature_snapshot = nil
-          assert Feature.enabled?(:board_ai_summary, company: @company)
-          assert Feature.enabled?(:coder_reap)
-        end
+    assert_no_queries do
+      20.times do
+        assert explain(store, :board_ai_summary, company: @company).value
+        assert explain(store, :coder_reap).value
       end
     end
     assert_equal reads, @token.reads
@@ -155,7 +151,7 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     report = capture_error_reports(ActiveRecord::ConnectionNotEstablished) { store.snapshot }.sole
     assert_equal [ FeatureFlags::RELOAD_FAILED_SOURCE, true ], [ report.source, report.context[:loaded] ]
     assert_equal false, store.snapshot.global(:coder_reap) # rubocop:disable Minitest/RefuteFalse
-    with_store(store) { assert_equal [ false, :global ], [ Feature.enabled?(:coder_reap), Feature.explain(:coder_reap).source ] }
+    assert_equal [ false, :global ], value_and_source(store, :coder_reap)
 
     database_down = false
     advance(REFRESH)
@@ -175,12 +171,9 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     assert_equal false, report.context[:loaded] # rubocop:disable Minitest/RefuteFalse
     assert_same FeatureFlags::Snapshot::EMPTY, store.snapshot
 
-    with_store(store) do
-      assert_equal [ true, :default ], [ Feature.enabled?(:coder_reap), Feature.explain(:coder_reap).source ]
-      stub_feature_env(:coder_reap, "off") do
-        assert_equal [ false, :env ], [ Feature.enabled?(:coder_reap), Feature.explain(:coder_reap).source ]
-      end
-    end
+    assert_equal [ true, :default ], value_and_source(store, :coder_reap)
+    locked = FeatureFlags.env_source.merge("FEATURE_CODER_REAP" => "off")
+    assert_equal [ false, :env ], value_and_source(store, :coder_reap, env: locked)
 
     database_down = false
     advance(REFRESH)
@@ -249,23 +242,20 @@ class FeatureFlags::StoreTest < ActiveSupport::TestCase
     refute_same first_snapshot, store_snapshot
   end
 
-  test "a value changed mid-request does not change the answer inside that request" do
+  # FeatureFlags.snapshot pins what the store hands out for the rest of a
+  # request (test/services/feature_flags/snapshot_pinning_test.rb); that holds
+  # because a reload replaces the snapshot instead of changing the one held.
+  test "a value changed mid-request does not change a snapshot already handed out" do
     store = build_store
+    pinned = store.snapshot
+    assert resolve(pinned, :coder_reap).value
 
-    with_store(store) do
-      Rails.application.executor.wrap do
-        assert Feature.enabled?(:coder_reap)
+    set_global(:coder_reap, false)
+    @token.bump
+    advance(REFRESH)
 
-        set_global(:coder_reap, false)
-        @token.bump
-        advance(REFRESH)
-
-        assert Feature.enabled?(:coder_reap), "the request keeps the snapshot its first check pinned"
-        assert_equal false, store.snapshot.global(:coder_reap) # rubocop:disable Minitest/RefuteFalse
-
-        Current.reset
-        refute Feature.enabled?(:coder_reap), "the next request sees the new value"
-      end
-    end
+    assert resolve(pinned, :coder_reap).value, "the snapshot a request pinned keeps its values"
+    refute_same pinned, store.snapshot
+    refute explain(store, :coder_reap).value, "the next request sees the new value"
   end
 end

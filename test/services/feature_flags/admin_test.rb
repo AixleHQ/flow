@@ -7,14 +7,10 @@ class FeatureFlags::AdminTest < ActiveSupport::TestCase
   uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY
 
   setup do
-    @token = FakeFeatureFlagVersionToken.new
-    @token_before_test = FeatureFlags.version_token
-    FeatureFlags.version_token = @token
+    @token = FeatureFlags.version_token
     @admin = create(:user, :super_admin)
     @company = create(:company)
   end
-
-  teardown { FeatureFlags.version_token = @token_before_test }
 
   def admin = FeatureFlags::Admin
 

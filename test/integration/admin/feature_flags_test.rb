@@ -6,14 +6,10 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
   uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY
 
   setup do
-    @token = FakeFeatureFlagVersionToken.new
-    @token_before_test = FeatureFlags.version_token
-    FeatureFlags.version_token = @token
+    @token = FeatureFlags.version_token
     @company = create(:company, name: "Northwind")
     @admin = create(:user, :super_admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
   end
-
-  teardown { FeatureFlags.version_token = @token_before_test }
 
   def flag(key) = FeatureFlag.find_by(key: key.to_s)
 
