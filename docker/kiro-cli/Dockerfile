@@ -37,8 +37,8 @@ RUN set -eux; \
     package="kirocli-${arch}-linux.zip"; \
     channel=https://prod.download.cli.kiro.dev/stable; \
     case "${CLI_VERSION}/$arch" in \
-      2.32.0/x86_64) sha256="7cea2c90198edc60ccaee9e0d9c9de26902b3824f54a66aa3639a365f7242fbb" ;; \
-      2.32.0/aarch64) sha256="f66faaa3fa202e7730979e10ad907c43f83220577609c97fdffbb07fc8ef1848" ;; \
+      2.34.0/x86_64) sha256="877b6fc99182c1a789719141306ff19019c047eaf500d19f2b812f925dd0f913" ;; \
+      2.34.0/aarch64) sha256="de9674e9c029a50fae6be2334a35034a71f56a77b133183f19e37094a79e2bb2" ;; \
       *) sha256="$(curl -fsSL "$channel/latest/manifest.json" | jq -r --arg v "$CLI_VERSION" --arg f "${CLI_VERSION}/$package" \
            'select(.version == $v) | .packages[] | select(.download == $f) | .sha256')"; \
          [ -n "$sha256" ] || { echo "No checksum for kiro-cli ${CLI_VERSION} on $arch: add it to docker/kiro-cli/Dockerfile" >&2; exit 1; } ;; \

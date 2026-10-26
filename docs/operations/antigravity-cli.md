@@ -2,7 +2,7 @@
 
 Aixle runs Antigravity CLI as a separate runtime (`antigravity_cli`); it does not replace Gemini CLI.
 
-The runtime image pins `agy` (1.4.2, `cli_version` in `config/agent_runtimes.json`) and
+The runtime image pins `agy` (1.4.7, `cli_version` in `config/agent_runtimes.json`) and
 verifies Google's published SHA-256 checksum during the build.
 
 ## Authentication
@@ -19,7 +19,7 @@ Account OAuth is fully supported here, unlike the earlier design of this doc ass
 - Automatic sessions use `agy --output-format stream-json --print`; the option order is significant because `agy` treats the token after `--print` as prompt text.
 - MCP servers use `~/.gemini/config/mcp_config.json` and the documented `serverUrl` schema.
 - Antigravity imports Gemini-compatible `GEMINI.md` and skills, so Aixle writes those established paths.
-- Telemetry follows the user's Google account, not this image. Since 1.1.28 `agy` syncs it from the account's server-side setting and ignores `settings.json`'s `enableTelemetry` (it drops the key when it rewrites the file); no setting, environment variable or flag overrides it up to 1.4.2 (checked 2026-10-20). The user sets it in `/config`, or on the "Terms of Service & Data Use" onboarding step, whose box comes pre-ticked; the auth terminal leaves that step to the user. Even 1.1.27 lost the image's `enableTelemetry: false` once a user passed that step with the box ticked. Antigravity does not expose an OTLP export contract; automatic-run token counts remain available in its stream-JSON result and terminal log.
+- Telemetry follows the user's Google account, not this image. Since 1.1.28 `agy` syncs it from the account's server-side setting and ignores `settings.json`'s `enableTelemetry` (it drops the key when it rewrites the file); no setting, environment variable or flag overrides it up to 1.4.7 (checked 2026-10-26). The user sets it in `/config`, or on the "Terms of Service & Data Use" onboarding step, whose box comes pre-ticked; the auth terminal leaves that step to the user. Even 1.1.27 lost the image's `enableTelemetry: false` once a user passed that step with the box ticked. Antigravity does not expose an OTLP export contract; automatic-run token counts remain available in its stream-JSON result and terminal log.
 - Every session container is a fresh install, so agy would open each interactive session with its first-run onboarding (colour scheme, terms, then "Do you trust the contents of this project?"). Session containers get the file agy writes when onboarding finishes (`~/.gemini/antigravity-cli/cache/onboarding.json`, consumer logins only) and `/workspace` in `trustedWorkspaces`, so the session opens at the prompt. The auth terminal is not seeded with the onboarding file.
 - The CLI updates itself. Run as root, the image's user, it replaces `/usr/local/bin/agy` with the vendor's newest release a second after it starts, so the session would run whatever shipped that day instead of the pin. `AGY_CLI_DISABLE_AUTO_UPDATE=true` in every container's environment (`Agents::AntigravityCliAdapter#default_env_vars`) stops it; the CLI ignores any other value, `1` included.
 

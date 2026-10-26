@@ -35,7 +35,7 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 #
 # Once the CLI has run as the agent user, root's unpacked copy goes: it is byte-identical
 # to the package's `bin/grok-native`, which is what `grok` runs, and the agent cannot
-# read /root (0700) anyway — 163 MB nothing executes.
+# read /root (0700) anyway — ~190 MB nothing executes.
 #
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.

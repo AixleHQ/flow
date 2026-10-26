@@ -13,7 +13,7 @@
             {
               "key": "host.arch",
               "value": {
-                "stringValue": "arm64"
+                "stringValue": "amd64"
               }
             },
             {
@@ -37,7 +37,7 @@
             {
               "key": "service.version",
               "value": {
-                "stringValue": "2.1.303"
+                "stringValue": "2.1.310"
               }
             }
           ]
@@ -46,7 +46,7 @@
           {
             "scope": {
               "name": "com.anthropic.claude_code",
-              "version": "2.1.303"
+              "version": "2.1.310"
             },
             "metrics": [
               {
@@ -65,13 +65,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -87,8 +87,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915130000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019352520000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 1
                     }
                   ],
@@ -113,13 +113,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -141,8 +141,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915541000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019353162000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 0.00049275
                     }
                   ],
@@ -167,13 +167,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -201,8 +201,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915541000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019353162000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 120
                     },
                     {
@@ -216,13 +216,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -250,8 +250,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915541000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019353162000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 7
                     },
                     {
@@ -265,13 +265,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -299,8 +299,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915541000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019353162000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 30
                     },
                     {
@@ -314,13 +314,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -348,8 +348,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915541000000",
-                      "timeUnixNano": "1792435915560000000",
+                      "startTimeUnixNano": "1793019353162000000",
+                      "timeUnixNano": "1793019353192000000",
                       "asDouble": 5
                     }
                   ],
@@ -374,13 +374,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "ce9f3a02cc28a84b732b7146e4daf8efa569cfcb8722f3f4e2b08278b1dc501c"
+                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "5a7f29bb-0af5-445f-8fdb-9d5c49ee54de"
+                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
                           }
                         },
                         {
@@ -396,9 +396,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1792435915557000000",
-                      "timeUnixNano": "1792435915560000000",
-                      "asDouble": 0.408
+                      "startTimeUnixNano": "1793019353186000000",
+                      "timeUnixNano": "1793019353192000000",
+                      "asDouble": 0.623
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_DELTA",
