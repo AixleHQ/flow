@@ -239,4 +239,40 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
     assert_select "a[href=?]", admin_feature_flag_path(:board_ai_summary)
     assert_includes response.body, "pilot customer"
   end
+
+  test "CODER_REAP_ENABLED locks coder_reap, and admin names it" do
+    sign_in_as(@admin)
+
+    stub_feature_env_setting(:coder_reap, false) do
+      get admin_feature_flags_path
+      assert_match(/locked by <code>CODER_REAP_ENABLED<\/code>/, response.body)
+
+      get admin_feature_flag_path(:coder_reap)
+      assert_response :success
+      assert_match(/Locked by <code>CODER_REAP_ENABLED<\/code>/, response.body)
+      assert_select "tr.flag-winner td", text: "ENV CODER_REAP_ENABLED"
+      assert_select "fieldset[disabled] input[type=submit][value=?]", "Save global value"
+
+      patch admin_feature_flag_path(:coder_reap), params: { value: "off", reason: "x" }
+      assert_redirected_to admin_feature_flag_path(:coder_reap)
+      assert_match(/locked by CODER_REAP_ENABLED/, flash[:alert])
+    end
+
+    assert_nil flag(:coder_reap)
+  end
+
+  test "with CODER_REAP_ENABLED unset, coder_reap can be paused from admin" do
+    sign_in_as(@admin)
+
+    stub_feature_env_setting(:coder_reap, nil) do
+      get admin_feature_flag_path(:coder_reap)
+      assert_select "tr td", text: "ENV FEATURE_CODER_REAP or CODER_REAP_ENABLED"
+      assert_select "fieldset[disabled]", count: 0
+
+      patch admin_feature_flag_path(:coder_reap), params: { value: "off", reason: "incident: reaper misfiring" }
+      assert_redirected_to admin_feature_flag_path(:coder_reap)
+      assert_equal false, flag(:coder_reap).enabled # rubocop:disable Minitest/RefuteFalse
+      assert_equal [ false, :global ], FeatureFlags::Overview.new.row(:coder_reap).resolution.then { |r| [ r.value, r.source ] }
+    end
+  end
 end

@@ -7,6 +7,7 @@
 #   with_feature(:board_ai_summary, true) { ... }                          # global value
 #   with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
 #   stub_feature_env(:board_ai_summary, "off") { ... }                     # the FEATURE_* lock
+#   stub_feature_env_setting(:coder_reap, false) { ... }                   # the legacy env_setting lock
 #   with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }    # declare test flags
 #
 # The database-backed FeatureFlags::Store is tested on its own, against real
@@ -76,6 +77,20 @@ module FeatureFlagsHelper
     definition = FeatureFlags.registry.fetch(key)
     previous = FeatureFlags.env_source
     FeatureFlags.env_source = previous.merge(definition.env_var => value)
+    yield
+  ensure
+    FeatureFlags.env_source = previous if previous
+  end
+
+  # The legacy lock of a flag declared with env_setting: `value` is what
+  # config/settings.yml would give it (true or false when its variable is set,
+  # nil when it is not).
+  def stub_feature_env_setting(key, value)
+    definition = FeatureFlags.registry.fetch(key)
+    raise ArgumentError, "feature flag #{definition.key} declares no env_setting" if definition.env_setting.nil?
+
+    previous = FeatureFlags.env_source
+    FeatureFlags.env_source = previous.merge_settings(definition.env_setting => value)
     yield
   ensure
     FeatureFlags.env_source = previous if previous

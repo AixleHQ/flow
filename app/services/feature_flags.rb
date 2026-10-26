@@ -37,7 +37,7 @@ module FeatureFlags
   # A change FeatureFlags::Admin will not make. Nothing was written.
   class WriteRefused < Error; end
 
-  # FEATURE_<KEY> decides the flag in every process, so a runtime value would
+  # An ENV variable decides the flag in every process, so a runtime value would
   # only look like a change.
   class EnvLocked < WriteRefused
     attr_reader :key, :variable
@@ -69,7 +69,7 @@ module FeatureFlags
     end
 
     def env_source
-      @env_source ||= EnvSource.new(Settings.feature_flags&.env.to_h, registry: registry)
+      @env_source ||= EnvSource.new(Settings.feature_flags&.env.to_h, registry: registry, settings: Settings.to_h)
     end
 
     # The suite replaces this with a MemoryStore before any test runs.
@@ -117,11 +117,12 @@ module FeatureFlags
       end
     end
 
-    # Loads and validates the registry and the ENV layer, raising on anything
-    # invalid, and reports FEATURE_* variables no flag declares.
-    def boot!(registry_path: REGISTRY_PATH, env: Settings.feature_flags&.env.to_h)
+    # Loads and validates the registry and the ENV layer (FEATURE_* and the
+    # legacy env_setting values in `settings`), raising on anything invalid, and
+    # reports FEATURE_* variables no flag declares.
+    def boot!(registry_path: REGISTRY_PATH, env: Settings.feature_flags&.env.to_h, settings: Settings.to_h)
       self.registry = Registry.load(registry_path)
-      self.env_source = EnvSource.new(env, registry: registry)
+      self.env_source = EnvSource.new(env, registry: registry, settings: settings)
 
       env_source.undeclared.each do |variable|
         error = UndeclaredEnv.new(variable)

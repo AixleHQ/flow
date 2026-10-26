@@ -80,4 +80,18 @@ class FeatureFlags::OverviewTest < ActiveSupport::TestCase
     end
     assert_empty FeatureFlags::Overview.new.orphans
   end
+
+  test "a row names the variable that locks it, or every variable that could" do
+    rows = FeatureFlags::Overview.new.rows.index_by(&:key)
+    assert_nil rows[:coder_reap].env_variable
+    assert_equal %w[FEATURE_CODER_REAP CODER_REAP_ENABLED], rows[:coder_reap].env_vars
+
+    stub_feature_env_setting(:coder_reap, false) do
+      row = FeatureFlags::Overview.new.row(:coder_reap)
+
+      assert row.locked?
+      assert_equal [ "CODER_REAP_ENABLED", %w[CODER_REAP_ENABLED] ], [ row.env_variable, row.env_vars ]
+      assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ row.resolution.value, row.resolution.source, row.resolution.env_var ]
+    end
+  end
 end
