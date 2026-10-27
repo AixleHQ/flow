@@ -50,12 +50,11 @@
   color: var(--app-text-tertiary);
 }
 
-.footer img {
-  display: block;
+.footer svg {
   opacity: 0.6;
   transition: opacity 0.2s;
 }
 
-.footer:hover img {
+.footer:hover svg {
   opacity: 1;
 }

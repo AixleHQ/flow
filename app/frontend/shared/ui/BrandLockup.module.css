@@ -1,31 +1,37 @@
+/* An explicit width, not width: auto — a flex column's default stretch would
+   widen the box and the SVG would center the mark inside it. */
 .root {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
+  --lockup-height: 28px;
 
-.word {
-  font-family: 'Hanken Grotesk', sans-serif;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.01em;
+  display: block;
+  flex-shrink: 0;
+  height: var(--lockup-height);
+  width: calc(var(--lockup-height) * 354 / 62.5);
   color: var(--app-text-primary);
 }
 
-.sm .word {
-  font-size: 20px;
+.xs {
+  --lockup-height: 16px;
 }
 
-.md .word {
-  font-size: 26px;
+.sm {
+  --lockup-height: 22px;
 }
 
-.lg .word {
-  font-size: 34px;
+.md {
+  --lockup-height: 28px;
+}
+
+.lg {
+  --lockup-height: 36px;
 }
 
 @media (max-width: 480px) {
-  .lg .word {
-    font-size: 26px;
+  .lg {
+    --lockup-height: 30px;
   }
+}
+
+.flow {
+  fill: var(--app-brand-orange);
 }

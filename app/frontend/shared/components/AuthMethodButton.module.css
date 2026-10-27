@@ -15,7 +15,7 @@
   background-color: var(--app-bg-elevated);
   border: 1px solid var(--app-border-default);
   color: var(--app-text-primary);
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
   font-size: 14px;
   font-weight: 500;
   transition:
