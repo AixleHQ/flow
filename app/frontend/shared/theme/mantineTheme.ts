@@ -39,13 +39,9 @@ const dark: MantineColorsTuple = [
   '#040302', // 9 — deepest
 ];
 
-const FONT_BODY = 'Figtree, sans-serif';
-const FONT_HEADING = '"Hanken Grotesk", sans-serif';
-const FONT_MONO = '"JetBrains Mono", monospace';
-
 export const mantineTheme = createTheme({
-  fontFamily: FONT_BODY,
-  fontFamilyMonospace: FONT_MONO,
+  fontFamily: 'Figtree, sans-serif',
+  fontFamilyMonospace: '"JetBrains Mono", monospace',
 
   primaryColor: 'brand',
   // Dark: brand orange (6). Light: darker press tone (7) so white text on
@@ -64,7 +60,7 @@ export const mantineTheme = createTheme({
   headings: {
     // Aixle uses Lab Grotesque (→ Hanken Grotesk) at regular-ish weight; size and
     // tight tracking carry the headlines rather than heavy bold.
-    fontFamily: FONT_HEADING,
+    fontFamily: '"Hanken Grotesk", sans-serif',
     fontWeight: '500',
   },
 
@@ -130,9 +126,9 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
     /* Aixle typography — body Figtree, headings Hanken Grotesk, code JetBrains Mono,
        small decorative mono labels Spline Sans Mono. */
-    '--app-font-body': FONT_BODY,
-    '--app-font-heading': FONT_HEADING,
-    '--app-font-mono': FONT_MONO,
+    '--app-font-body': 'Figtree, sans-serif',
+    '--app-font-heading': '"Hanken Grotesk", sans-serif',
+    '--app-font-mono': '"JetBrains Mono", monospace',
     '--app-font-mono-label': '"Spline Sans Mono", monospace',
     /* The logo's own orange, the same in both schemes. UI accents use the calmer
        --app-primary instead. */
