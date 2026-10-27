@@ -6,21 +6,21 @@ Helpers for testing the application on staging through the Playwright MCP tool `
 ## Why one plain-JavaScript snippet
 
 `browser_run_code` takes a single self-contained `async (page) => { … }` function. It cannot import modules, has no
-`process.env`, no TypeScript, and no global `URL`.
-
-| Missing in the sandbox                 | Use instead                                                             |
-| -------------------------------------- | ----------------------------------------------------------------------- |
-| `require`, `import()`                  | paste `helpers.js` in full                                              |
-| `process`, `process.env`               | `loadCredentialsAsset(page)` for credentials                            |
-| `setTimeout`                           | `await page.waitForTimeout(ms)`                                         |
-| `URL`, `URLSearchParams`               | the helpers cut paths out by hand (`aixlePathname`, `aixleFormEncode`)  |
-| `Buffer`, `TextEncoder`                | index the buffers Playwright returns (`shot` reads the PNG header so)   |
-| an in-page `fetch` that sees redirects | `page.request` (`appRequest`): it shares the context's cookies          |
-
-A tool call has to return within a few minutes: one that stays silent for 30 minutes gets its session killed. Every
-request in these helpers times out after 30 seconds. So `helpers.js` is plain JavaScript with no imports, and it defines
+`process.env`, no TypeScript, and no global `URL`. So `helpers.js` is plain JavaScript with no imports, and it defines
 every helper at once: paste the whole file at the top of the function body, then call the helpers below it. One snippet
 is simpler to keep correct than a set of per-helper snippets that each repeat the shared internals.
+
+| Missing in the sandbox                 | Use instead                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| `require`, `import()`                  | paste `helpers.js` in full                                             |
+| `process`, `process.env`               | `loadCredentialsAsset(page)` for credentials                           |
+| `setTimeout`                           | `await page.waitForTimeout(ms)`                                        |
+| `URL`, `URLSearchParams`               | the helpers cut paths out by hand (`aixlePathname`, `aixleFormEncode`) |
+| `Buffer`, `TextEncoder`                | index the buffers Playwright returns (`shot` reads the PNG header so)  |
+| an in-page `fetch` that sees redirects | `page.request` (`appRequest`): it shares the context's cookies         |
+
+A tool call has to return within a few minutes: one that stays silent for 30 minutes gets its session killed. Every
+request in these helpers times out after 30 seconds.
 
 Nothing in this repository runs or imports `helpers.js`. It is not a module and `@playwright/test` is not a dependency.
 
@@ -156,17 +156,17 @@ Requests go through `page.request`, so they carry the browser context's cookies 
 
 Sends one HTTP request as the signed-in browser and returns `{ status, location, contentType, json, text }`.
 
-| Option         | Default | Meaning                                                                                                                    |
-| -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `method`       | `'GET'` | Any HTTP method.                                                                                                           |
-| `path`         |         | `'/company/projects'` or an absolute URL. Required.                                                                        |
-| `json`         |         | Body sent as `application/json` (and `Accept: application/json` unless `headers` sets one).                                |
-| `form`         |         | Fields sent URL-encoded, with `authenticity_token` added. For `PATCH`/`PUT`/`DELETE` it POSTs them with `_method`.         |
-| `csrf`         | `true`  | Sends the session's CSRF token on non-GET requests (`X-CSRF-Token`, and in `form`). `false` sends none: expect `422`.      |
-| `maxRedirects` | `0`     | `0` reports a `302` and its `Location` instead of following it. An in-page `fetch` would see only an opaque status `0`.    |
-| `headers`      | `{}`    | Extra request headers.                                                                                                     |
-| `textLimit`    | `2000`  | Characters of a non-JSON body kept in `text`, so an HTML page does not flood the context.                                 |
-| `baseUrl`      |         | See above.                                                                                                                 |
+| Option         | Default | Meaning                                                                                                                 |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `method`       | `'GET'` | Any HTTP method.                                                                                                        |
+| `path`         |         | `'/company/projects'` or an absolute URL. Required.                                                                     |
+| `json`         |         | Body sent as `application/json` (and `Accept: application/json` unless `headers` sets one).                             |
+| `form`         |         | Fields sent URL-encoded, with `authenticity_token` added. For `PATCH`/`PUT`/`DELETE` it POSTs them with `_method`.      |
+| `csrf`         | `true`  | Sends the session's CSRF token on non-GET requests (`X-CSRF-Token`, and in `form`). `false` sends none: expect `422`.   |
+| `maxRedirects` | `0`     | `0` reports a `302` and its `Location` instead of following it. An in-page `fetch` would see only an opaque status `0`. |
+| `headers`      | `{}`    | Extra request headers.                                                                                                  |
+| `textLimit`    | `2000`  | Characters of a non-JSON body kept in `text`, so an HTML page does not flood the context.                               |
+| `baseUrl`      |         | See above.                                                                                                              |
 
 - `json` is the parsed body when the response is JSON, and then `text` is `null`. Otherwise `json` is `null`.
 - `location` is shortened to a path (`'/login'`) when it points at the base URL.
@@ -215,7 +215,11 @@ Screenshots the viewport to `/workspace/outputs/screenshots_<round>/<name>.png` 
   when it is not given. Never put a credential in a banner.
 
 ```js
-await shot(page, { round: 3, name: 'employee-assets-redirect', banner: { role: 'CompanyEmployee', value: '/company/assets → /' } });
+await shot(page, {
+  round: 3,
+  name: 'employee-assets-redirect',
+  banner: { role: 'CompanyEmployee', value: '/company/assets → /' },
+});
 // { path: '/workspace/outputs/screenshots_3/employee-assets-redirect.png', width: 1920, height: 1080 }
 ```
 
@@ -228,7 +232,9 @@ call `signOut` first.
 
 ```js
 await loginAsCompanyEmployee(page, staging);
-await probeRoutes(page, { requests: [{ path: '/company/assets' }, { method: 'DELETE', path: '/logout', csrf: false }] });
+await probeRoutes(page, {
+  requests: [{ path: '/company/assets' }, { method: 'DELETE', path: '/logout', csrf: false }],
+});
 // [{ method: 'GET', path: '/company/assets', status: 302, location: '/' },
 //  { method: 'DELETE', path: '/logout', status: 422, location: null }]
 ```
@@ -236,16 +242,16 @@ await probeRoutes(page, { requests: [{ path: '/company/assets' }, { method: 'DEL
 Baseline on staging (checked 2026-10-27, appVersion `10dd9779`; `—` means not checked). These are expected, so do not
 report them as bugs:
 
-| Route                                                              | Anonymous             | CompanyEmployee | CompanyAdmin          |
-| ------------------------------------------------------------------ | --------------------- | --------------- | --------------------- |
-| `/`                                                                | 200                   | 200             | 200                   |
-| `/login`                                                           | 200                   | —               | —                     |
-| `/profile`, `/company/projects`, `/company/members`                | 302 → `/login`        | 200             | 200                   |
-| `/company/assets`, `/company/sessions`                             | 302 → `/login`        | 302 → `/`       | 200                   |
-| `/company/projects/3/{overview,agents,skills,tools}`               | —                     | 200             | 200                   |
-| `/company/projects/3/{integrations,mcp_servers,repositories,config_items}` | —             | 200             | 200                   |
-| `/admin`                                                           | 302 → `/admin/login`  | 302 → `/admin/login` | 302 → `/admin/login` |
-| any non-GET with `csrf: false`                                     | 422                   | 422             | 422                   |
+| Route                                                                      | Anonymous            | CompanyEmployee      | CompanyAdmin         |
+| -------------------------------------------------------------------------- | -------------------- | -------------------- | -------------------- |
+| `/`                                                                        | 200                  | 200                  | 200                  |
+| `/login`                                                                   | 200                  | —                    | —                    |
+| `/profile`, `/company/projects`, `/company/members`                        | 302 → `/login`       | 200                  | 200                  |
+| `/company/assets`, `/company/sessions`                                     | 302 → `/login`       | 302 → `/`            | 200                  |
+| `/company/projects/3/{overview,agents,skills,tools}`                       | —                    | 200                  | 200                  |
+| `/company/projects/3/{integrations,mcp_servers,repositories,config_items}` | —                    | 200                  | 200                  |
+| `/admin`                                                                   | 302 → `/admin/login` | 302 → `/admin/login` | 302 → `/admin/login` |
+| any non-GET with `csrf: false`                                             | 422                  | 422                  | 422                  |
 
 #### `signOut(page, { baseUrl } = {})`
 

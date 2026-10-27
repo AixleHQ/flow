@@ -347,7 +347,12 @@ function aixleCsrfFromHtml(html) {
   const input = html.match(/<input\b[^>]*\bname="authenticity_token"[^>]*>/i);
   const tag = (meta && meta[0]) || (input && input[0]);
   const value = tag && tag.match(meta ? /\bcontent="([^"]*)"/i : /\bvalue="([^"]*)"/i);
-  return value ? value[1].replace(/&amp;/g, '&').replace(/&#x2F;/gi, '/').replace(/&#43;/g, '+') : null;
+  return value
+    ? value[1]
+        .replace(/&amp;/g, '&')
+        .replace(/&#x2F;/gi, '/')
+        .replace(/&#43;/g, '+')
+    : null;
 }
 
 // The CSRF token of the current session, never returned. In order:
