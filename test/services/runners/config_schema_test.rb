@@ -55,6 +55,9 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     assert_equal [ "container.extra_mounts[0].source must be an absolute path" ],
                  errors("container" => { "extra_mounts" => [ { "source" => "data", "target" => "/data" } ] })
     assert_equal [ "container.network must be one of bridge, host" ], errors("container" => { "network" => "none" })
+    assert_equal [ "container.home_mount must be an object or null" ], errors("container" => { "home_mount" => "/home/op" })
+    assert_equal [ "container.cache_mounts[0] must set exactly one of name or host_path" ],
+                 errors("container" => { "cache_mounts" => [ { "target" => "/cache" } ] })
   end
 
   test "keys a type requires are required" do

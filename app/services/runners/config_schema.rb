@@ -180,6 +180,10 @@ module Runners
         path = location(error["data_pointer"])
         schema = error["schema"].is_a?(Hash) ? error["schema"] : {}
 
+        # A cache mount is a named volume or a host path; json_schemer reports a
+        # failed `oneOf` as each branch's own `required` error.
+        return "#{path} must set exactly one of name or host_path" if error["schema_pointer"].to_s.include?("/oneOf")
+
         case error["type"]
         when "required"
           missing = error.dig("details", "missing_keys").to_a.map { |k| [ path, k ].compact_blank.join(".") }
@@ -194,9 +198,9 @@ module Runners
         when "format" then "#{path} must be a #{schema['format'].upcase}"
         when "oneOf" then "#{path} must set exactly one of name or host_path"
         when "schema" then "#{path} is not a known setting"
+        when "type", *TYPE_NAMES.keys then "#{path} must be #{Array(schema['type']).map { |t| TYPE_NAMES[t] }.join(' or ')}"
         when "maxLength" then "#{path} is too long"
         when "minLength" then "#{path} can't be blank"
-        when *TYPE_NAMES.keys then "#{path} must be #{Array(schema['type']).map { |t| TYPE_NAMES[t] }.join(' or ')}"
         else
           "#{path} #{error['error']}"
         end
