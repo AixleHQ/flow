@@ -207,11 +207,16 @@ later because the protocol is versioned.
 
 ## 2. Data model
 
-All tables use `include TenantColumns` and the `<table>_tenant_columns` check-constraint
-pattern. Secrets use `Encryptable` with a new `encryption_key :runners_key`
-(`Settings.encryption.runners_key`, with rotation through `runners_key_previous` and
-`bin/rails encryption:reencrypt`). No secret is ever stored on a workflow, a workflow
-version, a run or a step.
+Runner tables carry `company_id` and, where they have one, a nullable `project_id`
+directly, like `integrations`. They have no polymorphic `scope_type`/`scope_id` pair, so
+they do not use `TenantColumns`. Tenant integrity comes from the composite foreign keys of
+`AddTenantColumnsToScopedResources`: `(project_id, company_id) → projects (id, company_id)`
+ties a row's company to its project's, and `(integration_id, company_id) → integrations
+(id, company_id)` ties a Coder runner's integration to the same company. Secrets use
+`Encryptable` with a new `encryption_key :runners_key` (`Settings.encryption.runners_key`,
+with rotation through `runners_key_previous` and `bin/rails encryption:reencrypt`), added
+with the first encrypted column (`runner_operations.encrypted_payload`, §15 task 5). No
+secret is ever stored on a workflow, a workflow version, a run or a step.
 
 ### 2.1 `runners`
 
@@ -225,15 +230,18 @@ version, a run or a step.
 | `status_reason` | string, null | Human-readable, shown in the UI and in run failures. |
 | `integration_id` | bigint, null | `coder` only: the Coder integration the runner provisions through (§2.6). Check constraint: required when `runner_type = 'coder'`, null otherwise. |
 | `config` | jsonb, not null, default `{}` | Non-secret, per-type schema validated by the adapter's `config_schema`. Every key, its default and the types it applies to are in **§2.7**, the authoritative table. There is no `execution_mode` key in v1: container mode is the only one, and the key arrives with the `host` mode (§6.8). |
-| `encrypted_secrets` | text, null | `Encryptable` column for any type-specific secret. Unused by the three v1 types (`manual` has no secret by design) and kept for later types. |
 | `max_concurrency` | integer, not null | Pool limit for admission (§10). Must be > 0. |
-| `max_environments` | integer, null | `coder`: environment pool size, null means equal to `max_concurrency`. `manual`: always null. Its capacity is the number of registered machines, a physical fact and not a setting (§7.3, §10). Check constraint: null when `runner_type = 'manual'`. |
-| `reuse_policy` | string, not null | `reuse` or `fresh`. What each value does depends on the type (§7.1). The default comes from the type's capability. |
-| `capabilities` | jsonb, not null | Computed by the adapter from type and config (§4), cached for the UI. |
+| `max_environments` | integer, null | `coder`: environment pool size, null means equal to `max_concurrency`. `manual`: always null. Its capacity is the number of registered machines, a physical fact and not a setting (§7.3, §10). Check constraints: null when `runner_type = 'manual'`, and > 0 when set. |
+| `reuse_policy` | string, not null | `reuse` or `fresh`. What each value does depends on the type (§7.1). Until the adapters exist, `Runner` defaults it by type: `reuse` on `manual` and `coder`, `fresh` (the only allowed value) on `kubernetes` (§2.7). |
+| `capabilities` | jsonb, not null, default `{}` | Computed by the adapter from type and config (§4), cached for the UI. |
 | `health` | jsonb, not null, default `{}` | Last health-check facts and timestamp. |
 | `last_seen_at` | datetime, null | Last controller heartbeat (`kubernetes`), last heartbeat of any registered machine (`manual`), or last successful health check (`coder`). |
-| `created_by_id` | bigint, not null | |
+| `created_by_id` | bigint, null | Required when the runner is created. Nullable with `ON DELETE SET NULL`, like every other authorship column, so permanently deleting the user who created a runner leaves the runner in place (`Users::PermanentDeletionService`). |
 | `disabled_at`, `revoked_at`, `deleted_at` | datetime, null | Soft lifecycle. Rows are never hard-deleted while anything references them. |
+
+There is no `encrypted_secrets` column: no v1 type has a secret (`manual` has none by
+design, and `coder` uses the integration's token). It is added, as an `Encryptable` column,
+with the first runner type that needs one.
 
 ### 2.2 `runner_environments`
 
@@ -294,34 +302,18 @@ runner sessions (§6.5). They are pruned once cleanup has written the final `Ses
 | `terminal_sessions` | `runner_id`, `runner_environment_id` | Which runner and environment the session used. Standalone sessions store the user's pick here directly. |
 | `session_admissions` | (existing) `runtime_kind`, `runtime_id` | Already runtime-agnostic. `runtime_kind = "ContainerRuntime::RunnerRuntime"` and `runtime_id = <environment key>` for external sessions. |
 
-Migration sketch (not written in this change):
+The `runners` table is `db/migrate/20261027100000_create_runners.rb` (§15 task 1b): the
+§2.1 columns, the unique name index, the check constraints `max_concurrency > 0`,
+`(runner_type = 'coder') = (integration_id IS NOT NULL)`,
+`runner_type <> 'manual' OR max_environments IS NULL` and
+`max_environments IS NULL OR max_environments > 0`, and the two composite keys of §2. The
+company and project keys cascade, as in the tenant migration. The integration keys are
+restrictive: what disconnecting a Coder integration does to its runners is decided with
+the Coder adapter (task 17).
+
+Sketch of the references, added by tasks 4 and 5 (not written yet):
 
 ```ruby
-create_table :runners do |t|
-  t.references :company, null: false, foreign_key: true
-  t.references :project, foreign_key: true
-  t.string :name, null: false
-  t.string :runner_type, null: false
-  t.string :status, null: false, default: "pending"
-  t.string :status_reason
-  t.references :integration, foreign_key: true
-  t.jsonb :config, null: false, default: {}
-  t.text :encrypted_secrets
-  t.integer :max_concurrency, null: false
-  t.integer :max_environments
-  t.string :reuse_policy, null: false
-  t.jsonb :capabilities, null: false, default: {}
-  t.jsonb :health, null: false, default: {}
-  t.datetime :last_seen_at, :disabled_at, :revoked_at, :deleted_at
-  t.references :created_by, null: false, foreign_key: { to_table: :users }
-  t.timestamps
-end
-add_check_constraint :runners, "max_concurrency > 0", name: "runners_max_concurrency_positive"
-add_check_constraint :runners,
-  "(runner_type = 'coder') = (integration_id IS NOT NULL)", name: "runners_coder_integration"
-add_check_constraint :runners,
-  "runner_type <> 'manual' OR max_environments IS NULL", name: "runners_manual_no_pool_size"
-
 add_reference :workflows, :runner, foreign_key: true          # nullable, no default
 add_reference :workflow_runs, :runner, foreign_key: true
 add_reference :terminal_sessions, :runner, foreign_key: true
@@ -335,11 +327,27 @@ The migrations only add nullable columns and new tables. Every existing row read
 
 ```
 pending ──health ok──▶ connected ◀──recovers── degraded / unreachable
-   │                      │  ▲
-   │                      ▼  │ enable
+   │  │                   │  ▲
+   │  └─first check fails─┼──┼──────────────▶ degraded / unreachable
+   │                      ▼  │ enable (to pending)
    │                   disabled
-   └──────────────▶ revoked (terminal)       deleted_at set ⇒ hidden; treated as revoked
+   └──────────────▶ revoked (terminal)       deleted_at set ⇒ hidden; revoked
 ```
+
+The transitions, as `RunnerStateMachine` (`app/state_machines/runner_state_machine.rb`)
+implements them:
+
+- Health results: `connected` from `pending`, `degraded` or `unreachable`; `degraded` and
+  `unreachable` from `pending`, from `connected`, or from each other. A failed **first**
+  check moves `pending` straight to `degraded` or `unreachable`. A health result stores its
+  reason in `status_reason`; reaching `connected` clears it.
+- `disable` works from any of the four health states and sets `disabled_at`. `enable`
+  returns to **`pending`**, not to `connected`, and clears `disabled_at`: nothing checked
+  the runner while it was disabled, so the next health check decides.
+- `revoke` works from any state except `revoked` and sets `revoked_at`. `revoked` is
+  terminal.
+- Deleting a runner is a soft delete that revokes it in the same write: `deleted_at` and
+  `revoked` are set together, so a deleted runner is revoked in the data, not only in reads.
 
 - `pending`: created, never verified. Coder: the integration token and template have not
   been checked yet. Kubernetes: the controller has not connected yet. Manual: no machine
@@ -1972,11 +1980,11 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | # | Phase | Task |
 | --- | --- | --- |
 | 1a | 1 | **Flag and the client-flag resource.** Declare `external_runners` in `config/feature_flags.yml` exactly as in §12.1 (`introduced` set to the PR's date). Replace the hand-written `FeatureFlagName` with an Alba `FeaturesResource` and `useFeatureFlag(name: keyof Features)`, which touches every existing `useFeatureFlag` consumer, and retire `test/config/feature_flag_name_test.rb` (§11). Override on for the test company from `/admin`. Platform cleanup triggered by the first client flag, not runner-specific: a prerequisite for task 3, not for 1b, and reviewed on its own. |
-| 1b | 1 | **Migrations and models.** `runners` (with the `coder` and `manual` check constraints), `runner_environments` (`origin`, `display_name`, `ephemeral`), `runner_credentials`, the nullable `runner_id` references (§2.4), `Encryptable :runners_key`, the status state machine (§2.5), `visible_for_project`. No flag check here: nothing reaches these models until task 2's controllers, which check it. |
+| 1b | 1 | **The `runners` table and the `Runner` model**, only what task 2 reads and writes. The `runners` migration (§2.1, without `encrypted_secrets`): the unique name index, the four check constraints and the two composite tenant keys (§2, §2.4). `Runner` with enumerize `runner_type` and `reuse_policy` (defaulted by type, §2.7), validations mirroring the database, the §2.6 integration rule, `visible_for_project` (§3.1), and the status state machine with soft delete (§2.5). No flag check here: nothing reaches the model until task 2's controllers, which check it. Every other table and column of §2 lands with the first task that reads or writes it. |
 | 2 | 1 | Policies and controllers: company and project runners CRUD with §3.2 rules and the `Feature.enabled?(:external_runners, company:)` check, `Runners::Adapter` registry + `config_schema` encoding §2.7 (including the refusal of unknown, inapplicable and later keys) + capabilities (`provisionable`, `rebuildable`), `ManualAdapter#validate_config`/`check_health` only. Needs 1a (the flag) and 1b. |
 | 3 | 1 | Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): Company Settings → Runners tab, Project → Runners page, new-runner form generated from schema (Manual card), runner page (without machines). |
-| 4 | 1 | Selection: `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. The "hosted unchanged with the flag enabled" regression test of §12.3. |
-| 5 | 2 | Gateway process type, `runner_operations` queue with LISTEN/NOTIFY long-poll, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
+| 4 | 1 | Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. The "hosted unchanged with the flag enabled" regression test of §12.3. |
+| 5 | 2 | Gateway process type, the `runner_environments` (`origin`, `display_name`, `ephemeral`) and `runner_credentials` tables and `terminal_sessions.runner_environment_id` (§2.2–§2.4), `runner_operations` queue with LISTEN/NOTIFY long-poll and `Encryptable :runners_key` for its `encrypted_payload`, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
 | 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
 | 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. |
