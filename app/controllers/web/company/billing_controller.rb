@@ -73,27 +73,54 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     (BigDecimal(seconds) / 60).round(1).to_f
   end
 
-  # What AWS has actually been sent, hour by hour, and only where AWS answered
-  # with a receipt for this workspace's licence.
+  # What AWS has actually been sent this calendar month, from BOTH paths that
+  # send, counted by AWS's own receipt so nothing lands twice.
   #
   # Not CompanyCapacityUsage, which is what the workspace was OFFERED: that
   # holds minutes the card was billed for before a mid-month handover, minutes
   # measured but not yet sent, and fractions where a record carries whole
-  # numbers. Floored per hour for the same reason -- that is what is sent.
+  # numbers.
+  #
+  # Two paths, because the hourly meter is not the only one. A cancellation
+  # sends the last part-hour through Billing::MarketplaceFinalMeter, which
+  # writes no ledger row -- so a figure built from ledger rows alone misses
+  # exactly the minutes a cancelling customer is most likely to check.
+  #
+  # Keyed by receipt, which also settles the repeat: the two cancellation
+  # events send the same record and AWS answers both with the id it issued
+  # first, so the id appears twice and the minutes count once.
   def reported_minutes
-    arns = current_company.marketplace_licenses.pluck(:license_arn)
-    return 0.0 if arns.empty?
+    licenses = current_company.marketplace_licenses.pluck(:id, :license_arn)
+    return 0.0 if licenses.empty?
 
+    (hourly_receipts(licenses.map(&:last)).merge(final_meter_receipts(licenses.map(&:first))))
+      .values.sum.to_f
+  end
+
+  # Receipt -> minutes, from the hourly ledger. The row carries one receipt per
+  # licence and the company's seconds in its breakdown; the record AWS was sent
+  # carries whole minutes, so this floors the same way the adapter does.
+  def hourly_receipts(arns)
     CapacityMeterReport
       .where(provider: Billing::Meter::AwsMarketplaceSaas.provider)
       .where(period_start: Time.current.utc.beginning_of_month..)
       .pluck(:breakdown, :receipts)
-      .sum { |breakdown, receipts| arns.any? { |arn| receipts[arn].present? } ? hour_minutes(breakdown) : 0 }
-      .to_f
+      .each_with_object({}) do |(breakdown, receipts), map|
+        arns.each do |arn|
+          id = receipts[arn]
+          next if id.blank?
+
+          map[id] = (BigDecimal(breakdown[current_company.id.to_s].to_s.presence || "0") / 60).floor
+        end
+      end
   end
 
-  def hour_minutes(breakdown)
-    (BigDecimal(breakdown[current_company.id.to_s].to_s.presence || "0") / 60).floor
+  def final_meter_receipts(license_ids)
+    MarketplaceSubscriptionEvent
+      .where(marketplace_license_id: license_ids)
+      .where("occurred_at >= ?", Time.current.utc.beginning_of_month)
+      .pluck(:metered_receipts)
+      .each_with_object({}) { |receipts, map| map.merge!(receipts.to_h) }
   end
 
   def marketplace_proposal

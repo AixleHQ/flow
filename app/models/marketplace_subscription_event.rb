@@ -46,8 +46,9 @@ class MarketplaceSubscriptionEvent < ApplicationRecord
 
   # `metered` is what the final meter sent, when this event was the one that
   # ran it. Nil for every other event, which is most of them.
-  def applied!(license, metered: nil)
-    update!(marketplace_license: license, applied_at: Time.current, failure: nil, metered: metered.presence)
+  def applied!(license, metered: nil, receipts: {})
+    update!(marketplace_license: license, applied_at: Time.current, failure: nil,
+            metered: metered.presence, metered_receipts: receipts || {})
   end
 
   # Left unapplied deliberately: a failure that clears is retried by the next

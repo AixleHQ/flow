@@ -50,8 +50,9 @@ module Billing
       def live? = status == "ACTIVE"
     end
 
-    # What AWS answers per record. `DuplicateRecord` means the hour is already
-    # held, which is a success for a replay rather than a failure to retry.
+    # What AWS answers per record. A replay of the same quantity comes back
+    # `Success` with the id already issued, not `DuplicateRecord` -- see Outcome
+    # below for what `DuplicateRecord` actually means.
     SUCCESS = "Success"
     DUPLICATE = "DuplicateRecord"
 

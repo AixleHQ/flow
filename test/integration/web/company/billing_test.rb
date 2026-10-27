@@ -169,6 +169,39 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The hourly meter is not the only path that sends. A cancellation sends the
+  # last part-hour through the final meter, which writes no ledger row -- so a
+  # figure built from ledger rows alone understated what AWS had been told by
+  # exactly the minutes a cancelling customer is most likely to check.
+  #
+  # And the two cancellation events send the same record, which AWS answers
+  # twice with the id it issued first: counted by receipt, that lands once.
+  test "the AWS panel counts the final meter too, and counts a repeated receipt once" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :ended, company: @company)
+    hour = Time.current.utc.beginning_of_month + 3.hours
+
+    CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour,
+                                quantity_seconds: 3600, state: "reported",
+                                breakdown: { @company.id.to_s => 3600 },
+                                receipts: { license.license_arn => "mr-hourly" })
+    # The cancellation: two events, one record, one receipt answered twice.
+    %w[ev-ended ev-deprovisioned].each do |id|
+      MarketplaceSubscriptionEvent.create!(
+        event_id: id, detail_type: "Purchase Agreement Ended", occurred_at: hour + 1.hour,
+        marketplace_license: license, applied_at: Time.current,
+        metered: "sent=1:already=0:minutes=9:receipt=mr-final", metered_receipts: { "mr-final" => 9 }
+      )
+    end
+
+    get company_settings_billing_path
+
+    assert_inertia_props do |props|
+      assert_in_delta 69.0, props.dig(:marketplaceBilling, :reportedMinutes), 0.001,
+                      "60 from the hourly ledger and 9 from the final meter, the repeat counted once"
+    end
+  end
+
   # The other half of the same rule, and the one that was a dead end: a customer
   # who unsubscribes in AWS keeps `billing_provider`, so keying the refusal on
   # the payer rather than on a live subscription left them unable to pay by card
