@@ -234,6 +234,14 @@ module Agents
       assert config["projects"].present?
     end
 
+    # An API-billed session that crosses $5 otherwise stops on a notice nobody answers
+    # in an automatic step, and the no-output watchdog kills it 30 minutes later.
+    test "generate_config pre-acknowledges the cost-threshold notice" do
+      config = @adapter.generate_config({ "primaryApiKey" => "sk-xxx" })
+
+      assert_equal true, config["hasAcknowledgedCostThreshold"]
+    end
+
     test "config_files returns main config and settings" do
       credentials = { "primaryApiKey" => "sk-xxx" }
 

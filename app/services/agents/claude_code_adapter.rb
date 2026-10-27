@@ -495,6 +495,12 @@ module Agents
         # interactive container session the nudge steals the first keystrokes; the flag
         # is what Claude Code itself writes once the nudge has been answered.
         "hasSeenAutoDefaultNudge" => true,
+        # Suppresses the "You've spent $5 on the Anthropic API this session." notice that
+        # an API-billed session gets once it crosses $5. It waits for a keypress, so an
+        # automatic session went silent until Sessions::NoOutputWatchdog killed it (runs
+        # 3390 and 5341, both after finishing their work). Claude Code writes this flag
+        # itself once the notice is answered.
+        "hasAcknowledgedCostThreshold" => true,
 
         # Project config (generated based on workflow)
         "projects" => generate_projects_config(workflow_config)
