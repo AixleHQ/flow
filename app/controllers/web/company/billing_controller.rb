@@ -3,12 +3,10 @@
 # The Billing tab of company settings: where the subscription stands, what this
 # period has cost so far, and the controls that change it.
 #
-# Deliberately NOT under HostedBillingOnly, which the three controllers that
-# *act* on billing still are. A workspace AWS Marketplace bills has nothing to
-# manage here, and turning it away made its billing look missing rather than
-# managed somewhere else. It reads this page instead, which says where its bill
-# comes from and what we have reported towards it, and offers no control that
-# would be a second bill for the same capacity.
+# Deliberately NOT under HostedBillingOnly, unlike the three controllers that
+# *act* on billing: a workspace AWS Marketplace bills reads this page to see
+# where its bill comes from and what has been reported towards it, and is
+# offered no control that would be a second bill.
 class Web::Company::BillingController < Web::Company::ApplicationController
   before_action :require_billing!
 
@@ -19,17 +17,11 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # Where Checkout sent the admin back from. Only these two values, so the
       # page never echoes an arbitrary query string.
       checkout_result: params[:billing].presence_in(%w[done cancelled]),
-      # A subscription bought in AWS asking to be applied here. Shown to every
-      # admin because the decision moves who bills the workspace, and the one
-      # who happens to open this page is not necessarily the one who should
-      # answer.
+      # Shown to every admin: the decision moves who bills the workspace.
       marketplace_proposal: marketplace_proposal,
-      # Set once AWS bills this workspace, which is what the page shows instead
-      # of controls. Deliberately NOT `marketplace`: that name is taken by the
-      # shared prop the stopped-workspace banner reads, and a page prop of the
-      # same name shadows it: the banner then reads this object, finds no
-      # `status` on it, and announces an ended subscription to a workspace whose
-      # subscription is running.
+      # Deliberately NOT `marketplace`: that name is the shared prop the
+      # stopped-workspace banner reads, and a page prop of the same name
+      # shadows it.
       marketplace_billing: marketplace_billing
     }
   end
@@ -47,33 +39,23 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     redirect_to company_settings_path, alert: "This workspace is managed by Aixle and is not billed."
   end
 
-  # Shown while AWS is the payer, and also after it has stopped being one if
-  # AWS has already been sent minutes this calendar month.
-  #
-  # The second half is the part a customer feels. A workspace that leaves AWS
-  # for a card still gets an AWS bill at the end of the month for what it ran
-  # there -- and keyed on the payer alone this panel vanished the moment the
-  # card arrived, leaving the product saying "0 worker-minutes this period"
-  # beside a charge it never mentions. The same mistake the Billing tab made
-  # from the other side, when it hid itself from a workspace AWS billed.
+  # Shown while AWS is the payer, and afterwards for as long as this calendar
+  # month has minutes AWS was sent: a workspace that goes back to a card still
+  # gets an AWS bill for them, and keyed on the payer alone the panel vanished
+  # beside that charge.
   def marketplace_billing
     return nil unless current_company.billing_payer.aws_marketplace? || reported_minutes.positive?
 
-    # The most recent, live or not: a workspace whose subscription has ended is
-    # exactly the one that needs this panel, and `marketplace_license` answers
-    # only for the live one.
+    # The most recent, live or not: `marketplace_license` answers only for a
+    # live one, and an ended subscription is exactly what this panel explains.
     license = current_company.marketplace_licenses.order(:id).last
     {
       aws_account_id: license&.customer_aws_account_id,
       subscribed_at: license&.subscribed_at,
       ended: license&.ended? || false,
-      # Whether AWS is the payer NOW. False on a workspace that has gone back
-      # to a card: the panel is then a statement about this month, not an
-      # offer to renew.
+      # False once a card has taken over: the panel is then a statement about
+      # this month, not an offer to renew.
       bills_now: current_company.billing_payer.aws_marketplace?,
-      # What we have reported towards the AWS bill this calendar month, which is
-      # the period AWS invoices on. The only figure available before the invoice
-      # exists, so it has to be the one AWS was actually sent — see below.
       reported_minutes: reported_minutes
     }
   end
@@ -86,22 +68,12 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     (BigDecimal(seconds) / 60).round(1).to_f
   end
 
-  # What AWS has actually been sent this calendar month, from BOTH paths that
-  # send, counted by AWS's own receipt so nothing lands twice.
-  #
-  # Not CompanyCapacityUsage, which is what the workspace was OFFERED: that
-  # holds minutes the card was billed for before a mid-month handover, minutes
-  # measured but not yet sent, and fractions where a record carries whole
-  # numbers.
-  #
-  # Two paths, because the hourly meter is not the only one. A cancellation
-  # sends the last part-hour through Billing::MarketplaceFinalMeter, which
-  # writes no ledger row -- so a figure built from ledger rows alone misses
-  # exactly the minutes a cancelling customer is most likely to check.
-  #
-  # Keyed by receipt, which also settles the repeat: the two cancellation
-  # events send the same record and AWS answers both with the id it issued
-  # first, so the id appears twice and the minutes count once.
+  # What AWS has actually been sent this calendar month, from both paths that
+  # send, keyed by AWS's receipt so the final meter's repeat counts once. Not
+  # CompanyCapacityUsage, which is what the workspace was OFFERED: minutes the
+  # card was billed for before a handover, minutes not yet sent, and
+  # fractions. Billing::MarketplaceFinalMeter writes no ledger row, so its
+  # receipts are read off the events.
   def reported_minutes
     @reported_minutes ||= begin
       licenses = current_company.marketplace_licenses.pluck(:id, :license_arn)
@@ -114,9 +86,7 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     end
   end
 
-  # Receipt -> minutes, from the hourly ledger. The row carries one receipt per
-  # licence and the company's seconds in its breakdown; the record AWS was sent
-  # carries whole minutes, so this floors the same way the adapter does.
+  # Receipt -> minutes, floored the way the adapter floors what it sends.
   def hourly_receipts(arns)
     CapacityMeterReport
       .where(provider: Billing::Meter::AwsMarketplaceSaas.provider)
@@ -148,17 +118,11 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       asked_by: license.proposed_by_email,
       aws_account_id: license.customer_aws_account_id,
       asked_at: license.proposed_at,
-      # What accepting would stop. The admin should not have to work out that
-      # the card goes away from the fact that two things cannot both bill.
       replaces_card: current_company.stripe_subscription_id.present?,
-      # And what that costs: the capacity the card has not been billed for yet,
-      # which accepting puts on its final invoice. An ordinary cancellation
-      # shows this on a screen of its own; deciding this one blind was the
-      # difference.
+      # What accepting puts on the card's final invoice.
       final_invoice_minutes: final_invoice_minutes,
-      # Accepting is refused until AWS confirms the agreement, so the card says
-      # so rather than letting an administrator press a button that cannot
-      # work. Declining is offered either way.
+      # Accepting is refused until AWS confirms the agreement; declining is
+      # offered either way.
       confirmed: license.active?,
       can_decide: current_membership&.admin? || false
     }

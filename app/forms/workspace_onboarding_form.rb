@@ -63,12 +63,9 @@ class WorkspaceOnboardingForm
     e.record.errors.each { |error| errors.add(mapped_attribute(error.attribute), error.message) }
     false
   rescue ActiveRecord::RecordNotUnique
-    # The same races, lost further down: a validation checks and then writes, and
-    # the index is what settles it when two requests do both at once. Two
-    # confirmations of one subscription arriving together is the realistic case
-    # — a buyer double-clicking the link in their mail — and it answered the
-    # second with a 500 where the same race a moment earlier answers with a
-    # refusal.
+    # The same races, lost at the index rather than at the validation: two
+    # confirmations of one subscription arriving together -- a buyer
+    # double-clicking the link -- answered the second with a 500.
     errors.add(:email_domain, "That domain already has a workspace.")
     false
   end

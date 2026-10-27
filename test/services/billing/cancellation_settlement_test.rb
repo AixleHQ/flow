@@ -75,6 +75,52 @@ class Billing::CancellationSettlementTest < ActiveSupport::TestCase
     assert_equal "settled", @cancellation.reload.settlement_state
   end
 
+  # A handover to AWS Marketplace records the cancellation before Stripe is
+  # told, so the subscription is stopped from here and the rest follows.
+  test "a cancellation Stripe has not heard of stops the subscription first, then settles" do
+    @client.add_subscription(id: "sub_card")
+    @cancellation.update!(settlement_state: "cancelling", stripe_subscription_id: "sub_card",
+                          final_invoice_id: nil, cancels_at: Time.utc(2026, 10, 12, 14, 20))
+
+    travel_to Time.utc(2026, 10, 12, 14, 21) do
+      settle
+    end
+
+    assert_equal "canceled", @client.subscriptions.fetch("sub_card")[:status]
+    @cancellation.reload
+    assert_equal "settled", @cancellation.settlement_state
+    assert_equal "in_final_sub_card", @cancellation.final_invoice_id
+    assert_equal Time.utc(2026, 10, 12, 14, 21), @cancellation.cancels_at
+    assert_equal "paid", @client.invoices.fetch("in_final_sub_card")[:status]
+  end
+
+  # A cancel that landed at Stripe but was not recorded here is not sent again:
+  # Stripe refuses to cancel a cancelled subscription, and a retry that did
+  # would fail for ever.
+  test "a subscription already stopped at Stripe is read, not stopped again" do
+    @client.add_subscription(id: "sub_card")
+    @client.cancel_subscription(subscription_id: "sub_card", reason: nil, comment: nil)
+    @cancellation.update!(settlement_state: "cancelling", stripe_subscription_id: "sub_card", final_invoice_id: nil)
+    updates_before = @client.subscription_updates.size
+
+    settle
+
+    assert_equal updates_before, @client.subscription_updates.size
+    assert_equal "in_final_sub_card", @cancellation.reload.final_invoice_id
+    assert_equal "settled", @cancellation.settlement_state
+  end
+
+  test "a subscription Stripe cannot be asked about is still to be stopped" do
+    @client.add_subscription(id: "sub_card")
+    @cancellation.update!(settlement_state: "cancelling", stripe_subscription_id: "sub_card", final_invoice_id: nil)
+    @client.failure = "unreachable"
+
+    assert_raises(Billing::StripeClient::Error) { settle }
+
+    assert @cancellation.reload.cancelling?
+    assert_equal "active", @client.subscriptions.fetch("sub_card")[:status]
+  end
+
   test "a settlement that is done is not done again" do
     @cancellation.update!(settlement_state: "settled")
 

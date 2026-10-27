@@ -278,13 +278,34 @@ describe('Company billing page', () => {
       expect(screen.queryByText(/card subscription paying for this workspace/)).not.toBeInTheDocument();
     });
 
-    it('applies it', async () => {
+    // One click moves who bills the workspace and stops the card, so the
+    // button asks first; nothing is sent until the admin says so again.
+    it('asks before applying it, and sends nothing until the admin confirms', async () => {
+      const post = vi.spyOn(router, 'post').mockImplementation(() => undefined);
+      render({}, null, proposal({ replacesCard: true, finalInvoiceMinutes: 184.5 }));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Apply the subscription' }));
+      const dialog = await screen.findByRole('dialog');
+
+      expect(post).not.toHaveBeenCalled();
+      expect(dialog).toHaveTextContent('444455556666');
+      expect(dialog).toHaveTextContent('184.5');
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Apply it' }));
+
+      expect(post).toHaveBeenCalledWith('/company/marketplace_license_proposal', {}, expect.anything());
+    });
+
+    it('can be thought better of', async () => {
       const post = vi.spyOn(router, 'post').mockImplementation(() => undefined);
       render({}, null, proposal());
 
       await userEvent.click(screen.getByRole('button', { name: 'Apply the subscription' }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Keep things as they are' }));
 
-      expect(post).toHaveBeenCalledWith('/company/marketplace_license_proposal', {}, expect.anything());
+      expect(post).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 
     // Separate renders, not two clicks: applying holds the pair while the
@@ -315,6 +336,8 @@ describe('Company billing page', () => {
       render({}, null, proposal());
 
       await userEvent.click(screen.getByRole('button', { name: 'Apply the subscription' }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Apply it' }));
 
       expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled();
     });

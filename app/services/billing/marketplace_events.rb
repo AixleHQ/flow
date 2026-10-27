@@ -91,12 +91,9 @@ module Billing
     private
 
     # The rule in the seller account matches a source and a detail type, not a
-    # product, so every agreement this account sells arrives here -- other
-    # listings, other buyers, other teams. Theirs would never match a licence
-    # and would be retried by every sweep for ever.
-    #
-    # An event that names no product at all is kept: better a row nobody
-    # matches than a dropped one that was ours.
+    # product, so every listing this account sells arrives here. An event that
+    # names no product is kept: better a row nobody matches than a dropped one
+    # that was ours.
     def ours?(detail)
       product = detail["product"] || {}
       named = product.values_at("id", "code").compact
@@ -117,13 +114,10 @@ module Billing
       MarketplaceLicense.find_by(agreement_id: event.agreement_id) || by_previous_agreement(event)
     end
 
-    # AWS fires `Purchase Agreement Created` for a renewal and for a
-    # replacement as well as for a new purchase, and a renewal is a NEW
-    # agreement id for the subscription we already hold -- the old one is named
-    # in `previousAgreementId`. Matched only on the new id, such an event finds
-    # nothing, and the licence goes on pointing at an agreement that has been
-    # superseded: the renewal is never recorded, and an `Ended` for the old
-    # agreement stops a customer who has just renewed.
+    # AWS fires `Purchase Agreement Created` for a renewal and a replacement
+    # too, under a NEW agreement id with the old one in `previousAgreementId`.
+    # Matched on the new id alone the event finds nothing, and an `Ended` for
+    # the old agreement would stop a customer who has just renewed.
     def by_previous_agreement(event)
       previous = event.detail.dig("agreement", "previousAgreementId")
       MarketplaceLicense.find_by(agreement_id: previous) if previous.present?
@@ -157,10 +151,8 @@ module Billing
       company.update!(billing_state: "active", billing_block_reason: nil)
     end
 
-    # The offer, and the agreement the subscription is on now. Re-pointing the
-    # agreement is what makes a renewal stick: afterwards the licence answers to
-    # the new id, and an `Ended` for the one it replaced matches nothing and
-    # stops nobody.
+    # The offer, and the agreement the subscription is on now: re-pointed, so
+    # an `Ended` for a superseded agreement matches nothing.
     def store(license, event)
       changes = {}
       offer = event.detail.dig("offer", "id")
@@ -171,16 +163,10 @@ module Billing
       license.update!(**changes) if changes.any?
     end
 
-    # Not the metering deadline, whatever it looks like: AWS opens the final
-    # window on the deprovisioning event, not here. The company loses access
-    # now and the licence stays meterable until that event arrives.
-    #
-    # But the usage goes first, because stopping the company is what makes it
-    # unmeasurable: CapacityWindow offers a blocked company nothing, and it
-    # does so for the WHOLE hour, including the part it was running. Measured
-    # afterwards there is nothing left to find. Billing::FinalUsage says the
-    # same thing for Stripe in its first line; this path was written again and
-    # walked into it.
+    # Not the metering deadline: AWS opens the final window on the
+    # deprovisioning event, not here. The company loses access now and the
+    # licence stays meterable until that event arrives; the usage goes first,
+    # and the state moves either way.
     def close(license, event)
       meter_the_last_usage(license, event)
     ensure
@@ -189,21 +175,16 @@ module Billing
     end
 
     # The one hour AWS allows starts here, and the hourly schedule cannot serve
-    # it: an hour reported at five past the next hour is already outside the
-    # window for any licence deprovisioned after its first five minutes. So the
-    # usage goes now, before the state moves -- `finish!` makes it unmeterable.
-    # Metered again, and that is not waste: the two events arrive seconds apart
-    # and in one drain, so whichever runs first is the one that catches the
-    # hour, and the window does not reopen for whichever does not.
+    # it: an hour reported at five past the next is already outside the window
+    # for a licence deprovisioned after its first five minutes. The usage goes
+    # before `finish!` makes the licence unmeterable.
     #
-    # AWS answers the second copy `Success` with the `meteringRecordId` it
-    # issued for the first -- measured against the real listing, where a
-    # cancellation produced two identical records a minute apart and both came
-    # back with the same id. NOT `DuplicateRecord`, which AWS reserves for a
-    # record whose quantity differs from one already metered, and which it does
-    # not honour. So the customer is billed once; what the repeat costs is a
-    # line that reads like two charges, which is why the receipt is stored --
-    # it is the only thing that tells a replay from a second charge.
+    # Sent again after `close`, deliberately: the two events arrive in one
+    # drain, and whichever runs first catches the hour. AWS answers the repeat
+    # `Success` with the id it issued the first time (measured against the real
+    # listing; `DuplicateRecord` is for a differing quantity), so the customer
+    # is billed once, and the stored receipt tells the repeat from a second
+    # charge.
     def deprovision(license, event)
       meter_the_last_usage(license, event)
     ensure
@@ -211,15 +192,10 @@ module Billing
       block(license.company)
     end
 
-    # AWS gives one hour from the event, and a call that never reached AWS has
-    # sent nothing -- so it is raised, which leaves the event unapplied and the
-    # next sweep tries again a minute later. The state still moves, through the
-    # `ensure` above: a customer who has cancelled does not keep the workspace
-    # because our credentials are broken.
-    #
-    # Bounded by the window itself. Once it has shut no retry can be accepted,
-    # so the attempt stops and says so rather than being made every minute for
-    # ever.
+    # AWS gives one hour from the event. A call that never reached AWS is
+    # raised, which leaves the event unapplied for the next sweep; the state
+    # still moves, through the `ensure` above. Once the window has shut no
+    # retry can be accepted, so the attempt stops and says so.
     def meter_the_last_usage(license, event)
       final_meter.call(license)
     rescue MarketplaceSellerClient::Error => e

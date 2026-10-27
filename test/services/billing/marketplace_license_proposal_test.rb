@@ -207,7 +207,8 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
                                 stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
     @admin = create(:user)
-    @client = mock
+    @client = FakeStripeClient.new
+    @client.add_subscription(id: "sub_1")
     Billing::StripeClient.stubs(:new).returns(@client)
   end
 
@@ -215,63 +216,66 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
 
   def propose = Billing::MarketplaceLicenseProposal.raise!(license: @license, email: "dana@northwind.example")
 
-  def expect_cancellation
-    @client.expects(:cancel_subscription)
-           .with(subscription_id: "sub_1", reason: nil, comment: nil)
-           .returns(Stripe::Subscription.construct_from(id: "sub_1", status: "canceled",
-                                                        ended_at: Time.current.to_i,
-                                                        latest_invoice: "in_final"))
-  end
+  def cancellation = @company.billing_cancellations.sole
 
   # Immediate, not at the period's end: capacity is billed in arrears, so the
   # rest of a period is not paid for, and leaving it to run would bill the
   # same hours to Stripe and to AWS both.
-  test "accepting stops the card subscription in the same breath" do
-    expect_cancellation
+  test "accepting records the card subscription as one to stop" do
     propose
 
     proposal.accept!(by: @admin)
 
     assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.reload.billing_provider
     assert_nil @company.stripe_subscription_id, "nothing later should read this as a card-billed workspace"
+    assert cancellation.cancelling?
+    assert_equal "sub_1", cancellation.stripe_subscription_id
+    assert_enqueued_with(job: Billing::SettleCancellationJob, args: [ cancellation.id ])
+  end
+
+  # Stripe is told after the commit, from the job, so nothing here can roll
+  # back around a subscription Stripe has already cancelled -- and the row lock
+  # is never held across a call to another service.
+  test "the card is stopped by the settlement job, not inside the handover" do
+    propose
+
+    proposal.accept!(by: @admin)
+    assert_equal "active", @client.subscriptions.fetch("sub_1")[:status], "nothing reaches Stripe in the transaction"
+
+    perform_enqueued_jobs(only: Billing::SettleCancellationJob)
+
+    assert_equal "canceled", @client.subscriptions.fetch("sub_1")[:status]
+    assert_equal "settled", cancellation.reload.settlement_state
   end
 
   # The settlement puts the last metered hours on the final invoice and
   # reaches Stripe through the customer, so the customer has to survive.
   test "the Stripe customer survives, because the final invoice is settled through it" do
-    expect_cancellation
     propose
 
     proposal.accept!(by: @admin)
 
     assert_equal "cus_1", @company.reload.stripe_customer_id
-    assert_enqueued_with(job: Billing::SettleCancellationJob)
   end
 
   # The same rule an ordinary cancellation follows: only the admin who pressed
   # the button had read that the card would be stopped.
   test "every administrator hears that the card was stopped, not just the one who accepted" do
-    expect_cancellation
     deciding = create(:user, :admin, :onboarding_completed, company: @company)
     create(:user, :admin, :onboarding_completed, company: @company)
     propose
 
-    # Counted rather than delivered: the settlement job is enqueued beside the
-    # mail and would carry on talking to Stripe, which this suite mocks for the
-    # cancellation alone. Two is the whole assertion -- one would be the bug.
     assert_enqueued_emails 2 do
       proposal.accept!(by: deciding)
     end
   end
 
   test "the minutes Stripe has not counted are recorded against the cancellation" do
-    expect_cancellation
     CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 2, occurred_at: 2.hours.ago)
     propose
 
     proposal.accept!(by: @admin)
 
-    cancellation = @company.billing_cancellations.sole
     assert_equal @admin, cancellation.user
     assert cancellation.final_usage.any?, "the hours Stripe never saw are what the final invoice is for"
   end
@@ -280,7 +284,6 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
   # -- there would be nobody paying -- and here AWS takes over in the same
   # transaction, so the state that stops it is never reached.
   test "the workspace is never stopped on the way across" do
-    expect_cancellation
     propose
 
     proposal.accept!(by: @admin)
@@ -289,15 +292,16 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
     assert_nil @company.billing_block_reason
   end
 
-  # Stripe refusing leaves everything as it was rather than half-moved.
-  test "a payment provider that cannot be reached changes nothing" do
-    @client.expects(:cancel_subscription).raises(Billing::StripeClient::Error, "unreachable")
+  # The handover is done whether or not Stripe can be reached right now; the
+  # card is stopped when it can be, and the job retries until then.
+  test "a payment provider that cannot be reached does not hold the handover up" do
+    @client.failure = "unreachable"
     propose
 
-    assert_raises(Billing::StripeClient::Error) { proposal.accept!(by: @admin) }
+    proposal.accept!(by: @admin)
 
-    assert_nil @license.reload.company
-    assert_equal "sub_1", @company.reload.stripe_subscription_id
-    assert_equal Company::BILLING_PROVIDER_STRIPE, @company.billing_provider
+    assert_equal @company, @license.reload.company
+    assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.reload.billing_provider
+    assert cancellation.cancelling?
   end
 end

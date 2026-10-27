@@ -24,14 +24,10 @@ class MarketplaceSubscriptionEvent < ApplicationRecord
   scope :in_order, -> { order(:occurred_at, :id) }
 
   # What the blind sweep looks at. The seller account's rule matches a source
-  # and a detail type rather than a product, so this table receives the
-  # agreement traffic of every listing that account sells -- none of which will
-  # ever match a licence of ours, and all of which an unbounded sweep would
-  # reconsider for ever.
-  #
-  # The rows are kept; only the looking stops, and only for the sweep.
-  # #awaiting is unbounded, so a
-  # licence that appears late still replays its own events when it is created.
+  # and a detail type rather than a product, so this table receives every
+  # listing's agreement traffic, none of which will match a licence of ours.
+  # The rows are kept; only the sweep stops looking. #awaiting is unbounded,
+  # so a licence appearing late still replays its own.
   scope :worth_sweeping, -> { unapplied.where(occurred_at: SWEPT_FOR.ago..) }
 
   # Everything still waiting for the licence it names to exist. Matched on

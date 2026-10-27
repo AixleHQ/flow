@@ -21,9 +21,6 @@ class Web::Company::MarketplaceLicenseProposalsController < Web::Company::Applic
                 notice: "#{current_company.name} is now billed through AWS Marketplace."
   rescue Billing::MarketplaceLicenseProposal::Refused => e
     refuse(e.message)
-  rescue Billing::StripeClient::Error => e
-    Rails.logger.error("[MarketplaceLicenseProposals] company #{current_company.id}: #{e.message}")
-    refuse("We could not reach our payment provider. Nothing has changed — try again in a moment.")
   end
 
   def destroy

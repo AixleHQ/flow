@@ -75,10 +75,9 @@ module Billing
 
     private
 
-    # Two totals from one pass. `seconds` is everything the company was offered,
-    # which is what a free allowance is spent from; `payable` is the part its
-    # current payer owes, which is everything except the time before that payer
-    # took over.
+    # Two totals from one pass: `seconds` is everything the company was offered,
+    # which a free allowance is spent from; `payable` is the part its current
+    # payer owes.
     def accrue(seconds, payable, limits, states, from:, to:)
       elapsed = (to - from).round
       return if elapsed <= 0
@@ -91,23 +90,15 @@ module Billing
       end
     end
 
-    # Only an active workspace owes for what it was offered. A trialing one is
-    # spending a free allowance, and a blocked one was offered nothing anyway.
-    #
-    # Read from the state it was IN at that moment, which is the whole reason
-    # the log exists. Decided here rather than by filtering the live row
-    # afterwards: that filter asked what the company is at five past the next
-    # hour, so a trial that took a card in those five minutes had its free hour
-    # charged, and a workspace stopped by a cancellation lost the minutes it ran
-    # before it.
+    # Only an active workspace owes for what it was offered: a trialing one
+    # spends a free allowance, a blocked one was offered nothing. Read from the
+    # state it was in at that moment, not from the live row at five past the
+    # next hour.
     def owed?(state) = !Deployment.saas? || state == "active"
 
-    # A company that changed payer inside this hour is billed by the new one
-    # only from the moment it took over. The time before belonged to the old
-    # payer: free where the workspace was trialing, and already on the old
-    # payer's final invoice where it was paying -- Billing::FinalUsage measures
-    # up to the switch and settles it. Without this the new payer is sent the
-    # whole hour and that earlier part is charged twice.
+    # A company that changed payer inside this hour owes the new one only from
+    # the switch. The time before is free trial time, or already on the old
+    # payer's final invoice (Billing::FinalUsage).
     def owed_elapsed(company_id, from, to)
       since = payer_since[company_id]
       return (to - from).round if since.nil?
@@ -115,16 +106,12 @@ module Billing
       (to - [ from, since ].max).round.clamp(0, (to - from).round)
     end
 
-    # Every switch from the start of this window onwards. One from before it is
-    # absent, so `owed_elapsed` charges the payer for the whole hour.
-    #
-    # One from *after* the window counts as much as one inside it: the hour is
-    # measured at five past the next, and `per_company` goes to whichever payer
-    # the company has by then -- so a switch made in those five minutes left the
-    # hour owed in full by a payer who had not held it for any of it, while the
-    # one who did had already invoiced it. `owed_elapsed` clamps it to zero; the
-    # earlier payer is settled by FinalUsage going out, the final meter coming
-    # back, and free trial time either way.
+    # Every switch from the start of this window onwards, one AFTER the window
+    # included: the hour is measured at five past the next and delivered to
+    # whichever payer the company has by then, so a switch in those minutes
+    # must leave the new payer owing nothing. `owed_elapsed` clamps it to zero;
+    # the earlier payer is settled by FinalUsage, the final meter, or free
+    # trial time.
     def payer_since
       @payer_since ||= Company.where(id: measured_company_ids)
                               .where(billing_provider_since: period_start..)
@@ -135,15 +122,10 @@ module Billing
       limits.sum { |company_id, limit| offered(limit, states[company_id]) }
     end
 
-    # What the company could actually run, which is what it may be charged for.
-    # A zero here is a company offered nothing — stopped, or unbounded and
-    # therefore unbillable — and the two are told apart by the ceiling, not by
-    # the number.
-    #
-    # Takes the state it was in at the moment being measured, not the state it
-    # is in now. A workspace stopped until :47 offered nothing until :47,
-    # whatever it has become by the time the hour is measured at five past the
-    # next one.
+    # What the company could actually run, in the state it was in at that
+    # moment: a workspace stopped until :47 offered nothing until :47. A zero
+    # is a company offered nothing — stopped, or unbounded and therefore
+    # unbillable — and the two are told apart by the ceiling, not the number.
     def offered(configured, state)
       ceiling = ceiling_for(state)
       return configured.to_i if ceiling.nil?
@@ -159,16 +141,10 @@ module Billing
       Trial.ceiling_for(state)
     end
 
-    # What every company's billing state was as the hour opened, read the same
-    # way as its capacity.
-    #
-    # The fallback to the live row is a safety net and not the normal path: a
-    # migration seeded one entry per company when the log shipped, so a company
-    # the log knows nothing about is one created since — and a company created
-    # mid-hour is logged on creation, which this reads before the walk applies
-    # it. Trusting the live row for a company whose first entry lands *inside*
-    # the hour is what the net cannot do correctly, because nothing records what
-    # that entry replaced; the seed is what makes that case not arise.
+    # What every company's billing state was as the hour opened. The live row
+    # is a safety net for a company the log does not know, which since the
+    # backfill is only one created mid-hour — and that one is logged on
+    # creation, which the walk applies.
     def opening_states
       logged = CompanyBillingStateChange.state_at(period_start)
       live = Company.where(id: measured_company_ids).pluck(:id, :billing_state).to_h
@@ -190,18 +166,11 @@ module Billing
     end
 
     # What every company's limit was as the hour opened. The log is the source
-    # for every company that appears in it at all; one that does not falls back
-    # to its live row, which is the only thing available for capacity set before
-    # the log shipped.
-    #
-    # The fallback is read narrowly on purpose. A company whose first entry lands
-    # *during* this hour is in the log, so it opened the hour at nothing — taking
-    # its live row instead would read today's capacity back to the top of the
+    # for every company in it at all; one that is not falls back to its live
+    # row, the only thing available for capacity set before the log shipped.
+    # A company whose first entry lands *during* this hour opened it at
+    # nothing: its live row would read today's capacity back to the top of the
     # hour and bill a customer who signed up at 04:26 for the whole of 04:00.
-    # That is every new customer's first hour, so the narrow reading costs at
-    # most one under-billed hour for a pre-log company whose first change happens
-    # to land between the hour ending and this running, and saves an overcharge
-    # that would otherwise happen every time.
     def opening_limits
       logged = CompanyCapacityChange.state_at(period_start)
       live = SessionConcurrencyLimit.for_companies.pluck(:scope_id, :max_sessions).to_h
@@ -215,11 +184,10 @@ module Billing
       end
     end
 
-    # Companies the log knows anything about, whenever it was written. One of
-    # these missing from `logged` is left out of the opening entirely rather
-    # than opened at zero, because a zero here means "no limit set", which
-    # `offered` answers with the company's ceiling. It enters the window when
-    # its first change does.
+    # Companies the log knows at all. One of these absent from `logged` is left
+    # out of the opening rather than opened at zero, because a zero means "no
+    # limit set" and `offered` answers that with the ceiling; it enters the
+    # window with its first change.
     def ever_logged
       @ever_logged ||= CompanyCapacityChange.where(company_id: measured_company_ids)
                                             .distinct.pluck(:company_id).to_set
@@ -233,14 +201,10 @@ module Billing
         .pluck(:company_id, :max_sessions, :occurred_at)
     end
 
-    # Active companies only, which is honest because admission refuses every other
-    # kind (SessionService#preflight_company_active!). The two rules have to agree:
-    # billing for capacity that cannot be occupied overcharges, and metering a
-    # company that can still run would make suspending one a way to keep the
-    # capacity and stop paying for it.
-    # What is left to read from the live row, now that the billing state is read
-    # from the log instead: a company Aixle carries, which is a standing
-    # arrangement and not a thing an hour can change.
+    # Running companies only, because admission refuses the rest
+    # (SessionService#preflight_company_active!) and capacity nobody can occupy
+    # must not be billed; and not one Aixle carries, a standing arrangement no
+    # hour changes. The billing state is read from the log, not here.
     def billable_company_ids
       @billable_company_ids ||= begin
         scope = Company.active

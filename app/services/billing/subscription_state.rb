@@ -7,7 +7,8 @@ module Billing
   # moved the billing period from the subscription onto its items, and the
   # version that shapes a webhook payload belongs to the endpoint, not to this
   # gem — ours were created on the account's default.
-  SubscriptionState = Data.define(:id, :status, :period_starts_at, :period_ends_at, :cancels_at, :ended_at) do
+  SubscriptionState = Data.define(:id, :status, :period_starts_at, :period_ends_at, :cancels_at, :ended_at,
+                                  :latest_invoice_id) do
     def self.from(object)
       data = (object.respond_to?(:to_hash) ? object.to_hash : object.to_h).deep_symbolize_keys
       item = data.dig(:items, :data, 0) || {}
@@ -19,11 +20,15 @@ module Billing
         period_starts_at: at(item[:current_period_start] || data[:current_period_start]),
         period_ends_at: period_ends_at,
         cancels_at: at(data[:cancel_at]) || (data[:cancel_at_period_end] ? period_ends_at : nil),
-        ended_at: at(data[:ended_at])
+        ended_at: at(data[:ended_at]),
+        latest_invoice_id: invoice_id(data[:latest_invoice])
       )
     end
 
     def self.at(timestamp) = timestamp.present? ? Time.zone.at(timestamp.to_i) : nil
+
+    # An id, or the whole invoice when the response came back expanded.
+    def self.invoice_id(invoice) = invoice.is_a?(Hash) ? invoice[:id] : invoice.presence
 
     def running? = %w[active trialing].include?(status)
 
