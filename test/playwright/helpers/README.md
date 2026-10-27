@@ -270,7 +270,8 @@ await signOut(page, staging); // { signedOut: true, landedOn: '/login' }
 These four start an agent session on staging, follow it, finish it and read its log through
 `/api/v1/terminal_sessions`, as the signed-in user. Like `appRequest` they take `page` and one options object, and each
 accepts `baseUrl`. `show`, `finish` and `destroy` only find sessions the signed-in user owns, so follow a session as the
-role that started it. `id` may be the numeric id or the route token.
+role that started it. `id` may be the numeric id or the route token in every helper. The API's `finish` takes the
+numeric id only, so `finishSession` resolves a route token with `GET /api/v1/terminal_sessions/:id` first.
 
 **Finish every session you start**, so no container is left running. `DELETE /api/v1/terminal_sessions/:id` is no
 substitute: it refuses an active session with `400 Cannot delete active session`.
@@ -307,7 +308,10 @@ Polls `GET /api/v1/terminal_sessions/:id` every `intervalMs` and returns `{ id, 
 - After `timeoutMs` it returns with `timedOut: true` and `final` set to the last state seen. Call it again to keep
   waiting; do not raise `timeoutMs` to wait longer in one call. `timeoutMs` is capped at 10 minutes, so a call never
   comes near the 30-minute silence limit.
-- Throws when the session cannot be read, for example `404` for a session the signed-in user does not own.
+- Throws when the first poll fails, for example `404` for a session the signed-in user does not own.
+- A later poll that fails (a `5xx` during a deploy, no response) is retried up to twice, `intervalMs` apart and within
+  `timeoutMs`. If it still fails, the helper returns `{ id, final, timedOut: false, error, timeline }`, with `final`
+  the last state seen and the timeline so far, instead of throwing. Check `error`, then call it again.
 
 ```js
 const wait = await waitForSession(page, { id: session.id });
@@ -325,6 +329,8 @@ Calls `POST /api/v1/terminal_sessions/:id/finish` and returns `{ status, state, 
 - A session that cannot be finished, for example one already `finished`, answers
   `400 Cannot finish session in state: …`. The helper does not throw: `status` is `400`, `error` carries the message,
   and `state` is read with `GET /api/v1/terminal_sessions/:id`.
+- Any other status (`404`, `403`, `422`, `5xx`) throws with the API's message, so a failed finish never looks like a
+  result. A route token that `show` cannot resolve throws too.
 
 ```js
 await finishSession(page, { id: session.id }); // { status: 200, state: 'finishing', error: null }

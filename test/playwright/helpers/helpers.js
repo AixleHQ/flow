@@ -704,14 +704,20 @@ async function signOut(page, options = {}) {
 // startSession, waitForSession, sessionLog and finishSession drive
 // /api/v1/terminal_sessions as the signed-in user. Like appRequest they take
 // `page` and one options object, and accept `baseUrl`. `show`, `finish` and
-// `destroy` only find sessions the signed-in user owns; `id` may be the
-// numeric id or the route token. Finish every session you start.
+// `destroy` only find sessions the signed-in user owns. `show` and
+// `terminal_log` take the numeric id or the route token; `finish` takes the
+// numeric id only, so finishSession resolves a route token through `show`
+// first. Finish every session you start.
 
 // Nothing leaves these states, so waitForSession stops on them whatever `until` says.
 const AIXLE_SESSION_TERMINAL_STATES = ['finished', 'failed', 'cancelled'];
 // One waitForSession call never blocks longer than this: a tool call silent for
 // 30 minutes gets the QA session killed. Call it again to wait longer.
 const AIXLE_SESSION_MAX_WAIT_MS = 600000;
+// After the first successful poll, a failed poll (5xx during a deploy, no
+// response) is retried this many times before waitForSession gives up and
+// returns the timeline it has, with `error`.
+const AIXLE_SESSION_POLL_RETRIES = 2;
 
 function aixleSessionPath(id, rest = '') {
   return `/api/v1/terminal_sessions/${aixleId('id', id)}${rest}`;
@@ -777,7 +783,11 @@ async function startSession(
  * seen, and `timeline` has one row { t, state, containerId, errorMessage } per
  * change of any of those three fields (`t` is an ISO time). On timeout it
  * returns with timedOut: true; call it again to keep waiting. `timeoutMs` is
- * capped at 10 minutes. Throws when the session cannot be read (404, …).
+ * capped at 10 minutes. Throws when the first poll fails (404 for a session
+ * that is missing or not yours, …). A later failed poll (non-200 or no
+ * response) is retried up to twice, `intervalMs` apart and within the budget;
+ * if it still fails, returns { id, final, timedOut: false, error, timeline }
+ * with the last state seen and the timeline so far, so it is not lost.
  */
 async function waitForSession(
   page,
@@ -790,12 +800,31 @@ async function waitForSession(
   const started = Date.now();
   const timeline = [];
   let last = null;
+  let failures = 0;
 
   for (;;) {
-    const result = await appRequest(page, { path, baseUrl });
-    if (result.status !== 200 || !result.json) {
-      throw new Error(`waitForSession: GET ${path} answered ${result.status}: ${aixleApiError(result)}`);
+    let result = null;
+    let error = null;
+    try {
+      result = await appRequest(page, { path, baseUrl });
+      if (result.status !== 200 || !result.json) {
+        error = `waitForSession: GET ${path} answered ${result.status}: ${aixleApiError(result)}`;
+      }
+    } catch (failure) {
+      error = `waitForSession: ${failure.message}`;
     }
+    if (error) {
+      // Nothing gathered yet: the session is missing, not ours, or unreachable.
+      if (!last) throw new Error(error);
+      failures += 1;
+      const remaining = budget - (Date.now() - started);
+      if (failures > AIXLE_SESSION_POLL_RETRIES || remaining <= 0) {
+        return { id, final: last.state, timedOut: false, error, timeline };
+      }
+      await page.waitForTimeout(Math.min(interval, remaining));
+      continue;
+    }
+    failures = 0;
     const row = {
       t: new Date().toISOString(),
       state: result.json.state,
@@ -905,18 +934,40 @@ async function sessionLog(page, { id, tailLines = 200, grep, baseUrl } = {}) {
 
 /**
  * POST /api/v1/terminal_sessions/:id/finish. Returns { status, state, error }.
+ * `id` may be the numeric id or the route token: `finish` looks sessions up by
+ * numeric id only, so a route token is first resolved with GET show (a hex
+ * token must never reach `finish`, where Rails could cast its leading digits to
+ * another session's id).
  * On 200 the session is usually `finishing`, not yet `finished`: follow with
  * waitForSession({ id, until: ['finished'] }). A session that cannot be finished
  * (already finished, say) answers 400 `Cannot finish session in state: …`;
- * then `state` is read with GET show and `error` carries the message.
- * DELETE is no substitute: it refuses an active session with 400.
+ * then `state` is read with GET show and `error` carries the message. Any
+ * other status (404, 403, 422, 5xx) throws, so a failed finish is never
+ * mistaken for a result. DELETE is no substitute: it refuses an active session
+ * with 400.
  */
 async function finishSession(page, { id, baseUrl } = {}) {
-  const result = await appRequest(page, { method: 'POST', path: aixleSessionPath(id, '/finish'), json: {}, baseUrl });
+  aixleId('id', id);
+  let numericId = String(id);
+  if (!/^\d+$/.test(numericId)) {
+    const show = await appRequest(page, { path: aixleSessionPath(numericId), baseUrl });
+    if (show.status !== 200 || !show.json || !/^\d+$/.test(String(show.json.id))) {
+      throw new Error(
+        `finishSession: could not resolve route token to a session id: GET show answered ${show.status}: ${aixleApiError(show)}`,
+      );
+    }
+    numericId = String(show.json.id);
+  }
+
+  const path = aixleSessionPath(numericId, '/finish');
+  const result = await appRequest(page, { method: 'POST', path, json: {}, baseUrl });
   if (result.status === 200 && result.json) return { status: 200, state: result.json.state, error: null };
+  if (result.status !== 400) {
+    throw new Error(`finishSession: POST ${path} answered ${result.status}: ${aixleApiError(result)}`);
+  }
 
   let state = null;
-  const show = await appRequest(page, { path: aixleSessionPath(id), baseUrl }).catch(() => null);
+  const show = await appRequest(page, { path: aixleSessionPath(numericId), baseUrl }).catch(() => null);
   if (show && show.status === 200 && show.json) state = show.json.state;
-  return { status: result.status, state, error: aixleApiError(result) };
+  return { status: 400, state, error: aixleApiError(result) };
 }
