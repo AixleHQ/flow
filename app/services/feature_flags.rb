@@ -111,12 +111,13 @@ module FeatureFlags
       definition.company_scoped? ? Feature.enabled?(definition.key, company: company) : Feature.enabled?(definition.key)
     end
 
-    # Composes the graph and installs it for the process. Called by
-    # config/initializers/feature_flags.rb; a test of composition calls #compose.
+    # Composes the graph and installs it for the process. A test of composition
+    # calls #compose.
     def boot!(**options) = @booted = compose(**options)
 
-    # A read before boot! composes the default graph: an initializer or a rake
-    # task can load app code before after_initialize runs.
+    # The installed graph, composed on first use. config/initializers/feature_flags.rb
+    # calls it after initialization; eager loading or a rake task may reach it
+    # first, and the graph is composed (and undeclared variables reported) once.
     def booted = @booted || boot!
 
     # Loads and validates the registry and the ENV layer, raising on anything

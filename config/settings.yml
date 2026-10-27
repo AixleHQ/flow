@@ -672,9 +672,13 @@ session_admission:
 # Feature flags (config/feature_flags.yml). `env` carries every FEATURE_*
 # variable, and every variable a flag declares as its own `env:`, as a JSON
 # object — JSON is valid YAML — so FeatureFlags::EnvSource can parse and
-# validate the ENV lock layer without app code reading ENV.
+# validate the ENV lock layer without app code reading ENV. The registry is
+# parsed with the options FeatureFlags::Registry.load uses (aliases: false).
+<% flag_registry  = YAML.load_file(Rails.root.join("config/feature_flags.yml"), permitted_classes: [ Date ], aliases: false).to_h %>
+<% flag_env_names = flag_registry.values.filter_map { |flag| flag["env"] if flag.is_a?(Hash) } %>
+<% feature_env    = ENV.to_h.select { |name, _| name.start_with?("FEATURE_") || flag_env_names.include?(name) } %>
 feature_flags:
-  env: <%= YAML.load_file(Rails.root.join("config/feature_flags.yml"), permitted_classes: [ Date ]).to_h.values.filter_map { |flag| flag["env"] if flag.is_a?(Hash) }.then { |declared| ENV.to_h.select { |name, _| name.start_with?("FEATURE_") || declared.include?(name) } }.to_json %>
+  env: <%= feature_env.to_json %>
 
 # How long a tool result's stored payload is kept (ToolResultCleanupJob).
 tool_results:
