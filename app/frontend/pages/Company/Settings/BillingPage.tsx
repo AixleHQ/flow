@@ -45,8 +45,8 @@ interface Usage {
 }
 
 interface FinalInvoice {
-  /** `settling` while the last usage is still on its way to Stripe. */
-  state: 'settling' | 'settled' | 'failed';
+  /** `cancelling` until the card has been stopped at Stripe; `settling` while the last usage is on its way to it. */
+  state: 'cancelling' | 'settling' | 'settled' | 'failed';
   url: string | null;
 }
 
@@ -212,6 +212,7 @@ function CancelModal({ opened, onClose, reasons }: { opened: boolean; onClose: (
 
 function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
   switch (invoice.state) {
+    case 'cancelling':
     case 'settling':
       return (
         <Group gap="xs">
@@ -403,12 +404,18 @@ function useRefreshWhileSettling(settling: boolean) {
   }, [settling]);
 }
 
-// A purchase made somewhere else asking to become this workspace's bill. The
-// consequences are spelled out rather than summarised: accepting hands billing
-// to an AWS account that may belong to somebody else, and whoever holds that
-// subscription can stop the workspace by unsubscribing.
 function MarketplaceProposalCard({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
+  const [applyOpen, setApplyOpen] = useState(false);
   const [deciding, setDeciding] = useState(false);
+
+  const apply = () => {
+    setDeciding(true);
+    router.post(
+      companyMarketplaceLicenseProposalPath(),
+      {},
+      { onSuccess: () => setApplyOpen(false), onFinish: () => setDeciding(false) },
+    );
+  };
 
   return (
     <Card withBorder padding="lg">
@@ -421,27 +428,7 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
           <b>{proposal.askedBy}</b> bought an AWS Marketplace subscription to Aixle Flow and asks for it to be applied
           to {companyName}. They confirmed that address on {formatDateMedium(proposal.askedAt)}.
         </Text>
-        <List size="sm" spacing={4}>
-          <List.Item>
-            {companyName} would be billed through AWS account <b>{proposal.awsAccountId}</b>, which you may not control.
-          </List.Item>
-          <List.Item>Whoever holds that subscription can end it, and this workspace stops when they do.</List.Item>
-          {proposal.replacesCard && (
-            <List.Item>
-              The card subscription paying for this workspace is stopped at the same moment, and a final invoice follows
-              {proposal.finalInvoiceMinutes != null ? (
-                <>
-                  {' '}
-                  for the <b>{formatMinutes(proposal.finalInvoiceMinutes)}</b> worker-minutes it has not been billed for
-                  yet
-                </>
-              ) : (
-                <> for the capacity used up to then</>
-              )}
-              .
-            </List.Item>
-          )}
-        </List>
+        <ProposalConsequences proposal={proposal} companyName={companyName} />
         {!proposal.confirmed && (
           <Alert color="gray" title="Waiting for AWS">
             AWS has not confirmed this subscription yet, so it cannot be applied. This usually takes a few minutes.
@@ -450,14 +437,7 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
         )}
         {proposal.canDecide ? (
           <Group>
-            <Button
-              loading={deciding}
-              disabled={!proposal.confirmed}
-              onClick={() => {
-                setDeciding(true);
-                router.post(companyMarketplaceLicenseProposalPath(), {}, { onFinish: () => setDeciding(false) });
-              }}
-            >
+            <Button loading={deciding} disabled={!proposal.confirmed} onClick={() => setApplyOpen(true)}>
               Apply the subscription
             </Button>
             <Button
@@ -474,17 +454,63 @@ function MarketplaceProposalCard({ proposal, companyName }: { proposal: Marketpl
           </Text>
         )}
       </Stack>
+      <Modal
+        opened={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        title="Apply the AWS Marketplace subscription?"
+        size="md"
+      >
+        <Stack gap="md">
+          <Text size="sm">This takes effect now and is not undone by declining later:</Text>
+          <ProposalConsequences proposal={proposal} companyName={companyName} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setApplyOpen(false)} disabled={deciding}>
+              Keep things as they are
+            </Button>
+            <Button loading={deciding} onClick={apply}>
+              Apply it
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Card>
+  );
+}
+
+// What accepting does, spelled out rather than summarised: billing goes to an
+// AWS account that may belong to somebody else, who can stop the workspace by
+// unsubscribing, and the card paying for it today is stopped at once.
+function ProposalConsequences({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
+  return (
+    <List size="sm" spacing={4}>
+      <List.Item>
+        {companyName} would be billed through AWS account <b>{proposal.awsAccountId}</b>, which you may not control.
+      </List.Item>
+      <List.Item>Whoever holds that subscription can end it, and this workspace stops when they do.</List.Item>
+      {proposal.replacesCard && (
+        <List.Item>
+          The card subscription paying for this workspace is stopped at the same moment, and a final invoice follows
+          {proposal.finalInvoiceMinutes != null ? (
+            <>
+              {' '}
+              for the <b>{formatMinutes(proposal.finalInvoiceMinutes)}</b> worker-minutes it has not been billed for yet
+            </>
+          ) : (
+            <> for the capacity used up to then</>
+          )}
+          .
+        </List.Item>
+      )}
+    </List>
   );
 }
 
 const AWS_SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
 
-// A workspace AWS bills has nothing to change here, and the page used to be
-// taken away from it entirely -- which read as billing gone missing rather than
-// billing kept somewhere else. So it says where the bill comes from, and what
-// we have reported towards it, which is the one figure not visible in AWS until
-// the invoice exists.
+// A workspace AWS bills has nothing to change here. Taken away from the page
+// entirely, its billing read as gone missing rather than kept somewhere else,
+// so the card says where the bill comes from and what has been reported
+// towards it -- the one figure not visible in AWS until the invoice exists.
 function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplace; companyName: string }) {
   return (
     <Card withBorder padding="lg">
@@ -539,7 +565,7 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
 
 const BillingPage = () => {
   const { company, billing, checkoutResult, marketplaceProposal, marketplaceBilling } = usePage<Props>().props;
-  useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
+  useRefreshWhileSettling(billing.finalInvoice?.state === 'cancelling' || billing.finalInvoice?.state === 'settling');
 
   return (
     <AuthLayout>
