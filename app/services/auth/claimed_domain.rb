@@ -24,14 +24,12 @@ module Auth
     end
 
     # For a typed address rather than a proved one, which is all an AWS
-    # Marketplace buyer has: they are signed out on arrival, so there is no user
-    # to check memberships against. Answered narrowly even so -- see #to_h -- a
-    # pay-as-you-go subscription costs nothing to take out, so it is a door and
-    # not a vouching.
+    # Marketplace buyer has: they are signed out on arrival. Answered narrowly
+    # (#to_h), because a pay-as-you-go subscription costs nothing to take out.
     #
-    # Any company, not only an active one. The form refuses the domain whatever
+    # Any company, not only an active one: the form refuses the domain whatever
     # state its workspace is in (WorkspaceOnboardingForm#domain_is_free), so
-    # scoping this to active would refuse the buyer and then explain nothing.
+    # scoping to active would refuse the buyer and then explain nothing.
     def self.for_email(email)
       return nil if email.blank?
 
@@ -46,13 +44,10 @@ module Auth
     end
 
     # The workspace is named, and its ways in listed, only for an address its
-    # owner has proved. A typed one may be anybody's: auto-join does not run for
-    # it whatever the method, so naming the workspace buys the person nothing
-    # they can act on and hands a stranger its name, its sign-ins and whether
-    # joining needs approval -- for any domain they care to type.
-    #
-    # The narrow answer still says the one thing the screen exists for: this
-    # domain is taken, which is why the form refused.
+    # owner has proved. Auto-join does not run for a typed one whatever the
+    # method, so naming it would hand a stranger the workspace's name, sign-ins
+    # and approval rule for any domain they care to type. The narrow answer
+    # still says why the form refused: the domain is taken.
     def to_h
       return { domain: company.email_domain, workspace_name: nil, join_methods: [], approval_required: false } unless proved?
 

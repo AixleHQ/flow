@@ -64,13 +64,12 @@ module Billing
 
     # What came back for it, without the vendor's types.
     #
-    # `DuplicateRecord` is NOT acceptance, whatever the word suggests. AWS:
-    # "the UsageRecord was invalid and not honored. A previously metered
-    # UsageRecord had the same customer, dimension, and time, but a DIFFERENT
-    # quantity." An honest replay of the same quantity comes back `Success`
-    # with the id already issued, measured against the real listing, so a
-    # duplicate is never a replay of ours. It is two different
-    # answers to what one hour was worth, and the hour went unbilled.
+    # `DuplicateRecord` is NOT acceptance. AWS: "the UsageRecord was invalid
+    # and not honored. A previously metered UsageRecord had the same customer,
+    # dimension, and time, but a DIFFERENT quantity." A replay of the same
+    # quantity comes back `Success` with the id already issued, so a duplicate
+    # is two different answers to what one hour was worth, and the hour went
+    # unbilled.
     Outcome = Data.define(:license_arn, :status, :metering_record_id) do
       def accepted? = status == SUCCESS
       def duplicate? = status == DUPLICATE

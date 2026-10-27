@@ -147,29 +147,17 @@ class Company < ApplicationRecord
   # the column has to be true for all of them or the admin shows `none` beside a
   # company that is paying.
   before_validation :record_stripe_as_the_payer, if: :acquiring_a_stripe_customer?
-  # Here rather than in the paths that switch the payer -- there are three, and
-  # a measurement that quietly bills the wrong one is not the kind of mistake a
-  # fourth path should be able to make. See Billing::CapacityWindow for what
-  # reads it.
+  # Here rather than in the three paths that switch the payer, so a fourth
+  # cannot forget it. Billing::CapacityWindow reads it.
   before_save :stamp_the_payer_change, if: -> { persisted? && will_save_change_to_billing_provider? }
-  # After commit, like the capacity log beside it: the measurement reads this
-  # for an hour that has closed, so an entry for a state that was rolled back
-  # would bill against something that never happened.
+  # After commit, like the capacity log beside it: an entry for a state that
+  # was rolled back would bill against something that never happened.
   #
-  # Creation is logged unconditionally. A company whose state came from the
-  # column default reports no change to it, so keying creation on one left every
-  # new company out of the log entirely -- and a company the log does not know
-  # is read from its live row, which is the snapshot this exists to stop
-  # trusting. The first hour of its first state change was billed at whatever it
-  # had become.
-  #
-  # Neither fires on destroy, which also commits and also reports the state as
-  # changed: the entry would name a company that no longer exists, and its own
-  # `belongs_to` refuses it.
-  # One callback, not two: a second `after_commit` naming the same method
-  # replaces the first rather than joining it, so the pair that reads as
-  # "creation always, updates when the state moved" silently becomes only the
-  # second of them.
+  # Creation is logged whatever the state, because one that came from the
+  # column default reports no change -- and a company the log does not know is
+  # read from its live row, the snapshot the log exists to stop trusting. Not
+  # on destroy, where `belongs_to` refuses the entry. One callback for both: a
+  # second `after_commit` naming the same method replaces the first.
   after_commit :record_billing_state_change, on: %i[create update],
                                              if: -> { previously_new_record? || saved_change_to_billing_state? }
   after_save :apply_session_concurrency_limit
@@ -301,11 +289,9 @@ class Company < ApplicationRecord
     return false unless stripe_customer_id.present? && will_save_change_to_stripe_customer_id?
     return true if billing_provider == BILLING_PROVIDER_NONE
 
-    # A workspace AWS billed until its subscription ended. Nothing re-points
-    # `billing_provider` on a cancellation, so without this a customer who
-    # unsubscribed could never pay by card again. Never while the subscription
-    # is live -- that would be a second bill for the same capacity -- and never
-    # on create, where no licence exists yet to say either way.
+    # A workspace AWS billed until its subscription ended: nothing re-points the
+    # column on a cancellation. Never while the licence is live, and never on
+    # create, where no licence exists yet to say.
     billing_provider == BILLING_PROVIDER_AWS_MARKETPLACE && persisted? && marketplace_license.nil?
   end
 
@@ -313,23 +299,16 @@ class Company < ApplicationRecord
     self.billing_provider = BILLING_PROVIDER_STRIPE
   end
 
-  # When the payer that bills this company now took over. An hour is measured
-  # after it closes, against the company as it is then, so without this the
-  # whole of the hour a switch happened in goes to the new payer -- including
-  # the part the old one has already invoiced.
-  #
-  # A change, never a birth: `persisted?` keeps this off companies created with
-  # a payer already set. For those the stamp would say the payer took over at
-  # creation, which is true and useless -- nothing before a company exists is
-  # billed anyway (Billing::CapacityWindow#opening_limits) -- and it would clip
-  # the hour a company was created in for a second, unrelated reason.
+  # When the payer that bills this company now took over, which is what splits
+  # the hour a switch happened in between the old payer and the new. Not on
+  # create: nothing before a company exists is billed anyway
+  # (Billing::CapacityWindow#opening_limits).
   def stamp_the_payer_change
     self.billing_provider_since = Time.current
   end
 
   # What Billing::CapacityWindow reads to tell an hour a workspace was stopped
-  # for from one it was running: without it the hour is billed at whatever the
-  # company has become by the time the hour is measured.
+  # for from one it was running.
   def record_billing_state_change
     CompanyBillingStateChange.record!(company_id: id, billing_state: billing_state)
   end

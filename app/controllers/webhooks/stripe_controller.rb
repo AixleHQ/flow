@@ -122,11 +122,10 @@ class Webhooks::StripeController < ActionController::API
   def payment_failed(company, invoice)
     subscription_id = subscription_of(invoice)
     return ignore(company, "failed invoice for #{subscription_id}, not its current one") unless current_subscription?(company, subscription_id)
-    # The last invoice of the card a Marketplace workspace left. It is a real
-    # debt and Stripe collects it, but it buys nothing here and must not stop a
-    # workspace AWS is paying for. Not recorded on the company either:
-    # `billing_unpaid_invoice_url` survives only on a blocked one, and the
-    # invoice already has a home on the BillingCancellation the handover wrote.
+    # The last invoice of the card a Marketplace workspace left: a real debt
+    # Stripe collects, which must not stop a workspace AWS pays for. Not
+    # recorded on the company either -- `billing_unpaid_invoice_url` survives
+    # only on a blocked one, and the BillingCancellation holds the invoice.
     return ignore(company, "failed invoice #{invoice.id}, for the card AWS Marketplace replaced") if aws_bills?(company)
     return final_invoice_unpaid(company, invoice) if company.billing_status == "canceled"
 

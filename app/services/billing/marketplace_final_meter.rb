@@ -10,16 +10,12 @@ module Billing
   # it offered after the window shut. So this is the only metering in the design
   # that is event-driven rather than periodic.
   #
-  # Sending an hour the schedule will send again is safe and expected: AWS keys
-  # a record on (licence, dimension, hour), so the repeat bills nothing.
-  # Sending nothing is the failure that cannot be recovered, because the window
-  # does not reopen. So this errs towards sending.
-  #
-  # What it does not do is send an hour we already hold AWS's receipt for.
-  # Measured against the real listing: AWS answers such a repeat with `Success`
-  # and the *same* `MeteringRecordId` rather than `DuplicateRecord`, so a line
-  # counting what it sent reports minutes that were already billed. The receipt
-  # is the only thing that tells a replay from a charge.
+  # Sending an hour the schedule will send again is safe: AWS keys a record on
+  # (licence, dimension, hour), so the repeat bills nothing. Sending nothing
+  # cannot be recovered, because the window does not reopen. So this errs
+  # towards sending -- except for an hour we already hold AWS's receipt for,
+  # which AWS would answer `Success` with the same `MeteringRecordId`, so that
+  # a line counting what was sent would read as a second charge.
   class MarketplaceFinalMeter
     # The hour under way and the one before it. The earlier one is included
     # because the schedule may not have reached it yet -- it reports an hour at
@@ -36,30 +32,18 @@ module Billing
     NOTHING = "nothing to send"
 
     # What one call did: the line a reader sees, and AWS's receipts with the
-    # minutes each one bought.
-    #
-    # The receipts are structured rather than left in the line because they are
-    # the only record that these minutes reached AWS -- this path writes no
-    # ledger row, so a figure built from ledger rows alone misses exactly the
-    # part-hour the path exists for. Keyed by receipt id, which is also what
-    # makes the repeat countable once: the two cancellation events send the same
-    # record and AWS answers both with the id it issued first.
+    # minutes each bought. Structured because this path writes no ledger row,
+    # so the receipts are the only record these minutes reached AWS; keyed by
+    # receipt id, which counts the two cancellation events' repeat once.
     Sent = Data.define(:line, :receipts) do
       def to_s = line
     end
 
-    # Answers what it did, which the caller records against the event that
-    # caused it. The hourly meter has a ledger row for this; without one here,
-    # whether the last hour of a cancelling customer was billed could only be
-    # read off their own invoice, hours later.
-    #
-    # Raises when the call did not happen -- credentials, throttling, anything
-    # that leaves AWS not having heard of these minutes. It used to answer
-    # "refused: ..." instead, so that the caller could go on to end the licence;
-    # but the caller ends it either way now, and swallowing the failure here
-    # meant the last part-hour was measured once, lost, and never sent. A
-    # refusal of a *record* is not this: AWS answers those in the batch, and
-    # they go in the line.
+    # Answers what it did, which the caller records against the event. Raises
+    # when the call did not happen -- credentials, throttling -- so the event
+    # stays unapplied and is tried again inside AWS's window. A refusal of a
+    # *record* is not this: AWS answers those in the batch, and they go in the
+    # line.
     def call(license)
       return Sent.new(line: NOTHING, receipts: {}) unless license.meterable? && client.configured?
 
@@ -82,15 +66,12 @@ module Billing
       end
     end
 
-    # Minutes as well as counts: the whole point of this path is the part-hour
-    # the schedule cannot reach, and a reader needs to see that it was not zero.
+    # Minutes as well as counts, and AWS's receipt: the only evidence of
+    # acceptance that is not our own word.
     def summary(usages, outcomes)
       already = outcomes.count(&:duplicate?)
       refused = outcomes.reject(&:accepted?)
       line = "sent=#{outcomes.size - already}:already=#{already}:minutes=#{usages.sum(&:quantity)}"
-      # AWS's own receipt, which is the only evidence of acceptance that is not
-      # our own word. One line is enough here: this path sends a licence's last
-      # hour or two, never a batch.
       receipts = outcomes.filter_map(&:metering_record_id)
       line += ":receipt=#{receipts.join(',')}" if receipts.any?
       return line if refused.empty?
@@ -124,17 +105,9 @@ module Billing
       (0..HOURS_BACK).map { |back| current - back.hours }
     end
 
-    # Hours the schedule already holds AWS's receipt for, as epoch seconds —
-    # compared that way because the column comes back as a TimeWithZone and
-    # `Array#-` would not match it against a Time.
-    #
-    # Re-sending such an hour is harmless in itself: AWS keys a record on
-    # (licence, dimension, hour). It is the *line* that misleads. AWS answers
-    # the repeat with the same `MeteringRecordId` and `Success` rather than
-    # `DuplicateRecord`, so a count of what was sent includes minutes that were
-    # already billed. A reader cannot tell a replay from a second charge on
-    # AWS's answer alone; they can tell it from
-    # the receipt we already hold.
+    # Hours the schedule already holds AWS's receipt for, as epoch seconds: the
+    # column comes back as a TimeWithZone and `Array#-` would not match it
+    # against a Time.
     def receipted_hours(license, hours)
       CapacityMeterReport
         .where(provider: Meter::AwsMarketplaceSaas.provider, period_start: hours, state: "reported")

@@ -40,12 +40,9 @@ module Billing
         usages, unbillable = usages_for(report)
         outcomes = client.batch_meter_usage(usages)
 
-        # Written BEFORE anything is raised, and merged rather than replaced.
-        # AWS answers each record separately, so one refusal among twenty does
-        # not mean the other nineteen were not billed -- and dropping their
-        # receipts to raise on the one would leave the retry unable to tell
-        # which. The receipt is the only evidence of acceptance that is not our
-        # own word; it is also what stops the retry sending them again.
+        # Written BEFORE anything is raised, and merged: AWS answers each record
+        # separately, so one refusal among twenty does not mean the others were
+        # not billed, and the receipt is what stops the retry sending them again.
         report.update!(receipts: report.receipts.merge(receipts(outcomes)))
 
         retryable = outcomes.select(&:retryable?)
@@ -62,10 +59,9 @@ module Billing
 
         usages = report.breakdown_minutes.filter_map do |company_id, minutes|
           license = licenses[company_id.to_i]
-          # Already receipted on an earlier attempt at this same hour. Sending
-          # it again would be answered `Success` with the id AWS already
-          # issued, which reads afterwards as a second charge that never
-          # happened.
+          # Already receipted on an earlier attempt at this hour: AWS would
+          # answer `Success` with the id it already issued, which reads
+          # afterwards as a second charge.
           next if license && report.receipts[license.first].present?
           # `next` without a value, deliberately: inside filter_map a `next x`
           # keeps x, so the counting idiom Meter::Stripe uses inside `each`
@@ -106,13 +102,9 @@ module Billing
         outcomes.to_h { |o| [ o.license_arn, o.metering_record_id || (o.duplicate? ? "duplicate" : nil) ] }
       end
 
-      # Carried on the ledger row so an hour reads afterwards as what it was: a
-      # replay rather than a second charge, and companies nobody bills rather
-      # than companies we failed to bill.
       # `disputed` rather than `already`: a duplicate is an hour AWS refused
-      # because it had already been told a different number for it, so it is
-      # unbilled and somebody has to look. Counting it as sent was what hid
-      # that.
+      # because it had been told a different number for it, so it is unbilled
+      # and somebody has to look.
       def summary(report, outcomes, unbillable)
         disputed = outcomes.count(&:duplicate?)
         line = "aws_saas:#{report.period_start.utc.iso8601}:" \
