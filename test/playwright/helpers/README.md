@@ -6,7 +6,19 @@ Helpers for testing the application on staging through the Playwright MCP tool `
 ## Why one plain-JavaScript snippet
 
 `browser_run_code` takes a single self-contained `async (page) => { … }` function. It cannot import modules, has no
-`process.env`, no TypeScript, and no global `URL`. So `helpers.js` is plain JavaScript with no imports, and it defines
+`process.env`, no TypeScript, and no global `URL`.
+
+| Missing in the sandbox                 | Use instead                                                             |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| `require`, `import()`                  | paste `helpers.js` in full                                              |
+| `process`, `process.env`               | `loadCredentialsAsset(page)` for credentials                            |
+| `setTimeout`                           | `await page.waitForTimeout(ms)`                                         |
+| `URL`, `URLSearchParams`               | the helpers cut paths out by hand (`aixlePathname`, `aixleFormEncode`)  |
+| `Buffer`, `TextEncoder`                | index the buffers Playwright returns (`shot` reads the PNG header so)   |
+| an in-page `fetch` that sees redirects | `page.request` (`appRequest`): it shares the context's cookies          |
+
+A tool call has to return within a few minutes: one that stays silent for 30 minutes gets its session killed. Every
+request in these helpers times out after 30 seconds. So `helpers.js` is plain JavaScript with no imports, and it defines
 every helper at once: paste the whole file at the top of the function body, then call the helpers below it. One snippet
 is simpler to keep correct than a set of per-helper snippets that each repeat the shared internals.
 
@@ -128,3 +140,136 @@ in an effect, a guard component) is caught too. A client-side redirect later tha
 Agents, skills, tools, integrations, MCP servers, repositories, config items, workflows and runs are project-scoped, so
 those helpers take a project ID. To find IDs while signed in, read the Inertia page props, for example
 `JSON.parse(document.querySelector('script[data-page="app"]').textContent).props.projects` on `/company/projects`.
+
+### Requests, page payloads, screenshots and route probes
+
+These five take `page` and one options object, not `env`. A relative `path` resolves against, in order:
+
+1. `options.baseUrl`, when given;
+2. the origin of the page the browser is on, which is staging once you have signed in or called `signOut`;
+3. staging (`https://staging.flow.aixle.com`), when the browser is on `about:blank`.
+
+Requests go through `page.request`, so they carry the browser context's cookies (and its HTTP Basic Auth, set by
+`login`/`signOut` from `env.httpCredentials`). Each request times out after 30 seconds.
+
+#### `appRequest(page, options)`
+
+Sends one HTTP request as the signed-in browser and returns `{ status, location, contentType, json, text }`.
+
+| Option         | Default | Meaning                                                                                                                    |
+| -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `method`       | `'GET'` | Any HTTP method.                                                                                                           |
+| `path`         |         | `'/company/projects'` or an absolute URL. Required.                                                                        |
+| `json`         |         | Body sent as `application/json` (and `Accept: application/json` unless `headers` sets one).                                |
+| `form`         |         | Fields sent URL-encoded, with `authenticity_token` added. For `PATCH`/`PUT`/`DELETE` it POSTs them with `_method`.         |
+| `csrf`         | `true`  | Sends the session's CSRF token on non-GET requests (`X-CSRF-Token`, and in `form`). `false` sends none: expect `422`.      |
+| `maxRedirects` | `0`     | `0` reports a `302` and its `Location` instead of following it. An in-page `fetch` would see only an opaque status `0`.    |
+| `headers`      | `{}`    | Extra request headers.                                                                                                     |
+| `textLimit`    | `2000`  | Characters of a non-JSON body kept in `text`, so an HTML page does not flood the context.                                 |
+| `baseUrl`      |         | See above.                                                                                                                 |
+
+- `json` is the parsed body when the response is JSON, and then `text` is `null`. Otherwise `json` is `null`.
+- `location` is shortened to a path (`'/login'`) when it points at the base URL.
+- The CSRF token comes from the `XSRF-TOKEN` cookie that inertia_rails sets on every response, then from
+  `meta[name="csrf-token"]`, then from `input[name="authenticity_token"]` on the open page, then from the HTML of
+  `/login`. The cookie comes first because an Inertia visit (the one after sign-in) does not reload `<head>`, so the meta
+  tag can still hold the token from before sign-in. The token is never returned.
+
+```js
+await loginAsCompanyEmployee(page, staging);
+await appRequest(page, { path: '/company/assets' }); // { status: 302, location: '/', … }
+await appRequest(page, { method: 'DELETE', path: '/logout', form: {}, csrf: false }); // { status: 422, … }
+await appRequest(page, { method: 'DELETE', path: '/logout', form: {} }); // { status: 302, location: '/login', … }
+```
+
+#### `readInertiaPage(page, { path, pick = [], baseUrl } = {})`
+
+Fetches a page's HTML with the session cookies, following redirects, and parses the Inertia payload in
+`<script data-page="app" type="application/json">`. It returns `{ url, status, component, version, appVersion, props }`.
+
+- Do not read the `#app[data-page]` attribute: with `use_script_element_for_initial_page` the payload is in the script
+  element. Do not read the DOM after load either, since hydration removes the element. This helper reads the HTML.
+- `path` defaults to the page the browser is on.
+- `url` is the path the request ended on after redirects, so a redirect to `/login` shows there.
+- `appVersion` is `props.settings.appVersion`: the deployed commit. Read it at the start and at the end of a round.
+- `pick` takes dotted paths (`'projects.0.id'`) and returns only those props, keyed by path. A path that does not
+  resolve gives `null`. Use it on pages with large props.
+- Throws `No Inertia page payload at <path> (HTTP <status>)` on a response that is not an Inertia page.
+
+```js
+await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVersion', 'projects.0.id'] });
+// { url: '/company/projects', status: 200, component: 'Projects/IndexPage', version: null,
+//   appVersion: '10dd9779…', props: { 'settings.appVersion': '10dd9779…', 'projects.0.id': 3 } }
+```
+
+#### `shot(page, { round, name, banner })`
+
+Screenshots the viewport to `/workspace/outputs/screenshots_<round>/<name>.png` and returns `{ path, width, height }`.
+
+- It sets the viewport to 1920×1080 first if it differs.
+- It reads the size from the PNG header of the returned buffer, and throws unless it is 1920×1080. The capture uses
+  CSS pixels, so a device scale factor does not change the size.
+- `round` and `name` may hold letters, digits, `.`, `_` and `-` only. `name` may end in `.png`.
+- `banner` (`{ role, value, appVersion }`, all optional) overlays a strip at the bottom with the role, the page URL,
+  `appVersion` and the value under test, and removes it after the capture. `appVersion` is read with `readInertiaPage`
+  when it is not given. Never put a credential in a banner.
+
+```js
+await shot(page, { round: 3, name: 'employee-assets-redirect', banner: { role: 'CompanyEmployee', value: '/company/assets → /' } });
+// { path: '/workspace/outputs/screenshots_3/employee-assets-redirect.png', width: 1920, height: 1080 }
+```
+
+#### `probeRoutes(page, { requests, baseUrl })`
+
+Sends each request (`{ method = 'GET', path, csrf = true }`) through `appRequest` with `maxRedirects: 0`, one after
+another, and returns one row per request: `[{ method, path, status, location }]`. A request that gets no response gives
+`status: null` and an `error`, and the remaining rows still run. Keep a call to a few dozen requests. For anonymous rows,
+call `signOut` first.
+
+```js
+await loginAsCompanyEmployee(page, staging);
+await probeRoutes(page, { requests: [{ path: '/company/assets' }, { method: 'DELETE', path: '/logout', csrf: false }] });
+// [{ method: 'GET', path: '/company/assets', status: 302, location: '/' },
+//  { method: 'DELETE', path: '/logout', status: 422, location: null }]
+```
+
+Baseline on staging (checked 2026-10-27, appVersion `10dd9779`; `—` means not checked). These are expected, so do not
+report them as bugs:
+
+| Route                                                              | Anonymous             | CompanyEmployee | CompanyAdmin          |
+| ------------------------------------------------------------------ | --------------------- | --------------- | --------------------- |
+| `/`                                                                | 200                   | 200             | 200                   |
+| `/login`                                                           | 200                   | —               | —                     |
+| `/profile`, `/company/projects`, `/company/members`                | 302 → `/login`        | 200             | 200                   |
+| `/company/assets`, `/company/sessions`                             | 302 → `/login`        | 302 → `/`       | 200                   |
+| `/company/projects/3/{overview,agents,skills,tools}`               | —                     | 200             | 200                   |
+| `/company/projects/3/{integrations,mcp_servers,repositories,config_items}` | —             | 200             | 200                   |
+| `/admin`                                                           | 302 → `/admin/login`  | 302 → `/admin/login` | 302 → `/admin/login` |
+| any non-GET with `csrf: false`                                     | 422                   | 422             | 422                   |
+
+#### `signOut(page, { baseUrl } = {})`
+
+Clears the context's cookies and the origin's local and session storage, loads `/login`, and confirms the session is
+gone: the browser stays on `/login` and `GET /company/projects` answers `302 → /login`. Returns
+`{ signedOut, landedOn }`. It accepts the `env` from `loadCredentialsAsset` too, and then applies its `httpCredentials`.
+Use it to switch roles, or before anonymous checks.
+
+```js
+await signOut(page, staging); // { signedOut: true, landedOn: '/login' }
+```
+
+### Worked example: a round
+
+```js
+async (page) => {
+  // ---- paste test/playwright/helpers/helpers.js here ----
+
+  const staging = await loadCredentialsAsset(page);
+  await loginAsCompanyEmployee(page, staging);
+  const start = await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVersion'] });
+  const rows = await probeRoutes(page, { requests: [{ path: '/company/assets' }, { path: '/company/sessions' }] });
+  const evidence = await shot(page, { round: 1, name: 'employee-projects', banner: { role: 'CompanyEmployee' } });
+  const anonymous = await signOut(page, staging);
+  return { appVersion: start.appVersion, rows, evidence, anonymous };
+};
+```
