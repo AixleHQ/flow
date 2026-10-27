@@ -47,8 +47,17 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     redirect_to company_settings_path, alert: "This workspace is managed by Aixle and is not billed."
   end
 
+  # Shown while AWS is the payer, and also after it has stopped being one if
+  # AWS has already been sent minutes this calendar month.
+  #
+  # The second half is the part a customer feels. A workspace that leaves AWS
+  # for a card still gets an AWS bill at the end of the month for what it ran
+  # there -- and keyed on the payer alone this panel vanished the moment the
+  # card arrived, leaving the product saying "0 worker-minutes this period"
+  # beside a charge it never mentions. The same mistake the Billing tab made
+  # from the other side, when it hid itself from a workspace AWS billed.
   def marketplace_billing
-    return nil unless current_company.billing_payer.aws_marketplace?
+    return nil unless current_company.billing_payer.aws_marketplace? || reported_minutes.positive?
 
     # The most recent, live or not: a workspace whose subscription has ended is
     # exactly the one that needs this panel, and `marketplace_license` answers
@@ -58,6 +67,10 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       aws_account_id: license&.customer_aws_account_id,
       subscribed_at: license&.subscribed_at,
       ended: license&.ended? || false,
+      # Whether AWS is the payer NOW. False on a workspace that has gone back
+      # to a card: the panel is then a statement about this month, not an
+      # offer to renew.
+      bills_now: current_company.billing_payer.aws_marketplace?,
       # What we have reported towards the AWS bill this calendar month, which is
       # the period AWS invoices on. The only figure available before the invoice
       # exists, so it has to be the one AWS was actually sent — see below.
@@ -90,11 +103,15 @@ class Web::Company::BillingController < Web::Company::ApplicationController
   # events send the same record and AWS answers both with the id it issued
   # first, so the id appears twice and the minutes count once.
   def reported_minutes
-    licenses = current_company.marketplace_licenses.pluck(:id, :license_arn)
-    return 0.0 if licenses.empty?
-
-    (hourly_receipts(licenses.map(&:last)).merge(final_meter_receipts(licenses.map(&:first))))
-      .values.sum.to_f
+    @reported_minutes ||= begin
+      licenses = current_company.marketplace_licenses.pluck(:id, :license_arn)
+      if licenses.empty?
+        0.0
+      else
+        (hourly_receipts(licenses.map(&:last)).merge(final_meter_receipts(licenses.map(&:first))))
+          .values.sum.to_f
+      end
+    end
   end
 
   # Receipt -> minutes, from the hourly ledger. The row carries one receipt per

@@ -202,6 +202,40 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # A workspace that has gone back to a card still gets an AWS bill at the end
+  # of the month for what it ran there. Keyed on the payer alone, the panel
+  # vanished the moment the card arrived -- leaving the page saying "0
+  # worker-minutes this period" beside a charge it never mentioned.
+  test "the AWS panel outlives the payer, for as long as the month AWS billed" do
+    license = create(:marketplace_license, :ended, company: @company)
+    CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider,
+                                period_start: Time.current.utc.beginning_of_month + 3.hours,
+                                quantity_seconds: 5820, state: "reported",
+                                breakdown: { @company.id.to_s => 5820 },
+                                receipts: { license.license_arn => "mr-1" })
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE)
+
+    get company_settings_billing_path
+
+    assert_inertia_props do |props|
+      assert props[:marketplaceBilling], "the month AWS billed is still this month"
+      assert_not props.dig(:marketplaceBilling, :billsNow), "but AWS is not the payer any more"
+      assert_in_delta 97.0, props.dig(:marketplaceBilling, :reportedMinutes)
+      assert props[:permissions][:canManageBilling], "and the card is what it manages now"
+    end
+  end
+
+  # Nothing to say where nothing was sent: a workspace that never had a
+  # subscription this month gets no panel at all.
+  test "a workspace AWS has not billed this month has no panel" do
+    create(:marketplace_license, :ended, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE)
+
+    get company_settings_billing_path
+
+    assert_inertia_props { |props| assert_nil props[:marketplaceBilling] }
+  end
+
   # The other half of the same rule, and the one that was a dead end: a customer
   # who unsubscribes in AWS keeps `billing_provider`, so keying the refusal on
   # the payer rather than on a live subscription left them unable to pay by card
