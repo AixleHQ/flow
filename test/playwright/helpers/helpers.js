@@ -14,7 +14,7 @@
  *
  * Errors never include credentials.
  */
-/* eslint-disable no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars -- a paste-in snippet: every helper is used by the code pasted after it. */
 
 const AIXLE_STAGING_URL = 'https://staging.flow.aixle.com';
 
