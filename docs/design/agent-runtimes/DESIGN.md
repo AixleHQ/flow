@@ -393,6 +393,14 @@ This is the single list of what a runner can be configured with. Other sections 
 *why* a key exists and link here; when they disagree, this table wins. It is what
 `Runners::Adapter.config_schema` (§5.1, §15 task 2) encodes per type.
 
+In the code the table is `Runners::ConfigSchema` (`app/services/runners/config_schema.rb`):
+every key below, with its JSON Schema, default, types and whether it arrives later.
+`Runners::ConfigSchema.for_type(type)` is the JSON Schema of one type, the one the form
+renders from, and `Runner` validates `config` against it for all three types (§15 task 2).
+A key that a type requires (`template_id`, `namespace`) is required by that type's schema.
+`ephemeral` is refused with "not a config key: it is set per machine at registration".
+`Runners::ConfigSchema.value(config, key)` reads a key with its default applied.
+
 **Validation rules, for every type:**
 
 - An unknown key is refused, not ignored.
@@ -431,7 +439,7 @@ constrained in SQL:
 | `container.cache_mounts` | array of `{name}` (named volume `aixle-cache-<key>-<name>`) or `{host_path}`, each with `target` | `[]` | `manual`, `coder` | §6.8, §7.2 |
 | `container.home_mount` | `{path, writable}`, or null | null (off). `path` required on `manual`, the workspace user's `$HOME` on `coder`; `writable: false` | `manual`, `coder` | §6.8 |
 | `container.extra_mounts` | array of `{source, target, writable}`; the form accepts `src:dst[:rw]` | `[]`; `writable: false` | `manual`, `coder`; absolute paths only | §6.8 |
-| `container.acknowledged_writable_mounts` | array of target paths | `[]` | `manual`; every writable host mount (`home_mount`, `extra_mounts`, host-path `cache_mounts`) must be listed, or the config is refused | §7.2 |
+| `container.acknowledged_writable_mounts` | array of target paths | `[]` | `manual`; every writable host mount (`home_mount`, `extra_mounts`, host-path `cache_mounts`) must be listed, or the config is refused. `home_mount` has no target of its own and is listed by its `path` | §7.2 |
 | `container.network` | `bridge` \| `host` | `bridge` | `manual`, `coder` | §6.8 |
 | `container.pid` | `private` \| `host` | `private` | `manual`, `coder` | §6.8 |
 | `container.allow_privileged_mounts` | boolean | `false` | `manual`, `coder`; the gate for `docker_socket` | §6.8 |
@@ -545,7 +553,12 @@ A reference is never cleared automatically and never falls back to `hosted`.
 ## 4. Capability flags
 
 The platform reasons about a runner through `Runners::Capabilities`, never through its
-type. Each adapter returns them from `type + config`. Flags that depend on how the agent
+type. Each adapter returns them from `type + config`.
+
+**What v1 has so far** (§15 task 2): `Runners::Capabilities` declares `provisionable` and
+`rebuildable` only, both `false` on `manual`. The runners controllers store them in
+`runners.capabilities` on every create and update. Each other flag of the table is added
+with the first code that reads it. Flags that depend on how the agent
 runs come from **the execution mode** (§6.8), not from the type. In v1 every type runs
 container mode, so they are the same across the three external types; the `host` mode
 (phase 7) will derive its own.
@@ -607,6 +620,18 @@ module Runners
   end
 end
 ```
+
+**What v1 has so far** (§15 task 2): `Runners::Adapter` with `type`, `config_schema`,
+`capabilities` and `validate_config`, and a registry that holds `Runners::ManualAdapter`
+only. A type without an adapter cannot be created: `Runners::Adapter.for` raises
+`Runners::Adapter::UnavailableType`, and the controllers refuse a `coder` or `kubernetes`
+runner as "not available yet" until task 17 and phase 6. `ManualAdapter#validate_config`
+checks the `config.container` rules one key's schema cannot express: `home_mount.path`,
+the acknowledgement of every writable host mount, and `docker_socket` behind
+`allow_privileged_mounts`. `Runners::Save` runs it on create and update and saves nothing
+when it returns errors. `check_health` is not there yet: on `manual` health comes from
+machine heartbeats, so it lands with task 12. The environment lifecycle methods land with
+the tasks that call them.
 
 `Runners::Adapter.for(runner)` is a registry keyed by type
 (`Runners::ManualAdapter`, `Runners::CoderAdapter`, `Runners::KubernetesAdapter`). Adding a
@@ -1981,7 +2006,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | --- | --- | --- |
 | 1a | 1 | **Flag and the client-flag resource.** Declare `external_runners` in `config/feature_flags.yml` exactly as in §12.1 (`introduced` set to the PR's date). Replace the hand-written `FeatureFlagName` with an Alba `FeaturesResource` and `useFeatureFlag(name: keyof Features)`, which touches every existing `useFeatureFlag` consumer, and retire `test/config/feature_flag_name_test.rb` (§11). Override on for the test company from `/admin`. Platform cleanup triggered by the first client flag, not runner-specific: a prerequisite for task 3, not for 1b, and reviewed on its own. |
 | 1b | 1 | **The `runners` table and the `Runner` model**, only what task 2 reads and writes. The `runners` migration (§2.1, without `encrypted_secrets`): the unique name index, the four check constraints and the two composite tenant keys (§2, §2.4). `Runner` with enumerize `runner_type` and `reuse_policy` (defaulted by type, §2.7), validations mirroring the database, the §2.6 integration rule, `visible_for_project` (§3.1), and the status state machine with soft delete (§2.5). No flag check here: nothing reaches the model until task 2's controllers, which check it. Every other table and column of §2 lands with the first task that reads or writes it. |
-| 2 | 1 | Policies and controllers: company and project runners CRUD with §3.2 rules and the `Feature.enabled?(:external_runners, company:)` check, `Runners::Adapter` registry + `config_schema` encoding §2.7 (including the refusal of unknown, inapplicable and later keys) + capabilities (`provisionable`, `rebuildable`), `ManualAdapter#validate_config`/`check_health` only. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
+| 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refuses writes on a company runner, from the record), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without `Feature.enabled?(:external_runners, company:)`. `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config`. The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): Company Settings → Runners tab, Project → Runners page, new-runner form generated from schema (Manual card), runner page (without machines). |
 | 4 | 1 | Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5 | 2 | Gateway process type, the `runner_environments` (`origin`, `display_name`, `ephemeral`) and `runner_credentials` tables and `terminal_sessions.runner_environment_id` (§2.2–§2.4), `runner_operations` queue with LISTEN/NOTIFY long-poll and `Encryptable :runners_key` for its `encrypted_payload`, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
@@ -1991,7 +2016,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
-| 12 | 3 | `manual` end to end: heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). |
+| 12 | 3 | `manual` end to end: `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
