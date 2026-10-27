@@ -552,6 +552,16 @@ Rails.application.routes.draw do
       # The third tab of company settings: what the workspace pays, and the
       # controls that change it. Hosted product only.
       get "settings/billing", to: "billing#show", as: :settings_billing
+      # Company runners, another settings tab (docs/design/agent-runtimes/DESIGN.md
+      # §3.2). `destroy` is the soft delete that revokes.
+      resources :runners, path: "settings/runners", as: :settings_runners,
+                          only: %i[index show create update destroy] do
+        member do
+          post :disable
+          post :enable
+          post :revoke
+        end
+      end
       # Stopping at the end of the billing period, and taking that back before
       # the date arrives.
       resource :billing_cancellation, only: %i[create destroy], controller: "billing_cancellations"
@@ -662,6 +672,15 @@ Rails.application.routes.draw do
             end
           end
           resources :agents, only: %i[index create update destroy]
+          # The project's runners and the company's; only the project's own are
+          # managed here. `destroy` is the soft delete that revokes.
+          resources :runners, only: %i[index show create update destroy] do
+            member do
+              post :disable
+              post :enable
+              post :revoke
+            end
+          end
           resources :tools, only: %i[index create update destroy]
           resources :mcp_servers, only: %i[index create update destroy] do
             member do
