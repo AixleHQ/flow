@@ -167,7 +167,7 @@ module AzureDevops
       stale = create(:azure_devops_subscription, integration: @integration, azure_project_id: @integration.azure_project_id,
                                                  event_type: "workitem.created", status: :pending, azure_subscription_id: nil)
       AzureDevopsSubscription.where(id: stale.id).update_all(azure_subscription_id: "remote-1", status: "active")
-      @integration.azure_devops_subscriptions.stubs(:find_by).returns(stale)
+      @integration.azure_devops_subscriptions.expects(:find_by).once.returns(stale)
 
       result = @service.ensure_all!(event_types: [ "workitem.created" ], base_url: "https://aixle.test")
 
@@ -179,7 +179,7 @@ module AzureDevops
       stub_create
       winner = create(:azure_devops_subscription, integration: @integration, azure_project_id: @integration.azure_project_id,
                                                   event_type: "workitem.created", azure_subscription_id: "remote-1")
-      @integration.azure_devops_subscriptions.stubs(:find_by).returns(nil)
+      @integration.azure_devops_subscriptions.expects(:find_by).once.returns(nil)
 
       result = @service.ensure_all!(event_types: [ "workitem.created" ], base_url: "https://aixle.test")
 

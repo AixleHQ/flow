@@ -78,6 +78,32 @@ module AzureDevops
       threads&.each(&:join)
     end
 
+    # The Sentry failure: workers released together against an empty table race
+    # the INSERT on the unique index. Serialized scheduling still satisfies it.
+    test "workers inserting the same row at once neither raise nor duplicate it" do
+      stub_request(:post, %r{/_apis/hooks/subscriptions}).to_return do
+        { status: 200, headers: { "Content-Type" => "application/json" },
+          body: { id: SecureRandom.uuid, status: "enabled" }.to_json }
+      end
+      gate = Queue.new
+      threads = Array.new(THREADS) do
+        Thread.new do
+          gate.pop
+          ensure_in_own_connection
+        end
+      end
+      THREADS.times { gate << true }
+      results = threads.map(&:value)
+
+      rows = AzureDevopsSubscription.where(integration_id: @integration.id, event_type: EVENT_TYPE)
+      assert_equal 1, rows.count
+      assert_equal Array.new(THREADS) { [ rows.first.id ] }, results.map { |result| result.map(&:id) }
+      assert rows.first.active?
+      assert_requested :post, %r{/_apis/hooks/subscriptions}, times: 1
+    ensure
+      threads&.each(&:join)
+    end
+
     private
 
     # An integration record of its own per thread, as each job has: records are not thread-safe.
