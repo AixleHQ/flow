@@ -81,7 +81,7 @@ function aixleId(name, value) {
 /**
  * Read the STAGING_CREDENTIALS_SECRETS.txt asset through the browser (file://),
  * so the secrets never appear in the code sent to browser_run_code. Lines are
- * KEY="value" (quotes optional):
+ * KEY="value" (double, single or no quotes; an `export ` prefix is allowed):
  *   STAGING_URL                          base URL (optional, defaults to staging)
  *   STAGING_COMPANY_ADMIN_CREDENTIALS    email:password
  *   STAGING_COMPANY_EMPLOYEE_CREDENTIALS email:password
@@ -89,6 +89,8 @@ function aixleId(name, value) {
  *   STAGING_HTTP_CREDENTIALS             user:password (Basic Auth, optional)
  * Returns an object usable as `env` that also carries companyAdmin,
  * companyEmployee and admin. Credential values print as "[redacted]".
+ * Throws, naming the keys it found (never the values), when neither role key
+ * is present.
  */
 async function loadCredentialsAsset(page, path = '/workspace/assets/STAGING_CREDENTIALS_SECRETS.txt') {
   const reader = await page.context().newPage();
@@ -102,10 +104,23 @@ async function loadCredentialsAsset(page, path = '/workspace/assets/STAGING_CRED
     await reader.close();
   }
 
+  // KEY=value, KEY="value" or KEY='value', with an optional `export ` prefix.
+  // One pair of matching quotes is stripped; anything else is kept as is.
   const values = {};
   for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*"?(.*?)"?\s*$/);
-    if (match) values[match[1]] = match[2];
+    const match = line.match(/^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!match) continue;
+    const quoted = match[2].match(/^(["'])(.*)\1$/);
+    values[match[1]] = quoted ? quoted[2] : match[2];
+  }
+  const roleKeys = ['STAGING_COMPANY_ADMIN_CREDENTIALS', 'STAGING_COMPANY_EMPLOYEE_CREDENTIALS'];
+  if (!roleKeys.some((key) => values[key])) {
+    // Name the keys, never the values: the file holds secrets.
+    const found = Object.keys(values);
+    throw new Error(
+      `Credentials asset at ${path} has none of the expected keys: ${roleKeys.join(', ')}. ` +
+        `Keys found: ${found.length ? found.join(', ') : 'none (expected KEY="email:password" lines)'}`,
+    );
   }
   const secret = (key) => {
     if (!values[key]) return null;
@@ -187,10 +202,13 @@ async function loginAsAdmin(page, env, credentials = env && env.admin) {
 /**
  * Open a path under baseUrl and make sure the browser stayed there. Throws on an
  * HTTP error, on a redirect to sign-in, and on any other redirect (a page the
- * role may not open sends the browser back, or to /).
+ * role may not open sends the browser back, or to /). Waits up to 5 s for the
+ * network to go idle before checking, so a redirect the frontend makes right
+ * after mount is caught too; a later one is not.
  */
 async function goTo(page, env, path) {
   await aixleOpen(page, env, path);
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
   const expected = aixlePathname(path);
   const pathname = aixlePathname(page.url());
   if (pathname === expected) return;

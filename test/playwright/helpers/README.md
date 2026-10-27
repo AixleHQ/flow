@@ -25,7 +25,8 @@ The helpers apply Basic Auth only when `env.httpCredentials` is given. Leave it 
 ## Credentials
 
 QA agents get credentials from the `STAGING_CREDENTIALS_SECRETS.txt` asset, at
-`/workspace/assets/STAGING_CREDENTIALS_SECRETS.txt`. Its lines are `KEY="value"`:
+`/workspace/assets/STAGING_CREDENTIALS_SECRETS.txt`. Its lines are `KEY="value"` (single quotes, no quotes and an
+`export ` prefix are accepted too):
 
 | Key                                    | Value                                                                    |
 | -------------------------------------- | ------------------------------------------------------------------------ |
@@ -45,6 +46,10 @@ that works as `env` and carries the role credentials:
 const staging = await loadCredentialsAsset(page); // optional 2nd argument: another path
 // staging.baseUrl, staging.httpCredentials (or null), staging.companyAdmin, staging.companyEmployee, staging.admin (or null)
 ```
+
+If neither `STAGING_COMPANY_ADMIN_CREDENTIALS` nor `STAGING_COMPANY_EMPLOYEE_CREDENTIALS` is in the file,
+`loadCredentialsAsset` throws and lists the key names it did find (never the values), so a format change is visible
+without printing the file.
 
 Credential objects print as `"[redacted]"` if a snippet returns or logs them, and helper errors never include them.
 Still, never print, screenshot, or copy credential values into comments, pull requests, or `/workspace/outputs`.
@@ -72,8 +77,8 @@ async (page) => {
 };
 ```
 
-On the public entry, add Basic Auth to the asset as `STAGING_HTTP_CREDENTIALS`, or pass it yourself:
-`{ ...staging, httpCredentials: { username: '…', password: '…' } }`.
+On the public entry, add Basic Auth to the asset as `STAGING_HTTP_CREDENTIALS`; `loadCredentialsAsset` then returns it
+as `staging.httpCredentials`. Do not write it into the snippet: the MCP echoes the code it runs.
 
 ## Helper reference
 
@@ -95,7 +100,9 @@ follows the visible form, not field names.
 ### Navigation
 
 Each `goTo*` helper opens its route and checks the browser stayed there. It throws on an HTTP error, on a redirect to
-sign-in, and on any other redirect. A page a role may not open redirects back or to `/`.
+sign-in, and on any other redirect. A page a role may not open redirects back or to `/`. Before checking, it waits up
+to 5 seconds for the network to go idle, so a redirect the frontend makes right after mount (an Inertia `router.visit`
+in an effect, a guard component) is caught too. A client-side redirect later than that is not.
 
 | Helper                                                  | Route                                                 | Notes                                               |
 | ------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------- |
