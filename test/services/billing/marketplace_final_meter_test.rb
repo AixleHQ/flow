@@ -79,7 +79,13 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     change(2, Time.utc(2026, 10, 23, 8))
 
     travel_to Time.utc(2026, 10, 23, 10, 20) do
-      assert_equal "sent=2:already=0:minutes=160:receipt=mr-1,mr-2", @meter.call(@license)
+      sent = @meter.call(@license)
+
+      assert_equal "sent=2:already=0:minutes=160:receipt=mr-1,mr-2", sent.line
+      # The hour under way goes first, the closed one second: 20 minutes at two
+      # workers, then the whole of the hour before it.
+      assert_equal({ "mr-1" => 40, "mr-2" => 120 }, sent.receipts,
+                   "each receipt carries the minutes it bought, so a figure can be built from them")
     end
   end
 
@@ -92,7 +98,7 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
     reported(Time.utc(2026, 10, 23, 9), receipts: { @license.license_arn => "mr-earlier" })
 
     travel_to Time.utc(2026, 10, 23, 10, 2) do
-      assert_equal "sent=1:already=0:minutes=2:receipt=mr-1", @meter.call(@license)
+      assert_equal "sent=1:already=0:minutes=2:receipt=mr-1", @meter.call(@license).line
     end
 
     assert_equal [ Time.utc(2026, 10, 23, 10) ], @client.recorded.map(&:occurred_at)
@@ -121,7 +127,7 @@ class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
   test "an installation that sells nothing meters nothing" do
     @client.configured = false
 
-    assert_equal Billing::MarketplaceFinalMeter::NOTHING, @meter.call(@license)
+    assert_equal Billing::MarketplaceFinalMeter::NOTHING, @meter.call(@license).line
   end
 
   # A call that never reached AWS has sent nothing, and the minutes it was

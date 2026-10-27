@@ -35,10 +35,23 @@ module Billing
 
     NOTHING = "nothing to send"
 
-    # Answers a line saying what it did, which the caller records against the
-    # event that caused it. The hourly meter has a ledger row for this; without
-    # one here, whether the last hour of a cancelling customer was billed could
-    # only be read off their own invoice, hours later.
+    # What one call did: the line a reader sees, and AWS's receipts with the
+    # minutes each one bought.
+    #
+    # The receipts are structured rather than left in the line because they are
+    # the only record that these minutes reached AWS -- this path writes no
+    # ledger row, so a figure built from ledger rows alone misses exactly the
+    # part-hour the path exists for. Keyed by receipt id, which is also what
+    # makes the repeat countable once: the two cancellation events send the same
+    # record and AWS answers both with the id it issued first.
+    Sent = Data.define(:line, :receipts) do
+      def to_s = line
+    end
+
+    # Answers what it did, which the caller records against the event that
+    # caused it. The hourly meter has a ledger row for this; without one here,
+    # whether the last hour of a cancelling customer was billed could only be
+    # read off their own invoice, hours later.
     #
     # Raises when the call did not happen -- credentials, throttling, anything
     # that leaves AWS not having heard of these minutes. It used to answer
@@ -48,15 +61,26 @@ module Billing
     # refusal of a *record* is not this: AWS answers those in the batch, and
     # they go in the line.
     def call(license)
-      return NOTHING unless license.meterable? && client.configured?
+      return Sent.new(line: NOTHING, receipts: {}) unless license.meterable? && client.configured?
 
       usages = usages_for(license)
-      return NOTHING if usages.empty?
+      return Sent.new(line: NOTHING, receipts: {}) if usages.empty?
 
-      summary(usages, client.batch_meter_usage(usages))
+      outcomes = client.batch_meter_usage(usages)
+      Sent.new(line: summary(usages, outcomes), receipts: receipts_for(usages, outcomes))
     end
 
     private
+
+    # Receipt -> the minutes it bought. Only records AWS honoured: a refused one
+    # carries no id, and counting it would say an hour was billed that was not.
+    def receipts_for(usages, outcomes)
+      usages.zip(outcomes).each_with_object({}) do |(usage, outcome), map|
+        next if outcome.nil? || outcome.metering_record_id.blank?
+
+        map[outcome.metering_record_id] = usage.quantity
+      end
+    end
 
     # Minutes as well as counts: the whole point of this path is the part-hour
     # the schedule cannot reach, and a reader needs to see that it was not zero.

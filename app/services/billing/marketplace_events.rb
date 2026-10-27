@@ -80,7 +80,8 @@ module Billing
       license = license_for(event)
       return false if license.nil?
 
-      event.applied!(license, metered: move(license, event))
+      sent = move(license, event)
+      event.applied!(license, metered: sent.to_s.presence, receipts: sent.try(:receipts) || {})
       true
     rescue StandardError => e
       event.failed!(e.message)

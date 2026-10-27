@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_27_080000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -953,6 +953,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_150000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "metered"
+    t.jsonb "metered_receipts", default: {}, null: false
     t.index ["agreement_id"], name: "index_marketplace_subscription_events_on_agreement_id"
     t.index ["applied_at", "occurred_at"], name: "idx_on_applied_at_occurred_at_9b9f6d64f1"
     t.index ["event_id"], name: "index_marketplace_subscription_events_on_event_id", unique: true
