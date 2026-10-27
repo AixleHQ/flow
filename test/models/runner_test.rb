@@ -171,6 +171,16 @@ class RunnerTest < ActiveSupport::TestCase
     end
   end
 
+  test "an integration a runner uses, deleted or not, is not destroyed" do
+    runner = create(:runner, :coder, company: @company, created_by: @user)
+    runner.soft_delete!
+    integration = runner.integration
+
+    assert_not integration.destroy
+    assert integration.errors.of_kind?(:base, :"restrict_dependent_destroy.has_many")
+    assert Integration.exists?(integration.id)
+  end
+
   test "the database accepts a runner with a deleted runner's name" do
     deleted = create(:runner, company: @company, created_by: @user)
     deleted.soft_delete!

@@ -9,7 +9,9 @@ module RunnerStateMachine
   included do
     include AASM
 
-    aasm column: :status do
+    # whiny_persistence: a state that fails to save raises instead of returning
+    # false unnoticed. A lost revoke would be the worst case.
+    aasm column: :status, whiny_persistence: true do
       state :pending, initial: true
       state :connected
       state :degraded

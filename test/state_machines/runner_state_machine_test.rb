@@ -44,6 +44,14 @@ class RunnerStateMachineTest < ActiveSupport::TestCase
     assert_equal "revoked", runner.reload.status
   end
 
+  test "an event whose save fails raises instead of returning false" do
+    runner = runner_in("connected")
+    runner.max_concurrency = 0
+
+    assert_raises(ActiveRecord::RecordInvalid) { runner.revoke! }
+    assert_equal "connected", runner.reload.status
+  end
+
   # == health results ==
 
   test "a degraded or unreachable result stores its reason" do
