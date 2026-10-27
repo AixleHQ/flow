@@ -24,6 +24,10 @@ governance, community health — carry none.
   `list_workflow_runs` and the admin run page show both.
 
 ### Changed
+- **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
+  "Session Time" — how many tokens the project's sessions consumed and how long
+  they ran, each with a per-session average. A dollar figure misled projects
+  whose agents run on a subscription.
 - **Integrations**: `CODER_REAP_ENABLED` takes the same values as any
   `FEATURE_*` lock (`on`/`off`, `true`/`false`, `1`/`0`); any other value now
   stops the app at boot, naming the variable, instead of meaning off.

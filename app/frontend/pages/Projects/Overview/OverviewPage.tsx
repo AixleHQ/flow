@@ -1,6 +1,13 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Box, Button, RingProgress, Switch, Text } from '@mantine/core';
-import { IconArrowRight, IconChecklist, IconCoin, IconGitBranch, IconPlayerPlay } from '@tabler/icons-react';
+import {
+  IconArrowRight,
+  IconChartBar,
+  IconChecklist,
+  IconClock,
+  IconGitBranch,
+  IconPlayerPlay,
+} from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Project } from '@/types/generated';
@@ -14,7 +21,8 @@ import classes from './OverviewPage.module.css';
 interface Summary {
   sessionsLaunched: number;
   sessionsRunning: number;
-  totalSpendCents: number;
+  totalTokens: number;
+  sessionSeconds: number;
   workflowsCount: number;
   boardTasksCount: number;
 }
@@ -53,10 +61,21 @@ interface Props {
   recentActivity: ActivityItem[];
 }
 
-function formatSpend(cents: number): string {
-  const dollars = cents / 100;
-  if (dollars >= 1000) return `$${(dollars / 1000).toFixed(1)}k`;
-  return `$${dollars.toFixed(2)}`;
+const compactNumber = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
+function formatTokenCount(tokens: number): string {
+  if (!tokens) return '—';
+  return compactNumber.format(tokens);
+}
+
+function formatSessionTime(seconds: number): string {
+  if (!seconds) return '—';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 100) return `${hours.toLocaleString()}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${Math.round(seconds)}s`;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -109,7 +128,7 @@ function boardColumnColor(name: string, index: number): string {
   return BOARD_NEUTRAL_RAMP[index % BOARD_NEUTRAL_RAMP.length];
 }
 
-// One muted tone for all four KPI icons: the number is the signal, the icon
+// One muted tone for all KPI icons: the number is the signal, the icon
 // just names the metric.
 const KPI_ICON_COLOR = 'var(--app-text-tertiary)';
 
@@ -177,7 +196,8 @@ const OverviewPage = () => {
     { label: 'Queued', value: queued, color: RUN_STATUS_COLOR.queued },
   ];
 
-  const avgPerSessionCents = summary.sessionsLaunched > 0 ? summary.totalSpendCents / summary.sessionsLaunched : null;
+  const avgTokensPerSession = summary.sessionsLaunched > 0 ? summary.totalTokens / summary.sessionsLaunched : null;
+  const avgSecondsPerSession = summary.sessionsLaunched > 0 ? summary.sessionSeconds / summary.sessionsLaunched : null;
 
   const displayedBoardDistribution = includeArchivedTasks ? allBoardTaskDistribution : boardTaskDistribution;
   const boardColumns = displayedBoardDistribution.columns ?? [];
@@ -203,14 +223,27 @@ const OverviewPage = () => {
 
           <Box className={classes.kpiCard}>
             <Box className={classes.kpiTop}>
-              <IconCoin size={15} color={KPI_ICON_COLOR} />
-              <Text className={classes.kpiLabel}>Token Cost</Text>
+              <IconChartBar size={15} color={KPI_ICON_COLOR} />
+              <Text className={classes.kpiLabel}>Tokens Used</Text>
             </Box>
             <Text className={`${classes.kpiValue} ${classes.kpiValueMono}`}>
-              {formatSpend(summary.totalSpendCents)}
+              {formatTokenCount(summary.totalTokens)}
             </Text>
-            {avgPerSessionCents != null && (
-              <Text className={classes.kpiDelta}>{formatSpend(avgPerSessionCents)} avg per session</Text>
+            {avgTokensPerSession != null && (
+              <Text className={classes.kpiDelta}>{formatTokenCount(avgTokensPerSession)} avg per session</Text>
+            )}
+          </Box>
+
+          <Box className={classes.kpiCard}>
+            <Box className={classes.kpiTop}>
+              <IconClock size={15} color={KPI_ICON_COLOR} />
+              <Text className={classes.kpiLabel}>Session Time</Text>
+            </Box>
+            <Text className={`${classes.kpiValue} ${classes.kpiValueMono}`}>
+              {formatSessionTime(summary.sessionSeconds)}
+            </Text>
+            {avgSecondsPerSession != null && (
+              <Text className={classes.kpiDelta}>{formatSessionTime(avgSecondsPerSession)} avg per session</Text>
             )}
           </Box>
 
