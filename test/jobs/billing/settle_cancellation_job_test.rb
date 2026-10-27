@@ -31,4 +31,19 @@ class Billing::SettleCancellationJobTest < ActiveJob::TestCase
     assert_equal "failed", @cancellation.reload.settlement_state
     assert @client.invoices.fetch(@invoice_id)[:auto_advance]
   end
+
+  # No invoice to hand back yet: the subscription was never stopped, and the
+  # failure is reported so that somebody stops it by hand.
+  test "out of attempts before the card was stopped, the failure is reported" do
+    @client.add_subscription(id: "sub_card")
+    @cancellation.update!(settlement_state: "cancelling", stripe_subscription_id: "sub_card", final_invoice_id: nil)
+    @client.failure = "unreachable"
+
+    assert_error_reported(Billing::StripeClient::Error) do
+      perform_enqueued_jobs { Billing::SettleCancellationJob.perform_later(@cancellation.id) }
+    end
+
+    assert_equal "failed", @cancellation.reload.settlement_state
+    assert_equal "active", @client.subscriptions.fetch("sub_card")[:status]
+  end
 end
