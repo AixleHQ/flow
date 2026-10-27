@@ -74,6 +74,15 @@ class FeatureTest < ActiveSupport::TestCase
     FeatureFlags.compose(registry_path: registry_path, env: env)
   end
 
+  # The initializer calls booted: when eager loading (FeaturesResource) has
+  # already composed the graph, it is reused and nothing is reported again.
+  test "booted reuses the installed graph without composing again" do
+    graph = FeatureFlags.booted
+    FeatureFlags.expects(:compose).never
+
+    assert_same graph, FeatureFlags.booted
+  end
+
   test "compose warns for each FEATURE_* variable no flag declares, and composes" do
     graph = nil
     reports = capture_error_reports(FeatureFlags::UndeclaredEnv) do
