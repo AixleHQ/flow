@@ -239,7 +239,7 @@ module Agents
     test "generate_config pre-acknowledges the cost-threshold notice" do
       config = @adapter.generate_config({ "primaryApiKey" => "sk-xxx" })
 
-      assert_equal true, config["hasAcknowledgedCostThreshold"]
+      assert config["hasAcknowledgedCostThreshold"], "cost-threshold notice must be pre-acknowledged"
     end
 
     test "config_files returns main config and settings" do
