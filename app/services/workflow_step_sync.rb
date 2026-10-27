@@ -40,10 +40,11 @@ class WorkflowStepSync
   def sync!
     rows = @workflow.steps.unscope(:order).includes(:sub_steps).lock.to_a.index_by(&:id)
     park_positions(rows.values)
-    key_map = write_steps(rows)
+    steps = write_steps(rows)
+    key_map = steps.transform_values(&:id)
     rewrite_draft_references(key_map)
     retire_others(rows, key_map)
-    write_dependencies(key_map)
+    write_dependencies(steps, key_map)
     key_map
   end
 
@@ -63,7 +64,7 @@ class WorkflowStepSync
   # workflow no longer has (hard-deleted before steps were always soft-deleted)
   # gets a new row.
   def write_steps(rows)
-    @specs.each_with_object({}) do |spec, key_map|
+    @specs.each_with_object({}) do |spec, steps|
       step = rows[spec["id"].presence&.to_i] || @workflow.steps.new
       attrs = spec.slice(*STEP_COLUMNS)
       Versions::Snapshots::Workflow::STEP_REFERENCES.each do |column, model|
@@ -73,7 +74,7 @@ class WorkflowStepSync
       step.assign_attributes(attrs.merge("depends_on_step_ids" => [], "deleted_at" => nil))
       step.save!
       write_sub_steps(step, Array(spec["sub_steps"]))
-      key_map[spec["key"]] = step.id
+      steps[spec["key"]] = step
     end
   end
 
@@ -105,13 +106,15 @@ class WorkflowStepSync
     end
   end
 
-  def write_dependencies(key_map)
+  # Only depends_on_step_ids may be written here: the in-memory instructions can
+  # still hold draft keys that rewrite_draft_references replaced in the database.
+  def write_dependencies(steps, key_map)
     by_key = @specs.index_by { |s| s["key"] }
     in_dependency_order(by_key).each do |key|
       deps = Array(by_key[key]["depends_on_step_ids"]).filter_map { |dep| key_map[dep.to_s] }
       next if deps.empty?
 
-      Step.find(key_map.fetch(key)).update!(depends_on_step_ids: deps)
+      steps.fetch(key).update!(depends_on_step_ids: deps)
     end
   end
 

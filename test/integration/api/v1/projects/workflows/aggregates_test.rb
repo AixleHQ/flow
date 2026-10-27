@@ -36,6 +36,21 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert_equal 2, response.parsed_body["currentVersionNumber"]
   end
 
+  test "dependencies are written on the saved steps without reloading each one by id" do
+    assert_no_queries_match(/FROM "steps" WHERE "steps"\."id" = .* LIMIT /) do
+      save([
+        { id: @build.id, name: "Build" },
+        { key: "new-1", name: "Package", depends_on_step_ids: [ @build.id ] },
+        { id: @test.id, name: "Test", depends_on_step_ids: [ "new-1" ] }
+      ])
+    end
+
+    assert_response :success
+    package = @workflow.steps.not_deleted.find_by!(name: "Package")
+    assert_equal [ @build.id ], package.depends_on_step_ids
+    assert_equal [ package.id ], @test.reload.depends_on_step_ids
+  end
+
   test "steps left out are soft-deleted, not removed" do
     save([ { id: @build.id, name: "Build", sub_steps: [] } ])
 
