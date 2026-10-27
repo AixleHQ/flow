@@ -2,13 +2,13 @@ import { router } from '@inertiajs/react';
 import {
   Alert,
   Button,
-  Checkbox,
   Code,
   Group,
   Modal,
   MultiSelect,
   PasswordInput,
   Radio,
+  SegmentedControl,
   Stack,
   Text,
   TextInput,
@@ -19,16 +19,22 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 
-export interface AzureDevopsProject {
-  id: string;
-  name: string;
-}
+import { AzureDevopsFederatedForm, type AzureDevopsFederation } from './AzureDevopsFederatedForm';
+import { type AzureDevopsProject, capabilitiesChanged, DEFAULT_CAPABILITIES, postJson } from './azureDevopsShared';
+import { CapabilityPicker } from './CapabilityPicker';
+
+export type { AzureDevopsProject } from './azureDevopsShared';
+export type { AzureDevopsFederation } from './AzureDevopsFederatedForm';
 
 export interface AzureDevopsProps {
   enabled: boolean;
   patModeEnabled?: boolean;
+  /** False when only the customer's own Entra app can be used. Absent means the shared app is available. */
+  sharedAppEnabled?: boolean;
   /** Not a secret: it is what a customer runs `az ad sp create --id` with. */
   clientId?: string | null;
+  /** Present when this deployment can act as the issuer for a customer's own Entra app. */
+  federation?: AzureDevopsFederation | null;
 }
 
 /** A Microsoft sign-in the server holds, to resume the dialog with after the redirect back. */
@@ -46,33 +52,7 @@ interface Props {
 }
 
 type Proof = 'sign_in' | 'admin_pat';
-
-// Mirrors AzureDevops::IntegrationService::ALL_CAPABILITIES. These are Aixle's
-// operation profile, not Azure's ACLs: unticking one stops the request being
-// sent at all, while Azure independently decides whether the identity may
-// perform the ones that are sent.
-const CAPABILITIES: { value: string; label: string; hint: string }[] = [
-  {
-    value: 'repositories.read',
-    label: 'Clone and push repositories',
-    hint: "Azure's permissions decide what may be pushed",
-  },
-  { value: 'pull_requests.write', label: 'Open and edit pull requests', hint: 'Never completes or merges one' },
-  { value: 'pull_request_threads.write', label: 'Reply in review threads', hint: 'Comment and resolve discussions' },
-  { value: 'work_items.read', label: 'Read work items', hint: 'Azure Boards tasks and comments' },
-  { value: 'work_items.write', label: 'Edit work items', hint: 'Create, update and comment' },
-  { value: 'builds.read', label: 'Read pipeline builds', hint: 'Build results and branch policy status' },
-  {
-    value: 'pull_requests.complete',
-    label: 'Complete pull requests',
-    hint: 'Merging. Branch policies still apply and are never bypassed',
-  },
-];
-
-// Mirrors AzureDevops::IntegrationService::DEFAULT_CAPABILITIES — all of them,
-// merging included. Azure's branch policies decide whether a merge is allowed;
-// this list decides only which requests Aixle sends at all.
-const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value);
+type AuthMode = 'service_principal' | 'federated' | 'pat';
 
 interface Inspection {
   organization: string;
@@ -82,24 +62,14 @@ interface Inspection {
   projects: AzureDevopsProject[];
 }
 
-// These two endpoints answer JSON rather than an Inertia redirect, because the
-// modal keeps its state across the two steps.
-const postJson = async (url: string, body: Record<string, unknown>) => {
-  const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message || 'Azure DevOps rejected the request');
-  return payload;
-};
-
 export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops, signIn }: Props) => {
   const patAvailable = !!azureDevops.patModeEnabled;
+  const federationAvailable = !!azureDevops.federation;
+  const sharedAppAvailable = azureDevops.sharedAppEnabled !== false;
+  const initialMode: AuthMode = sharedAppAvailable || !federationAvailable ? 'service_principal' : 'federated';
 
-  const [authMode, setAuthMode] = useState<'service_principal' | 'pat'>('service_principal');
+  const [authMode, setAuthMode] = useState<AuthMode>(initialMode);
+  const [federatedDirty, setFederatedDirty] = useState(false);
   const [proof, setProof] = useState<Proof>('sign_in');
   const [organization, setOrganization] = useState('');
   const [adminPat, setAdminPat] = useState('');
@@ -115,7 +85,8 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
-    setAuthMode('service_principal');
+    setAuthMode(initialMode);
+    setFederatedDirty(false);
     setProof('sign_in');
     setOrganization('');
     setAdminPat('');
@@ -125,7 +96,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     setPat('');
     setCapabilities(DEFAULT_CAPABILITIES);
     setError(null);
-  }, []);
+  }, [initialMode]);
 
   const close = useCallback(() => {
     onClose();
@@ -141,8 +112,8 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     projectIds.length > 0 ||
     patProjectId !== '' ||
     pat !== '' ||
-    capabilities.length !== DEFAULT_CAPABILITIES.length ||
-    capabilities.some((c) => !DEFAULT_CAPABILITIES.includes(c));
+    federatedDirty ||
+    capabilitiesChanged(capabilities);
   const requestClose = useConfirmClose(dirty, close);
 
   // Step one: prove this company may bind the organization at all, and see what
@@ -260,9 +231,61 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
 
   const missingPrincipal = !!error && error.includes('missing a service principal');
 
+  // Choosing between Aixle's own Microsoft app and the customer's. The personal
+  // access token path is a separate, explicitly labelled fallback below.
+  const modeSwitch =
+    federationAvailable && sharedAppAvailable && authMode !== 'pat' ? (
+      <SegmentedControl
+        fullWidth
+        value={authMode}
+        onChange={(value) => {
+          setAuthMode(value as AuthMode);
+          setError(null);
+        }}
+        data={[
+          { value: 'service_principal', label: 'Aixle’s Microsoft app' },
+          { value: 'federated', label: 'Your own Entra app' },
+        ]}
+      />
+    ) : null;
+
+  if (authMode === 'federated' && azureDevops.federation) {
+    return (
+      <Modal opened={opened} onClose={requestClose} title="Connect Azure DevOps" centered size="lg">
+        <Stack gap="md">
+          {modeSwitch}
+          <AzureDevopsFederatedForm
+            basePath={basePath}
+            federation={azureDevops.federation}
+            capabilities={capabilities}
+            onCapabilitiesChange={setCapabilities}
+            onDirtyChange={setFederatedDirty}
+            onCancel={requestClose}
+            onConnected={close}
+          />
+          {patAvailable && (
+            <Group>
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                onClick={() => {
+                  setAuthMode('pat');
+                  setError(null);
+                }}
+              >
+                Connect as yourself with a personal access token instead
+              </Button>
+            </Group>
+          )}
+        </Stack>
+      </Modal>
+    );
+  }
+
   return (
     <Modal opened={opened} onClose={requestClose} title="Connect Azure DevOps" centered size="lg">
       <Stack gap="md">
+        {modeSwitch}
         {authMode === 'service_principal' ? (
           <>
             <TextInput
@@ -409,29 +432,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
           </>
         )}
 
-        <Checkbox.Group
-          label="What agents may do"
-          description="Unticking one stops Aixle sending that kind of request at all. Azure still decides separately whether the identity is permitted."
-          value={capabilities}
-          onChange={setCapabilities}
-        >
-          <Stack gap={6} mt="xs">
-            {CAPABILITIES.map((capability) => (
-              <Checkbox
-                key={capability.value}
-                value={capability.value}
-                label={
-                  <span>
-                    {capability.label}{' '}
-                    <Text component="span" fz={12} c="dimmed">
-                      — {capability.hint}
-                    </Text>
-                  </span>
-                }
-              />
-            ))}
-          </Stack>
-        </Checkbox.Group>
+        <CapabilityPicker value={capabilities} onChange={setCapabilities} />
 
         {error && (
           <Alert color="red" icon={<IconAlertCircle size={16} />}>
@@ -455,13 +456,15 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               variant="subtle"
               size="compact-sm"
               onClick={() => {
-                setAuthMode(authMode === 'pat' ? 'service_principal' : 'pat');
+                setAuthMode(authMode === 'pat' ? initialMode : 'pat');
                 setInspection(null);
                 setError(null);
               }}
             >
               {authMode === 'pat'
-                ? 'Use Aixle’s own identity instead'
+                ? initialMode === 'federated'
+                  ? 'Use your own Entra app instead'
+                  : 'Use Aixle’s own identity instead'
                 : 'Connect as yourself with a personal access token instead'}
             </Button>
           ) : (

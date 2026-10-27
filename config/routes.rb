@@ -24,6 +24,12 @@ Rails.application.routes.draw do
   post "/azure/git/credentials", to: "azure_git_credentials#create"
   post "/agents/git/credentials", to: "git_credentials#create"
 
+  # This deployment as an OIDC issuer for customer-owned Entra apps (Azure DevOps
+  # workload identity federation). Public by design: Entra reads them to verify
+  # tokens, and they hold only public keys. 404 unless federation is configured.
+  get "/.well-known/openid-configuration", to: "oidc_issuer#configuration"
+  get "/.well-known/jwks.json", to: "oidc_issuer#jwks"
+
   # Credential write-back from agent containers: the in-container watcher posts an auth
   # file here as soon as the CLI rotates it, so a container that dies without cleanup no
   # longer takes the rotation with it. Authenticated by a derived per-session key
@@ -674,6 +680,11 @@ Rails.application.routes.draw do
               post :azure_devops_connect
               # "Sign in with Microsoft" instead of an administrator PAT.
               get :azure_devops_sign_in
+              # The customer's own Entra app (workload identity federation): no
+              # administrator credential, the token exchange is the proof.
+              post :azure_devops_federated_inspect
+              post :azure_devops_federated_connect
+              post :azure_devops_federated_script
               # Jira: the OAuth app redirect, and the service-account check
               # that lists what a credential can see before it is saved.
               get :jira_oauth_start
