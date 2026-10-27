@@ -193,8 +193,16 @@ module Billing
     # usage goes now, before the state moves -- `finish!` makes it unmeterable.
     # Metered again, and that is not waste: the two events arrive seconds apart
     # and in one drain, so whichever runs first is the one that catches the
-    # hour. AWS answers the second copy DuplicateRecord, which the adapter
-    # counts as accepted.
+    # hour, and the window does not reopen for whichever does not.
+    #
+    # AWS answers the second copy `Success` with the `meteringRecordId` it
+    # issued for the first -- measured against the real listing, where a
+    # cancellation produced two identical records a minute apart and both came
+    # back with the same id. NOT `DuplicateRecord`, which AWS reserves for a
+    # record whose quantity differs from one already metered, and which it does
+    # not honour. So the customer is billed once; what the repeat costs is a
+    # line that reads like two charges, which is why the receipt is stored --
+    # it is the only thing that tells a replay from a second charge.
     def deprovision(license, event)
       meter_the_last_usage(license, event)
     ensure
