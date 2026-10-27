@@ -154,26 +154,28 @@ class RunnerTest < ActiveSupport::TestCase
     foreign_integration = create(:integration, :coder, company: foreign_company)
     twin = create(:runner, company: @company, created_by: @user, project: @project)
 
-    {
-      "max_concurrency > 0" => -> { runner.update_columns(max_concurrency: 0) },
-      "coder needs an integration" => -> { coder.update_columns(integration_id: nil) },
-      "only coder has an integration" => -> { runner.update_columns(integration_id: coder.integration_id) },
-      "no pool size on manual" => -> { runner.update_columns(max_environments: 2) },
-      "max_environments > 0" => -> { coder.update_columns(max_environments: 0) },
-      "project in the runner's company" => -> { runner.update_columns(company_id: foreign_company.id) },
-      "integration in the runner's company" => -> { coder.update_columns(integration_id: foreign_integration.id) },
-      "one name per scope" => -> { twin.update_columns(name: runner.name.upcase) }
-    }.each do |constraint, write|
-      assert_raises(ActiveRecord::StatementInvalid, constraint) { Runner.transaction(requires_new: true) { write.call } }
+    [
+      [ "runners_max_concurrency_positive", runner, { max_concurrency: 0 } ],
+      [ "runners_coder_integration", coder, { integration_id: nil } ],
+      [ "runners_coder_integration", runner, { integration_id: coder.integration_id } ],
+      [ "runners_manual_no_pool_size", runner, { max_environments: 2 } ],
+      [ "runners_max_environments_positive", coder, { max_environments: 0 } ],
+      [ "fk_runners_project_company", runner, { company_id: foreign_company.id } ],
+      [ "fk_runners_integration_company", coder, { integration_id: foreign_integration.id } ],
+      [ "index_runners_on_scope_and_name", twin, { name: runner.name.upcase } ]
+    ].each do |constraint, row, values|
+      error = assert_raises(ActiveRecord::StatementInvalid, constraint) do
+        Runner.transaction(requires_new: true) { Runner.where(id: row.id).update_all(values) }
+      end
+      assert_includes error.message, constraint
     end
   end
 
-  test "the database still accepts a second runner with a deleted runner's name" do
+  test "the database accepts a runner with a deleted runner's name" do
     deleted = create(:runner, company: @company, created_by: @user)
     deleted.soft_delete!
+    runner = create(:runner, company: @company, created_by: @user)
 
-    assert_nothing_raised do
-      create(:runner, company: @company, created_by: @user).update_columns(name: deleted.name)
-    end
+    assert_nothing_raised { Runner.where(id: runner.id).update_all(name: deleted.name) }
   end
 end
