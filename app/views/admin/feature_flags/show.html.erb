@@ -144,7 +144,7 @@
       <% if @company_query.present? %>
         <% if @company_matches.any? %>
           <table>
-            <thead><tr><th>Company</th><th>Gets</th><th>Decided by</th><th>Shadowed</th></tr></thead>
+            <thead><tr><th>Company</th><th>Gets</th><th>Decided by</th></tr></thead>
             <tbody>
               <% @company_matches.each do |company| %>
                 <% resolution = @overview.resolver.resolve(definition.key, company: company) %>
@@ -152,13 +152,6 @@
                   <td><%= link_to company.name, admin_company_path(company) %></td>
                   <td><%= feature_flag_value(resolution.value) %></td>
                   <td><%= feature_flag_source(resolution.source) %><%= " (#{resolution.env_var})" if resolution.source == :env %></td>
-                  <td>
-                    <% if resolution.shadowed.any? %>
-                      <%= safe_join(resolution.shadowed.map { |layer| "#{feature_flag_source(layer[:source])}: #{feature_flag_audit_value(layer[:value])}" }, ", ") %>
-                    <% else %>
-                      <span class="flag-muted">—</span>
-                    <% end %>
-                  </td>
                 </tr>
               <% end %>
             </tbody>

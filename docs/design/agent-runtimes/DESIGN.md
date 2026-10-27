@@ -1527,7 +1527,7 @@ external_runners_kubernetes:
 ```
 
 - **The check** is `Feature.enabled?(:external_runners, company:)`, always with the
-  runner's or the session's company, in the literal shape the registry test looks for:
+  runner's or the session's company, in the literal shape docs/architecture/feature-flags.md asks for:
   - the company and project Runners controllers, and every controller or API endpoint that
     accepts `runner_id` (a company without the flag gets `404` or the field refused);
   - `Runners::Resolver.resolve!` at launch, so a workflow that still names a runner fails

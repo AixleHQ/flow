@@ -3,8 +3,7 @@
 require "test_helper"
 
 # FeaturesResource is the `features` shared prop and, through Typelizer, the
-# `Features` type useFeatureFlag takes. Its attributes come from the shipped
-# registry; its values from the current one.
+# `Features` type useFeatureFlag takes.
 class FeaturesResourceTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
@@ -45,12 +44,6 @@ class FeaturesResourceTest < ActiveSupport::TestCase
   test "no company reads the global value" do
     with_feature(:external_runners, true) do
       assert_equal({ "externalRunners" => true }, FeaturesResource.new(nil).to_h.slice("externalRunners"))
-    end
-  end
-
-  test "a flag the current registry does not declare is left out, not raised" do
-    with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
-      assert_equal({}, FeaturesResource.new(@company).to_h)
     end
   end
 end

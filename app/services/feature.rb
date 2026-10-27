@@ -2,9 +2,9 @@
 
 # Reads platform feature flags (config/feature_flags.yml).
 #
-#   Feature.enabled?(:board_ai_summary, company: current_company)  # company-scoped; nil is legal
+#   Feature.enabled?(:external_runners, company: current_company)  # company-scoped; nil is legal
 #   Feature.enabled?(:coder_reap)                                   # global; company: raises
-#   Feature.explain(:board_ai_summary, company: company)            # value, source, shadowed layers
+#   Feature.explain(:external_runners, company: company)            # value, source, ENV variable
 #
 # Deliberately no `disabled?`, setter or block form: an `if Feature.enabled?`
 # is the one shape to search for when a flag is removed.

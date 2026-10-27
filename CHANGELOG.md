@@ -14,13 +14,6 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
-- **Admin**: `bin/rails feature_flags:audit` lists the feature flags due for
-  removal: release flags past their remove-by date, flags that have had the same
-  value for every company for 30 days, database rows of flags no longer
-  declared, and `FEATURE_*` variables no flag declares. `bin/rails
-  feature_flags:prune` deletes those leftover rows, recording each key in the
-  audit trail; it is an optional manual step once a rollout has replaced every
-  old pod, described in the release guide.
 - **Profile**: the `trigger_workflow` tool of personal access takes an optional
   `idempotency_key`. A second call with the same key returns the run the first
   call started instead of starting another, so an agent can retry safely after a
@@ -60,6 +53,9 @@ governance, community health — carry none.
   billed by nobody even if Stripe still holds a customer for it.
 
 ### Changed
+- **Integrations**: `CODER_REAP_ENABLED` takes the same values as any
+  `FEATURE_*` lock (`on`/`off`, `true`/`false`, `1`/`0`); any other value now
+  stops the app at boot, naming the variable, instead of meaning off.
 - **Sessions & Runs**: an automatic Kiro session shows Kiro's full terminal
   interface, so its live terminal shows each tool call with its output and can
   be steered, as with the other runtimes. If Kiro stops to ask a person what to

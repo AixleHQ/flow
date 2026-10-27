@@ -1,117 +1,79 @@
 # frozen_string_literal: true
 
-# Feature flags in tests: no database, no Redis, no real ENV. Every test starts
-# from the declared defaults; the helpers below change one layer for a block and
-# put it back afterwards.
+# Feature flags in tests. Values are rows: with_feature creates them inside the
+# test's transaction, which rolls back on its own. The test cache is a null
+# store, so every read goes to the database. Tests use the flags
+# config/feature_flags.yml declares: external_runners is company-scoped,
+# coder_reap is global and has its own `env:` variable.
 #
-#   with_feature(:board_ai_summary, true) { ... }                          # global value
-#   with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
-#   stub_feature_env(:board_ai_summary, "off") { ... }                     # the FEATURE_* lock
-#   stub_feature_env_setting(:coder_reap, false) { ... }                   # the legacy env_setting lock
-#   with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }    # declare test flags
+#   with_feature(:external_runners, true) { ... }                         # global value
+#   with_feature(:external_runners, false, company: company) { ... }      # one override
+#   stub_feature_env(:coder_reap, "off") { ... }                          # FEATURE_CODER_REAP
+#   stub_feature_env(:coder_reap, "off", variable: "CODER_REAP_ENABLED") { ... }   # the flag's env:
 #
-# The database-backed FeatureFlags::Store is tested on its own, against real
-# rows and FakeFeatureFlagVersionToken (test/services/feature_flags/store_test.rb).
+# An ENV lock is a deployment fact, so it is the one thing a test substitutes:
+# stub_feature_env goes through FeatureFlags.with, fiber-local and undone when
+# its block ends. A test of the flag machinery itself builds its own Registry,
+# EnvSource and Resolver instead.
 module FeatureFlagsHelper
   extend ActiveSupport::Concern
-
-  EXAMPLE_REGISTRY = Rails.root.join("test/fixtures/files/feature_flags_registry.yml")
 
   included do
     setup { reset_feature_flags! }
   end
 
-  class_methods do
-    # with_feature_registry for every test of the class.
-    def uses_feature_registry(path)
-      setup do
-        @registry_before_test = [ FeatureFlags.registry, FeatureFlags.env_source ]
-        registry = FeatureFlags::Registry.load(path)
-        FeatureFlags.registry = registry
-        FeatureFlags.env_source = FeatureFlags.env_source.with_registry(registry)
-      end
-
-      teardown do
-        FeatureFlags.registry, FeatureFlags.env_source = @registry_before_test if @registry_before_test
-      end
-    end
-  end
-
-  # Empties the store and the ENV layer, so every test starts from the declared
-  # defaults whatever an earlier test or the process environment left behind.
   def reset_feature_flags!
-    FeatureFlags.store.reset!
     Current.feature_snapshot = nil
     Feature::REPORTED_UNKNOWN.clear
-    FeatureFlags.env_source = FeatureFlags::EnvSource.new({}, registry: FeatureFlags.registry)
   end
 
   def with_feature(key, enabled, company: FeatureFlags::UNSET)
     raise ArgumentError, "with_feature takes true or false, got #{enabled.inspect}" unless [ true, false ].include?(enabled)
 
     definition = FeatureFlags.registry.fetch(key)
-    store = FeatureFlags.store
-    previous = store.snapshot
-
+    flag = FeatureFlag.find_or_create_by!(key: definition.key.to_s)
     if company.equal?(FeatureFlags::UNSET)
-      store.set_global(definition.key, enabled)
+      previous = flag.enabled
+      flag.update!(enabled: enabled)
     else
       raise ArgumentError, "feature flag #{definition.key} is global: it has no company overrides" if definition.global?
       raise ArgumentError, "with_feature(..., company:) needs a company" if company.nil?
 
-      store.set_override(definition.key, company.id, enabled)
+      override = flag.overrides.find_or_initialize_by(company: company)
+      previous = override.new_record? ? nil : override.enabled
+      override.update!(enabled: enabled, reason: "test")
     end
 
-    # A test runs inside one executor run, so the snapshot its first check
-    # pinned would otherwise hide the value set here.
+    # Inside an executor run the values its first check read would otherwise
+    # hide the row written here.
     Current.feature_snapshot = nil
     yield
   ensure
-    if previous
-      store.replace(previous)
-      Current.feature_snapshot = nil
-    end
+    restore_feature(flag, company, previous) if flag
   end
 
-  def stub_feature_env(key, value)
+  # `variable` defaults to FEATURE_<KEY>; pass the flag's own `env:` variable to
+  # simulate that one.
+  def stub_feature_env(key, value, variable: nil, &)
     definition = FeatureFlags.registry.fetch(key)
-    previous = FeatureFlags.env_source
-    FeatureFlags.env_source = previous.merge(definition.env_var => value)
-    yield
-  ensure
-    FeatureFlags.env_source = previous if previous
+    variable ||= definition.env_var
+    raise ArgumentError, "#{variable} does not lock #{definition.key}" unless definition.env_vars.include?(variable)
+
+    FeatureFlags.with(env: FeatureFlags.env_source.merge(variable => value), &)
   end
 
-  # The legacy lock of a flag declared with env_setting: `value` is what
-  # config/settings.yml would give it (true or false when its variable is set,
-  # nil when it is not).
-  def stub_feature_env_setting(key, value)
-    definition = FeatureFlags.registry.fetch(key)
-    raise ArgumentError, "feature flag #{definition.key} declares no env_setting" if definition.env_setting.nil?
+  private
 
-    previous = FeatureFlags.env_source
-    FeatureFlags.env_source = previous.merge_settings(definition.env_setting => value)
-    yield
-  ensure
-    FeatureFlags.env_source = previous if previous
-  end
-
-  # Swaps the declared flags (a path or a FeatureFlags::Registry) for the block.
-  # The ENV layer is re-read against the new registry.
-  def with_feature_registry(registry)
-    registry = FeatureFlags::Registry.load(registry) unless registry.is_a?(FeatureFlags::Registry)
-    previous_registry = FeatureFlags.registry
-    previous_env = FeatureFlags.env_source
-    FeatureFlags.registry = registry
-    FeatureFlags.env_source = previous_env.with_registry(registry)
-    yield
-  ensure
-    if previous_registry
-      FeatureFlags.registry = previous_registry
-      FeatureFlags.env_source = previous_env
+  # Puts the value back when the block ends, so nested with_feature blocks
+  # unwind in order; the transaction rollback removes the rows at the end.
+  def restore_feature(flag, company, previous)
+    if company.equal?(FeatureFlags::UNSET)
+      flag.update!(enabled: previous)
+    elsif previous.nil?
+      flag.overrides.where(company: company).delete_all
+    else
+      flag.overrides.find_by!(company: company).update!(enabled: previous)
     end
+    Current.feature_snapshot = nil
   end
 end
-
-# The suite never reads flag values from the database or Redis.
-FeatureFlags.store = FeatureFlags::MemoryStore.new

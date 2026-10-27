@@ -198,7 +198,7 @@ per-project namespaces and network policies separate them.
 | `CODER_SSH_EXEC_INLINE_BYTES`      | no       | `262144` | Total response budget for one `coder_ssh_exec`; the rest is read back through the tool-result path. |
 | `CODER_SSH_EXEC_CEILING_SECONDS`   | no       | `120`    | Wall-clock ceiling one `coder_ssh_exec` can reach regardless of its own timeout. Longer work must run detached. |
 | `CODER_JOB_STATUS_TAIL_LINES`      | no       | `40`     | Log tail `coder_job_status` returns by default.                          |
-| `CODER_REAP_ENABLED`               | no       | `true`   | `false` disables deletion of dead workspaces. The reaper only ever looks at workspaces the integration's token owns under its machine prefix, and does nothing for an integration without one; a workspace whose last start or stop failed is confirmed twice like a dead one, and one whose delete failed is left for an operator. It is the ENV lock of the `coder_reap` feature flag: unset, the reaper can be paused at runtime from `/admin/feature_flags`; `FEATURE_CODER_REAP` wins when both are set. |
+| `CODER_REAP_ENABLED`               | no       | `true`   | `false` disables deletion of dead workspaces. The reaper only ever looks at workspaces the integration's token owns under its machine prefix, and does nothing for an integration without one; a workspace whose last start or stop failed is confirmed twice like a dead one, and one whose delete failed is left for an operator. It is the `coder_reap` feature flag's own ENV lock (its `env:` in `config/feature_flags.yml`), parsed like `FEATURE_<KEY>`: `on`, `true`, `1` and `off`, `false`, `0`, and any other value fails boot. Unset, the reaper can be paused at runtime from `/admin/feature_flags`; `FEATURE_CODER_REAP` wins when both are set. |
 | `CODER_REAP_CONFIRMATION_MINUTES`  | no       | `10`     | How far apart the two "this box is dead" observations must be before a workspace is deleted. |
 | `CODER_REAP_MAX_DELETIONS_PER_RUN` | no       | `3`      | Cap on deletions in one reaper sweep, however dead the pool looks.       |
 
@@ -398,13 +398,13 @@ origin without credentials, because the app calls them from a sandboxed widget.
 ## Feature flags
 
 Flags are declared in `config/feature_flags.yml`; a variable only locks a flag
-declared there. Read once at boot, so a change needs a restart.
+declared there. A flag may also name one variable of its own (`env:`), parsed
+the same way, as `coder_reap` does with `CODER_REAP_ENABLED`; `FEATURE_<KEY>`
+wins when both are set. Read once at boot, so a change needs a restart.
 
 | Variable                         | Required | Default | Purpose                                                     |
 | -------------------------------- | -------- | ------- | ----------------------------------------------------------- |
 | `FEATURE_<KEY>`                  | no       | unset   | Locks the declared flag `<key>` (upper-cased, e.g. `FEATURE_BOARD_AI_SUMMARY` for `board_ai_summary`) on or off, over every company override and admin value. `on`, `true`, `1` and `off`, `false`, `0`, case-insensitive; empty is unset. Any other value fails boot naming the variable. A variable for a flag nobody declares is ignored with one warning at boot (logged and sent to Sentry), so removing a flag never needs an infra change first. |
-| `FEATURE_FLAGS_REFRESH_INTERVAL` | no       | `5`     | Seconds between a process's checks of the Redis change token for runtime flag values (admin values and company overrides). |
-| `FEATURE_FLAGS_MAX_STALENESS`    | no       | `60`    | Seconds after which a process reloads runtime flag values from the database even without a change signal, e.g. while Redis is down. |
 
 ## Docs explorer
 
@@ -469,3 +469,7 @@ files and CI build args:
   columns, read straight off the integration row with no settings fallback.
 - MAX_FILE_SIZE — read by nothing; upload limits come from the uploaders.
 - ENVIRONMENT — a stray CI-only variable nothing read.
+- FEATURE_FLAGS_REFRESH_INTERVAL, FEATURE_FLAGS_MAX_STALENESS — flag values are
+  now read through the Rails cache with a fixed 10-second TTL, and an admin
+  change drops the cached values at once. Left set, they are reported at boot
+  as `FEATURE_*` variables no flag declares.
