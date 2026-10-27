@@ -29,14 +29,7 @@ module AzureDevops
     def ensure_all!(event_types: AzureDevopsSubscription::GATE_EVENT_TYPES, base_url: nil)
       integration.azure_project_ids.flat_map do |project_id|
         event_types.filter_map do |event_type|
-          # ANY existing row, not only a live one: the unique index is on
-          # (integration, project, event_type), so a row left behind by an
-          # earlier failed attempt must be reused rather than duplicated.
-          existing = integration.azure_devops_subscriptions
-                                .find_by(event_type: event_type, azure_project_id: project_id)
-          next existing if existing&.azure_subscription_id.present? && existing.live?
-
-          create!(event_type: event_type, project_id: project_id, base_url: base_url, subscription: existing)
+          create!(event_type: event_type, project_id: project_id, base_url: base_url)
         rescue Error => e
           Rails.logger.warn("[AzureDevops::SubscriptionService] #{event_type} in project #{project_id} " \
                             "failed for integration #{integration.id}: #{e.code}")
@@ -45,13 +38,106 @@ module AzureDevops
       end
     end
 
-    def create!(event_type:, project_id: nil, base_url: nil, subscription: nil)
+    # Posts to Azure only for a row without a live hook, serialized on that row
+    # so a caller that waited finds the hook created instead of adding a second.
+    # Lock order: subscription row, then installation (AppTokenService).
+    def create!(event_type:, project_id: nil, base_url: nil)
       project_id ||= integration.azure_default_project_id
-      subscription ||= integration.azure_devops_subscriptions
-                                  .find_or_initialize_by(event_type: event_type, azure_project_id: project_id)
-      subscription.azure_project_id ||= project_id
-      subscription.save! if subscription.new_record?
+      subscription = subscription_row(event_type, project_id)
+      return subscription if provisioned?(subscription)
 
+      failure = nil
+      result = subscription.with_lock do
+        next subscription if provisioned?(subscription)
+
+        create_under_lock!(subscription, event_type: event_type, project_id: project_id, base_url: base_url)
+      rescue Error => e
+        # Raised after the block, so the error status recorded on the row is
+        # committed rather than rolled back with the lock's transaction.
+        failure = e
+        nil
+      end
+      raise failure if failure
+
+      result
+    end
+
+    # Each wanted subscription that is not delivering, and why: never created,
+    # refused (its error code), disabled, or on probation.
+    def undelivered(event_types)
+      rows = integration.azure_devops_subscriptions.where(event_type: event_types)
+                        .index_by { |subscription| [ subscription.azure_project_id, subscription.event_type ] }
+      integration.azure_project_ids.product(event_types).filter_map do |project_id, event_type|
+        row = rows[[ project_id, event_type ]]
+        next if row&.active? && row.azure_subscription_id.present?
+
+        { project_id: project_id, event_type: event_type,
+          reason: row.nil? ? "missing" : (row.error_code.presence || row.status.to_s) }
+      end
+    end
+
+    # Ask Azure what state each subscription is actually in. A subscription on
+    # probation is not delivering, and from this side that is indistinguishable
+    # from "nothing has happened" — so it is read and recorded rather than
+    # assumed healthy.
+    # Reading and deleting a subscription are ORGANIZATION-level calls, but the
+    # credential still has to name a project it covers — `resolve!` refuses to
+    # pick one when a connection covers several. Each subscription knows which
+    # project it belongs to, so that is what is used.
+    def refresh_status!
+      integration.azure_devops_subscriptions.find_each do |subscription|
+        captured_id = subscription.azure_subscription_id
+        next if captured_id.blank?
+
+        client, = CredentialProvider.client_for(integration, project_id: subscription.azure_project_id)
+
+        remote = client.get("_apis", "hooks", "subscriptions", captured_id, family: :default)
+        update_if_current(subscription, captured_id, status: map_status(remote["status"]).to_s)
+      rescue NotFound
+        # Deleted in Azure's UI. Recorded as disabled rather than recreated
+        # behind the operator's back.
+        update_if_current(subscription, captured_id, status: "disabled", error_code: "deleted_upstream")
+      rescue Error => e
+        update_if_current(subscription, captured_id, error_code: e.code)
+      end
+    end
+
+    # Deletes the given subscriptions in Azure after their connection is gone;
+    # the local rows went with it. Best effort, and deliberately so: a removal
+    # must not be blocked by Azure, and what is left behind posts to an endpoint
+    # that no longer authenticates, which fails closed. An inactive connection's
+    # hooks still exist in Azure, so they are deleted too.
+    def release(hooks)
+      hooks.each do |azure_subscription_id, azure_project_id|
+        client, = CredentialProvider.client_for(integration, allow_inactive: true, project_id: azure_project_id)
+        client.request_delete("_apis", "hooks", "subscriptions", azure_subscription_id)
+      rescue Error => e
+        Rails.logger.warn("[AzureDevops::SubscriptionService] could not delete subscription " \
+                          "#{azure_subscription_id}: #{e.code}")
+      end
+    end
+
+    private
+
+    # ANY existing row, not only a live one: the unique index is on
+    # (integration, project, event_type), so a row left behind by an earlier
+    # failed attempt is reused, and a concurrent insert reads the winner back.
+    def subscription_row(event_type, project_id)
+      scope = integration.azure_devops_subscriptions
+      key = { event_type: event_type, azure_project_id: project_id }
+      scope.find_by(key) || scope.create_or_find_by!(key)
+    rescue ActiveRecord::RecordInvalid => e
+      # The winner committed before our uniqueness validation ran.
+      raise unless e.record.errors.of_kind?(:event_type, :taken)
+
+      scope.find_by!(key)
+    end
+
+    def provisioned?(subscription)
+      subscription.azure_subscription_id.present? && subscription.live?
+    end
+
+    def create_under_lock!(subscription, event_type:, project_id:, base_url:)
       client, resolved = CredentialProvider.client_for(integration, project_id: project_id)
       payload = client.post(
         "_apis", "hooks", "subscriptions",
@@ -83,65 +169,21 @@ module AzureDevops
       )
       subscription
     rescue Error => e
-      subscription&.update(status: :error, error_code: e.code, last_checked_at: Time.current)
+      subscription.update!(status: :error, error_code: e.code, last_checked_at: Time.current)
       raise e
     end
 
-    # Each wanted subscription that is not delivering, and why: never created,
-    # refused (its error code), disabled, or on probation.
-    def undelivered(event_types)
-      rows = integration.azure_devops_subscriptions.where(event_type: event_types)
-                        .index_by { |subscription| [ subscription.azure_project_id, subscription.event_type ] }
-      integration.azure_project_ids.product(event_types).filter_map do |project_id, event_type|
-        row = rows[[ project_id, event_type ]]
-        next if row&.active? && row.azure_subscription_id.present?
+    # Applies a refresh result only while the row still names the hook that was
+    # read: a hook created meanwhile must not be overwritten by its predecessor.
+    def update_if_current(subscription, captured_id, attributes)
+      now = Time.current
+      applied = AzureDevopsSubscription.where(id: subscription.id, azure_subscription_id: captured_id)
+                                       .update_all(attributes.merge(last_checked_at: now, updated_at: now))
+      return true if applied.positive?
 
-        { project_id: project_id, event_type: event_type,
-          reason: row.nil? ? "missing" : (row.error_code.presence || row.status.to_s) }
-      end
+      Rails.logger.debug { "[AzureDevops::SubscriptionService] stale refresh of #{captured_id} dropped" }
+      false
     end
-
-    # Ask Azure what state each subscription is actually in. A subscription on
-    # probation is not delivering, and from this side that is indistinguishable
-    # from "nothing has happened" — so it is read and recorded rather than
-    # assumed healthy.
-    # Reading and deleting a subscription are ORGANIZATION-level calls, but the
-    # credential still has to name a project it covers — `resolve!` refuses to
-    # pick one when a connection covers several. Each subscription knows which
-    # project it belongs to, so that is what is used.
-    def refresh_status!
-      integration.azure_devops_subscriptions.find_each do |subscription|
-        next if subscription.azure_subscription_id.blank?
-
-        client, = CredentialProvider.client_for(integration, project_id: subscription.azure_project_id)
-
-        remote = client.get("_apis", "hooks", "subscriptions", subscription.azure_subscription_id, family: :default)
-        subscription.update!(status: map_status(remote["status"]), last_checked_at: Time.current)
-      rescue NotFound
-        # Deleted in Azure's UI. Recorded as disabled rather than recreated
-        # behind the operator's back.
-        subscription.update!(status: :disabled, error_code: "deleted_upstream", last_checked_at: Time.current)
-      rescue Error => e
-        subscription.update!(error_code: e.code, last_checked_at: Time.current)
-      end
-    end
-
-    # Deletes the given subscriptions in Azure after their connection is gone;
-    # the local rows went with it. Best effort, and deliberately so: a removal
-    # must not be blocked by Azure, and what is left behind posts to an endpoint
-    # that no longer authenticates, which fails closed. An inactive connection's
-    # hooks still exist in Azure, so they are deleted too.
-    def release(hooks)
-      hooks.each do |azure_subscription_id, azure_project_id|
-        client, = CredentialProvider.client_for(integration, allow_inactive: true, project_id: azure_project_id)
-        client.request_delete("_apis", "hooks", "subscriptions", azure_subscription_id)
-      rescue Error => e
-        Rails.logger.warn("[AzureDevops::SubscriptionService] could not delete subscription " \
-                          "#{azure_subscription_id}: #{e.code}")
-      end
-    end
-
-    private
 
     # Scoped to the connection's own Azure project, so a subscription cannot
     # deliver events from elsewhere in the organization.
