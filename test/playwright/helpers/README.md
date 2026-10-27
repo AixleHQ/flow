@@ -143,11 +143,10 @@ those helpers take a project ID. To find IDs while signed in, read the Inertia p
 
 ### Requests, page payloads, screenshots and route probes
 
-These five take `page` and one options object, not `env`. A relative `path` resolves against, in order:
-
-1. `options.baseUrl`, when given;
-2. the origin of the page the browser is on, which is staging once you have signed in or called `signOut`;
-3. staging (`https://staging.flow.aixle.com`), when the browser is on `about:blank`.
+These five take `page` and one options object, not `env`. A relative `path` resolves against `options.baseUrl` when it
+is given, else staging (`https://staging.flow.aixle.com`), as `env.baseUrl` does for the helpers above. The origin of
+the open page is never used: after an external link or an OAuth redirect it can be a foreign host. When the credentials
+asset sets `STAGING_URL`, pass `baseUrl: staging.baseUrl`, as in the worked example.
 
 Requests go through `page.request`, so they carry the browser context's cookies (and its HTTP Basic Auth, set by
 `login`/`signOut` from `env.httpCredentials`). Each request times out after 30 seconds.
@@ -189,7 +188,7 @@ Fetches a page's HTML with the session cookies, following redirects, and parses 
 
 - Do not read the `#app[data-page]` attribute: with `use_script_element_for_initial_page` the payload is in the script
   element. Do not read the DOM after load either, since hydration removes the element. This helper reads the HTML.
-- `path` defaults to the page the browser is on.
+- `path` defaults to the page the browser is on, when that page is on the base URL; otherwise pass `path`.
 - `url` is the path the request ended on after redirects, so a redirect to `/login` shows there.
 - `appVersion` is `props.settings.appVersion`: the deployed commit. Read it at the start and at the end of a round.
 - `pick` takes dotted paths (`'projects.0.id'`) and returns only those props, keyed by path. A path that does not
@@ -202,7 +201,7 @@ await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVer
 //   appVersion: '10dd9779…', props: { 'settings.appVersion': '10dd9779…', 'projects.0.id': 3 } }
 ```
 
-#### `shot(page, { round, name, banner })`
+#### `shot(page, { round, name, banner, baseUrl })`
 
 Screenshots the viewport to `/workspace/outputs/screenshots_<round>/<name>.png` and returns `{ path, width, height }`.
 
@@ -212,7 +211,7 @@ Screenshots the viewport to `/workspace/outputs/screenshots_<round>/<name>.png` 
 - `round` and `name` may hold letters, digits, `.`, `_` and `-` only. `name` may end in `.png`.
 - `banner` (`{ role, value, appVersion }`, all optional) overlays a strip at the bottom with the role, the page URL,
   `appVersion` and the value under test, and removes it after the capture. `appVersion` is read with `readInertiaPage`
-  when it is not given. Never put a credential in a banner.
+  (against `baseUrl`) when it is not given. Never put a credential in a banner.
 
 ```js
 await shot(page, {
@@ -228,7 +227,8 @@ await shot(page, {
 Sends each request (`{ method = 'GET', path, csrf = true }`) through `appRequest` with `maxRedirects: 0`, one after
 another, and returns one row per request: `[{ method, path, status, location }]`. A request that gets no response gives
 `status: null` and an `error`, and the remaining rows still run. Keep a call to a few dozen requests. For anonymous rows,
-call `signOut` first.
+call `signOut` first. The CSRF token is resolved for every row, so a row that resets the session (`DELETE /logout`, a
+sign-in) does not leave the rows after it with a stale token and false `422`s.
 
 ```js
 await loginAsCompanyEmployee(page, staging);
@@ -272,9 +272,18 @@ async (page) => {
 
   const staging = await loadCredentialsAsset(page);
   await loginAsCompanyEmployee(page, staging);
-  const start = await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVersion'] });
-  const rows = await probeRoutes(page, { requests: [{ path: '/company/assets' }, { path: '/company/sessions' }] });
-  const evidence = await shot(page, { round: 1, name: 'employee-projects', banner: { role: 'CompanyEmployee' } });
+  const { baseUrl } = staging;
+  const start = await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVersion'], baseUrl });
+  const rows = await probeRoutes(page, {
+    requests: [{ path: '/company/assets' }, { path: '/company/sessions' }],
+    baseUrl,
+  });
+  const evidence = await shot(page, {
+    round: 1,
+    name: 'employee-projects',
+    banner: { role: 'CompanyEmployee' },
+    baseUrl,
+  });
   const anonymous = await signOut(page, staging);
   return { appVersion: start.appVersion, rows, evidence, anonymous };
 };

@@ -300,9 +300,9 @@ async function goToWorkflowRun(page, env, projectId, runId) {
 // ---------------------------------------------------------------------------
 //
 // These helpers take `page` and one options object. Relative paths resolve
-// against `options.baseUrl` when it is given, else the origin of the page the
-// browser is on, else staging (see aixleRequestBase). Passing the `env` from
-// loadCredentialsAsset as the options of signOut works, since it has baseUrl.
+// against `options.baseUrl` when it is given, else staging (see
+// aixleRequestBase). Passing the `env` from loadCredentialsAsset as the
+// options of signOut works, since it has baseUrl.
 
 // The origin (scheme://host[:port]) of an http(s) URL, or null.
 function aixleOrigin(href) {
@@ -310,9 +310,11 @@ function aixleOrigin(href) {
   return match ? match[1] : null;
 }
 
+// The base URL is always explicit, as in the #182 helpers: never the origin of
+// the open page, which may be a foreign host after an external link or an
+// OAuth redirect.
 function aixleRequestBase(page, options) {
-  if (options && options.baseUrl) return aixleBaseUrl(options);
-  return aixleOrigin(page.url()) || AIXLE_STAGING_URL;
+  return aixleBaseUrl(options);
 }
 
 function aixleAbsolute(base, path) {
@@ -388,7 +390,7 @@ async function aixleCsrfToken(page, base) {
 }
 
 // One request through page.request, with the browser context's cookies.
-// `csrfToken` is passed in by callers that send several requests.
+// `csrfToken` is optional; without it the token is resolved for this request.
 async function aixleSend(page, base, options, csrfToken) {
   const {
     method = 'GET',
@@ -509,8 +511,8 @@ function aixlePick(source, paths) {
  */
 async function readInertiaPage(page, { path, pick = [], baseUrl } = {}) {
   const base = aixleRequestBase(page, { baseUrl });
-  const target = path || (aixleOrigin(page.url()) ? page.url() : null);
-  if (!target) throw new Error('readInertiaPage needs a path: the browser is not on an app page');
+  const target = path || (aixleOrigin(page.url()) === base ? page.url() : null);
+  if (!target) throw new Error(`readInertiaPage needs a path: the browser is not on ${base}`);
   const url = aixleAbsolute(base, target);
   let response;
   try {
@@ -578,9 +580,9 @@ function aixlePngSize(buffer) {
  * `banner` ({ role, value, appVersion }) overlays the role, the page URL,
  * appVersion (read with readInertiaPage when not given) and the value under
  * test at the bottom of the page, and removes it after the capture. Never put
- * credentials in a banner.
+ * credentials in a banner. `baseUrl` is only used for that appVersion lookup.
  */
-async function shot(page, { round, name, banner } = {}) {
+async function shot(page, { round, name, banner, baseUrl } = {}) {
   const dir = `screenshots_${aixleFileSegment('round', round)}`;
   const file = aixleFileSegment('name', String(name || '').replace(/\.png$/i, ''));
   const path = `/workspace/outputs/${dir}/${file}.png`;
@@ -594,7 +596,7 @@ async function shot(page, { round, name, banner } = {}) {
   if (banner) {
     let appVersion = banner.appVersion;
     if (appVersion === undefined) {
-      appVersion = await readInertiaPage(page, { pick: ['settings.appVersion'] })
+      appVersion = await readInertiaPage(page, { pick: ['settings.appVersion'], baseUrl })
         .then((result) => result.appVersion)
         .catch(() => null);
     }
@@ -644,18 +646,18 @@ async function shot(page, { round, name, banner } = {}) {
  * per request: [{ method, path, status, location }]. A request that gets no
  * response gives status null and an `error`, and the other rows still run.
  * Requests run one after another; keep a call to a few dozen of them.
- * For anonymous rows, call signOut first.
+ * The CSRF token is resolved again for every row, so a row that resets the
+ * session (DELETE /logout, a sign-in) does not give the rows after it a stale
+ * token and false 422s. For anonymous rows, call signOut first.
  */
 async function probeRoutes(page, { requests = [], baseUrl } = {}) {
   const base = aixleRequestBase(page, { baseUrl });
-  let token = null;
   const rows = [];
   for (const request of requests) {
     const { method = 'GET', path, csrf = true } = request || {};
     const verb = String(method).toUpperCase();
     try {
-      if (csrf && verb !== 'GET' && verb !== 'HEAD' && !token) token = await aixleCsrfToken(page, base);
-      const result = await aixleSend(page, base, { method: verb, path, csrf, maxRedirects: 0 }, token);
+      const result = await aixleSend(page, base, { method: verb, path, csrf, maxRedirects: 0 });
       rows.push({ method: verb, path, status: result.status, location: result.location });
     } catch (error) {
       rows.push({ method: verb, path, status: null, location: null, error: error.message });
