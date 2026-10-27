@@ -448,7 +448,7 @@ module Coder
 
     test "CODER_REAP_ENABLED=false still switches the reaper off" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
-      stub_feature_env_setting(:coder_reap, false) do
+      stub_feature_env(:coder_reap, "false", variable: "CODER_REAP_ENABLED") do
         result = build_reaper(workspace_service: service).reap
 
         assert_equal false, result[:enabled] # rubocop:disable Minitest/RefuteFalse

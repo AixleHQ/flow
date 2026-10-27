@@ -48,8 +48,11 @@ class ConfigurationReferenceTest < ActiveSupport::TestCase
 
   private
 
+  # Plus the variables flags declare as their own `env:`, which config/settings.yml
+  # reads by name from config/feature_flags.yml.
   def settings_variables
-    SETTINGS_FILES.flat_map { |file| file.read.scan(/ENV(?:\.fetch)?[\[(]\s*['"]([A-Z0-9_]+)['"]/) }.flatten.to_set
+    from_settings = SETTINGS_FILES.flat_map { |file| file.read.scan(/ENV(?:\.fetch)?[\[(]\s*['"]([A-Z0-9_]+)['"]/) }.flatten
+    (from_settings + FeatureFlags.registry.definitions.filter_map(&:env)).to_set
   end
 
   # Only the first cell of a table row counts as documentation: prose (the

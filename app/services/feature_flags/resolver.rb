@@ -2,9 +2,10 @@
 
 module FeatureFlags
   # Resolves a flag from the registry, the ENV layer and a snapshot of runtime
-  # values, with no I/O: the first layer that is set wins, in the order
+  # values (FeatureFlag.load_snapshot), with no I/O: the first layer that is set
+  # wins, in the order
   #
-  #   ENV > company override > (reserved: rollout %) > global admin value > declared default
+  #   ENV > company override > global admin value > declared default
   #
   # A company-scoped flag needs `company:` (nil is legal and skips the override
   # step); a global flag refuses one. An undeclared key raises UnknownFlag.
@@ -19,10 +20,9 @@ module FeatureFlags
       definition = @registry.fetch(key)
       check_company_argument!(definition, company)
 
-      layers = set_layers(definition, company)
-      winner, *shadowed = layers
-      Resolution.new(key: definition.key, value: winner[:value], source: winner[:source],
-                     env_var: @env.variable_for(definition.key) || definition.env_var, shadowed: shadowed.reject { |layer| layer[:source] == :default }.freeze)
+      source, value = layers(definition, company).find { |_, layer_value| !layer_value.nil? }
+      Resolution.new(key: definition.key, value: value, source: source,
+                     env_var: @env.variable_for(definition.key) || definition.env_var)
     end
 
     private
@@ -36,17 +36,10 @@ module FeatureFlags
       end
     end
 
-    def set_layers(definition, company)
-      layers = []
-      add(layers, :env, @env.value_for(definition.key))
-      add(layers, :company, @snapshot.override(definition.key, company.id)) if definition.company_scoped? && !company.nil?
-      add(layers, :global, @snapshot.global(definition.key))
-      add(layers, :default, definition.default)
-      layers.map(&:freeze)
-    end
-
-    def add(layers, source, value)
-      layers << { source: source, value: value } unless value.nil?
+    def layers(definition, company)
+      values = @snapshot.fetch(definition.key, {})
+      override = values.dig(:overrides, company.id) if definition.company_scoped? && !company.nil?
+      { env: @env.value_for(definition.key), company: override, global: values[:global], default: definition.default }
     end
   end
 end

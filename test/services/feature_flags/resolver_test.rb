@@ -2,15 +2,20 @@
 
 require "test_helper"
 
-# The resolution model of the feature flags design: the §3.3 table (a flag
-# unknown to one layer) and the eleven worked examples of §3.4.
+# Precedence: ENV > company override > global value > declared default, for a
+# flag unknown to one layer or another.
 class FeatureFlags::ResolverTest < ActiveSupport::TestCase
-  REGISTRY = FeatureFlags::Registry.load(FeatureFlagsHelper::EXAMPLE_REGISTRY)
+  REGISTRY = FeatureFlags::Registry.new(
+    { "board_ai_summary" => { "description" => "AI summary.", "owner" => "@AixleHQ/board", "kind" => "release",
+                              "scope" => "company", "default" => false, "remove_by" => Date.new(2027, 1, 31) },
+      "coder_reap" => { "description" => "Reaper.", "owner" => "@AixleHQ/platform", "kind" => "ops", "scope" => "global",
+                        "default" => true, "env" => "CODER_REAP_ENABLED" } },
+    source: "test registry"
+  )
 
-  def resolver(env: {}, flags: {}, settings: nil)
-    FeatureFlags::Resolver.new(registry: REGISTRY,
-                               env: FeatureFlags::EnvSource.new(env, registry: REGISTRY, settings: settings),
-                               snapshot: FeatureFlags::Snapshot.new(flags))
+  # `flags` is FeatureFlag.load_snapshot's shape.
+  def resolver(env: {}, flags: {})
+    FeatureFlags::Resolver.new(registry: REGISTRY, env: FeatureFlags::EnvSource.new(env, registry: REGISTRY), snapshot: flags)
   end
 
   def company(id) = Company.new(id: id)
@@ -31,7 +36,7 @@ class FeatureFlags::ResolverTest < ActiveSupport::TestCase
   ].freeze
 
   BOARD_AI_SUMMARY_EXAMPLES.each do |example, env, global, overrides, results, sources|
-    test "§3.4 example #{example}: board_ai_summary" do
+    test "example #{example}: board_ai_summary" do
       flag = { overrides: overrides }
       flag[:global] = global unless global == :no_row
       resolver = resolver(env: env ? { "FEATURE_BOARD_AI_SUMMARY" => env } : {}, flags: { board_ai_summary: flag })
@@ -44,45 +49,36 @@ class FeatureFlags::ResolverTest < ActiveSupport::TestCase
     end
   end
 
-  test "§3.4 example 5: the ENV lock lists the override and global value it shadows" do
+  test "the ENV lock names its variable; without one, env_var is FEATURE_<KEY>" do
     resolver = resolver(env: { "FEATURE_BOARD_AI_SUMMARY" => "off" },
                         flags: { board_ai_summary: { global: true, overrides: { 7 => true } } })
 
-    resolution = board_ai_summary(resolver, 7)
-
-    assert_equal "FEATURE_BOARD_AI_SUMMARY", resolution.env_var
-    assert_equal [ { source: :company, value: true }, { source: :global, value: true } ], resolution.shadowed
-    assert_equal [ { source: :global, value: true } ], board_ai_summary(resolver, 42).shadowed
+    assert_equal [ :env, "FEATURE_BOARD_AI_SUMMARY" ], board_ai_summary(resolver, 7).then { |r| [ r.source, r.env_var ] }
+    assert_equal [ :company, "FEATURE_BOARD_AI_SUMMARY" ],
+                 board_ai_summary(resolver(flags: { board_ai_summary: { overrides: { 7 => true } } }), 7).then { |r| [ r.source, r.env_var ] }
   end
 
-  test "§3.4 example 6: ENV beats the off override for 42" do
-    resolver = resolver(env: { "FEATURE_BOARD_AI_SUMMARY" => "on" },
-                        flags: { board_ai_summary: { overrides: { 42 => false } } })
-
-    assert_equal [ { source: :company, value: false } ], board_ai_summary(resolver, 42).shadowed
-  end
-
-  test "§3.4 example 8: an unrecognised ENV value fails boot naming the variable" do
+  test "an unrecognised ENV value fails boot naming the variable" do
     error = assert_raises(FeatureFlags::InvalidEnv) { resolver(env: { "FEATURE_BOARD_AI_SUMMARY" => "maybe" }) }
 
     assert_match "FEATURE_BOARD_AI_SUMMARY must be on/off/true/false/1/0", error.message
   end
 
-  test "§3.4 example 9: an unset global flag is its default" do
+  test "an unset global flag is its default" do
     resolution = resolver.resolve(:coder_reap)
 
     assert resolution.value
     assert_equal :default, resolution.source
   end
 
-  test "§3.4 example 10: an admin pauses the reaper at runtime" do
+  test "an admin pauses the reaper at runtime" do
     resolution = resolver(flags: { coder_reap: { global: false } }).resolve(:coder_reap)
 
     refute resolution.value
     assert_equal :global, resolution.source
   end
 
-  test "§3.4 example 11: a global flag refuses company:" do
+  test "a global flag refuses company:" do
     error = assert_raises(ArgumentError) { resolver.resolve(:coder_reap, company: company(7)) }
     assert_match "global", error.message
     assert_raises(ArgumentError) { resolver.resolve(:coder_reap, company: nil) }
@@ -94,33 +90,33 @@ class FeatureFlags::ResolverTest < ActiveSupport::TestCase
     assert_match "company-scoped", error.message
   end
 
-  test "§3.3: a declared flag with no runtime value and no ENV is its declared default" do
+  test "a declared flag with no runtime value and no ENV is its declared default" do
     resolution = board_ai_summary(resolver, 7)
 
-    assert_equal [ false, :default, [] ], [ resolution.value, resolution.source, resolution.shadowed ]
+    assert_equal [ false, :default ], [ resolution.value, resolution.source ]
   end
 
-  test "§3.3: a global value of nil (use default) is skipped" do
+  test "a global value of nil (use default) is skipped" do
     resolution = board_ai_summary(resolver(flags: { board_ai_summary: { global: nil } }), nil)
 
     assert_equal :default, resolution.source
   end
 
-  test "§3.3: runtime values for an undeclared key are ignored, and the key stays unknown" do
+  test "runtime values for an undeclared key are ignored, and the key stays unknown" do
     resolver = resolver(flags: { board_ai_sumary: { global: true, overrides: { 7 => true } } })
 
     assert_equal :default, board_ai_summary(resolver, 7).source
     assert_raises(FeatureFlags::UnknownFlag) { resolver.resolve(:board_ai_sumary, company: company(7)) }
   end
 
-  test "§3.3: an override left on a global flag is ignored" do
+  test "an override left on a global flag is ignored" do
     resolution = resolver(flags: { coder_reap: { overrides: { 7 => false } } }).resolve(:coder_reap)
 
     assert resolution.value
     assert_equal :default, resolution.source
   end
 
-  test "§3.3: an undeclared key raises UnknownFlag" do
+  test "an undeclared key raises UnknownFlag" do
     error = assert_raises(FeatureFlags::UnknownFlag) { resolver.resolve(:board_ai_sumary, company: nil) }
 
     assert_equal :board_ai_sumary, error.key
@@ -130,14 +126,11 @@ class FeatureFlags::ResolverTest < ActiveSupport::TestCase
     assert_equal :coder_reap, resolver.resolve("coder_reap").key
   end
 
-  test "the legacy env_setting locks coder_reap over a global value, naming its variable" do
-    global_on = { coder_reap: { global: true } }
-
-    resolution = resolver(flags: global_on, settings: { coder: { reap_enabled: false } }).resolve(:coder_reap)
+  test "a flag's own env: variable locks it over a global value, naming its variable" do
+    resolution = resolver(env: { "CODER_REAP_ENABLED" => "off" }, flags: { coder_reap: { global: true } }).resolve(:coder_reap)
     assert_equal [ false, :env, "CODER_REAP_ENABLED" ], [ resolution.value, resolution.source, resolution.env_var ]
-    assert_equal [ { source: :global, value: true } ], resolution.shadowed
 
-    resolution = resolver(flags: { coder_reap: { global: false } }, settings: { coder: { reap_enabled: nil } }).resolve(:coder_reap)
+    resolution = resolver(flags: { coder_reap: { global: false } }).resolve(:coder_reap)
     assert_equal [ false, :global, "FEATURE_CODER_REAP" ], [ resolution.value, resolution.source, resolution.env_var ]
   end
 end
