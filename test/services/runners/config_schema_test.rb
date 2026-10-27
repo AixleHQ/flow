@@ -5,6 +5,14 @@ require "test_helper"
 class Runners::ConfigSchemaTest < ActiveSupport::TestCase
   def errors(config, type = "manual") = Runners::ConfigSchema.errors(config, type)
 
+  def patterns_in(node)
+    case node
+    when Hash then node.flat_map { |name, value| name == "pattern" ? [ value ] : patterns_in(value) }
+    when Array then node.flat_map { |value| patterns_in(value) }
+    else []
+    end
+  end
+
   test "a config that sets nothing is valid on manual, and every v1 key with a valid value passes" do
     assert_empty errors({})
     assert_empty errors(
@@ -58,6 +66,23 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     assert_equal [ "container.home_mount must be an object or null" ], errors("container" => { "home_mount" => "/home/op" })
     assert_equal [ "container.cache_mounts[0] must set exactly one of name or host_path" ],
                  errors("container" => { "cache_mounts" => [ { "target" => "/cache" } ] })
+  end
+
+  test "every pattern in every type's schema is an ECMA-262 regex, read as one on the server" do
+    patterns = Runners::ConfigSchema.types.flat_map { |type| patterns_in(Runners::ConfigSchema.for_type(type)) }.uniq
+
+    assert_not_empty patterns
+    patterns.each do |pattern|
+      assert_no_match(/\\[AzZhG]/, pattern, "#{pattern} uses a Ruby-only escape")
+      assert_nothing_raised { JSONSchemer::EcmaRegexp.ruby_equivalent(pattern) }
+    end
+    assert_empty errors("container" => { "home_mount" => { "path" => "/home/op" } })
+    assert_equal [ "container.home_mount.path must be an absolute path" ],
+                 errors("container" => { "home_mount" => { "path" => "A/" } })
+    assert_equal [ "container.home_mount.path must be an absolute path" ],
+                 errors("container" => { "home_mount" => { "path" => "home\n/op" } })
+    assert_equal [ "container.cache_mounts[0].name is not valid" ],
+                 errors("container" => { "cache_mounts" => [ { "name" => "pip\n", "target" => "/cache" } ] })
   end
 
   test "keys a type requires are required" do

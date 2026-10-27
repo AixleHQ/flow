@@ -17,7 +17,7 @@ module Runners
 
     ALL = %w[manual coder kubernetes].freeze
     MACHINE = %w[manual coder].freeze
-    ABSOLUTE_PATH = { "type" => "string", "pattern" => "\\A/" }.freeze
+    ABSOLUTE_PATH = { "type" => "string", "pattern" => "^/" }.freeze
     UUID = { "type" => "string", "format" => "uuid" }.freeze
 
     def self.key(path, types:, schema:, default: nil, required: false, later: false)
@@ -33,7 +33,7 @@ module Runners
                         schema: { "type" => "object", "additionalProperties" => { "type" => "string" } }),
       key("on_release", types: %w[coder], default: "delete", schema: { "enum" => %w[delete stop] }),
       key("namespace", types: %w[kubernetes], required: true,
-                       schema: { "type" => "string", "maxLength" => 63, "pattern" => "\\A[a-z0-9]([-a-z0-9]*[a-z0-9])?\\z" }),
+                       schema: { "type" => "string", "maxLength" => 63, "pattern" => "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }),
       key("reconnect_grace", types: ALL, default: 900, schema: { "type" => "integer", "minimum" => 60, "maximum" => 7200 }),
       key("auto_update", types: %w[manual], default: true, schema: { "type" => "boolean" }),
       key("container.image_override", types: ALL, schema: { "type" => "string", "minLength" => 1 }),
@@ -42,7 +42,7 @@ module Runners
         "additionalProperties" => false,
         "properties" => {
           "cpus" => { "type" => "number", "exclusiveMinimum" => 0 },
-          "memory" => { "type" => "string", "pattern" => "\\A[0-9]+(\\.[0-9]+)?([kKmMgGtT]i?)?\\z" }
+          "memory" => { "type" => "string", "pattern" => "^[0-9]+(\\.[0-9]+)?([kKmMgGtT]i?)?$" }
         }
       }),
       key("container.workspace_volume", types: MACHINE, default: true, schema: { "type" => "boolean" }),
@@ -53,7 +53,7 @@ module Runners
           "additionalProperties" => false,
           "required" => %w[target],
           "properties" => {
-            "name" => { "type" => "string", "pattern" => "\\A[a-z0-9][a-z0-9_.-]*\\z" },
+            "name" => { "type" => "string", "pattern" => "^[a-z0-9][a-z0-9_.-]*$" },
             "host_path" => ABSOLUTE_PATH,
             "target" => ABSOLUTE_PATH
           },
@@ -173,7 +173,10 @@ module Runners
       end
 
       def value_errors(config, type)
-        JSONSchemer.schema(for_type(type), format: true).validate(config).map { |error| message(error) }.uniq
+        # The patterns are ECMA-262, as JSON Schema defines them, so the form
+        # and the server read them the same way.
+        JSONSchemer.schema(for_type(type), format: true, regexp_resolver: "ecma")
+                   .validate(config).map { |error| message(error) }.uniq
       end
 
       def message(error)
