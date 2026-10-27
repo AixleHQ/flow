@@ -31,12 +31,11 @@ class Runner < ApplicationRecord
   validates :reuse_policy, inclusion: { in: %w[fresh], message: "must be fresh on a kubernetes runner" }, if: :kubernetes?
   validates :integration, presence: true, if: :coder?
   validates :integration, absence: true, unless: :coder?
-  validate :name_unique_in_scope, if: -> { name.present? && company_id.present? }
+  validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :integration_usable, if: -> { coder? && integration.present? }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
-  scope :company_wide, -> { where(project_id: nil) }
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id)).not_deleted
   }
