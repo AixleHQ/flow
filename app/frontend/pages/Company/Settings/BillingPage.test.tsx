@@ -57,6 +57,7 @@ const marketplace = (over = {}) => ({
   awsAccountId: '444455556666',
   subscribedAt: '2026-10-25T17:44:31Z',
   ended: false,
+  billsNow: true,
   reportedMinutes: 132.5,
   ...over,
 });
@@ -336,6 +337,19 @@ describe('Company billing page', () => {
 
   // The page used to be taken away from a workspace AWS bills, which read as
   // billing gone missing rather than billing kept somewhere else.
+  // A workspace that goes back to a card still gets an AWS bill for the minutes
+  // it ran there this month. Keyed on the payer alone the panel vanished the
+  // moment the card arrived, leaving "0 worker-minutes this period" beside a
+  // charge the product never mentioned.
+  it('keeps the AWS panel for the month AWS billed, without offering to renew', () => {
+    render({}, null, null, marketplace({ ended: true, billsNow: false, reportedMinutes: 97 }));
+
+    expect(screen.getByText(/A card pays for Acme Robotics now/)).toBeInTheDocument();
+    expect(screen.getByText('97')).toBeInTheDocument();
+    expect(screen.queryByText(/Renewing it in AWS/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Manage the subscription/ })).not.toBeInTheDocument();
+  });
+
   describe('a workspace billed through AWS Marketplace', () => {
     it('says where the bill comes from, and which account pays it', () => {
       render({}, null, null, marketplace());

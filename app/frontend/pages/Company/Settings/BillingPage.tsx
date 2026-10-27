@@ -86,6 +86,8 @@ interface Marketplace {
   subscribedAt: string | null;
   /** The subscription has ended; the workspace is stopped until somebody renews it in AWS. */
   ended: boolean;
+  /** AWS is the payer now. False once a card has taken over — the panel is then about this month, not an offer to renew. */
+  billsNow: boolean;
   /** Worker-minutes reported towards the AWS bill so far this month. */
   reportedMinutes: number;
 }
@@ -492,7 +494,12 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
           <Badge color={marketplace.ended ? 'red' : 'green'}>{marketplace.ended ? 'Ended' : 'Active'}</Badge>
         </Group>
         <Text size="sm" c="var(--app-text-secondary)">
-          {marketplace.ended ? (
+          {!marketplace.billsNow ? (
+            <>
+              A card pays for {companyName} now, so nothing more is reported to AWS. The minutes below ran through AWS
+              Marketplace earlier this month and are on that account&apos;s AWS bill for it.
+            </>
+          ) : marketplace.ended ? (
             <>
               The AWS Marketplace subscription for {companyName} has ended, so the workspace is stopped. Renewing it in
               AWS starts it again.
@@ -520,9 +527,11 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
             <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
           )}
         </List>
-        <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
-          Manage the subscription in AWS Marketplace
-        </Anchor>
+        {marketplace.billsNow && (
+          <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
+            Manage the subscription in AWS Marketplace
+          </Anchor>
+        )}
       </Stack>
     </Card>
   );
