@@ -10,7 +10,8 @@ interface OverviewProps extends Record<string, unknown> {
   summary: {
     sessionsLaunched: number;
     sessionsRunning: number;
-    totalSpendCents: number;
+    totalTokens: number;
+    sessionSeconds: number;
     workflowsCount: number;
     boardTasksCount: number;
   };
@@ -42,7 +43,8 @@ const buildProps = (overrides: Partial<OverviewProps> = {}): OverviewProps => ({
   summary: {
     sessionsLaunched: 1234,
     sessionsRunning: 2,
-    totalSpendCents: 5678,
+    totalTokens: 12_345_678,
+    sessionSeconds: 5 * 3600 + 25 * 60,
     workflowsCount: 9,
     boardTasksCount: 17,
   },
@@ -121,13 +123,16 @@ describe('Projects/Overview/OverviewPage', () => {
 
     // KPI labels
     expect(screen.getByText('Sessions Launched')).toBeInTheDocument();
-    expect(screen.getByText('Token Cost')).toBeInTheDocument();
+    expect(screen.getByText('Tokens Used')).toBeInTheDocument();
+    expect(screen.getByText('Session Time')).toBeInTheDocument();
     expect(screen.getByText('Workflows')).toBeInTheDocument();
     expect(screen.getByText('Board Tasks')).toBeInTheDocument();
 
-    // KPI values: sessionsLaunched is localized, spend is formatted as dollars.
+    // KPI values: sessionsLaunched is localized, tokens are compact, time is hours and minutes.
     expect(screen.getByText('1,234')).toBeInTheDocument();
-    expect(screen.getByText('$56.78')).toBeInTheDocument();
+    expect(screen.getByText('12.3M')).toBeInTheDocument();
+    expect(screen.getByText('5h 25m')).toBeInTheDocument();
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();
 
@@ -136,14 +141,21 @@ describe('Projects/Overview/OverviewPage', () => {
     expect(screen.getByText('All active')).toBeInTheDocument();
   });
 
-  it('shows the avg-per-session delta when sessions have been launched', () => {
-    renderAuthedPage(<OverviewPage />, { props: buildProps() });
-    expect(screen.getByText(/avg per session/)).toBeInTheDocument();
+  it('shows per-session averages of tokens and time when sessions have been launched', () => {
+    renderAuthedPage(<OverviewPage />, {
+      props: buildProps({
+        summary: { ...buildProps().summary, sessionsLaunched: 10, totalTokens: 450_000, sessionSeconds: 3 * 3600 },
+      }),
+    });
+    expect(screen.getByText('45K avg per session')).toBeInTheDocument();
+    expect(screen.getByText('18m avg per session')).toBeInTheDocument();
   });
 
-  it('omits the avg-per-session delta when no sessions have launched', () => {
+  it('omits the per-session averages when no sessions have launched', () => {
     renderAuthedPage(<OverviewPage />, {
-      props: buildProps({ summary: { ...buildProps().summary, sessionsLaunched: 0, totalSpendCents: 0 } }),
+      props: buildProps({
+        summary: { ...buildProps().summary, sessionsLaunched: 0, totalTokens: 0, sessionSeconds: 0 },
+      }),
     });
     expect(screen.queryByText(/avg per session/)).not.toBeInTheDocument();
   });

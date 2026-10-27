@@ -2,8 +2,8 @@
 
 class CompanyOverviewService
   Result = Struct.new(
-    :sessions_launched, :sessions_running, :total_spend_cents, :workflows_count,
-    :board_tasks_count,
+    :sessions_launched, :sessions_running, :total_tokens, :session_seconds,
+    :workflows_count, :board_tasks_count,
     keyword_init: true
   )
 
@@ -16,7 +16,8 @@ class CompanyOverviewService
     Result.new(
       sessions_launched: sessions_scope.count,
       sessions_running: sessions_scope.where(state: %w[running ready]).count,
-      total_spend_cents: sessions_scope.sum(:cost_cents),
+      total_tokens: sessions_scope.sum(:total_tokens),
+      session_seconds: sessions_scope.sum(Arel.sql(TerminalSession::DURATION_SECONDS_SQL)).to_i,
       workflows_count: workflows_scope.count,
       board_tasks_count: board_tasks_scope.count
     )
