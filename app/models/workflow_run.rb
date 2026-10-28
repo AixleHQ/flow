@@ -47,6 +47,7 @@ class WorkflowRun < ApplicationRecord
   belongs_to :retried_from_run, class_name: "WorkflowRun", optional: true
 
   has_many :step_runs, dependent: :destroy
+  has_many :llm_calls, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
   has_many :column_transitions, dependent: :nullify
 

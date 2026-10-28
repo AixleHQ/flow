@@ -885,6 +885,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
     t.index ["status"], name: "index_integrations_on_status"
   end
 
+  create_table "llm_calls", force: :cascade do |t|
+    t.integer "cache_read_tokens", default: 0, null: false
+    t.integer "cache_write_tokens", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "input_tokens", default: 0, null: false
+    t.string "model", null: false
+    t.datetime "occurred_at", null: false
+    t.integer "output_tokens", default: 0, null: false
+    t.string "source", null: false
+    t.bigint "step_run_id"
+    t.bigint "terminal_session_id", null: false
+    t.decimal "total_cents_precise", precision: 12, scale: 8, default: "0.0", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_run_id"
+    t.index ["terminal_session_id", "occurred_at"], name: "index_llm_calls_on_terminal_session_id_and_occurred_at"
+    t.index ["workflow_run_id", "occurred_at"], name: "index_llm_calls_on_workflow_run_id_and_occurred_at"
+    t.index ["workflow_run_id", "step_run_id"], name: "index_llm_calls_on_workflow_run_id_and_step_run_id"
+  end
+
   create_table "magic_link_tokens", force: :cascade do |t|
     t.datetime "consumed_at"
     t.datetime "created_at", null: false
@@ -2171,6 +2190,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "llm_calls", "step_runs"
+  add_foreign_key "llm_calls", "terminal_sessions"
+  add_foreign_key "llm_calls", "workflow_runs"
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false

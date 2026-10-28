@@ -114,7 +114,7 @@ module ContainerStrategies
 
       attrs = env_vars.find { |v| v.start_with?("OTEL_RESOURCE_ATTRIBUTES=") }
       key = UsageStatistics::SessionKey.generate(@session.route_token)
-      assert_equal "OTEL_RESOURCE_ATTRIBUTES=terminal_session_token=#{@session.route_token},terminal_session_key=#{key}", attrs
+      assert_equal "OTEL_RESOURCE_ATTRIBUTES=terminal_session_token=#{@session.route_token},terminal_session_key=#{key},agent_type=claude_code", attrs
       assert UsageStatistics::SessionKey.required_for?(@session.reload)
     end
 

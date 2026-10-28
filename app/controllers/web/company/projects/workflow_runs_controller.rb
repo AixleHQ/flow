@@ -16,10 +16,16 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
                      )
                      .find(params[:id])
 
+    llm_calls = LlmCall.for_workflow_run(run.id)
+                        .includes(step_run: :step)
+                        .order(occurred_at: :desc)
+                        .map { |c| LlmCallResource.new(c).to_h }
+
     render inertia: "Projects/WorkflowRuns/ShowPage", props: {
       project: project_props,
       run: WorkflowRunResource.new(run, params: { viewer: current_user }).to_h,
       assets: run.workflow_run_assets.map { |wra| WorkflowRunAssetResource.new(wra).to_h },
+      llm_calls: llm_calls,
       cable_stream: inertia_cable_stream(run)
     }
   end

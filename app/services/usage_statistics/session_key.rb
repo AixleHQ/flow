@@ -36,7 +36,10 @@ module UsageStatistics
       token = session&.route_token
       return if token.blank?
 
-      "terminal_session_token=#{token},#{ATTRIBUTE}=#{generate(token)}"
+      attributes = "terminal_session_token=#{token},#{ATTRIBUTE}=#{generate(token)}"
+      agent_type = session&.agent_type
+      attributes += ",agent_type=#{agent_type}" if agent_type.present?
+      attributes
     end
 
     # Every usage batch must prove it came from the session it names — no

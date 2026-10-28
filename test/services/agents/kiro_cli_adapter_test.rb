@@ -499,7 +499,7 @@ module Agents
 
       assert_equal "1", env["KIRO_TELEMETRY_OTEL"]
       assert_equal Settings.otel.endpoint, env["KIRO_TELEMETRY_OTLP_ENDPOINT"]
-      assert_equal "terminal_session_token=tok-123,terminal_session_key=#{UsageStatistics::SessionKey.generate('tok-123')}",
+      assert_equal "terminal_session_token=tok-123,terminal_session_key=#{UsageStatistics::SessionKey.generate('tok-123')},agent_type=kiro_cli",
                    env["OTEL_RESOURCE_ATTRIBUTES"]
       # Measured: this one stops the export altogether, cost figures included.
       refute_includes env.keys, "KIRO_DISABLE_TELEMETRY"
