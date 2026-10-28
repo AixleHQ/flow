@@ -9,7 +9,7 @@ module InternalTools
       inject_when :workflow_step_session
       input_schema({
         type: "object",
-        required: %w[task_id body],
+        required: %w[body],
         properties: {
           body: {
             type: "string",
@@ -24,7 +24,11 @@ module InternalTools
           },
           task_id: {
             type: "integer",
-            description: "Board task ID"
+            description: TASK_ID_PARAM
+          },
+          task_number: {
+            type: "integer",
+            description: TASK_NUMBER_PARAM
           }
         }
       })
@@ -35,8 +39,8 @@ module InternalTools
       board = BoardContextResolver.resolve(session)
       return error("No board available in current context") unless board
 
-      task = board.board_tasks.find_by(id: params[:task_id])
-      return error("Task not found on this board") unless task
+      task = find_task(board.board_tasks)
+      return error(task_not_found) unless task
 
       author = resolve_actor(task)
       return error("Cannot determine comment author") unless author

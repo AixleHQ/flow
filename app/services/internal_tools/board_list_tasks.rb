@@ -5,7 +5,8 @@ module InternalTools
     tool do
       display_name "Board List Tasks"
       description "List tasks on the current board one page at a time, with optional filters for " \
-                  "parent epic, column, tag, task type, or assignee. Rows carry no description — read a task's " \
+                  "search text, parent epic, column, tag, task type, or assignee. Each row carries the task's " \
+                  "`number`, the #N people see on the board. Rows carry no description — read a task's " \
                   "description with board_get_task."
       tags :board
       inject_when :workflow_step_session
@@ -13,6 +14,10 @@ module InternalTools
         type: "object",
         required: [],
         properties: {
+          query: {
+            type: "string",
+            description: "Words from the task title, or a task number (`12` or `#12`) — the board's search box"
+          },
           parent_task_id: {
             type: "integer",
             description: "Filter to subtasks of this epic's internal task ID, not its #N board number"
@@ -80,6 +85,7 @@ module InternalTools
     private
 
     def filtered(scope)
+      scope = scope.matching(params[:query]) if params[:query].present?
       scope = scope.where(parent_task_id: params[:parent_task_id]) if params[:parent_task_id].present?
       scope = scope.joins(:board_column).where(board_columns: { name: params[:column_name] }) if params[:column_name].present?
       scope = scope.with_tag(params[:tag]) if params[:tag].present?

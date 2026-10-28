@@ -73,6 +73,10 @@ governance, community health — carry none.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.
+- **Tasks**: agents find a board task by the `#N` you see on the board. Every
+  task tool of personal access, the Aixle Builder and workflow sessions takes
+  `task_number` next to `task_id`, task listings show each task's number and
+  search by title or `#N`, so an agent no longer asks you for an internal id.
 - **Workflows**: the read-only notice in the workflow builder no longer covers
   the "← Workflows" back link, so a project viewer can click it again.
 - **Integrations**: enabling several Azure Boards triggers at once no longer

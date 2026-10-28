@@ -200,6 +200,8 @@ module ContextBuilders
         - Catalog installs put third-party code or prompt text into the project: read
           the entry, then confirm.
         - After changing board columns, check the order with `list_board_columns`.
+        - The user names a board task by its board number (`#12`): pass it as
+          `task_number`. They never see a task's `id`, so never ask them for one.
         - "Not allowed" means the user's role cannot do that here — say so; retrying
           will not help.
 
