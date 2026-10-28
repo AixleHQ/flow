@@ -263,8 +263,23 @@ function LeafField(props: FieldProps) {
 /** A shape the renderer has no widget for, edited as JSON and kept as typed until it parses. */
 function JsonField(props: FieldProps) {
   const { path, value, onChange, error } = props;
-  const [text, setText] = useState(value === undefined ? '' : JSON.stringify(value, null, 2));
+  const serialize = (current: unknown) => (current === undefined ? '' : JSON.stringify(current, null, 2));
+  const [text, setText] = useState(() => serialize(value));
   const [parseError, setParseError] = useState<string | null>(null);
+  // The value this field last committed (or was last given). When `value` changes from outside,
+  // for example through "Use default", the text follows it instead of showing stale JSON.
+  const [synced, setSynced] = useState<unknown>(value);
+
+  if (!Object.is(value, synced) && JSON.stringify(value) !== JSON.stringify(synced)) {
+    setSynced(value);
+    setText(serialize(value));
+    setParseError(null);
+  }
+
+  const commit = (next: unknown) => {
+    setSynced(next);
+    onChange(next);
+  };
 
   return (
     <Textarea
@@ -278,11 +293,11 @@ function JsonField(props: FieldProps) {
       onBlur={() => {
         if (text.trim() === '') {
           setParseError(null);
-          onChange(undefined);
+          commit(undefined);
           return;
         }
         try {
-          onChange(JSON.parse(text));
+          commit(JSON.parse(text));
           setParseError(null);
         } catch {
           setParseError('Not valid JSON');

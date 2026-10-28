@@ -13,34 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
 - **Integrations**: Azure DevOps can be connected through your own Microsoft Entra app.
   Register an app in your directory, add a federated credential that trusts Flow, and
   an Azure DevOps administrator runs a generated script once. No secret, certificate or
   personal access token is stored, Aixle never receives an administrator credential,
   and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
   setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
-
-## [1.8.0] - 2026-10-28
-
-### Added
-- **Profile**: the `trigger_workflow` tool of personal access takes an optional
-  `idempotency_key`. A second call with the same key returns the run the first
-  call started instead of starting another, so an agent can retry safely after a
-  timeout.
-- **Sessions & Runs**: a new workflow run records how it was started: from the
-  workflow page, through personal access, as a retry of a failed run, or by a
-  trigger. A retry links to the run it repeats. `get_workflow_run`,
-  `list_workflow_runs` and the admin run page show both.
-- **Tasks**: you can delete your own comment on a task within 3 hours of
-  posting it, the same window as editing. The task's activity shows who deleted
-  a comment.
-- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
-  call, the tool (`tool=`), so an agent session's calls can be followed in the
-  logs. Tool arguments are still never logged.
-- **Workflows**: an archived workflow's name in the Archived list opens its
-  configuration (sessions, triggers, base resources) read-only. Restore it to
-  edit it; the builder's back link returns to the Archived list.
-
 - **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
   who subscribes is sent to a page of ours that sets their workspace up: they
   are signed out first and create a new workspace, confirming the address by
@@ -75,6 +54,40 @@ governance, community health — carry none.
   It is read-only: the value follows from a subscription existing. Existing
   companies are filled in by a migration, with one that Aixle carries counted as
   billed by nobody even if Stripe still holds a customer for it.
+
+### Fixed
+- **Company settings**: a workspace is no longer billed for parts of an hour it
+  did not owe for — before it was created, while it was stopped, while it was on
+  free capacity, or before it changed who bills it. An hour is measured after it
+  closes, and it used to be measured against the workspace as it was at that
+  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
+  at :47 for the whole hour, and one that changed payer in the five minutes
+  before the measurement was billed for the hour by a payer who had not held it
+  for any of it. The hour is now measured against the states the workspace was
+  actually in during it.
+- A browser tab left open across a release reloads into the new version on its
+  next navigation, instead of failing to open the page and asking for a reload.
+
+## [1.8.0] - 2026-10-28
+
+### Added
+- **Profile**: the `trigger_workflow` tool of personal access takes an optional
+  `idempotency_key`. A second call with the same key returns the run the first
+  call started instead of starting another, so an agent can retry safely after a
+  timeout.
+- **Sessions & Runs**: a new workflow run records how it was started: from the
+  workflow page, through personal access, as a retry of a failed run, or by a
+  trigger. A retry links to the run it repeats. `get_workflow_run`,
+  `list_workflow_runs` and the admin run page show both.
+- **Tasks**: you can delete your own comment on a task within 3 hours of
+  posting it, the same window as editing. The task's activity shows who deleted
+  a comment.
+- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
+  call, the tool (`tool=`), so an agent session's calls can be followed in the
+  logs. Tool arguments are still never logged.
+- **Workflows**: an archived workflow's name in the Archived list opens its
+  configuration (sessions, triggers, base resources) read-only. Restore it to
+  edit it; the builder's back link returns to the Archived list.
 
 ### Changed
 - **Company members**: the Members page lists pending invitations by default,
@@ -122,15 +135,6 @@ governance, community health — carry none.
   pages use the same names.
 
 ### Fixed
-- **Company settings**: a workspace is no longer billed for parts of an hour it
-  did not owe for — before it was created, while it was stopped, while it was on
-  free capacity, or before it changed who bills it. An hour is measured after it
-  closes, and it used to be measured against the workspace as it was at that
-  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
-  at :47 for the whole hour, and one that changed payer in the five minutes
-  before the measurement was billed for the hour by a payer who had not held it
-  for any of it. The hour is now measured against the states the workspace was
-  actually in during it.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.
@@ -209,71 +213,6 @@ governance, community health — carry none.
   everywhere, and add or remove company overrides, each with a required reason
   recorded in the flag's history. Flags locked by `FEATURE_<KEY>` are read-only.
   A company's admin page lists its feature overrides.
-- **Company settings**: the Billing tab of a workspace billed through AWS
-  Marketplace says which AWS account pays for it, how many worker-minutes have
-  been reported towards that bill this month, and where to manage the
-  subscription. Adding a card, cancelling and paying an invoice are still
-  refused there — any of them would be a second bill for capacity AWS already
-  charges for.
-- **Company settings**: a workspace billed through AWS Marketplace now says why
-  it is stopped — waiting for AWS to confirm the subscription, or the
-  subscription having ended, with a link to renew it in AWS Marketplace. It
-  previously said nothing at all, so sessions that never started looked like a
-  fault.
-- **Company settings**: the identifier AWS issues for each accepted metering
-  record is now kept, so an operator can show a charge was accepted without
-  waiting for the customer's invoice.
-- **Company settings**: what the final metering call sent when an AWS
-  Marketplace subscription ended is now recorded, so an operator can see
-  whether a cancelling customer's last minutes were billed without waiting for
-  the customer's invoice.
-- **Company settings**: cancelling an AWS Marketplace subscription now reports
-  the part-hour the workspace was still running, instead of losing it. Stopping
-  the workspace is what made that time unmeasurable, and it was being stopped
-  first.
-- **Company settings**: a workspace billed through AWS Marketplace is no longer
-  told it has spent free worker-hours it was never given, or offered a card it
-  cannot add — its subscription is paid through AWS.
-- **Sign-in & onboarding**: a workspace created from an AWS Marketplace
-  subscription now starts as soon as AWS has confirmed the agreement, which is
-  usually before the buyer finishes signing up. It previously waited for a
-  confirmation nothing ever acted on, so the workspace stayed stopped however
-  long you left it.
-- **Sign-in & onboarding**: opening the AWS Marketplace setup link directly now
-  explains where to go instead of answering with an error. The page AWS sends a
-  buyer to after subscribing is unchanged; this is what anyone else sees, and
-  what AWS itself checks before accepting the link.
-- **Company settings**: a workspace billed through AWS Marketplace follows the
-  subscription itself. Cancelling in AWS stops the workspace, and the usage from
-  the last partial hour is reported inside the one hour AWS allows for it rather
-  than waiting for the next hourly run, which would miss it. Notifications that
-  arrive before the workspace exists are kept and applied when it does, and one
-  that arrives late or twice cannot move a finished subscription backwards.
-  Operators: this needs `AWS_MARKETPLACE_EVENTS_QUEUE_URL`; without it metering
-  still runs but cancellations are never noticed.
-- **Sign-in & onboarding**: a workspace created from an AWS Marketplace
-  subscription can be billed from the moment it exists. Flow asks AWS what state
-  the agreement is in while the buyer is registering, instead of waiting to be
-  told, so the hours between subscribing and the notification arriving are no
-  longer lost. A subscription AWS does not confirm leaves the workspace waiting
-  rather than running unbilled. Operators: this needs
-  `aws-marketplace:DescribeAgreement` on the seller role.
-- **Sign-in & onboarding**: a buyer who subscribes to Aixle Flow on AWS
-  Marketplace is sent to a page of ours that sets their workspace up. They are
-  signed out first and create a new workspace, confirming the address by email
-  as any other signup does — the subscription proves the purchase, not the
-  address. Returning from Manage subscriptions reaches the workspace they
-  already made rather than making a second one. The new workspace is billed by
-  AWS, is not offered our free worker-hours, and waits until AWS confirms the
-  agreement before it runs. Operators: this needs
-  `AWS_MARKETPLACE_SAAS_PRODUCT_CODE` and `AWS_MARKETPLACE_SELLER_ROLE_ARN`;
-  without them the page answers 404 and nothing else changes.
-- **Admin**: a company's page and the companies list show which system bills it
-  — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
-  It is read-only: the value follows from a subscription existing, so it is not
-  something to type. Existing companies are filled in by a migration, with one
-  that Aixle carries counted as billed by nobody even if Stripe still holds a
-  customer for it.
 
 ### Changed
 - **Triggers & gates**: a chat trigger listens in exactly one channel connected
@@ -293,12 +232,6 @@ governance, community health — carry none.
   them (and the `channel_rename` and `group_rename` events) to the Slack app, and
   set them in `SLACK_SCOPES` if you override it; each workspace reinstalls the
   app once to pick them up.
-
-- **Company settings**: a workspace billed through AWS Marketplace is no longer
-  offered a card. Adding one would be a second bill for capacity AWS already
-  charges for; the billing screens say where to manage it instead. A workspace
-  that acquires a Stripe customer now records Stripe as its payer, so the admin
-  shows who bills it rather than `none`.
 - **Company settings**: in an AWS Marketplace installation a company has at
   least 3 workers. A new company starts at 3, and a lower number is refused; a
   company that already has fewer keeps them until its number is changed.
@@ -314,76 +247,6 @@ governance, community health — carry none.
   button that ends the session and returns to the admin sign-in; before, the
   admin had none, and a sign-out request sent a super admin back into the admin
   still signed in. **Back to app** now shows only while impersonating someone.
-- **Company settings**: a new workspace is no longer billed for the part of its
-  first hour that came before it was created. A workspace set up at 04:26 was
-  charged for the whole of 04:00; it is now charged from 04:26.
-- **Company settings**: a workspace is no longer billed for the part of an hour
-  it was stopped. Starting one at :47 billed the whole hour, and a cancellation
-  could bill two hours a stopped workspace had not been running for — 116
-  worker-minutes for nine minutes of service, seen live on 26 October. Billing
-  state is now kept over time, the way capacity already was, so an hour is
-  measured against what the workspace was during it rather than what it has
-  become by the time the hour is measured.
-- **Company settings**: every administrator is told when applying an AWS
-  Marketplace subscription stops the card paying for the workspace, as they
-  already are for an ordinary cancellation. Only the one who pressed the button
-  had read that it would happen.
-- **Company settings**: the request to apply an AWS Marketplace subscription
-  says how many worker-minutes the card's final invoice will be for, instead of
-  asking an administrator to decide that blind.
-- **Company settings**: a card that completes checkout for a workspace AWS
-  Marketplace has since begun billing is cancelled rather than adopted. The two
-  could not both be billed — the meter follows one payer — but one of them
-  would have run on with nobody to cancel it.
-- **Company settings**: a card taken out after an AWS Marketplace subscription
-  ended is what bills the workspace from then on. The workspace keeps the
-  Stripe customer it had, so nothing about it changed when the card came back
-  and the payer stayed pointed at AWS — leaving a running workspace that
-  neither side billed.
-- **Company settings**: a workspace whose AWS Marketplace subscription has
-  ended can pay by card. The refusal was keyed on its payer, which a
-  cancellation never changes, so the workspace was stopped with no way to pay
-  at all. It is now keyed on a subscription that can still bill: refused while
-  one is live, waiting to be confirmed, or inside its final metering window,
-  and offered once it has ended — beside the panel that says what became of the
-  AWS one.
-- **Company settings**: a workspace that changes who bills it is no longer
-  charged by the new payer for the part of that hour the old one owned. Moving
-  onto AWS Marketplace at 18:36 sent AWS the whole of 18:00, which was free
-  time while the workspace was on its allowance and time already on the final
-  card invoice where it had been paying — charged twice.
-- **Sign-in & onboarding**: a customer whose AWS Marketplace subscription ended
-  can subscribe again. The finished subscription went on counting as the
-  workspace's one, so the request was refused with "that workspace already has
-  an AWS Marketplace subscription" — about a workspace that was stopped for
-  want of one, and which our own screen had told them to subscribe again for.
-- **Sign-in & onboarding**: a refused request now says why. The reason was
-  carried in a message that page never drew, so the buyer landed on an empty
-  workspace form with no trace of what they had just done.
-- **Sign-in & onboarding**: a buyer whose request to apply an AWS Marketplace
-  subscription is declined can ask again. They were told to ask again and given
-  no way to, which left a paid subscription attached to nothing for good.
-- **Sign-in & onboarding**: a buyer arriving from AWS Marketplace whose email
-  domain already has a workspace is now shown that workspace and the ways into
-  it, and told that their subscription is recorded and not yet attached to
-  anything. They were previously refused on a form field with advice written
-  for a stranger, and left with no idea what had become of what they had paid
-  for.
-- **Company settings**: that buyer can now ask the administrators of the
-  workspace at their domain to apply the subscription to it, and an
-  administrator there accepts or declines it on the Billing tab. Accepting
-  bills the workspace through AWS Marketplace from that moment and stops the
-  card subscription paying for it, with a final invoice for the capacity used
-  up to then; the workspace keeps running throughout. The asking takes a
-  confirmed email address, the workspace is always the one holding the asker's
-  own domain, and nothing moves until somebody there says yes.
-- **Company settings**: the record of an AWS Marketplace subscription now
-  carries the dates it started and ended. Both columns existed and neither was
-  ever written.
-- **Company settings**: the final metering call made when a subscription ends
-  no longer reports an hour the hourly run has already had accepted, which made
-  its summary read as though those minutes were newly billed when they were
-  not.
 - **Repositories**: an agent's first commit no longer fails with "Author
   identity unknown" on GitHub, GitLab, Bitbucket or Azure DevOps. Every agent
   commit is authored and committed by **Aixle Flow** with the address

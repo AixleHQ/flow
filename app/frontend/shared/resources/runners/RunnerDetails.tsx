@@ -97,7 +97,8 @@ export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel
 
   const actions = canManage && (
     <Group gap="xs">
-      {option && (
+      {/* Revoke is final (RunnerStateMachine), so a revoked runner has nothing left to edit. */}
+      {option && runner.status !== 'revoked' && (
         <Button variant="default" onClick={() => setEditing(true)}>
           Edit
         </Button>
@@ -238,7 +239,7 @@ export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel
         </Stack>
       </Section>
 
-      {canManage && option && (
+      {canManage && option && runner.status !== 'revoked' && (
         <RunnerFormModal
           opened={editing}
           onClose={() => setEditing(false)}

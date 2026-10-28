@@ -525,7 +525,8 @@ function EntryRow({
               {entry.userName}
             </Link>
           ) : (
-            '—'
+            // A run whose user was deleted keeps its "Deleted user" name, unlinked.
+            (entry.userName ?? '—')
           )}
         </span>
         <span className={`${classes.num} ${classes.right}`}>{formatTokens(entry.totalTokens)}</span>

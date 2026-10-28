@@ -82,6 +82,15 @@ describe('Company/Settings/RunnerPage', () => {
     expect(within(dialog).queryByRole('radio', { name: 'Manual' })).not.toBeInTheDocument();
   });
 
+  it('hides Edit on a revoked runner, since revoke is final', () => {
+    render({ runner: { ...runner, status: 'revoked' } });
+
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    ['Edit', 'Disable', 'Enable', 'Revoke'].forEach((name) =>
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument(),
+    );
+  });
+
   it('hides every manage action without canManage', () => {
     render({ canManage: false });
 
