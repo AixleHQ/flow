@@ -96,7 +96,7 @@ class Webhooks::StripeController < ActionController::API
   # `invoice.payment_failed`, in no promised order, and the two must agree or the
   # company flips between running and stopped on delivery order.
   def follow(company, subscription)
-    if subscription.running? && aws_bills?(company)
+    if subscription.running? && (aws_bills?(company) || stopped_by_us?(company, subscription.id))
       refuse_second_payer(company, subscription.id)
     elsif subscription.running?
       company.update!(billing_state: "active", stripe_subscription_id: subscription.id,
@@ -179,8 +179,21 @@ class Webhooks::StripeController < ActionController::API
   # may stop it — a late `deleted` for the old one would otherwise stop a company
   # that is paying again.
   def current_subscription?(company, subscription_id)
+    return false if stopped_by_us?(company, subscription_id)
+
     company.stripe_subscription_id.blank? || subscription_id.blank? ||
       company.stripe_subscription_id == subscription_id
+  end
+
+  # The subscription a handover to AWS Marketplace recorded for stopping. A
+  # handover clears `stripe_subscription_id`, which reads above as "any
+  # subscription is the current one" -- and once the Marketplace subscription
+  # has ended, nothing else turns that subscription's events away: a late
+  # failed invoice would stop the workspace, and one still running (the
+  # settlement job ran out of attempts before Stripe answered) would be adopted
+  # back as the payer. It is never current, whatever the licence has become.
+  def stopped_by_us?(company, subscription_id)
+    subscription_id.present? && company.billing_cancellations.exists?(stripe_subscription_id: subscription_id)
   end
 
   # API 2025-03-31 moved an invoice's subscription under `parent`; the version a
@@ -221,8 +234,8 @@ class Webhooks::StripeController < ActionController::API
   # webhook is retried, and a subscription nobody cancelled is worse than a
   # retry.
   def refuse_second_payer(company, subscription_id)
-    Rails.logger.warn("[Webhooks::Stripe] company #{company.id}: AWS Marketplace bills it, " \
-                      "cancelling Stripe subscription #{subscription_id}")
+    Rails.logger.warn("[Webhooks::Stripe] company #{company.id}: Stripe subscription #{subscription_id} " \
+                      "is not its payer, cancelling it")
     return if subscription_id.blank?
 
     client.cancel_subscription(subscription_id: subscription_id, reason: nil, comment: nil)
