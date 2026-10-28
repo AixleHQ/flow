@@ -274,7 +274,11 @@ host: Entra must be able to reach `/.well-known/openid-configuration` and
 openssl genrsa -out federation.pem 2048        # keep the private key; never commit it
 ```
 
-Put the PEM in `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`. Check it from outside:
+Put the PEM in `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`. A single-line value with
+literal `\n` in place of the newlines is accepted. A key that is set but cannot be
+used (not parseable, public only, under 2048 bits) switches the option off; the
+reason is logged once as `AZURE_DEVOPS_FEDERATION_SIGNING_KEY is set but ignored`.
+Check it from outside:
 
 ```bash
 curl https://<DOMAIN>/.well-known/openid-configuration   # "issuer" must equal https://<DOMAIN>
@@ -283,9 +287,11 @@ curl https://<DOMAIN>/.well-known/jwks.json              # one key, no private f
 
 **The issuer URL can never change.** Each customer's federated credential pins it,
 so moving `DOMAIN` breaks every such connection at once; the customer must edit
-their credential. Set `AZURE_DEVOPS_FEDERATION_ISSUER_URL` before the first
-customer connects only if you expect the domain to move. It must be an origin with
-no path.
+their credential. When you enable the feature, set
+`AZURE_DEVOPS_FEDERATION_ISSUER_URL` explicitly to the origin you serve today
+(`https://<DOMAIN>`, no path, no trailing slash). Without it the issuer follows
+`DOMAIN`, so a later change of `DOMAIN` would silently change the issuer under every
+customer who has already pinned it.
 
 **One issuer per deployment.** Staging has its own domain and therefore its own
 issuer and its own key; a key must never be shared between deployments, because the
