@@ -16,10 +16,23 @@ describe('MarketplaceBanner', () => {
   // The whole reason this exists: the allowance banner withholds itself from
   // this payer, so without it a stopped workspace says nothing at all.
   it('says a cancelled subscription is why nothing starts, and where to renew it', () => {
-    renderPage(<MarketplaceBanner />, { props: { marketplace: { status: 'canceled' } } });
+    renderPage(<MarketplaceBanner />, {
+      props: { marketplace: { status: 'canceled', listingUrl: 'https://aws.amazon.com/marketplace/pp/prodview-x' } },
+    });
 
     expect(screen.getByRole('status')).toHaveTextContent('subscription has ended');
-    expect(screen.getByRole('link', { name: 'Open AWS Marketplace' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Subscribe again in AWS Marketplace' })).toHaveAttribute(
+      'href',
+      'https://aws.amazon.com/marketplace/pp/prodview-x',
+    );
+  });
+
+  // The library lists the ended subscription and offers nothing to do about
+  // it, but it is the one AWS page that exists for every installation.
+  it('falls back to the subscription library where no listing page is configured', () => {
+    renderPage(<MarketplaceBanner />, { props: { marketplace: { status: 'canceled' } } });
+
+    expect(screen.getByRole('link', { name: 'Subscribe again in AWS Marketplace' })).toHaveAttribute(
       'href',
       'https://aws.amazon.com/marketplace/library',
     );

@@ -763,6 +763,12 @@ aws_marketplace:
     # not with the role above — the one call in this feature that is not signed
     # as the seller. Empty leaves the reader idle and metering unaffected.
     events_queue_url: <%= ENV['AWS_MARKETPLACE_EVENTS_QUEUE_URL'] %>
+    # The listing's public page, where a buyer whose subscription has ended
+    # subscribes again. Not derivable from the product id: the page is keyed on
+    # a `prodview-` id the catalogue API does not answer. Empty falls back to
+    # the buyer's subscription library, which lists the ended subscription and
+    # offers no way to a new one.
+    listing_url: <%= ENV['AWS_MARKETPLACE_SAAS_LISTING_URL'] %>
 
 stripe:
   secret_key: <%= ENV['STRIPE_SECRET_KEY'] %>

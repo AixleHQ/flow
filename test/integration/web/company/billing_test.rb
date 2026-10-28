@@ -195,6 +195,27 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The subscription library lists an ended subscription and offers nothing to
+  # do about it; the listing's own page is where a buyer subscribes again, and
+  # it cannot be derived from anything the catalogue API answers.
+  test "the AWS panel names the listing page when one is configured, and the library otherwise" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :ended, company: @company)
+
+    get company_settings_billing_path
+    assert_inertia_props do |props|
+      assert_equal "https://aws.amazon.com/marketplace/library", props.dig(:marketplaceBilling, :listingUrl)
+    end
+
+    Settings.stubs(:aws_marketplace).returns(
+      Hashie::Mash.new(saas: { listing_url: "https://aws.amazon.com/marketplace/pp/prodview-x" })
+    )
+    get company_settings_billing_path
+    assert_inertia_props do |props|
+      assert_equal "https://aws.amazon.com/marketplace/pp/prodview-x", props.dig(:marketplaceBilling, :listingUrl)
+    end
+  end
+
   # The hourly meter is not the only path that sends. A cancellation sends the
   # last part-hour through the final meter, which writes no ledger row -- so a
   # figure built from ledger rows alone understated what AWS had been told by

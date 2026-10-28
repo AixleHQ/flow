@@ -50,7 +50,9 @@ governance, community health — carry none.
   reports the part-hour it was still running. Operators: this needs
   `AWS_MARKETPLACE_SAAS_PRODUCT_CODE`, `AWS_MARKETPLACE_SAAS_PRODUCT_ID`,
   `AWS_MARKETPLACE_SELLER_ROLE_ARN` and `AWS_MARKETPLACE_EVENTS_QUEUE_URL`, and
-  `aws-marketplace:DescribeAgreement` on the seller role. Without them the
+  `aws-marketplace:DescribeAgreement` on the seller role; the optional
+  `AWS_MARKETPLACE_SAAS_LISTING_URL` is the listing's page, where a workspace
+  whose subscription ended is sent to subscribe again. Without them the
   registration page answers 404 and nothing else changes; without the queue,
   metering still runs but cancellations are never noticed.
 - **Company settings**: a buyer whose email domain already has a workspace can

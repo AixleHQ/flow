@@ -58,6 +58,7 @@ const marketplace = (over = {}) => ({
   subscribedAt: '2026-10-25T17:44:31Z',
   ended: false,
   billsNow: true,
+  listingUrl: 'https://aws.amazon.com/marketplace/pp/prodview-x',
   reportedMinutes: 132.5,
   ...over,
 });
@@ -401,6 +402,29 @@ describe('Company billing page', () => {
 
       expect(screen.getByText('Ended')).toBeInTheDocument();
       expect(screen.getByText(/Renewing it in AWS starts it again/)).toBeInTheDocument();
+    });
+
+    // The subscription library lists the ended subscription and offers no way
+    // to a new one; the listing's own page is where a buyer subscribes again.
+    it('points an ended subscription at the listing, not at the library', () => {
+      render({}, null, null, marketplace({ ended: true }));
+
+      expect(screen.getByRole('link', { name: /Subscribe again in AWS Marketplace/ })).toHaveAttribute(
+        'href',
+        'https://aws.amazon.com/marketplace/pp/prodview-x',
+      );
+      expect(screen.queryByRole('link', { name: /Manage the subscription/ })).not.toBeInTheDocument();
+    });
+
+    // Whichever pays now comes first: a card that took over after the AWS
+    // subscription ended is the subscription that runs the workspace, and the
+    // AWS panel beneath it is about this month's bill.
+    it('puts the card first once it pays, and names it as the card', () => {
+      render({}, null, null, marketplace({ ended: true, billsNow: false }));
+
+      const card = screen.getByText('Billed by card');
+      const aws = screen.getByText('Billed through AWS Marketplace');
+      expect(card.compareDocumentPosition(aws) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     // Renewing in AWS is one way out of a stopped workspace; a card is the

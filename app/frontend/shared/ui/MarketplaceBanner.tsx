@@ -9,7 +9,12 @@ import { companySettingsBillingPath } from 'shared/routes';
 import classes from './TrialBanner.module.css';
 import type { SharedProps } from './types';
 
-/** Where the buyer manages the subscription — it is theirs, not ours. */
+/**
+ * Where a buyer with no listing page configured is sent: their subscription
+ * library. The listing page is the right place -- the library shows the ended
+ * subscription and offers nothing to do about it -- and the server names it
+ * when it is configured.
+ */
 const SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
 
 /**
@@ -48,8 +53,14 @@ export const MarketplaceBanner = () => {
       </p>
       {!waiting && (
         <>
-          <Button className={classes.cta} component="a" href={SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
-            Open AWS Marketplace
+          <Button
+            className={classes.cta}
+            component="a"
+            href={marketplace.listingUrl ?? SUBSCRIPTIONS_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Subscribe again in AWS Marketplace
           </Button>
           {/* Not a checkout: the card is offered on the Billing tab, beside
               what AWS was billed this month, and only there. */}

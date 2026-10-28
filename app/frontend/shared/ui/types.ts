@@ -72,6 +72,8 @@ export interface SharedTrial {
  */
 export interface SharedMarketplace {
   status?: BillingStatus | 'awaiting_subscription';
+  /** The listing's page in AWS Marketplace, where an ended subscription is taken out again. */
+  listingUrl?: string;
 }
 
 export interface SharedProps {
