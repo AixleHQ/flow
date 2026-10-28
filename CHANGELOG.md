@@ -65,6 +65,9 @@ governance, community health — carry none.
   header and the "Powered by" line under every page.
 
 ### Fixed
+- **Company members**: the link in an invitation reminder email stops working on
+  the date the email gives, 7 days after the invitation was sent. It used to keep
+  working for up to a week longer.
 - **Workflows**: the read-only notice in the workflow builder no longer covers
   the "← Workflows" back link, so a project viewer can click it again.
 - **Trackers**: a tracker comment or issue description whose text looks to an

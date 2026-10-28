@@ -159,10 +159,15 @@ class CompanyMembership < ApplicationRecord
   # invitation timestamp, so any state transition (accept/revoke/suspend) OR a
   # re-invite/re-send (which touches invited_at) invalidates all outstanding
   # tokens — a revoked-then-reinvited membership must not revalidate old links.
+  #
+  # `expires_in` counts from when a link is generated, and the reminder mail
+  # generates a fresh one days after invited_at. The expired flag ends every
+  # link at invited_at + 7 days, the deadline the reminder and the members page
+  # state.
   INVITATION_VALID_FOR = 7.days
 
   generates_token_for :invitation, expires_in: INVITATION_VALID_FOR do
-    [ state, invited_at&.to_i ]
+    [ state, invited_at&.to_i, invitation_expired? ]
   end
 
   def invitation_expired?
