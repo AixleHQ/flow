@@ -7,10 +7,10 @@ class RunnerResource < ApplicationResource
   attributes :id, :name, :project_id, :integration_id, :max_concurrency, :max_environments,
              :status_reason, :last_seen_at, :disabled_at, :revoked_at, :created_at, :updated_at
 
-  # The column is `runner_type` so Rails does not read it as STI; the field is
-  # `type` everywhere else (DESIGN.md §2.1).
+  # `runner_type`, as the column is named so Rails does not read it as STI, in
+  # every layer: params, errors and props (DESIGN.md §2.1).
   typelize %w[manual coder kubernetes]
-  attribute :type do |runner|
+  attribute :runner_type do |runner|
     runner.runner_type.to_s
   end
 

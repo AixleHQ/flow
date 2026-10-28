@@ -5,6 +5,8 @@
 class Web::Company::RunnersController < Web::Company::ApplicationController
   include RunnerManagement
 
+  requires_feature :external_runners
+
   private
 
   def page_prefix = "Company/Settings"

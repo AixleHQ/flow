@@ -29,7 +29,7 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_response :not_found
     get company_project_runner_path(@project, @own)
     assert_response :not_found
-    post company_project_runners_path(@project), params: { runner: { name: "X", type: "manual", max_concurrency: 1 } }, as: :json
+    post company_project_runners_path(@project), params: { runner: { name: "X", runner_type: "manual", max_concurrency: 1 } }, as: :json
     assert_response :not_found
     patch company_project_runner_path(@project, @own), params: { runner: { name: "Renamed" } }, as: :json
     assert_response :not_found
@@ -63,7 +63,7 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
   test "a company admin or the project owner creates a project runner, scoped to the project" do
     assert_role_matrix(MANAGE_ROLES, transport: :web) do |role|
       post company_project_runners_path(@project),
-           params: { runner: { name: "Box #{role}", type: "manual", max_concurrency: 1 } }, as: :json
+           params: { runner: { name: "Box #{role}", runner_type: "manual", max_concurrency: 1 } }, as: :json
     end
 
     created = Runner.where("name LIKE 'Box %'").order(:name)
@@ -119,7 +119,7 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
 
     assert_no_difference -> { Runner.count } do
       post company_project_runners_path(@project),
-           params: { runner: { name: "K8s", type: "kubernetes", max_concurrency: 1, config: { namespace: "aixle" } } }, as: :json
+           params: { runner: { name: "K8s", runner_type: "kubernetes", max_concurrency: 1, config: { namespace: "aixle" } } }, as: :json
     end
     assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
   end

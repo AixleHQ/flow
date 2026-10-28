@@ -15,7 +15,7 @@ type Runner = {
   revokedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  type: 'manual' | 'coder' | 'kubernetes';
+  runnerType: 'manual' | 'coder' | 'kubernetes';
   status: 'pending' | 'connected' | 'degraded' | 'unreachable' | 'disabled' | 'revoked';
   reusePolicy: 'reuse' | 'fresh';
   scope: 'company' | 'project';
