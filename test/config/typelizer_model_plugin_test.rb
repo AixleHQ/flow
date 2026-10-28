@@ -25,6 +25,14 @@ class TypelizerModelPluginTest < ActiveSupport::TestCase
     assert_equal %w[pending connected degraded unreachable disabled revoked], plugin.enum_for(prop(:status))
   end
 
+  test "a model with two AASM machines gets each column its own machine's states" do
+    plugin = plugin_for(CompanyMembership)
+
+    assert_equal %w[invited active suspended revoked], plugin.enum_for(prop(:state))
+    assert_equal %w[step1 step2 completed], plugin.enum_for(prop(:onboarding_state))
+    assert_equal %w[employee admin viewer], plugin.enum_for(prop(:role))
+  end
+
   test "a plain column has no union" do
     assert_nil plugin_for(Runner).enum_for(prop(:name))
   end
