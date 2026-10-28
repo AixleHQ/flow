@@ -38,6 +38,7 @@ module TypelizerModelPlugin
     TaskAsset
     TaskComment
     TerminalSession
+    User
   ].freeze
 
   def self.new(model_class:, config:)
