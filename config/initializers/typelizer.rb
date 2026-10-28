@@ -32,6 +32,9 @@ module TypelizerModelPlugin
     ProjectTracker
     Runner
     Skill
+    Step
+    StepRun
+    SubStepRun
   ].freeze
 
   def self.new(model_class:, config:)
