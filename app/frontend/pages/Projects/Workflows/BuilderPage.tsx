@@ -123,7 +123,10 @@ const BuilderPage = () => {
   const catalogLoading = [rawAssets, rawMcpServers, rawTools, rawSkills, rawConfigItems].some((p) => p === undefined);
 
   const projectId = project?.id ?? null;
-  const backPath = projectId ? `/company/projects/${projectId}/workflows` : '/company/projects';
+  const archived = initialWorkflow.archivedAt != null;
+  const backPath = projectId
+    ? `/company/projects/${projectId}/workflows${archived ? '?view=archived' : ''}`
+    : '/company/projects';
 
   const [workflow, setWorkflow] = useState(initialWorkflow);
   const [steps, setSteps] = useState(initialSteps);
@@ -414,21 +417,22 @@ const BuilderPage = () => {
     <>
       <Head title={project ? `${workflow.name} — ${project.name}` : `${workflow.name}`} />
 
-      {readOnly && (
-        <Alert
-          icon={<IconInfoCircle size={16} />}
-          color="blue"
-          mb={0}
-          radius={0}
-          style={{ margin: '-24px -32px 0', borderBottom: '1px solid var(--app-border-default)' }}
-        >
-          {project && !canExecute
-            ? 'You have view access to this project, so its workflows are read-only.'
-            : 'This is a company-level workflow. Copy it to your project to customize.'}
-        </Alert>
-      )}
-
       <div className={classes.builderLayout}>
+        {readOnly && (
+          <Alert
+            icon={<IconInfoCircle size={16} />}
+            color="blue"
+            radius={0}
+            style={{ flexShrink: 0, borderBottom: '1px solid var(--app-border-default)' }}
+          >
+            {archived
+              ? 'This workflow is archived, so it is read-only. Restore it from the Archived list to edit it.'
+              : project && !canExecute
+                ? 'You have view access to this project, so its workflows are read-only.'
+                : 'This is a company-level workflow. Copy it to your project to customize.'}
+          </Alert>
+        )}
+
         {/* ===== HEADER (AC3) ===== */}
         <div className={classes.builderHeader}>
           {/* The visible title is an editable input, so the document outline

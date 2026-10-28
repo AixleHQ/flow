@@ -25,6 +25,9 @@ governance, community health — carry none.
 - Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
   call, the tool (`tool=`), so an agent session's calls can be followed in the
   logs. Tool arguments are still never logged.
+- **Workflows**: an archived workflow's name in the Archived list opens its
+  configuration (sessions, triggers, base resources) read-only. Restore it to
+  edit it; the builder's back link returns to the Archived list.
 
 ### Changed
 - **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
@@ -56,6 +59,8 @@ governance, community health — carry none.
   header and the "Powered by" line under every page.
 
 ### Fixed
+- **Workflows**: the read-only notice in the workflow builder no longer covers
+  the "← Workflows" back link, so a project viewer can click it again.
 - **Trackers**: a tracker comment or issue description whose text looks to an
   HTML parser like one tag with hundreds of attributes (for example `a <b`
   followed by a long pasted log) no longer drops the whole delivery, so its
