@@ -26,6 +26,7 @@ module TypelizerModelPlugin
     ConfigItem
     Connector
     EntityVersion
+    Integration
     MCPServer
     Runner
     Skill
