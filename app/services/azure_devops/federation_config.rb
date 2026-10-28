@@ -81,10 +81,23 @@ module AzureDevops
         Settings.azure_devops&.federation
       end
 
+      # A PEM in a single-line env value or a secret store usually carries
+      # literal `\n` escapes instead of newlines, which OpenSSL rejects. A key
+      # that is set but unusable turns the feature off with no other symptom, so
+      # the reason is logged (once per distinct value, never the key itself).
       def parse_signing_key(pem)
-        key = OpenSSL::PKey::RSA.new(pem)
-        key.private? && key.n.num_bits >= MIN_KEY_BITS ? key : nil
+        key = OpenSSL::PKey::RSA.new(pem.gsub("\\n", "\n"))
+        return key if key.private? && key.n.num_bits >= MIN_KEY_BITS
+
+        reason = key.private? ? "it is shorter than #{MIN_KEY_BITS} bits" : "it is a public key"
+        warn_unusable_key(reason)
       rescue OpenSSL::PKey::RSAError
+        warn_unusable_key("it is not a PEM-encoded RSA private key")
+      end
+
+      def warn_unusable_key(reason)
+        Rails.logger.warn("[AzureDevops::FederationConfig] AZURE_DEVOPS_FEDERATION_SIGNING_KEY is set " \
+                          "but ignored: #{reason}. Connecting with the customer's own Entra app is not offered.")
         nil
       end
 

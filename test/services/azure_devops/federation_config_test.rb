@@ -28,6 +28,41 @@ module AzureDevops
       assert_not FederationConfig.enabled?
     end
 
+    # Single-line env values and secret stores carry a PEM with `\n` escapes.
+    test "accepts a PEM whose newlines are written as literal backslash-n" do
+      with_azure_devops_federation_only(key: nil)
+      Settings.azure_devops.federation.signing_key = AzureDevopsTestHelper::FEDERATION_KEY.to_pem.strip.gsub("\n", "\\n")
+
+      assert_predicate FederationConfig, :enabled?
+      assert_equal FederationConfig.key_id(AzureDevopsTestHelper::FEDERATION_KEY), FederationConfig.current_key_id
+    end
+
+    test "says why a key that is set but unusable turns the feature off, without printing the key" do
+      with_azure_devops_federation_only(key: nil)
+      unparseable = "not a key #{SecureRandom.hex(4)}"
+      short = OpenSSL::PKey::RSA.generate(1024)
+      public_only = OpenSSL::PKey::RSA.generate(2048).public_key
+
+      logged = capture_rails_log do
+        [ unparseable, short.to_pem, public_only.to_pem ].each do |pem|
+          Settings.azure_devops.federation.signing_key = pem
+          2.times { assert_not FederationConfig.enabled? }
+        end
+      end
+
+      assert_equal 1, logged.scan("not a PEM-encoded RSA private key").size
+      assert_equal 1, logged.scan("shorter than 2048 bits").size
+      assert_equal 1, logged.scan("it is a public key").size
+      assert_not_includes logged, "BEGIN"
+      assert_not_includes logged, unparseable
+    end
+
+    test "is silent when no key is set" do
+      with_azure_devops_federation_only(key: nil)
+
+      assert_empty(capture_rails_log { assert_not FederationConfig.enabled? })
+    end
+
     test "is not offered for an issuer Entra can never read" do
       [ "http://flow.example.com", "https://localhost", "https://10.0.0.5", "https://flow.example.com/oidc",
         "https://flow.internal" ].each do |issuer|
@@ -67,6 +102,16 @@ module AzureDevops
 
       assert_equal [ FederationConfig.current_key_id, FederationConfig.key_id(previous) ], kids
       assert_equal "RS256", FederationConfig.jwks[:keys].first[:alg]
+    end
+
+    def capture_rails_log
+      buffer = StringIO.new
+      previous = Rails.logger
+      Rails.logger = ActiveSupport::Logger.new(buffer)
+      yield
+      buffer.string
+    ensure
+      Rails.logger = previous
     end
 
     test "publishes no private material" do
