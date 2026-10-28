@@ -37,7 +37,7 @@ module PersonalTools
       )
       return error("Failed to create task: #{task.errors.full_messages.to_sentence}") unless task.persisted?
 
-      success(id: task.id, title: task.title, column: column.name, column_id: column.id,
+      success(id: task.id, number: task.number, title: task.title, column: column.name, column_id: column.id,
               assignee_id: task.assignee_id, position: task.position)
     end
   end

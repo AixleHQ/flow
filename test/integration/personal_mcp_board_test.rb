@@ -119,6 +119,46 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert tool_error?(neither)
   end
 
+  test "list_board_tasks rows carry the board number and search by it or by title" do
+    second = create(:board_task, board: @board, board_column: @done, title: "Second task")
+
+    rows = payload(call_tool("list_board_tasks", { project_id: @project.id }))["tasks"]
+    assert_equal [ [ @task.number, "First task" ], [ second.number, "Second task" ] ],
+                 rows.map { |t| t.values_at("number", "title") }
+
+    assert_equal [ "Second task" ], listed_titles(query: "##{second.number}")
+    assert_equal [ "First task" ], listed_titles(query: "first")
+  end
+
+  test "every task tool takes the #N people see on the board" do
+    foreign_task
+    second = create(:board_task, board: @board, board_column: @todo, title: "Second task")
+    assert_not_equal second.id, second.number
+    by_number = { project_id: @project.id, task_number: second.number }
+
+    moved = payload(call_tool("move_board_task", by_number.merge(column_id: @done.id)))
+    assert_equal [ second.id, second.number ], moved.values_at("id", "number")
+    assert_not tool_error?(call_tool("update_board_task", by_number.merge(priority: "high")))
+    assert_not tool_error?(call_tool("add_board_comment", by_number.merge(body: "by number")))
+    comments = payload(call_tool("list_board_comments", by_number))
+
+    assert_equal [ @done.id, "high" ], second.reload.values_at(:board_column_id, :priority)
+    assert_equal second.number, comments["task_number"]
+    assert_equal [ "by number" ], comments["comments"].map { |c| c["body"] }
+    assert_equal @todo.id, @task.reload.board_column_id
+    assert_empty @task.task_comments
+  end
+
+  test "an id that matches no task is refused with a pointer to task_number" do
+    missing_id = BoardTask.maximum(:id) + 1
+
+    body = call_tool("move_board_task", { project_id: @project.id, task_id: missing_id, column_id: @done.id })
+
+    assert tool_error?(body)
+    assert_match(/no task has id #{missing_id}.*task_number/,
+                 body.dig("result", "content").map { |c| c["text"] }.join(" "))
+  end
+
   test "create_board_task creates a task in the target column" do
     body = call_tool("create_board_task",
                      { project_id: @project.id, column_id: @todo.id, title: "New", description: "d" })

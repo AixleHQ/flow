@@ -12,7 +12,7 @@ module InternalTools
       inject_when :workflow_step_session
       input_schema({
         type: "object",
-        required: %w[task_id gate_type],
+        required: %w[gate_type],
         properties: {
           run_id: {
             type: "integer",
@@ -20,7 +20,11 @@ module InternalTools
           },
           task_id: {
             type: "integer",
-            description: "Board task ID"
+            description: TASK_ID_PARAM
+          },
+          task_number: {
+            type: "integer",
+            description: TASK_NUMBER_PARAM
           },
           gate_type: {
             type: "string",
@@ -79,8 +83,8 @@ module InternalTools
       board = BoardContextResolver.resolve(session)
       return error("No board available in current context") unless board
 
-      task = board.board_tasks.find_by(id: params[:task_id])
-      return error("Task not found on this board") unless task
+      task = find_task(board.board_tasks)
+      return error(task_not_found) unless task
 
       gate_type = params[:gate_type]
       return error("Unsupported gate_type: #{gate_type}") unless SUPPORTED_GATE_TYPES.include?(gate_type)
@@ -91,14 +95,15 @@ module InternalTools
       gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
 
       success({
-        id:         gate.id,
-        task_id:    task.id,
-        gate_type:  gate.gate_type,
-        status:     gate.status,
-        metadata:   gate.metadata,
+        id:          gate.id,
+        task_id:     task.id,
+        task_number: task.number,
+        gate_type:   gate.gate_type,
+        status:      gate.status,
+        metadata:    gate.metadata,
         # When this Gate stops waiting on CI whatever happens, so a step that parks
         # a task can say how long the wait can last.
-        expires_at: gate.expires_at
+        expires_at:  gate.expires_at
       }.to_json)
     end
 

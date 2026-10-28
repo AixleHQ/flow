@@ -15,8 +15,8 @@ module PersonalTools
       display_name "Read Asset"
       description "Read a text file the platform holds: an output a workflow run wrote to /workspace/outputs " \
                   "(source \"run\", with run_id; get_workflow_run lists them), a file attached to a board task " \
-                  "(source \"task\", with task_id; get_board_task lists them), or a project asset (source " \
-                  "\"project\"; list_assets lists them). Returns up to `limit` bytes from `offset`; follow " \
+                  "(source \"task\", with task_number or task_id; get_board_task lists them), or a project " \
+                  "asset (source \"project\"; list_assets lists them). Returns up to `limit` bytes from `offset`; follow " \
                   "next_offset to page through a large file. Binary files are refused with their size and type."
       audience :user
       tags :resources
@@ -27,7 +27,8 @@ module PersonalTools
       param :asset_id, type: :integer, required: true,
                        description: "The file's id, as the run, task or asset listing shows it."
       param :run_id, type: :integer, description: "Workflow run id (source run)."
-      param :task_id, type: :integer, description: "Board task id (source task)."
+      param :task_number, type: :integer, description: "(source task) #{TASK_NUMBER_PARAM}"
+      param :task_id, type: :integer, description: "(source task) #{TASK_ID_PARAM}"
       param :offset, type: :integer, description: "Byte offset to start reading at (default 0)."
       param :limit, type: :integer,
                     description: "Bytes to return (default #{DEFAULT_LIMIT}, at most #{MAX_LIMIT})."
@@ -37,7 +38,9 @@ module PersonalTools
       project = find_project!
       return error("source must be one of: #{SOURCES.join(', ')}") unless SOURCES.include?(params[:source])
       return error("run_id is required for source run") if params[:source] == "run" && params[:run_id].blank?
-      return error("task_id is required for source task") if params[:source] == "task" && params[:task_id].blank?
+      if params[:source] == "task" && params[:task_id].blank? && params[:task_number].blank?
+        return error("task_number or task_id is required for source task")
+      end
 
       record = find_record(project)
       return error("#{params[:source].capitalize} file #{params[:asset_id]} not found") unless record
@@ -59,7 +62,7 @@ module PersonalTools
         return nil unless project.board
 
         authorize!(project.board, :show?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
-        project.board&.board_tasks&.find_by(id: params[:task_id])&.task_assets&.find_by(id: params[:asset_id])
+        find_task(project.board.board_tasks)&.task_assets&.find_by(id: params[:asset_id])
       when "project"
         authorize!(project, :index?, policy: Web::Company::Projects::AssetsPolicy, project: project)
         Asset.accessible_from_project(project).find_by(id: params[:asset_id])

@@ -13,7 +13,8 @@ module PersonalTools
       tags :board, :workflows
       destructive
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
       param :force, type: :boolean,
                     description: "Cancel the task's in-flight run and re-trigger (default false)."
     end
@@ -24,8 +25,8 @@ module PersonalTools
       project = find_project!
       authorize!(project, :trigger_workflow?, policy: Api::V1::Projects::Board::TasksPolicy, project: project)
 
-      task = find_task(project)
-      return error("Task #{params[:task_id]} not found in this project") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       active_run = active_run_for(task)
       if active_run && !params[:force]
@@ -49,15 +50,11 @@ module PersonalTools
       # second copy of that rule in the caller is exactly what drifts. The account
       # is worth reporting because it is the one whose agent credential the run
       # spends and whose bill it lands on.
-      success(task_id: task.id, run_id: result.id, state: result.state,
+      success(task_id: task.id, task_number: task.number, run_id: result.id, state: result.state,
               runs_as: result.user&.email, cancelled_run_id: active_run&.id)
     end
 
     private
-
-    def find_task(project)
-      project.board&.board_tasks&.find_by(id: params[:task_id])
-    end
 
     def active_run_for(task)
       task.workflow_runs.where(state: ACTIVE_RUN_STATES).order(created_at: :desc).first

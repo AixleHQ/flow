@@ -45,6 +45,14 @@ class BoardTask < ApplicationRecord
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
   scope :tags_contains, ->(tags) { where("tags @> ARRAY[?]::varchar[]", Array(tags)) }
+  # What a person types to find a task: words from its title, or its board
+  # number with or without the `#` — the same match the board's search box makes.
+  scope :matching, ->(query) {
+    text = query.to_s.strip
+    by_title = where("board_tasks.title ILIKE ?", "%#{sanitize_sql_like(text)}%")
+    number = text.delete_prefix("#")
+    number.match?(/\A\d+\z/) ? by_title.or(where(number: number.to_i)) : by_title
+  }
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
   # Board ordering. `position` is only unique-ish within a column, so the id keeps

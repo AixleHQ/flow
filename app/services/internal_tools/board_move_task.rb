@@ -9,11 +9,15 @@ module InternalTools
       inject_when :workflow_step_session
       input_schema({
         type: "object",
-        required: %w[task_id column_name],
+        required: %w[column_name],
         properties: {
           task_id: {
             type: "integer",
-            description: "Board task ID"
+            description: TASK_ID_PARAM
+          },
+          task_number: {
+            type: "integer",
+            description: TASK_NUMBER_PARAM
           },
           column_name: {
             type: "string",
@@ -28,8 +32,8 @@ module InternalTools
       board = BoardContextResolver.resolve(session)
       return error("No board available in current context") unless board
 
-      task = board.board_tasks.find_by(id: params[:task_id])
-      return error("Task not found on this board") unless task
+      task = find_task(board.board_tasks)
+      return error(task_not_found) unless task
 
       target_column = board.board_columns.find_by(name: params[:column_name])
       return error("Column '#{params[:column_name]}' not found") unless target_column
@@ -45,6 +49,7 @@ module InternalTools
 
       success({
         id: task.id,
+        number: task.number,
         title: task.title,
         from_column: from_column_name,
         to_column: target_column.name
