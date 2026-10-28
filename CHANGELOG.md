@@ -68,6 +68,9 @@ governance, community health — carry none.
   a day is left at the workspace's limit, or 85% is spent, it leads with when
   free capacity runs out and the button reads "Add a card now". A spent
   allowance turns the bar solid red.
+- **Admin**: on the dashboard, a company without a worker limit has worker
+  hours equal to its busy hours, so it shows as 100% utilized instead of 0
+  worker hours and no utilization.
 
 ### Fixed
 - **Company members**: the link in an invitation reminder email stops working on
