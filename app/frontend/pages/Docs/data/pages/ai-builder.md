@@ -1,7 +1,7 @@
 # AI Builder
 
 Describe a process in plain language and let Flow build it: board columns,
-workflows, steps, and the tools they need. The sidebar entry is **AI Builder**
+workflows, their sessions, and the tools they need. The sidebar entry is **AI Builder**
 with a **Build with AI** button; inside, the feature calls itself **Aixle
 Builder**.
 
@@ -19,7 +19,7 @@ agents, repositories, MCP servers, the names of your secrets — and reuses them
 rather than creating duplicates. Three things stay with you:
 
 - **Secrets and variables.** Add them in project settings; the builder attaches
-  them to steps by name and never sees a value.
+  them to sessions by name and never sees a value.
 - **Integrations.** It gives you the link; you connect GitHub, Slack and the rest
   in the browser.
 - **Custom tools and project settings.** It describes what is needed and leaves
@@ -35,7 +35,7 @@ rather than creating duplicates. Three things stay with you:
 3. **Let it check its work.** Before calling a workflow done, the builder
    validates it and can start a test run and read the result.
 4. **Check what it made.** The **Workflows** and **Board** tabs show the result
-   — workflows with their steps, columns with their auto-trigger bindings —
+   — workflows with their sessions, columns with their auto-trigger bindings —
    while the session is still open.
 5. **Finish Session** when it looks right.
 

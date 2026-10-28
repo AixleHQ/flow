@@ -104,6 +104,11 @@ governance, community health — carry none.
   a day, failing the requests in flight.
 - **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
   Slack, and describes the `/help` list as the app sends it, naming no project.
+- **Docs**: *Building workflows* uses the builder's names — a workflow is made
+  of sessions, a session of steps — and explains that each session runs in its
+  own fresh container, that files pass between sessions as outputs, and that a
+  session's steps are a checklist one agent works through. The other Using Flow
+  pages use the same names.
 
 ## [1.6.0] - 2026-10-24
 

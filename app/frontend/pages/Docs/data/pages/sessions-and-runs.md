@@ -1,8 +1,8 @@
 # Sessions & Runs
 
 One sidebar item, one list. A **run** is one execution of a workflow; a
-**session** is one agent working. Every step of a run is a session, and a
-session can also stand on its own, with no workflow behind it.
+**session** is one agent working. A run is made of the workflow's sessions, and
+a session can also stand on its own, with no workflow behind it.
 
 ## The list
 
@@ -16,9 +16,9 @@ Three tabs:
 Filter by agent, status, type, workflow, the person who started it, or the
 days it started on, or search by name. Click the **Tokens**, **Cost**,
 **Duration** or **Started** header to sort by that column — most expensive or
-longest first; click again to flip it. A run sorts by what its step sessions
-add up to.
-A workflow-step session links back to the run it belongs to; a standalone
+longest first; click again to flip it. A run sorts by what its sessions add
+up to.
+A session from a workflow links back to the run it belongs to; a standalone
 session has nothing to expand.
 
 Sessions someone kept private show as locked. You can see that they exist and
@@ -33,31 +33,32 @@ it? A finished session offers to start a fresh one from the same setup.
 
 ## Watching a run
 
-Open a run and you get one card per step, in run order, with the run's status,
-id, and totals in the header.
+Open a run and you get one card per session, in run order, with the run's
+status, id, and totals in the header.
 
-- A **running step shows its terminal live**, embedded in the page. Before the
-  container is ready it reads *Session starting…*, then *Connecting to
-  terminal…*, then you are watching the agent work. Someone else's step reads
-  *Live view is private* when its owner has turned off *Show my active
+- A **running session shows its terminal live**, embedded in the page. Before
+  the container is ready it reads *Session starting…*, then *Connecting to
+  terminal…*, then you are watching the agent work. Someone else's session
+  reads *Live view is private* when its owner has turned off *Show my active
   sessions* in their profile.
-- A **parallel run shows every active step at once**, each with its own console
-  and its own action bar.
+- A **parallel run shows every active session at once**, each with its own
+  console and its own action bar.
 - **Only the person who started a session can type into it.** Everyone else it
-  is shared with — colleagues on the project, and every step of a run someone
-  else started — watches a read-only terminal, and the editor is not offered to
-  them: the container holds its owner's agent login and repository access.
-- Expand a step card for its prompt, its sub-steps, and the note it left
-  behind. A failed step shows its error there, and the header names *where* the
-  run stopped rather than when it started.
+  is shared with — colleagues on the project, and every session of a run
+  someone else started — watches a read-only terminal, and the editor is not
+  offered to them: the container holds its owner's agent login and repository
+  access.
+- Expand a session card for its prompt, its steps, and the note it left
+  behind. A failed session shows its error there, and the header names
+  *where* the run stopped rather than when it started.
 
 ## Steering a run
 
 | Action | When |
 | --- | --- |
-| **Approve & continue** | A step is waiting for a person. This is the approval you set on the step |
-| **Retry** | A step failed, or is waiting on input and should have another go |
-| **Skip** | A step should not run. You are asked for a reason, which stays on the record |
+| **Approve & continue** | A session is waiting for a person, because **Auto-run available** is off on it |
+| **Retry** | A session failed, or is waiting on input and should have another go |
+| **Skip** | A session should not run. You are asked for a reason, which stays on the record |
 | **Cancel run** | The whole run should stop. Offered only while it is still active |
 
 If a run stopped because the workspace hit a usage limit, the run says so in a

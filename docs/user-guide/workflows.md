@@ -4,6 +4,11 @@ A Workflow is a DAG of Steps that together accomplish a business
 process — a code review, a feature spec, a bug triage. Each Step is one
 agent session in one container.
 
+> The workflow builder names these levels differently from the API: a
+> **Step** on this page is a **session** in the builder, and a **SubStep** is a
+> **step** in the builder. The API, the MCP tools (`create_workflow_step`,
+> `create_sub_step`) and the field names below keep `step` and `sub_step`.
+
 ## Anatomy of a Workflow
 
 | Field                            | Description                                                                 |
@@ -70,11 +75,13 @@ workflow from a fresh page reload.
 
 ## SubSteps
 
-Inside a Step, the agent can mark progress milestones via the
-`mark_sub_step` tool. SubSteps are **not** separate sessions — they're
-checkpoints inside one container session. Use them when you want
+SubSteps are what the builder shows as a session's steps. They are **not**
+separate sessions — they're a checklist inside one container session. They
+reach the agent as a numbered list under the Step's instructions, and the
+agent marks each one with the `mark_sub_step` tool. Use them when you want
 visible progress for a long step (e.g. "1/5: scanned codebase",
-"2/5: drafted plan"…).
+"2/5: drafted plan"…). Neither their order nor their `required` flag is
+enforced at run time.
 
 ## Execution flow
 
