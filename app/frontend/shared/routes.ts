@@ -1222,6 +1222,31 @@ export function adminCatalogSyncsPath(options?: object): string {
   return "/" + "admin" + "/" + "catalog_syncs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/feature_flags/:key/turn_off_everywhere(.:format) */
+export function turnOffEverywhereAdminFeatureFlagPath(key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + key + "/" + "turn_off_everywhere" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["key","format"]);
+}
+
+/** /admin/feature_flags/:feature_flag_key/overrides(.:format) */
+export function adminFeatureFlagOverridesPath(feature_flag_key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + feature_flag_key + "/" + "overrides" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["feature_flag_key","format"]);
+}
+
+/** /admin/feature_flags/:feature_flag_key/overrides/:company_id(.:format) */
+export function adminFeatureFlagOverridePath(feature_flag_key: ScalarType, company_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + feature_flag_key + "/" + "overrides" + "/" + company_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["feature_flag_key","company_id","format"]);
+}
+
+/** /admin/feature_flags(.:format) */
+export function adminFeatureFlagsPath(options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/feature_flags/:key(.:format) */
+export function adminFeatureFlagPath(key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + key + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["key","format"]);
+}
+
 /** /admin/session_admission(.:format) */
 export function adminSessionAdmissionPath(options?: object): string {
   return "/" + "admin" + "/" + "session_admission" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1617,6 +1642,31 @@ export function companySettingsBillingPath(options?: object): string {
   return "/" + "company" + "/" + "settings" + "/" + "billing" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /company/settings/runners/:id/disable(.:format) */
+export function disableCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "disable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/settings/runners/:id/enable(.:format) */
+export function enableCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "enable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/settings/runners/:id/revoke(.:format) */
+export function revokeCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/settings/runners(.:format) */
+export function companySettingsRunnersPath(options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/settings/runners/:id(.:format) */
+export function companySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /company/billing_cancellation(.:format) */
 export function companyBillingCancellationPath(options?: object): string {
   return "/" + "company" + "/" + "billing_cancellation" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1960,6 +2010,31 @@ export function companyProjectAgentsPath(project_id: ScalarType, options?: objec
 /** /company/projects/:project_id/agents/:id(.:format) */
 export function companyProjectAgentPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "agents" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id/disable(.:format) */
+export function disableCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "disable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id/enable(.:format) */
+export function enableCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "enable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id/revoke(.:format) */
+export function revokeCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners(.:format) */
+export function companyProjectRunnersPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id(.:format) */
+export function companyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/tools(.:format) */
