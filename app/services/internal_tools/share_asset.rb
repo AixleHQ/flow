@@ -17,10 +17,10 @@ module InternalTools
       display_name "Share Asset"
       description "Make an asset publicly accessible and return a stable, safe share link: a project asset " \
                   "(source \"project\", the default), an output of this workflow run (source \"run\"), or a " \
-                  "file attached to a board task (source \"task\", with task_id). Company assets cannot be " \
-                  "shared. A file this session writes to /workspace/outputs becomes a run output only after " \
-                  "the session ends. The link renders the asset inside a sandboxed iframe and does not change " \
-                  "across asset versions. " \
+                  "file attached to a board task (source \"task\", with task_number or task_id). Company " \
+                  "assets cannot be shared. A file this session writes to /workspace/outputs becomes a run " \
+                  "output only after the session ends. The link renders the asset inside a sandboxed iframe " \
+                  "and does not change across asset versions. " \
                   "Only use this tool when the step instructions explicitly ask to share (or make public) " \
                   "an asset; do not call it on your own initiative."
       tags :assets
@@ -35,8 +35,8 @@ module InternalTools
                    description: "Asset name to share (alternative to asset_id)."
       param :folder, type: :string,
                      description: "Folder of a project asset when resolving by name."
-      param :task_id, type: :integer,
-                      description: "Board task whose attached file to share (source task)."
+      param :task_number, type: :integer, description: "(source task) #{TASK_NUMBER_PARAM}"
+      param :task_id, type: :integer, description: "(source task) #{TASK_ID_PARAM}"
     end
 
     def execute
@@ -44,10 +44,9 @@ module InternalTools
       return error("No project in the current context") unless project
       return error("source must be one of: #{SOURCES.join(', ')}") unless SOURCES.include?(source)
       return error("Provide asset_id or name") if params[:asset_id].blank? && params[:name].blank?
-      return error("Provide task_id to share a task's asset") if source == "task" && params[:task_id].blank?
 
       candidates = candidate_scope
-      return error("Task not found on this board") unless candidates
+      return error(task_not_found) unless candidates
 
       asset = resolve(candidates)
       return error(not_found_message) unless asset
@@ -72,7 +71,7 @@ module InternalTools
       case source
       when "project" then Asset.active.where(scope_type: "Project", scope_id: project.id)
       when "run" then workflow_run.workflow_run_assets
-      when "task" then BoardContextResolver.resolve(session)&.board_tasks&.find_by(id: params[:task_id])&.task_assets
+      when "task" then find_task(BoardContextResolver.resolve(session)&.board_tasks)&.task_assets
       end
     end
 

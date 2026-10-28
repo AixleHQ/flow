@@ -9,7 +9,8 @@ module PersonalTools
       tags :board
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
     end
 
     LIMIT = 100
@@ -17,14 +18,14 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project.board, :index?, policy: Web::Company::Projects::Board::Task::CommentsPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       rows = task.task_comments.includes(:author).order(created_at: :desc).limit(LIMIT).map do |c|
         { id: c.id, body: c.body, author: c.author&.name, author_type: c.author_type, tags: c.tags,
           created_at: c.created_at }
       end
-      success(task_id: task.id, comments: rows)
+      success(task_id: task.id, task_number: task.number, comments: rows)
     end
   end
 end

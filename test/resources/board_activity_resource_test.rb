@@ -23,6 +23,11 @@ class BoardActivityResourceTest < ActiveSupport::TestCase
                    "Workflow 'Nightly build' cancelled on 'Ship it'" ], descriptions
   end
 
+  test "a deleted comment names who deleted it and on which task" do
+    assert_equal "Ada Lovelace deleted a comment on 'Ship it'",
+                 describe_activity("comment_deleted", actor_type: :human, metadata: { "preview" => "Typo here" })
+  end
+
   test "unmapped events fall back to a humanized actor sentence" do
     assert_equal "Ada Lovelace performed task archived",
                  describe_activity("task_archived", actor_type: :human)

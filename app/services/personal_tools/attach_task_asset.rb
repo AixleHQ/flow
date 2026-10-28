@@ -16,7 +16,8 @@ module PersonalTools
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
       param :upload_id, type: :string, description: "From create_task_asset_upload, once the bytes are uploaded."
       param :content, type: :string, description: "Text to attach instead of an upload, up to 1 MB."
       param :name, type: :string,
@@ -28,8 +29,8 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project.board, :create?, policy: Web::Company::Projects::Board::Task::AssetsPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
       return error("Pass either upload_id or content, not both") if params[:upload_id].present? && text?
 
       file, name = text? ? text_file : uploaded_file(task)
@@ -39,7 +40,7 @@ module PersonalTools
                                     actor: user)
       return error("Could not attach #{name}: #{asset.errors.full_messages.to_sentence}") unless asset.persisted?
 
-      success(id: asset.id, task_id: task.id, name: asset.name, content_type: asset.file&.mime_type,
+      success(id: asset.id, task_id: task.id, task_number: task.number, name: asset.name, content_type: asset.file&.mime_type,
               size: asset.file&.size)
     end
 

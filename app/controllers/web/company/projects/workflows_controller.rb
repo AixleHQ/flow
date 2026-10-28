@@ -41,7 +41,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   end
 
   def builder
-    workflow = Workflow.visible_for_project(current_project)
+    workflow = Workflow.for_project(current_project)
                       .includes(steps: :sub_steps)
                       .find(params[:id])
 
@@ -49,7 +49,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       project: project_props,
       workflow: WorkflowResource.new(workflow).to_h,
       steps: workflow.visible_steps.map { |s| StepResource.new(s).to_h },
-      read_only: workflow.scope_type == "Company" || !project_permissions_props[:canExecute],
+      read_only: workflow.archived? || workflow.scope_type == "Company" || !project_permissions_props[:canExecute],
       issues: DataFlow::Check.for_workflow(workflow, project: current_project).issues.map(&:as_json),
       board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.map { |c|
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }

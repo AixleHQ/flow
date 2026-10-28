@@ -8,6 +8,7 @@ module PersonalTools
   # InternalTools, plus `audience :user`.
   class Base
     extend Tools::DefinitionDSL
+    include Tools::TaskLookup
 
     class UnauthorizedError < StandardError; end
     class NotFoundError < StandardError; end

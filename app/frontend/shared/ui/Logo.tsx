@@ -5,15 +5,13 @@ interface LogoProps extends Omit<ImageProps, 'src' | 'alt'> {
   width?: number | string;
   height?: number | string;
   variant?: 'full' | 'icon';
-  colorScheme?: 'dark' | 'light';
 }
 
-export const Logo = ({ width, height, variant = 'full', colorScheme, style, ...props }: LogoProps) => {
-  const computedScheme = useComputedColorScheme('dark');
-  const resolvedScheme = colorScheme ?? computedScheme;
+export const Logo = ({ width, height, variant = 'full', style, ...props }: LogoProps) => {
+  const colorScheme = useComputedColorScheme('dark');
   const defaultWidth = variant === 'icon' ? 32 : 120;
   const defaultHeight = variant === 'icon' ? 32 : undefined;
-  const filter = resolvedScheme === 'dark' ? 'brightness(0) invert(1)' : 'none';
+  const filter = colorScheme === 'dark' ? 'brightness(0) invert(1)' : 'none';
 
   return (
     <Image

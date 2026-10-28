@@ -29,4 +29,18 @@ class Web::Company::MembersRenderTest < ActionDispatch::IntegrationTest
       props[:users].length == 2 && emails.include?(@user.email) && emails.include?(member.email)
     end
   end
+
+  test "index marks an invitation whose link has lapsed as expired" do
+    pending_user = create(:user, :employee, company: @company, membership_state: "invited")
+    lapsed_user = create(:user, :employee, company: @company, membership_state: "invited")
+    @company.company_memberships.find_by!(user: pending_user).update!(invited_at: 1.day.ago)
+    @company.company_memberships.find_by!(user: lapsed_user).update!(invited_at: 8.days.ago)
+
+    get company_members_path
+
+    assert_inertia_props do |props|
+      expired = props[:users].to_h { |u| [ u[:email], u[:invitationExpired] ] }
+      expired == { @user.email => false, pending_user.email => false, lapsed_user.email => true }
+    end
+  end
 end

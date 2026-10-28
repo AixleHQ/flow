@@ -3,6 +3,7 @@
 module InternalTools
   class Base
     extend Tools::DefinitionDSL
+    include Tools::TaskLookup
 
     attr_reader :params, :session, :mcp_server
 

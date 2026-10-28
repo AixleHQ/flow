@@ -63,6 +63,7 @@ export function TaskCardUI({
   const ciSummary = ciGateSummary(task);
   const latestRun = (task.recentWorkflowRuns ?? [])[0] ?? null;
   const isRunning = latestRun && WORKFLOW_ACTIVE_STATES.has(latestRun.state);
+  const isQueued = latestRun?.state === 'queued';
   const isFailed = latestRun?.state === 'failed';
   const isSuccess = latestRun && (latestRun.state === 'completed' || latestRun.state === 'succeeded');
 
@@ -204,18 +205,18 @@ export function TaskCardUI({
             <Badge
               size="xs"
               variant="filled"
-              color={isFailed ? 'red' : isRunning ? 'orange' : 'green'}
+              color={isFailed ? 'red' : isQueued ? 'blue' : isRunning ? 'orange' : 'green'}
               leftSection={
                 <Box
                   w={5}
                   h={5}
-                  className={isRunning ? styles.workflowDotActive : undefined}
+                  className={isRunning && !isQueued ? styles.workflowDotActive : undefined}
                   style={{ borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
                 />
               }
               style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
             >
-              {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
+              {isFailed ? 'Failed' : isQueued ? 'Queued' : isRunning ? 'Running' : 'Succeeded'}
             </Badge>
           </Group>
         </RecentRunsTooltip>

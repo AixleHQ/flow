@@ -21,6 +21,8 @@ class Company < ApplicationRecord
   has_many :skills, as: :scope, dependent: :destroy
   has_many :assets, as: :scope, dependent: :destroy
   has_many :folders, as: :scope, dependent: :destroy
+  # Before :integrations — a Coder runner's integration refuses to go while the runner uses it.
+  has_many :runners, dependent: :destroy
   has_many :integrations, dependent: :destroy
   has_many :oauth_credentials, as: :owner, dependent: :destroy
   # After :integrations — an installation refuses to go while integrations use it.

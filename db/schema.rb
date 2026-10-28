@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_27_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_27_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1171,6 +1171,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_090000) do
 
   add_check_constraint "repositories", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "repositories_tenant_columns", validate: false
 
+  create_table "runners", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "project_id"
+    t.string "name", null: false
+    t.string "runner_type", null: false
+    t.string "status", default: "pending", null: false
+    t.string "status_reason"
+    t.bigint "integration_id"
+    t.jsonb "config", default: {}, null: false
+    t.integer "max_concurrency", null: false
+    t.integer "max_environments"
+    t.string "reuse_policy", null: false
+    t.jsonb "capabilities", default: {}, null: false
+    t.jsonb "health", default: {}, null: false
+    t.datetime "last_seen_at"
+    t.bigint "created_by_id"
+    t.datetime "disabled_at"
+    t.datetime "revoked_at"
+    t.datetime "deleted_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "company_id, COALESCE(project_id, (0)::bigint), lower((name)::text)", name: "index_runners_on_scope_and_name", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["company_id"], name: "index_runners_on_company_id"
+    t.index ["created_by_id"], name: "index_runners_on_created_by_id"
+    t.index ["integration_id"], name: "index_runners_on_integration_id"
+    t.index ["project_id"], name: "index_runners_on_project_id"
+    t.check_constraint "(runner_type::text = 'coder'::text) = (integration_id IS NOT NULL)", name: "runners_coder_integration"
+    t.check_constraint "max_concurrency > 0", name: "runners_max_concurrency_positive"
+    t.check_constraint "max_environments IS NULL OR max_environments > 0", name: "runners_max_environments_positive"
+    t.check_constraint "runner_type::text <> 'manual'::text OR max_environments IS NULL", name: "runners_manual_no_pool_size"
+  end
+
   create_table "scim_configurations", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
@@ -2230,6 +2262,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_090000) do
   add_foreign_key "repositories", "integrations", on_delete: :cascade
   add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "runners", "companies", on_delete: :cascade
+  add_foreign_key "runners", "integrations"
+  add_foreign_key "runners", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runners_integration_company"
+  add_foreign_key "runners", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runners_project_company", on_delete: :cascade
+  add_foreign_key "runners", "projects", on_delete: :cascade
+  add_foreign_key "runners", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "scim_configurations", "companies"
   add_foreign_key "scim_configurations", "identity_providers"
   add_foreign_key "session_admissions", "session_admission_pools"

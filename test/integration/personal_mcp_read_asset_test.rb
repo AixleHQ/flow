@@ -105,6 +105,6 @@ class PersonalMCPReadAssetTest < ActionDispatch::IntegrationTest
   test "read_asset asks for the id its source needs" do
     body = call_tool("read_asset", { project_id: @project.id, source: "task", asset_id: 1 })
     assert tool_error?(body)
-    assert_match(/task_id is required/, text(body))
+    assert_match(/task_number or task_id is required/, text(body))
   end
 end

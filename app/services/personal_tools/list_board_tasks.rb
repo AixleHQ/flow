@@ -5,12 +5,14 @@ module PersonalTools
     tool do
       display_name "List Board Tasks"
       description "List tasks on a project's board one page at a time, optionally filtered by " \
-                  "column, tag or archive state. Rows carry no description — read one with " \
-                  "get_board_task."
+                  "search text, column, tag or archive state. Each row carries the task's `number`, the #N " \
+                  "people see on the board. Rows carry no description — read one with get_board_task."
       audience :user
       tags :board
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
+      param :query, type: :string,
+            description: "Words from the task title, or a task number (`12` or `#12`) — the board's search box."
       param :column_id, type: :integer, description: "Filter to a board column id."
       param :tag, type: :string, description: "Filter by tag."
       param :archived, type: :boolean,
@@ -32,6 +34,7 @@ module PersonalTools
       return error("This project has no board — create one with setup_board") unless board
 
       tasks = board.board_tasks.preload(:board_column, :assignee)
+      tasks = tasks.matching(params[:query]) if params[:query].present?
       tasks = tasks.where(board_column_id: params[:column_id]) if params[:column_id].present?
       tasks = tasks.with_tag(params[:tag]) if params[:tag].present?
       tasks = filter_by_archived(tasks)
@@ -40,7 +43,7 @@ module PersonalTools
       limit = requested_limit
       offset = requested_offset
       rows = tasks.in_flat_board_order.limit(limit).offset(offset).map do |t|
-        { id: t.id, title: t.title, task_type: t.task_type, priority: t.priority,
+        { id: t.id, number: t.number, title: t.title, task_type: t.task_type, priority: t.priority,
           column: t.board_column&.name, column_id: t.board_column_id,
           assignee: t.assignee&.name, assignee_id: t.assignee_id, tags: t.tags }
       end

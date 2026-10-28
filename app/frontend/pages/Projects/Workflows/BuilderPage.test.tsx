@@ -1006,6 +1006,20 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(aggregate.steps[0].outputAssetSpecs[0].name).toBe('out.md');
   });
 
+  it('opens an archived workflow read-only and leads back to the archived list', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ readOnly: true, workflow: makeWorkflow({ archivedAt: '2026-10-23T14:33:48Z' }) }),
+    });
+
+    expect(
+      screen.getByText('This workflow is archived, so it is read-only. Restore it from the Archived list to edit it.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Workflows' }));
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/workflows?view=archived');
+  });
+
   it('renders a read-only project workflow with disabled editing affordances', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
