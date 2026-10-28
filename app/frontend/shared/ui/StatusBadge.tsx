@@ -35,13 +35,16 @@ const STATE_TONES: Record<string, StatusTone> = {
   paused: 'warning',
   inactive: 'warning',
   suspended: 'warning',
+  degraded: 'warning',
   // broken
   failed: 'danger',
   error: 'danger',
+  unreachable: 'danger',
   // terminal, neutral
   cancelled: 'neutral',
   archived: 'neutral',
   disabled: 'neutral',
+  revoked: 'neutral',
 };
 
 const TONE_STYLES: Record<StatusTone, { color: string; background: string; borderColor: string }> = {

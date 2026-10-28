@@ -20,6 +20,7 @@ import {
   IconPlug,
   IconPlugConnected,
   IconRobot,
+  IconServer,
   IconSettings,
   IconTemplate,
   IconSparkles,
@@ -38,6 +39,7 @@ import type { Membership } from '@/types/generated';
 
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { getInitials } from 'shared/lib/getInitials';
+import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import {
   companyAssetsPath,
   companyMembersPath,
@@ -55,6 +57,7 @@ import {
   companyProjectOverviewIndexPath,
   companyProjectPath,
   companyProjectRepositoriesPath,
+  companyProjectRunnersPath,
   companyProjectTrackersPath,
   companyProjectTriggersPath,
   companyProjectSessionsPath,
@@ -119,7 +122,7 @@ interface NavGroup {
 
 // ─── Project-level nav ────────────────────────────────────────────────────────
 
-const buildProjectNavGroups = (projectId: string): NavGroup[] => [
+const buildProjectNavGroups = (projectId: string, { externalRunners }: { externalRunners: boolean }): NavGroup[] => [
   {
     items: [
       { label: 'Overview', icon: <IconLayoutDashboard size={18} />, path: companyProjectOverviewIndexPath(projectId) },
@@ -146,6 +149,9 @@ const buildProjectNavGroups = (projectId: string): NavGroup[] => [
       { label: 'Repositories', icon: <IconGitBranch size={18} />, path: companyProjectRepositoriesPath(projectId) },
       { label: 'Trackers', icon: <IconTicket size={18} />, path: companyProjectTrackersPath(projectId) },
       { label: 'Integrations', icon: <IconPlug size={18} />, path: companyProjectIntegrationsPath(projectId) },
+      ...(externalRunners
+        ? [{ label: 'Runners', icon: <IconServer size={18} />, path: companyProjectRunnersPath(projectId) }]
+        : []),
     ],
   },
   {
@@ -711,7 +717,9 @@ function SidebarContent({
   const isAdmin = permissions?.isAdmin ?? false;
   const companyName = currentUser?.currentCompany?.name ?? '';
 
-  const navGroups = context === 'project' && projectId ? buildProjectNavGroups(projectId) : companyNavGroups;
+  const externalRunners = useFeatureFlag('externalRunners');
+  const navGroups =
+    context === 'project' && projectId ? buildProjectNavGroups(projectId, { externalRunners }) : companyNavGroups;
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
   const toggleGroup = useCallback((label: string) => {
