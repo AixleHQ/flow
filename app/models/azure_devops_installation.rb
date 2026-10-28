@@ -34,6 +34,7 @@ class AzureDevopsInstallation < ApplicationRecord
   validates :client_id, presence: true
   validates :organization_slug, presence: true
   validates :app_config_key, presence: true, unless: :federated?
+  validates :app_config_key, absence: true, if: :federated?
   validate :azure_identity_is_immutable, on: :update
   validate :allowed_project_ids_are_guids
 

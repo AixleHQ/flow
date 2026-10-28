@@ -115,6 +115,13 @@ class AzureDevopsInstallationTest < ActiveSupport::TestCase
     assert_not_predicate build(:azure_devops_installation, company: @company, app_config_key: nil), :valid?
   end
 
+  test "a federated installation cannot also name an operator app configuration" do
+    installation = build(:azure_devops_installation, :federated, company: @company, app_config_key: "default")
+
+    assert_not_predicate installation, :valid?
+    assert_includes installation.errors[:app_config_key].to_sentence, "must be blank"
+  end
+
   test "a federated installation can move to a new app, and a shared one cannot" do
     federated = create(:azure_devops_installation, :federated, company: @company, service_principal_object_id: SecureRandom.uuid)
     federated.update!(client_id: SecureRandom.uuid, service_principal_object_id: SecureRandom.uuid)
