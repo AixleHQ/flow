@@ -60,6 +60,8 @@ governance, community health — carry none.
   instead of staying received.
 - **Triggers & gates**: the Auto / Manual switch of a column trigger now
   highlights the selected mode, so it is clear which one a trigger uses.
+- **Tasks**: a card whose workflow run is waiting for a free session slot shows
+  a blue "Queued" chip instead of "Running", matching Sessions & Runs.
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.
 - **Sessions & Runs**: an agent session on Kubernetes no longer fails to start
