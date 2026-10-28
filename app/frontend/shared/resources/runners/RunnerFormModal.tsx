@@ -84,13 +84,16 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const [submitting, setSubmitting] = useState(false);
 
+  // Only on opening: a refused save re-renders the page with a new `runner` object, and the
+  // form has to keep what was entered and the errors it got back.
   useEffect(() => {
     if (opened) {
       setActive(0);
       setDraft(draftFor(runner));
       setErrors(NO_ERRORS);
     }
-  }, [opened, runner]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened]);
 
   const option = runnerTypes.find((t) => t.runnerType === draft.runnerType);
   const schema = useMemo(() => option?.configSchema ?? {}, [option]);
