@@ -13,31 +13,7 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
-### Fixed
-- A browser tab left open across a release reloads into the new version on its
-  next navigation, instead of failing to open the page and asking for a reload.
-
-## [1.8.0] - 2026-10-28
-
 ### Added
-- **Profile**: the `trigger_workflow` tool of personal access takes an optional
-  `idempotency_key`. A second call with the same key returns the run the first
-  call started instead of starting another, so an agent can retry safely after a
-  timeout.
-- **Sessions & Runs**: a new workflow run records how it was started: from the
-  workflow page, through personal access, as a retry of a failed run, or by a
-  trigger. A retry links to the run it repeats. `get_workflow_run`,
-  `list_workflow_runs` and the admin run page show both.
-- **Tasks**: you can delete your own comment on a task within 3 hours of
-  posting it, the same window as editing. The task's activity shows who deleted
-  a comment.
-- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
-  call, the tool (`tool=`), so an agent session's calls can be followed in the
-  logs. Tool arguments are still never logged.
-- **Workflows**: an archived workflow's name in the Archived list opens its
-  configuration (sessions, triggers, base resources) read-only. Restore it to
-  edit it; the builder's back link returns to the Archived list.
-
 - **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
   who subscribes is sent to a page of ours that sets their workspace up: they
   are signed out first and create a new workspace, confirming the address by
@@ -72,6 +48,40 @@ governance, community health — carry none.
   It is read-only: the value follows from a subscription existing. Existing
   companies are filled in by a migration, with one that Aixle carries counted as
   billed by nobody even if Stripe still holds a customer for it.
+
+### Fixed
+- **Company settings**: a workspace is no longer billed for parts of an hour it
+  did not owe for — before it was created, while it was stopped, while it was on
+  free capacity, or before it changed who bills it. An hour is measured after it
+  closes, and it used to be measured against the workspace as it was at that
+  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
+  at :47 for the whole hour, and one that changed payer in the five minutes
+  before the measurement was billed for the hour by a payer who had not held it
+  for any of it. The hour is now measured against the states the workspace was
+  actually in during it.
+- A browser tab left open across a release reloads into the new version on its
+  next navigation, instead of failing to open the page and asking for a reload.
+
+## [1.8.0] - 2026-10-28
+
+### Added
+- **Profile**: the `trigger_workflow` tool of personal access takes an optional
+  `idempotency_key`. A second call with the same key returns the run the first
+  call started instead of starting another, so an agent can retry safely after a
+  timeout.
+- **Sessions & Runs**: a new workflow run records how it was started: from the
+  workflow page, through personal access, as a retry of a failed run, or by a
+  trigger. A retry links to the run it repeats. `get_workflow_run`,
+  `list_workflow_runs` and the admin run page show both.
+- **Tasks**: you can delete your own comment on a task within 3 hours of
+  posting it, the same window as editing. The task's activity shows who deleted
+  a comment.
+- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
+  call, the tool (`tool=`), so an agent session's calls can be followed in the
+  logs. Tool arguments are still never logged.
+- **Workflows**: an archived workflow's name in the Archived list opens its
+  configuration (sessions, triggers, base resources) read-only. Restore it to
+  edit it; the builder's back link returns to the Archived list.
 
 ### Changed
 - **Company members**: the Members page lists pending invitations by default,
@@ -119,15 +129,6 @@ governance, community health — carry none.
   pages use the same names.
 
 ### Fixed
-- **Company settings**: a workspace is no longer billed for parts of an hour it
-  did not owe for — before it was created, while it was stopped, while it was on
-  free capacity, or before it changed who bills it. An hour is measured after it
-  closes, and it used to be measured against the workspace as it was at that
-  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
-  at :47 for the whole hour, and one that changed payer in the five minutes
-  before the measurement was billed for the hour by a payer who had not held it
-  for any of it. The hour is now measured against the states the workspace was
-  actually in during it.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.
