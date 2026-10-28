@@ -108,6 +108,33 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert MarketplaceLicense.last.proposal_pending?, "and the request still stands"
   end
 
+  # The link outlives the answer by up to two hours. Opened again after a no,
+  # it would raise the same request again and mail every administrator who
+  # had just declined it.
+  test "a declined request is not raised again from the same link" do
+    arrive_from_marketplace
+    ask
+    perform_enqueued_jobs
+    token = link_from_mail
+    get confirm_marketplace_proposal_path(token: token)
+    license = MarketplaceLicense.last
+    # The administrator answers from their own browser; the buyer keeps theirs.
+    admin = open_session
+    admin.post login_path, params: { user: { email: @admin.email, password: AuthHelper::TEST_PASSWORD } }
+    admin.delete company_marketplace_license_proposal_path
+    assert_equal "declined", license.reload.proposal_state
+    perform_enqueued_jobs
+    ActionMailer::Base.deliveries.clear
+
+    get confirm_marketplace_proposal_path(token: token)
+    perform_enqueued_jobs
+
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/declined/i, props.dig(:errors, :base).to_s) }
+    assert_equal "declined", license.reload.proposal_state, "and the answer stands"
+    assert_empty ActionMailer::Base.deliveries
+  end
+
   # The address is the whole of the proof, so a link that was tampered with,
   # signed elsewhere, or has simply expired raises nothing.
   #

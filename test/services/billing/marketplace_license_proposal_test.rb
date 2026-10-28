@@ -28,6 +28,24 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert @license.proposal_pending?
   end
 
+  # A closing subscription cannot be confirmed, so a request to apply it would
+  # wait for ever on a card it had already taken away.
+  test "a subscription that is closing has nothing to propose" do
+    @license.close!
+
+    error = assert_raises(Billing::MarketplaceLicenseProposal::Refused) { propose }
+
+    assert_equal Billing::MarketplaceLicenseProposal::NOT_PROPOSABLE, error.message
+    assert_nil @license.reload.proposed_company
+  end
+
+  test "a request whose subscription has since started closing is no longer pending for the workspace" do
+    propose
+    @license.reload.close!
+
+    assert_nil Billing::MarketplaceLicenseProposal.pending_for(@company)
+  end
+
   # The workspace is never a parameter. It is looked up from the address, so
   # there is nothing to aim somewhere else.
   test "a domain with no workspace has nothing to propose to" do
