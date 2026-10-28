@@ -18,7 +18,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   id: 1,
   sessionType: 'auth_setup',
   agentType: 'claude_code',
-  state: 'starting',
+  state: 'not_started',
   mode: 'interactive',
   queuedAt: null,
   waitReason: null,
@@ -320,7 +320,7 @@ describe('Onboarding/OnboardingPage', () => {
     const session: TerminalSession = {
       ...buildTerminalSession(),
       agentType: 'claude_code',
-      state: 'starting',
+      state: 'not_started',
     };
     renderAuthedPage(<OnboardingPage />, {
       props: {

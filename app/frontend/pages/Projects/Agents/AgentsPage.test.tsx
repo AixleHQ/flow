@@ -16,7 +16,7 @@ const agent = (overrides: Partial<Agent> = {}): Agent => ({
   persona: 'Senior analyst with deep market research expertise.',
   communicationStyle: null,
   principles: null,
-  source: 'project',
+  source: 'custom',
   scopeType: 'Project',
   scopeId: 7,
   scopeIndicator: 'project',

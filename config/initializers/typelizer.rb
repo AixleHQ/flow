@@ -14,8 +14,37 @@ end
 # model narrows about thirty generated types at once, and the frontend code and
 # tests that still pass plain strings (or values a column does not have) must be
 # fixed in the same change, so models join the list one at a time.
+#
+# The union applies to every prop named like the column, computed ones too, and
+# an explicit `typelize` does not replace it. WorkflowRun stays out for that
+# reason: RunListEntryResource#state also reports `queued`, which is not one of
+# its states (task #189).
 module TypelizerModelPlugin
-  INFERRED_ENUM_MODELS = %w[Runner].freeze
+  INFERRED_ENUM_MODELS = %w[
+    Agent
+    AssetVersion
+    BoardActivity
+    BoardTask
+    ColumnTransition
+    ColumnWorkflowBinding
+    CompanyMembership
+    ConfigItem
+    Connector
+    EntityVersion
+    Integration
+    MCPServer
+    Project
+    ProjectTracker
+    Runner
+    Skill
+    Step
+    StepRun
+    SubStepRun
+    TaskAsset
+    TaskComment
+    TerminalSession
+    User
+  ].freeze
 
   def self.new(model_class:, config:)
     plugin = model_class && model_class < ::ActiveRecord::Base ? ActiveRecord : Typelizer::ModelPlugins::Poro

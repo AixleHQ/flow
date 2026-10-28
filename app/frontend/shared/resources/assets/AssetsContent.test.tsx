@@ -479,7 +479,7 @@ describe('AssetsContent', () => {
             version: 1,
             contentType: 'application/pdf',
             fileSize: 2048,
-            source: 'import',
+            source: 'github',
             uploadedById: 5,
             fileUrl: null,
             createdAt: '2026-01-01T00:00:00Z',
@@ -502,7 +502,7 @@ describe('AssetsContent', () => {
     expect(within(dialog).getByText('Version History — versioned.pdf')).toBeInTheDocument();
     expect(within(dialog).getByText('v2')).toBeInTheDocument();
     expect(within(dialog).getByText('v1')).toBeInTheDocument();
-    expect(within(dialog).getByText('import')).toBeInTheDocument();
+    expect(within(dialog).getByText('github')).toBeInTheDocument();
   });
 
   it('shows the empty history message when no versions are seeded', async () => {
@@ -543,7 +543,7 @@ describe('AssetsContent', () => {
             version: 1,
             contentType: 'application/pdf',
             fileSize: 2048,
-            source: 'import',
+            source: 'github',
             uploadedById: 5,
             fileUrl: null,
             createdAt: '2026-02-01T00:00:00Z',

@@ -5,7 +5,7 @@ export const buildBoardTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   number: 1,
   title: 'Task',
   description: null,
-  taskType: 'feature',
+  taskType: 'not_specified',
   priority: null,
   assigneeId: null,
   boardColumnId: 10,
