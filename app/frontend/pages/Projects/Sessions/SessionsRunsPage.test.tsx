@@ -149,6 +149,21 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.queryByRole('link', { name: /open session/i })).not.toBeInTheDocument();
   });
 
+  it('links the user when there is one and keeps a deleted user as plain text', () => {
+    renderWith(
+      seed({
+        entries: [
+          buildSessionEntry({ userId: 3 }),
+          buildRunEntry({ userId: null, userName: 'Deleted user', sessions: [] }),
+        ],
+      }),
+    );
+
+    expect(screen.getByRole('link', { name: 'Artem Petrov' })).toHaveAttribute('href', '/user/3');
+    expect(screen.getByText('Deleted user')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Deleted user' })).not.toBeInTheDocument();
+  });
+
   it('navigates with the chosen type when a type tab is clicked', async () => {
     renderWith(seed());
 
