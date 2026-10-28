@@ -764,7 +764,27 @@ module Agents
     end
 
     def session_log_paths
-      super + %w[/var/log/mitm/http.log]
+      super + %w[/var/log/mitm/http.log] + agent_log_paths
+    end
+
+    # Kiro writes both files itself, so the container's redaction filters never see them.
+    def unfiltered_log_paths
+      agent_log_paths
+    end
+
+    # What a failed tool call leaves behind. The pane says only `[tool] status: Failed:
+    # Read File` (`--no-interactive`) or redraws it as ANSI (the TUI); the agent server
+    # keeps the reason in two places of its own, checked on CLI 2.32.0 (session 44788,
+    # 2026-10-28):
+    #
+    #   * ~/.kiro/sessions/<workspace hash>/sess_<id>/messages.jsonl — the transcript:
+    #     every `tool_call` with its args and every `tool_result` with `success` and the
+    #     tool's own output, e.g. `"content":"Caught error reading: ENOENT: …",
+    #     "success":false`;
+    #   * ~/.kiro/logs/<start timestamp>/*.log — the agent server's JSON log (`kiro.log`,
+    #     level `error` per failed tool, tagged with the session id) and its MCP log.
+    def agent_log_paths
+      [ "#{home_dir}/.kiro/sessions/*/sess_*/messages.jsonl", "#{home_dir}/.kiro/logs/*/*.log" ]
     end
 
     private

@@ -130,6 +130,20 @@ module Agents
       assert_equal "/home/kiro/.kiro/skills", @adapter.skills_install_path
     end
 
+    # The pane only says `[tool] status: Failed: Read File`; why it failed is in the
+    # agent server's transcript and its own log, so both are collected with the session.
+    test "session_log_paths collects the transcript and the agent server's logs" do
+      assert_equal [ "/var/log/context.log", "/var/log/mitm/http.log",
+                     "/home/kiro/.kiro/sessions/*/sess_*/messages.jsonl",
+                     "/home/kiro/.kiro/logs/*/*.log" ], @adapter.session_log_paths
+    end
+
+    # Kiro writes them itself, so the container's write-time filters never scrub them.
+    test "unfiltered_log_paths are the logs Kiro writes itself" do
+      assert_equal [ "/home/kiro/.kiro/sessions/*/sess_*/messages.jsonl",
+                     "/home/kiro/.kiro/logs/*/*.log" ], @adapter.unfiltered_log_paths
+    end
+
     # == Auth completion ==
 
     # The database IS the credential, but only once it holds a token. Persisting one

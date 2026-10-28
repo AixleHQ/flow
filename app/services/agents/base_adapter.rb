@@ -789,6 +789,17 @@ module Agents
       %w[/var/log/context.log]
     end
 
+    # The subset of #session_log_paths the agent CLI writes itself, outside the
+    # container's write-time redaction filters (docker/base/logger/aixle_redact.py
+    # scrubs the pane capture and the MITM log, nothing else). Sessions::LogCollector
+    # never lets the container upload one of these directly: it reads them through
+    # Sessions::SecretRedactor, like every log from an image without the filters.
+    # Same pattern syntax as #session_log_paths.
+    # @return [Array<String>]
+    def unfiltered_log_paths
+      []
+    end
+
 
     # Collect and verify usage data at session cleanup.
     # Called from AgentSessionStrategy#before_cleanup after artifact collection.
