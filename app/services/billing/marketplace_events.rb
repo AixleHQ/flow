@@ -26,11 +26,17 @@ module Billing
     # from the event. After it, a record is refused however correct it is.
     FINAL_WINDOW = 1.hour
 
-    def initialize(final_meter: MarketplaceFinalMeter.new)
+    # Raised when AWS cannot say whether the agreement a licence holds is
+    # still live, which is the one question a deprovisioning after a renewal
+    # turns on. The event is left for the next sweep rather than guessed at.
+    Unread = Class.new(StandardError)
+
+    def initialize(final_meter: MarketplaceFinalMeter.new, client: MarketplaceSellerClient.new)
       @final_meter = final_meter
+      @client = client
     end
 
-    attr_reader :final_meter
+    attr_reader :final_meter, :client
 
     # One envelope off the queue. Answers the stored row, or nil for anything
     # that is not ours to act on -- another product's event, or a type we do
@@ -80,6 +86,12 @@ module Billing
       license = license_for(event)
       return false if license.nil?
 
+      if superseded?(license, event)
+        event.applied!(license, metered: "ignored: about agreement #{event.agreement_id.presence || 'unnamed'}, " \
+                                         "which #{license.agreement_id} replaced")
+        return true
+      end
+
       sent = move(license, event)
       event.applied!(license, metered: sent.to_s.presence, receipts: sent.try(:receipts) || {})
       true
@@ -107,11 +119,38 @@ module Billing
     def product_code = settings.product_code.presence
 
     def license_for(event)
-      by_arn = MarketplaceLicense.find_by(license_arn: event.license_arn) if event.license_arn.present?
-      return by_arn if by_arn
+      return license_named_by(event) if event.license_arn.present?
       return nil if event.agreement_id.blank?
 
       MarketplaceLicense.find_by(agreement_id: event.agreement_id) || by_previous_agreement(event)
+    end
+
+    # A licence event names its licence. A `License Updated` naming an ARN
+    # nobody holds, under an agreement a live row does hold, is the licence a
+    # renewal or replacement issued for that agreement: the row is that
+    # licence's now (see #store). A deprovisioning of a licence nobody holds
+    # is nobody's to apply.
+    def license_named_by(event)
+      MarketplaceLicense.find_by(license_arn: event.license_arn) ||
+        (renewed_licence?(event) ? MarketplaceLicense.live.find_by(agreement_id: event.agreement_id) : nil)
+    end
+
+    def renewed_licence?(event) = event.detail_type == LICENSE_UPDATED && event.agreement_id.present?
+
+    # The old licence being deprovisioned after a renewal, when the row has
+    # moved to the new agreement but still carries the old ARN, must not end
+    # the subscription that replaced it. A deprovisioning that names its
+    # agreement says so itself. One that names none is asked about: the
+    # agreement the row holds now is still live, or it is not.
+    def superseded?(license, event)
+      return false if event.license_arn.blank? || event.detail_type != LICENSE_DEPROVISIONED
+      return event.agreement_id != license.agreement_id if event.agreement_id.present?
+      return false if license.previous_agreement_id.blank?
+
+      agreement = client.describe_agreement(agreement_id: license.agreement_id)
+      raise Unread, "could not read agreement #{license.agreement_id} to tell whose licence this is" if agreement.nil?
+
+      agreement.live?
     end
 
     # AWS fires `Purchase Agreement Created` for a renewal and a replacement
@@ -151,14 +190,22 @@ module Billing
       company.update!(billing_state: "active", billing_block_reason: nil)
     end
 
-    # The offer, and the agreement the subscription is on now: re-pointed, so
-    # an `Ended` for a superseded agreement matches nothing.
+    # The offer, the agreement the subscription is on now, and the licence AWS
+    # issued for it: re-pointed, so an `Ended` for a superseded agreement
+    # matches nothing and the meter names the licence AWS will accept usage
+    # under. The agreement left behind is kept, because its licence can still
+    # be deprovisioned after the move (#superseded?).
     def store(license, event)
       changes = {}
       offer = event.detail.dig("offer", "id")
       changes[:offer_identifier] = offer if offer.present? && offer != license.offer_identifier
       agreement = event.agreement_id
-      changes[:agreement_id] = agreement if agreement.present? && agreement != license.agreement_id
+      if agreement.present? && agreement != license.agreement_id
+        changes[:agreement_id] = agreement
+        changes[:previous_agreement_id] = license.agreement_id
+      end
+      arn = event.license_arn
+      changes[:license_arn] = arn if arn.present? && arn != license.license_arn
 
       license.update!(**changes) if changes.any?
     end
@@ -185,10 +232,19 @@ module Billing
     # listing; `DuplicateRecord` is for a differing quantity), so the customer
     # is billed once, and the stored receipt tells the repeat from a second
     # charge.
+    #
+    # Finished only once the usage has gone or the window has shut: `ended`
+    # is unmeterable, so a licence finished around a call that never reached
+    # AWS would be measured as nothing when the sweep came back for it. Until
+    # then it is `ending`, which the retry can still meter.
     def deprovision(license, event)
-      meter_the_last_usage(license, event)
-    ensure
+      sent = meter_the_last_usage(license, event)
       license.finish! if license.may_finish?
+      sent
+    rescue StandardError
+      license.close! if license.may_close?
+      raise
+    ensure
       block(license.company)
     end
 

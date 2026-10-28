@@ -75,6 +75,27 @@ class Billing::MarketplaceRegistrationTest < ActiveSupport::TestCase
     end
   end
 
+  # A renewal issues a new licence under a new agreement, and the event that
+  # announced it has already moved the row to that agreement. The buyer
+  # arriving with the new licence is the same subscription; a second row for
+  # it could never be bound beside the first.
+  test "the licence a renewal issued takes the row its agreement already has" do
+    license = @registration.call(registration_token: "tok")
+    license.update!(agreement_id: "agmt-2", previous_agreement_id: license.agreement_id)
+    @client.customer = Billing::MarketplaceSellerClient::Customer.new(
+      license_arn: "arn:aws:license-manager:us-east-1:111122223333:license/l-renewed",
+      aws_account_id: "111122223333", product_code: FakeMarketplaceSellerClient::PRODUCT_CODE,
+      agreement_id: "agmt-2", customer_identifier: nil
+    )
+
+    assert_no_difference -> { MarketplaceLicense.count } do
+      again = @registration.call(registration_token: "fresh")
+
+      assert_equal license.id, again.id
+      assert_equal "arn:aws:license-manager:us-east-1:111122223333:license/l-renewed", again.license_arn
+    end
+  end
+
   test "a returning buyer does not lose the company their licence is already bound to" do
     license = @registration.call(registration_token: "tok")
     company = create(:company)
