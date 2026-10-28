@@ -1222,6 +1222,31 @@ export function adminCatalogSyncsPath(options?: object): string {
   return "/" + "admin" + "/" + "catalog_syncs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/feature_flags/:key/turn_off_everywhere(.:format) */
+export function turnOffEverywhereAdminFeatureFlagPath(key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + key + "/" + "turn_off_everywhere" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["key","format"]);
+}
+
+/** /admin/feature_flags/:feature_flag_key/overrides(.:format) */
+export function adminFeatureFlagOverridesPath(feature_flag_key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + feature_flag_key + "/" + "overrides" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["feature_flag_key","format"]);
+}
+
+/** /admin/feature_flags/:feature_flag_key/overrides/:company_id(.:format) */
+export function adminFeatureFlagOverridePath(feature_flag_key: ScalarType, company_id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + feature_flag_key + "/" + "overrides" + "/" + company_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["feature_flag_key","company_id","format"]);
+}
+
+/** /admin/feature_flags(.:format) */
+export function adminFeatureFlagsPath(options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/feature_flags/:key(.:format) */
+export function adminFeatureFlagPath(key: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "feature_flags" + "/" + key + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["key","format"]);
+}
+
 /** /admin/session_admission(.:format) */
 export function adminSessionAdmissionPath(options?: object): string {
   return "/" + "admin" + "/" + "session_admission" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
