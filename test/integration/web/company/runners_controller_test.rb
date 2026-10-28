@@ -104,7 +104,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
 
     assert_no_difference -> { Runner.count } do
-      post company_settings_runners_path, params: runner_params(runner_runner_type: "kubernetes", config: { namespace: "aixle" }), as: :json
+      post company_settings_runners_path, params: runner_params(runner_type: "kubernetes", config: { namespace: "aixle" }), as: :json
       assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
       post company_settings_runners_path, params: runner_params(runner_type: "coder"), as: :json
       assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
