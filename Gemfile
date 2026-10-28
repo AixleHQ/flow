@@ -34,7 +34,7 @@ gem "omniauth-entra-id", "~> 3.1"
 gem "openid_connect", "~> 2.5"
 # Passkeys. Owns the WebAuthn ceremonies and attestation verification; this app
 # still owns credential storage, the UI and account recovery.
-gem "webauthn", "~> 3.4"
+gem "webauthn", "~> 3.5"
 # SCIM 2.0 as a service provider: a customer's directory pushes joiners and
 # leavers to us. The filter-query grammar is genuinely hard ABNF work, which is
 # what justifies the dependency over hand-rolling.
@@ -193,22 +193,22 @@ gem "shrine", "~> 3.10"
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.233"
+gem "aws-sdk-s3", "~> 1.235"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.85"
+gem "aws-sdk-bedrockruntime", "~> 1.88"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.95"
+gem "aws-sdk-bedrock", "~> 1.98"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
-gem "aws-sdk-marketplacemetering", "~> 1.106"
+gem "aws-sdk-marketplacemetering", "~> 1.110"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
