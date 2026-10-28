@@ -36,8 +36,8 @@ class TypelizerModelPluginTest < ActiveSupport::TestCase
   end
 
   test "a model outside INFERRED_ENUM_MODELS is left as typelizer types it" do
-    assert_not_includes TypelizerModelPlugin::INFERRED_ENUM_MODELS, "Agent"
-    assert_nil plugin_for(Agent).enum_for(prop(:source))
+    assert_not_includes TypelizerModelPlugin::INFERRED_ENUM_MODELS, "WorkflowRun"
+    assert_nil plugin_for(WorkflowRun).enum_for(prop(:mode))
   end
 
   test "a Rails enum keeps typelizer's own named enum type" do

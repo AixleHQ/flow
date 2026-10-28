@@ -15,7 +15,10 @@ end
 # tests that still pass plain strings (or values a column does not have) must be
 # fixed in the same change, so models join the list one at a time.
 module TypelizerModelPlugin
-  INFERRED_ENUM_MODELS = %w[Runner].freeze
+  INFERRED_ENUM_MODELS = %w[
+    Agent
+    Runner
+  ].freeze
 
   def self.new(model_class:, config:)
     plugin = model_class && model_class < ::ActiveRecord::Base ? ActiveRecord : Typelizer::ModelPlugins::Poro
