@@ -1,7 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
 
 import type { Runner } from '@/types/generated';
-
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';

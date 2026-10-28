@@ -24,10 +24,9 @@ import { formatDateTime } from 'shared/lib/formatDate';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { RunnerFormModal } from './RunnerFormModal';
-import { DEFAULT_REUSE_POLICY, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
 import { accessWideners, humanize, setKeys, type RunnerPaths, type RunnerTypeOption } from './runnerConfig';
-import { lastSeen } from './RunnersTable';
+import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
+import { RunnerFormModal } from './RunnerFormModal';
 
 interface RunnerDetailsProps {
   runner: Runner;

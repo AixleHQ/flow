@@ -8,7 +8,6 @@ import type { Runner } from '@/types/generated';
 
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 
-import { DEFAULT_REUSE_POLICY, REUSE_POLICY_COPY, RUNNER_TYPE_COPY, runnerTypeTitle } from './runnerCopy';
 import {
   ACKNOWLEDGED_MOUNTS_PATH,
   acknowledgedMounts,
@@ -23,6 +22,7 @@ import {
   type RunnerPaths,
   type RunnerTypeOption,
 } from './runnerConfig';
+import { DEFAULT_REUSE_POLICY, REUSE_POLICY_COPY, RUNNER_TYPE_COPY, runnerTypeTitle } from './runnerCopy';
 import { SchemaFields } from './SchemaFields';
 
 type Step = 'type' | 'config' | 'limits';

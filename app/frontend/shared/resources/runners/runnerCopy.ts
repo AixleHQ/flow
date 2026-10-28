@@ -1,5 +1,7 @@
 import type { Runner } from '@/types/generated';
 
+import { formatDateTime } from 'shared/lib/formatDate';
+
 import { humanize } from './runnerConfig';
 
 /**
@@ -116,3 +118,6 @@ export const DEFAULT_REUSE_POLICY: Record<Runner['runnerType'], Runner['reusePol
   coder: 'reuse',
   kubernetes: 'fresh',
 };
+
+export const lastSeen = (runner: Pick<Runner, 'lastSeenAt'>): string =>
+  runner.lastSeenAt ? formatDateTime(runner.lastSeenAt) : 'Never';

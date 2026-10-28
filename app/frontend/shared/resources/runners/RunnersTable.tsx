@@ -3,14 +3,10 @@ import { Anchor, Group, Table, Text } from '@mantine/core';
 
 import type { Runner } from '@/types/generated';
 
-import { formatDateTime } from 'shared/lib/formatDate';
 import { ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { runnerTypeTitle } from './runnerCopy';
-
-export const lastSeen = (runner: Pick<Runner, 'lastSeenAt'>): string =>
-  runner.lastSeenAt ? formatDateTime(runner.lastSeenAt) : 'Never';
+import { lastSeen, runnerTypeTitle } from './runnerCopy';
 
 /** A runner's status pill with the reason the server recorded for it, if any. */
 export function RunnerStatus({ runner }: { runner: Pick<Runner, 'status' | 'statusReason'> }) {

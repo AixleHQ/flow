@@ -19,7 +19,6 @@ import {
 import { IconAlertTriangle, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useState, type ReactNode } from 'react';
 
-import { FIELD_COPY, FIELD_ORDER, fieldLabel } from './runnerCopy';
 import {
   ACKNOWLEDGED_MOUNTS_PATH,
   DOCKER_SOCKET_PATH,
@@ -35,6 +34,7 @@ import {
   type JsonSchema,
   type RunnerConfig,
 } from './runnerConfig';
+import { FIELD_COPY, FIELD_ORDER, fieldLabel } from './runnerCopy';
 
 /*
  * An in-house renderer for the JSON Schema of Runners::ConfigSchema: objects (groups and the
