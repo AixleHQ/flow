@@ -28,6 +28,7 @@ module TypelizerModelPlugin
     EntityVersion
     Integration
     MCPServer
+    ProjectTracker
     Runner
     Skill
   ].freeze
