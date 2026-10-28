@@ -70,6 +70,10 @@ governance, community health — carry none.
   allowance turns the bar solid red.
 
 ### Fixed
+- **Profile**: connecting Claude Code through Amazon Bedrock no longer fails
+  verification with "Timed out after 60s waiting for AWS" when the Identity
+  Center sign-in takes longer than a minute. The login terminal now waits up to
+  120 seconds, the same as agent sessions.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.

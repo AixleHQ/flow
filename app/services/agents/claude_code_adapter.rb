@@ -138,8 +138,14 @@ module Agents
     # login container too, so its first-run wizard starts in the right colours.
     THEME_SETTINGS = { "theme" => "auto" }.freeze
 
+    # The wizard runs credential_process during Bedrock verification and the helper waits
+    # up to 100s for a connection; Claude Code's 60s default would cut it off. Never seed
+    # CLAUDE_CODE_USE_BEDROCK here: it is the auth-complete marker.
     def auth_setup_files
-      { "#{home_dir}/.claude/settings.json" => THEME_SETTINGS.to_json }
+      settings = THEME_SETTINGS.merge(
+        "env" => { "CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS" => BEDROCK_CHAIN_RESOLVE_TIMEOUT_MS.to_s }
+      )
+      { "#{home_dir}/.claude/settings.json" => settings.to_json }
     end
 
     # Seed the user's existing base login (minus any designOauth) so the CLI starts

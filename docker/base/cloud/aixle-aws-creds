@@ -24,8 +24,9 @@ set -euo pipefail
 # is what lets Claude Code's own wizard verification pass on the first attempt instead of
 # reporting a credential error the user has to click past.
 #
-# The total budget must stay under Claude Code's chain-resolve timeout (we set 120s), or
-# the CLI gives up first and orphans this process.
+# The total budget must stay under Claude Code's chain-resolve timeout (120s, set both in
+# agent sessions and in the auth container), or the CLI gives up first and orphans this
+# process. Worst case is DEADLINE + sleep 3 + --max-time 15, which must stay below it.
 DEADLINE=$((SECONDS + 100))
 
 while :; do
