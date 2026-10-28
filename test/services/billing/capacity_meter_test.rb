@@ -39,6 +39,17 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
 
   def report_for(hour) = CapacityMeterReport.find_by(provider: "recording", period_start: hour)
 
+  # The state log is what an hour is measured against, and a write that went
+  # round its callback leaves it wrong until the next change. Every run brings
+  # it back to the row first, so the drift lasts an hour at most.
+  test "a run reconciles the state log with the live rows before measuring" do
+    @company.update_columns(billing_state: "blocked", billing_block_reason: "canceled")
+
+    meter.call
+
+    assert_equal "blocked", CompanyBillingStateChange.where(company_id: @company.id).order(:id).last.billing_state
+  end
+
   # The tests below define the whole installation's capacity themselves, so the
   # company `setup` gave a limit to must not be counted alongside it.
   def only_capacity_declared_here!
