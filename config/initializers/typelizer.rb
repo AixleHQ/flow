@@ -17,6 +17,7 @@ end
 module TypelizerModelPlugin
   INFERRED_ENUM_MODELS = %w[
     Agent
+    AssetVersion
     Runner
   ].freeze
 
