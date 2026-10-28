@@ -4,26 +4,16 @@
 # sets; defaults come from the type's schema (Runners::ConfigSchema), which the
 # page receives alongside.
 class RunnerResource < ApplicationResource
+  # Typed from the model: the columns by Typelizer, and the values of
+  # `runner_type` and `reuse_policy` (enumerize) and `status` (AASM) by the
+  # plugin in config/initializers/typelizer.rb. `runner_type` is named like the
+  # column, which avoids `type` so Rails does not read it as STI (DESIGN.md §2.1).
   attributes :id, :name, :project_id, :integration_id, :max_concurrency, :max_environments,
-             :status_reason, :last_seen_at, :disabled_at, :revoked_at, :created_at, :updated_at
+             :status_reason, :last_seen_at, :disabled_at, :revoked_at, :created_at, :updated_at,
+             :runner_type, :status, :reuse_policy
 
-  # The column is `runner_type` so Rails does not read it as STI; the field is
-  # `type` everywhere else (DESIGN.md §2.1).
-  typelize %w[manual coder kubernetes]
-  attribute :type do |runner|
-    runner.runner_type.to_s
-  end
-
-  typelize %w[pending connected degraded unreachable disabled revoked]
-  attribute :status do |runner|
-    runner.status.to_s
-  end
-
-  typelize %w[reuse fresh]
-  attribute :reuse_policy do |runner|
-    runner.reuse_policy.to_s
-  end
-
+  # The rest have nothing to infer from: values computed here, and jsonb
+  # columns, which Typelizer types as `unknown`.
   typelize %w[company project]
   attribute :scope do |runner|
     runner.project_id.present? ? "project" : "company"

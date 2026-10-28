@@ -6,6 +6,8 @@
 class Web::Company::Projects::RunnersController < Web::Company::Projects::ApplicationController
   include RunnerManagement
 
+  requires_feature :external_runners
+
   private
 
   def page_prefix = "Projects/Runners"

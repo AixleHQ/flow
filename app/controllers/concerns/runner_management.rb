@@ -4,14 +4,11 @@
 # (docs/design/agent-runtimes/DESIGN.md §3.2, §15 task 2). Each includer names
 # its scope: where runners are listed and found, the runner a create builds,
 # its policy, its pages and its paths.
+#
+# Each includer declares `requires_feature :external_runners` itself, so the
+# flag the controller needs is read where the controller is.
 module RunnerManagement
   extend ActiveSupport::Concern
-
-  included do
-    # Ahead of authorization, so a company without the flag gets a 404 from
-    # every route whatever the user's role.
-    prepend_before_action :require_external_runners!
-  end
 
   def index
     runners = listed_runners.includes(:created_by).order(:name)
@@ -72,12 +69,6 @@ module RunnerManagement
 
   private
 
-  def require_external_runners!
-    return unless signed_in?
-
-    head :not_found unless Feature.enabled?(:external_runners, company: current_company)
-  end
-
   def transition(event, done)
     runner = find_runner
     authorize_runner!(runner, :"#{event}?")
@@ -104,12 +95,12 @@ module RunnerManagement
   def runner_policy(record) = runner_policy_class.new(policy_context, record)
 
   # Scope, company and author come from the request, never from params. The
-  # type, sent as `type` like RunnerResource names it, is chosen once, at
+  # type, `runner_type` as in the model and RunnerResource, is chosen once, at
   # creation.
   def runner_params(creating:)
     runner = params.require(:runner)
     attributes = runner.permit(:name, :max_concurrency, :max_environments, :reuse_policy, :integration_id)
-    attributes[:runner_type] = runner[:type] if creating
+    attributes[:runner_type] = runner[:runner_type] if creating
     attributes[:config] = config_param(runner[:config]) if runner.key?(:config)
     attributes
   end
@@ -122,14 +113,14 @@ module RunnerManagement
   end
 
   def runner_types_props
-    Runners::Adapter.available_types.map do |type|
-      adapter = Runners::Adapter.for_type(type)
+    Runners::Adapter.available_types.map do |runner_type|
+      adapter = Runners::Adapter.for_type(runner_type)
       # The schema's property names are config keys, sent back by the form as
       # they are, so they are not camelized.
       {
-        type: type,
+        runner_type: runner_type,
         config_schema: DeepKeyCamelizer.verbatim(adapter.config_schema),
-        capabilities: adapter.capabilities(Runner.new(runner_type: type)).to_h,
+        capabilities: adapter.capabilities(Runner.new(runner_type: runner_type)).to_h,
         DeepKeyCamelizer::PRESERVE_MARKER => [ "configSchema" ]
       }
     end

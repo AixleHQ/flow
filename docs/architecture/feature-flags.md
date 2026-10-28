@@ -46,6 +46,25 @@ Keep the key a literal symbol: it is the one thing to search for when the flag i
 undeclared key raises `FeatureFlags::UnknownFlag` in development and test; elsewhere it reads as
 off and is reported to Sentry once per process.
 
+### Controllers
+
+A controller, or some of its actions, that exists only while a flag is on declares it with
+`requires_feature` (`FeatureGated`, included in `ApplicationController`). With the flag off the
+action answers `404`.
+
+```ruby
+class Web::Company::RunnersController < Web::Company::ApplicationController
+  requires_feature :external_runners                  # every action
+  requires_feature :runner_tokens, only: %i[rotate]   # some actions; except:, if:, unless: too
+end
+```
+
+The check is prepended, so it runs ahead of authentication and authorization and a company
+without the flag gets the same `404` whatever the user's role. A company-scoped flag is read for
+`current_company`; an anonymous request skips it and goes on to the sign-in redirect. A global
+flag is read for every request. Use `Feature.enabled?` inside an action only when the flag
+changes what the action does rather than whether it exists.
+
 ### Frontend
 
 Declare the flag `client: true`; that is the only step. `FeaturesResource` sends every client
@@ -136,7 +155,8 @@ Vitest test.
 
 In one PR, owned by the flag's owner:
 
-1. Delete the losing branch of every `Feature.enabled?(:key` and `useFeatureFlag` check.
+1. Delete the losing branch of every `Feature.enabled?(:key` and `useFeatureFlag` check, and
+   every `requires_feature :key`.
 2. Delete the entry from `config/feature_flags.yml`. For a client flag, regenerate the Typelizer
    types; `tsc` then points at any `useFeatureFlag` check left behind, and a leftover Ruby check
    raises `UnknownFlag` in the tests.

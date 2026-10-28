@@ -26,7 +26,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
   end
 
   def runner_params(**overrides)
-    { runner: { name: "Office Mac", type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
+    { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
   end
 
   test "every route answers 404 for a company without the flag" do
@@ -64,7 +64,8 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Company/Settings/RunnersPage"
     assert_inertia_props do |props|
       props[:runners].pluck(:id) == [ @runner.id ] && !props[:runners].pluck(:id).include?(project_runner.id) &&
-        props[:runnerTypes].pluck(:type) == %w[manual] &&
+        props[:runners].first[:runnerType] == "manual" &&
+        props[:runnerTypes].pluck(:runnerType) == %w[manual] &&
         props[:runnerTypes].first[:configSchema][:properties].key?(:reconnect_grace) &&
         props[:canManage] == true
     end
@@ -103,9 +104,9 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
 
     assert_no_difference -> { Runner.count } do
-      post company_settings_runners_path, params: runner_params(type: "kubernetes", config: { namespace: "aixle" }), as: :json
+      post company_settings_runners_path, params: runner_params(runner_type: "kubernetes", config: { namespace: "aixle" }), as: :json
       assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
-      post company_settings_runners_path, params: runner_params(type: "coder"), as: :json
+      post company_settings_runners_path, params: runner_params(runner_type: "coder"), as: :json
       assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
     end
   end
