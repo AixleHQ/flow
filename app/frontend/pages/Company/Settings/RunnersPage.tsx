@@ -63,12 +63,7 @@ export default function RunnersPage() {
       </SettingsTabs>
 
       {canManage && (
-        <RunnerFormModal
-          opened={creating}
-          onClose={() => setCreating(false)}
-          runnerTypes={runnerTypes}
-          paths={paths}
-        />
+        <RunnerFormModal opened={creating} onClose={() => setCreating(false)} runnerTypes={runnerTypes} paths={paths} />
       )}
     </AuthLayout>
   );

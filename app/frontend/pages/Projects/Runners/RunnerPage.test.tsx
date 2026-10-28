@@ -40,7 +40,10 @@ describe('Projects/Runners/RunnerPage', () => {
     });
 
     expect(screen.getByText(/A company runner/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage it there' })).toHaveAttribute('href', '/company/settings/runners/1');
+    expect(screen.getByRole('link', { name: 'Manage it there' })).toHaveAttribute(
+      'href',
+      '/company/settings/runners/1',
+    );
     ['Edit', 'Disable', 'Revoke', 'Delete'].forEach((name) =>
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument(),
     );

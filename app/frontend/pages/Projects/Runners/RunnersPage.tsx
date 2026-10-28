@@ -93,12 +93,7 @@ const RunnersPage = () => {
       </Stack>
 
       {canManage && (
-        <RunnerFormModal
-          opened={creating}
-          onClose={() => setCreating(false)}
-          runnerTypes={runnerTypes}
-          paths={paths}
-        />
+        <RunnerFormModal opened={creating} onClose={() => setCreating(false)} runnerTypes={runnerTypes} paths={paths} />
       )}
     </Box>
   );

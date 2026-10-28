@@ -179,9 +179,7 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
     else router.post(paths.list, { runner: body }, options);
   };
 
-  const reuseCopy = draft.runnerType
-    ? REUSE_POLICY_COPY[draft.runnerType as Runner['runnerType']]
-    : undefined;
+  const reuseCopy = draft.runnerType ? REUSE_POLICY_COPY[draft.runnerType as Runner['runnerType']] : undefined;
   const defaultReuse = draft.runnerType ? DEFAULT_REUSE_POLICY[draft.runnerType as Runner['runnerType']] : undefined;
   const isLast = active === steps.length - 1;
   const canAdvance = step !== 'type' || !!option;

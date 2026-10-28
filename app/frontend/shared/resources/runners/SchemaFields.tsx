@@ -139,7 +139,12 @@ interface FieldProps {
 }
 
 /** The field's words, what it defaults to while unset, and a way back to that default once set. */
-function FieldDescription({ path, schema, isSet, onChange }: Pick<FieldProps, 'path' | 'schema' | 'isSet' | 'onChange'>) {
+function FieldDescription({
+  path,
+  schema,
+  isSet,
+  onChange,
+}: Pick<FieldProps, 'path' | 'schema' | 'isSet' | 'onChange'>) {
   const key = pathKey(path);
   const description = FIELD_COPY[key]?.description;
   const hasDefault = schema.default !== undefined;
@@ -436,9 +441,7 @@ function DockerSocketField(props: FieldProps & { allowed: boolean }) {
     <Stack gap="xs">
       <Switch
         label={fieldLabel(pathKey(path))}
-        description={
-          allowed ? <FieldDescription {...props} /> : 'Turn on Allow privileged mounts first.'
-        }
+        description={allowed ? <FieldDescription {...props} /> : 'Turn on Allow privileged mounts first.'}
         error={error}
         disabled={!allowed && !on}
         checked={on}

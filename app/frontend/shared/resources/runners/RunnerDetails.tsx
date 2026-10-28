@@ -1,5 +1,20 @@
 import { Link, router } from '@inertiajs/react';
-import { Alert, Anchor, Badge, Button, Code, Group, List, Modal, Paper, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Code,
+  Group,
+  List,
+  Modal,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import { IconAlertTriangle, IconArrowLeft } from '@tabler/icons-react';
 import { useState, type ReactNode } from 'react';
 
@@ -27,8 +42,7 @@ const HEALTH_STATES: Runner['status'][] = ['pending', 'connected', 'degraded', '
 
 type Confirming = 'revoke' | 'delete' | null;
 
-const formatValue = (value: unknown): string =>
-  typeof value === 'string' ? value : JSON.stringify(value);
+const formatValue = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value));
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -150,7 +164,8 @@ export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
           <Fact label="Max concurrency">{runner.maxConcurrency}</Fact>
           <Fact label="Max environments">
-            {runner.maxEnvironments ?? (option?.capabilities.provisionable ? 'Same as max concurrency' : 'One per machine')}
+            {runner.maxEnvironments ??
+              (option?.capabilities.provisionable ? 'Same as max concurrency' : 'One per machine')}
           </Fact>
           <Fact label="Reuse policy">
             {humanize(runner.reusePolicy)}

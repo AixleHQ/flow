@@ -96,8 +96,7 @@ export const ACKNOWLEDGED_MOUNTS_PATH = ['container', 'acknowledged_writable_mou
 export const PRIVILEGED_MOUNTS_PATH = ['container', 'allow_privileged_mounts'];
 export const DOCKER_SOCKET_PATH = ['container', 'docker_socket'];
 
-const asList = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.filter(isPlainObject) : [];
+const asList = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isPlainObject) : []);
 
 /**
  * The host paths the agent could write to outside Aixle's labels (§7.2), as
@@ -170,7 +169,8 @@ export function setKeys(config: RunnerConfig, schema: JsonSchema, prefix: string
   return Object.entries(config).flatMap(([name, value]) => {
     const path = [...prefix, name];
     const child = schemaAt(schema, path);
-    const isGroup = !!child && schemaTypes(child).length === 1 && schemaTypes(child)[0] === 'object' && !!child.properties;
+    const isGroup =
+      !!child && schemaTypes(child).length === 1 && schemaTypes(child)[0] === 'object' && !!child.properties;
     return isGroup && isPlainObject(value)
       ? setKeys(value, schema, path)
       : ([[pathKey(path), value]] as [string, unknown][]);
