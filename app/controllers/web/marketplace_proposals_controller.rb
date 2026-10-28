@@ -48,10 +48,11 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     # administrator a second time, which the rate limit on #create does not
     # cover.
     return redirect_to(new_workspace_path(email: answers[:email])) if already_asked?(proposed, answers[:email])
-    # Answered, and the link still inside its two hours: not an ask to raise
-    # again, which would put the same question back in front of the
-    # administrators who have just said no.
-    return refuse(DECLINED, email: answers[:email]) if already_declined?(proposed, answers[:email])
+    # Answered, and the link that asked still inside its two hours: not an ask
+    # to raise again, which would put the same question back in front of the
+    # administrators who have just said no. A link issued after the answer is
+    # a new ask, and goes through.
+    return refuse(DECLINED, email: answers[:email]) if already_declined?(proposed, answers)
 
     raise_proposal(proposed, answers[:email])
   rescue Billing::MarketplaceLicenseProposal::Refused => e
@@ -66,8 +67,11 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     proposed.proposal_pending? && proposed.proposed_by_email == email.to_s.downcase
   end
 
-  def already_declined?(proposed, email)
-    proposed.proposal_state == "declined" && proposed.proposed_by_email == email.to_s.downcase
+  def already_declined?(proposed, answers)
+    return false unless proposed.proposal_state == "declined"
+    return false unless proposed.proposed_by_email == answers[:email].to_s.downcase
+
+    answers[:issued_at].nil? || answers[:issued_at] <= proposed.proposal_decided_at
   end
 
   def raise_proposal(proposed, email)

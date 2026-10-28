@@ -21,17 +21,23 @@ class MarketplaceProposalTicket
   TTL = 2.hours
 
   class << self
+    # Dated, because two links for the same licence and address are otherwise
+    # the same link: one issued before the administrators answered is a reload
+    # of the request they declined, one issued after is a new ask.
     def issue(license_id:, email:)
-      verifier.generate({ "license_id" => license_id, "email" => email }, expires_in: TTL)
+      verifier.generate({ "license_id" => license_id, "email" => email, "issued_at" => Time.current.to_i },
+                        expires_in: TTL)
     end
 
     # nil for a link that was tampered with, signed by another installation, or
-    # has simply expired.
+    # has simply expired. `issued_at` is nil on a link from before it was dated.
     def decode(token)
       payload = verifier.verified(token.to_s)
       return nil unless payload.is_a?(Hash)
 
-      payload.symbolize_keys.slice(:license_id, :email)
+      answers = payload.symbolize_keys.slice(:license_id, :email, :issued_at)
+      answers[:issued_at] = answers[:issued_at] && Time.zone.at(answers[:issued_at].to_i)
+      answers
     end
 
     private

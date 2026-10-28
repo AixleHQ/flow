@@ -135,6 +135,33 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert_empty ActionMailer::Base.deliveries
   end
 
+  # Only the link that asked is spent by the answer. The buyer may have spoken
+  # to the administrators since, and asking again with the same address has
+  # to work -- the two links differ in nothing but when they were issued.
+  test "asking again after a decline raises a new request" do
+    arrive_from_marketplace
+    ask
+    perform_enqueued_jobs
+    get confirm_marketplace_proposal_path(token: link_from_mail)
+    license = MarketplaceLicense.last
+    admin = open_session
+    admin.post login_path, params: { user: { email: @admin.email, password: AuthHelper::TEST_PASSWORD } }
+    travel 1.minute
+    admin.delete company_marketplace_license_proposal_path
+    assert_equal "declined", license.reload.proposal_state
+    perform_enqueued_jobs
+    ActionMailer::Base.deliveries.clear
+
+    travel 1.minute
+    ask
+    perform_enqueued_jobs
+    get confirm_marketplace_proposal_path(token: link_from_mail)
+    perform_enqueued_jobs
+
+    assert license.reload.proposal_pending?, "a fresh ask, not a reload of the declined one"
+    assert_includes ActionMailer::Base.deliveries.map { |m| m.to.first }, @admin.email
+  end
+
   # The address is the whole of the proof, so a link that was tampered with,
   # signed elsewhere, or has simply expired raises nothing.
   #
