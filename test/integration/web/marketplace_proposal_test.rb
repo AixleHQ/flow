@@ -308,6 +308,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
     assert_equal @company, license.reload.company
     assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.reload.billing_provider
+    assert_redirected_to company_settings_billing_path, "the panel that now says where the bill is"
   end
 
   test "declining leaves the subscription attached to nothing" do
