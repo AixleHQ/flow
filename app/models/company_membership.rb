@@ -165,6 +165,10 @@ class CompanyMembership < ApplicationRecord
     [ state, invited_at&.to_i ]
   end
 
+  def invitation_expired?
+    invited? && invited_at.present? && invited_at <= INVITATION_VALID_FOR.ago
+  end
+
   # A revoked member keeps no live company streams: kill their cable
   # connections so open sockets re-authenticate (and lose company channels).
   after_update_commit :disconnect_user_cables, if: -> { saved_change_to_state? && state == "revoked" }

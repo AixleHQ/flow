@@ -109,11 +109,30 @@ const ROLE_FILTER_OPTIONS = [
 ];
 
 const STATUS_FILTER_OPTIONS = [
+  { value: 'current', label: 'Active & Pending' },
   { value: 'active', label: 'Active' },
-  { value: 'invited', label: 'Invited' },
+  { value: 'invited', label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
   { value: 'all', label: 'All Statuses' },
 ];
+
+const matchesStatus = (user: Member, filter: string) => {
+  if (filter === 'all') return true;
+  if (filter === 'current') return user.state === 'active' || user.state === 'invited';
+  return user.state === filter;
+};
+
+export function MemberStatusBadge({ member }: { member: Pick<Member, 'state' | 'invitationExpired'> }) {
+  if (member.state !== 'invited') return <StatusBadge state={member.state} size="sm" />;
+  if (member.invitationExpired) {
+    return (
+      <StatusBadge tone="warning" size="sm">
+        Expired
+      </StatusBadge>
+    );
+  }
+  return <StatusBadge state="pending" size="sm" />;
+}
 
 export const MembersContent = ({
   users,
@@ -130,7 +149,7 @@ export const MembersContent = ({
   const canManageMembers = permissions?.canManageMembers ?? false;
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('active');
+  const [statusFilter, setStatusFilter] = useState('current');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [handoverFor, setHandoverFor] = useState<Member | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -151,13 +170,11 @@ export const MembersContent = ({
     if (roleFilter !== 'all') {
       result = result.filter((u) => u.role === roleFilter);
     }
-    if (statusFilter !== 'all') {
-      result = result.filter((u) => u.state === statusFilter);
-    }
+    result = result.filter((u) => matchesStatus(u, statusFilter));
     return result;
   }, [users, search, roleFilter, statusFilter]);
 
-  const hasFilters = !!search || roleFilter !== 'all' || statusFilter !== 'active';
+  const hasFilters = !!search || roleFilter !== 'all' || statusFilter !== 'current';
 
   const handleRoleChange = (userId: number, role: string) => {
     router.patch(`${basePath}/${userId}`, { user: { role } }, { preserveScroll: true });
@@ -239,9 +256,9 @@ export const MembersContent = ({
           aria-label="Filter by status"
           data={STATUS_FILTER_OPTIONS}
           value={statusFilter}
-          onChange={(value) => setStatusFilter(value ?? 'active')}
+          onChange={(value) => setStatusFilter(value ?? 'current')}
           allowDeselect={false}
-          w={150}
+          w={170}
         />
         <ResourceCount>
           {filtered.length} member{filtered.length !== 1 ? 's' : ''}
@@ -280,6 +297,8 @@ export const MembersContent = ({
             <Table.Tbody>
               {filtered.map((user) => {
                 const isSelf = currentUser != null && user.id === currentUser.id;
+                const hasRoleItem = showRoleActions && (user.role !== 'viewer' || user.state === 'active');
+                const hasStateItem = user.state === 'active' || user.state === 'suspended';
                 return (
                   <Table.Tr
                     key={user.id}
@@ -352,7 +371,7 @@ export const MembersContent = ({
                       <RoleTag role={user.role} />
                     </Table.Td>
                     <Table.Td>
-                      <StatusBadge state={user.state} size="sm" />
+                      <MemberStatusBadge member={user} />
                     </Table.Td>
                     <Table.Td>
                       <Text size="sm" c="var(--app-text-primary)">
@@ -367,7 +386,18 @@ export const MembersContent = ({
                     {canManageMembers && (
                       <Table.Td>
                         {isSelf ? null : (
-                          <Group gap={4} justify="flex-end">
+                          <Group gap={4} justify="flex-end" wrap="nowrap">
+                            {user.state === 'invited' && (
+                              <Button
+                                variant="subtle"
+                                size="compact-xs"
+                                leftSection={<IconMailForward size={14} />}
+                                aria-label={`Resend invitation to ${user.name}`}
+                                onClick={() => handleResend(user.id)}
+                              >
+                                Resend
+                              </Button>
+                            )}
                             <Menu position="bottom-end" withArrow>
                               <Menu.Target>
                                 <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
@@ -402,15 +432,7 @@ export const MembersContent = ({
                                     </Menu.Item>
                                   </Tooltip>
                                 )}
-                                {showRoleActions && <Menu.Divider />}
-                                {user.state === 'invited' && (
-                                  <Menu.Item
-                                    leftSection={<IconMailForward size={14} />}
-                                    onClick={() => handleResend(user.id)}
-                                  >
-                                    Resend Invitation
-                                  </Menu.Item>
-                                )}
+                                {hasRoleItem && hasStateItem && <Menu.Divider />}
                                 {user.state === 'active' && (
                                   <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
                                     <Menu.Item
@@ -424,7 +446,7 @@ export const MembersContent = ({
                                 {user.state === 'suspended' && (
                                   <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
                                 )}
-                                <Menu.Divider />
+                                {(hasRoleItem || hasStateItem) && <Menu.Divider />}
                                 <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
                                   <Menu.Item
                                     color="red"

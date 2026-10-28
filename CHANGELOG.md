@@ -33,6 +33,9 @@ governance, community health — carry none.
   edit it; the builder's back link returns to the Archived list.
 
 ### Changed
+- **Company members**: the Members page lists pending invitations by default,
+  marked **Pending**, or **Expired** once the 7-day link has lapsed, with a
+  **Resend** button on the row.
 - **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
   "Session Time" — how many tokens the project's sessions consumed and how long
   they ran, each with a per-session average. A dollar figure misled projects
