@@ -25,6 +25,7 @@ module TypelizerModelPlugin
     CompanyMembership
     ConfigItem
     Connector
+    EntityVersion
     Runner
   ].freeze
 
