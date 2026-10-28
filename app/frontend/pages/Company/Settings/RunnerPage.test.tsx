@@ -40,18 +40,28 @@ describe('Company/Settings/RunnerPage', () => {
     expect(screen.getByText('container.network')).toBeInTheDocument();
   });
 
-  it('disables, revokes and deletes for someone who may manage it', async () => {
+  it('disables a runner for someone who may manage it', async () => {
     const user = userEvent.setup();
     render();
 
     await user.click(screen.getByRole('button', { name: 'Disable' }));
     expect(router.post).toHaveBeenCalledWith('/company/settings/runners/5/disable', {}, expect.anything());
     expect(screen.queryByRole('button', { name: 'Enable' })).not.toBeInTheDocument();
+  });
+
+  it('revokes a runner once confirmed', async () => {
+    const user = userEvent.setup();
+    render();
 
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
     const revoke = await screen.findByRole('dialog', { name: 'Revoke runner' });
     await user.click(within(revoke).getByRole('button', { name: 'Revoke' }));
     expect(router.post).toHaveBeenCalledWith('/company/settings/runners/5/revoke', {}, expect.anything());
+  });
+
+  it('deletes a runner once confirmed', async () => {
+    const user = userEvent.setup();
+    render();
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     const remove = await screen.findByRole('dialog', { name: 'Delete runner' });

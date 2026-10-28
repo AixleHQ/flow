@@ -46,11 +46,11 @@ describe('RunnerFormModal', () => {
 
     const fieldset = within(dialog).getByRole('group', { name: 'Give the agent your toolchain' });
     expect(within(fieldset).getByText('Extra mounts')).toBeInTheDocument();
-    expect(within(fieldset).getByRole('switch', { name: 'Home directory mount' })).not.toBeChecked();
-    expect(within(fieldset).getByRole('switch', { name: 'Keep a workspace volume' })).toBeChecked();
+    expect(within(fieldset).getByRole('switch', { name: /^Home directory mount/ })).not.toBeChecked();
+    expect(within(fieldset).getByRole('switch', { name: /^Keep a workspace volume/ })).toBeChecked();
     expect(within(fieldset).getByRole('radio', { name: 'bridge (default)' })).toBeChecked();
     expect(within(fieldset).getByRole('radio', { name: 'private (default)' })).toBeChecked();
-    expect(within(dialog).getByRole('switch', { name: 'Auto-update' })).toBeChecked();
+    expect(within(dialog).getByRole('switch', { name: /^Auto-update/ })).toBeChecked();
     expect(within(dialog).getByRole('textbox', { name: /Reconnect grace/ })).toHaveAttribute('placeholder', '900');
     expect(within(dialog).getByText('Default: 900.')).toBeInTheDocument();
     expect(within(dialog).getByRole('radio', { name: /Reuse \(default\)/ })).toBeChecked();
@@ -66,7 +66,7 @@ describe('RunnerFormModal', () => {
 
     const network = within(dialog).getByRole('radiogroup', { name: 'Network' });
     await user.click(within(network).getByRole('radio', { name: 'host' }));
-    await user.click(within(dialog).getByRole('switch', { name: 'Auto-update' }));
+    await user.click(within(dialog).getByRole('switch', { name: /^Auto-update/ }));
     expect(within(dialog).getByRole('button', { name: 'Use the default for Network' })).toBeInTheDocument();
 
     await fillLimits(user, dialog);
@@ -130,15 +130,15 @@ describe('RunnerFormModal', () => {
     renderForm();
     const dialog = await pickManual(user);
 
-    const socket = () => within(dialog).getByRole('switch', { name: 'Mount the Docker socket' });
+    const socket = () => within(dialog).getByRole('switch', { name: /^Mount the Docker socket/ });
     expect(socket()).toBeDisabled();
 
-    await user.click(within(dialog).getByRole('switch', { name: 'Allow privileged mounts' }));
+    await user.click(within(dialog).getByRole('switch', { name: /^Allow privileged mounts/ }));
     expect(socket()).toBeEnabled();
     await user.click(socket());
     expect(within(dialog).getByText(/gives the agent root on this machine/)).toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole('switch', { name: 'Allow privileged mounts' }));
+    await user.click(within(dialog).getByRole('switch', { name: /^Allow privileged mounts/ }));
     expect(socket()).not.toBeChecked();
     expect(socket()).toBeDisabled();
   });
@@ -179,7 +179,7 @@ describe('RunnerFormModal', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit build-box' });
     expect(within(dialog).queryByRole('radio', { name: 'Manual' })).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('switch', { name: 'Auto-update' })).not.toBeChecked();
+    expect(within(dialog).getByRole('switch', { name: /^Auto-update/ })).not.toBeChecked();
 
     await user.click(within(dialog).getByRole('button', { name: 'Next' }));
     await user.click(within(dialog).getByRole('button', { name: 'Save runner' }));

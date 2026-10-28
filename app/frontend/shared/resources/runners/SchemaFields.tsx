@@ -158,7 +158,11 @@ function FieldDescription({
         <Button
           variant="subtle"
           size="compact-xs"
-          onClick={() => onChange(undefined)}
+          onClick={(event) => {
+            // Inside a switch's label a click would also toggle the switch.
+            event.preventDefault();
+            onChange(undefined);
+          }}
           aria-label={`Use the default for ${fieldLabel(key)}`}
         >
           Use default ({formatDefault(schema.default)})

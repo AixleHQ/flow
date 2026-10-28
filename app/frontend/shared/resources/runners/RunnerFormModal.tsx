@@ -1,3 +1,4 @@
+import type { FormDataConvertible } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, NumberInput, Radio, Stack, Stepper, Text, TextInput } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
@@ -155,11 +156,11 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
       return;
     }
 
-    const body: Record<string, unknown> = {
+    const body: Record<string, FormDataConvertible> = {
       name: draft.name.trim(),
       max_concurrency: draft.maxConcurrency,
       max_environments: provisionable && draft.maxEnvironments !== '' ? draft.maxEnvironments : null,
-      config: configForSubmit(draft.config, schema),
+      config: configForSubmit(draft.config, schema) as Record<string, FormDataConvertible>,
     };
     if (!editing) body.runner_type = draft.runnerType;
     if (draft.reusePolicy) body.reuse_policy = draft.reusePolicy;
