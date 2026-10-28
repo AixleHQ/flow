@@ -169,6 +169,32 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # An hour AWS refused for having been told a different number is marked on
+  # the ledger so that it is not sent again, and it is on nobody's bill.
+  test "the AWS panel does not count an hour AWS disputed" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, company: @company)
+    hour = Time.current.utc.beginning_of_month + 3.hours
+
+    CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour,
+                                quantity_seconds: 3600, state: "reported",
+                                breakdown: { @company.id.to_s => 3600 },
+                                receipts: { license.license_arn => "mr-1" })
+    [ hour + 1.hour, hour + 2.hours ].each do |disputed|
+      CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: disputed,
+                                  quantity_seconds: 3600, state: "reported",
+                                  breakdown: { @company.id.to_s => 3600 },
+                                  receipts: { license.license_arn => Billing::Meter::AwsMarketplaceSaas::DISPUTED })
+    end
+
+    get company_settings_billing_path
+
+    assert_inertia_props do |props|
+      assert_in_delta 60.0, props.dig(:marketplaceBilling, :reportedMinutes), 0.001,
+                      "the honoured hour alone; two disputed hours count for nothing, not for one"
+    end
+  end
+
   # The hourly meter is not the only path that sends. A cancellation sends the
   # last part-hour through the final meter, which writes no ledger row -- so a
   # figure built from ledger rows alone understated what AWS had been told by
