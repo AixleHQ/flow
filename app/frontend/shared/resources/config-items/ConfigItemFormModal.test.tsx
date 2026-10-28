@@ -20,7 +20,7 @@ describe('ConfigItemFormModal', () => {
   });
 
   it('renders the edit-mode title and pre-fills the name when an item is given', () => {
-    const item = { id: 7, name: 'API_KEY', value: 'secret', description: 'A key', itemType: 'variable' };
+    const item = { id: 7, name: 'API_KEY', value: 'secret', description: 'A key', itemType: 'variable' as const };
     renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={item} />);
 
     expect(screen.getByRole('heading', { name: 'Edit secret' })).toBeInTheDocument();
@@ -29,14 +29,14 @@ describe('ConfigItemFormModal', () => {
   });
 
   it("edits a variable in place and never pre-fills a secret's value", () => {
-    const variable = { id: 7, name: 'REGION', value: 'eu-west-1', description: null, itemType: 'variable' };
+    const variable = { id: 7, name: 'REGION', value: 'eu-west-1', description: null, itemType: 'variable' as const };
     const { unmount } = renderPage(
       <ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={variable} />,
     );
     expect(screen.getByDisplayValue('eu-west-1')).toBeInTheDocument();
     unmount();
 
-    const secret = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' };
+    const secret = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' as const };
     renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={secret} />);
     expect(screen.queryByDisplayValue('••••••••')).not.toBeInTheDocument();
   });
@@ -78,7 +78,7 @@ describe('ConfigItemFormModal', () => {
 
   it('closes an untouched edit without asking', async () => {
     const onClose = vi.fn();
-    const item = { id: 7, name: 'REGION', value: 'eu-west-1', description: 'Deploy region', itemType: 'variable' };
+    const item = { id: 7, name: 'REGION', value: 'eu-west-1', description: 'Deploy region', itemType: 'variable' as const };
     renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} item={item} />);
 
     expect(screen.getByDisplayValue('eu-west-1')).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('ConfigItemFormModal', () => {
 
   it('asks before closing an edit through its X once the value changed', async () => {
     const onClose = vi.fn();
-    const item = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' };
+    const item = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' as const };
     renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} item={item} />);
 
     await userEvent.type(screen.getByPlaceholderText('Enter secret value...'), 'rotated');

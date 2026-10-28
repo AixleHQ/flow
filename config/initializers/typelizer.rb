@@ -23,6 +23,7 @@ module TypelizerModelPlugin
     ColumnTransition
     ColumnWorkflowBinding
     CompanyMembership
+    ConfigItem
     Runner
   ].freeze
 
