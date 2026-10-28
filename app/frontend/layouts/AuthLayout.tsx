@@ -63,36 +63,43 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
 
   return (
     <Box className={classes.root}>
-      {showChrome && (
-        <AppSidebar
-          projectId={projectId}
-          context={context}
-          projects={projects}
-          currentProjectId={projectId ?? null}
-          permissions={permissions}
-        />
-      )}
-      <Box className={classes.contentColumn}>
-        {/* First tab stop: without it, reaching page content costs ~21 Tab
-            presses past the sidebar's nav links, switcher and user menu. */}
-        <a href="#app-main" className="app-skip-link">
-          Skip to content
-        </a>
-        {/* Above the content rather than inside a page: a workspace that has
-            spent its free capacity looks, from every other screen, like sessions
-            that silently never start. */}
-        <TrialBanner />
-        <Box component="main" id="app-main" tabIndex={-1} className={noPadding ? classes.mainNoPadding : classes.main}>
-          {children}
-        </Box>
+      {/* Above the sidebar as well as the content: a workspace that has spent
+          its free capacity looks, from every other screen, like sessions that
+          silently never start. */}
+      <TrialBanner />
+      <Box className={classes.shell}>
         {showChrome && (
-          <Box component="footer" className={classes.footer}>
-            <Text component="span" size="xs" lh={1}>
-              Powered by
-            </Text>
-            <BrandLockup size="xs" />
-          </Box>
+          <AppSidebar
+            projectId={projectId}
+            context={context}
+            projects={projects}
+            currentProjectId={projectId ?? null}
+            permissions={permissions}
+          />
         )}
+        <Box className={classes.contentColumn}>
+          {/* First tab stop: without it, reaching page content costs ~21 Tab
+              presses past the sidebar's nav links, switcher and user menu. */}
+          <a href="#app-main" className="app-skip-link">
+            Skip to content
+          </a>
+          <Box
+            component="main"
+            id="app-main"
+            tabIndex={-1}
+            className={noPadding ? classes.mainNoPadding : classes.main}
+          >
+            {children}
+          </Box>
+          {showChrome && (
+            <Box component="footer" className={classes.footer}>
+              <Text component="span" size="xs" lh={1}>
+                Powered by
+              </Text>
+              <BrandLockup size="xs" />
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   );
