@@ -20,15 +20,19 @@ module Billing
     def none? = provider == Company::BILLING_PROVIDER_NONE
     def stripe? = provider == Company::BILLING_PROVIDER_STRIPE
 
-    # Who this company's hours are SENT to. Read by the two meters, and by
-    # nothing that decides what a screen offers.
+    # Who this company's hours are SENT to, and whose banner and Billing panel
+    # it sees: the two meters, the Marketplace banner and the AWS panel read
+    # this. Deliberately not the same question as #subscribed_through_aws?.
+    # An ended licence leaves the column at `aws` until a card moves it back,
+    # and in that interval the screens still say the AWS subscription has
+    # ended and point at Billing, where a card is offered -- while nothing
+    # refuses the card, which is the other predicate's job.
     def aws_marketplace? = provider == Company::BILLING_PROVIDER_AWS_MARKETPLACE
 
     # Whether a card would be a SECOND bill for capacity somebody is already
     # charged for. Read by every screen and refusal that turns a card away.
-    # Not #aws_marketplace?: an ended licence leaves the column saying `aws`
-    # until a card moves it back, and a pending one is live but metered by
-    # nobody.
+    # Not #aws_marketplace?: see above, and a pending licence is live but
+    # metered by nobody.
     def subscribed_through_aws?
       return false if company.nil?
 

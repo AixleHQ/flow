@@ -33,10 +33,16 @@ describe('MarketplaceBanner', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
-  // Never a card: this payer has none, and Checkout refuses them.
-  it('never offers a card', () => {
+  // A card is a way out once the subscription has ended, but it is offered on
+  // the Billing tab beside what AWS was billed this month -- the banner points
+  // there rather than opening a checkout of its own.
+  it('points at Billing for a card rather than taking one itself', () => {
     renderPage(<MarketplaceBanner />, { props: { marketplace: { status: 'canceled' } } });
 
     expect(screen.queryByRole('button', { name: /card/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Pay by card instead' })).toHaveAttribute(
+      'href',
+      '/company/settings/billing',
+    );
   });
 });
