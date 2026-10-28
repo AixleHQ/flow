@@ -76,7 +76,10 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
 
   def raise_proposal(proposed, email)
     Billing::MarketplaceLicenseProposal.raise!(license: proposed, email: email)
-    notify_admins(proposed.reload)
+    proposed.reload
+    administrator = administrator_at(proposed.proposed_company, email)
+    notify_admins(proposed, except: administrator)
+    return land(administrator) if administrator
 
     # No marker in the URL: the licence itself now says a request is waiting, so
     # the screen reads the same whether this is the redirect or a reload of it
@@ -84,10 +87,30 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     redirect_to new_workspace_path(email: email)
   end
 
+  # The proved address is an administrator's of the very workspace being asked
+  # -- one that cancelled and subscribed again, as a rule. They are who decides,
+  # so they are not mailed to ask themselves: the proof signs them in, as a
+  # signup link signs its owner in, and the request is in front of them.
+  # Only where an emailed link is a sign-in at all; elsewhere the ask goes the
+  # long way round.
+  def administrator_at(company, email)
+    return nil unless Auth::PolicyResolver.deployment_allowlist_kinds.include?("magic_link")
+
+    administrator = company.billing_admins.find_by(email: email.to_s.downcase)
+    administrator unless administrator&.deleted?
+  end
+
+  def land(administrator)
+    sign_in(administrator, provider: IdentityProvider.deployment!("magic_link"))
+    redirect_to company_settings_billing_path
+  end
+
   # Every administrator, because there is no billing contact and the decision
-  # moves who pays for their workspace.
-  def notify_admins(proposed)
-    proposed.proposed_company.billing_admins.find_each do |admin|
+  # moves who pays for their workspace -- except the one who has just asked.
+  def notify_admins(proposed, except: nil)
+    admins = proposed.proposed_company.billing_admins
+    admins = admins.where.not(id: except.id) if except
+    admins.find_each do |admin|
       MarketplaceProposalMailer.raised(proposed, admin).deliver_later
     end
   end

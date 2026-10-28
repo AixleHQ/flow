@@ -84,6 +84,33 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert_equal [ @admin.email, other.email ].sort, ActionMailer::Base.deliveries.map { |m| m.to.first }.sort
   end
 
+  # The address the link proved is an administrator's of the very workspace
+  # being asked: a workspace that cancelled its subscription and took out a
+  # new one. Asking themselves by mail and waiting for their own answer was the
+  # long way round; the proof signs them in and puts the request in front of
+  # them, and the other administrators are told as before.
+  test "an administrator proving their own address lands on the request, signed in" do
+    other = create(:user, :admin, :onboarding_completed, company: @company)
+    arrive_from_marketplace
+    ask(email: @admin.email)
+    perform_enqueued_jobs
+    token = link_from_mail
+    ActionMailer::Base.deliveries.clear
+
+    get confirm_marketplace_proposal_path(token: token)
+    perform_enqueued_jobs
+
+    assert_redirected_to company_settings_billing_path
+    assert MarketplaceLicense.last.proposal_pending?
+    assert_equal [ other.email ], ActionMailer::Base.deliveries.map { |m| m.to.first },
+                 "the other administrator is told; the one asking is not"
+    follow_redirect!
+    assert_inertia_props do |props|
+      assert_equal @admin.email, props.dig(:marketplaceProposal, :askedBy)
+      assert props.dig(:marketplaceProposal, :canDecide)
+    end
+  end
+
   # The link lives two hours and the buyer has it in front of them, so opening
   # it twice is a double click or a returned-to tab. Raising again would mail
   # every administrator a second time -- the one route the rate limit on asking
