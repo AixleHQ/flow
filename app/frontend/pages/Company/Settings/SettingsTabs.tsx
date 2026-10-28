@@ -1,15 +1,22 @@
 import { router, usePage } from '@inertiajs/react';
 import { Box, Tabs, Text } from '@mantine/core';
 
-import { companySettingsAccessPath, companySettingsBillingPath, companySettingsPath } from 'shared/routes';
+import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import {
+  companySettingsAccessPath,
+  companySettingsBillingPath,
+  companySettingsPath,
+  companySettingsRunnersPath,
+} from 'shared/routes';
 import type { SharedPermissions } from 'shared/ui';
 
-export type SettingsTab = 'general' | 'access' | 'billing';
+export type SettingsTab = 'general' | 'access' | 'billing' | 'runners';
 
 const TAB_PATHS: Record<SettingsTab, () => string> = {
   general: companySettingsPath,
   access: companySettingsAccessPath,
   billing: companySettingsBillingPath,
+  runners: companySettingsRunnersPath,
 };
 
 // Each tab is its own page, not a client-side panel swap. The two halves of
@@ -27,6 +34,7 @@ export function SettingsTabs({
   children: React.ReactNode;
 }) {
   const { permissions } = usePage<{ permissions?: SharedPermissions }>().props;
+  const externalRunners = useFeatureFlag('externalRunners');
 
   return (
     <Box px="lg" py="md">
@@ -42,6 +50,7 @@ export function SettingsTabs({
           <Tabs.Tab value="general">General</Tabs.Tab>
           <Tabs.Tab value="access">Access</Tabs.Tab>
           {permissions?.canViewBilling && <Tabs.Tab value="billing">Billing</Tabs.Tab>}
+          {externalRunners && <Tabs.Tab value="runners">Runners</Tabs.Tab>}
         </Tabs.List>
       </Tabs>
 

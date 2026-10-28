@@ -7,6 +7,7 @@ import { buildBoardTask } from './boardTask';
 import { buildIntegration } from './integration';
 import { buildProject } from './project';
 import { buildRepository } from './repository';
+import { buildRunner, buildRunnerTypeOption } from './runner';
 import { buildSessionArtifact } from './sessionArtifact';
 import { buildStepRun } from './stepRun';
 import { buildSubStepRun } from './subStepRun';
@@ -40,6 +41,12 @@ describe('typed factories', () => {
   it('buildIntegration applies overrides', () => {
     expect(buildIntegration().provider).toBe('github');
     expect(buildIntegration({ provider: 'gitlab' }).provider).toBe('gitlab');
+  });
+
+  it('buildRunner and buildRunnerTypeOption apply overrides', () => {
+    expect(buildRunner().runnerType).toBe('manual');
+    expect(buildRunner({ scope: 'project', projectId: 7 }).scope).toBe('project');
+    expect(buildRunnerTypeOption().configSchema.properties?.container).toBeDefined();
   });
 
   it('buildRepository nests a full Integration and applies overrides', () => {
