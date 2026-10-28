@@ -81,7 +81,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                          alert: "Only a company admin can remove a company-wide integration"
     end
 
-    integration.destroy
+    # A Coder integration that runners provision through is kept
+    # (`dependent: :restrict_with_error`) until task 17 of the runners design
+    # decides what disconnecting does to them.
+    unless integration.destroy
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: integration.errors.full_messages.to_sentence
+    end
+
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
   end
 

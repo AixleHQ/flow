@@ -56,6 +56,13 @@ const previousMonth = (month: string) => {
 
 const minDay = (a: string, b: string) => (a < b ? a : b);
 
+const unlimitedShare = (row: UsageDay) => Math.min(1, row.unlimitedSeconds / (row.hours * 3600));
+
+// The meter offers nothing while a company has no limit, so that time counts as
+// worker hours exactly what its workers were busy: fully used. A day the limit
+// was set or cleared on is split by the share of it without one.
+const workerSecondsOf = (row: UsageDay) => row.offeredSeconds + row.occupiedSeconds * unlimitedShare(row);
+
 export function periodOf(grain: Exclude<Grain, 'custom'>, day: string): string {
   if (grain === 'week') return mondayOf(day);
   if (grain === 'month') return day.slice(0, 7);
@@ -113,7 +120,8 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
   return Array.from(byTenant, ([tenantId, rows]) => {
     rows.sort((a, b) => a.day.localeCompare(b.day));
     const sum = (pick: (row: UsageDay) => number) => rows.reduce((total, row) => total + pick(row), 0);
-    const offered = sum((row) => row.offeredSeconds);
+    const worker = sum(workerSecondsOf);
+    const busy = sum((row) => row.occupiedSeconds);
     const admitted = sum((row) => row.sessionsAdmitted);
     const bounded = rows.flatMap((row) => (row.limitMin === null ? [] : [row.limitMin]));
     const maxima = rows.flatMap((row) => (row.limitMax === null ? [] : [row.limitMax]));
@@ -124,12 +132,12 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
       name: names.get(tenantId) ?? `Company #${tenantId}`,
       firstDay: rows[0].day,
       lastDay: rows[rows.length - 1].day,
-      workerHours: offered / 3600,
-      busyHours: sum((row) => row.occupiedSeconds) / 3600,
+      workerHours: worker / 3600,
+      busyHours: busy / 3600,
       minWorkers: bounded.length ? Math.min(...bounded) : Infinity,
       maxWorkers: everUnlimited || !maxima.length ? Infinity : Math.max(...maxima),
       peakWorkers: Math.max(...rows.map((row) => row.peakWorkers)),
-      utilization: offered > 0 ? sum((row) => row.occupiedSeconds) / offered : null,
+      utilization: worker > 0 ? busy / worker : null,
       avgWaitSeconds: admitted > 0 ? sum((row) => row.waitSecondsTotal) / admitted : null,
       maxWaitSeconds: admitted > 0 ? Math.max(...rows.map((row) => row.waitSecondsMax)) : null,
       sessionsSucceeded: sum((row) => row.sessionsSucceeded),

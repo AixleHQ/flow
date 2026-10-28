@@ -94,7 +94,8 @@ as `staging.httpCredentials`. Do not write it into the snippet: the MCP echoes t
 
 ## Helper reference
 
-Every helper is `async`, takes `page` first and `env` second, and throws with a readable message when it fails.
+Every helper is `async`, takes `page` first and `env` (or an options object, from the requests section on) second, and
+throws with a readable message when it fails.
 
 ### Credentials and sign-in
 
@@ -262,6 +263,129 @@ Use it to switch roles, or before anonymous checks.
 
 ```js
 await signOut(page, staging); // { signedOut: true, landedOn: '/login' }
+```
+
+### Agent sessions
+
+These four start an agent session on staging, follow it, finish it and read its log through
+`/api/v1/terminal_sessions`, as the signed-in user. Like `appRequest` they take `page` and one options object, and each
+accepts `baseUrl`. `show`, `finish` and `destroy` only find sessions the signed-in user owns, so follow a session as the
+role that started it. `id` may be the numeric id or the route token in every helper. The API's `finish` takes the
+numeric id only, so `finishSession` resolves a route token with `GET /api/v1/terminal_sessions/:id` first.
+
+**Finish every session you start**, so no container is left running. `DELETE /api/v1/terminal_sessions/:id` is no
+substitute: it refuses an active session with `400 Cannot delete active session`.
+
+Session states are `not_started`, `queued`, `running`, `ready`, `finishing`, `finished`, `failed` and `cancelled`. The
+last three are terminal.
+
+#### `startSession(page, { projectId, agentType, mode = 'non_interactive', sessionType = 'agent_session', prompt, baseUrl })`
+
+Sends `POST /api/v1/terminal_sessions` with the session cookie and the CSRF token, and the body
+`{ terminal_session: { project_id, session_type, agent_type, mode, initial_prompt } }`. Returns
+`{ id, state, routeToken }`.
+
+- `projectId` and `agentType` (a runtime id from `config/agent_runtimes.json`, such as `claude_code`) are required.
+  `prompt` is required for a `non_interactive` session.
+- Throws with the API's message unless it answers `201`: `422` with validation errors or a preflight failure (no
+  credential for the runtime), `403` for a viewer.
+- Staging has no credentials for some runtimes (Gemini, a Codex subscription, xAI, Kiro). Use one that works there, and
+  say which one in the result.
+
+```js
+const session = await startSession(page, { projectId: 3, agentType: 'claude_code', prompt: 'Reply with OK and stop.' });
+// { id: 28731, state: 'not_started', routeToken: 'k3…' }
+```
+
+#### `waitForSession(page, { id, until = ['ready', 'finished', 'failed'], timeoutMs = 240000, intervalMs = 8000, baseUrl })`
+
+Polls `GET /api/v1/terminal_sessions/:id` every `intervalMs` and returns `{ id, final, timedOut, timeline }`.
+
+- It stops when the state is one of `until`, and also on any terminal state (`finished`, `failed`, `cancelled`), since
+  nothing leaves those.
+- `timeline` has one row `{ t, state, containerId, errorMessage }` (`t` is an ISO time) each time any of those three
+  fields changes. That is the state table for the result comment.
+- After `timeoutMs` it returns with `timedOut: true` and `final` set to the last state seen. Call it again to keep
+  waiting; do not raise `timeoutMs` to wait longer in one call. `timeoutMs` is capped at 10 minutes, so a call never
+  comes near the 30-minute silence limit.
+- Throws when the first poll fails, for example `404` for a session the signed-in user does not own.
+- A later poll that fails (a `5xx` during a deploy, no response) is retried up to twice, `intervalMs` apart and within
+  `timeoutMs`. If it still fails, the helper returns `{ id, final, timedOut: false, error, timeline }`, with `final`
+  the last state seen and the timeline so far, instead of throwing. Check `error`, then call it again.
+
+```js
+const wait = await waitForSession(page, { id: session.id });
+// { id: 28731, final: 'ready', timedOut: false,
+//   timeline: [{ t: '2026-10-27T17:40:02.114Z', state: 'queued', containerId: null, errorMessage: null },
+//              { t: '2026-10-27T17:40:34.871Z', state: 'running', containerId: 'f1c2…', errorMessage: null }, …] }
+```
+
+#### `finishSession(page, { id, baseUrl })`
+
+Calls `POST /api/v1/terminal_sessions/:id/finish` and returns `{ status, state, error }`.
+
+- On `200` the session is usually `finishing`, not yet `finished`. Follow with
+  `waitForSession(page, { id, until: ['finished'] })`.
+- A session that cannot be finished, for example one already `finished`, answers
+  `400 Cannot finish session in state: …`. The helper does not throw: `status` is `400`, `error` carries the message,
+  and `state` is read with `GET /api/v1/terminal_sessions/:id`.
+- Any other status (`404`, `403`, `422`, `5xx`) throws with the API's message, so a failed finish never looks like a
+  result. A route token that `show` cannot resolve throws too.
+
+```js
+await finishSession(page, { id: session.id }); // { status: 200, state: 'finishing', error: null }
+await waitForSession(page, { id: session.id, until: ['finished'] }); // { final: 'finished', … }
+```
+
+#### `sessionLog(page, { id, tailLines = 200, grep, baseUrl })`
+
+Fetches `GET /api/v1/terminal_sessions/:id/terminal_log`, strips ANSI escape codes, and returns
+`{ bytes, truncated, totalLines, lines }`.
+
+- **The log exists only for a `finished` or `failed` session** (and only when it wrote a `terminal_output.log`). Any
+  other state answers `404`, and the helper throws. Finish the session and wait for `finished` before reading it.
+- `lines` is the last `tailLines` lines. With `grep` (a `RegExp`, or a string matched as a plain substring) it is the
+  last `tailLines` lines that match. Whole logs of 1–2 MB never reach the context.
+- The log is the raw terminal stream, so lines are rebuilt from it: cursor-forward codes become spaces (a TUI writes
+  them instead of spaces), a column jump becomes one space, and a carriage return, a newline or a move to another row
+  ends the line. Blank lines are dropped. A TUI redraws its screen, so some lines repeat; `grep` is the way to find a
+  line.
+- `bytes` is the size of the log as served. The server serves at most the last 2 MB, and `truncated` is `true` when it
+  cut the log (`X-Log-Truncated: true`). `totalLines` counts the lines after cleaning.
+
+```js
+await sessionLog(page, { id: session.id, tailLines: 20 });
+// { bytes: 48213, truncated: false, totalLines: 611, lines: ['…', …] }
+await sessionLog(page, { id: session.id, grep: /error|fail/i });
+```
+
+#### Worked example: one session, start to finish
+
+A single wait returns after at most `timeoutMs`. If it comes back with `timedOut: true`, run another
+`browser_run_code_unsafe` call that waits on the same `id` rather than one long call.
+
+```js
+async (page) => {
+  // ---- paste test/playwright/helpers/helpers.js here ----
+
+  const staging = await loadCredentialsAsset(page);
+  const { baseUrl } = staging;
+  await loginAsCompanyAdmin(page, staging);
+
+  const session = await startSession(page, {
+    projectId: 3,
+    agentType: 'claude_code',
+    prompt: 'Reply with OK and stop.',
+    baseUrl,
+  });
+  const up = await waitForSession(page, { id: session.id, baseUrl });
+  // Finish every session you start; then wait for `finished`, since the log exists only then.
+  const finish = up.final === 'finished' ? null : await finishSession(page, { id: session.id, baseUrl });
+  const done = await waitForSession(page, { id: session.id, until: ['finished'], baseUrl });
+  const tail = await sessionLog(page, { id: session.id, tailLines: 20, baseUrl });
+  const grep = await sessionLog(page, { id: session.id, grep: 'OK', baseUrl });
+  return { session, timeline: [...up.timeline, ...done.timeline], finish, tail, grep };
+};
 ```
 
 ### Worked example: a round

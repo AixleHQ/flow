@@ -85,7 +85,7 @@ module Sessions
       contents = {}
 
       found.each do |path, size|
-        name = File.basename(path)
+        name = log_name(path)
 
         if direct_upload?(path) && (uploaded = upload_from_container(path, size, name))
           log = persist(name, uploaded, size)
@@ -152,20 +152,41 @@ module Sessions
       ]
     end
 
-    # Whether this file can go straight from the container to storage. Two conditions,
+    # Whether this file can go straight from the container to storage. Three conditions,
     # each one a way the direct path would otherwise be wrong:
     #
     #   * the container scrubs its own logs. Without that the bytes would reach storage
     #     carrying whatever the agent read through get_config_item — so an image built
     #     before those filters shipped keeps the path where this process scrubs;
+    #   * the file is one those filters actually write. A log the agent CLI writes for
+    #     itself (Agents::BaseAdapter#unfiltered_log_paths) never passes through them,
+    #     so it takes the scrubbing path whatever the image;
     #   * the storage can sign a PUT at all. In development and test it is a filesystem
     #     or a memory store, and there is nothing to upload to.
     #
     # A log #collect_usage parses is no longer an exception: it is handed back as a
     # Sessions::LogSource, which reads the stored object a line at a time, and every
     # parser was already written against `each_line`.
-    def direct_upload?(_path)
-      @container_redacts && cache_storage.respond_to?(:presign)
+    def direct_upload?(path)
+      @container_redacts && !unfiltered?(path) && cache_storage.respond_to?(:presign)
+    end
+
+    # FNM_PATHNAME so a `*` stays inside one directory, as it does in the container's
+    # shell that expanded the same pattern.
+    def unfiltered?(path)
+      unfiltered_patterns.any? { |pattern| File.fnmatch?(pattern, path, File::FNM_PATHNAME) }
+    end
+
+    def unfiltered_patterns
+      @unfiltered_patterns ||=
+        adapter.respond_to?(:unfiltered_log_paths) ? Array(adapter.unfiltered_log_paths).compact_blank : []
+    end
+
+    # Agents::BaseAdapter#session_log_name, so an adapter whose CLI keeps the session id
+    # in a directory can still store each file under a distinct, correlatable name.
+    def log_name(path)
+      name = adapter.session_log_name(path) if adapter.respond_to?(:session_log_name)
+      name.presence || File.basename(path)
     end
 
     # Hands the container a URL it can PUT to and lets it do the transfer. Nothing about
@@ -268,10 +289,10 @@ module Sessions
     # with a server-side copy, so the bytes never travel through here at all. Returns the
     # record, because a caller that handed over an upload has no other way to read it back.
     #
-    # The name is the basename, so the keys adapters already read
-    # (`artifacts["logs/http.log"]`) keep working. For a transcript that basename is the
-    # agent's own session id, which is the key that correlates this row with the vendor's
-    # telemetry.
+    # The name is the adapter's #session_log_name — the basename unless it says otherwise —
+    # so the keys adapters already read (`artifacts["logs/http.log"]`) keep working. For a
+    # transcript that name carries the agent's own session id, which is the key that
+    # correlates this row with the vendor's telemetry.
     def persist(name, body, size)
       log = SessionLog.new(
         terminal_session: session,

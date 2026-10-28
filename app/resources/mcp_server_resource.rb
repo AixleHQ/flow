@@ -3,8 +3,10 @@
 class MCPServerResource < ApplicationResource
   preserve_keys :env, :headers
 
+  # `transport` keeps its union here: the column is nullable, and inference
+  # would widen it with `| null`, which the frontend has never had to handle.
   typelize headers: "Record<string, string>", env: "Record<string, string>",
-           transport: %w[http sse stdio], kind: %w[internal custom]
+           transport: %w[http sse stdio]
   attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
              :current_version_number, :archived_at, :created_at, :updated_at
@@ -105,12 +107,10 @@ class MCPServerResource < ApplicationResource
   end
 
   # --- OAuth (oauth-unification §4.4 / §5) ---
-  typelize %w[none static oauth]
   attribute :auth_type do |server|
     server.auth_type.to_s
   end
 
-  typelize %w[shared per_user]
   attribute :credential_scope do |server|
     server.credential_scope.to_s
   end

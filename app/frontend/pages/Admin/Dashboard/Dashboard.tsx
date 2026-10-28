@@ -423,13 +423,13 @@ export default function Dashboard({ data, now = new Date() }: Props) {
 
       <p className={classes.note}>
         Worker hours are the capacity a company was offered — its worker limit over time, which is what a paying company
-        is billed for. Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours,
-        and has no value for a company without a limit. Min and max workers are the limit (∞ when none was set); peak
-        workers is the most held at once. Wait time is how long a session queued before a worker took it. Billing shows
-        whether the company pays, is on a trial, is blocked, or is managed by Aixle; “Not billed” marks a company that
-        runs free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday. The
-        small figure under each value is the change from the previous period; a period still in progress is compared
-        with the same number of days of the one before.
+        is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
+        Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
+        workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
+        session queued before a worker took it. Billing shows whether the company pays, is on a trial, is blocked, or is
+        managed by Aixle; “Not billed” marks a company that runs free without being managed, which should never happen.
+        Days are UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous
+        period; a period still in progress is compared with the same number of days of the one before.
         {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`}
       </p>
     </div>

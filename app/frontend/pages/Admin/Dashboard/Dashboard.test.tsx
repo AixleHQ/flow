@@ -74,13 +74,15 @@ describe('Dashboard', () => {
     expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
   });
 
-  it('shows a company without a limit as unlimited, with no utilization', () => {
+  it('shows a company without a limit as unlimited and fully used', () => {
     render(<Dashboard data={data} now={now} />);
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
-    const utilization = globex.getAllByRole('cell')[6];
-    expect(utilization).toHaveTextContent(/^—/);
+    const [, workerHours, busyHours, , , , utilization] = globex.getAllByRole('cell');
+    expect(workerHours).toHaveTextContent(/^48/);
+    expect(busyHours).toHaveTextContent(/^48/);
+    expect(utilization).toHaveTextContent(/^100%/);
   });
 
   it('compares with the same days of the month before', () => {

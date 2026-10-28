@@ -11,8 +11,9 @@
  * applied only when it is given (staging's public entry asks for it; from inside
  * the VPCs or over the VPN there is none). `loadCredentialsAsset(page)` returns
  * such an object, plus the role credentials, read from the QA credentials asset.
- * appRequest, readInertiaPage, shot, probeRoutes and signOut take `page` and an
- * options object instead; see the section that defines them.
+ * appRequest, readInertiaPage, shot, probeRoutes, signOut and the agent-session
+ * helpers (startSession, waitForSession, sessionLog, finishSession) take `page`
+ * and an options object instead; see the sections that define them.
  *
  * Errors never include credentials.
  */
@@ -694,4 +695,279 @@ async function signOut(page, options = {}) {
   const probe = await aixleSend(page, base, { path: '/company/projects', maxRedirects: 0 });
   const toLogin = probe.status >= 300 && probe.status < 400 && aixlePathname(probe.location || '').startsWith('/login');
   return { signedOut: landedOn.startsWith('/login') && toLogin, landedOn };
+}
+
+// ---------------------------------------------------------------------------
+// Agent sessions
+// ---------------------------------------------------------------------------
+//
+// startSession, waitForSession, sessionLog and finishSession drive
+// /api/v1/terminal_sessions as the signed-in user. Like appRequest they take
+// `page` and one options object, and accept `baseUrl`. `show`, `finish` and
+// `destroy` only find sessions the signed-in user owns. `show` and
+// `terminal_log` take the numeric id or the route token; `finish` takes the
+// numeric id only, so finishSession resolves a route token through `show`
+// first. Finish every session you start.
+
+// Nothing leaves these states, so waitForSession stops on them whatever `until` says.
+const AIXLE_SESSION_TERMINAL_STATES = ['finished', 'failed', 'cancelled'];
+// One waitForSession call never blocks longer than this: a tool call silent for
+// 30 minutes gets the QA session killed. Call it again to wait longer.
+const AIXLE_SESSION_MAX_WAIT_MS = 600000;
+// After the first successful poll, a failed poll (5xx during a deploy, no
+// response) is retried this many times before waitForSession gives up and
+// returns the timeline it has, with `error`.
+const AIXLE_SESSION_POLL_RETRIES = 2;
+
+function aixleSessionPath(id, rest = '') {
+  return `/api/v1/terminal_sessions/${aixleId('id', id)}${rest}`;
+}
+
+// The session JSON is camelCase (ApplicationResource); snake_case is read too.
+function aixleSessionField(session, camel, snake) {
+  if (!session) return null;
+  if (session[camel] !== undefined) return session[camel];
+  return session[snake] === undefined ? null : session[snake];
+}
+
+// The API's own error text ({ error } or { errors: [...] }), or the HTTP status.
+function aixleApiError(result) {
+  const body = result.json || {};
+  if (body.error) return String(body.error);
+  if (Array.isArray(body.errors) && body.errors.length) return body.errors.join('; ');
+  return `HTTP ${result.status}`;
+}
+
+/**
+ * Start an agent session: POST /api/v1/terminal_sessions with the body nested
+ * under `terminal_session`. Returns { id, state, routeToken }. Throws with the
+ * API's error (422 validation, 403 for a viewer, …) unless it answers 201.
+ * `prompt` is the initial prompt; non_interactive sessions require one.
+ */
+async function startSession(
+  page,
+  { projectId, agentType, mode = 'non_interactive', sessionType = 'agent_session', prompt, baseUrl } = {},
+) {
+  aixleId('projectId', projectId);
+  aixleId('agentType', agentType);
+  if (mode === 'non_interactive' && !prompt) throw new Error('prompt is required for a non_interactive session');
+  const result = await appRequest(page, {
+    method: 'POST',
+    path: '/api/v1/terminal_sessions',
+    json: {
+      terminal_session: {
+        project_id: projectId,
+        session_type: sessionType,
+        agent_type: agentType,
+        mode,
+        initial_prompt: prompt,
+      },
+    },
+    baseUrl,
+  });
+  if (result.status !== 201 || !result.json) {
+    throw new Error(`startSession: POST /api/v1/terminal_sessions answered ${result.status}: ${aixleApiError(result)}`);
+  }
+  const session = result.json;
+  return {
+    id: session.id,
+    state: session.state,
+    routeToken: aixleSessionField(session, 'routeToken', 'route_token'),
+  };
+}
+
+/**
+ * Poll GET /api/v1/terminal_sessions/:id every `intervalMs` until the state is
+ * one of `until`, or terminal (finished, failed, cancelled), or `timeoutMs` has
+ * passed. Returns { id, final, timedOut, timeline }: `final` is the last state
+ * seen, and `timeline` has one row { t, state, containerId, errorMessage } per
+ * change of any of those three fields (`t` is an ISO time). On timeout it
+ * returns with timedOut: true; call it again to keep waiting. `timeoutMs` is
+ * capped at 10 minutes. Throws when the first poll fails (404 for a session
+ * that is missing or not yours, …). A later failed poll (non-200 or no
+ * response) is retried up to twice, `intervalMs` apart and within the budget;
+ * if it still fails, returns { id, final, timedOut: false, error, timeline }
+ * with the last state seen and the timeline so far, so it is not lost.
+ */
+async function waitForSession(
+  page,
+  { id, until = ['ready', 'finished', 'failed'], timeoutMs = 240000, intervalMs = 8000, baseUrl } = {},
+) {
+  const path = aixleSessionPath(id);
+  const targets = Array.isArray(until) ? until : [until];
+  const budget = Math.min(Math.max(Number(timeoutMs) || 0, 0), AIXLE_SESSION_MAX_WAIT_MS);
+  const interval = Math.max(Number(intervalMs) || 0, 1000);
+  const started = Date.now();
+  const timeline = [];
+  let last = null;
+  let failures = 0;
+
+  for (;;) {
+    let result = null;
+    let error = null;
+    try {
+      result = await appRequest(page, { path, baseUrl });
+      if (result.status !== 200 || !result.json) {
+        error = `waitForSession: GET ${path} answered ${result.status}: ${aixleApiError(result)}`;
+      }
+    } catch (failure) {
+      error = `waitForSession: ${failure.message}`;
+    }
+    if (error) {
+      // Nothing gathered yet: the session is missing, not ours, or unreachable.
+      if (!last) throw new Error(error);
+      failures += 1;
+      const remaining = budget - (Date.now() - started);
+      if (failures > AIXLE_SESSION_POLL_RETRIES || remaining <= 0) {
+        return { id, final: last.state, timedOut: false, error, timeline };
+      }
+      await page.waitForTimeout(Math.min(interval, remaining));
+      continue;
+    }
+    failures = 0;
+    const row = {
+      t: new Date().toISOString(),
+      state: result.json.state,
+      containerId: aixleSessionField(result.json, 'containerId', 'container_id'),
+      errorMessage: aixleSessionField(result.json, 'errorMessage', 'error_message'),
+    };
+    if (
+      !last ||
+      last.state !== row.state ||
+      last.containerId !== row.containerId ||
+      last.errorMessage !== row.errorMessage
+    ) {
+      timeline.push(row);
+    }
+    last = row;
+
+    if (targets.includes(row.state) || AIXLE_SESSION_TERMINAL_STATES.includes(row.state)) {
+      return { id, final: row.state, timedOut: false, timeline };
+    }
+    const remaining = budget - (Date.now() - started);
+    if (remaining <= 0) return { id, final: row.state, timedOut: true, timeline };
+    await page.waitForTimeout(Math.min(interval, remaining));
+  }
+}
+
+/* eslint-disable no-control-regex -- these patterns match terminal control characters on purpose. */
+// Cursor forward (ESC [ n C): a TUI writes it instead of spaces.
+const AIXLE_ANSI_FORWARD = /\x1b\[(\d*)C/g;
+// Cursor to column (ESC [ n G): a jump within the row, so it separates words.
+const AIXLE_ANSI_COLUMN = /\x1b\[\d*G/g;
+// Cursor up/down/next/previous line, to row, or to a position: the text after
+// it is on another row of the screen.
+const AIXLE_ANSI_ROW = /\x1b\[[\d;]*[ABEFHfd]/g;
+// Everything else: CSI (ESC [ … final byte), OSC (ESC ] … BEL or ESC \), DCS
+// and other string sequences (ESC P/X/^/_ … ESC \), charset selection
+// (ESC ( B …), other two-byte escapes, and the 8-bit CSI form.
+const AIXLE_ANSI =
+  /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[PX^_][^\x1b]*\x1b\\|\x1b[()*+][0-9A-Za-z]|\x1b[@-Z\\-_]|\x9b[0-?]*[ -/]*[@-~]/g;
+const AIXLE_CONTROL = /[\x00-\x08\x0b-\x1f\x7f]/g;
+/* eslint-enable no-control-regex */
+
+// A raw PTY capture as display lines. Cursor-forward becomes spaces, a column
+// jump one space, and any move to another row, a carriage return or a newline
+// ends the line. What remains of the escapes and control characters is removed,
+// and blank lines are dropped. A TUI that redraws its screen repeats lines.
+function aixleLogLines(raw) {
+  return String(raw)
+    .replace(AIXLE_ANSI_FORWARD, (_, count) => ' '.repeat(Math.min(Number(count) || 1, 200)))
+    .replace(AIXLE_ANSI_COLUMN, ' ')
+    .replace(AIXLE_ANSI_ROW, '\n')
+    .replace(AIXLE_ANSI, '')
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(AIXLE_CONTROL, '').trimEnd())
+    .filter((line) => line.trim() !== '');
+}
+
+/**
+ * Read GET /api/v1/terminal_sessions/:id/terminal_log, strip ANSI codes and
+ * return { bytes, truncated, totalLines, lines }: the last `tailLines` lines,
+ * or with `grep` (a RegExp, or a string matched as a plain substring) the last
+ * `tailLines` lines that match. Lines are display lines of the raw terminal
+ * stream (see aixleLogLines): blank ones are dropped, and a TUI's redraws
+ * repeat some. `totalLines` counts them. `bytes` is the size of the log as served (at
+ * most the last 2 MB); `truncated` is true when the server cut it
+ * (X-Log-Truncated). The log exists only once the session is finished or
+ * failed: any other state answers 404, and so throws.
+ */
+async function sessionLog(page, { id, tailLines = 200, grep, baseUrl } = {}) {
+  const base = aixleRequestBase(page, { baseUrl });
+  const path = aixleSessionPath(id, '/terminal_log');
+  let response;
+  try {
+    response = await page.request.get(base + path, {
+      headers: { Accept: 'text/plain' },
+      failOnStatusCode: false,
+      timeout: 30000,
+    });
+  } catch (error) {
+    throw new Error(`GET ${path} failed: no response (${error && error.name})`);
+  }
+  if (response.status() !== 200) {
+    const hint = response.status() === 404 ? ' (the log exists only for a finished or failed session)' : '';
+    throw new Error(`sessionLog: GET ${path} answered ${response.status()}${hint}`);
+  }
+  const bytes = (await response.body()).length;
+  const all = aixleLogLines(await response.text());
+
+  let selected = all;
+  if (grep !== undefined && grep !== null && grep !== '') {
+    const test =
+      grep instanceof RegExp
+        ? (line) => {
+            grep.lastIndex = 0;
+            return grep.test(line);
+          }
+        : (line) => line.includes(String(grep));
+    selected = all.filter(test);
+  }
+  const limit = Math.max(Number(tailLines) || 0, 0);
+  return {
+    bytes,
+    truncated: response.headers()['x-log-truncated'] === 'true',
+    totalLines: all.length,
+    lines: limit ? selected.slice(-limit) : [],
+  };
+}
+
+/**
+ * POST /api/v1/terminal_sessions/:id/finish. Returns { status, state, error }.
+ * `id` may be the numeric id or the route token: `finish` looks sessions up by
+ * numeric id only, so a route token is first resolved with GET show (a hex
+ * token must never reach `finish`, where Rails could cast its leading digits to
+ * another session's id).
+ * On 200 the session is usually `finishing`, not yet `finished`: follow with
+ * waitForSession({ id, until: ['finished'] }). A session that cannot be finished
+ * (already finished, say) answers 400 `Cannot finish session in state: …`;
+ * then `state` is read with GET show and `error` carries the message. Any
+ * other status (404, 403, 422, 5xx) throws, so a failed finish is never
+ * mistaken for a result. DELETE is no substitute: it refuses an active session
+ * with 400.
+ */
+async function finishSession(page, { id, baseUrl } = {}) {
+  aixleId('id', id);
+  let numericId = String(id);
+  if (!/^\d+$/.test(numericId)) {
+    const show = await appRequest(page, { path: aixleSessionPath(numericId), baseUrl });
+    if (show.status !== 200 || !show.json || !/^\d+$/.test(String(show.json.id))) {
+      throw new Error(
+        `finishSession: could not resolve route token to a session id: GET show answered ${show.status}: ${aixleApiError(show)}`,
+      );
+    }
+    numericId = String(show.json.id);
+  }
+
+  const path = aixleSessionPath(numericId, '/finish');
+  const result = await appRequest(page, { method: 'POST', path, json: {}, baseUrl });
+  if (result.status === 200 && result.json) return { status: 200, state: result.json.state, error: null };
+  if (result.status !== 400) {
+    throw new Error(`finishSession: POST ${path} answered ${result.status}: ${aixleApiError(result)}`);
+  }
+
+  let state = null;
+  const show = await appRequest(page, { path: aixleSessionPath(numericId), baseUrl }).catch(() => null);
+  if (show && show.status === 200 && show.json) state = show.json.state;
+  return { status: 400, state, error: aixleApiError(result) };
 }

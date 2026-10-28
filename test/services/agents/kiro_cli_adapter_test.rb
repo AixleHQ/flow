@@ -130,6 +130,43 @@ module Agents
       assert_equal "/home/kiro/.kiro/skills", @adapter.skills_install_path
     end
 
+    # The pane only says `[tool] status: Failed: Read File`; why it failed is in the
+    # agent server's transcript and its own log, so both are collected with the session.
+    test "session_log_paths collects the transcripts and the agent server's logs" do
+      assert_equal [ "/var/log/context.log", "/var/log/mitm/http.log",
+                     "/home/kiro/.kiro/sessions/*/sess_*/messages.jsonl",
+                     "/home/kiro/.kiro/sessions/*/sess_*/sub-executions/*.jsonl",
+                     "/home/kiro/.kiro/logs/*/*.log" ], @adapter.session_log_paths
+    end
+
+    # Kiro writes them itself, so the container's write-time filters never scrub them.
+    test "unfiltered_log_paths are the logs Kiro writes itself" do
+      assert_equal [ "/home/kiro/.kiro/sessions/*/sess_*/messages.jsonl",
+                     "/home/kiro/.kiro/sessions/*/sess_*/sub-executions/*.jsonl",
+                     "/home/kiro/.kiro/logs/*/*.log" ], @adapter.unfiltered_log_paths
+    end
+
+    # Every Kiro file has the same basename; the session id and start time sit in the
+    # directory, so they go into the stored name.
+    test "session_log_name folds Kiro's session id and log timestamp into the name" do
+      assert_equal "sess_3fdd2276.messages.jsonl",
+                   @adapter.session_log_name("/home/kiro/.kiro/sessions/c52ddf65/sess_3fdd2276/messages.jsonl")
+      assert_equal "sess_3fdd2276.sub-0b7e5c1a-9f2d.jsonl",
+                   @adapter.session_log_name(
+                     "/home/kiro/.kiro/sessions/c52ddf65/sess_3fdd2276/sub-executions/0b7e5c1a-9f2d.jsonl"
+                   )
+      assert_equal "20261028T135607984-kiro.log",
+                   @adapter.session_log_name("/home/kiro/.kiro/logs/20261028T135607984/kiro.log")
+      assert_equal "20261028T135607984-mcp.log",
+                   @adapter.session_log_name("/home/kiro/.kiro/logs/20261028T135607984/mcp.log")
+    end
+
+    # artifacts["logs/http.log"] is how usage is parsed, so the other logs keep their basename.
+    test "session_log_name keeps the basename for the logs the container writes" do
+      assert_equal "http.log", @adapter.session_log_name("/var/log/mitm/http.log")
+      assert_equal "context.log", @adapter.session_log_name("/var/log/context.log")
+    end
+
     # == Auth completion ==
 
     # The database IS the credential, but only once it holds a token. Persisting one

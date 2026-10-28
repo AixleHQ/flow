@@ -115,6 +115,19 @@ describe('AppSidebar', () => {
     expect(screen.getByText('Aurora Platform')).toBeInTheDocument();
   });
 
+  it('lists the project Runners page only while externalRunners is on', () => {
+    const { unmount } = renderAuthedPage(
+      <AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />,
+    );
+    expect(screen.queryByRole('link', { name: 'Runners' })).not.toBeInTheDocument();
+    unmount();
+
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />, {
+      props: { features: { externalRunners: true } },
+    });
+    expect(screen.getByRole('link', { name: 'Runners' })).toHaveAttribute('href', '/company/projects/7/runners');
+  });
+
   // The switcher's project rows are real Inertia <Link>s; left alone, a click would trigger
   // the real Router.visit (which has no live page context under jsdom and throws). A
   // capture-phase preventDefault makes Inertia's shouldIntercept() bail out before visiting,
@@ -473,7 +486,7 @@ function buildUser() {
       {
         id: 1,
         role: 'admin' as const,
-        state: 'active',
+        state: 'active' as const,
         company: {
           id: 1,
           name: 'Vega Corp',

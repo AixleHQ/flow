@@ -448,6 +448,18 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
+  test "destroy keeps a Coder integration a runner provisions through, and says why" do
+    coder = create(:integration, :coder, company: @company, connected_by: @user, project: @project)
+    create(:runner, :coder, company: @company, created_by: @user, project: @project, integration: coder)
+
+    delete company_project_integration_path(@project, coder)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/runners/, flash[:alert])
+    assert_nil flash[:notice]
+    assert Integration.exists?(coder.id)
+  end
+
   test "create coder integration happy path persists project-scoped record" do
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
       status: 200,

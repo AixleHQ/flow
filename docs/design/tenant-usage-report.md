@@ -38,6 +38,7 @@ Decisions taken on 2026-10-19:
 - **Busy hours** (occupied). For each worker, the overlap of `admitted_at … (released_at or the end of the hour)` with the hour. A slot is held until release is confirmed, so a container still being torn down counts.
 - **Peak workers.** The most workers held at one moment in the hour. A release and an admission at the same instant are a hand-over, not two workers.
 - **Utilization.** Busy ÷ worker hours. It has no value for a tenant with no worker hours.
+- **Unlimited time on the page.** The ledger offers 0 while a company has no limit, which would leave an unlimited tenant with no worker hours and no utilization. The page counts that time's busy hours as its worker hours instead, so it shows as fully used. The stored rows keep the ledger's number; the page splits a day the limit was set or cleared on by `unlimited_seconds ÷ (hours × 3600)`, so busy time on such a day is attributed in proportion rather than by the hour.
 - **Wait.** `admitted_at − created_at` for each admission granted in the hour. A session still waiting is counted as queued only.
 - **Outcome.** Sessions of type `agent_session` or `workflow_step` (`AnalyticsPeriod::USAGE_SESSION_TYPES`), counted in the hour of `finished_at`: succeeded is `finished`, failed is `failed`. A `cancelled` session is neither.
 - **Periods.** Hours are UTC. Weeks start on Monday, as in the mock-up. Because the stored grain is the hour, moving the report to another time zone later only shifts the day boundary; nothing is re-measured.

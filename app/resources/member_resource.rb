@@ -5,7 +5,8 @@
 # membership itself. `id` is the USER id — member routes are keyed by user_id.
 class MemberResource < ApplicationResource
   # No `Member` model exists — resolve DB column types (invited_at/accepted_at)
-  # from CompanyMembership so Typelizer doesn't emit `unknown`.
+  # and the role/state/position values from CompanyMembership so Typelizer
+  # doesn't emit `unknown` or a bare `string`.
   typelize_from CompanyMembership
 
   attributes :invited_at, :accepted_at
@@ -26,17 +27,14 @@ class MemberResource < ApplicationResource
     membership.user.name
   end
 
-  typelize CompanyMembership.role.values
   attribute :role do |membership|
     membership.role.to_s
   end
 
-  typelize :string
   attribute :state do |membership|
     membership.state.to_s
   end
 
-  typelize "string | null"
   attribute :position do |membership|
     # Per company: the same person can hold a different position in each.
     membership.position&.to_s

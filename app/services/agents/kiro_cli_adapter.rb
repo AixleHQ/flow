@@ -764,7 +764,56 @@ module Agents
     end
 
     def session_log_paths
-      super + %w[/var/log/mitm/http.log]
+      super + %w[/var/log/mitm/http.log] + agent_log_paths
+    end
+
+    # Kiro writes these files itself, so the container's redaction filters never see them.
+    def unfiltered_log_paths
+      agent_log_paths
+    end
+
+    # Kiro keeps the ids in directory names and gives every file the same basename, so
+    # the bare basename would store every transcript as `messages.jsonl` and every server
+    # log as `kiro.log` — rows that neither tell sessions apart nor match the
+    # `conversationId` (`sess_<id>`) the server log carries. Fold the id into the name:
+    #
+    #   sessions/<hash>/sess_<id>/messages.jsonl              → sess_<id>.messages.jsonl
+    #   sessions/<hash>/sess_<id>/sub-executions/<uuid>.jsonl → sess_<id>.sub-<uuid>.jsonl
+    #   logs/<start timestamp>/kiro.log                       → <start timestamp>-kiro.log
+    def session_log_name(path)
+      relative = path.delete_prefix("#{home_dir}/.kiro/")
+
+      case relative
+      when %r{\Asessions/[^/]+/(sess_[^/]+)/messages\.jsonl\z}
+        "#{Regexp.last_match(1)}.messages.jsonl"
+      when %r{\Asessions/[^/]+/(sess_[^/]+)/sub-executions/([^/]+)\.jsonl\z}
+        "#{Regexp.last_match(1)}.sub-#{Regexp.last_match(2)}.jsonl"
+      when %r{\Alogs/([^/]+)/([^/]+\.log)\z}
+        "#{Regexp.last_match(1)}-#{Regexp.last_match(2)}"
+      else
+        super
+      end
+    end
+
+    # What a failed tool call leaves behind. The pane says only `[tool] status: Failed:
+    # Read File` (`--no-interactive`) or redraws it as ANSI (the TUI); the agent server
+    # keeps the reason in places of its own, checked on CLI 2.32.0 (session 44788,
+    # 2026-10-28) and 2.34.0 (TUI):
+    #
+    #   * ~/.kiro/sessions/<workspace hash>/sess_<id>/messages.jsonl — the transcript:
+    #     every `tool_call` with its args and every `tool_result` with `success` and the
+    #     tool's own output, e.g. `"content":"Caught error reading: ENOENT: …",
+    #     "success":false`;
+    #   * ~/.kiro/sessions/<workspace hash>/sess_<id>/sub-executions/<uuid>.jsonl — one
+    #     transcript per sub-agent run, with that sub-agent's own `tool_call`s and
+    #     `tool_result`s. The parent's messages.jsonl holds only the delegation, and the
+    #     server log records no `error` line for a sub-agent's failed tool;
+    #   * ~/.kiro/logs/<start timestamp>/*.log — the agent server's JSON log (`kiro.log`,
+    #     level `error` per failed tool, tagged with the session id) and its MCP log.
+    def agent_log_paths
+      [ "#{home_dir}/.kiro/sessions/*/sess_*/messages.jsonl",
+        "#{home_dir}/.kiro/sessions/*/sess_*/sub-executions/*.jsonl",
+        "#{home_dir}/.kiro/logs/*/*.log" ]
     end
 
     private
