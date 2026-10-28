@@ -20,7 +20,12 @@ module InternalTools
         properties: {
           task_id: {
             type: "integer",
-            description: "Board task ID. Optional when the workflow run is already attached to a board task."
+            description: TASK_ID_PARAM
+          },
+          task_number: {
+            type: "integer",
+            description: "#{TASK_NUMBER_PARAM} Both are optional when the workflow run is already attached " \
+                         "to a board task."
           },
           status: {
             type: "string",
@@ -38,16 +43,13 @@ module InternalTools
       board = BoardContextResolver.resolve(session)
       return error("No board available in current context") unless board
 
-      task_id = params[:task_id] || workflow_run&.board_task_id
-      return error("task_id is required") unless task_id
-
-      task = board.board_tasks.find_by(id: task_id)
-      return error("Task not found on this board") unless task
+      task = find_task(board.board_tasks, default_id: workflow_run&.board_task_id)
+      return error(task_not_found) unless task
 
       status = (params[:status].presence || "all").to_s
       return error("Unknown status '#{status}' — use one of: #{STATUSES.join(', ')}, all") unless valid_status?(status)
 
-      success({ task_id: task.id, status: status, gates: rows(task, status) }.to_json)
+      success({ task_id: task.id, task_number: task.number, status: status, gates: rows(task, status) }.to_json)
     end
 
     private

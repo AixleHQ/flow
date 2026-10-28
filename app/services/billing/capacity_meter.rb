@@ -38,6 +38,7 @@ module Billing
     # Records the hour that has just closed, then sends everything still unsent
     # inside the replay window — including the hour just recorded.
     def call
+      CompanyBillingStateChange.reconcile!(now: now)
       measure!(now.beginning_of_hour - 1.hour)
       # After the hour is recorded and before anything is sent: the hour that
       # spends the last of a company's free allowance is the hour that stops it,

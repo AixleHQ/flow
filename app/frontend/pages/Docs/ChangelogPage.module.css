@@ -28,7 +28,7 @@
 
 .title {
   margin: 0 0 14px;
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-size: 40px;
   font-weight: 700;
   line-height: 1.1;
@@ -97,7 +97,7 @@
 
 .version {
   margin: 0;
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-size: 24px;
   font-weight: 700;
   line-height: 1.2;

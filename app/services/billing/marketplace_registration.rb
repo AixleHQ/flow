@@ -27,7 +27,10 @@ module Billing
     private
 
     def record(customer, offer_type)
-      license = MarketplaceLicense.find_or_initialize_by(license_arn: customer.license_arn)
+      license = MarketplaceLicense.find_by(license_arn: customer.license_arn) ||
+                renewed_license_for(customer) ||
+                MarketplaceLicense.new
+      license.license_arn = customer.license_arn
       license.customer_aws_account_id = customer.aws_account_id
       license.product_code = customer.product_code
       license.agreement_id = customer.agreement_id if customer.agreement_id.present?
@@ -41,6 +44,17 @@ module Billing
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
       # Two tabs, one buyer. A failure with no row behind it is a real one.
       MarketplaceLicense.find_by(license_arn: customer.license_arn) || raise(e)
+    end
+
+    # A renewal or replacement issues a new licence under a new agreement, and
+    # the row holding the agreement it replaced has already been moved to the
+    # new one by the event that announced it (MarketplaceEvents#store). A
+    # second row for the same subscription could never be bound beside the
+    # first; the first takes the licence instead.
+    def renewed_license_for(customer)
+      return nil if customer.agreement_id.blank?
+
+      MarketplaceLicense.live.find_by(agreement_id: customer.agreement_id)
     end
 
     # The agreement is already live by the time the buyer reaches this page, but

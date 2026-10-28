@@ -26,4 +26,18 @@ class Web::Company::Projects::OverviewControllerTest < ActionDispatch::Integrati
       props[:summary][:sessionsLaunched] == 3 && props[:summary][:sessionsRunning] == 2
     end
   end
+
+  test "summary reports tokens and session time, not what the tokens cost" do
+    started = 1.hour.ago
+    create(:terminal_session, :agent_session, project: @project, user: @user, state: "finished",
+                                              started_at: started, finished_at: started + 20.minutes,
+                                              total_tokens: 500, cost_cents: 999)
+
+    get company_project_overview_index_path(@project)
+
+    assert_inertia_props do |props|
+      summary = props[:summary]
+      summary[:totalTokens] == 500 && summary[:sessionSeconds] == 20.minutes.to_i && !summary.key?(:totalSpendCents)
+    end
+  end
 end

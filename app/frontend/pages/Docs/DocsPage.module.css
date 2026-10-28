@@ -7,7 +7,7 @@
   overflow: hidden;
   background: var(--app-bg-default);
   color: var(--app-text-primary);
-  font-family: 'Figtree', sans-serif;
+  font-family: var(--app-font-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -57,23 +57,10 @@
 .navLogo {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   margin-right: 24px;
   cursor: pointer;
   text-decoration: none;
 }
-
-.navBrandFlow {
-  font-family: 'Hanken Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 17px;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: var(--app-text-primary);
-  transition: color 0.15s;
-}
-
-.navLogo:hover .navBrandFlow { color: var(--app-primary-strong); }
 
 .navLinks {
   display: flex;
@@ -451,7 +438,7 @@
 .mdH1 {
   font-size: 30px;
   font-weight: 700;
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   color: var(--app-text-primary);
   line-height: 1.2;
   letter-spacing: -0.02em;
@@ -461,7 +448,7 @@
 .mdH2 {
   font-size: 17px;
   font-weight: 600;
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   color: var(--app-text-primary);
   letter-spacing: -0.01em;
   padding-top: 22px;
@@ -473,7 +460,7 @@
 .mdH3 {
   font-size: 15px;
   font-weight: 600;
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   color: var(--app-text-primary);
   margin-top: 22px;
   margin-bottom: 10px;
@@ -667,7 +654,7 @@
   background: transparent;
   transition: color 0.12s, background 0.12s;
   user-select: none;
-  font-family: 'Figtree', sans-serif;
+  font-family: var(--app-font-body);
 }
 
 .copyButton:hover {
@@ -950,7 +937,7 @@
   background: none;
   border: none;
   outline: none;
-  font-family: 'Figtree', sans-serif;
+  font-family: var(--app-font-body);
   font-size: 15px;
   color: var(--app-text-primary);
   padding: 0;

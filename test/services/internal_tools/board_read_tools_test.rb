@@ -101,6 +101,16 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal [ "Test task" ], data["tasks"].map { |t| t["title"] }
   end
 
+  test "board_list_tasks searches by title or by the #N people see on the board" do
+    login = create(:board_task, board: @board, board_column: @col2, title: "Fix login")
+
+    by_number = list_tasks(query: "##{login.number}")
+    by_title = list_tasks(query: "test")
+
+    assert_equal [ [ login.id, login.number ] ], by_number["tasks"].map { |t| t.values_at("id", "number") }
+    assert_equal [ @task.id ], by_title["tasks"].map { |t| t["id"] }
+  end
+
   test "board_list_tasks advertises the epic filter to agents" do
     properties = InternalTools::BoardListTasks.tool_definition.input_schema["properties"]
 

@@ -9,7 +9,8 @@ module PersonalTools
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
       param :archived, type: :boolean,
             description: "true archives (the default); false unarchives.", default: true
     end
@@ -17,15 +18,15 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project.board, :update?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       # Through TaskService, so the board activity feed records the change the
       # same way the UI's archive action does.
       archive? ? TaskService.archive(task: task, actor: user) : TaskService.unarchive(task: task, actor: user)
       return error("Failed to update task: #{task.errors.full_messages.to_sentence}") if task.errors.any?
 
-      success(id: task.id, title: task.title, archived: task.archived?, archived_at: task.archived_at)
+      success(id: task.id, number: task.number, title: task.title, archived: task.archived?, archived_at: task.archived_at)
     end
 
     private

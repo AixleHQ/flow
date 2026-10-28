@@ -21,7 +21,8 @@ module PersonalTools
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
       param :filename, type: :string, required: true,
                        description: "The file's name, extension included. It names the attachment and " \
                                     "decides its content type."
@@ -42,8 +43,8 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project.board, :create?, policy: Web::Company::Projects::Board::Task::AssetsPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       filename = params[:filename].to_s.strip
       return error("filename is required") if filename.empty?
@@ -51,7 +52,8 @@ module PersonalTools
       upload = Uploads::CacheUpload.mint(filename: filename)
       success(upload_id: self.class.issue(upload: upload, task: task, user: user, filename: filename),
               upload_url: upload.presigned_put_url || local_upload_url(upload),
-              method: "PUT", expires_in_seconds: EXPIRES_IN.to_i, task_id: task.id, filename: filename)
+              method: "PUT", expires_in_seconds: EXPIRES_IN.to_i, task_id: task.id, task_number: task.number,
+              filename: filename)
     end
 
     private

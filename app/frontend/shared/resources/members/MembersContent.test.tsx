@@ -17,6 +17,7 @@ const makeUser = (over: Partial<Member> = {}): Member => ({
   position: null,
   invitedAt: null,
   acceptedAt: null,
+  invitationExpired: false,
   createdAt: '2024-01-01T00:00:00Z',
   invitedBy: null,
   ...over,
@@ -69,25 +70,44 @@ describe('MembersContent', () => {
     expect(screen.getByText('1 member')).toBeInTheDocument();
   });
 
-  it('defaults the status filter to Active, hiding suspended members until "All Statuses" is picked', async () => {
+  it('defaults the status filter to Active & Pending, hiding suspended members until "All Statuses" is picked', async () => {
     renderPage(
       <MembersContent
         {...baseProps([
           makeUser({ id: 1, name: 'Ada Lovelace', state: 'active' }),
           makeUser({ id: 2, name: 'Grace Hopper', state: 'suspended' }),
+          makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' }),
         ])}
       />,
     );
 
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('Ivy Invitee')).toBeInTheDocument();
     expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument();
-    expect(screen.getByText('1 member')).toBeInTheDocument();
+    expect(screen.getByText('2 members')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
     await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
 
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
-    expect(screen.getByText('2 members')).toBeInTheDocument();
+    expect(screen.getByText('3 members')).toBeInTheDocument();
+  });
+
+  it('the Pending filter lists only invitations', async () => {
+    renderPage(
+      <MembersContent
+        {...baseProps([
+          makeUser({ id: 1, name: 'Ada Lovelace', state: 'active' }),
+          makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' }),
+        ])}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Pending' }));
+
+    expect(screen.getByText('Ivy Invitee')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
   it('the Invite Member button opens the invite drawer', async () => {
@@ -220,23 +240,38 @@ describe('MembersContent', () => {
     expect(screen.queryByRole('menuitem', { name: /make employee/i })).not.toBeInTheDocument();
   });
 
-  it('a pending invite shows Invited status and a Resend Invitation action', async () => {
+  it('a pending invite shows a Pending badge and resends from the row', async () => {
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' })])} />);
+
+    const row = screen.getByText('Ivy Invitee').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Pending')).toBeInTheDocument();
+
+    await userEvent.click(within(row).getByRole('button', { name: 'Resend invitation to Ivy Invitee' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/members/3/resend',
+      {},
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('an invite past its link lifetime reads Expired and can still be resent', () => {
     renderAuthedPage(
       <MembersContent
-        {...baseProps([makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' })])}
-        // The status filter defaults to Active — switch to All Statuses to see the invite.
+        {...baseProps([makeUser({ id: 4, name: 'Old Invitee', state: 'invited', invitationExpired: true })])}
       />,
     );
 
-    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
-    await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
+    const row = screen.getByText('Old Invitee').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Expired')).toBeInTheDocument();
+    expect(within(row).queryByText('Pending')).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Resend invitation to Old Invitee' })).toBeInTheDocument();
+  });
 
-    const row = screen.getByText('Ivy Invitee').closest('tr') as HTMLElement;
-    expect(within(row).getByText('Invited')).toBeInTheDocument();
+  it('offers no Resend on an active member', () => {
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 2, name: 'Grace Hopper' })])} />);
 
-    await userEvent.click(within(row).getByRole('button'));
-
-    expect(await screen.findByRole('menuitem', { name: /resend invitation/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resend invitation/i })).not.toBeInTheDocument();
   });
 
   it('renders a non-empty badge for a viewer member', () => {

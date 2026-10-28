@@ -95,7 +95,7 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       .each_with_object({}) do |(breakdown, receipts), map|
         arns.each do |arn|
           id = receipts[arn]
-          next if id.blank?
+          next if id.blank? || id == Billing::Meter::AwsMarketplaceSaas::DISPUTED
 
           map[id] = (BigDecimal(breakdown[current_company.id.to_s].to_s.presence || "0") / 60).floor
         end

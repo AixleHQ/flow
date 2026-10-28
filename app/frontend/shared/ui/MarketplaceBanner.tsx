@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import { Button } from '@mantine/core';
+import { IconAlertTriangle, IconHourglassHigh } from '@tabler/icons-react';
 
 // The banner slot above the content is one thing, so it keeps one look. The
 // content differs entirely: there is no allowance to show and no card to add.
@@ -25,9 +26,11 @@ export const MarketplaceBanner = () => {
   if (!marketplace) return null;
 
   const waiting = marketplace.status === 'awaiting_subscription';
+  const Icon = waiting ? IconHourglassHigh : IconAlertTriangle;
 
   return (
     <div className={`${classes.root} ${classes.blocked}`} role="status">
+      <Icon size={20} className={classes.icon} aria-hidden />
       <p className={classes.text}>
         {waiting ? (
           <>

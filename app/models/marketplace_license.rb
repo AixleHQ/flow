@@ -53,6 +53,9 @@ class MarketplaceLicense < ApplicationRecord
   # one that can still be billed, cancelled, or stand in the way of another.
   scope :live, -> { where.not(subscription_state: "ended") }
   scope :proposed_to, ->(company) { where(proposed_company: company, proposal_state: "pending") }
+  # Bound to nothing, and with a future to apply: `ending` is already closing,
+  # and a request to apply it would wait on a confirmation that cannot come.
+  scope :proposable, -> { where(company_id: nil, subscription_state: %w[pending active]) }
   # Somebody is being billed and has no way into the product. The first report of
   # that must not be theirs.
   scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
@@ -64,8 +67,8 @@ class MarketplaceLicense < ApplicationRecord
   def proposal_pending? = proposal_state == "pending"
 
   # A licence with nothing to apply has nothing to propose: one already bound
-  # belongs somewhere, and one AWS has finished accepts no usage.
-  def proposable? = !bound? && !ended?
+  # belongs somewhere, and one closing or closed accepts no usage.
+  def proposable? = !bound? && (pending? || active?)
 
   # `ending` counts: the hour AWS allows after an agreement closes is exactly
   # when the last usage has to go.

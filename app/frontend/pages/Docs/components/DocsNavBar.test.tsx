@@ -9,9 +9,7 @@ describe('DocsNavBar', () => {
   it('renders the brand logo and primary navigation links', () => {
     renderPage(<DocsNavBar active="docs" onMenuClick={vi.fn()} onSearchClick={vi.fn()} />);
 
-    // Logo text is split across an accent span; assert the link by its target.
-    const logo = screen.getByRole('link', { name: /aixle/i });
-    expect(logo).toHaveAttribute('href', '/docs');
+    expect(screen.getByRole('link', { name: 'Aixle Flow docs' })).toHaveAttribute('href', '/docs');
 
     expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('href', '/docs');
     expect(screen.getByRole('link', { name: 'API' })).toHaveAttribute('href', '/docs/api-guide');

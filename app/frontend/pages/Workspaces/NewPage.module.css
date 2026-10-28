@@ -35,7 +35,7 @@
 }
 
 .title {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: clamp(2rem, 4vw, 2.9rem);
   line-height: 1.05;
@@ -105,7 +105,7 @@
 }
 
 .formTitle {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: 1.5rem;
   letter-spacing: -0.02em;

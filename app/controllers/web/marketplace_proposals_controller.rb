@@ -22,6 +22,7 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
 
   EXPIRED = "That link has expired. Open the page AWS Marketplace sent you to and ask again."
   NO_SUBSCRIPTION = "We cannot find the subscription that request was for."
+  DECLINED = "The administrators of that workspace declined this request."
 
   def create
     return refuse(NO_SUBSCRIPTION) unless license&.proposable?
@@ -47,6 +48,10 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     # administrator a second time, which the rate limit on #create does not
     # cover.
     return redirect_to(new_workspace_path(email: answers[:email])) if already_asked?(proposed, answers[:email])
+    # Answered, and the link still inside its two hours: not an ask to raise
+    # again, which would put the same question back in front of the
+    # administrators who have just said no.
+    return refuse(DECLINED, email: answers[:email]) if already_declined?(proposed, answers[:email])
 
     raise_proposal(proposed, answers[:email])
   rescue Billing::MarketplaceLicenseProposal::Refused => e
@@ -59,6 +64,10 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
   # second proposal replaces a pending one.
   def already_asked?(proposed, email)
     proposed.proposal_pending? && proposed.proposed_by_email == email.to_s.downcase
+  end
+
+  def already_declined?(proposed, email)
+    proposed.proposal_state == "declined" && proposed.proposed_by_email == email.to_s.downcase
   end
 
   def raise_proposal(proposed, email)

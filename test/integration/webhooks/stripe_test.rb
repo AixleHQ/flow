@@ -150,6 +150,44 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
     assert @company.reload.billing_active?
   end
 
+  # The guards above read the licence, and the licence ends. What outlives it
+  # is the handover's record of the subscription it stopped: a late event
+  # about that subscription is about a card the workspace left, however long
+  # ago the Marketplace subscription that replaced it has itself ended.
+  def card_left_behind(subscription_id: "sub_old")
+    create(:marketplace_license, :ended, company: @company)
+    create(:billing_cancellation, company: @company, settlement_state: "failed", stripe_subscription_id: subscription_id)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "active", billing_block_reason: nil, stripe_subscription_id: nil)
+  end
+
+  test "a late failed invoice for the card a handover stopped does not stop the workspace, even once AWS has finished" do
+    card_left_behind
+
+    deliver("invoice.payment_failed", invoice_object(subscription: "sub_old"))
+    deliver("customer.subscription.deleted", subscription_object(id: "sub_old", status: "canceled"))
+
+    assert_response :ok
+    assert @company.reload.billing_active?
+  end
+
+  # The settlement job gave up before Stripe answered, so the card is still
+  # running. Adopting it would make the card the payer again behind the
+  # workspace's back; it is stopped instead, as the handover meant to.
+  test "the card a handover failed to stop is stopped when Stripe next mentions it, not adopted" do
+    card_left_behind
+    client = Billing::StripeClient.new
+    client.expects(:cancel_subscription).with(subscription_id: "sub_old", reason: nil, comment: nil)
+    Billing::StripeClient.stubs(:new).returns(client)
+
+    deliver("customer.subscription.updated", subscription_object(id: "sub_old", status: "active"))
+
+    assert_response :ok
+    @company.reload
+    assert_nil @company.stripe_subscription_id
+    assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.billing_provider
+  end
+
   # Leaving AWS Marketplace keeps the Stripe customer -- Checkout reuses it --
   # so the id never changes and the callback that watches it never fires. The
   # payer has to move here instead, or the workspace falls between the two

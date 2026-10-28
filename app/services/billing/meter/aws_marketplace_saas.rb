@@ -20,6 +20,10 @@ module Billing
       # that one is published and cannot move.
       DIMENSION = "worker_minute"
 
+      # The receipt of an hour AWS refused for having been told a different
+      # number: not a record id, and not minutes on anybody's bill.
+      DISPUTED = "duplicate"
+
       def initialize(client: ::Billing::MarketplaceSellerClient.new)
         super()
         @client = client
@@ -99,7 +103,7 @@ module Billing
       # own, so it is marked as the duplicate it is rather than left looking
       # like a record that went missing.
       def receipts(outcomes)
-        outcomes.to_h { |o| [ o.license_arn, o.metering_record_id || (o.duplicate? ? "duplicate" : nil) ] }
+        outcomes.to_h { |o| [ o.license_arn, o.metering_record_id || (o.duplicate? ? DISPUTED : nil) ] }
       end
 
       # `disputed` rather than `already`: a duplicate is an hour AWS refused

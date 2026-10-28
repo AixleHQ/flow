@@ -204,6 +204,32 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal @col2.id, @task.board_column_id
   end
 
+  test "board tools act on the task a #N names, not on a task whose id equals it" do
+    TemporalService.stubs(:start_workflow)
+    TemporalService.stubs(:send_signal)
+    TemporalService.stubs(:cancel_workflow)
+    other_board = create(:board, project: create(:project, company: @company, owner: @user))
+    create_list(:board_task, 2, board: other_board, board_column: create(:board_column, board: other_board))
+    second = create(:board_task, board: @board, board_column: @col1, title: "Second")
+
+    moved = InternalTools::BoardMoveTask.new(params: { task_number: 2, column_name: "QA" }, session: @session).execute
+    commented = InternalTools::BoardAddComment.new(params: { task_number: 2, body: "by number" }, session: @session).execute
+
+    assert_equal [ 0, 0 ], [ moved[:exit_code], commented[:exit_code] ]
+    assert_equal [ second.id, 2 ], JSON.parse(moved[:stdout]).values_at("id", "number")
+    assert_equal @col3.id, second.reload.board_column_id
+    assert_equal [ "by number" ], second.task_comments.pluck(:body)
+    assert_equal @col1.id, @task.reload.board_column_id
+  end
+
+  test "board tools point an unknown task id at task_number" do
+    result = InternalTools::BoardAddComment.new(params: { task_id: 99_999, body: "x" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/no task has id 99999.*task_number/, result[:stderr])
+    assert_empty TaskComment.where(body: "x")
+  end
+
   test "board_move_task returns error for unknown column" do
     result = InternalTools::BoardMoveTask.new(
       params: { task_id: @task.id, column_name: "Nonexistent" },

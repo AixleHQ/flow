@@ -280,4 +280,17 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert_equal [ both.id ], BoardTask.tags_contains(%w[api ui]).map(&:id)
     assert_equal [ both.id, one.id ].sort, BoardTask.tags_overlap(%w[api ui]).map(&:id).sort
   end
+
+  test "matching finds a task by words from its title or by its board number" do
+    login = BoardTask.create!(title: "Fix login redirect", board: @board, board_column: @col1)
+    second = BoardTask.create!(title: "Ship 100% of the release", board: @board, board_column: @col2)
+
+    assert_equal [ login.id ], @board.board_tasks.matching("LOGIN").map(&:id)
+    assert_equal [ second.id ], @board.board_tasks.matching("#2").map(&:id)
+    assert_equal [ second.id ], @board.board_tasks.matching(" 2 ").map(&:id)
+    # A digit term still matches titles, and LIKE wildcards in the query are literal.
+    assert_equal [ second.id ], @board.board_tasks.matching("100").map(&:id)
+    assert_equal [ second.id ], @board.board_tasks.matching("100%").map(&:id)
+    assert_empty @board.board_tasks.matching("_")
+  end
 end

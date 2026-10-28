@@ -37,6 +37,40 @@ class CompanyBillingStateChangeTest < ActiveSupport::TestCase
                  "happened would bill against it"
   end
 
+  # The callback is the only writer, so a write that went round it -- a pod
+  # on the previous release during a deploy, a console -- leaves the row and
+  # the log disagreeing until the next logged change. The meter brings the
+  # log back to the row every hour, dated then: when the row changed is what
+  # nobody knows.
+  test "reconciling logs a state the callback never saw, dated now" do
+    company = create(:company, billing_state: "active")
+    company.update_columns(billing_state: "blocked", billing_block_reason: "canceled")
+    now = Time.utc(2026, 10, 28, 11, 5)
+
+    assert_equal 1, CompanyBillingStateChange.reconcile!(now: now)
+
+    last = CompanyBillingStateChange.where(company_id: company.id).order(:id).last
+    assert_equal "blocked", last.billing_state
+    assert_equal now, last.occurred_at
+  end
+
+  test "reconciling leaves a log that agrees with its rows alone" do
+    create(:company, billing_state: "active")
+    create(:company, billing_state: "trialing")
+
+    assert_equal 0, CompanyBillingStateChange.reconcile!
+    assert_equal 2, CompanyBillingStateChange.count
+  end
+
+  test "reconciling gives a company the log does not know its first entry" do
+    company = create(:company)
+    CompanyBillingStateChange.where(company_id: company.id).delete_all
+
+    assert_equal 1, CompanyBillingStateChange.reconcile!
+    assert_equal [ company.billing_state ],
+                 CompanyBillingStateChange.where(company_id: company.id).map(&:billing_state)
+  end
+
   test "saving without touching the state logs nothing" do
     company = create(:company)
     company.update!(name: "Renamed")

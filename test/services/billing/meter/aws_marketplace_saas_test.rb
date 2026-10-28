@@ -191,6 +191,6 @@ class Billing::Meter::AwsMarketplaceSaasTest < ActiveSupport::TestCase
 
     @adapter.deliver(report(company.id => seconds))
 
-    assert_equal({ license.license_arn => "duplicate" }, CapacityMeterReport.sole.receipts)
+    assert_equal({ license.license_arn => Billing::Meter::AwsMarketplaceSaas::DISPUTED }, CapacityMeterReport.sole.receipts)
   end
 end

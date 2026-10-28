@@ -34,7 +34,7 @@ module Billing
       new(license).send(:propose!, company: company, email: email)
     end
 
-    def self.pending_for(company) = MarketplaceLicense.proposed_to(company).first
+    def self.pending_for(company) = MarketplaceLicense.proposed_to(company).proposable.first
 
     def initialize(license)
       @license = license

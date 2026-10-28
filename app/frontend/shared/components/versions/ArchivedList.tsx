@@ -1,5 +1,5 @@
-import { router } from '@inertiajs/react';
-import { ActionIcon, Box, Button, Checkbox, Group, Modal, Stack, Table, Text, Tooltip } from '@mantine/core';
+import { Link, router } from '@inertiajs/react';
+import { ActionIcon, Anchor, Box, Button, Checkbox, Group, Modal, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArchive, IconHistory, IconRestore } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -28,6 +28,7 @@ interface ArchivedListProps {
   /** e.g. "agents" — used in the empty state. */
   noun: string;
   canRestore: boolean;
+  hrefFor?: (item: ArchivedItem) => string;
 }
 
 async function restore(projectId: number, type: VersionableType, id: number, enableTriggerIds: number[] = []) {
@@ -47,7 +48,7 @@ async function disabledTriggerIds(projectId: number, id: number): Promise<number
 }
 
 /** The Archived tab of a list screen: archived entities with their history and a Restore button. */
-export function ArchivedList({ projectId, versionableType, items, noun, canRestore }: ArchivedListProps) {
+export function ArchivedList({ projectId, versionableType, items, noun, canRestore, hrefFor }: ArchivedListProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [historyFor, setHistoryFor] = useState<ArchivedItem | null>(null);
   const [triggerPrompt, setTriggerPrompt] = useState<{ item: ArchivedItem; triggerIds: number[] } | null>(null);
@@ -117,9 +118,15 @@ export function ArchivedList({ projectId, versionableType, items, noun, canResto
             {items.map((item) => (
               <Table.Tr key={item.id}>
                 <Table.Td>
-                  <Text fz={14} fw={500}>
-                    {item.name}
-                  </Text>
+                  {hrefFor ? (
+                    <Anchor component={Link} href={hrefFor(item)} fz={14} fw={500}>
+                      {item.name}
+                    </Anchor>
+                  ) : (
+                    <Text fz={14} fw={500}>
+                      {item.name}
+                    </Text>
+                  )}
                   {item.detail && (
                     <Text fz={12} c="dimmed" ff="JetBrains Mono, monospace">
                       {item.detail}

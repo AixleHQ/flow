@@ -137,12 +137,14 @@ class TerminalSession < ApplicationRecord
 
   # Start to finish. A live session counts up to now, as its list row does; one
   # that never started, or stopped without a finish time, has none.
+  DURATION_SECONDS_SQL = <<~SQL.squish
+    EXTRACT(EPOCH FROM (COALESCE(terminal_sessions.finished_at,
+      CASE WHEN terminal_sessions.state IN ('not_started', 'running', 'ready') THEN NOW() END)
+      - terminal_sessions.started_at))
+  SQL
+
   ransacker :duration_seconds, type: :integer do
-    Arel.sql(<<~SQL.squish)
-      EXTRACT(EPOCH FROM (COALESCE(terminal_sessions.finished_at,
-        CASE WHEN terminal_sessions.state IN ('not_started', 'running', 'ready') THEN NOW() END)
-        - terminal_sessions.started_at))
-    SQL
+    Arel.sql(DURATION_SECONDS_SQL)
   end
 
   # Scopes

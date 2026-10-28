@@ -98,6 +98,7 @@ class RecentActivityService
     when "task_updated"          then "Task \"#{task_title}\" updated"
     when "task_deleted"          then "Task \"#{task_title}\" deleted"
     when "comment_added"         then "Comment added on \"#{task_title}\""
+    when "comment_deleted"       then "Comment deleted on \"#{task_title}\""
     when "asset_attached"        then "Asset attached to \"#{task_title}\""
     when "workflow_started"      then "Workflow started for \"#{task_title}\""
     when "workflow_completed"    then "Workflow completed for \"#{task_title}\""

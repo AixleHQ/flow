@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildProject } from 'test/factories/project';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
@@ -77,6 +77,26 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zzz');
 
     expect(await screen.findByText('No workflows match your search')).toBeInTheDocument();
+  });
+
+  describe('archived workflows', () => {
+    afterEach(() => window.history.pushState({}, '', '/'));
+
+    it('opens on the archived list the builder links back to, each name leading to its read-only builder', () => {
+      window.history.pushState({}, '', '/company/projects/7/workflows?view=archived');
+      renderAuthedPage(<WorkflowsPage />, {
+        props: {
+          ...baseProps([workflow()]),
+          archivedWorkflows: [{ id: 5, name: 'Old pipeline', archivedAt: '2026-10-23T14:33:48Z' }],
+        },
+      });
+
+      expect(screen.queryByText('Nightly Build')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Old pipeline' })).toHaveAttribute(
+        'href',
+        '/company/projects/7/workflows/5/builder',
+      );
+    });
   });
 
   it('navigates to the builder when Configure is clicked on a workflow card', async () => {

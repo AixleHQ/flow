@@ -159,7 +159,7 @@ module PersonalTools
       result = execute(task_id: other_task.id)
 
       assert_equal 1, result[:exit_code]
-      assert_match(/not found in this project/, result[:stderr])
+      assert_match(/Task not found on this board/, result[:stderr])
     end
 
     test "a read-only member cannot trigger" do

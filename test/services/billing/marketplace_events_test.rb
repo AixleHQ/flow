@@ -197,6 +197,7 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
 
     assert_equal 1, @events.apply_pending
     assert_equal "agmt-2", license.reload.agreement_id
+    assert_equal "agmt-1", license.previous_agreement_id, "kept: its licence can still be deprovisioned after the move"
     assert license.active?
   end
 
@@ -210,6 +211,147 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert_equal 0, @events.apply_pending, "it names agmt-1, which nothing holds any more"
     assert license.reload.active?
     assert company.reload.billing_active?
+  end
+
+  # Under Concurrent Agreements the new agreement comes with a licence of its
+  # own. The row has to move to it, or the meter goes on naming a licence AWS
+  # has finished with. A licence event is the first thing that carries both.
+  test "the licence a renewal issued takes over the row of the one it replaced" do
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-2",
+                                                    previous_agreement_id: "agmt-1", company: create(:company))
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+               detail: { "license" => { "arn" => "arn:lic:2" }, "agreement" => { "id" => "agmt-2" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 1, @events.apply_pending
+    assert_equal "arn:lic:2", license.reload.license_arn
+    assert license.active?
+    assert_equal 1, MarketplaceLicense.count, "the same subscription, not a second row"
+  end
+
+  # The old licence is deprovisioned after the move, and it still names the
+  # row, which holds its ARN until the new licence is heard of. Ending the row
+  # would stop a customer who has just renewed.
+  test "the deprovisioning of the licence a renewal replaced ends nothing" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-2",
+                                                    previous_agreement_id: "agmt-1", company: company)
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "agreement" => { "id" => "agmt-1" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 1, @events.apply_pending, "applied, as the record that it was seen and set aside"
+    assert license.reload.active?
+    assert company.reload.billing_active?
+    assert_match(/agmt-1, which agmt-2 replaced/, MarketplaceSubscriptionEvent.sole.metered)
+  end
+
+  # A deprovisioning that names no agreement could be either licence. AWS is
+  # asked whether the agreement the row holds now is still live: if so, this
+  # is the old licence going; if not, the subscription has ended.
+  test "a deprovisioning that names no agreement is told apart by asking AWS" do
+    client = FakeMarketplaceSellerClient.new
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-2",
+                                                    previous_agreement_id: "agmt-1", company: company)
+    events = Billing::MarketplaceEvents.new(final_meter: RecordingMeter.new, client: client)
+    events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    events.apply_pending
+
+    assert_equal [ "agmt-2" ], client.described
+    assert license.reload.active?, "the renewed agreement is live, so this was the old licence"
+    assert company.reload.billing_active?
+
+    client.agreement_status = "CANCELLED"
+    events.record(
+      envelope(id: "ev-2", detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    events.apply_pending
+
+    assert license.reload.ended?, "nothing live to be the other licence of"
+    assert company.reload.billing_blocked?
+  end
+
+  test "a deprovisioning AWS cannot be asked about is left for the next sweep" do
+    client = FakeMarketplaceSellerClient.new
+    client.agreement_status = nil
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-2",
+                                                    previous_agreement_id: "agmt-1", company: create(:company))
+    events = Billing::MarketplaceEvents.new(final_meter: RecordingMeter.new, client: client)
+    events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 0, events.apply_pending
+    assert_not MarketplaceSubscriptionEvent.sole.applied?
+    assert_match(/could not read agreement agmt-2/, MarketplaceSubscriptionEvent.sole.failure)
+    assert license.reload.active?
+  end
+
+  # A licence never heard of, under an agreement nobody holds, is somebody
+  # else's: the fallback by agreement is for the renewal case only -- and only
+  # for the update that announces the new licence. A deprovisioning of a
+  # licence nobody holds ends nothing, whatever agreement it names.
+  test "a licence event under an unknown agreement matches nothing" do
+    create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-1")
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+               detail: { "license" => { "arn" => "arn:lic:9" }, "agreement" => { "id" => "agmt-9" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 0, @events.apply_pending
+  end
+
+  test "a deprovisioning of a licence nobody holds ends nothing, even under an agreement somebody does" do
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: "agmt-1",
+                                                    company: create(:company))
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:9" }, "agreement" => { "id" => "agmt-1" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 0, @events.apply_pending
+    assert license.reload.active?
+  end
+
+  # `ended` is unmeterable. Finished around a call that never reached AWS, the
+  # licence was measured as nothing when the sweep came back for it, and the
+  # last hour was lost in exactly the window AWS gives for it.
+  test "a deprovisioning whose final meter could not reach AWS is finished only once it has" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
+    Billing::MarketplaceEvents.new(final_meter: FailingMeter.new)
+                              .record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))
+
+    travel_to Time.utc(2026, 10, 23, 10, 30) do
+      Billing::MarketplaceEvents.new(final_meter: FailingMeter.new).apply_pending
+    end
+
+    assert_not MarketplaceSubscriptionEvent.sole.applied?
+    assert license.reload.ending?, "still meterable for the retry"
+    assert company.reload.billing_blocked?, "the customer has cancelled; the workspace stops either way"
+
+    meter = RecordingMeter.new
+    travel_to Time.utc(2026, 10, 23, 10, 35) do
+      Billing::MarketplaceEvents.new(final_meter: meter).apply_pending
+    end
+
+    assert_equal [ license ], meter.calls
+    assert license.reload.ended?
+    assert MarketplaceSubscriptionEvent.sole.applied?
   end
 
   # Out of order is normal, and the machine is what refuses it.

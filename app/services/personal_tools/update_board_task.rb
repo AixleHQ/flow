@@ -8,7 +8,8 @@ module PersonalTools
       audience :user
       tags :board
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
       param :title, type: :string, description: "Updated title."
       param :description, type: :string, description: "Updated description."
       param :priority, type: :string, description: "Updated priority."
@@ -24,8 +25,8 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project.board, :update?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       updates = params.slice(*UPDATABLE).reject { |_, v| v.nil? }
       if assign? && unassign?
@@ -40,7 +41,7 @@ module PersonalTools
       # assignee_id surfaces as a tool error rather than a silent no-op.
       return error("Update failed: #{task.errors.full_messages.to_sentence}") if task.errors.any?
 
-      success(id: task.id, title: task.title, assignee_id: task.assignee_id, updated_fields: updates.keys)
+      success(id: task.id, number: task.number, title: task.title, assignee_id: task.assignee_id, updated_fields: updates.keys)
     end
 
     private

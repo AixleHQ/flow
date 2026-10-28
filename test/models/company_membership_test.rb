@@ -267,6 +267,31 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     end
   end
 
+  test "a link generated late (the reminder's) still dies 7 days after the invitation was sent" do
+    freeze_time
+    membership = create(:company_membership, :invited, user: @user, company: @company, invited_at: 6.days.ago)
+    reminder_token = membership.generate_token_for(:invitation)
+
+    assert_equal membership, CompanyMembership.find_by_token_for(:invitation, reminder_token)
+
+    travel 1.day do
+      assert_nil CompanyMembership.find_by_token_for(:invitation, reminder_token)
+    end
+  end
+
+  test "an invitation is expired once its link lifetime has passed since it was last sent" do
+    freeze_time
+    fresh = create(:company_membership, :invited, user: @user, company: @company, invited_at: 6.days.ago)
+    stale = create(:company_membership, :invited, user: create(:user), company: @company, invited_at: 7.days.ago)
+    unsent = create(:company_membership, :invited, user: create(:user), company: @company, invited_at: nil)
+    accepted = create(:company_membership, user: create(:user), company: @company, invited_at: 30.days.ago)
+
+    assert_equal [ false, true, false, false ], [ fresh, stale, unsent, accepted ].map(&:invitation_expired?)
+
+    stale.update!(invited_at: Time.current)
+    assert_equal false, stale.invitation_expired? # rubocop:disable Minitest/RefuteFalse
+  end
+
   # === owned-project transfer on revocation ===
   # Project#owner_belongs_to_company requires an ACTIVE membership, so a revoked
   # owner leaves the project failing validation on any later save. Revocation

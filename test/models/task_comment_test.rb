@@ -99,6 +99,19 @@ class TaskCommentTest < ActiveSupport::TestCase
     refute comment.editable_by?(nil)
   end
 
+  test "deletable_by? follows the edit rules" do
+    other = create(:user, company: @company)
+    own = TaskComment.create!(body: "A", board_task: @task, author: @owner)
+    agent = TaskComment.create!(body: "B", board_task: @task, author: @owner, author_type: :agent)
+    stale = TaskComment.create!(body: "C", board_task: @task, author: @owner)
+    stale.update_column(:created_at, (TaskComment::EDIT_WINDOW + 1.minute).ago)
+
+    assert own.deletable_by?(@owner)
+    refute own.deletable_by?(other)
+    refute agent.deletable_by?(@owner)
+    refute stale.deletable_by?(@owner)
+  end
+
   test "destroying task destroys comments" do
     TaskComment.create!(body: "A", board_task: @task, author: @owner)
 
