@@ -56,7 +56,8 @@ class Web::Company::BillingController < Web::Company::ApplicationController
       # False once a card has taken over: the panel is then a statement about
       # this month, not an offer to renew.
       bills_now: current_company.billing_payer.aws_marketplace?,
-      reported_minutes: reported_minutes
+      reported_minutes: reported_minutes,
+      listing_url: Billing::MarketplaceListing.listing_url
     }
   end
 

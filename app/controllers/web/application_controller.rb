@@ -97,7 +97,7 @@ class Web::ApplicationController < ApplicationController
     return nil if current_company.nil? || current_company.billing_active?
     return nil unless current_company.billing_payer.aws_marketplace?
 
-    { status: current_company.billing_status }
+    { status: current_company.billing_status, listing_url: ::Billing::MarketplaceListing.listing_url }
   end
 
   def trial_share

@@ -90,6 +90,8 @@ interface Marketplace {
   billsNow: boolean;
   /** Worker-minutes reported towards the AWS bill so far this month. */
   reportedMinutes: number;
+  /** The listing's page in AWS Marketplace, where an ended subscription is taken out again. */
+  listingUrl: string;
 }
 
 interface Props {
@@ -235,7 +237,7 @@ function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
   }
 }
 
-function SubscriptionCard({ billing }: { billing: Billing }) {
+function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billing; title?: string }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const badge = STATUS_BADGE[billing.status];
@@ -342,7 +344,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
     <Card withBorder padding="lg">
       <Stack gap="sm">
         <Group justify="space-between">
-          <Text fw={600}>Subscription</Text>
+          <Text fw={600}>{title}</Text>
           <Badge color={badge.color} variant="light">
             {badge.label}
           </Badge>
@@ -553,9 +555,17 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
             <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
           )}
         </List>
-        {marketplace.billsNow && (
+        {/* The library manages a running subscription; an ended one is taken
+            out again on the listing's own page, which the library never leads
+            to. */}
+        {marketplace.billsNow && !marketplace.ended && (
           <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
             Manage the subscription in AWS Marketplace
+          </Anchor>
+        )}
+        {marketplace.billsNow && marketplace.ended && (
+          <Anchor href={marketplace.listingUrl} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
+            Subscribe again in AWS Marketplace
           </Anchor>
         )}
       </Stack>
@@ -574,16 +584,24 @@ const BillingPage = () => {
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
           {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
-          {marketplaceBilling && <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />}
-          {/* Both, once the AWS subscription has ended: the panel says what
-              happened and where to renew, and the card beneath it is the other
-              way to carry on. While the subscription is live there is no card
-              to offer -- it would be a second bill for the same capacity. */}
+          {/* Whichever pays now comes first. Both are shown once the AWS
+              subscription has ended: the panel says what happened and where to
+              renew, and the card is the other way to carry on -- and once a
+              card has taken over, the AWS panel is a statement about this
+              month's bill, beneath the subscription that runs the workspace.
+              While the AWS subscription is live there is no card to offer: it
+              would be a second bill for the same capacity. */}
+          {marketplaceBilling?.billsNow && (
+            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
+          )}
           {(!marketplaceBilling || marketplaceBilling.ended) && (
             <>
-              <SubscriptionCard billing={billing} />
+              <SubscriptionCard billing={billing} title={marketplaceBilling ? 'Billed by card' : 'Subscription'} />
               {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
             </>
+          )}
+          {marketplaceBilling && !marketplaceBilling.billsNow && (
+            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
           )}
         </Stack>
       </SettingsTabs>
