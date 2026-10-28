@@ -33,13 +33,14 @@ the background and the agent reads the result back with `read_tool_result`.
 ## Built-in tools
 
 The most visible built-ins are the **board tools**, plus workflow-control
-and lifecycle tools:
+and lifecycle tools. Every board tool that acts on a task takes either its
+`#N` board number (`task_number`) or its internal id (`task_id`):
 
 | Tool | Purpose |
 | --- | --- |
 | `board_get_board_info` | Return the current board with its columns. |
-| `board_list_tasks` | List a page of tasks (no descriptions), filtered by column / tag / type / assignee. |
-| `board_get_task` | Full details for a task, by id or by its `#N` board number. |
+| `board_list_tasks` | List a page of tasks (no descriptions), searched by title or `#N`, filtered by column / tag / type / assignee. |
+| `board_get_task` | Full details for a task. |
 | `board_create_task` | Create a task, optionally in a specific column. |
 | `board_update_task` | Update title, description, priority, tags, or type. |
 | `board_move_task` | Move a task to another column. |

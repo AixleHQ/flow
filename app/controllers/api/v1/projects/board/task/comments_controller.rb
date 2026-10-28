@@ -18,9 +18,9 @@ module Api
 
             def update
               comment = current_task.task_comments.find(params[:id])
-              # update? (the policy) is a plain project-write, like destroy; the
+              # update? and destroy? (the policy) are plain project-writes; the
               # record-level rules — own comment, human-authored, younger than
-              # TaskComment::EDIT_WINDOW — live here because the authorize-by-default
+              # TaskComment::EDIT_WINDOW — live in the actions because the authorize-by-default
               # path hands the policy a symbol, not the record (see AuthorizationConcern).
               unless comment.editable_by?(current_user)
                 return render json: { error: "Not authorized" }, status: :forbidden
@@ -30,6 +30,16 @@ module Api
                 task: current_task, comment: comment, params: comment_params.slice(:body), actor: current_user
               )
               render json: TaskCommentResource.new(comment).to_h
+            end
+
+            def destroy
+              comment = current_task.task_comments.find(params[:id])
+              unless comment.deletable_by?(current_user)
+                return render json: { error: "Not authorized" }, status: :forbidden
+              end
+
+              TaskService.destroy_comment(task: current_task, comment: comment, actor: current_user)
+              head :no_content
             end
 
             private

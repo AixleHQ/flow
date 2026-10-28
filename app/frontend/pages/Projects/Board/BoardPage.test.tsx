@@ -525,6 +525,40 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  it('deletes your own fresh comment after confirming, and offers no Delete on anyone else’s', async () => {
+    const fetchSpy = answerFetch({ 'DELETE /api/v1/projects/7/tasks/1/comments/41': {} });
+    const justNow = new Date().toISOString();
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [
+          buildTaskComment({ id: 41, authorId: 1, body: 'Mine, with a typo', createdAt: justNow }),
+          buildTaskComment({ id: 42, authorId: 2, authorName: 'Sam Lee', body: 'Not mine', createdAt: justNow }),
+        ],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('tab', { name: /Comments/ }));
+
+    expect(drawer.getAllByRole('button', { name: 'Delete comment' })).toHaveLength(1);
+    await userEvent.click(drawer.getByRole('button', { name: 'Delete comment' }));
+    const confirm = within(await screen.findByRole('dialog', { name: 'Delete comment' }));
+    await userEvent.click(confirm.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/tasks/1/comments/41',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    fetchSpy.mockRestore();
+  });
+
   it('says which tracker issue a copied file came from', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -2545,6 +2579,28 @@ describe('Projects/Board/BoardPage', () => {
     expect(inCard.getByText('Running')).toBeInTheDocument();
     // A bolt icon also appears alongside the chip.
     expect(card.querySelector('svg.tabler-icon-bolt')).toBeTruthy();
+  });
+
+  it('shows a card whose run waits for a session slot as Queued, not Running', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Merge to develop',
+            boardColumnId: 100,
+            recentWorkflowRuns: [runOf({ state: 'queued' })],
+          }),
+        ],
+      },
+    });
+
+    const card = screen.getByText('Merge to develop').closest('[class*="Paper-root"]') as HTMLElement;
+    const inCard = within(card);
+
+    expect(inCard.getByText('Queued')).toBeInTheDocument();
+    expect(inCard.queryByText('Running')).not.toBeInTheDocument();
   });
 
   it('opens the create-task panel as a right-side Drawer (not a modal) via the "n" hotkey', async () => {

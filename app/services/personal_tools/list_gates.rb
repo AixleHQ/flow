@@ -16,17 +16,18 @@ module PersonalTools
       tags :board
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :task_id, type: :integer, description: "Board task id.", required: true
+      param :task_number, type: :integer, description: TASK_NUMBER_PARAM
+      param :task_id, type: :integer, description: TASK_ID_PARAM
     end
 
     def execute
       project = find_project!
       authorize!(project.board, :show?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
-      task = project.board&.board_tasks&.find_by(id: params[:task_id])
-      return error("Task not found on this project's board") unless task
+      task = find_task(project.board&.board_tasks)
+      return error(task_not_found) unless task
 
       rows = task.gates.includes(:creator).order(:created_at).map { |gate| Gates::ToolRow.call(gate) }
-      success(task_id: task.id, gates: rows)
+      success(task_id: task.id, task_number: task.number, gates: rows)
     end
   end
 end

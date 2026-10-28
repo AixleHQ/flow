@@ -44,6 +44,7 @@ function seed(overrides: Partial<UserShowProps> = {}): UserShowProps {
       position: 'dev',
       invitedAt: '2026-01-05T10:00:00Z',
       acceptedAt: '2026-01-06T10:00:00Z',
+      invitationExpired: false,
       createdAt: '2026-01-05T10:00:00Z',
       invitedBy: null,
     },

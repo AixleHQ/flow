@@ -76,6 +76,27 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
       ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
   PANE
 
+  # `tmux capture-pane` of Claude Code 2.1.310 in a 120x30 pane, API-key billed, once the
+  # session's cost crossed $5 and with hasAcknowledgedCostThreshold absent from
+  # ~/.claude.json. The notice waits for a keypress.
+  CLAUDE_COST_THRESHOLD_PANE = <<~PANE
+     ▐▛███▛█   Claude Code v2.1.310
+    ▝▜██████▀  Sonnet 4.5 · API Usage Billing
+     ▝▝   ▝▝   /workspace
+    ❯ Say done.
+    ● done
+    ✻ Sautéed for 0s · done 3:13 PM
+    #{"─" * 120}
+      You've spent $5 on the Anthropic API this session.
+
+      Learn more about how to monitor your spending:
+      https://code.claude.com/docs/en/costs
+
+      ❯ 1. Got it, thanks!
+
+      Enter to confirm · Esc to cancel
+  PANE
+
   # `tmux capture-pane` of Kiro CLI 2.34.0 (`--v3`, TUI) in a 160x45 pane after an MCP
   # tool failed 7 times in a row. The session's steering said nobody can answer; the
   # dialog was still on screen 4 minutes later.
@@ -269,6 +290,42 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
 
   test "does not apply the Claude Code MCP signatures to another agent" do
     result = InteractivePromptDetector.detect(CLAUDE_MCP_URL_PANE, agent_type: "codex")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "detects Claude Code waiting on its cost-threshold notice and names it" do
+    result = InteractivePromptDetector.detect(CLAUDE_COST_THRESHOLD_PANE, agent_type: "claude_code")
+
+    assert result.blocked?
+    assert_equal :claude_cost_threshold, result.prompt_id
+    assert_match(/cost-threshold notice/, result.message)
+    assert_match(/You've spent \$5 on the Anthropic API this session/, result.message)
+    assert_operator result.message.length, :<=, InteractivePromptDetector::MAX_MESSAGE_LENGTH
+  end
+
+  test "does not fire once Claude Code has moved past the cost-threshold notice" do
+    moved_on = "#{CLAUDE_COST_THRESHOLD_PANE}#{CLAUDE_CHAT_SCREEN}"
+
+    result = InteractivePromptDetector.detect(moved_on, agent_type: "claude_code")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  # The notice's footer is shared by every Claude Code select dialog; without the
+  # notice's own text above it, the pane is some other dialog.
+  test "does not take another Claude Code dialog with the same footer for the notice" do
+    other = CLAUDE_COST_THRESHOLD_PANE
+      .sub("You've spent $5 on the Anthropic API this session.", "Choose a model")
+      .sub("Got it, thanks!", "Sonnet")
+
+    result = InteractivePromptDetector.detect(other, agent_type: "claude_code")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "does not apply the cost-threshold signature to another agent" do
+    result = InteractivePromptDetector.detect(CLAUDE_COST_THRESHOLD_PANE, agent_type: "kiro_cli")
 
     assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
   end

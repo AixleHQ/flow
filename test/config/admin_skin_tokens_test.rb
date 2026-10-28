@@ -13,9 +13,11 @@ class AdminSkinTokensTest < ActiveSupport::TestCase
   DARK = "[data-mantine-color-scheme='dark']"
 
   def theme_tokens(scheme)
+    constants = THEME.scan(/^const ([A-Z_]+) = '([^']+)';$/).to_h
     variables = THEME[/^  variables: \{(.*?)^  \},/m, 1]
     colors = THEME[/^  #{scheme}: \{(.*?)^  \},/m, 1]
-    "#{variables}#{colors}".scan(/'(--app-[a-z0-9-]+)': '([^']+)'/).to_h
+    "#{variables}#{colors}".scan(/'(--app-[a-z0-9-]+)': (?:'([^']+)'|([A-Z_]+))/)
+                           .to_h { |name, literal, constant| [ name, literal || constants.fetch(constant) ] }
   end
 
   def skin_tokens(scheme)

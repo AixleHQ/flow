@@ -38,6 +38,10 @@ module Tools
 
       - Start from `list_companies` / `list_projects`. Every id you pass comes
         from a list tool — never invent one, never carry an id across projects.
+      - People name a board task by its number on the board: `#12`, or the
+        `?n=12` in a board link. Pass it as `task_number` — every task tool
+        takes one. A task's `id` appears nowhere in the UI, so never ask a
+        person for it.
       - Read before you write: `get_workflow`, `get_workflow_step`, `get_agent`,
         `get_skill`, `get_mcp_server`. `get_workflow` carries step instructions
         in full; `get_workflow_step` adds one step's remaining wiring.

@@ -174,6 +174,15 @@ class TaskService
       comment
     end
 
+    def destroy_comment(task:, comment:, actor:)
+      if comment.destroy
+        record_activity(task.board, :comment_deleted, actor, task: task,
+          metadata: { tag: comment.tags&.first, preview: comment.body.to_s.truncate(100) })
+      end
+
+      comment
+    end
+
     def add_asset(task:, params:, actor:)
       asset = task.task_assets.build(params)
       asset.author = actor

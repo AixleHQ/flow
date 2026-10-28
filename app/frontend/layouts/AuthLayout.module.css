@@ -1,13 +1,20 @@
 .root {
   display: flex;
+  flex-direction: column;
   /* dvh, not vh — 100vh is taller than the visible area on mobile browsers
      with dynamic toolbars, which pushed the shell under the URL bar. */
   height: 100dvh;
 }
 
+.shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Under 768px the sidebar becomes a sticky top bar, so the shell stacks. */
 @media (max-width: 768px) {
-  .root {
+  .shell {
     flex-direction: column;
   }
 }
@@ -50,12 +57,11 @@
   color: var(--app-text-tertiary);
 }
 
-.footer img {
-  display: block;
+.footer svg {
   opacity: 0.6;
   transition: opacity 0.2s;
 }
 
-.footer:hover img {
+.footer:hover svg {
   opacity: 1;
 }

@@ -20,6 +20,16 @@ class LogrageOptionsTest < ActiveSupport::TestCase
     assert_equal 42, logged[:session]
   end
 
+  test "an MCP call logs its JSON-RPC method and tool name, and nothing for what it lacks" do
+    call = options_for("/action_mcp", session: 42, rpc: "tools/call", tool: "finish_session")
+    list = options_for("/action_mcp", session: 42, rpc: "tools/list", tool: nil)
+    credentials = options_for("/agents/credentials")
+
+    assert_equal [ "tools/call", "finish_session" ], call.values_at(:rpc, :tool)
+    assert_equal({ rpc: "tools/list" }, list.slice(:rpc, :tool))
+    assert_empty credentials.slice(:rpc, :tool)
+  end
+
   test "other requests log their (filtered) params and their user" do
     logged = options_for("/company/projects", { "name" => "p" }, user: 7)
 

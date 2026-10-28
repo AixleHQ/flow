@@ -55,5 +55,5 @@ and spend. From there, **Tasks** is the board where work actually happens.
 ## What to read next
 
 1. [Tasks & the board](/docs/tasks) — where work enters and results land
-2. [Building workflows](/docs/running-workflows) — turning a process into steps
+2. [Building workflows](/docs/running-workflows) — turning a process into sessions and steps
 3. [Sessions & Runs](/docs/sessions-and-runs) — watching and steering a run

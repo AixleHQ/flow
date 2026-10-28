@@ -1,27 +1,30 @@
+/* Solid brand fill on purpose: the workspace should want to pay just to make it
+   go away. --app-on-primary is the label color tuned for that fill in each
+   scheme (white on light orange, near-black on dark). */
 .root {
-  border-bottom: 1px solid var(--app-border-default);
-  padding: 10px 20px;
+  flex-shrink: 0;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  background: var(--app-action-selected);
+  background: var(--app-primary);
+  color: var(--app-on-primary);
 }
 
 .blocked {
-  background: var(--app-danger-bg);
-  border-bottom-color: var(--app-danger-border);
+  background: var(--app-danger-fg);
+}
+
+.icon {
+  flex-shrink: 0;
 }
 
 .text {
-  font-size: 13px;
+  margin: 0;
+  font-size: 15px;
   line-height: 1.45;
-  color: var(--app-text-primary);
   flex: 1 1 320px;
-}
-
-.blocked .text {
-  color: var(--app-danger-fg);
 }
 
 .figure {
@@ -31,23 +34,35 @@
 
 /* A spent allowance is not a progress bar anybody wants animated at them. */
 .meter {
-  flex: 0 0 160px;
+  flex: 0 0 180px;
   height: 6px;
   border-radius: 3px;
-  background: var(--app-border-default);
+  background: rgba(0, 0, 0, 0.22);
   overflow: hidden;
 }
 
 .meterFill {
   height: 100%;
-  background: var(--app-primary);
+  background: var(--app-on-primary);
 }
 
-.blocked .meterFill {
-  background: var(--app-danger-fg);
+/* Near-black in both schemes: the only fill that stands off orange and red alike.
+   Two classes deep to outrank Mantine's own `background: var(--button-bg)`. */
+.root .cta {
+  flex-shrink: 0;
+  background-color: #0a0908;
+  color: #ffffff;
+}
+
+.root .cta:hover {
+  background-color: #2a2522;
 }
 
 @media (max-width: 640px) {
+  .root {
+    padding: 12px 16px;
+  }
+
   .meter {
     display: none;
   }

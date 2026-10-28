@@ -7,7 +7,7 @@
 
 .kpiRow {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   margin-bottom: 22px;
 }
@@ -306,6 +306,10 @@
 }
 
 @media (max-width: 1100px) {
+  .kpiRow {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
   .twoCol {
     grid-template-columns: 1fr;
   }

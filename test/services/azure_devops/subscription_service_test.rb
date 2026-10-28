@@ -154,7 +154,38 @@ module AzureDevops
                                     base_url: "https://aixle.test")
 
       assert_empty result
-      assert @integration.azure_devops_subscriptions.all?(&:error?)
+      rows = @integration.azure_devops_subscriptions.reload
+      assert rows.all?(&:error?)
+      assert_equal [ "permission_denied" ], rows.map(&:error_code).uniq
+      assert rows.all?(&:last_checked_at)
+    end
+
+    test "the app token is renewed before the row lock, not while the POST holds it" do
+      stub_create
+      locked = []
+      record_lock = lambda do |*, payload|
+        table = payload[:sql][/FROM "(azure_devops_\w+)" .* FOR UPDATE/, 1]
+        locked << table if table
+      end
+
+      ActiveSupport::Notifications.subscribed(record_lock, "sql.active_record") do
+        @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
+      end
+
+      assert_equal %w[azure_devops_installations azure_devops_subscriptions], locked
+    end
+
+    test "a row another worker inserted after the read is reused, not duplicated" do
+      stub_create
+      winner = create(:azure_devops_subscription, integration: @integration, azure_project_id: @integration.azure_project_id,
+                                                  event_type: "workitem.created", azure_subscription_id: "remote-1")
+      @integration.azure_devops_subscriptions.expects(:find_by).once.returns(nil)
+
+      result = @service.ensure_all!(event_types: [ "workitem.created" ], base_url: "https://aixle.test")
+
+      assert_equal [ winner.id ], result.map(&:id)
+      assert_equal 1, AzureDevopsSubscription.where(integration: @integration, event_type: "workitem.created").count
+      assert_not_requested :post, %r{/_apis/hooks/subscriptions}
     end
 
     # Probation is Azure throttling a failing subscription: it still exists and
@@ -181,6 +212,23 @@ module AzureDevops
 
       assert subscription.reload.disabled?
       assert_equal "deleted_upstream", subscription.error_code
+    end
+
+    # The read is not under the row lock, so the hook can be replaced while it
+    # is in flight; the old hook's 404 must not mark the new one disabled.
+    test "a refresh that read a replaced hook does not overwrite its successor" do
+      stub_create(id: "sub-old")
+      subscription = @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
+      stub_request(:get, %r{/_apis/hooks/subscriptions/sub-old}).to_return do
+        AzureDevopsSubscription.where(id: subscription.id).update_all(azure_subscription_id: "sub-new", status: "active")
+        { status: 404, body: "" }
+      end
+
+      @service.refresh_status!
+
+      subscription.reload
+      assert_equal [ "active", "sub-new", nil ],
+                   [ subscription.status.to_s, subscription.azure_subscription_id, subscription.error_code ]
     end
 
     test "removing a connection deletes its Service Hooks in Azure" do

@@ -9,12 +9,11 @@ import { type Period, periodParams } from 'shared/analytics/chartHelpers';
 import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
-import { RoleTag } from 'shared/resources/members/MembersContent';
+import { MemberStatusBadge, RoleTag } from 'shared/resources/members/MembersContent';
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
 import { UsageAnalytics } from 'shared/resources/usage/UsageAnalytics';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import { companyProjectSessionPath, companySessionPath, userPath } from 'shared/routes';
-import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import classes from './Show.module.css';
 
@@ -110,7 +109,7 @@ function UserShow({
             </Text>
             <Group gap={8} mt={10}>
               <RoleTag role={member.role} />
-              <StatusBadge state={member.state} size="sm" />
+              <MemberStatusBadge member={member} />
               {member.position && (
                 <Badge size="sm" variant="default">
                   {member.position}

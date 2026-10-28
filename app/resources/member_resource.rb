@@ -10,6 +10,9 @@ class MemberResource < ApplicationResource
 
   attributes :invited_at, :accepted_at
 
+  typelize :boolean
+  attribute :invitation_expired, &:invitation_expired?
+
   typelize :number
   attribute :id, &:user_id
 
