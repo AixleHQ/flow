@@ -12,7 +12,6 @@ class SkillResource < ApplicationResource
 
   # Registry vs hand-written. The UI needs it because a manual skill has no
   # registry page, cannot be re-installed by the CLI, and is labelled as ours.
-  typelize %w[registry manual]
   attribute :origin do |skill|
     skill.origin.to_s
   end

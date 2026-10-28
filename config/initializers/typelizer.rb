@@ -27,6 +27,7 @@ module TypelizerModelPlugin
     Connector
     EntityVersion
     Runner
+    Skill
   ].freeze
 
   def self.new(model_class:, config:)
