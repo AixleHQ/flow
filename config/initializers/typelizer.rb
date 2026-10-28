@@ -18,6 +18,8 @@ module TypelizerModelPlugin
   INFERRED_ENUM_MODELS = %w[
     Agent
     AssetVersion
+    BoardActivity
+    ColumnTransition
     Runner
   ].freeze
 
