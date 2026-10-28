@@ -22,6 +22,9 @@ class AzureDevopsInstallation < ApplicationRecord
   extend Enumerize
 
   enumerize :status, in: %i[inactive active error], default: :inactive, predicates: true, scope: true
+  # shared_app: Aixle's multi-tenant Entra app. federated: the customer's own app,
+  # which trusts this deployment as an OIDC issuer.
+  enumerize :credential_kind, in: %i[shared_app federated], default: :shared_app, predicates: true, scope: true
 
   belongs_to :company
   belongs_to :approved_by, class_name: "User", optional: true
@@ -30,7 +33,8 @@ class AzureDevopsInstallation < ApplicationRecord
   validates :tenant_id, presence: true
   validates :client_id, presence: true
   validates :organization_slug, presence: true
-  validates :app_config_key, presence: true
+  validates :app_config_key, presence: true, unless: :federated?
+  validates :app_config_key, absence: true, if: :federated?
   validate :azure_identity_is_immutable, on: :update
   validate :allowed_project_ids_are_guids
 
@@ -47,6 +51,11 @@ class AzureDevopsInstallation < ApplicationRecord
 
   def organization_url
     "#{AzureDevops::AppConfig.api_host}/#{organization_slug}"
+  end
+
+  # What the customer's federated credential must name as its subject.
+  def federated_subject
+    AzureDevops::FederatedSubject.for(company)
   end
 
   # Approved scope is an allowlist with no "unrestricted" state: an empty list
@@ -113,15 +122,25 @@ class AzureDevopsInstallation < ApplicationRecord
   # Ownership and Azure identity are what the authorization check reads. If they
   # could move while project integrations point here, an approved binding to one
   # organization would quietly become a binding to another.
+  #
+  # A federated installation is the one exception for the app itself: the
+  # customer owns that app and may delete and recreate it, which gives it a new
+  # client id and service principal. The binding to the organization does not
+  # move, and the caller re-verifies the new app before saving.
   def azure_identity_is_immutable
-    %w[company_id tenant_id client_id organization_slug].each do |attr|
+    immutable = %w[company_id tenant_id organization_slug credential_kind]
+    immutable << "client_id" unless federated?
+    immutable.each do |attr|
       errors.add(attr, "cannot change on an existing installation") if public_send(:"#{attr}_changed?")
     end
 
     # These two start null and are filled in by verification; they may be SET
     # once, never rewritten.
+    rewritable = federated? && client_id_changed?
     %w[organization_id service_principal_object_id].each do |attr|
       was = public_send(:"#{attr}_was")
+      next if rewritable && attr == "service_principal_object_id"
+
       errors.add(attr, "is verified and cannot change") if public_send(:"#{attr}_changed?") && was.present?
     end
   end

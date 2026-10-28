@@ -91,6 +91,10 @@ class Company < ApplicationRecord
   ].freeze
 
   # Validations
+  # The id Azure DevOps federation names a company by. Customers pin it in their
+  # own Entra app, so it can never be rewritten.
+  attr_readonly :public_id
+
   validates :name, presence: true, uniqueness: true
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }

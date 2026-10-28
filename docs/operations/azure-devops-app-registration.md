@@ -256,3 +256,54 @@ never fails the connection, because everything on demand works without them.
 
 Worth knowing: a subscription Azure has put **on probation** exists and delivers
 nothing, which from Flow's side looks exactly like nothing having happened.
+
+## Customer-owned apps: this deployment as an OIDC issuer (optional)
+
+A customer can connect with an Entra app **they** register in their own directory,
+which trusts this deployment through a federated credential. For that, Flow has to
+publish an OIDC issuer: a discovery document and a key set that Microsoft Entra
+fetches itself, anonymously, from the public internet. It does not use the app
+registration above and needs no client ID of yours.
+
+It is on exactly when `AZURE_DEVOPS_FEDERATION_SIGNING_KEY` is set and the issuer is
+a public HTTPS origin. Not supported on a deployment behind a VPN or on a private
+host: Entra must be able to reach `/.well-known/openid-configuration` and
+`/.well-known/jwks.json`, and this release does not publish them anywhere else.
+
+```bash
+openssl genrsa -out federation.pem 2048        # keep the private key; never commit it
+```
+
+Put the PEM in `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`. A single-line value with
+literal `\n` in place of the newlines is accepted. A key that is set but cannot be
+used (not parseable, public only, under 2048 bits) switches the option off; the
+reason is logged once as `AZURE_DEVOPS_FEDERATION_SIGNING_KEY is set but ignored`.
+Check it from outside:
+
+```bash
+curl https://<DOMAIN>/.well-known/openid-configuration   # "issuer" must equal https://<DOMAIN>
+curl https://<DOMAIN>/.well-known/jwks.json              # one key, no private fields
+```
+
+**The issuer URL can never change.** Each customer's federated credential pins it,
+so moving `DOMAIN` breaks every such connection at once; the customer must edit
+their credential. When you enable the feature, set
+`AZURE_DEVOPS_FEDERATION_ISSUER_URL` explicitly to the origin you serve today
+(`https://<DOMAIN>`, no path, no trailing slash). Without it the issuer follows
+`DOMAIN`, so a later change of `DOMAIN` would silently change the issuer under every
+customer who has already pinned it.
+
+**One issuer per deployment.** Staging has its own domain and therefore its own
+issuer and its own key; a key must never be shared between deployments, because the
+subject a customer trusts is predictable and a leaked key could mint a token for
+any app that trusts the issuer. Treat the key like the certificate in §2.
+
+**Rotation.** Entra caches the key set, so publish a key before signing with it:
+
+1. Generate the new key and add its **public** half to
+   `AZURE_DEVOPS_FEDERATION_PREVIOUS_PUBLIC_KEYS` (a JSON array of PEM strings). Deploy.
+2. Wait until Entra has refreshed its cache. This has not been measured; allow a day.
+3. Make the new key the signing key and move the old public key into the array. Deploy.
+4. Later, remove the old public key.
+
+A customer sees a failure at step 3 only if step 2 was too short.
