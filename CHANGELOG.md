@@ -48,6 +48,9 @@ governance, community health — carry none.
   stays at 0.60.0: newer releases still stop `--yolo` at a prompt when the
   agent edits a build file or runs a command on a path an earlier command
   printed.
+- **Sign-in & onboarding**: the new Aixle Flow logo, with Flow in the brand
+  orange, on the sign-in, workspace sign-up and How it works pages, the docs
+  header and the "Powered by" line under every page.
 
 ### Fixed
 - **Trackers**: a tracker comment or issue description whose text looks to an

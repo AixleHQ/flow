@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
-import { AppSidebar, FullPageLoader, Logo, type SharedProps, TrialBanner } from 'shared/ui';
+import { AppSidebar, BrandLockup, FullPageLoader, type SharedProps, TrialBanner } from 'shared/ui';
 
 import classes from './AuthLayout.module.css';
 
@@ -90,7 +90,7 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
             <Text component="span" size="xs" lh={1}>
               Powered by
             </Text>
-            <Logo width={50} />
+            <BrandLockup size="xs" />
           </Box>
         )}
       </Box>
