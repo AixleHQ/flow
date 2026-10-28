@@ -52,7 +52,11 @@ class Web::Company::BillingController < Web::Company::ApplicationController
     {
       aws_account_id: license&.customer_aws_account_id,
       subscribed_at: license&.subscribed_at,
-      ended: license&.ended? || false,
+      # Closing counts. AWS sends the agreement's end and the licence's
+      # deprovisioning seconds apart, and the workspace is stopped at the
+      # first: in between, a panel still saying Active beside a banner saying
+      # it has ended reads as a fault.
+      ended: license.present? && (license.ending? || license.ended?),
       # False once a card has taken over: the panel is then a statement about
       # this month, not an offer to renew.
       bills_now: current_company.billing_payer.aws_marketplace?,
@@ -65,7 +69,14 @@ class Web::Company::BillingController < Web::Company::ApplicationController
   def final_invoice_minutes
     return nil if current_company.stripe_subscription_id.blank?
 
-    seconds = Billing::FinalUsage.new(current_company, until_time: Time.current).billed.values.sum
+    billed = Billing::FinalUsage.new(current_company, until_time: Time.current).billed
+    # The final invoice replays the last closed hour, in case the :05 run has
+    # not delivered it yet. Where it has, Stripe takes the replay as the event
+    # it already holds -- the same identifier -- so the hour is not owed again,
+    # and counting it here overstated the invoice by an hour.
+    sent = CapacityMeterReport.where(provider: Billing::Meter::Stripe.provider, period_start: billed.keys, state: "reported")
+                              .pluck(:period_start).map(&:to_i)
+    seconds = billed.reject { |hour, _| sent.include?(hour.to_i) }.values.sum
     (BigDecimal(seconds) / 60).round(1).to_f
   end
 

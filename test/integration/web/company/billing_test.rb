@@ -216,6 +216,40 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # AWS ends the agreement and deprovisions the licence seconds apart, and the
+  # workspace is stopped at the first. Between the two the banner already said
+  # the subscription had ended while this panel still said Active.
+  test "the AWS panel calls a closing subscription ended, as the banner does" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    create(:marketplace_license, :ending, company: @company)
+
+    get company_settings_billing_path
+
+    assert_inertia_props { |props| assert props.dig(:marketplaceBilling, :ended) }
+  end
+
+  # The figure an administrator decides on. The final invoice replays the last
+  # closed hour in case the :05 run has not delivered it; where it has, Stripe
+  # holds that hour already under the same identifier, and counting it again
+  # showed an hour more than the invoice would carry.
+  test "the final invoice an administrator is shown leaves out an hour the card was already sent" do
+    hour = Time.utc(2026, 10, 20, 10)
+    CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 1, occurred_at: hour - 3.hours)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 1)
+    CapacityMeterReport.create!(provider: Billing::Meter::Stripe.provider, period_start: hour - 1.hour,
+                                quantity_seconds: 3600, state: "reported",
+                                breakdown: { @company.id.to_s => 3600 }, receipts: {})
+    create(:marketplace_license, :active, proposed_company: @company, proposal_state: "pending",
+                                          proposed_by_email: "dana@#{@company.email_domain}", proposed_at: hour)
+
+    travel_to(hour + 30.minutes) { get company_settings_billing_path }
+
+    assert_inertia_props do |props|
+      assert_in_delta 30.0, props.dig(:marketplaceProposal, :finalInvoiceMinutes), 0.001,
+                      "the half-hour now running; the hour before it is already with Stripe"
+    end
+  end
+
   # The hourly meter is not the only path that sends. A cancellation sends the
   # last part-hour through the final meter, which writes no ledger row -- so a
   # figure built from ledger rows alone understated what AWS had been told by
