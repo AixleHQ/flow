@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-28
+
 ### Added
 - **Profile**: the `trigger_workflow` tool of personal access takes an optional
   `idempotency_key`. A second call with the same key returns the run the first
@@ -68,6 +70,14 @@ governance, community health — carry none.
   a day is left at the workspace's limit, or 85% is spent, it leads with when
   free capacity runs out and the button reads "Add a card now". A spent
   allowance turns the bar solid red.
+- **Admin**: on the dashboard, a company without a worker limit has worker
+  hours equal to its busy hours, so it shows as 100% utilized instead of 0
+  worker hours and no utilization.
+- **Docs**: *Building workflows* uses the builder's names — a workflow is made
+  of sessions, a session of steps — and explains that each session runs in its
+  own fresh container, that files pass between sessions as outputs, and that a
+  session's steps are a checklist one agent works through. The other Using Flow
+  pages use the same names.
 
 ### Fixed
 - **Company members**: the link in an invitation reminder email stops working on
@@ -100,6 +110,9 @@ governance, community health — carry none.
   end the session or mark sub-steps, and that a subagent it starts must report
   back instead. A subagent that called `finish_session` used to end the step
   mid-work, losing changes that were not pushed yet.
+- **Sessions & Runs**: an automatic Claude Code session on an API key no longer
+  stops at Claude Code's "You've spent $5 on the Anthropic API" notice and fails
+  30 minutes later with no output; the notice is acknowledged at launch.
 - The queue health check no longer warns "Admission queue is not moving" while a
   pool is simply full of sessions that are still running. It warns when a slot
   is free but not granted, or held by a session that ended over 30 minutes ago.
@@ -122,11 +135,6 @@ governance, community health — carry none.
   a day, failing the requests in flight.
 - **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
   Slack, and describes the `/help` list as the app sends it, naming no project.
-- **Docs**: *Building workflows* uses the builder's names — a workflow is made
-  of sessions, a session of steps — and explains that each session runs in its
-  own fresh container, that files pass between sessions as outputs, and that a
-  session's steps are a checklist one agent works through. The other Using Flow
-  pages use the same names.
 
 ## [1.6.0] - 2026-10-24
 
@@ -887,7 +895,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.7.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.8.0...develop
+[1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/AixleHQ/flow/compare/v1.4.0...v1.5.0

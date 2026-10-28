@@ -87,7 +87,7 @@ describe('summarize', () => {
     });
   });
 
-  it('has no utilization and no maximum limit for a tenant without a limit', () => {
+  it('counts a tenant without a limit as fully used, with no maximum limit', () => {
     const days = [
       buildUsageDay({
         offeredSeconds: 0,
@@ -100,9 +100,25 @@ describe('summarize', () => {
 
     const [acme] = summarize(days, tenants, { start: '2026-10-14', end: '2026-10-14' });
 
+    expect(acme).toMatchObject({ workerHours: 48, busyHours: 48, utilization: 1, maxWorkers: Infinity });
+  });
+
+  it('counts the busy share of a day without a limit as worker hours on a day the limit was cleared', () => {
+    const days = [buildUsageDay({ offeredSeconds: 4 * 12 * 3600, unlimitedSeconds: 12 * 3600, limitMax: 4 })];
+
+    const [acme] = summarize(days, tenants, { start: '2026-10-14', end: '2026-10-14' });
+
+    expect(acme.workerHours).toBe(72);
+    expect(acme.utilization).toBeCloseTo(48 / 72);
+  });
+
+  it('has no utilization for a tenant without a limit that ran nothing', () => {
+    const days = [buildUsageDay({ offeredSeconds: 0, occupiedSeconds: 0, unlimitedSeconds: 24 * 3600 })];
+
+    const [acme] = summarize(days, tenants, { start: '2026-10-14', end: '2026-10-14' });
+
+    expect(acme.workerHours).toBe(0);
     expect(acme.utilization).toBeNull();
-    expect(acme.maxWorkers).toBe(Infinity);
-    expect(acme.busyHours).toBe(48);
   });
 
   it('has no wait for a tenant that admitted nothing', () => {
