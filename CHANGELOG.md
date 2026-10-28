@@ -33,6 +33,9 @@ governance, community health — carry none.
   edit it; the builder's back link returns to the Archived list.
 
 ### Changed
+- **Company members**: the Members page lists pending invitations by default,
+  marked **Pending**, or **Expired** once the 7-day link has lapsed, with a
+  **Resend** button on the row.
 - **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
   "Session Time" — how many tokens the project's sessions consumed and how long
   they ran, each with a per-session average. A dollar figure misled projects
@@ -62,6 +65,9 @@ governance, community health — carry none.
   header and the "Powered by" line under every page.
 
 ### Fixed
+- **Company members**: the link in an invitation reminder email stops working on
+  the date the email gives, 7 days after the invitation was sent. It used to keep
+  working for up to a week longer.
 - **Workflows**: the read-only notice in the workflow builder no longer covers
   the "← Workflows" back link, so a project viewer can click it again.
 - **Trackers**: a tracker comment or issue description whose text looks to an

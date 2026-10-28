@@ -22,6 +22,9 @@ There are two ways, and only one of them works out of the box.
 **By invitation.** An admin invites an address from **Members → Invite**. The
 person gets a link, accepts, and joins with the role they were given. This always
 works, needs nothing set up, and is the only way in until the step below is done.
+Until they accept, the invitation stays on the Members page as **Pending**. The
+link works for 7 days, after which the row reads **Expired**. **Resend** on the row
+mails a fresh link, and the old one stops working.
 
 **By email domain.** Anyone signing in with an address at the workspace's domain
 joins without an invitation — useful once a team is more than a handful of people.
