@@ -78,7 +78,13 @@ describe('ConfigItemFormModal', () => {
 
   it('closes an untouched edit without asking', async () => {
     const onClose = vi.fn();
-    const item = { id: 7, name: 'REGION', value: 'eu-west-1', description: 'Deploy region', itemType: 'variable' as const };
+    const item = {
+      id: 7,
+      name: 'REGION',
+      value: 'eu-west-1',
+      description: 'Deploy region',
+      itemType: 'variable' as const,
+    };
     renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} item={item} />);
 
     expect(screen.getByDisplayValue('eu-west-1')).toBeInTheDocument();
