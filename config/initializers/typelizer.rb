@@ -35,6 +35,8 @@ module TypelizerModelPlugin
     Step
     StepRun
     SubStepRun
+    TaskAsset
+    TaskComment
   ].freeze
 
   def self.new(model_class:, config:)
