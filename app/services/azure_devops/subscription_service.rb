@@ -46,6 +46,7 @@ module AzureDevops
       subscription = subscription_row(event_type, project_id)
       return subscription if provisioned?(subscription)
 
+      renew_token(project_id)
       failure = nil
       result = subscription.with_lock do
         next subscription if provisioned?(subscription)
@@ -135,6 +136,16 @@ module AzureDevops
 
     def provisioned?(subscription)
       subscription.azure_subscription_id.present? && subscription.live?
+    end
+
+    # Renewing the app token locks the installation row. Inside the row lock's
+    # transaction that lock would last until Azure answered the POST, stalling
+    # every other renewal for the installation. A failure here is left to the
+    # POST, which records it on the row.
+    def renew_token(project_id)
+      CredentialProvider.resolve!(integration, project_id: project_id).authorization_headers
+    rescue Error
+      nil
     end
 
     def create_under_lock!(subscription, event_type:, project_id:, base_url:)

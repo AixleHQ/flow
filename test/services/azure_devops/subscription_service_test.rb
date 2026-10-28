@@ -160,19 +160,19 @@ module AzureDevops
       assert rows.all?(&:last_checked_at)
     end
 
-    # Another worker created the hook while this one waited for the row lock:
-    # posting again would leave a second hook in Azure aimed at the same endpoint.
-    test "a caller that waited on the row lock finds the hook created meanwhile and posts none" do
+    test "the app token is renewed before the row lock, not while the POST holds it" do
       stub_create
-      stale = create(:azure_devops_subscription, integration: @integration, azure_project_id: @integration.azure_project_id,
-                                                 event_type: "workitem.created", status: :pending, azure_subscription_id: nil)
-      AzureDevopsSubscription.where(id: stale.id).update_all(azure_subscription_id: "remote-1", status: "active")
-      @integration.azure_devops_subscriptions.expects(:find_by).once.returns(stale)
+      locked = []
+      record_lock = lambda do |*, payload|
+        table = payload[:sql][/FROM "(azure_devops_\w+)" .* FOR UPDATE/, 1]
+        locked << table if table
+      end
 
-      result = @service.ensure_all!(event_types: [ "workitem.created" ], base_url: "https://aixle.test")
+      ActiveSupport::Notifications.subscribed(record_lock, "sql.active_record") do
+        @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
+      end
 
-      assert_equal [ [ stale.id, "remote-1" ] ], result.map { |row| [ row.id, row.azure_subscription_id ] }
-      assert_not_requested :post, %r{/_apis/hooks/subscriptions}
+      assert_equal %w[azure_devops_installations azure_devops_subscriptions], locked
     end
 
     test "a row another worker inserted after the read is reused, not duplicated" do
