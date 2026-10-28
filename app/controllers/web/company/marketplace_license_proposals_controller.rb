@@ -6,8 +6,8 @@
 # Not under HostedBillingOnly, unlike the rest of the billing screens. The
 # workspace being asked about is by definition not yet billed by AWS, so the
 # guard would pass on the way in — but accepting is precisely what makes it
-# AWS-billed, and the redirect afterwards has to go somewhere the admin can
-# still open.
+# AWS-billed. The Billing tab stays open to such a workspace, and says where
+# its bill is, so that is where the answer lands.
 class Web::Company::MarketplaceLicenseProposalsController < Web::Company::ApplicationController
   before_action :require_proposal!
 
@@ -17,7 +17,7 @@ class Web::Company::MarketplaceLicenseProposalsController < Web::Company::Applic
     Billing::MarketplaceLicenseProposal.new(@license).accept!(by: current_user)
     MarketplaceProposalMailer.decided(@license.reload).deliver_later
 
-    redirect_to company_settings_path,
+    redirect_to company_settings_billing_path,
                 notice: "#{current_company.name} is now billed through AWS Marketplace."
   rescue Billing::MarketplaceLicenseProposal::Refused => e
     refuse(e.message)

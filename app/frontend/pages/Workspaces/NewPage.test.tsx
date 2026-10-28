@@ -212,6 +212,15 @@ describe('New workspace page', () => {
         });
       });
 
+      // The heading answers somebody who tried to create a workspace. A buyer
+      // who asked for the subscription to be applied is not being refused.
+      it('heads an ask under way with where it is, not with a refusal', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'pending' }) });
+
+        expect(screen.getByRole('heading', { name: 'Your request is with the administrators' })).toBeInTheDocument();
+        expect(screen.queryByText(/no second one to create/)).not.toBeInTheDocument();
+      });
+
       it('says a link has gone out, and that nobody has been asked yet', () => {
         renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'check-email' }) });
 
@@ -270,6 +279,65 @@ describe('New workspace page', () => {
   // wrap_parameters is off in this namespace. Posted flat, every submission came
   // back to the form with no visible reason — and both suites stayed green,
   // because each tested only its own side of the shape.
+  // A buyer arriving from AWS used to be shown the form and nothing else, and
+  // learned that their team already had a workspace only after typing an
+  // address at its domain. The subscription has two places it can go, and the
+  // page asks which.
+  describe('for a buyer whose subscription has nowhere to go yet', () => {
+    const buyer = (props = {}) => ({
+      ...stranger,
+      freeQueueHours: null,
+      marketplaceSubscription: true,
+      subscriptionRequest: null,
+      claimedDomain: null,
+      ...props,
+    });
+
+    it('asks where the subscription should go before showing any form', () => {
+      renderPage(<NewWorkspacePage />, { props: buyer() });
+
+      expect(screen.getByRole('button', { name: 'Create a new workspace' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Apply it to a workspace that already exists' })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Workspace name/)).not.toBeInTheDocument();
+    });
+
+    it('creating opens the usual form', async () => {
+      renderPage(<NewWorkspacePage />, { props: buyer() });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Create a new workspace' }));
+
+      expect(screen.getByLabelText(/Workspace name/)).toBeInTheDocument();
+    });
+
+    // Nothing but the address: the workspace is whichever one uses its domain,
+    // and the link sent there is what proves the address.
+    it('applying asks only for the address, and sends the link', async () => {
+      renderPage(<NewWorkspacePage />, { props: buyer() });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Apply it to a workspace that already exists' }));
+      await userEvent.type(screen.getByLabelText(/Your work email at that workspace/), 'dana@northwind.example');
+      await userEvent.click(screen.getByRole('button', { name: 'Email me the link' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/marketplace/aws/proposal',
+        { email: 'dana@northwind.example' },
+        expect.anything(),
+      );
+    });
+
+    it('brings a refused ask back on the ask, with the address kept', () => {
+      renderPage(<NewWorkspacePage />, {
+        props: buyer({
+          suggestedEmail: 'dana@nowhere.example',
+          errors: { base: 'There is no workspace at that domain to apply it to.' },
+        }),
+      });
+
+      expect(screen.getByLabelText(/Your work email at that workspace/)).toHaveValue('dana@nowhere.example');
+      expect(screen.getByText('There is no workspace at that domain to apply it to.')).toBeInTheDocument();
+    });
+  });
+
   it('posts the fields nested under workspace', async () => {
     const form = makeFormStub({ name: 'Northwind Robotics', email: 'dana@northwind.example', max_sessions: '8' });
     renderPage(<NewWorkspacePage />, { props: stranger, form });

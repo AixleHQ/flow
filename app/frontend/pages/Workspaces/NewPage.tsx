@@ -1,6 +1,7 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
+import { useState } from 'react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
 import { howItWorksPath, loginPath, logoutPath, marketplaceProposalPath, workspacePath } from 'shared/routes';
@@ -172,6 +173,63 @@ const SubscriptionRequest = ({ claim, state, email }: { claim: ClaimedDomain; st
   );
 };
 
+/** What a buyer arriving from AWS wants done with the subscription. */
+type BuyerMode = 'create' | 'attach';
+
+// The subscription has to go somewhere, and the page used to assume a new
+// workspace: a buyer whose team already has one found that out only after
+// typing an address at its domain. The workspace is still never chosen here --
+// it is whichever one uses the address's domain -- so this asks for nothing
+// but the address, and sends a link rather than raising anything.
+const AttachForm = ({ initialEmail, refusal }: { initialEmail: string; refusal?: string }) => {
+  const [email, setEmail] = useState(initialEmail);
+  const [sending, setSending] = useState(false);
+
+  return (
+    <Stack gap="md">
+      <TextInput
+        label="Your work email at that workspace"
+        type="email"
+        placeholder="you@acme-robotics.example"
+        description="We send a link there to confirm it is yours. The workspace is whichever one uses that domain, and nothing about it changes until an administrator there accepts."
+        required
+        size="md"
+        value={email}
+        onChange={(event) => setEmail(event.currentTarget.value)}
+        error={refusal}
+      />
+      <Button
+        fullWidth
+        size="md"
+        mt="xs"
+        loading={sending}
+        disabled={!email}
+        rightSection={<IconArrowRight size={16} />}
+        onClick={() => {
+          setSending(true);
+          router.post(marketplaceProposalPath(), { email }, { onFinish: () => setSending(false) });
+        }}
+      >
+        Email me the link
+      </Button>
+    </Stack>
+  );
+};
+
+const Chooser = ({ choose }: { choose: (mode: BuyerMode) => void }) => (
+  <Stack gap="md">
+    <Text size="sm" c="var(--app-text-secondary)">
+      Your AWS Marketplace subscription is recorded. Where should it go?
+    </Text>
+    <Button size="md" fullWidth onClick={() => choose('create')}>
+      Create a new workspace
+    </Button>
+    <Button size="md" fullWidth variant="default" onClick={() => choose('attach')}>
+      Apply it to a workspace that already exists
+    </Button>
+  </Stack>
+);
+
 // Reached two ways. Someone signed in gets here from their own proved address,
 // and signing out is their way to the sign-in screen where the methods named
 // here are offered. A Marketplace buyer was signed out on arrival, so there is
@@ -192,38 +250,52 @@ const ClaimedScreen = ({
   /** Why the last thing they tried was refused. Drawn here because this screen replaces the form that would have drawn it. */
   refusal?: string;
   email: string;
-}) => (
-  <PageShell variant="centered">
-    <Head title="Your domain already has a workspace" />
-    <div className={classes.form}>
-      <Group mb="xl">
-        <BrandLockup />
-      </Group>
-      <h2 className={classes.formTitle}>Your domain already has a workspace</h2>
-      <Text size="sm" c="var(--app-text-secondary)" mb="md">
-        Each domain has one workspace, so there is no second one to create for yours.
-      </Text>
-      <ClaimedDomainNotice claim={claim} inviteOffered={!subscriptionHeld} />
-      {refusal && (
-        <Alert color="red" mt="md" variant="light">
-          {refusal}
-        </Alert>
-      )}
-      {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
-      {signedIn ? (
-        <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
-          {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
-        </Button>
-      ) : (
-        claim.joinMethods.length > 0 && (
-          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.visit(loginPath())}>
-            Go to sign in
+}) => {
+  // "Already has a workspace" is the answer to somebody who tried to create
+  // one. A buyer who asked for the subscription to be applied to it is not
+  // being told no, so while the ask is under way the heading says where it is.
+  const asking = subscriptionHeld && (requestState === 'check-email' || requestState === 'pending');
+  const title = !asking
+    ? 'Your domain already has a workspace'
+    : requestState === 'check-email'
+      ? 'Check your email'
+      : 'Your request is with the administrators';
+
+  return (
+    <PageShell variant="centered">
+      <Head title={title} />
+      <div className={classes.form}>
+        <Group mb="xl">
+          <BrandLockup />
+        </Group>
+        <h2 className={classes.formTitle}>{title}</h2>
+        {!asking && (
+          <Text size="sm" c="var(--app-text-secondary)" mb="md">
+            Each domain has one workspace, so there is no second one to create for yours.
+          </Text>
+        )}
+        <ClaimedDomainNotice claim={claim} inviteOffered={!subscriptionHeld} />
+        {refusal && (
+          <Alert color="red" mt="md" variant="light">
+            {refusal}
+          </Alert>
+        )}
+        {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
+        {signedIn ? (
+          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
+            {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
           </Button>
-        )
-      )}
-    </div>
-  </PageShell>
-);
+        ) : (
+          claim.joinMethods.length > 0 && (
+            <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.visit(loginPath())}>
+              Go to sign in
+            </Button>
+          )
+        )}
+      </div>
+    </PageShell>
+  );
+};
 
 const NewWorkspacePage = () => {
   const {
@@ -239,6 +311,15 @@ const NewWorkspacePage = () => {
     subscriptionRequest,
     errors = {},
   } = usePage<PageProps>().props;
+
+  // A buyer is signed out on arrival; somebody signed in is making a workspace
+  // of their own and gets the form straight away. A refusal of an ask comes
+  // back on the ask, not on the form it never used.
+  const buyer = marketplaceSubscription && needsEmail;
+  const [mode, setMode] = useState<BuyerMode | null>(() => {
+    if (!buyer) return 'create';
+    return errors.base && suggestedEmail ? 'attach' : null;
+  });
 
   const form = useForm({
     name: suggestedName ?? nameFromEmail(suggestedEmail),
@@ -278,6 +359,34 @@ const NewWorkspacePage = () => {
       />
     );
 
+  const title = buyer && mode !== 'create' ? 'Set up your subscription' : 'Create your workspace';
+
+  if (!sentTo && buyer && mode !== 'create')
+    return (
+      <div className={classes.page}>
+        <Head title={title} />
+        <Pitch />
+        <section className={classes.formSide}>
+          <div className={classes.form}>
+            <h2 className={classes.formTitle}>{title}</h2>
+            {mode === 'attach' ? (
+              <>
+                <AttachForm initialEmail={suggestedEmail ?? ''} refusal={joined(errors.base)} />
+                <Text size="sm" c="var(--app-text-tertiary)" mt="md">
+                  No workspace yet?{' '}
+                  <Anchor size="sm" component="button" type="button" onClick={() => setMode('create')}>
+                    Create a new one instead
+                  </Anchor>
+                </Text>
+              </>
+            ) : (
+              <Chooser choose={setMode} />
+            )}
+          </div>
+        </section>
+      </div>
+    );
+
   return (
     <div className={classes.page}>
       <Head title={sentTo ? 'Check your email' : 'Create your workspace'} />
@@ -289,6 +398,14 @@ const NewWorkspacePage = () => {
         <section className={classes.formSide}>
           <div className={classes.form}>
             <h2 className={classes.formTitle}>Create your workspace</h2>
+            {buyer && (
+              <Text size="sm" c="var(--app-text-tertiary)" mb="sm">
+                Already have a workspace?{' '}
+                <Anchor size="sm" component="button" type="button" onClick={() => setMode('attach')}>
+                  Apply the subscription to it instead
+                </Anchor>
+              </Text>
+            )}
             <Text size="sm" c="var(--app-text-secondary)" mb="lg">
               <span className={classes.domainNote}>
                 {domain ? (
