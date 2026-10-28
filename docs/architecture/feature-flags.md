@@ -62,9 +62,10 @@ end
 The check is prepended, so it runs ahead of authentication and authorization and a company
 without the flag gets the same `404` whatever the user's role. A company-scoped flag is read for
 `current_company` when a user is signed in. Without a session (an anonymous visitor, or a
-token-authenticated controller) it is read at its global value, as `FeatureFlags.client_value`
-does for anonymous pages, so the gate fails closed: with the flag off globally the request gets
-`404`, not the sign-in redirect. A global flag is read for every request. Use `Feature.enabled?` inside an action only when the flag
+token-authenticated controller) it is read at its global value (`Feature.enabled?(key, company:
+nil)`), so the gate fails closed: with the flag off globally the request gets `404`, not the
+sign-in redirect. A global flag is read for every request. The gate reads `Feature` directly, not
+`FeatureFlags.client_value`, which is the browser projection only. Use `Feature.enabled?` inside an action only when the flag
 changes what the action does rather than whether it exists.
 
 ### Frontend
