@@ -25,6 +25,10 @@ module TypelizerModelPlugin
   class ActiveRecord < Typelizer::ModelPlugins::ActiveRecord
     # Inline unions, as `typelize %w[...]` wrote them: no named enum type.
     def enum_for(prop)
+      # Same contract as super: an association or nested prop is typed by its
+      # serializer, and a same-named column says nothing about it.
+      return if serializer_resolved_type?(prop)
+
       rails_enum = super
       return rails_enum if rails_enum || !INFERRED_ENUM_MODELS.include?(model_class.name)
 
