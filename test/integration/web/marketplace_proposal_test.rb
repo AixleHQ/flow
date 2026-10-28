@@ -237,10 +237,27 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
   # The workspace is looked up from the proved address, never passed in, so
   # there is no parameter here through which to aim a request somewhere else.
-  test "a proved address at a domain with no workspace raises nothing" do
+  # Told before the inbox, not after it: a buyer sent to open a link that can
+  # only be refused has been sent on an errand for nothing.
+  test "asking for a domain with no workspace is refused before any mail goes out" do
+    arrive_from_marketplace
+
+    ask(email: "dana@nowhere.example")
+    perform_enqueued_jobs
+
+    assert_empty ActionMailer::Base.deliveries
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/no workspace at that domain/i, props.dig(:errors, :base).to_s) }
+  end
+
+  # The domain had a workspace when the link was sent and none when it was
+  # opened: the link raises nothing rather than guessing.
+  test "a proved address at a domain whose workspace has since gone raises nothing" do
+    gone = create(:company, email_domain: "somewhere-else.example")
     arrive_from_marketplace
     ask(email: "dana@somewhere-else.example")
     perform_enqueued_jobs
+    gone.destroy!
 
     get confirm_marketplace_proposal_path(token: link_from_mail)
 

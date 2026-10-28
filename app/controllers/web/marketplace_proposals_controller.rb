@@ -27,6 +27,10 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
   def create
     return refuse(NO_SUBSCRIPTION) unless license&.proposable?
     return refuse("Enter the work email address you will use Aixle Flow with.") unless address.present?
+    # Said now rather than by the link: a domain with no workspace has nobody
+    # to ask, and a buyer told so after opening their inbox has been sent on an
+    # errand for nothing.
+    return refuse(Billing::MarketplaceLicenseProposal::DOMAIN_FREE) unless Company.exists?(email_domain: address.split("@").last)
 
     MarketplaceProposalMailer.confirm(
       email: address, token: MarketplaceProposalTicket.issue(license_id: license.id, email: address)

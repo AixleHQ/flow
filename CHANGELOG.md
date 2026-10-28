@@ -48,7 +48,9 @@ governance, community health — carry none.
   metering still runs but cancellations are never noticed.
 - **Company settings**: a buyer whose email domain already has a workspace can
   ask its administrators to apply the subscription to it, instead of being left
-  with a subscription attached to nothing. The workspace is never chosen — it is
+  with a subscription attached to nothing. The page AWS sends a buyer to asks
+  where the subscription should go, a new workspace or one that already
+  exists, before showing any form. The workspace is never chosen — it is
   whichever one holds the asker's own domain — the address is proved by a link
   sent to it, and an administrator still decides. An administrator proving
   their own address — a workspace subscribing again after cancelling — is
