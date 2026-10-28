@@ -26,6 +26,7 @@ module TypelizerModelPlugin
     ConfigItem
     Connector
     EntityVersion
+    MCPServer
     Runner
     Skill
   ].freeze
