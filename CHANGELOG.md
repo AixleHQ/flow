@@ -70,6 +70,9 @@ governance, community health — carry none.
   working for up to a week longer.
 - **Workflows**: the read-only notice in the workflow builder no longer covers
   the "← Workflows" back link, so a project viewer can click it again.
+- **Integrations**: enabling several Azure Boards triggers at once no longer
+  fails to set up the connection's Service Hooks, and concurrent setup no longer
+  creates the same Service Hook in Azure twice.
 - **Trackers**: a tracker comment or issue description whose text looks to an
   HTML parser like one tag with hundreds of attributes (for example `a <b`
   followed by a long pasted log) no longer drops the whole delivery, so its
