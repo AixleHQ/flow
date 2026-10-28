@@ -46,6 +46,8 @@ class BoardActivityResource < ApplicationResource
     when "comment_added"
       tag_info = meta["tag"].present? ? " with tag '#{meta['tag']}'" : ""
       "#{actor} added comment#{tag_info} on '#{task}'"
+    when "comment_deleted"
+      "#{actor} deleted a comment on '#{task}'"
     when "asset_attached"
       "#{actor} attached '#{meta['name']}' to '#{task}'"
     when "workflow_started"

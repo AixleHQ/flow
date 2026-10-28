@@ -22,6 +22,9 @@ governance, community health — carry none.
   workflow page, through personal access, as a retry of a failed run, or by a
   trigger. A retry links to the run it repeats. `get_workflow_run`,
   `list_workflow_runs` and the admin run page show both.
+- **Tasks**: you can delete your own comment on a task within 3 hours of
+  posting it, the same window as editing. The task's activity shows who deleted
+  a comment.
 - Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
   call, the tool (`tool=`), so an agent session's calls can be followed in the
   logs. Tool arguments are still never logged.

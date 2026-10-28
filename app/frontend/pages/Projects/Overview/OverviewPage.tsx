@@ -97,6 +97,7 @@ const ACTIVITY_EVENT_COLORS: Record<string, string> = {
   task_updated: 'var(--app-text-tertiary)',
   task_deleted: 'var(--app-text-tertiary)',
   comment_added: 'var(--app-chart-5)',
+  comment_deleted: 'var(--app-text-tertiary)',
   asset_attached: 'var(--app-chart-7)',
   workflow_triggered: 'var(--app-chart-2)',
   workflow_completed: 'var(--app-success-fg)',

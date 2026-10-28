@@ -9,6 +9,7 @@ module Web
             def index? = project_accessible?
             def create? = project_writable?
             def update? = project_writable?
+            def destroy? = project_writable?
           end
         end
       end
