@@ -21,6 +21,7 @@ module TypelizerModelPlugin
     BoardActivity
     BoardTask
     ColumnTransition
+    ColumnWorkflowBinding
     Runner
   ].freeze
 
