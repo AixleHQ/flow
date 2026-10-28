@@ -48,12 +48,12 @@ export const MarketplaceBanner = () => {
       </p>
       {!waiting && (
         <>
-          <Button size="xs" variant="filled" component="a" href={SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
+          <Button className={classes.cta} component="a" href={SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
             Open AWS Marketplace
           </Button>
           {/* Not a checkout: the card is offered on the Billing tab, beside
               what AWS was billed this month, and only there. */}
-          <Button size="xs" variant="outline" color="white" component={Link} href={companySettingsBillingPath()}>
+          <Button className={classes.cta} component={Link} href={companySettingsBillingPath()}>
             Pay by card instead
           </Button>
         </>
