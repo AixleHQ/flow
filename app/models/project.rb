@@ -25,6 +25,8 @@ class Project < ApplicationRecord
   has_many :assets, as: :scope, dependent: :destroy
   has_many :folders, as: :scope, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
+  # Before :integrations — a Coder runner's integration refuses to go while the runner uses it.
+  has_many :runners, dependent: :destroy
   has_many :integrations, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
   # Board must be destroyed before workflows: Workflow#check_column_bindings aborts

@@ -32,11 +32,11 @@
 /* ── Labels & Text ──────────────────────────────── */
 
 .label {
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
 }
 
 .subtitle {
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
 }
 
 /* ── Inputs ─────────────────────────────────────── */
@@ -45,7 +45,7 @@
   background-color: var(--app-bg-default);
   border-color: var(--app-border-default);
   color: var(--app-text-primary);
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
   font-size: 14px;
   padding: 12px 16px;
   height: auto;
@@ -70,7 +70,7 @@
 /* ── Submit ─────────────────────────────────────── */
 
 .submitButton {
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
   font-size: 14px;
   font-weight: 500;
 }
@@ -78,6 +78,6 @@
 /* ── No Workspace Screen ────────────────────────── */
 
 .noWorkspaceHeading {
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
   color: var(--app-text-primary);
 }

@@ -46,7 +46,7 @@ module Aixle
                   user: event.payload[:user], session: event.payload[:session] }
       # MCP tool calls and the three credential endpoints post secrets in bodies
       # whose keys no parameter filter can predict; their params are never logged.
-      return options if event.payload[:path].to_s.match?(%r{\A/(mcp|action_mcp|agents/credentials|agents/git/credentials|cloud/aws/credentials|azure/git/credentials)(/|\?|\z)})
+      return options.merge(event.payload.slice(:rpc, :tool).compact) if event.payload[:path].to_s.match?(%r{\A/(mcp|action_mcp|agents/credentials|agents/git/credentials|cloud/aws/credentials|azure/git/credentials)(/|\?|\z)})
 
       options.merge(params: event.payload[:params].except("controller", "action", "format", "utf8"))
     end

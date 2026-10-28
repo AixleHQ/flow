@@ -5,9 +5,8 @@
 # issued to, so ending that sign-in ends the pass, and a password change keeps
 # the browser it was made from signed in.
 #
-# `feature_snapshot` is the flag values the first `Feature.enabled?` of this
-# request or job saw, so one unit of work gets one answer per flag
-# (FeatureFlags.snapshot).
+# `feature_snapshot` is the flag values read by the first `Feature.enabled?` of
+# this request or job (FeatureFlags.snapshot).
 class Current < ActiveSupport::CurrentAttributes
   attribute :user_session
   attribute :feature_snapshot

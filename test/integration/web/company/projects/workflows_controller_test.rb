@@ -75,6 +75,19 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_inertia_props(readOnly: true)
   end
 
+  test "builder opens an archived workflow read-only, with the sessions it was archived with" do
+    wf = create(:workflow, scope: @project, name: "Old pipeline")
+    create(:step, workflow: wf, name: "Review")
+    Versions.archive!(wf, actor: Versions::Actor.ui(@user))
+
+    get builder_company_project_workflow_path(@project, wf)
+
+    assert_inertia_page "Projects/Workflows/BuilderPage"
+    assert_inertia_props(readOnly: true)
+    assert_equal [ "Review" ], inertia.props[:steps].pluck("name")
+    assert inertia.props[:workflow]["archivedAt"].present?
+  end
+
   test "builder lists every tracker, detached ones too, and whether each recognises a mention of Aixle" do
     integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     create(:project_tracker, integration: integration, handle: "boards", status: "detached")

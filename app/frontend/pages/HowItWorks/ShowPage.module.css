@@ -16,7 +16,7 @@
 }
 
 .heroTitle {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: clamp(2rem, 5vw, 3.2rem);
   line-height: 1.05;
@@ -36,7 +36,7 @@
 }
 
 .sectionTitle {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: clamp(1.5rem, 3vw, 2rem);
   letter-spacing: -0.025em;
@@ -68,7 +68,7 @@
 }
 
 .stepTitle {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 600;
   font-size: 1.15rem;
   letter-spacing: -0.015em;
@@ -84,7 +84,7 @@
 }
 
 .priceFigure {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: 40px;
   line-height: 1;

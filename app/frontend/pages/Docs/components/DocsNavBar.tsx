@@ -1,7 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import { IconBrandGithub, IconMenu2, IconSearch } from '@tabler/icons-react';
 
-import { Logo } from 'shared/ui/Logo';
+import { BrandLockup } from 'shared/ui';
 
 import { DOCS_SECTIONS, type DocsSection } from '../data/sections';
 import classes from '../DocsPage.module.css';
@@ -25,8 +25,7 @@ export function DocsNavBar({ active, onMenuClick, onSearchClick }: Props) {
       </button>
 
       <Link href="/docs" className={classes.navLogo} aria-label="Aixle Flow docs">
-        <Logo width={60} colorScheme="dark" />
-        <span className={classes.navBrandFlow}>Flow</span>
+        <BrandLockup size="sm" />
       </Link>
 
       <nav className={classes.navLinks} aria-label="Site sections">

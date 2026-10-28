@@ -120,5 +120,5 @@
 /* ── Subtitle text ─────────────────────────── */
 
 .subtitle {
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-family: var(--app-font-body);
 }

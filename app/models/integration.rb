@@ -20,6 +20,11 @@ class Integration < ApplicationRecord
   belongs_to :azure_devops_installation, optional: true
   # App mode only: the Forge installation whose pushed token this connection uses.
   belongs_to :bitbucket_installation, optional: true
+  # The keys from runners are restrictive until the Coder adapter decides what
+  # disconnecting does to its runners (DESIGN.md §15 task 17). Until then a
+  # removal is refused with a model error, not an InvalidForeignKey. Declared
+  # before the dependents below, so the refusal comes before they are destroyed.
+  has_many :runners, dependent: :restrict_with_error
   has_many :repositories, dependent: :destroy
   # Each GitLab repository has a hook in GitLab that would outlive it. Collected
   # before the repositories go, removed once the removal has committed.

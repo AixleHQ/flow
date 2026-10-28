@@ -1,66 +1,28 @@
 # frozen_string_literal: true
 
-require_relative "fakes/fake_feature_flag_version_token"
-
-# Feature flags in tests: no database, no Redis, no real ENV. Every test starts
-# from the declared defaults; the helpers below change one layer for a block and
-# put it back afterwards.
+# Feature flags in tests. Values are rows: with_feature creates them inside the
+# test's transaction, which rolls back on its own. The test cache is a null
+# store, so every read goes to the database. Tests use the flags
+# config/feature_flags.yml declares: external_runners is company-scoped,
+# coder_reap is global and has its own `env:` variable.
 #
-#   with_feature(:board_ai_summary, true) { ... }                          # global value
-#   with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
-#   stub_feature_env(:board_ai_summary, "off") { ... }                     # the FEATURE_* lock
-#   stub_feature_env_setting(:coder_reap, false) { ... }                   # the legacy env_setting lock
-#   with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }    # declare test flags
+#   with_feature(:external_runners, true) { ... }                         # global value
+#   with_feature(:external_runners, false, company: company) { ... }      # one override
+#   stub_feature_env(:coder_reap, "off") { ... }                          # FEATURE_CODER_REAP
+#   stub_feature_env(:coder_reap, "off", variable: "CODER_REAP_ENABLED") { ... }   # the flag's env:
 #
-# Values are the normal lever: with_feature writes the memory store, the same
-# mechanism production uses. The ENV and registry helpers go through the one
-# test seam, FeatureFlags.with, so a substitution is fiber-local and ends with
-# its block. A test of registry, ENV or resolver semantics builds those objects
-# itself (FeatureFlags::Resolver.new(registry:, env:, snapshot:)) instead.
-#
-# The database-backed FeatureFlags::Store is tested on its own, against real
-# rows and its own FakeFeatureFlagVersionToken (test/services/feature_flags/store_test.rb).
+# An ENV lock is a deployment fact, so it is the one thing a test substitutes:
+# stub_feature_env goes through FeatureFlags.with, fiber-local and undone when
+# its block ends. A test of the flag machinery itself builds its own Registry,
+# EnvSource and Resolver instead.
 module FeatureFlagsHelper
   extend ActiveSupport::Concern
-
-  EXAMPLE_REGISTRY = Rails.root.join("test/fixtures/files/feature_flags_registry.yml")
 
   included do
     setup { reset_feature_flags! }
   end
 
-  class_methods do
-    # with_feature_registry around every test of the class, setup and teardown
-    # included. The override is built from the booted graph before setup runs,
-    # so the suite's graph is re-installed first here as well.
-    def uses_feature_registry(path)
-      registry = FeatureFlags::Registry.load(path)
-      prepend(Module.new do
-        define_method(:run) do
-          FeatureFlagsHelper.reinstall_suite_graph!
-          with_feature_registry(registry) { super() }
-        end
-      end)
-    end
-  end
-
-  # A test of composition calls FeatureFlags.compose. One that calls
-  # FeatureFlags.boot! replaces the suite's graph (a database-backed store, a
-  # Redis token) for the rest of its worker; this puts the suite's back before
-  # the next test, whatever order the tests run in.
-  def self.reinstall_suite_graph!
-    FeatureFlags.boot!(SUITE_GRAPH) unless FeatureFlags.booted.equal?(SUITE_GRAPH)
-  end
-
-  # Re-installs the suite's graph if a test booted another, then empties the
-  # store and resets the version token, so every test starts from the declared
-  # defaults and counts its own bumps whatever an earlier test left behind. The
-  # ENV layer needs no reset: it is the booted one, empty in the suite, outside
-  # any stub_feature_env block.
   def reset_feature_flags!
-    FeatureFlagsHelper.reinstall_suite_graph!
-    FeatureFlags.store.reset!
-    FeatureFlags.version_token.reset!
     Current.feature_snapshot = nil
     Feature::REPORTED_UNKNOWN.clear
   end
@@ -69,59 +31,49 @@ module FeatureFlagsHelper
     raise ArgumentError, "with_feature takes true or false, got #{enabled.inspect}" unless [ true, false ].include?(enabled)
 
     definition = FeatureFlags.registry.fetch(key)
-    store = FeatureFlags.store
-    previous = store.snapshot
-
+    flag = FeatureFlag.find_or_create_by!(key: definition.key.to_s)
     if company.equal?(FeatureFlags::UNSET)
-      store.set_global(definition.key, enabled)
+      previous = flag.enabled
+      flag.update!(enabled: enabled)
     else
       raise ArgumentError, "feature flag #{definition.key} is global: it has no company overrides" if definition.global?
       raise ArgumentError, "with_feature(..., company:) needs a company" if company.nil?
 
-      store.set_override(definition.key, company.id, enabled)
+      override = flag.overrides.find_or_initialize_by(company: company)
+      previous = override.new_record? ? nil : override.enabled
+      override.update!(enabled: enabled, reason: "test")
     end
 
-    # A test runs inside one executor run, so the snapshot its first check
-    # pinned would otherwise hide the value set here.
+    # Inside an executor run the values its first check read would otherwise
+    # hide the row written here.
     Current.feature_snapshot = nil
     yield
   ensure
-    if previous
-      store.replace(previous)
-      Current.feature_snapshot = nil
+    restore_feature(flag, company, previous) if flag
+  end
+
+  # `variable` defaults to FEATURE_<KEY>; pass the flag's own `env:` variable to
+  # simulate that one.
+  def stub_feature_env(key, value, variable: nil, &)
+    definition = FeatureFlags.registry.fetch(key)
+    variable ||= definition.env_var
+    raise ArgumentError, "#{variable} does not lock #{definition.key}" unless definition.env_vars.include?(variable)
+
+    FeatureFlags.with(env: FeatureFlags.env_source.merge(variable => value), &)
+  end
+
+  private
+
+  # Puts the value back when the block ends, so nested with_feature blocks
+  # unwind in order; the transaction rollback removes the rows at the end.
+  def restore_feature(flag, company, previous)
+    if company.equal?(FeatureFlags::UNSET)
+      flag.update!(enabled: previous)
+    elsif previous.nil?
+      flag.overrides.where(company: company).delete_all
+    else
+      flag.overrides.find_by!(company: company).update!(enabled: previous)
     end
-  end
-
-  def stub_feature_env(key, value, &)
-    definition = FeatureFlags.registry.fetch(key)
-    FeatureFlags.with(env: FeatureFlags.env_source.merge(definition.env_var => value), &)
-  end
-
-  # The legacy lock of a flag declared with env_setting: `value` is what
-  # config/settings.yml would give it (true or false when its variable is set,
-  # nil when it is not).
-  def stub_feature_env_setting(key, value, &)
-    definition = FeatureFlags.registry.fetch(key)
-    raise ArgumentError, "feature flag #{definition.key} declares no env_setting" if definition.env_setting.nil?
-
-    FeatureFlags.with(env: FeatureFlags.env_source.merge_settings(definition.env_setting => value), &)
-  end
-
-  # Swaps the declared flags (a path or a FeatureFlags::Registry) for the block.
-  # The ENV layer is re-read against the new registry.
-  def with_feature_registry(registry, &)
-    registry = FeatureFlags::Registry.load(registry) unless registry.is_a?(FeatureFlags::Registry)
-    FeatureFlags.with(registry: registry, &)
+    Current.feature_snapshot = nil
   end
 end
-
-# The test environment's infrastructure, composed once for the whole suite:
-# CI has no Redis, and the suite never reads flag values from the database, so
-# the store is a MemoryStore and the version token a fake. The ENV layer is
-# empty: config/settings/test.yml drops FEATURE_* variables, and `settings: nil`
-# keeps legacy env_setting variables (CODER_REAP_ENABLED) of the shell out.
-# Parallel workers fork after this and each keeps its own copy. The suite keeps
-# the graph, so reset_feature_flags! can put it back if a test boots another.
-FeatureFlagsHelper::SUITE_GRAPH = FeatureFlags.boot!(
-  settings: nil, store: FeatureFlags::MemoryStore.new, version_token: FakeFeatureFlagVersionToken.new
-)

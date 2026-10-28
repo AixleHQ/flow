@@ -43,7 +43,7 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
-| **Overview** | Project home: activity, task distribution, spend, workflow run status |
+| **Overview** | Project home: activity, task distribution, token and session-time usage, workflow run status |
 | **Tasks** | The board: columns, cards, subtasks, comments, attachments, waits, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
 | **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behavior (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
 | **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack or Teams message, incoming webhook, task tracker event) and what can pause a run: a gate waiting on CI (waiting / passed / failed / stale) or a step waiting on a person |

@@ -218,6 +218,21 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert BoardActivity.exists?(board: @board, event_type: :task_deleted)
   end
 
+  # == destroy_comment ==
+
+  test "destroy_comment removes the comment and records a comment_deleted activity" do
+    task = create(:board_task, board: @board, board_column: @column)
+    comment = create(:task_comment, board_task: task, author: @user, body: "Typo here", tags: %w[review])
+
+    assert_difference -> { TaskComment.count }, -1 do
+      TaskService.destroy_comment(task: task, comment: comment, actor: @user)
+    end
+
+    activity = BoardActivity.find_by!(board: @board, board_task: task, event_type: :comment_deleted)
+    assert_equal @user, activity.actor
+    assert_equal({ "tag" => "review", "preview" => "Typo here" }, activity.metadata)
+  end
+
   # == move ==
 
   test "move changes column and creates transition" do

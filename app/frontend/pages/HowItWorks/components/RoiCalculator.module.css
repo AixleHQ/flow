@@ -34,7 +34,7 @@
 }
 
 .headline {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: 44px;
   line-height: 1.05;
@@ -93,7 +93,7 @@
 }
 
 .workerCount {
-  font-family: 'Hanken Grotesk', sans-serif;
+  font-family: var(--app-font-heading);
   font-weight: 700;
   font-size: 28px;
   line-height: 1;

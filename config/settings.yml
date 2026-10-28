@@ -484,11 +484,8 @@ coder:
   # is no way to tell a dead box from an unresponsive one — but a workspace
   # whose last start or stop failed is reaped without a probe. The feature flag
   # `coder_reap` (config/feature_flags.yml) is the only switch that stops all
-  # deletion: it defaults to on, and an admin can pause it at runtime from
-  # /admin/feature_flags. `reap_enabled` is that flag's legacy ENV lock: null
-  # (`~`) while CODER_REAP_ENABLED is unset, so the default never locks the
-  # flag; true or false once it is set, `true` meaning on as before.
-  reap_enabled:              <%= ENV['CODER_REAP_ENABLED'].nil? ? '~' : ENV['CODER_REAP_ENABLED'] == 'true' %>
+  # deletion: it defaults to on, an admin can pause it at runtime from
+  # /admin/feature_flags, and CODER_REAP_ENABLED (or FEATURE_CODER_REAP) locks it.
   reap_confirmation_minutes: <%= (ENV['CODER_REAP_CONFIRMATION_MINUTES'] || 10).to_i %>
   reap_max_deletions_per_run: <%= (ENV['CODER_REAP_MAX_DELETIONS_PER_RUN'] || 3).to_i %>
 
@@ -673,13 +670,15 @@ session_admission:
   pinned_release_confirmation_minutes: <%= (ENV['SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES'] || 5).to_i %>
 
 # Feature flags (config/feature_flags.yml). `env` carries every FEATURE_*
-# variable as a JSON object — JSON is valid YAML — so FeatureFlags::EnvSource can
-# parse and validate the ENV lock layer without app code reading ENV. The two
-# FEATURE_FLAGS_* knobs are the snapshot refresh cadence and its upper bound.
+# variable, and every variable a flag declares as its own `env:`, as a JSON
+# object — JSON is valid YAML — so FeatureFlags::EnvSource can parse and
+# validate the ENV lock layer without app code reading ENV. The registry is
+# parsed with the options FeatureFlags::Registry.load uses (aliases: false).
+<% flag_registry  = YAML.load_file(Rails.root.join("config/feature_flags.yml"), permitted_classes: [ Date ], aliases: false).to_h %>
+<% flag_env_names = flag_registry.values.filter_map { |flag| flag["env"] if flag.is_a?(Hash) } %>
+<% feature_env    = ENV.to_h.select { |name, _| name.start_with?("FEATURE_") || flag_env_names.include?(name) } %>
 feature_flags:
-  env: <%= ENV.to_h.select { |name, _| name.start_with?("FEATURE_") && !name.start_with?("FEATURE_FLAGS_") }.to_json %>
-  refresh_interval_seconds: <%= (ENV['FEATURE_FLAGS_REFRESH_INTERVAL'] || 5).to_i %>
-  max_staleness_seconds: <%= (ENV['FEATURE_FLAGS_MAX_STALENESS'] || 60).to_i %>
+  env: <%= feature_env.to_json %>
 
 # How long a tool result's stored payload is kept (ToolResultCleanupJob).
 tool_results:
