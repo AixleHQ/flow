@@ -519,7 +519,7 @@ function EntryRow({
         </div>
 
         <span className={classes.user}>
-          {entry.userName ? (
+          {entry.userName && entry.userId != null ? (
             <Link href={userPath(entry.userId)} className={classes.userLink} onClick={(e) => e.stopPropagation()}>
               {entry.userName}
             </Link>
