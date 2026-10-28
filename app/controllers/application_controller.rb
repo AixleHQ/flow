@@ -2,6 +2,7 @@
 
 class ApplicationController < ActionController::Base
   include AuthConcern
+  include FeatureGated
 
   helper_method :current_user, :true_user, :impersonated?
 

@@ -34,6 +34,7 @@ class Runner < ApplicationRecord
   validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :integration_usable, if: -> { coder? && integration.present? }
+  validate :config_matches_schema, if: -> { runner_type.present? }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
   scope :visible_for_project, ->(project) {
@@ -70,5 +71,9 @@ class Runner < ApplicationRecord
     return if integration.project_id.nil? || integration.project_id == project_id
 
     errors.add(:integration, project_id ? "must be company-wide or this project's" : "must be company-wide")
+  end
+
+  def config_matches_schema
+    Runners::ConfigSchema.errors(config, runner_type).each { |message| errors.add(:config, message) }
   end
 end

@@ -17,4 +17,11 @@ class DeepKeyCamelizerTest < ActiveSupport::TestCase
 
     assert_equal({ "env" => { "MY_TOKEN" => "a" }, "extraKey" => 1 }, DeepKeyCamelizer.call(payload))
   end
+
+  test "verbatim keeps a whole tree's keys at every depth" do
+    config = { "home_mount" => { "path" => "/home/op" }, "extra_mounts" => [ { "source_path" => "/x" } ] }
+    payload = { "runner_config" => DeepKeyCamelizer.verbatim(config), "_preserveKeys" => [ "runnerConfig" ], "max_concurrency" => 1 }
+
+    assert_equal({ "runnerConfig" => config, "maxConcurrency" => 1 }, DeepKeyCamelizer.call(payload))
+  end
 end

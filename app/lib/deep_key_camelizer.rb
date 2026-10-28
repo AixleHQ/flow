@@ -34,6 +34,20 @@ module DeepKeyCamelizer
     end
   end
 
+  # Marks every hash in `obj` so the whole tree keeps its keys verbatim, at any
+  # depth. A marker covers only its own hash's children, so data whose keys are
+  # names at every level (a runner's config, a JSON Schema) needs one per hash.
+  def self.verbatim(obj)
+    case obj
+    when Hash
+      obj.to_h { |k, v| [ k.to_s, verbatim(v) ] }.merge(PRESERVE_MARKER => obj.keys.map(&:to_s))
+    when Array
+      obj.map { |item| verbatim(item) }
+    else
+      obj
+    end
+  end
+
   def self.camelize_key(key)
     name = key.is_a?(Symbol) ? key.name : key.to_s
     name.match?(ALREADY_CAMEL) ? name : name.camelize(:lower)
