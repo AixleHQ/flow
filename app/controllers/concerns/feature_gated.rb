@@ -9,11 +9,14 @@
 #     requires_feature :runner_tokens, only: %i[rotate]    # some actions
 #   end
 #
-# The check is prepended, so it runs ahead of authorization and a company
-# without the flag gets the same 404 whatever the user's role. A company-scoped
-# flag is read for `current_company`, which needs a signed-in user: an anonymous
-# request is left to the authentication filter, so it is sent to sign in rather
-# than told the page does not exist. A global flag is read for every request.
+# The check is prepended, so it runs ahead of authentication and authorization,
+# and a company without the flag gets the same 404 whatever the user's role. A
+# company-scoped flag is read for `current_company` when a user is signed in.
+# Without a session (an anonymous visitor, or a token-authenticated controller)
+# there is no company, so the flag is read at its global value, as
+# FeatureFlags.client_value does for anonymous pages: the gate fails closed
+# rather than letting the request through. A global flag is read for every
+# request.
 module FeatureGated
   extend ActiveSupport::Concern
 
@@ -29,12 +32,10 @@ module FeatureGated
   private
 
   def required_feature_enabled?(key)
-    definition = FeatureFlags.registry.declared?(key) ? FeatureFlags.registry.fetch(key) : nil
     # An undeclared key goes to Feature.enabled? as it is, which raises in
     # development and test and reads as off elsewhere.
-    return Feature.enabled?(key) unless definition&.company_scoped?
-    return true unless signed_in?
+    return Feature.enabled?(key) unless FeatureFlags.registry.declared?(key)
 
-    Feature.enabled?(key, company: current_company)
+    FeatureFlags.client_value(FeatureFlags.registry.fetch(key), company: signed_in? ? current_company : nil)
   end
 end

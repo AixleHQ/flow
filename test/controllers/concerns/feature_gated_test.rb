@@ -3,9 +3,9 @@
 require "test_helper"
 
 # `requires_feature` (FeatureGated): a 404 while the flag is off, scoped to the
-# actions it names, a company-scoped flag read for the current company and left
-# to authentication when nobody is signed in. The runners request tests cover
-# it on real controllers.
+# actions it names, a company-scoped flag read for the current company, and at
+# its global value when nobody is signed in. The runners request tests cover it
+# on real controllers.
 class FeatureGatedTest < ActionDispatch::IntegrationTest
   class GatedController < ActionController::Base
     include FeatureGated
@@ -49,8 +49,17 @@ class FeatureGatedTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "an anonymous request is left to authentication rather than answered 404" do
+  test "without a session a company-scoped flag is read at its global value, so the gate fails closed" do
     with_feature(:external_runners, false) do
+      # A company override does not reach a request that has no company.
+      with_feature(:external_runners, true, company: @company) do
+        draw_gated_routes do
+          get "/gated"
+          assert_response :not_found
+        end
+      end
+    end
+    with_feature(:external_runners, true) do
       draw_gated_routes do
         get "/gated"
         assert_response :ok
