@@ -19,6 +19,7 @@ module TypelizerModelPlugin
     Agent
     AssetVersion
     BoardActivity
+    BoardTask
     ColumnTransition
     Runner
   ].freeze
