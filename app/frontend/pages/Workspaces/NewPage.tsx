@@ -250,38 +250,52 @@ const ClaimedScreen = ({
   /** Why the last thing they tried was refused. Drawn here because this screen replaces the form that would have drawn it. */
   refusal?: string;
   email: string;
-}) => (
-  <PageShell variant="centered">
-    <Head title="Your domain already has a workspace" />
-    <div className={classes.form}>
-      <Group mb="xl">
-        <BrandLockup />
-      </Group>
-      <h2 className={classes.formTitle}>Your domain already has a workspace</h2>
-      <Text size="sm" c="var(--app-text-secondary)" mb="md">
-        Each domain has one workspace, so there is no second one to create for yours.
-      </Text>
-      <ClaimedDomainNotice claim={claim} inviteOffered={!subscriptionHeld} />
-      {refusal && (
-        <Alert color="red" mt="md" variant="light">
-          {refusal}
-        </Alert>
-      )}
-      {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
-      {signedIn ? (
-        <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
-          {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
-        </Button>
-      ) : (
-        claim.joinMethods.length > 0 && (
-          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.visit(loginPath())}>
-            Go to sign in
+}) => {
+  // "Already has a workspace" is the answer to somebody who tried to create
+  // one. A buyer who asked for the subscription to be applied to it is not
+  // being told no, so while the ask is under way the heading says where it is.
+  const asking = subscriptionHeld && (requestState === 'check-email' || requestState === 'pending');
+  const title = !asking
+    ? 'Your domain already has a workspace'
+    : requestState === 'check-email'
+      ? 'Check your email'
+      : 'Your request is with the administrators';
+
+  return (
+    <PageShell variant="centered">
+      <Head title={title} />
+      <div className={classes.form}>
+        <Group mb="xl">
+          <BrandLockup />
+        </Group>
+        <h2 className={classes.formTitle}>{title}</h2>
+        {!asking && (
+          <Text size="sm" c="var(--app-text-secondary)" mb="md">
+            Each domain has one workspace, so there is no second one to create for yours.
+          </Text>
+        )}
+        <ClaimedDomainNotice claim={claim} inviteOffered={!subscriptionHeld} />
+        {refusal && (
+          <Alert color="red" mt="md" variant="light">
+            {refusal}
+          </Alert>
+        )}
+        {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
+        {signedIn ? (
+          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
+            {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
           </Button>
-        )
-      )}
-    </div>
-  </PageShell>
-);
+        ) : (
+          claim.joinMethods.length > 0 && (
+            <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.visit(loginPath())}>
+              Go to sign in
+            </Button>
+          )
+        )}
+      </div>
+    </PageShell>
+  );
+};
 
 const NewWorkspacePage = () => {
   const {

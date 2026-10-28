@@ -212,6 +212,15 @@ describe('New workspace page', () => {
         });
       });
 
+      // The heading answers somebody who tried to create a workspace. A buyer
+      // who asked for the subscription to be applied is not being refused.
+      it('heads an ask under way with where it is, not with a refusal', () => {
+        renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'pending' }) });
+
+        expect(screen.getByRole('heading', { name: 'Your request is with the administrators' })).toBeInTheDocument();
+        expect(screen.queryByText(/no second one to create/)).not.toBeInTheDocument();
+      });
+
       it('says a link has gone out, and that nobody has been asked yet', () => {
         renderPage(<NewWorkspacePage />, { props: buyer({}, { subscriptionRequest: 'check-email' }) });
 
