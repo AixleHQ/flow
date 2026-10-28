@@ -1,6 +1,8 @@
-import { usePage } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Button } from '@mantine/core';
 import { IconAlertTriangle, IconHourglassHigh } from '@tabler/icons-react';
+
+import { companySettingsBillingPath } from 'shared/routes';
 
 // The banner slot above the content is one thing, so it keeps one look. The
 // content differs entirely: there is no allowance to show and no card to add.
@@ -40,14 +42,21 @@ export const MarketplaceBanner = () => {
         ) : (
           <>
             Your AWS Marketplace subscription has ended, so no new sessions start. Anything already running finishes.
-            Your data is kept. Subscribe again in AWS Marketplace to carry on.
+            Your data is kept. Subscribe again in AWS Marketplace to carry on, or pay by card.
           </>
         )}
       </p>
       {!waiting && (
-        <Button size="xs" variant="filled" component="a" href={SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
-          Open AWS Marketplace
-        </Button>
+        <>
+          <Button size="xs" variant="filled" component="a" href={SUBSCRIPTIONS_URL} target="_blank" rel="noreferrer">
+            Open AWS Marketplace
+          </Button>
+          {/* Not a checkout: the card is offered on the Billing tab, beside
+              what AWS was billed this month, and only there. */}
+          <Button size="xs" variant="outline" color="white" component={Link} href={companySettingsBillingPath()}>
+            Pay by card instead
+          </Button>
+        </>
       )}
     </div>
   );
