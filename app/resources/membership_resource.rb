@@ -8,12 +8,10 @@ class MembershipResource < ApplicationResource
 
   attributes :id
 
-  typelize CompanyMembership.role.values
   attribute :role do |membership|
     membership.role.to_s
   end
 
-  typelize :string
   attribute :state do |membership|
     membership.state.to_s
   end

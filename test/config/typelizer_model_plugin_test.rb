@@ -25,6 +25,14 @@ class TypelizerModelPluginTest < ActiveSupport::TestCase
     assert_equal %w[pending connected degraded unreachable disabled revoked], plugin.enum_for(prop(:status))
   end
 
+  test "a model with two AASM machines gets each column its own machine's states" do
+    plugin = plugin_for(CompanyMembership)
+
+    assert_equal %w[invited active suspended revoked], plugin.enum_for(prop(:state))
+    assert_equal %w[step1 step2 completed], plugin.enum_for(prop(:onboarding_state))
+    assert_equal %w[employee admin viewer], plugin.enum_for(prop(:role))
+  end
+
   test "a plain column has no union" do
     assert_nil plugin_for(Runner).enum_for(prop(:name))
   end
@@ -36,8 +44,8 @@ class TypelizerModelPluginTest < ActiveSupport::TestCase
   end
 
   test "a model outside INFERRED_ENUM_MODELS is left as typelizer types it" do
-    assert_not_includes TypelizerModelPlugin::INFERRED_ENUM_MODELS, "Agent"
-    assert_nil plugin_for(Agent).enum_for(prop(:source))
+    assert_not_includes TypelizerModelPlugin::INFERRED_ENUM_MODELS, "WorkflowRun"
+    assert_nil plugin_for(WorkflowRun).enum_for(prop(:mode))
   end
 
   test "a Rails enum keeps typelizer's own named enum type" do

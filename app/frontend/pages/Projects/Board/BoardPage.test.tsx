@@ -35,7 +35,7 @@ const columns = [
 
 // buildBoardTask (typed factory) is the drift contract. This thin wrapper re-applies the
 // page-local defaults these tests were written against where they differ from the factory's:
-//   taskType 'story' (factory: 'feature'), commentsCount 0 (factory: 3), title 'Untitled'
+//   taskType 'story' (factory: 'not_specified'), commentsCount 0 (factory: 3), title 'Untitled'
 //   (factory: 'Task'; always overridden below anyway), and no assignee (factory: 'Ada').
 const makeTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: null, ...overrides });

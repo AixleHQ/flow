@@ -6,12 +6,10 @@
 class EntityVersionResource < ApplicationResource
   attributes :id, :number, :versionable_type, :versionable_id, :terminal_session_id, :created_at
 
-  typelize %w[created saved reverted archived restored]
   attribute :event do |version|
     version.event.to_s
   end
 
-  typelize %w[ui api mcp builder system]
   attribute :source do |version|
     version.source.to_s
   end
