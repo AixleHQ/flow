@@ -151,6 +151,14 @@ async function editTaskComment(projectId: number, taskId: number, commentId: num
   return saved;
 }
 
+async function deleteTaskComment(projectId: number, taskId: number, commentId: number) {
+  const deleted = await apiMutate(apiV1ProjectTaskCommentPath(projectId, taskId, commentId), {
+    method: 'DELETE',
+  });
+  if (deleted) router.reload({ only: ['task_comments', 'task_activities'] });
+  return deleted;
+}
+
 async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
   const formData = new FormData();
   formData.append('task_asset[name]', file.name);
@@ -240,6 +248,8 @@ export function TaskDetailSidebar({
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentBody, setEditingCommentBody] = useState('');
   const [savingCommentEdit, setSavingCommentEdit] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<number | null>(null);
+  const [deletingComment, setDeletingComment] = useState(false);
   const [authorFilter, setAuthorFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
@@ -391,6 +401,14 @@ export function TaskDetailSidebar({
     const saved = await editTaskComment(projectId, task.id, commentId, body);
     setSavingCommentEdit(false);
     if (saved) cancelEditComment();
+  };
+
+  const confirmDeleteComment = async () => {
+    if (!task || commentToDelete === null) return;
+    setDeletingComment(true);
+    const deleted = await deleteTaskComment(projectId, task.id, commentToDelete);
+    setDeletingComment(false);
+    if (deleted) setCommentToDelete(null);
   };
 
   const moveToColumn = async (columnId: string) => {
@@ -1426,29 +1444,54 @@ export function TaskDetailSidebar({
                   {/* Actions */}
                   <Box style={{ display: 'flex', gap: 2, marginTop: 8 }}>
                     {editingCommentId !== c.id && canEditComment(c, currentUserId) && (
-                      <Box
-                        component="button"
-                        onClick={() => startEditComment(c)}
-                        data-testid={`edit-comment-${c.id}`}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 5,
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--mantine-color-placeholder)',
-                          fontFamily: 'inherit',
-                          fontSize: 12,
-                          padding: '4px 8px',
-                          borderRadius: 5,
-                          cursor: 'pointer',
-                          transition: 'color .12s, background .12s',
-                        }}
-                        className={styles.cmtAct}
-                      >
-                        <IconPencil size={13} />
-                        Edit
-                      </Box>
+                      <>
+                        <Box
+                          component="button"
+                          onClick={() => startEditComment(c)}
+                          data-testid={`edit-comment-${c.id}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--mantine-color-placeholder)',
+                            fontFamily: 'inherit',
+                            fontSize: 12,
+                            padding: '4px 8px',
+                            borderRadius: 5,
+                            cursor: 'pointer',
+                            transition: 'color .12s, background .12s',
+                          }}
+                          className={styles.cmtAct}
+                        >
+                          <IconPencil size={13} />
+                          Edit
+                        </Box>
+                        <Box
+                          component="button"
+                          onClick={() => setCommentToDelete(c.id)}
+                          aria-label="Delete comment"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--mantine-color-placeholder)',
+                            fontFamily: 'inherit',
+                            fontSize: 12,
+                            padding: '4px 8px',
+                            borderRadius: 5,
+                            cursor: 'pointer',
+                            transition: 'color .12s, background .12s',
+                          }}
+                          className={styles.cmtAct}
+                        >
+                          <IconTrash size={13} />
+                          Delete
+                        </Box>
+                      </>
                     )}
                     <Box
                       component="button"
@@ -2003,6 +2046,26 @@ export function TaskDetailSidebar({
               setDeleteConfirm(false);
             }}
           >
+            Delete
+          </Button>
+        </Group>
+      </Modal>
+
+      <Modal
+        opened={commentToDelete !== null}
+        onClose={() => setCommentToDelete(null)}
+        title="Delete comment"
+        centered
+        size="sm"
+      >
+        <Text size="sm" mb="md">
+          Are you sure you want to delete this comment? This action cannot be undone.
+        </Text>
+        <Group justify="flex-end">
+          <Button variant="outline" onClick={() => setCommentToDelete(null)}>
+            Cancel
+          </Button>
+          <Button color="red" loading={deletingComment} onClick={confirmDeleteComment}>
             Delete
           </Button>
         </Group>
