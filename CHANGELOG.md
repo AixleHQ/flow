@@ -63,6 +63,11 @@ governance, community health — carry none.
 - **Sign-in & onboarding**: the new Aixle Flow logo, with Flow in the brand
   orange, on the sign-in, workspace sign-up and How it works pages, the docs
   header and the "Powered by" line under every page.
+- **Company settings**: the free-capacity banner spans the whole window, above
+  the sidebar, on a solid orange bar from the first worker-hour. Once less than
+  a day is left at the workspace's limit, or 85% is spent, it leads with when
+  free capacity runs out and the button reads "Add a card now". A spent
+  allowance turns the bar solid red.
 
 ### Fixed
 - **Company members**: the link in an invitation reminder email stops working on
