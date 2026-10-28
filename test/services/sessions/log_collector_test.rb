@@ -202,24 +202,47 @@ module Sessions
     # included, and no write-time filter ever sees it.
 
     KIRO_TRANSCRIPT = "/home/kiro/.kiro/sessions/c52ddf65/sess_3fdd2276/messages.jsonl"
+    KIRO_SUB_TRANSCRIPT = "/home/kiro/.kiro/sessions/c52ddf65/sess_3fdd2276/sub-executions/0b7e5c1a.jsonl"
     KIRO_SERVER_LOG = "/home/kiro/.kiro/logs/20261028T135607984/kiro.log"
 
     def use_kiro_adapter
       @adapter = Agents::KiroCliAdapter.new
       @runtime.fs[KIRO_TRANSCRIPT] =
         %({"payload":{"type":"tool_result","content":"Caught error reading: ENOENT","success":false}}\n)
+      @runtime.fs[KIRO_SUB_TRANSCRIPT] =
+        %({"payload":{"type":"tool_result","content":"browser_click: element not found","success":false}}\n)
       @runtime.fs[KIRO_SERVER_LOG] = %({"level":"error","message":"[read_file] Failed to read file"}\n)
     end
 
-    test "collects Kiro's transcript and server log, failing tool results included" do
+    test "collects Kiro's transcripts and server log, failing tool results included" do
       use_kiro_adapter
 
       result = collect
 
       assert_empty result.failures
-      assert_includes @session.session_logs.find_by(name: "messages.jsonl").file.read,
+      assert_includes @session.session_logs.find_by(name: "sess_3fdd2276.messages.jsonl").file.read,
                       %("content":"Caught error reading: ENOENT","success":false)
-      assert_includes @session.session_logs.find_by(name: "kiro.log").file.read, "Failed to read file"
+      assert_includes @session.session_logs.find_by(name: "sess_3fdd2276.sub-0b7e5c1a.jsonl").file.read,
+                      %("content":"browser_click: element not found","success":false)
+      assert_includes @session.session_logs.find_by(name: "20261028T135607984-kiro.log").file.read,
+                      "Failed to read file"
+      assert_includes result.contents.keys, "logs/sess_3fdd2276.messages.jsonl"
+      assert_includes result.contents.keys, "logs/http.log", "a usage log lost the key its parser reads"
+    end
+
+    # Two conversations in one container (an agent restart, a /clear) used to make two
+    # rows both named messages.jsonl, and contents kept only the last one.
+    test "stores two Kiro conversations under distinct names" do
+      use_kiro_adapter
+      @runtime.fs["/home/kiro/.kiro/sessions/c52ddf65/sess_77aa0011/messages.jsonl"] = %({"payload":{}}\n)
+
+      result = collect
+
+      names = @session.session_logs.pluck(:name)
+      assert_includes names, "sess_3fdd2276.messages.jsonl"
+      assert_includes names, "sess_77aa0011.messages.jsonl"
+      assert_equal names.uniq, names
+      assert_includes result.contents.keys, "logs/sess_77aa0011.messages.jsonl"
     end
 
     test "reads a log the agent writes itself through the redactor even when the container scrubs" do
@@ -227,14 +250,19 @@ module Sessions
       item = create(:config_item, :secret, scope: @project, name: "API_TOKEN", value: "s3cr3t-value")
       @session.config_items << item
       @runtime.fs[KIRO_TRANSCRIPT] = %({"payload":{"type":"tool_result","content":"s3cr3t-value"}}\n)
+      @runtime.fs[KIRO_SUB_TRANSCRIPT] = %({"payload":{"type":"tool_result","content":"s3cr3t-value"}}\n)
 
       with_filters { collect(cache_storage_key: presigned_cache) }
 
       uploaded = @runtime.uploads.map { |u| u[:path] }
       assert_not_includes uploaded, KIRO_TRANSCRIPT
+      assert_not_includes uploaded, KIRO_SUB_TRANSCRIPT
       assert_not_includes uploaded, KIRO_SERVER_LOG
       assert_includes uploaded, "/var/log/mitm/http.log", "a filtered log lost its direct upload"
-      assert_not_includes @session.session_logs.find_by(name: "messages.jsonl").file.read, "s3cr3t-value"
+      assert_not_includes @session.session_logs.find_by(name: "sess_3fdd2276.messages.jsonl").file.read,
+                          "s3cr3t-value"
+      assert_not_includes @session.session_logs.find_by(name: "sess_3fdd2276.sub-0b7e5c1a.jsonl").file.read,
+                          "s3cr3t-value"
     end
 
     test "falls back to the bounded read when the upload fails, and says so" do

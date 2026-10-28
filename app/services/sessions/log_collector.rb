@@ -85,7 +85,7 @@ module Sessions
       contents = {}
 
       found.each do |path, size|
-        name = File.basename(path)
+        name = log_name(path)
 
         if direct_upload?(path) && (uploaded = upload_from_container(path, size, name))
           log = persist(name, uploaded, size)
@@ -180,6 +180,13 @@ module Sessions
     def unfiltered_patterns
       @unfiltered_patterns ||=
         adapter.respond_to?(:unfiltered_log_paths) ? Array(adapter.unfiltered_log_paths).compact_blank : []
+    end
+
+    # Agents::BaseAdapter#session_log_name, so an adapter whose CLI keeps the session id
+    # in a directory can still store each file under a distinct, correlatable name.
+    def log_name(path)
+      name = adapter.session_log_name(path) if adapter.respond_to?(:session_log_name)
+      name.presence || File.basename(path)
     end
 
     # Hands the container a URL it can PUT to and lets it do the transfer. Nothing about
@@ -282,10 +289,10 @@ module Sessions
     # with a server-side copy, so the bytes never travel through here at all. Returns the
     # record, because a caller that handed over an upload has no other way to read it back.
     #
-    # The name is the basename, so the keys adapters already read
-    # (`artifacts["logs/http.log"]`) keep working. For a transcript that basename is the
-    # agent's own session id, which is the key that correlates this row with the vendor's
-    # telemetry.
+    # The name is the adapter's #session_log_name — the basename unless it says otherwise —
+    # so the keys adapters already read (`artifacts["logs/http.log"]`) keep working. For a
+    # transcript that name carries the agent's own session id, which is the key that
+    # correlates this row with the vendor's telemetry.
     def persist(name, body, size)
       log = SessionLog.new(
         terminal_session: session,

@@ -800,6 +800,17 @@ module Agents
       []
     end
 
+    # The name Sessions::LogCollector stores a collected log under (and its
+    # `artifacts["logs/<name>"]` key). The basename by default, which for a transcript
+    # named after the agent's session id is already the key that correlates the row with
+    # the vendor's telemetry. An adapter whose CLI keeps that id in a directory instead
+    # (and gives every file the same basename) overrides this so rows stay distinct.
+    # @param path [String] the file's path in the container
+    # @return [String]
+    def session_log_name(path)
+      File.basename(path)
+    end
+
 
     # Collect and verify usage data at session cleanup.
     # Called from AgentSessionStrategy#before_cleanup after artifact collection.
