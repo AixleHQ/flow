@@ -37,6 +37,7 @@ module TypelizerModelPlugin
     SubStepRun
     TaskAsset
     TaskComment
+    TerminalSession
   ].freeze
 
   def self.new(model_class:, config:)

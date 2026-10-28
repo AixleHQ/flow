@@ -210,7 +210,8 @@ const SessionsRunsPage = ({
         const map = new Map(prev);
         for (const row of rows) {
           const key = entryKey(row);
-          if (map.has(key)) map.set(key, { ...map.get(key)!, ...row });
+          // Same key, same kind: TypeScript cannot follow that through the spread.
+          if (map.has(key)) map.set(key, { ...map.get(key)!, ...row } as ListEntry);
         }
         return map;
       });
