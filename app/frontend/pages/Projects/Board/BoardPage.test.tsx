@@ -2547,6 +2547,28 @@ describe('Projects/Board/BoardPage', () => {
     expect(card.querySelector('svg.tabler-icon-bolt')).toBeTruthy();
   });
 
+  it('shows a card whose run waits for a session slot as Queued, not Running', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Merge to develop',
+            boardColumnId: 100,
+            recentWorkflowRuns: [runOf({ state: 'queued' })],
+          }),
+        ],
+      },
+    });
+
+    const card = screen.getByText('Merge to develop').closest('[class*="Paper-root"]') as HTMLElement;
+    const inCard = within(card);
+
+    expect(inCard.getByText('Queued')).toBeInTheDocument();
+    expect(inCard.queryByText('Running')).not.toBeInTheDocument();
+  });
+
   it('opens the create-task panel as a right-side Drawer (not a modal) via the "n" hotkey', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
