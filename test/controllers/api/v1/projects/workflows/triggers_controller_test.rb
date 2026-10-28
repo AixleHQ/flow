@@ -39,6 +39,22 @@ module Api
             assert_equal %w[chat column], kinds
           end
 
+          test "index lists an archived workflow's triggers, and the workflow takes no new ones" do
+            create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message")
+            Versions.archive!(@workflow, actor: Versions::Actor.ui(@user))
+
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+
+            assert_response :success
+            assert_equal [ [ "chat", false ] ], json["triggers"].map { |t| t.values_at("kind", "enabled") }
+
+            assert_no_difference "TriggerBinding.count" do
+              post :create, params: { project_id: @project.id, workflow_id: @workflow.id,
+                                      trigger: { kind: "chat", event_type: "chat.message" } }, as: :json
+            end
+            assert_response :not_found
+          end
+
           test "create tracker trigger stores its tracker, how it treats Aixle's own changes, and whether it copies files" do
             integration = create(:integration, :azure_devops, :active, company: @company, project: @project)
             tracker = create(:project_tracker, integration: integration)

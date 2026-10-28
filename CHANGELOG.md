@@ -14,13 +14,6 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
-- **Admin**: `bin/rails feature_flags:audit` lists the feature flags due for
-  removal: release flags past their remove-by date, flags that have had the same
-  value for every company for 30 days, database rows of flags no longer
-  declared, and `FEATURE_*` variables no flag declares. `bin/rails
-  feature_flags:prune` deletes those leftover rows, recording each key in the
-  audit trail; it is an optional manual step once a rollout has replaced every
-  old pod, described in the release guide.
 - **Profile**: the `trigger_workflow` tool of personal access takes an optional
   `idempotency_key`. A second call with the same key returns the run the first
   call started instead of starting another, so an agent can retry safely after a
@@ -29,8 +22,24 @@ governance, community health — carry none.
   workflow page, through personal access, as a retry of a failed run, or by a
   trigger. A retry links to the run it repeats. `get_workflow_run`,
   `list_workflow_runs` and the admin run page show both.
+- **Tasks**: you can delete your own comment on a task within 3 hours of
+  posting it, the same window as editing. The task's activity shows who deleted
+  a comment.
+- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
+  call, the tool (`tool=`), so an agent session's calls can be followed in the
+  logs. Tool arguments are still never logged.
+- **Workflows**: an archived workflow's name in the Archived list opens its
+  configuration (sessions, triggers, base resources) read-only. Restore it to
+  edit it; the builder's back link returns to the Archived list.
 
 ### Changed
+- **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
+  "Session Time" — how many tokens the project's sessions consumed and how long
+  they ran, each with a per-session average. A dollar figure misled projects
+  whose agents run on a subscription.
+- **Integrations**: `CODER_REAP_ENABLED` takes the same values as any
+  `FEATURE_*` lock (`on`/`off`, `true`/`false`, `1`/`0`); any other value now
+  stops the app at boot, naming the variable, instead of meaning off.
 - **Sessions & Runs**: an automatic Kiro session shows Kiro's full terminal
   interface, so its live terminal shows each tool call with its output and can
   be steered, as with the other runtimes. If Kiro stops to ask a person what to
@@ -48,8 +57,13 @@ governance, community health — carry none.
   stays at 0.60.0: newer releases still stop `--yolo` at a prompt when the
   agent edits a build file or runs a command on a path an earlier command
   printed.
+- **Sign-in & onboarding**: the new Aixle Flow logo, with Flow in the brand
+  orange, on the sign-in, workspace sign-up and How it works pages, the docs
+  header and the "Powered by" line under every page.
 
 ### Fixed
+- **Workflows**: the read-only notice in the workflow builder no longer covers
+  the "← Workflows" back link, so a project viewer can click it again.
 - **Integrations**: enabling several Azure Boards triggers at once no longer
   fails to set up the connection's Service Hooks, and concurrent setup no longer
   creates the same Service Hook in Azure twice.
@@ -60,6 +74,8 @@ governance, community health — carry none.
   instead of staying received.
 - **Triggers & gates**: the Auto / Manual switch of a column trigger now
   highlights the selected mode, so it is clear which one a trigger uses.
+- **Tasks**: a card whose workflow run is waiting for a free session slot shows
+  a blue "Queued" chip instead of "Running", matching Sessions & Runs.
 - **Tasks**: the REST endpoint that lists board tasks ignores a `q` that is not
   a filter hash (for example `?q=foo`) instead of failing with a server error.
 - **Sessions & Runs**: an agent session on Kubernetes no longer fails to start
@@ -91,6 +107,11 @@ governance, community health — carry none.
   a day, failing the requests in flight.
 - **Docs**: *Connecting Slack* no longer says Flow has no slash commands in
   Slack, and describes the `/help` list as the app sends it, naming no project.
+- **Docs**: *Building workflows* uses the builder's names — a workflow is made
+  of sessions, a session of steps — and explains that each session runs in its
+  own fresh container, that files pass between sessions as outputs, and that a
+  session's steps are a checklist one agent works through. The other Using Flow
+  pages use the same names.
 
 ## [1.6.0] - 2026-10-24
 

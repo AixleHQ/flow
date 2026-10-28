@@ -34,7 +34,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'running-workflows',
     title: 'Building workflows',
     section: 'Using Flow',
-    desc: 'Creating a workflow, what a step holds, dependencies and parallel steps, on-failure behaviour, approval steps, and publishing to the catalog.',
+    desc: 'Sessions and the steps inside them, what runs in its own container and how files pass between sessions, dependencies and parallel sessions, on-failure behaviour, approval sessions, and publishing to the catalog.',
   },
   {
     slug: 'starting-work',

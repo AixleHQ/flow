@@ -99,6 +99,25 @@ class InteractivePromptDetector
                "step interactively."
     },
     {
+      # Claude Code (2.1.310) shows this once an API-billed session has spent $5, and
+      # waits for a keypress. Agents::ClaudeCodeAdapter#generate_config pre-acknowledges
+      # it with hasAcknowledgedCostThreshold; this catches a CLI that shows it anyway.
+      # The footer is the one every Claude Code select dialog uses, so the markers carry
+      # the specificity.
+      id: :claude_cost_threshold,
+      agent_types: %w[claude_code],
+      markers: [
+        /You've spent \$[\d.,]+ on the Anthropic API this session\./,
+        /Got it, thanks!/
+      ],
+      footer: /\A\s*Enter to confirm · Esc to cancel\z/,
+      message: "Claude Code is blocked on its cost-threshold notice " \
+               "(\"You've spent $5 on the Anthropic API this session.\"), which a " \
+               "non_interactive session cannot dismiss. It is supposed to be " \
+               "pre-acknowledged by hasAcknowledgedCostThreshold in ~/.claude.json " \
+               "(Agents::ClaudeCodeAdapter#generate_config); this CLI version showed it anyway."
+    },
+    {
       # Kiro's agent server opens this itself when a tool has failed 7 times in a row
       # (2.34.0, FailureDetectionNode), whatever the session's instructions say; the
       # model has no part in it and no setting turns it off. Headless mode would carry

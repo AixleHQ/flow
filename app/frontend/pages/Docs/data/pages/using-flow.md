@@ -10,7 +10,7 @@ instead. This section is for people who *use* the product.
 ## The loop
 
 ```
- a card moves · Run · a schedule ──► Workflow ── step by step ──► Agent
+ a card moves · Run · a schedule ──► Workflow ── each session ──► Agent
  Slack or Teams · a tracker issue                                   │
  a webhook                                                          │
   ▲                                                                 │
@@ -22,9 +22,10 @@ instead. This section is for people who *use* the product.
    column is set to manual. It can also start on a schedule, from a Slack or
    Teams message, from an issue in a connected tracker, from a webhook, or from
    **Run**. See [Triggers & gates](/docs/starting-work).
-2. Each step of the workflow is one agent session doing one job. Independent
-   steps run at the same time. When the project is at its limit, a session
-   waits its turn in the [session queue](/docs/session-queues).
+2. Each session of the workflow is one agent doing one job in its own
+   container. Independent sessions run at the same time. When the project is
+   at its limit, a session waits its turn in the
+   [session queue](/docs/session-queues).
 3. The agent works under the credential of the person the run belongs to: the
    card's assignee, else whoever moved the card or pressed **Run**; for a
    schedule, a message, a webhook or a tracker event, whoever set up the

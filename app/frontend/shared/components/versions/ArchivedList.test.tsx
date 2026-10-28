@@ -9,6 +9,24 @@ import { ArchivedList } from './ArchivedList';
 const item = { id: 3, name: 'Old helper', detail: 'old_helper', archivedAt: '2026-09-20T10:00:00Z' };
 
 describe('ArchivedList', () => {
+  it('links each name to where the caller opens the item', () => {
+    renderPage(
+      <ArchivedList
+        projectId={7}
+        versionableType="Workflow"
+        noun="workflows"
+        canRestore={false}
+        items={[item]}
+        hrefFor={(archived) => `/company/projects/7/workflows/${archived.id}/builder`}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Old helper' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/workflows/3/builder',
+    );
+  });
+
   it('restores an archived agent and reloads the page', async () => {
     const restore = vi.fn<(body: unknown) => object>(() => ({}));
     answerFetch({

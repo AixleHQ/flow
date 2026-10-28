@@ -3,15 +3,14 @@
 module FeatureFlags
   # Every change to a flag's runtime values, made by a super admin from
   # /admin/feature_flags. Each write takes the admin and a reason, changes the
-  # rows and inserts exactly one Audit in one transaction, and bumps the version
-  # token only once that transaction has committed: a process that reloads on
-  # the bump must find the change, and a write that failed must not cost every
-  # process a reload.
+  # rows and inserts exactly one Audit in one transaction, and drops the cached
+  # values (FeatureFlags.changed!) only once that transaction has committed: a
+  # process that reads them again must find the change.
   #
   # Refusals raise WriteRefused (EnvLocked for a flag an ENV variable decides)
   # before anything is written.
   module Admin
-    AUDIT_ACTIONS = %w[global_set global_cleared override_set override_removed turned_off_everywhere pruned]
+    AUDIT_ACTIONS = %w[global_set global_cleared override_set override_removed turned_off_everywhere]
                     .to_h { |action| [ action.to_sym, "feature_flag.#{action}" ] }.freeze
 
     class << self
@@ -68,30 +67,21 @@ module FeatureFlags
         end
       end
 
-      # Deletes the rows of a key the registry no longer declares.
-      def prune(key, actor:, reason:, request: nil)
-        write(key, :pruned, actor:, reason:, request:, declared: false, create_row: false) do |flag|
-          changes = { "key" => flag.key, "enabled" => [ flag.enabled, nil ], "overrides" => removed_overrides(flag) }
-          flag.destroy!
-          changes
-        end
-      end
-
       private
 
-      def write(key, action, actor:, reason:, request:, company: nil, company_scoped: false, declared: true, create_row: true)
+      def write(key, action, actor:, reason:, request:, company: nil, company_scoped: false, create_row: true)
         key = key.to_s
         text = reason.to_s.strip
         raise WriteRefused, "A reason is required" if text.empty?
 
-        declared ? check_writable!(key, company_scoped:) : check_orphaned!(key)
+        check_writable!(key, company_scoped:)
 
         audit = FeatureFlag.transaction do
           flag = create_row ? find_or_create_row(key) : FeatureFlag.lock.find_by(key: key)
           raise WriteRefused, "#{key} has no rows" if flag.nil?
 
           changes = yield(flag, text)
-          flag.update_columns(updated_by_id: actor&.id, updated_at: Time.current) unless flag.destroyed?
+          flag.update_columns(updated_by_id: actor&.id, updated_at: Time.current)
           Audit.create!(auditable: flag, associated: company, user: actor, username: actor&.email,
                         action: AUDIT_ACTIONS.fetch(action), audited_changes: changes, comment: text,
                         remote_address: request&.remote_ip, request_uuid: request&.uuid)
@@ -101,7 +91,7 @@ module FeatureFlags
         # dropped if that rolls back.
         ActiveRecord.after_all_transactions_commit do
           log(audit, key)
-          FeatureFlags.version_token.bump
+          FeatureFlags.changed!
         end
         audit
       rescue ActiveRecord::RecordInvalid => e
@@ -115,10 +105,6 @@ module FeatureFlags
         raise WriteRefused, "#{key} is global: it has no company overrides" if company_scoped && definition.global?
         variable = FeatureFlags.env_source.variable_for(key)
         raise EnvLocked.new(key, variable) unless variable.nil?
-      end
-
-      def check_orphaned!(key)
-        raise WriteRefused, "#{key} is declared in config/feature_flags.yml: only undeclared rows are pruned" if FeatureFlags.registry.declared?(key)
       end
 
       # The lock serializes writes to one flag, so each audit's old value is the

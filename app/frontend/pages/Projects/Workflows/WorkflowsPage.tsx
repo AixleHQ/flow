@@ -74,7 +74,10 @@ const WorkflowsPage = () => {
   const repositories = rawRepositories ?? [];
   const basePath = `/company/projects/${project.id}/workflows`;
 
-  const [view, setView] = useState<ArchiveView>('active');
+  // An archived workflow's builder links back here with ?view=archived.
+  const [view, setView] = useState<ArchiveView>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'archived' ? 'archived' : 'active',
+  );
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [createOpen, setCreateOpen] = useState(false);
@@ -310,6 +313,7 @@ const WorkflowsPage = () => {
           noun="workflows"
           canRestore={canExecute}
           items={archivedWorkflows}
+          hrefFor={(item) => builderCompanyProjectWorkflowPath(project.id, item.id)}
         />
       ) : filtered.length === 0 ? (
         <Box py={60} ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>

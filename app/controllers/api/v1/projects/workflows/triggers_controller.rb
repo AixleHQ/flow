@@ -11,8 +11,10 @@ module Api
         # A webhook trigger additionally provisions a generic WebhookEndpoint and
         # returns its URL + secret.
         class TriggersController < Workflows::ApplicationController
+          # An archived workflow opens read-only in the builder and still shows its
+          # triggers; every write below goes through `current_workflow`, active ones only.
           def index
-            render json: { triggers: serialized_triggers }
+            render json: { triggers: serialized_triggers(current_project.workflows.find(params[:workflow_id])) }
           end
 
           def create
@@ -41,7 +43,7 @@ module Api
           def update
             case params[:kind].to_s
             when "column"
-              binding = column_bindings.find(params[:id])
+              binding = column_bindings(current_workflow).find(params[:id])
               binding.update!(column_binding_params)
               render json: serializer.column(binding)
             else
@@ -64,7 +66,7 @@ module Api
           def destroy
             case params[:kind].to_s
             when "column"
-              column_bindings.find(params[:id]).destroy
+              column_bindings(current_workflow).find(params[:id]).destroy
             else
               current_workflow.trigger_bindings.find(params[:id]).destroy
             end
@@ -108,10 +110,10 @@ module Api
 
           # ---- serialization ----
 
-          def serialized_triggers
-            bindings = current_workflow.trigger_bindings.includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a
+          def serialized_triggers(workflow)
+            bindings = workflow.trigger_bindings.includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a
             event_serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(bindings))
-            column_bindings.includes(:board_column, :created_by, :workflow).map { |b| serializer.column(b) } +
+            column_bindings(workflow).includes(:board_column, :created_by, :workflow).map { |b| serializer.column(b) } +
               bindings.map { |b| event_serializer.binding(b) }
           end
 
@@ -124,10 +126,10 @@ module Api
             WorkflowTriggers::Serializer.new(webhook_endpoints: endpoints).binding(binding)
           end
 
-          def column_bindings
+          def column_bindings(workflow)
             ColumnWorkflowBinding
               .joins(board_column: :board)
-              .where(boards: { project_id: current_project.id }, workflow_id: current_workflow.id)
+              .where(boards: { project_id: current_project.id }, workflow_id: workflow.id)
           end
         end
       end

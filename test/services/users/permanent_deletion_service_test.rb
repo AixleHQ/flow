@@ -106,27 +106,25 @@ module Users
     # schema: a new foreign key that reaches users fails this test until the
     # scenario has a row behind it.
     test "deletes a user who has a row behind every foreign key that reaches them" do
-      with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
-        FullyWiredUserScenario.new(user: @user, company: @company, heir: @heir).build
-        references = references_reaching(@user)
+      FullyWiredUserScenario.new(user: @user, company: @company, heir: @heir).build
+      references = references_reaching(@user)
 
-        unwired = references.reject { |reference| connection.select_value("SELECT EXISTS (#{reference.rows})") }
-        assert_empty unwired.map(&:to_s), "FullyWiredUserScenario has no row behind these foreign keys"
-        undeclared = User.reflect_on_all_associations.select { |a| a.options[:dependent] && !@user.public_send(a.name).exists? }
-        assert_empty undeclared.map(&:name), "FullyWiredUserScenario has no row in these User associations"
+      unwired = references.reject { |reference| connection.select_value("SELECT EXISTS (#{reference.rows})") }
+      assert_empty unwired.map(&:to_s), "FullyWiredUserScenario has no row behind these foreign keys"
+      undeclared = User.reflect_on_all_associations.select { |a| a.options[:dependent] && !@user.public_send(a.name).exists? }
+      assert_empty undeclared.map(&:name), "FullyWiredUserScenario has no row in these User associations"
 
-        survivors = references.select(&:nullified_user?).to_h { |reference| [ reference, connection.select_values(reference.rows) ] }
+      survivors = references.select(&:nullified_user?).to_h { |reference| [ reference, connection.select_values(reference.rows) ] }
 
-        assert_difference("User.count", -1) do
-          PermanentDeletionService.call(user: @user, actor: @actor)
-        end
+      assert_difference("User.count", -1) do
+        PermanentDeletionService.call(user: @user, actor: @actor)
+      end
 
-        survivors.each do |reference, ids|
-          fk = reference.foreign_key
-          kept = connection.select_values("SELECT id FROM #{connection.quote_table_name(fk.from_table)} " \
-                                          "WHERE id IN (#{ids.join(', ')}) AND #{connection.quote_column_name(fk.column)} IS NULL")
-          assert_equal ids.sort, kept.sort, "#{reference} rows must outlive the user with the reference nullified"
-        end
+      survivors.each do |reference, ids|
+        fk = reference.foreign_key
+        kept = connection.select_values("SELECT id FROM #{connection.quote_table_name(fk.from_table)} " \
+                                        "WHERE id IN (#{ids.join(', ')}) AND #{connection.quote_column_name(fk.column)} IS NULL")
+        assert_equal ids.sort, kept.sort, "#{reference} rows must outlive the user with the reference nullified"
       end
     end
 
@@ -173,15 +171,13 @@ module Users
     end
 
     test "keeps the feature flag values the user set, with the author nullified" do
-      with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) do
-        flag = FeatureFlag.create!(key: "board_ai_summary", enabled: true, updated_by: @user)
-        override = flag.overrides.create!(company: @company, enabled: false, reason: "asked to wait", created_by: @user)
+      flag = FeatureFlag.create!(key: "external_runners", enabled: true, updated_by: @user)
+      override = flag.overrides.create!(company: @company, enabled: false, reason: "asked to wait", created_by: @user)
 
-        PermanentDeletionService.call(user: @user, actor: @actor)
+      PermanentDeletionService.call(user: @user, actor: @actor)
 
-        assert_equal [ true, nil ], [ flag.reload.enabled, flag.updated_by_id ]
-        assert_equal [ false, nil ], [ override.reload.enabled, override.created_by_id ]
-      end
+      assert_equal [ true, nil ], [ flag.reload.enabled, flag.updated_by_id ]
+      assert_equal [ false, nil ], [ override.reload.enabled, override.created_by_id ]
     end
 
     test "nullifies invited_by on memberships this user created" do

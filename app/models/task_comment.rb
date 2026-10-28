@@ -16,6 +16,8 @@ class TaskComment < ApplicationRecord
     author_id == user&.id && author_type.human? && created_at > EDIT_WINDOW.ago
   end
 
+  def deletable_by?(user) = editable_by?(user)
+
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :by_author_type, ->(type) { where(author_type: type) }
 

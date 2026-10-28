@@ -1,309 +1,146 @@
 # Feature flags
 
-How to add a platform feature flag, roll it out and remove it. The design and the
-alternatives it was chosen over are in the
-[research report](../research/technical-feature-flags-system-design-research-2026-10-21.md);
-this guide describes what the code does now.
-
 A flag is declared in `config/feature_flags.yml` and read with `Feature.enabled?`. Its value
 comes from the first layer that is set:
 
 ```
-FEATURE_<KEY> or legacy env_setting (ENV) > company override > global admin value > declared default
+ENV (FEATURE_<KEY>, or the flag's own env: variable) > company override > global value > declared default
 ```
 
-`Feature.explain` returns the value with the layer that decided it and the layers it beat
-(`FeatureFlags::Resolution`). The admin page `/admin/feature_flags` shows the same thing for
-every declared flag.
+`Feature.explain` returns the value with the layer that decided it and the ENV variable that
+locks it (`FeatureFlags::Resolution`).
 
-## Ownership
+Flags are platform-only. Super admins change them on `/admin/feature_flags`, and every change
+goes through `FeatureFlags::Admin` with a required reason and one `Audit` row. Company admins
+never see them.
 
-Flags are platform-only. Only super admins see `/admin/feature_flags` and the overrides panel
-on a company's admin page, and every change goes through `FeatureFlags::Admin` with a required
-reason and an `Audit` row. Company admins never manage flags: a flag is how the platform
-exposes unfinished or risky work, not a customer setting.
+## Declaring a flag
 
-## Adding a flag
-
-In one PR:
-
-1. Declare it in `config/feature_flags.yml`. The header of that file lists every attribute.
-   A release flag ships with `default: false`, an `owner` and a `remove_by` about eight weeks
-   out. An invalid entry fails boot (`FeatureFlags::Registry`) and
-   `test/config/feature_flags_registry_test.rb`.
-
-   ```yaml
-   board_ai_summary:
-     description: AI summary panel on the board task drawer.
-     owner: "@AixleHQ/board"
-     kind: release
-     scope: company
-     default: false
-     remove_by: 2027-01-31
-   ```
-
-2. Guard the new code with the flag. A company-scoped flag needs `company:` (nil is legal and
-   skips the override layer); a global flag refuses it. Both mistakes raise `ArgumentError`.
-
-   ```ruby
-   if Feature.enabled?(:board_ai_summary, company: current_company)
-   ```
-
-   Keep the call in this shape, with the key as a literal symbol: it is what the registry test
-   finds, and the one thing to search for when the flag is removed.
-3. Test both branches with the helpers below.
-
-The flag ships off everywhere.
-
-### Adding a flag the frontend reads
-
-Add `client: true` to the flag in `config/feature_flags.yml`. That is the only step: read it with
-`useFeatureFlag('boardAiSummary')` (`app/frontend/shared/lib/hooks/useFeatureFlag.ts`), the
-camelized key, and a misspelled name fails `tsc`.
-
-`FeaturesResource` (`app/resources/features_resource.rb`) builds the `features` shared prop in
-`Web::ApplicationController`, the way `CurrentUserResource` builds `current_user`. It declares
-one `typelize :boolean` attribute per `client: true` flag, read from the shipped
-`config/feature_flags.yml`, and resolves each with `FeatureFlags.client_value` (through `Feature`,
-so a company's override is what its pages see). Typelizer turns it into the generated `Features` type
-(`app/frontend/types/generated/Features.ts`), and `useFeatureFlag(name: keyof Features)` takes
-its names from there. One class produces both the payload and the type, so there is no
-hand-written list of names and no test keeping one in sync. Commit the regenerated
-`Features.ts` (and `index.ts`) with the registry change; `tsc` only knows a new flag once it is
-there.
-
-Only `client: true` flags reach the browser, so the name and value of an ops or internal flag
-never ship. The frontend only reads the resolved boolean. The server decides every write
-whatever it shows.
-
-The attribute list is a build-time artifact (Typelizer generates `Features.ts` from it), so it is
-read from the registry **file**, never from the swappable `FeatureFlags.registry`, and does not
-depend on load order. The values are resolved per request against the current registry, and a key
-that registry does not declare is left out of the payload rather than raised; `SharedProps.features`
-is `Partial<Features>`, so an absent key is type-correct. A test that swaps the registry
-(`with_feature_registry`) therefore renders pages normally, with only the flags both registries
-declare in `features`. `test/resources/features_resource_test.rb` checks that the attributes are
-exactly the shipped `client: true` keys.
-
-## Rolling it out
-
-From `/admin/feature_flags`, with no deploy. Each step takes a reason and writes an `Audit`:
-
-1. Override on for our own company (dogfood).
-2. Overrides on for pilot companies.
-3. Global on.
-4. Override off for any company that hits a problem.
-
-"Turn off everywhere" sets global off and removes every override in one write; the removed
-overrides are kept in its audit so they can be put back.
-
-## ENV: `FEATURE_<KEY>`
-
-`FEATURE_<KEY>` (the key upper-cased, e.g. `FEATURE_BOARD_AI_SUMMARY`) locks a flag on or off
-in every process, over every override and admin value. It takes `on`/`true`/`1` or
-`off`/`false`/`0`; any other value fails boot naming the variable. It is read once at boot
-(`FeatureFlags::EnvSource`, via `Settings.feature_flags.env`), so changing it needs a restart,
-and the admin page shows the flag as locked. It is the kill switch for when the database or the
-admin page cannot be trusted.
-
-A variable for a key nobody declares is ignored with one warning at boot, so removing a flag
-never needs an infra change first. `FEATURE_FLAGS_*` is reserved for the system's own settings
-(`FEATURE_FLAGS_REFRESH_INTERVAL`, `FEATURE_FLAGS_MAX_STALENESS`), which is why no key may start
-with `flags`. See [reference/configuration.md](../reference/configuration.md).
-
-### Moving a legacy ENV toggle over: `env_setting`
-
-An existing kill switch with its own variable (for example `CODER_REAP_ENABLED`, read into
-`Settings.coder.reap_enabled`) becomes a flag without renaming the variable:
+Add an entry to `config/feature_flags.yml`; the header of that file lists every attribute. A
+release flag ships with `default: false`, an `owner` and a `remove_by`. An invalid entry fails
+boot (`FeatureFlags::Registry`) and `test/config/feature_flags_registry_test.rb`.
 
 ```yaml
-coder_reap:
-  description: Lets the Coder reaper delete dead workspaces.
-  owner: "@AixleHQ/platform"
-  kind: ops
-  scope: global
-  default: true
-  env_setting: coder.reap_enabled          # the Settings path
-  env_setting_variable: CODER_REAP_ENABLED  # what admin names as the lock
+board_ai_summary:
+  description: AI summary panel on the board task drawer.
+  owner: "@AixleHQ/board"
+  kind: release            # release | ops
+  scope: company           # company | global
+  default: false
+  client: true             # optional: the frontend reads it
+  remove_by: 2027-01-31    # required for kind: release
 ```
 
-- The setting is a second ENV lock, at the same precedence as `FEATURE_<KEY>`.
-  `FeatureFlags::EnvSource` reads it once at boot from the settings tree.
-- `config/settings.yml` must leave the setting null while its variable is unset, and give it
-  `true` or `false` once it is set. Only an explicitly set variable locks the flag; with it
-  unset, the flag is controlled from `/admin/feature_flags` and falls back to its default.
-  The read stays in `settings.yml`, so `docs/reference/configuration.md` keeps its row:
+A release flag whose `remove_by` has passed gets a "past remove-by" badge on
+`/admin/feature_flags`. Nothing fails on a date.
 
-  ```yaml
-  reap_enabled: <%= ENV['CODER_REAP_ENABLED'].nil? ? '~' : ENV['CODER_REAP_ENABLED'] == 'true' %>
-  ```
+## Reading it
 
-- **Both set: `FEATURE_<KEY>` wins.** It is the flag's own lock, so a deployment that sets it
-  has moved to it; the legacy variable is ignored while it is set. `Feature.explain` and the
-  admin page name the variable that actually decides (`Resolution#env_var`,
-  `EnvSource#variable_for`).
-- A value that is not `true`, `false` or null, or an `env_setting` path that names no setting,
-  fails boot (`FeatureFlags::InvalidEnv`).
-- Replace every read of the setting with `Feature.enabled?(:key)`.
-
-## Test helpers
-
-`test/support/feature_flags_helper.rb`, included in every test case. No database, Redis or real
-ENV: the suite's store is a `FeatureFlags::MemoryStore`, reset before each test, so every test
-starts from the declared defaults.
+### Ruby
 
 ```ruby
-with_feature(:board_ai_summary, true) { ... }                               # global value
-with_feature(:board_ai_summary, false, company: companies(:acme)) { ... }   # one override
-stub_feature_env(:board_ai_summary, "off") { ... }                          # the FEATURE_* lock
-stub_feature_env_setting(:coder_reap, false) { ... }                        # the legacy env_setting lock
-with_feature_registry(FeatureFlagsHelper::EXAMPLE_REGISTRY) { ... }         # declare test flags
-uses_feature_registry FeatureFlagsHelper::EXAMPLE_REGISTRY                  # the same, for a class
+if Feature.enabled?(:board_ai_summary, company: current_company)
 ```
 
-An undeclared key raises `FeatureFlags::UnknownFlag` in development and test, so a test that
-guards on a typo fails. Tests that need a flag declare the two examples of
-`test/fixtures/files/feature_flags_registry.yml`, so they do not depend on what the shipped
-registry declares. On the frontend, set
-`inertiaState.pageProps = { features: { boardAiSummary: true } }` in a Vitest test.
+Keep the key a literal symbol: it is the one thing to search for when the flag is removed. An
+undeclared key raises `FeatureFlags::UnknownFlag` in development and test; elsewhere it reads as
+off and is reported to Sentry once per process.
 
-### What a test may substitute, and where
+### Frontend
 
-`FeatureFlags` composes its parts once, in `FeatureFlags.boot!`: the registry, the ENV layer
-validated against it, the store and the version token, as one `FeatureFlags::Graph`. It has no
-writers. `FeatureFlags.compose` builds and validates the same graph without installing it,
-which is how boot-time validation is tested: a test of composition calls `compose`, never
-`boot!`. `boot!` replaces the whole graph for the process, so the suite keeps the graph it
-booted and `reset_feature_flags!` re-installs it before every test if another one is installed.
-A stray `boot!` then lasts until the next test, not for the rest of its worker.
+Declare the flag `client: true`; that is the only step. `FeaturesResource` sends every client
+flag, as the current company resolves it, in the `features` shared prop, and Typelizer turns its
+attributes into the generated `Features` type (`app/frontend/types/generated/Features.ts`).
+Commit the regenerated file with the registry change. Read the flag by its camelized key:
 
-- **Values: the normal lever.** `with_feature` writes the memory store, the mechanism
-  production uses. A test that only needs a flag on or off should never need anything else.
-- **Infrastructure: the test environment, not a test.** The suite's global setup
-  (`test/support/feature_flags_helper.rb`) boots with a `FeatureFlags::MemoryStore`, a
-  `FakeFeatureFlagVersionToken` (CI has no Redis) and an empty ENV layer
-  (`config/settings/test.yml` drops `FEATURE_*`, and no legacy `env_setting` variable is read).
-  `reset_feature_flags!` empties the store and resets the fake before every test, so a test that
-  asserts bumps reads `FeatureFlags.version_token.bumps` and sets `unavailable` / `on_bump` on
-  that instance. The database-backed `FeatureFlags::Store` is tested by building one with its
-  own token (`test/services/feature_flags/store_test.rb`); nothing is installed on the module.
-- **Schema and ENV locks: one scoped seam.** `with_feature_registry`, `uses_feature_registry`,
-  `stub_feature_env` and `stub_feature_env_setting` go through `FeatureFlags.with(registry:, env:)
-  { ... }`, which resolves checks inside the block against the given registry and ENV layer and
-  drops them when the block exits. A registry without `env:` gets the current ENV layer re-read
-  against it. The store and the token are never substituted. Production code must not call it.
-- **Semantics: no globals at all.** `Registry`, `EnvSource`, `Resolver`, `Overview` and
-  `Lifecycle` take their dependencies as constructor arguments, so unknown keys, scope rules,
-  ENV locks and defaults are tested on objects the test builds:
-  `FeatureFlags::Resolver.new(registry: FeatureFlags::Registry.load(fixture), env: ..., snapshot: ...)`.
-  A test registry through `FeatureFlags.with` is for tests that go through the facade
-  (`Feature.enabled?`, a model, a web request) with a flag production does not declare.
+```ts
+const enabled = useFeatureFlag('boardAiSummary')
+```
 
-Values rather than schema are the lever because a schema swap changes what every caller in the
-process believes exists: anything that reads the registry once (a memoised attribute list, a
-class body) keeps what it saw. The override is fiber-local, so it reaches the test's own
-requests, which Rails integration tests serve on the test's thread, and nothing else: another
-thread (a Capybara server, a thread the test spawns, a parallel test) and a Temporal activity,
-which the SDK runs on its own pool thread outside any executor run (the same limit
-`FeatureFlags.snapshot` documents), see the booted graph. A system test that needs a test-only
-flag in the browser therefore cannot declare it through `with_feature_registry`.
+`useFeatureFlag(name: keyof Features)` does not compile for an undeclared name. Only `client:
+true` flags reach the browser, and the server still decides every write.
 
-The seam does not reach the other way, into code loaded on the test's own fiber while a test
-registry is active. A class that memoises flag names at load time captures whatever registry
-was current when it loaded, and with `eager_load` off (locally, outside CI) the first request
-inside `with_feature_registry` can be the one that autoloads it. The seam cannot prevent that.
-The rule that does: a load-time memoiser reads the registry file,
-`FeatureFlags::Registry.load(FeatureFlags::REGISTRY_PATH)`, never `FeatureFlags.registry`, and
-resolves values through the facade per call. `FeaturesResource` is the reference: its attribute
-list comes from the file, and each value is resolved per request against the current registry,
-which leaves out a key that registry does not declare.
+## Scopes
 
-So the guarantee is this. A substitution cannot reach another thread, another fiber or a request
-served elsewhere. A load-time memoiser has to stay out of its reach by never reading the facade.
+- **`company`**: the call passes `company:`. `nil` is legal (no company context) and skips the
+  override layer. A super admin can set an override per company.
+- **`global`**: the call passes no `company:`. There are no overrides.
+
+Either mistake raises `ArgumentError`. `FeatureFlags::UNSET` is what tells a forgotten
+`company:` apart from `company: nil`.
+
+## Runtime values
+
+One `feature_flags` row per flag holds the global value (`NULL` is "use the default"), and
+`feature_flag_overrides` holds the per-company exceptions. A row is created the first time an
+admin changes the flag.
+
+`FeatureFlags.snapshot` reads all of them through `Rails.cache` (the shared Redis) with a
+10-second TTL, and memoises the result in `Current` for the rest of the request or job, so one
+unit of work gets one answer per flag. Outside an executor run (Temporal activities) nothing is
+memoised. An admin write deletes the cache key once its transaction commits
+(`FeatureFlags.changed!`), so every process sees the change on its next request; the TTL only
+covers a delete that never reached Redis. With Redis down, the cache store reads the database.
+
+Rollout, from `/admin/feature_flags` with no deploy: an override on for our own company, then
+for pilot companies, then global on. "Turn off everywhere" sets global off and removes every
+override in one write; the removed overrides are kept in its audit.
+
+## Setting a flag through ENV
+
+Both ways lock the flag in every process, over every override and admin value. They are read
+once at boot (`FeatureFlags::EnvSource`, from `Settings.feature_flags.env`), so a change needs a
+restart, and the admin pages show the flag as locked by that variable and refuse writes to it
+(`FeatureFlags::EnvLocked`).
+
+- **`FEATURE_<KEY>`**, the key upper-cased (`FEATURE_BOARD_AI_SUMMARY`), works for every flag.
+- **The flag's own variable**, declared as `env:` (`coder_reap` has `env: CODER_REAP_ENABLED`).
+  No two flags may claim the same one, and it may not be a `FEATURE_*` name. When both are set,
+  `FEATURE_<KEY>` wins.
+
+Both take `on`/`true`/`1` or `off`/`false`/`0`, case-insensitive; empty is unset. Any other
+value fails boot naming the variable. A `FEATURE_*` variable no flag declares is reported once
+at boot and otherwise ignored, so removing a flag never needs an infra change first.
+
+`config/settings.yml` collects the `FEATURE_*` variables and the variables flags declare as
+`env:` (it reads their names from `config/feature_flags.yml`), so app code never reads `ENV`.
+See [reference/configuration.md](../reference/configuration.md).
+
+## Testing
+
+`test/support/feature_flags_helper.rb` is included in every test case.
+
+```ruby
+with_feature(:external_runners, true) { ... }                                # global value
+with_feature(:external_runners, false, company: company) { ... }             # one override
+stub_feature_env(:coder_reap, "off") { ... }                                 # FEATURE_CODER_REAP
+stub_feature_env(:coder_reap, "off", variable: "CODER_REAP_ENABLED") { ... } # the flag's env:
+```
+
+- **Values are rows.** `with_feature` writes the row inside the test's transaction, which rolls
+  back on its own, and clears the `Current` memo. The test cache is a null store, so every read
+  goes to the database.
+- **Facade-level and web tests use the real flags.** Both scopes are among them:
+  `external_runners` is company-scoped, `coder_reap` is global and has its own `env:` variable.
+- **ENV locks are simulated with `stub_feature_env`.** It goes through `FeatureFlags.with(env:)`,
+  the one test seam: fiber-local, undone when the block ends. `config/settings/test.yml` keeps
+  the real environment's variables out of the suite.
+- **Tests of the flag machinery itself** (`Registry`, `EnvSource`, `Resolver`, `Overview`) build
+  their own objects with an in-memory registry passed to the constructor. Composition is tested
+  through `FeatureFlags.compose`, which validates and returns the parts without installing them.
+
+On the frontend, set `inertiaState.pageProps = { features: { externalRunners: true } }` in a
+Vitest test.
 
 ## Removing a flag
 
 In one PR, owned by the flag's owner:
 
-1. Delete the losing branch of every `Feature.enabled?(:key` (and `useFeatureFlag`) check.
+1. Delete the losing branch of every `Feature.enabled?(:key` and `useFeatureFlag` check.
 2. Delete the entry from `config/feature_flags.yml`. For a client flag, regenerate the Typelizer
-   types: `Features` loses the name, and `tsc` points at any `useFeatureFlag` check left behind.
-3. Remove any `FEATURE_<KEY>` from the environments when convenient; it is ignored meanwhile.
+   types; `tsc` then points at any `useFeatureFlag` check left behind, and a leftover Ruby check
+   raises `UnknownFlag` in the tests.
+3. Remove its `FEATURE_<KEY>` (or `env:` variable) from the environments when convenient.
 
-The flag's database rows are left behind. They are inert: the resolver never consults an
-undeclared key. `/admin/feature_flags` lists them under "Orphaned rows", where a super admin
-deletes one key's rows with a reason. That is the normal way to clean up.
-
-### Where `prune` runs
-
-`bin/rails feature_flags:prune` deletes the rows of every undeclared key, through
-`FeatureFlags::Admin.prune`, with one `feature_flag.pruned` `Audit` per key. It is idempotent: a
-second run finds nothing.
-
-It is a **manual** step and nothing runs it automatically, on purpose:
-
-- **Old pods.** Run it only once the rollout has replaced every pod running the previous code.
-  An old pod may still check the key, and would lose its value.
-- **Rollbacks.** Remove a flag, deploy, prune, then roll back: the old code declares the flag
-  again, its global value and company overrides are gone, and it silently falls back to its
-  declared `default`. For a release flag that was on for pilot companies, that is an incident
-  nobody would trace to the cleanup. Container start (`bin/docker-entrypoint`) has this failure
-  mode and also runs while old pods still serve; `.github/workflows/release.yml` runs before
-  any deploy and has no database.
-
-Skipping it is safe. The step is also listed in
-[operations/releasing.md](../operations/releasing.md#after-a-rollout).
-
-## Finding stale flags
-
-- **CI:** `test/config/feature_flags_registry_test.rb` fails when an entry is invalid, when a
-  declared flag is not read anywhere in `app/` or `lib/`, and when `Feature.enabled?(:x`,
-  `Feature.explain(:x` or `useFeatureFlag('x')` names an undeclared flag (or, for
-  `useFeatureFlag`, one not declared `client: true`). Comments and test files do not count as
-  reads, and neither does generated code (`app/frontend/types/generated/`, where `Features.ts`
-  names every client flag). A flag declared ahead of its first reader goes in the test's
-  `ALLOWED_UNREAD`, with the task that will read it; the entry expires, because the test fails
-  once that flag is read and the entry has to be removed. It deliberately never fails on dates.
-- **`bin/rails feature_flags:audit`** changes nothing and prints four lists: release flags past
-  `remove_by`; flags whose value has been the same for every company for 30 days or more (from
-  the row's `updated_at`, or `introduced` for a flag with no row), which are candidates for
-  removal; orphaned rows; and `FEATURE_*` variables for undeclared keys. Run it in the ops
-  review.
-- **The admin index** badges the same first two cases (`FeatureFlags::Overview`).
-
-## Adding a new targeting dimension
-
-The design is extensible by construction: `scope` is declared per flag and decides which
-keyword a call site must pass, so a new dimension changes no existing flag and no existing call
-site. Using a hypothetical `project` dimension:
-
-1. Add `project` to `FeatureFlags::Registry::SCOPES` and a `project_scoped?` predicate on
-   `FeatureFlags::Registry::Definition`, next to `company_scoped?` and `global?`.
-2. Add a `feature_flag_project_overrides` table with its own foreign key and
-   `on_delete: :cascade`, mirroring `feature_flag_overrides` in
-   `db/migrate/20261021120000_create_feature_flags.rb`.
-3. Add a slice and a reader to `FeatureFlags::Snapshot` (next to `global` and `override`), and
-   the extra `SELECT` to `FeatureFlag.load_snapshot`.
-4. Add one `add(layers, :project, ...)` line to `FeatureFlags::Resolver#set_layers` at the
-   chosen precedence position. `Feature.explain` reports the new layer with no further change,
-   because `FeatureFlags::Resolution` already carries `source` and `shadowed`.
-5. Add the keyword to `Feature.enabled?` and `Feature.explain`, and extend
-   `FeatureFlags::Resolver#check_company_argument!`, which today raises `ArgumentError` for a
-   missing or forbidden `company:`.
-
-Three decisions, and why:
-
-- **No polymorphic overrides table** (`subject_type` / `subject_id`). Postgres cannot put a
-  foreign key on a polymorphic reference, and `on_delete: :cascade` is what guarantees a
-  company's overrides disappear with the company (the tenant-hygiene rule of the report's
-  §4.2; `Users::PermanentDeletionService` relies on the same foreign keys). One table per
-  dimension keeps that guarantee in the database, not in code that can be forgotten.
-- **Percentage of companies needs no schema change.** `feature_flags.rollout_percent` already
-  exists and is reserved for it. It is evaluated after company overrides and before the global
-  value (resolution step 3 in the report's §3.1 and §4.4), with
-  `Zlib.crc32("#{key}:#{company.id}") % 100 < rollout_percent`, which only ever adds companies
-  as the percentage rises. With `company: nil` it falls through to global.
-- **Per-user targeting is deliberately not supported.** It needs a user at every call site and
-  per-user frontend payloads, and in a B2B product two colleagues seeing different features is
-  a support question with no good answer. If a real experiment needs it, compare against
-  PostHog experiments before growing this system (report §4.4).
+The flag's rows can stay: nothing reads a key that is no longer declared. Delete them with a
+migration in the same PR if you prefer.

@@ -3,11 +3,11 @@
 ## Overview
 
 **Overview** is the project's front page and the fastest answer to "what is
-this project doing, and what is it costing?"
+this project doing, and how much agent work went into it?"
 
-- **KPI cards** — board tasks, sessions launched, workflow runs, token cost,
-  each with a delta against the previous period, plus an average cost per
-  session once sessions have run.
+- **KPI cards** — sessions launched, tokens used, session time, workflows and
+  board tasks, with the tokens and time each session averages once sessions
+  have run.
 - **Workflow Runs** — a donut of run outcomes with a success rate, total, and a
   legend; failures that need a look are called out rather than buried.
 - **Board Task Distribution** — how many cards sit in each column, as a bar

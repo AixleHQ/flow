@@ -86,9 +86,9 @@ the guide hangs off this chapter.
 
 - **What it is.** The project's home page: recent activity, how tasks are
   distributed across the board, workflow runs, sessions launched, success rate,
-  and token cost.
+  tokens used, and time spent in sessions.
 - **When to use it.** The daily "what is this project doing right now, and what
-  is it costing" check — before drilling into a specific run.
+  is it using" check — before drilling into a specific run.
 - **What you do.** Read the tiles; follow one into Tasks, Sessions & Runs, or
   Analytics.
 - *Afterwards:* the reader knows where the numbers on this page come from and
