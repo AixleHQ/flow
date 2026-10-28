@@ -22,6 +22,9 @@ governance, community health — carry none.
   workflow page, through personal access, as a retry of a failed run, or by a
   trigger. A retry links to the run it repeats. `get_workflow_run`,
   `list_workflow_runs` and the admin run page show both.
+- Request logs of MCP calls name the JSON-RPC method (`rpc=`) and, for a tool
+  call, the tool (`tool=`), so an agent session's calls can be followed in the
+  logs. Tool arguments are still never logged.
 
 ### Changed
 - **Overview**: the project's "Token Cost" card is replaced by "Tokens Used" and
