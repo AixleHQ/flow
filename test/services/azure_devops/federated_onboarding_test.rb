@@ -21,6 +21,7 @@ module AzureDevops
       @project_id = SecureRandom.uuid
       @second_project_id = SecureRandom.uuid
       @sent_assertions = []
+      @transaction_depths = []
       @onboarding = FederatedOnboarding.new(company: @company, actor: @actor)
 
       stub_tenant
@@ -41,6 +42,7 @@ module AzureDevops
 
     def stub_exchange(status: 200, body: nil)
       stub_request(:post, "#{AZURE_TOKEN_HOST}/#{@tenant}/oauth2/v2.0/token").to_return do |request|
+        @transaction_depths << AzureDevopsInstallation.connection.open_transactions
         @sent_assertions << JWT.decode(Rack::Utils.parse_query(request.body)["client_assertion"], nil, false).first
         { status: status, headers: { "Content-Type" => "application/json" },
           body: (body || { access_token: app_token, token_type: "Bearer", expires_in: 3600 }).to_json }
@@ -62,8 +64,10 @@ module AzureDevops
         .to_return(status: 200, headers: json, body: { count: 1, value: [ { actions: actions } ] }.to_json)
       stub_request(:get, %r{#{AZURE_API_HOST}/contoso/[^/]+/_apis/wit/classificationnodes/areas})
         .to_return(status: 200, headers: json, body: { identifier: SecureRandom.uuid }.to_json)
-      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/permissions/})
-        .to_return(status: 200, headers: json, body: { count: 1, value: [ granted ] }.to_json)
+      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/permissions/}).to_return do
+        @transaction_depths << AzureDevopsInstallation.connection.open_transactions
+        { status: 200, headers: json, body: { count: 1, value: [ granted ] }.to_json }
+      end
     end
 
     def complete(**overrides)
@@ -143,6 +147,17 @@ module AzureDevops
 
       assert_equal [ @project_id, @second_project_id ].sort, installation.allowed_project_ids.sort
       assert_equal 1, AzureDevopsInstallation.count
+    end
+
+    # Azure can take its time; the connection and the installation row must not
+    # be held while it does.
+    test "no database transaction is open while Azure is being asked" do
+      baseline = AzureDevopsInstallation.connection.open_transactions
+
+      complete
+
+      assert_not_empty @transaction_depths
+      assert_equal [ baseline ], @transaction_depths.uniq
     end
 
     test "a project the app cannot see is refused and nothing is left behind" do

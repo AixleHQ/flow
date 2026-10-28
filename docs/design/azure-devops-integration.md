@@ -604,10 +604,12 @@ federation and no shared app at all.
 1. `FederatedOnboarding#inspect!`: discover the tenant from the organization, exchange a
    token for the entered client id, list the projects the app can see. Writes nothing. With
    `project_ids` it also runs `PermissionCheck`.
-2. `FederatedOnboarding#complete!`: in one transaction, bind or rebind the installation
-   (`credential_kind: federated`, `app_config_key: nil`), exchange through `AppTokenService`,
-   require the chosen projects to be visible, require the Repos permissions, record the
-   service principal's `oid`, activate. A failure at any point leaves nothing behind.
+2. `FederatedOnboarding#complete!`: exchange a token, require the chosen projects to be
+   visible and the Repos permissions to be granted, all without a database transaction.
+   Then one short transaction binds or rebinds the installation (`credential_kind: federated`,
+   `app_config_key: nil`), records the service principal's `oid` and activates it. A failure
+   at any point leaves nothing behind. `Onboarding` (shared app) refuses an organization
+   that is already federated, as `FederatedOnboarding` refuses the opposite.
 3. The project connection is then made with `IntegrationService#create_with_installation`
    exactly as for the shared app. `CredentialProvider`, `Client` and every tool are
    unchanged: a federated installation still yields a service-principal token.
