@@ -24,6 +24,7 @@ module TypelizerModelPlugin
     ColumnWorkflowBinding
     CompanyMembership
     ConfigItem
+    Connector
     Runner
   ].freeze
 

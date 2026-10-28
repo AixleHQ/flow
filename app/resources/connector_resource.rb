@@ -11,7 +11,6 @@ class ConnectorResource < ApplicationResource
   attributes :id, :name, :title, :description, :version, :repository_url,
              :registry_updated_at, :created_at, :updated_at
 
-  typelize %w[active deprecated deleted]
   attribute :status do |connector|
     connector.status.to_s
   end
