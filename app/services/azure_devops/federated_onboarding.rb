@@ -55,34 +55,29 @@ module AzureDevops
 
     # Records the binding. Idempotent: reconnecting widens the approved projects,
     # and connecting with a different client id (the customer recreated the app)
-    # moves the installation to the new app once that app has been verified. All
-    # of it happens in one transaction, so a failed exchange leaves nothing behind.
+    # moves the installation to the new app once that app has been verified.
+    # Nothing is written until the exchange and every check have passed, and the
+    # write is one short transaction, so Azure being slow never holds a database
+    # connection or the installation row.
     def complete!(organization:, client_id:, project_ids:)
       ensure_available!
       project_ids = Array(project_ids).map(&:to_s).uniq
       raise ValidationFailed, "Choose at least one Azure project" if project_ids.empty?
 
+      client_id = client_id.to_s.strip.downcase
       tenant = TenantDiscovery.call(organization)
+      refuse_shared_app!(existing_installation(tenant), tenant)
+
+      token = exchange(tenant, client_id)
+      client = static_client(tenant.organization, token)
+
+      visible = visible_projects(client)
+      verify_projects!(project_ids, visible)
+      report = PermissionCheck.new(client: client).call(visible.select { |p| project_ids.include?(p[:id]) })
+      raise_if_blocked!(report)
 
       AzureDevopsInstallation.transaction do
-        installation, rebound = bind(tenant, client_id.to_s.strip.downcase)
-        token = AppTokenService.new(installation).access_token(force: true)
-        client = Client.new(credential: credential_for(installation), organization: installation.organization_slug)
-
-        visible = visible_projects(client)
-        verify_projects!(project_ids, visible)
-        report = PermissionCheck.new(client: client).call(visible.select { |p| project_ids.include?(p[:id]) })
-        raise_if_blocked!(report)
-
-        # Assigned only now: every request above goes through a token service that
-        # reloads the row, which would discard an earlier assignment.
-        installation.assign_attributes(
-          allowed_project_ids: allowed_projects(installation, project_ids, visible, rebound),
-          service_principal_object_id: TokenClaims.object_id!(token.value),
-          status: :active, error_code: nil, last_verified_at: Time.current
-        )
-        installation.save!
-        installation
+        record_binding(tenant, client_id, token, project_ids, visible)
       end
     end
 
@@ -109,41 +104,40 @@ module AzureDevops
       Client.new(credential: credential, organization: organization)
     end
 
-    def credential_for(installation)
-      CredentialProvider::Resolved.new(
-        integration: nil, installation: installation, mode: :service_principal,
-        organization: installation.organization_slug, project_id: nil,
-        token_service: AppTokenService.new(installation)
-      )
+    def existing_installation(tenant, lock: false)
+      scope = AzureDevopsInstallation.where(company_id: company.id, tenant_id: tenant.tenant_id,
+                                            organization_slug: tenant.organization)
+      (lock ? scope.lock : scope).first
     end
 
-    def existing_installation(tenant)
-      AzureDevopsInstallation.find_by(company_id: company.id, tenant_id: tenant.tenant_id,
-                                      organization_slug: tenant.organization)
+    def refuse_shared_app!(installation, tenant)
+      return if installation.nil? || installation.federated?
+
+      raise ValidationFailed,
+            "'#{tenant.organization}' is already connected through Aixle's Microsoft app. " \
+            "Disconnect it first to connect with your own app."
     end
 
-    # The installation row for this company and organization, saved INACTIVE so the
-    # token service can cache on it. A new client id forgets what was learned about
-    # the old app; its cached token is already unusable, because the cache is keyed
-    # by client id. Returns the row and whether it moved to a different app.
-    def bind(tenant, client_id)
-      installation = existing_installation(tenant) ||
-                     AzureDevopsInstallation.new(company: company, tenant_id: tenant.tenant_id,
-                                                 organization_slug: tenant.organization)
-      if installation.persisted? && !installation.federated?
-        raise ValidationFailed,
-              "'#{tenant.organization}' is already connected through Aixle's Microsoft app. " \
-              "Disconnect it first to connect with your own app."
-      end
-
+    # The row is read again under a lock: another request may have bound this
+    # organization while Azure was being asked. A new client id forgets what was
+    # learned about the old app; its cached token is already unusable, because the
+    # cache is keyed by client id.
+    def record_binding(tenant, client_id, token, project_ids, visible)
+      installation = existing_installation(tenant, lock: true)
+      refuse_shared_app!(installation, tenant)
+      installation ||= AzureDevopsInstallation.new(company: company, tenant_id: tenant.tenant_id,
+                                                   organization_slug: tenant.organization)
       rebound = installation.persisted? && installation.client_id != client_id
-      installation.service_principal_object_id = nil if rebound
 
-      installation.assign_attributes(credential_kind: :federated, app_config_key: nil, client_id: client_id,
-                                     status: :inactive, approved_by: actor)
+      installation.assign_attributes(
+        credential_kind: :federated, app_config_key: nil, client_id: client_id, approved_by: actor,
+        allowed_project_ids: allowed_projects(installation, project_ids, visible, rebound),
+        service_principal_object_id: TokenClaims.object_id!(token.value),
+        status: :active, error_code: nil, last_verified_at: Time.current
+      )
       installation.approved_at ||= Time.current
       installation.save!
-      [ installation, rebound ]
+      installation
     end
 
     # Several requests per project, so only for the projects the caller names, not

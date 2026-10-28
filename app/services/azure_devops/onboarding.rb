@@ -51,6 +51,7 @@ module AzureDevops
       tenant = TenantDiscovery.call(organization)
       bound = existing_installation(tenant)
       same_directory!(admin, tenant)
+      refuse_federated!(bound, tenant) if admin
 
       if bound&.active?
         # A token widens the approved set. Without one this branch could only
@@ -112,6 +113,8 @@ module AzureDevops
         return bound
       end
 
+      refuse_federated!(bound, tenant)
+
       if admin.nil?
         raise ValidationFailed,
               "Approving new projects for this organization needs an administrator to sign in with Microsoft, " \
@@ -162,6 +165,16 @@ module AzureDevops
       raise NotAuthorized,
             "You signed in to a different Microsoft directory than the one '#{tenant.organization}' belongs to. " \
             "Sign in with an account in that organization's directory."
+    end
+
+    # Binding the shared app onto a federated row would keep its credential kind
+    # and point it at an app that has no federated credential for this issuer.
+    def refuse_federated!(bound, tenant)
+      return unless bound&.federated?
+
+      raise ValidationFailed,
+            "'#{tenant.organization}' is already connected through your own Entra app. " \
+            "Disconnect it first to connect with Aixle's Microsoft app."
     end
 
     # What the application itself can see, for an organization already bound.
