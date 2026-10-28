@@ -473,7 +473,7 @@ function buildUser() {
       {
         id: 1,
         role: 'admin' as const,
-        state: 'active',
+        state: 'active' as const,
         company: {
           id: 1,
           name: 'Vega Corp',

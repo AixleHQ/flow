@@ -22,6 +22,7 @@ module TypelizerModelPlugin
     BoardTask
     ColumnTransition
     ColumnWorkflowBinding
+    CompanyMembership
     Runner
   ].freeze
 
