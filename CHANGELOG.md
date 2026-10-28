@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- A browser tab left open across a release reloads into the new version on its
+  next navigation, instead of failing to open the page and asking for a reload.
+
 ## [1.8.0] - 2026-10-28
 
 ### Added
