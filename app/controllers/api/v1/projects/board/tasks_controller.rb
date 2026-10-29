@@ -126,7 +126,7 @@ module Api
           # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])
-            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, { runner: %i[company project] }, step_runs: %i[step terminal_session])
+            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, step_runs: %i[step terminal_session])
                        .order(created_at: :desc)
             render json: runs.map { |r| TaskWorkflowRunResource.new(r).to_h }
           end

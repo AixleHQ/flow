@@ -1604,8 +1604,9 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   12 and 13).
 
 **What v1 has so far (§15 task 4).** Behind the same flag, the selects and the badges, built from
-`shared/resources/runners/runnerChoice.tsx` and fed by `RunnerSummaryResource` (name, type, status,
-`deleted`, `operatedBy`):
+`shared/resources/runners/runnerChoice.tsx`. The selects are fed by `RunnerSummaryResource` (name,
+type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `RunnerBadgeResource`
+(name, type, `deleted`), which the session and run lists load with a plain `preload(:runner)`:
 
 - **Base Resources** has a "Runner" select, `Hosted (default)` plus the visible runners with their
   status. The builder's list also holds the workflow's own runner once deleted, so the select can

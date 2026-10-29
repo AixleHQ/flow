@@ -27,7 +27,7 @@ class Web::OnboardingController < Web::ApplicationController
                                        .with_cached_resource_counts
                                        .includes(:user, :project, :session_admission,
                                                  :tools, :skills, :mcp_servers, :config_items,
-                                                 :input_assets, :repositories)
+                                                 :input_assets, :repositories, :runner)
                                        .where(company_id: current_membership.company_id)
 
     viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?

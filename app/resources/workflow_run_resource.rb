@@ -6,10 +6,10 @@ class WorkflowRunResource < ApplicationResource
              :created_at, :updated_at,
              :failure_reason, :failed_agent_credential_id, :runner_id
 
-  # Where it runs (DESIGN.md §11): null is hosted. No query for a hosted row.
-  typelize "RunnerSummary | null"
+  # Where it runs (DESIGN.md §11): null is hosted. A list preloads `runner`.
+  typelize "RunnerBadge | null"
   attribute :runner do |record|
-    record.runner_id && RunnerSummaryResource.new(record.runner).to_h
+    record.runner && RunnerBadgeResource.new(record.runner).to_h
   end
 
   attribute :mode do |run|

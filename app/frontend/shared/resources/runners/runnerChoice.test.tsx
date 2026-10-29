@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildRunnerSummary } from 'test/factories/runner';
+import { buildRunnerBadge, buildRunnerSummary } from 'test/factories/runner';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import { RunnerSelect, RunsOnBadge } from './runnerChoice';
@@ -17,7 +17,7 @@ describe('RunsOnBadge', () => {
   });
 
   it("names the runner and its type, linking to the runner's page", () => {
-    renderAuthedPage(<RunsOnBadge runner={buildRunnerSummary({ id: 4, name: 'Prod VPC' })} projectId={7} />, {
+    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ id: 4, name: 'Prod VPC' })} projectId={7} />, {
       props: ON,
     });
 
@@ -28,7 +28,7 @@ describe('RunsOnBadge', () => {
   });
 
   it('names a deleted runner without a link', () => {
-    renderAuthedPage(<RunsOnBadge runner={buildRunnerSummary({ name: 'Old box', deleted: true })} projectId={7} />, {
+    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ name: 'Old box', deleted: true })} projectId={7} />, {
       props: ON,
     });
 
