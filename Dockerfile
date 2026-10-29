@@ -6,7 +6,7 @@
 # The development stage is last so that a build naming no target keeps producing
 # the image it always did.
 
-FROM ruby:4.0.7-alpine AS base
+FROM ruby:4.0.9-alpine AS base
 
 # Runtime libraries of the gems' native extensions (pg → libpq, ruby-vips → vips,
 # psych → yaml) and the tools the app itself runs.
