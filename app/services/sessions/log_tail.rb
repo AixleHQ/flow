@@ -116,8 +116,11 @@ module Sessions
 
     # The most common way an agent goes quiet without failing: the provider
     # refused it and the CLI is sitting on the error. Never fatal to the read.
+    # Read the way the quota scan reads a pane: the session's own provider, on the
+    # tail only, so a log full of the agent's own grep output is not reported as a
+    # quota stop (task #195). How long the pane has been quiet is idle_seconds.
     def quota_verdict(text)
-      detection = QuotaErrorDetector.detect(text)
+      detection = QuotaErrorDetector.detect_on_screen(text, agent_type: session.agent_type)
       return {} unless detection.quota_error?
 
       { quota_error: { provider: detection.provider, message: detection.message } }
