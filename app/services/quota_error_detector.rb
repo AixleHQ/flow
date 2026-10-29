@@ -1,7 +1,33 @@
 # frozen_string_literal: true
 
+# QuotaErrorDetector
+#
+# Recognises an agent CLI that has stopped on its provider's quota or credit error.
+#
+# Two kinds of caller hand it text:
+#
+#   - .detect reads text that is already about the session's end: a stored error
+#     message, or a finished session's terminal log (CompleteStepActivity).
+#   - .detect_on_screen reads a live pane (ScanQuotaErrorsActivity, Sessions::LogTail).
+#     That text is mostly the agent's own work, and an agent greps, reads, edits and
+#     tests code that names these errors: this class, its tests, the run failure
+#     reasons. Task #195: a Kiro session was failed within a minute of grepping a
+#     line of ShowPage.tsx that held one of OpenAI's identifiers. So the live check
+#     looks only at the session's own provider, and only at the pane's trailing
+#     block, where a CLI renders the error it stopped on. Whether the pane has also
+#     gone quiet is the caller's to check (QUIET_BEFORE_FAIL), because only the
+#     caller can read the pane's last output time.
 class QuotaErrorDetector
   MAX_MESSAGE_LENGTH = 500
+
+  # How much of a live pane counts as "the current screen", as in
+  # InteractivePromptDetector and Sessions::AuthPause: a CLI's error plus the prompt
+  # box or status line drawn under it, never the 1,000 lines of scrollback.
+  TAIL_LINES = 40
+
+  # A CLI that stopped on a quota error prints nothing more, and a working agent
+  # does. A live pane has to have been silent this long before its screen counts.
+  QUIET_BEFORE_FAIL = 1.minute
 
   PATTERNS = {
     anthropic: [
@@ -58,14 +84,30 @@ class QuotaErrorDetector
     ]
   }.freeze
 
+  # The provider whose errors each agent CLI renders (AgentCredentialsService::ADAPTERS).
+  # Antigravity runs on Google's models and Google's credits.
+  AGENT_PROVIDERS = {
+    "claude_code" => :anthropic,
+    "codex" => :openai,
+    "gemini_cli" => :gemini,
+    "antigravity_cli" => :gemini,
+    "cursor_cli" => :cursor,
+    "grok" => :xai,
+    "kiro_cli" => :kiro
+  }.freeze
+
   Result = Struct.new(:quota_error, :provider, :message, keyword_init: true) do
     def quota_error? = quota_error
   end
 
-  def self.detect(text)
+  # @param text [String, nil]
+  # @param agent_type [String, nil] the session's agent_type. When it names a known
+  #   agent, only that agent's provider is matched; without one every provider is.
+  # @return [Result]
+  def self.detect(text, agent_type: nil)
     return Result.new(quota_error: false) if text.blank?
 
-    PATTERNS.each do |provider, patterns|
+    patterns_for(agent_type).each do |provider, patterns|
       next unless patterns.any? { |pat| text.match?(pat) }
 
       return Result.new(
@@ -76,6 +118,28 @@ class QuotaErrorDetector
     end
 
     Result.new(quota_error: false)
+  end
+
+  # A live pane: matched on its trailing TAIL_LINES nonblank lines only, with the
+  # session's own provider's patterns.
+  #
+  # @param text [String, nil] rendered terminal output (tmux capture-pane)
+  # @param agent_type [String, nil] the session's agent_type
+  # @return [Result]
+  def self.detect_on_screen(text, agent_type:)
+    detect(current_screen(text), agent_type: agent_type)
+  end
+
+  def self.patterns_for(agent_type)
+    provider = AGENT_PROVIDERS[agent_type.to_s]
+    provider ? PATTERNS.slice(provider) : PATTERNS
+  end
+
+  # tmux pads capture-pane output to the pane height, so blank lines carry no signal:
+  # dropping them is what makes the tail the last thing the CLI actually rendered.
+  def self.current_screen(text)
+    text.to_s.dup.force_encoding(Encoding::UTF_8).scrub
+        .lines.map(&:rstrip).reject(&:empty?).last(TAIL_LINES).join("\n")
   end
 
   def self.extract_message(text, patterns)
@@ -96,5 +160,5 @@ class QuotaErrorDetector
 
     "#{message[0, MAX_MESSAGE_LENGTH]}…"
   end
-  private_class_method :truncate
+  private_class_method :patterns_for, :current_screen, :truncate
 end
