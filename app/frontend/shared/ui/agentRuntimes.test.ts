@@ -51,6 +51,8 @@ describe('reasoningEffortLevels', () => {
     expect(reasoningEffortUnavailableReason('cursor_cli', null)).toBe(
       'Cursor CLI sets a reasoning effort only on a model you choose.',
     );
-    expect(reasoningEffortUnavailableReason('kiro_cli', 'auto')).toBe('Kiro CLI has no reasoning-effort setting for auto.');
+    expect(reasoningEffortUnavailableReason('kiro_cli', 'auto')).toBe(
+      'Kiro CLI has no reasoning-effort setting for auto.',
+    );
   });
 });
