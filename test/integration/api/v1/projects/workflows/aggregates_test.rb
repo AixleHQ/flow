@@ -59,7 +59,7 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert_equal "high", @build.reload.reasoning_effort
     assert_equal "high", response.parsed_body["steps"].find { |s| s["id"] == @build.id }["reasoningEffort"]
 
-    save([ { id: @build.id, name: "Build", required_agent_runtime: "gemini_cli", reasoning_effort: "high" },
+    save([ { id: @build.id, name: "Build", required_agent_runtime: "gemini_cli", reasoning_effort: "medium" },
            { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ] } ])
 
     assert_response :unprocessable_entity
