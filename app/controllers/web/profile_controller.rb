@@ -149,16 +149,15 @@ class Web::ProfileController < Web::ApplicationController
         { days: ActivityHeatmapService.new(scope:).call.map { |d| { date: d.date, count: d.count } } }
       },
       sessions: InertiaRails.defer(group: "usage") {
-        current_user.terminal_sessions
-              .joins(:project).where(projects: { company_id: company.id })
-              .with_cached_resource_counts
-              .includes(:user, :project, :session_admission,
-                        :tools, :skills, :mcp_servers, :input_assets, :repositories, :config_items,
-                        { runner: %i[company project] })
-              .where.not(session_type: "auth_setup")
-              .order(created_at: :desc)
-              .limit(per_page)
-              .map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
+        records = current_user.terminal_sessions
+                              .joins(:project).where(projects: { company_id: company.id })
+                              .with_cached_resource_counts
+                              .includes(:user, :project, :session_admission,
+                                        :tools, :skills, :mcp_servers, :input_assets, :repositories, :config_items)
+                              .where.not(session_type: "auth_setup")
+                              .order(created_at: :desc)
+                              .limit(per_page)
+        TerminalSession.preload_runners(records).map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       }
     }
   end

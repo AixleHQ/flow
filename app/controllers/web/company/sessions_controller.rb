@@ -18,12 +18,12 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
     scope = base.with_cached_resource_counts
               .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :config_items,
-                        :input_assets, :repositories, { runner: %i[company project] })
+                        :input_assets, :repositories)
               .order(sort.order(sort.column(TerminalSession)), created_at: :desc, id: :desc)
 
     render inertia: "Company/Sessions/Index", props: {
       sessions: inertia_scroll(scope) { |records|
-        records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
+        TerminalSession.preload_runners(records).map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
       filters: feed_filters.merge(type: list_type),
       query: list_query.merge(s: sort.to_s),
@@ -43,16 +43,16 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
                                      .with_cached_resource_counts
                                      .includes(:user, :project, :session_admission,
                                                :tools, :skills, :mcp_servers, :config_items,
-                                               :input_assets, :repositories, { runner: %i[company project] })
+                                               :input_assets, :repositories)
 
-    render json: { sessions: sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } }
+    render json: { sessions: TerminalSession.preload_runners(sessions).map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } }
   end
 
   def show
     session = company_sessions_scope.with_cached_resource_counts
                 .includes(:user, :project, :session_admission,
                           :tools, :skills, :mcp_servers, :config_items,
-                          :input_assets, :repositories, { runner: %i[company project] })
+                          :input_assets, :repositories)
                 .find(params[:id])
     authorize_session_visibility!(session)
 

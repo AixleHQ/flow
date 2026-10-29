@@ -18,6 +18,20 @@ module RunnerReference
     validate :runner_within_project, if: -> { runner_id.present? && will_save_change_to_runner_id? }
   end
 
+  class_methods do
+    # Loads the runner of the rows that name one, with what RunnerSummaryResource
+    # reads, for a list that shows "Runs on". A hosted row reads nothing, so it
+    # is left out rather than preloaded for nothing. Returns the rows.
+    def preload_runners(records)
+      records = records.to_a
+      on_runner = records.select(&:runner_id)
+      if on_runner.any?
+        ActiveRecord::Associations::Preloader.new(records: on_runner, associations: { runner: %i[company project] }).call
+      end
+      records
+    end
+  end
+
   private
 
   def runner_within_project

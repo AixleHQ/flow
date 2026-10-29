@@ -28,7 +28,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
               .with_cached_resource_counts
               .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :config_items,
-                        :input_assets, :repositories, { runner: %i[company project] })
+                        :input_assets, :repositories)
               .order(created_at: :desc)
 
     render inertia: "Company/Users/Show", props: {
@@ -46,7 +46,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
       # the viewer redacts the prompt and metadata of sessions the owner keeps
       # private, and the row renders as a lock instead of disappearing.
       sessions: inertia_scroll(scope) { |records|
-        records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
+        TerminalSession.preload_runners(records).map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
       sessions_stream: inertia_cable_stream(current_company, membership.user, :sessions),
       # Fetched over HTTP from the runtime vendor, so deferred exactly as on the
