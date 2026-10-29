@@ -145,6 +145,15 @@ Polymorphic `scope` (Company or Project) used by: Agent, Tool, Workflow, MCPServ
 
 Pattern: `visible_for_project(project)` → unions code/platform + company-scoped + project-scoped rows. No name-level override; System-scoped and non-attachable meta/Builder rows are excluded via `user_attachable`. (`visible_for_company` is the company-level analogue.)
 
+**Referencing another tenant's row by id.** `visible_for_project` / `visible_for_company` decide what a picker offers. Whether an id may be *stored* is a different question, answered by `TenantScope` (`app/services/tenant_scope.rb`, see its header): ownership only, no enabled/attachable filtering, and platform-owned rows (code tools, internal MCP servers) belong to every tenant.
+
+- **Storing an id:** a record that stores the id of another row validates it with `TenantIdsValidator` (`app/validators/tenant_ids_validator.rb`): `validates :x, tenant_ids: { model: X, … }`. The same rule covers a single foreign key, an id array and an association collection.
+  - Options: `project:` / `company:` name the record's methods that return its tenant (default: `project`, and that project's company); `lenient: true` lets an id of a deleted row through, for references that outlive their row; `error_on:` names the attribute that gets the error.
+  - Usually validate only when the value changes: `if: -> { new_record? || will_save_change_to_x? }`.
+  - Examples: `Repository#integration_id` (`project: :scope_project, error_on: :integration`), `WorkflowRun#input_asset_ids` and `#repository_ids` (with the change guard), `TriggerBinding#subject_column_id` (`error_on: :subject_column`), and the `TerminalSession` associations (`tools`, `skills`, `mcp_servers`, `repositories`, `input_assets`, `config_items`; `company: :company`, `on: :create`).
+- **Which rows a tenant owns** is defined in one place, `TenantScope.owned`. A new model that can be referenced by id gets its rule there (the `case` raises `no tenant rule for …` otherwise), not in a model scope of its own.
+- **Database keys:** the database holds the company boundary too. Polymorphically scoped tables carry real `project_id` / `company_id` columns, kept in step with `scope_type` / `scope_id` by the `TenantColumns` concern, with foreign keys to projects and companies, a composite key `(project_id, company_id)` → `projects (id, company_id)` and a check that the columns agree with the scope pair (`AddTenantColumnsToScopedResources`). That migration also ties `repositories (integration_id, company_id)` to `integrations (id, company_id)`. A table that carries `company_id` directly gets the same composite keys for its project and its company-owned references (`CreateRunners`). A new scoped table follows the same pattern.
+
 ### Encrypted Fields
 
 - `AgentCredential#config_data` — uses `encryptor.encrypt_and_sign` / `decrypt_and_verify`
@@ -186,6 +195,7 @@ parent workflow run, waits for the commit (`ActiveRecord.after_all_transactions_
 - Mocks via `mocha`
 - WebMock for HTTP stubs in tests
 - Multi-tenancy: always filter by `company_id`
+- Tenant references: a stored id of another row is validated with `tenant_ids: { model: X }` against `TenantScope.owned` (see Multi-tenancy & Scoping)
 - Config: read `Settings.*`, never `ENV[...]` in app code — every env var is aggregated in
   `config/settings.yml` (+ `config/settings/<env>.yml`). Exceptions are only things that load
   before Settings or outside the app process: `config/boot.rb`, `config/application.rb`,
@@ -325,6 +335,8 @@ Read [docs/testing.md](../testing.md) before writing a test — it is the doctri
 - **Never add a second UI kit, a client-side store, a client router, or another form library** — Mantine, Inertia props, Inertia routing, and Mantine Form cover them
 - **Never use `as_json` or inline hashes for records in Inertia props** — use Alba resources; hand-built hashes bypass type generation
 - **Never forget `company_id` filter** in multi-tenant queries
+- **Never hand-write a tenant check for a stored id** (`validate :x_within_project`) — use `validates :x, tenant_ids: { model: X }`
+- **Never repeat a `TenantScope` ownership rule in a model scope** — add the model to `TenantScope.owned`; `visible_for_*` is for pickers, not for validating references
 - **Never read `ENV[...]` from app code** — add the key to `config/settings.yml` and read `Settings.*` (pre-Settings boot files are the only exception)
 - **Never skip `frozen_string_literal: true`** in Ruby files
 - **Never use `new Date()` on Alba-serialized dates** — use `shared/lib/formatDate` helpers
