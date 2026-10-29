@@ -72,6 +72,12 @@ governance, community health — carry none.
   the hour.
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
+- **Sessions & Runs**: an agent session, and the run it belongs to, is no
+  longer failed as having used up its provider's allowance because the agent's
+  own work printed text that looks like such an error (a grep, a file read,
+  test output). That happens only when the session's own CLI shows its
+  provider's message as the last thing on screen and then goes quiet, and the
+  credential is flagged only then.
 
 ## [1.8.0] - 2026-10-28
 
