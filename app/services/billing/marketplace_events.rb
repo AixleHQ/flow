@@ -144,6 +144,9 @@ module Billing
     # agreement the row holds now is still live, or it is not.
     def superseded?(license, event)
       return false if event.license_arn.blank? || event.detail_type != LICENSE_DEPROVISIONED
+      # A row that never learned its agreement has nothing for the event's to
+      # differ from: it was found by its ARN, and that is the licence going.
+      return false if license.agreement_id.blank?
       return event.agreement_id != license.agreement_id if event.agreement_id.present?
       return false if license.previous_agreement_id.blank?
 

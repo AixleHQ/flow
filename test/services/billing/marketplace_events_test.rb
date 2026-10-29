@@ -327,6 +327,24 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert license.reload.active?
   end
 
+  # Found by its ARN, the licence is the one going whatever agreement the event
+  # names. A row that never learned its agreement used to read that name as
+  # somebody else's and stay active, and unbilled, for ever.
+  test "a deprovisioning finishes a licence that never learned its agreement" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: nil, company: company)
+    @meter.expect(:call, "nothing to send", [ license ])
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "agreement" => { "id" => "agmt-1" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 1, @events.apply_pending
+    assert license.reload.ended?
+    assert company.reload.billing_blocked?
+  end
+
   # `ended` is unmeterable. Finished around a call that never reached AWS, the
   # licence was measured as nothing when the sweep came back for it, and the
   # last hour was lost in exactly the window AWS gives for it.
