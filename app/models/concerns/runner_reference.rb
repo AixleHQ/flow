@@ -26,8 +26,10 @@ module RunnerReference
   # stale or bypassed runner_id that names another project's or company's runner
   # serializes no name or type. The check runs on the preloaded row, from the
   # record's own tenant columns, so a list that includes `:runner` adds no query.
+  # `runner` is read even for a hosted row (nil, no query), so a list's
+  # `includes(:runner)` counts as used.
   def owned_runner
-    return if runner_id.nil? || runner.nil?
+    return if runner.nil?
 
     company_id, project_id = runner_tenant_ids
     runner if TenantScope.owns_runner?(runner, company_id: company_id, project_id: project_id)
