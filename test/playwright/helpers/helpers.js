@@ -180,6 +180,64 @@ async function loginAsCompanyEmployee(page, env, credentials = env && env.compan
   await login(page, env, credentials);
 }
 
+// The roles ensureSignedInAs knows: the keys loadCredentialsAsset returns.
+const AIXLE_SIGN_IN_ROLES = ['companyAdmin', 'companyEmployee'];
+// The page ensureSignedInAs reads the signed-in user from. /profile is a small
+// signed-in page; a signed-out session is redirected from it to /login.
+const AIXLE_WHOAMI_PATH = '/profile';
+
+// Whether the browser context is signed in as `email`, read from the shared
+// currentUser prop of /profile. Signed out (a redirect to /login), another
+// account, or a response that is not an Inertia page all count as false. The
+// email is compared here and never leaves this function.
+async function aixleSignedInAs(page, env, email) {
+  const http = env && env.httpCredentials;
+  if (http && http.username) {
+    await page.context().setHTTPCredentials({ username: http.username, password: http.password || '' });
+  }
+  let result;
+  try {
+    result = await readInertiaPage(page, {
+      path: AIXLE_WHOAMI_PATH,
+      pick: ['currentUser.email'],
+      baseUrl: aixleBaseUrl(env),
+    });
+  } catch {
+    return false;
+  }
+  if (result.status !== 200 || aixlePathname(result.url || '').startsWith('/login')) return false;
+  const current = result.props['currentUser.email'];
+  return typeof current === 'string' && current.toLowerCase() === String(email).toLowerCase();
+}
+
+/**
+ * Make sure the browser is signed in as `role` ('companyAdmin' or
+ * 'companyEmployee', the keys of loadCredentialsAsset), signing in only when it
+ * is not. One GET of /profile reads the signed-in user from the Inertia
+ * currentUser prop; when it is already that role's account, no sign-in form is
+ * submitted. Otherwise (signed out, or another account) it signs in with login()
+ * and checks the session again. Returns { role, reused }: `reused` is true when
+ * no sign-in was needed. Staging allows 10 sign-ins per hour for one account
+ * from one IP, so use this at the start of each call instead of loginAs….
+ * Neither the return value nor an error carries a credential.
+ */
+async function ensureSignedInAs(page, env, role) {
+  if (!AIXLE_SIGN_IN_ROLES.includes(role)) {
+    throw new Error(`ensureSignedInAs: role must be one of ${AIXLE_SIGN_IN_ROLES.join(', ')}`);
+  }
+  const credentials = env && env[role];
+  if (!credentials) throw new Error(`ensureSignedInAs: env has no ${role} credentials (see loadCredentialsAsset)`);
+  const { email } = aixleCredentials(credentials);
+
+  if (await aixleSignedInAs(page, env, email)) return { role, reused: true };
+
+  await login(page, env, credentials);
+  if (!(await aixleSignedInAs(page, env, email))) {
+    throw new Error(`ensureSignedInAs: signed in, but ${AIXLE_WHOAMI_PATH} does not show the ${role} account`);
+  }
+  return { role, reused: false };
+}
+
 /**
  * Sign in as the platform operator (super admin) at /admin/login: one form with
  * Email, Password and Sign in. Resolves once the browser has left /admin/login.

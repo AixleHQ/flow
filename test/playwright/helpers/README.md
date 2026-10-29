@@ -82,12 +82,28 @@ async (page) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const staging = await loadCredentialsAsset(page);
 
-  await loginAsCompanyAdmin(page, staging);
+  const signIn = await ensureSignedInAs(page, staging, 'companyAdmin'); // signs in only if needed
   await goToAgents(page, staging, 3); // project 3 is "QA Test Project" on staging
 
-  return { url: page.url(), title: await page.title() };
+  return { signIn, url: page.url(), title: await page.title() };
 };
 ```
+
+The calls of one QA round share the browser page and its cookies, so the session from one call is still there in the
+next. Start every call with `ensureSignedInAs` rather than `signOut` plus `loginAs…`: it signs in only when the browser
+is signed out or signed in as another account.
+
+## Sign-in limit
+
+Staging allows **10 sign-ins per hour for one account from one IP** (the `login/combo` throttle in
+`config/initializers/rack_attack.rb`, counting `POST /login`). Past it, sign-in answers `429` and the round stalls until
+the hour is up.
+
+- Start each call with `ensureSignedInAs(page, staging, role)`. A call that finds the session already signed in as that
+  role sends no `POST /login`.
+- Group the cases of one role together. Every role switch is a sign-in.
+- Use `signOut` only for checks that need a signed-out session.
+- Use `loginAs…` only for a case that needs a fresh sign-in: they always clear the cookies and sign in again.
 
 On the public entry, add Basic Auth to the asset as `STAGING_HTTP_CREDENTIALS`; `loadCredentialsAsset` then returns it
 as `staging.httpCredentials`. Do not write it into the snippet: the MCP echoes the code it runs.
@@ -106,6 +122,24 @@ throws with a readable message when it fails.
 | `loginAsCompanyAdmin(page, env, credentials = env.companyAdmin)`       | `login` as CompanyAdmin. Lands on `/company/projects`.                                                                                                                                                                            |
 | `loginAsCompanyEmployee(page, env, credentials = env.companyEmployee)` | `login` as CompanyEmployee. Lands on `/company/projects`.                                                                                                                                                                         |
 | `loginAsAdmin(page, env, credentials = env.admin)`                     | Platform super admin: clears cookies, opens `/admin/login` (one form: **Email**, **Password**, **Sign in**), and waits until the browser leaves `/admin/login`. Not verified on staging: the QA asset has no super-admin account. |
+| `ensureSignedInAs(page, env, role)`                                    | Signs in as `role` only when the browser is not already signed in as that account. See below.                                                                                                                                     |
+
+#### `ensureSignedInAs(page, env, role)`
+
+`role` is `'companyAdmin'` or `'companyEmployee'`, the keys of `loadCredentialsAsset`, and `env` is what
+`loadCredentialsAsset` returns. Returns `{ role, reused }`.
+
+- It sends one `GET /profile` and reads the shared `currentUser` prop with `readInertiaPage`. If that is the role's
+  account, it returns `{ role, reused: true }` without submitting the sign-in form.
+- Otherwise (a redirect to `/login`, or another account) it signs in with `login`, reads `/profile` again to confirm
+  the account, and returns `{ role, reused: false }`. It throws if the session still is not that account.
+- The email is compared inside the helper. It is not returned, and errors do not include it.
+
+```js
+await ensureSignedInAs(page, staging, 'companyAdmin'); // { role: 'companyAdmin', reused: false } (signed in)
+await ensureSignedInAs(page, staging, 'companyAdmin'); // { role: 'companyAdmin', reused: true }  (no POST /login)
+await ensureSignedInAs(page, staging, 'companyEmployee'); // { role: 'companyEmployee', reused: false }
+```
 
 Sign-in uses accessible locators (`getByLabel('Email')`, `getByLabel('Password')`, `getByRole('button', …)`), so it
 follows the visible form, not field names.
@@ -259,7 +293,8 @@ report them as bugs:
 Clears the context's cookies and the origin's local and session storage, loads `/login`, and confirms the session is
 gone: the browser stays on `/login` and `GET /company/projects` answers `302 → /login`. Returns
 `{ signedOut, landedOn }`. It accepts the `env` from `loadCredentialsAsset` too, and then applies its `httpCredentials`.
-Use it to switch roles, or before anonymous checks.
+Use it only before checks that need a signed-out session. To switch roles, call `ensureSignedInAs` with the other role:
+it signs in as that account without signing out first.
 
 ```js
 await signOut(page, staging); // { signedOut: true, landedOn: '/login' }
@@ -370,7 +405,7 @@ async (page) => {
 
   const staging = await loadCredentialsAsset(page);
   const { baseUrl } = staging;
-  await loginAsCompanyAdmin(page, staging);
+  await ensureSignedInAs(page, staging, 'companyAdmin');
 
   const session = await startSession(page, {
     projectId: 3,
@@ -395,7 +430,7 @@ async (page) => {
   // ---- paste test/playwright/helpers/helpers.js here ----
 
   const staging = await loadCredentialsAsset(page);
-  await loginAsCompanyEmployee(page, staging);
+  const signIn = await ensureSignedInAs(page, staging, 'companyEmployee');
   const { baseUrl } = staging;
   const start = await readInertiaPage(page, { path: '/company/projects', pick: ['settings.appVersion'], baseUrl });
   const rows = await probeRoutes(page, {
@@ -408,7 +443,8 @@ async (page) => {
     banner: { role: 'CompanyEmployee' },
     baseUrl,
   });
+  // Last: the anonymous check. The next call's ensureSignedInAs signs in again.
   const anonymous = await signOut(page, staging);
-  return { appVersion: start.appVersion, rows, evidence, anonymous };
+  return { signIn, appVersion: start.appVersion, rows, evidence, anonymous };
 };
 ```
