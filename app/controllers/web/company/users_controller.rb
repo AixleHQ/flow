@@ -28,7 +28,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
               .with_cached_resource_counts
               .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :config_items,
-                        :input_assets, :repositories)
+                        :input_assets, :repositories, { runner: %i[company project] })
               .order(created_at: :desc)
 
     render inertia: "Company/Users/Show", props: {
