@@ -117,7 +117,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const [maximized, setMaximized] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
   const clipboard = useClipboard({ timeout: 2000 });
-  const runsOnMeta = useRunsOnMeta(s.runner, s.projectId);
+  const runsOnMeta = useRunsOnMeta(s.runner, s.runnerId, s.projectId);
 
   const now = useElapsedTimer(isActive);
 

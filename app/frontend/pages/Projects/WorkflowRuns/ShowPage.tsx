@@ -134,7 +134,7 @@ const WorkflowRunShowPage = () => {
   const notYoursNote = `Started by ${run.userName ?? 'someone else'} — only they or a company admin can control this run.`;
   const now = useElapsedTimer(isActive);
   const canWrite = useCanWrite();
-  const runsOnMeta = useRunsOnMeta(run.runner, project.id);
+  const runsOnMeta = useRunsOnMeta(run.runner, run.runnerId, project.id);
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
   const [skipStepId, setSkipStepId] = useState<number | null>(null);
@@ -251,7 +251,7 @@ const WorkflowRunShowPage = () => {
   const sessionCards = sortedSteps.map((step, i) => (
     <SessionCard
       key={step.id}
-      runsOn={<RunsOnBadge runner={run.runner} projectId={project.id} />}
+      runsOn={<RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={project.id} />}
       data={toCardData(step, i)}
       live={isActive && liveStepIds.has(step.id)}
       defaultOpen={isActive ? liveStepIds.has(step.id) : isTerminal || step.state === 'failed'}

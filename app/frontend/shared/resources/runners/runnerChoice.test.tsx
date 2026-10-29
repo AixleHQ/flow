@@ -11,13 +11,13 @@ const ON = { features: { externalRunners: true } };
 
 describe('RunsOnBadge', () => {
   it('says Hosted for a run without a runner', () => {
-    renderAuthedPage(<RunsOnBadge runner={null} projectId={7} />, { props: ON });
+    renderAuthedPage(<RunsOnBadge runner={null} runnerId={null} projectId={7} />, { props: ON });
 
     expect(screen.getByText('Hosted')).toBeInTheDocument();
   });
 
   it("names the runner and its type, linking to the runner's page", () => {
-    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ id: 4, name: 'Prod VPC' })} projectId={7} />, {
+    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ id: 4, name: 'Prod VPC' })} runnerId={4} projectId={7} />, {
       props: ON,
     });
 
@@ -28,7 +28,7 @@ describe('RunsOnBadge', () => {
   });
 
   it('names a deleted runner without a link', () => {
-    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ name: 'Old box', deleted: true })} projectId={7} />, {
+    renderAuthedPage(<RunsOnBadge runner={buildRunnerBadge({ name: 'Old box', deleted: true })} runnerId={1} projectId={7} />, {
       props: ON,
     });
 
@@ -36,8 +36,16 @@ describe('RunsOnBadge', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('says the runner is not available, not Hosted, for a runner id the server sent no runner for', () => {
+    renderAuthedPage(<RunsOnBadge runner={null} runnerId={12} projectId={7} />, { props: ON });
+
+    expect(screen.getByText('Runner not available')).toBeInTheDocument();
+    expect(screen.queryByText('Hosted')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
   it('renders nothing without the flag', () => {
-    renderAuthedPage(<RunsOnBadge runner={null} projectId={7} />, { props: { features: { externalRunners: false } } });
+    renderAuthedPage(<RunsOnBadge runner={null} runnerId={null} projectId={7} />, { props: { features: { externalRunners: false } } });
 
     expect(screen.queryByText('Hosted')).not.toBeInTheDocument();
   });

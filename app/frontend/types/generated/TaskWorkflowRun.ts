@@ -10,6 +10,7 @@ type TaskWorkflowRun = {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  runnerId: number | null;
   runner: RunnerBadge | null;
   workflowName: string | null;
   totalCostCents: number | null;

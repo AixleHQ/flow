@@ -215,6 +215,11 @@ class WorkflowRun < ApplicationRecord
 
   private
 
+  # RunnerReference: the run's own project, and its company read off the
+  # workflow (same project, TenantColumns keeps workflows.company_id), which
+  # every list that renders the badge already loads, so no project is loaded.
+  def runner_tenant_ids = [ workflow&.company_id, project_id ]
+
   # Id only, like TerminalSession#broadcast_session_list_update: the page
   # fetches the row back through its own authorized endpoint.
   def broadcast_run_list_update

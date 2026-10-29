@@ -13,10 +13,12 @@ class TerminalSessionResource < ApplicationResource
              :project_id, :user_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at, :runner_id
 
-  # Where it runs (DESIGN.md §11): null is hosted. A list preloads `runner`.
+  # Where it runs (DESIGN.md §11): null is hosted, or, with `runner_id` set, a
+  # runner outside the record's tenant, which is never serialized. A list
+  # preloads `runner`.
   typelize "RunnerBadge | null"
   attribute :runner do |record|
-    record.runner && RunnerBadgeResource.new(record.runner).to_h
+    (runner = record.owned_runner) && RunnerBadgeResource.new(runner).to_h
   end
 
   typelize "string | null"

@@ -61,4 +61,24 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
     @run.update!(shared_context: {})
     assert_nil WorkflowRunResource.new(@run).to_h["chatOrigin"]
   end
+
+  # == the "Runs on" badge (DESIGN.md §11) ==
+
+  test "the badge names a runner of the run's company" do
+    runner = create(:runner, company: @project.company, name: "Prod VPC")
+    @run.update!(runner: runner)
+
+    assert_equal "Prod VPC", WorkflowRunResource.new(@run.reload).to_h.dig("runner", "name")
+  end
+
+  test "a stale runner id naming another company's runner serializes none of that runner" do
+    foreign = create(:runner, name: "Their VPC")
+    @run.update_column(:runner_id, foreign.id)
+
+    resource = WorkflowRunResource.new(@run.reload, params: { viewer: @owner }).to_h
+
+    assert_equal foreign.id, resource["runnerId"]
+    assert_nil resource["runner"]
+    assert_not_includes resource.to_json, "Their VPC"
+  end
 end

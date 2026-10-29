@@ -63,7 +63,18 @@ class Runners::ResolverTest < ActiveSupport::TestCase
     refusal = with_feature(:external_runners, true, company: @company) { refusal_for(@run) }
 
     assert_equal "runner_forbidden", refusal.reason
-    assert_equal "Runner \"Prod VPC\" is not available to project Payments.", refusal.message
+    assert_equal "Runner #{@runner.id} is not available to project Payments.", refusal.message
+  end
+
+  test "a stale id that names another company's runner is forbidden without reading that runner" do
+    foreign = create(:runner, name: "Their VPC")
+    @run.update_column(:runner_id, foreign.id)
+
+    refusal = with_feature(:external_runners, true, company: @company) { refusal_for(@run.reload) }
+
+    assert_equal "runner_forbidden", refusal.reason
+    assert_equal "Runner #{foreign.id} is not available to project Payments.", refusal.message
+    assert_not_includes refusal.message, "Their VPC"
   end
 
   test "a standalone session is told to pick another runner for the session" do
