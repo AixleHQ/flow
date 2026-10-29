@@ -11,7 +11,13 @@ class TerminalSessionResource < ApplicationResource
              :artifacts_reviewed,
              :error_message, :container_id,
              :project_id, :user_id, :route_token, :configured_agent_id,
-             :collected_at, :updated_at
+             :collected_at, :updated_at, :runner_id
+
+  # Where it runs (DESIGN.md §11): null is hosted. No query for a hosted row.
+  typelize "RunnerSummary | null"
+  attribute :runner do |record|
+    record.runner && RunnerSummaryResource.new(record.runner).to_h
+  end
 
   typelize "string | null"
   attribute :queued_at do |session|

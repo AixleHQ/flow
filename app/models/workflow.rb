@@ -6,6 +6,7 @@ class Workflow < ApplicationRecord
   include TenantColumns
   include Versioned
   include DecodesHtmlEntities
+  include RunnerReference
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -164,6 +165,11 @@ class Workflow < ApplicationRecord
 
   def system?
     scope_type == "System"
+  end
+
+  # A System workflow has no project, so it can only run hosted (DESIGN.md §3.1).
+  def runner_project
+    scope if scope_type == "Project"
   end
 
   def base_tool_ids

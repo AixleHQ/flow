@@ -6,6 +6,7 @@ class TerminalSession < ApplicationRecord
   include TerminalSessionStateMachine
   include JsonbDocument
   include CreatedWithinDates
+  include RunnerReference
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
 
@@ -320,6 +321,8 @@ class TerminalSession < ApplicationRecord
   end
 
   private
+
+  def runner_project = project
 
   def inherit_project_company
     self.company_id ||= project&.company_id

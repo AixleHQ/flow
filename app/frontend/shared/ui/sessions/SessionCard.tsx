@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { IconCheck, IconChevronRight, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 
@@ -67,10 +67,12 @@ interface SessionCardProps {
   defaultOpen?: boolean;
   /** Accent the border, for the session currently producing output. */
   live?: boolean;
+  /** Where the session runs, shown after its agent: the "Runs on" badge. */
+  runsOn?: ReactNode;
 }
 
 /** One session inside a workflow run, collapsed to an excerpt until opened. */
-export function SessionCard({ data, sessionHref, defaultOpen = false, live = false }: SessionCardProps) {
+export function SessionCard({ data, sessionHref, defaultOpen = false, live = false, runsOn }: SessionCardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const doneCount = data.steps.filter((s) => s.state === 'completed').length;
   const duration = formatDuration(data.startedAt, data.completedAt, data.state);
@@ -104,6 +106,7 @@ export function SessionCard({ data, sessionHref, defaultOpen = false, live = fal
             {agentLabel(data.agentType)}
           </span>
         )}
+        {runsOn}
         {data.terminalSessionId && <span className={`${classes.num} ${classes.dim}`}>#{data.terminalSessionId}</span>}
         {data.totalTokens > 0 && <span className={classes.num}>{formatTokens(data.totalTokens)} tokens</span>}
         {data.costCents > 0 && <span className={classes.num}>{formatCost(data.costCents)}</span>}

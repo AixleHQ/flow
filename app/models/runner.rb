@@ -19,6 +19,13 @@ class Runner < ApplicationRecord
   # Null only once its creator has been permanently deleted.
   belongs_to :created_by, class_name: "User", optional: true
 
+  # A runner leaves only with its project or company (its own delete is soft,
+  # §2.5), and the project's runners go before its workflows and runs, so the
+  # references are cleared here rather than blocking that delete.
+  has_many :workflows, dependent: :nullify
+  has_many :workflow_runs, dependent: :nullify
+  has_many :terminal_sessions, dependent: :nullify
+
   before_validation :default_reuse_policy
 
   validates :created_by, presence: true, on: :create
@@ -37,9 +44,17 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
-  scope :visible_for_project, ->(project) {
-    where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id)).not_deleted
+  # The project's runners and its company's, including deleted ones: what a
+  # reference may name (RunnerReference). Picking one also needs it live.
+  scope :within_project_scope, ->(project) {
+    where(company_id: project.company_id, project_id: nil).or(where(company_id: project.company_id, project_id: project.id))
   }
+  scope :visible_for_project, ->(project) { within_project_scope(project).not_deleted }
+
+  # Who runs the machines a session's credential goes to (§3.2, §11).
+  def operated_by
+    project ? "#{company.name}/#{project.name}" : company.name
+  end
 
   private
 

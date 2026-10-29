@@ -13,6 +13,11 @@ module Activities
         # The owner reads this on the step; renewing the login is theirs to do.
         raise Temporalio::Error::ApplicationError.new(e.message, type: "PreflightError", non_retryable: true,
                                                       category: TemporalExceptions::BENIGN)
+      rescue Runners::Resolver::Refused => e
+        # The runner is the workflow's to change; a retry finds the same runner.
+        WorkflowService.fail_step_on_runner_refusal(step_run: step_run, refusal: e)
+        raise Temporalio::Error::ApplicationError.new(e.message, type: "RunnerRefused", non_retryable: true,
+                                                      category: TemporalExceptions::BENIGN)
       rescue SessionAdmissionService::Stopped => e
         # The run was cancelled, or its company stopped, before this step launched;
         # a retry finds the same thing.

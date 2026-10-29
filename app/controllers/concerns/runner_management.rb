@@ -26,7 +26,8 @@ module RunnerManagement
     render inertia: "#{page_prefix}/RunnerPage", props: {
       runner: RunnerResource.new(runner).to_h,
       runner_types: runner_types_props,
-      can_manage: runner_policy(runner).update?
+      can_manage: runner_policy(runner).update?,
+      workflows_using: workflows_using(runner)
     }
   end
 
@@ -83,6 +84,15 @@ module RunnerManagement
 
   def find_runner
     listed_runners.find(params[:id])
+  end
+
+  # The workflows that name the runner (§11), the ones this page may show:
+  # deleting the runner asks for confirmation and lists them (§3.4).
+  def workflows_using(runner)
+    Workflow.active.where(runner_id: runner.id, project_id: workflow_projects.select(:id))
+            .includes(:scope).order(:name).map do |workflow|
+      { id: workflow.id, name: workflow.name, project_id: workflow.project_id, project_name: workflow.scope.name }
+    end
   end
 
   # The record-level half of the policy: the action was authorized for the

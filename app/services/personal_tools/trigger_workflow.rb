@@ -14,6 +14,9 @@ module PersonalTools
             description: "Any string unique to this launch, such as a UUID you generate once. Calling again with the " \
                          "same key returns the run the first call started instead of starting another, so pass it " \
                          "when you retry after a timeout or an error. Up to 255 characters."
+      param :runner_id, type: :integer,
+            description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use the " \
+                         "workflow's runner. Refused unless external runners are enabled for the company."
     end
 
     def execute
@@ -29,7 +32,8 @@ module PersonalTools
       begin
         run = WorkflowService.start(
           workflow: workflow, project: project, user: user, source: :mcp, idempotency_key: key,
-          mode: (params[:mode].presence || "interactive").to_sym
+          mode: (params[:mode].presence || "interactive").to_sym,
+          **runner_pick
         )
       rescue ActiveRecord::RecordNotUnique
         raise unless key
@@ -42,6 +46,8 @@ module PersonalTools
     end
 
     private
+
+    def runner_pick = params.key?(:runner_id) ? { runner_id: params[:runner_id] } : {}
 
     def replay(run, workflow, project)
       unless run.workflow_id == workflow.id && run.project_id == project.id

@@ -22,6 +22,7 @@ import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
+import { RunsOnBadge, useRunsOnMeta } from 'shared/resources/runners/runnerChoice';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
@@ -132,6 +133,7 @@ const WorkflowRunShowPage = () => {
   const notYoursNote = `Started by ${run.userName ?? 'someone else'} — only they or a company admin can control this run.`;
   const now = useElapsedTimer(isActive);
   const canWrite = useCanWrite();
+  const runsOnMeta = useRunsOnMeta(run.runner, project.id);
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
   const [skipStepId, setSkipStepId] = useState<number | null>(null);
@@ -244,9 +246,11 @@ const WorkflowRunShowPage = () => {
 
   const liveStepIds = useMemo(() => new Set(liveSteps.map((s) => s.id)), [liveSteps]);
 
+  // Every step runs on the run's runner (DESIGN.md §3.3): there is no step-level runner.
   const sessionCards = sortedSteps.map((step, i) => (
     <SessionCard
       key={step.id}
+      runsOn={<RunsOnBadge runner={run.runner} projectId={project.id} />}
       data={toCardData(step, i)}
       live={isActive && liveStepIds.has(step.id)}
       defaultOpen={isActive ? liveStepIds.has(step.id) : isTerminal || step.state === 'failed'}
@@ -369,7 +373,7 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={run.userName}
           mode={run.mode}
-          extraMeta={chatOriginMeta(run.chatOrigin)}
+          extraMeta={[...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
