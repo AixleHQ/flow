@@ -1,6 +1,5 @@
 import { Link } from '@inertiajs/react';
 import { Anchor, Select, Text } from '@mantine/core';
-import type { ReactNode } from 'react';
 
 import type { RunnerSummary } from '@/types/generated';
 
@@ -12,14 +11,6 @@ import { humanize } from './runnerConfig';
 import { runnerTypeTitle } from './runnerCopy';
 
 const HOSTED = 'hosted';
-
-/** Why a referenced runner cannot take a launch, in the §3.4 wording, or null when it can be tried. */
-export function runnerUnusableReason(runner: RunnerSummary): string | null {
-  if (runner.deleted) return `Runner "${runner.name}" is deleted.`;
-  if (runner.status === 'revoked') return `Runner "${runner.name}" is revoked.`;
-  if (runner.status === 'disabled') return `Runner "${runner.name}" is disabled.`;
-  return null;
-}
 
 const optionLabel = (runner: RunnerSummary) =>
   `${runner.name} · ${runner.deleted ? 'Deleted' : humanize(runner.status)}`;
@@ -103,13 +94,3 @@ export function RunsOnBadge({ runner, projectId }: { runner: RunnerSummary | nul
   );
 }
 
-/** The "Runs on" item of a detail header's meta row, or nothing without the flag or a project. */
-export function useRunsOnMeta(
-  runner: RunnerSummary | null | undefined,
-  projectId: number | null | undefined,
-): { label: string; value: ReactNode }[] {
-  const externalRunners = useFeatureFlag('externalRunners');
-  if (!externalRunners || projectId == null) return [];
-
-  return [{ label: 'Runs on', value: <RunsOnBadge runner={runner} projectId={projectId} /> }];
-}

@@ -551,7 +551,9 @@ describe('SessionNewForm — Runs on', () => {
   });
 
   it('shows no runner select without the flag', () => {
-    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, runners })} />, { props: authProps(['claude_code']) });
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, runners })} />, {
+      props: authProps(['claude_code']),
+    });
 
     expect(screen.queryByRole('combobox', { name: 'Runs on' })).not.toBeInTheDocument();
   });

@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildRunnerSummary } from 'test/factories/runner';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
-import { RunnerSelect, RunsOnBadge, runnerUnusableReason } from './runnerChoice';
+import { RunnerSelect, RunsOnBadge } from './runnerChoice';
+import { runnerUnusableReason } from './runnerCopy';
 
 const ON = { features: { externalRunners: true } };
 
@@ -63,12 +64,21 @@ describe('RunnerSelect', () => {
 
   it('turns every runner off for an interactive session', async () => {
     renderAuthedPage(
-      <RunnerSelect label="Runs on" hostedLabel="Hosted" runners={runners} value={null} onChange={vi.fn()} interactive />,
+      <RunnerSelect
+        label="Runs on"
+        hostedLabel="Hosted"
+        runners={runners}
+        value={null}
+        onChange={vi.fn()}
+        interactive
+      />,
     );
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Runs on' }));
 
-    const option = await screen.findByRole('option', { name: "Prod VPC · Connected · can't run interactive sessions yet" });
+    const option = await screen.findByRole('option', {
+      name: "Prod VPC · Connected · can't run interactive sessions yet",
+    });
     expect(option).toHaveAttribute('data-combobox-disabled', 'true');
   });
 });

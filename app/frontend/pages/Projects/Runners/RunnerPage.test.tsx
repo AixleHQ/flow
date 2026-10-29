@@ -53,7 +53,10 @@ describe('Projects/Runners/RunnerPage', () => {
     const user = userEvent.setup();
     render({ workflowsUsing: [{ id: 3, name: 'Deploy', projectId: 7, projectName: 'Aixle Core' }] });
 
-    expect(screen.getByRole('link', { name: 'Deploy' })).toHaveAttribute('href', '/company/projects/7/workflows/3/builder');
+    expect(screen.getByRole('link', { name: 'Deploy' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/workflows/3/builder',
+    );
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete runner' });

@@ -1,4 +1,4 @@
-import type { Runner } from '@/types/generated';
+import type { Runner, RunnerSummary } from '@/types/generated';
 
 import { formatDateTime } from 'shared/lib/formatDate';
 
@@ -121,3 +121,11 @@ export const DEFAULT_REUSE_POLICY: Record<Runner['runnerType'], Runner['reusePol
 
 export const lastSeen = (runner: Pick<Runner, 'lastSeenAt'>): string =>
   runner.lastSeenAt ? formatDateTime(runner.lastSeenAt) : 'Never';
+
+/** Why a referenced runner cannot take a launch, in the §3.4 wording, or null when it can be tried. */
+export function runnerUnusableReason(runner: RunnerSummary): string | null {
+  if (runner.deleted) return `Runner "${runner.name}" is deleted.`;
+  if (runner.status === 'revoked') return `Runner "${runner.name}" is revoked.`;
+  if (runner.status === 'disabled') return `Runner "${runner.name}" is disabled.`;
+  return null;
+}

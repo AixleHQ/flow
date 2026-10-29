@@ -140,14 +140,13 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     deleted.soft_delete!
 
     get builder_company_project_workflow_path(@project, @workflow), headers: deferred("runners")
-    assert_inertia_props { |props| props[:runners] == [] }
+    assert_equal [], response.parsed_body.dig("props", "runners")
 
     enable_runners
     get builder_company_project_workflow_path(@project, @workflow), headers: deferred("runners")
-    assert_inertia_props do |props|
-      props[:runners].map { |r| [ r[:name], r[:deleted] ] } == [ [ "Prod VPC", false ], [ "Old box", true ] ] &&
-        props[:runners].first[:operatedBy] == @company.name
-    end
+    runners = response.parsed_body.dig("props", "runners")
+    assert_equal [ [ "Prod VPC", false ], [ "Old box", true ] ], runners.map { |r| [ r["name"], r["deleted"] ] }
+    assert_equal @company.name, runners.first["operatedBy"]
   end
 
   # == the runner page ==

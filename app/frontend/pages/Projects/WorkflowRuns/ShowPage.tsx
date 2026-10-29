@@ -22,7 +22,8 @@ import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
-import { RunsOnBadge, useRunsOnMeta } from 'shared/resources/runners/runnerChoice';
+import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
+import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,

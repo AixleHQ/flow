@@ -40,7 +40,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { ideThemeUrl, ideUrlWithScheme } from 'shared/lib/ideTheme';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
-import { useRunsOnMeta } from 'shared/resources/runners/runnerChoice';
+import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import {

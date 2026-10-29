@@ -7,7 +7,8 @@ import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { type ToolGroup } from 'shared/lib/toolPicker';
-import { RunnerSelect, runnerUnusableReason } from 'shared/resources/runners/runnerChoice';
+import { RunnerSelect } from 'shared/resources/runners/runnerChoice';
+import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 
 interface NamedItem {
   id: number;
@@ -262,7 +263,12 @@ function RunnerField({
   onChange: (runnerId: number | null) => void;
 }) {
   const selected = runners.find((runner) => runner.id === runnerId);
-  const unusable = runnerId == null ? null : selected ? runnerUnusableReason(selected) : 'This runner is not available to this project.';
+  const unusable =
+    runnerId == null
+      ? null
+      : selected
+        ? runnerUnusableReason(selected)
+        : 'This runner is not available to this project.';
 
   return (
     <div style={{ marginBottom: 20 }}>
