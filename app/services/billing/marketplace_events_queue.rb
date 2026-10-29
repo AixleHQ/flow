@@ -24,7 +24,10 @@ module Billing
 
     # Yields each message body, parsed. Deletes only what the block took without
     # raising: a message whose handling failed is left to reappear after the
-    # visibility timeout rather than being dropped.
+    # visibility timeout rather than being dropped -- and the rest go on. One
+    # the block cannot take would otherwise end the drain every minute until it
+    # aged out, and with it the applying that follows the drain, inside the
+    # hour AWS gives for a cancelling customer's last usage.
     def each_message
       return 0 unless configured?
 
@@ -35,7 +38,8 @@ module Billing
         break if messages.empty?
 
         messages.each do |message|
-          yield parse(message.body)
+          next unless handle(message) { yield parse(message.body) }
+
           delete(message)
           handled += 1
         end
@@ -45,6 +49,16 @@ module Billing
     end
 
     private
+
+    def handle(message)
+      yield
+      true
+    rescue StandardError => e
+      Rails.logger.error(
+        "[MarketplaceEventsQueue] message #{message.message_id} left on the queue: #{e.class.name}: #{e.message}"
+      )
+      false
+    end
 
     def receive
       client.receive_message(
