@@ -113,6 +113,26 @@ module Agents
                    @adapter.session_command(mode: "non_interactive", model: "gemini-2.5-pro")
     end
 
+    # Gemini CLI has no effort flag: the level is a thinking level in settings.json.
+    test "session_command is unchanged by a reasoning effort" do
+      assert_equal "gemini --yolo", @adapter.session_command(mode: "interactive", effort: "low")
+    end
+
+    test "config_files sets the thinking level of the Gemini 3 chat alias" do
+      files = @adapter.config_files({ "api_key" => "k" }, { reasoning_effort: "low" })
+      settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
+
+      assert_equal [ { "match" => { "model" => "chat-base-3" },
+                       "modelConfig" => { "generateContentConfig" => { "thinkingConfig" => { "thinkingLevel" => "LOW" } } } } ],
+                   settings.dig("modelConfigs", "customOverrides")
+    end
+
+    test "config_files writes no model config when no effort is set" do
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "k" }, {})["/home/gemini/.gemini/settings.json"])
+
+      refute settings.key?("modelConfigs")
+    end
+
     test "env_vars_from_metadata returns empty hash" do
       metadata = { "google_cloud_project" => "my-project-123" }
 

@@ -23,6 +23,7 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   agentId: null,
   requiredAgentRuntime: null,
   preferredModel: null,
+  reasoningEffort: null,
   allowNonInteractive: false,
   skipPolicy: 'never',
   onFailure: 'fail',
@@ -955,6 +956,91 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.steps[0].preferredModel).toBe('opus-9');
+  });
+
+  it("a Reasoning Effort offers the runtime's levels and is sent on Save", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'gemini_cli' })],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+    expect(await screen.findByRole('option', { name: 'Low' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Medium' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'High' }));
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].reasoningEffort).toBe('high');
+  });
+
+  it('a Reasoning Effort is disabled, with the reason, where the runtime and model take none', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'gemini_cli',
+            preferredModel: 'gemini-2.5-pro',
+          }),
+        ],
+      }),
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+    expect(screen.getByText('Gemini CLI has no reasoning-effort setting for gemini-2.5-pro.')).toBeInTheDocument();
+  });
+
+  it('a saved level the model does not take is shown as an error, not dropped', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-sonnet-4.6',
+            reasoningEffort: 'xhigh',
+          }),
+        ],
+      }),
+    });
+
+    expect(
+      screen.getByText(
+        'Extra high is not available for Kiro CLI with claude-sonnet-4.6. Choose one of: Low, Medium, High, Max.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('textbox', { name: 'Session name' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), ' 2');
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].reasoningEffort).toBe('xhigh');
+  });
+
+  it('switching to a runtime that does not take the saved level clears it', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'claude_code', reasoningEffort: 'max' }),
+        ],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Required agent runtime' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Grok' }));
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ requiredAgentRuntime: 'grok', reasoningEffort: null });
   });
 
   it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {

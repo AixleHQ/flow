@@ -21,6 +21,7 @@ type TerminalSession = {
   costCents: number;
   models: Array<string>;
   requestedModel: string | null;
+  reasoningEffort: string | null;
   artifactsReviewed: boolean | null;
   errorMessage: string | null;
   containerId: string | null;

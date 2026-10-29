@@ -516,6 +516,58 @@ describe('SessionNewForm', () => {
       fetchSpy.mockRestore();
     });
   });
+
+  describe('reasoning effort', () => {
+    it("offers the selected runtime's levels and sends the one picked", async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['grok']) });
+
+      await user.click(screen.getByText('Grok'));
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High', 'Extra high']);
+      await user.click(screen.getByRole('option', { name: 'Extra high' }));
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession.reasoningEffort).toBe('xhigh');
+
+      fetchSpy.mockRestore();
+    });
+
+    it('sends no reasoning effort when none is picked', async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['grok']) });
+
+      await user.click(screen.getByText('Grok'));
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).not.toHaveProperty('reasoningEffort');
+
+      fetchSpy.mockRestore();
+    });
+
+    it('is disabled, with the reason, for a runtime that needs a model to take one', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps(['cursor_cli']) });
+
+      await user.click(screen.getByText('Cursor CLI'));
+
+      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+      expect(screen.getByText('Cursor CLI sets a reasoning effort only on a model you choose.')).toBeInTheDocument();
+    });
+  });
 });
 
 describe('SessionNewForm — Runs on', () => {

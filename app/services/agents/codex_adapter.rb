@@ -151,9 +151,13 @@ module Agents
 
     # Session command: always codex --yolo, with workspace trust granted inline.
     # The prompt is appended by AgentSessionStrategy, read from its prompt file.
-    def session_command(mode:, model: nil, workspace: DEFAULT_WORKSPACE)
+    #
+    # Codex has no effort flag: the level is the `model_reasoning_effort` config key,
+    # set from argv with `-c` like the trust override, so config.toml is not touched.
+    def session_command(mode:, model: nil, effort: nil, workspace: DEFAULT_WORKSPACE)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
-      "codex#{model_flag} --yolo#{cli_trust_flag(workspace)}"
+      effort_flag = effort.present? ? " -c model_reasoning_effort=#{Shellwords.shellescape(effort)}" : ""
+      "codex#{model_flag}#{effort_flag} --yolo#{cli_trust_flag(workspace)}"
     end
 
     # Grant workspace trust on the command line as well as in config.toml.

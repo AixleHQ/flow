@@ -770,7 +770,7 @@ module ContainerStrategies
       container_mock = mock("container")
 
       mock_adapter = mock("adapter")
-      mock_adapter.expects(:session_command).with(mode: "non_interactive", model: nil).returns("codex --yolo")
+      mock_adapter.expects(:session_command).with(mode: "non_interactive", model: nil, effort: nil).returns("codex --yolo")
       mock_adapter.stubs(:container_uid).returns(1001)
       mock_service = mock("service")
       mock_service.stubs(:adapter).returns(mock_adapter)
@@ -790,6 +790,28 @@ module ContainerStrategies
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
+    end
+
+    test "the session's reasoning effort reaches the launch command the way its CLI takes it" do
+      @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: "high")
+
+      assert_equal "claude --model claude-opus-5 --effort high", launched_command(build_strategy)
+    end
+
+    test "a session without a reasoning effort launches exactly as before" do
+      @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: nil)
+
+      assert_equal "claude --model claude-opus-5", launched_command(build_strategy)
+    end
+
+    # A step's runtime is resolved after the step saved its level; a level the
+    # resolved CLI does not take for the model is dropped, not passed through.
+    test "a level the launching runtime does not take for the model is left out" do
+      @session.update!(agent_type: "kiro_cli", mode: "interactive", requested_model: "claude-sonnet-4.6",
+                       reasoning_effort: "xhigh")
+
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --model claude-sonnet-4.6",
+                   launched_command(build_strategy(agent_type: "kiro_cli"))
     end
 
     test "build_env_vars carries no prompt" do
@@ -1048,6 +1070,21 @@ module ContainerStrategies
       strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
       strategy
+    end
+
+    # The command launch_agent_in_tmux types into the agent pane.
+    def launched_command(strategy)
+      delivered = nil
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:exec).with do |_container, command|
+        send_keys = command[2].match(/tmux send-keys -t agent (.+?) Enter;/)&.[](0)
+        delivered = Shellwords.split(send_keys).fetch(4)
+        true
+      end
+
+      strategy.send(:launch_agent_in_tmux, mock("container"))
+      delivered
     end
 
     def build_strategy(agent_type: "claude_code", credential: nil)

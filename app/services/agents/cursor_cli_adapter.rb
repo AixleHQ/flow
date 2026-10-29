@@ -107,9 +107,16 @@ module Agents
     # --disable-auto-update (hidden): every chat otherwise starts a background download of
     # the newest release (~180 MB) two seconds in, replacing the version the image pins.
     # The prompt is appended by AgentSessionStrategy, read from its prompt file.
-    def session_command(mode:, model: nil)
+    #
+    # Cursor has no effort flag: a parameterized model takes it as a bracket override,
+    # `--model 'claude-opus-4-8[effort=high]'`. With no model there is nothing to
+    # attach it to, and a model that already carries overrides keeps its own.
+    def session_command(mode:, model: nil, effort: nil)
       command = "agent --force --disable-auto-update"
-      model ? "#{command} --model #{Shellwords.shellescape(model)}" : command
+      return command unless model
+
+      model = "#{model}[effort=#{effort}]" if effort.present? && !model.include?("[")
+      "#{command} --model #{Shellwords.shellescape(model)}"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)

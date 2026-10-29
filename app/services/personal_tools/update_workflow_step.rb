@@ -4,7 +4,8 @@ module PersonalTools
   class UpdateWorkflowStep < Base
     tool do
       display_name "Update Workflow Step"
-      description "Update a workflow step's fields (name, instructions, agent, tools, skills, deps, BMAD). " \
+      description "Update a workflow step's fields (name, instructions, agent, runtime, reasoning effort, tools, " \
+                  "skills, deps, BMAD). " \
                   "Read the step with get_workflow_step first — every id list here replaces the current one."
       audience :user
       tags :workflows
@@ -18,6 +19,11 @@ module PersonalTools
                       description: "Runtime required for this step. Pass null to restore normal runtime resolution.",
                       enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
       runtime["type"] = %w[string null]
+      effort = param :reasoning_effort, type: :string,
+                     description: "Reasoning effort the step's CLI runs at. Pass null for the CLI's default. " \
+                                  "Only the levels the step's runtime (and preferred model) takes are accepted.",
+                     enum: AgentRuntime.reasoning_effort_levels + [ nil ]
+      effort["type"] = %w[string null]
       param :tool_ids, type: :array,
             description: "Tool ids available in this step. Replaces the whole list — read the current value " \
                          "with get_workflow_step first.",
@@ -48,8 +54,8 @@ module PersonalTools
     end
 
     UPDATABLE = %i[
-      name instructions agent_id required_agent_runtime tool_ids skill_ids mcp_server_ids config_item_ids
-      depends_on_step_ids bmad_enabled allow_non_interactive
+      name instructions agent_id required_agent_runtime reasoning_effort tool_ids skill_ids mcp_server_ids
+      config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 
     def execute

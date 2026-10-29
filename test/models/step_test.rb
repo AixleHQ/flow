@@ -100,6 +100,67 @@ class StepTest < ActiveSupport::TestCase
     assert step.errors.added?(:required_agent_runtime, :inclusion, value: "vim")
   end
 
+  # --- reasoning_effort ---
+
+  test "a reasoning effort is unset by default and a blank one is stored as unset" do
+    assert_nil create(:step, workflow: @workflow).reasoning_effort
+    assert_nil create(:step, workflow: @workflow, reasoning_effort: "").reasoning_effort
+  end
+
+  test "a reasoning effort the step's runtime takes is valid" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", reasoning_effort: "high")
+
+    assert step.valid?, step.errors.full_messages.to_sentence
+  end
+
+  test "a word that is no reasoning-effort level is rejected" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", reasoning_effort: "turbo")
+
+    assert_not step.valid?
+    assert step.errors.added?(:reasoning_effort, :inclusion, value: "turbo")
+  end
+
+  test "a level the step's runtime does not take is rejected, naming the ones it does" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", reasoning_effort: "medium")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "medium is not available for gemini_cli (choose one of: low, high)"
+  end
+
+  test "the level is checked against the step's preferred model where the runtime's levels depend on it" do
+    assert build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                        reasoning_effort: "xhigh").valid?
+
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-sonnet-4.6",
+                        reasoning_effort: "xhigh")
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort].first, "choose one of: low, medium, high, max"
+  end
+
+  test "a runtime and model with no level at all refuse any" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", preferred_model: "gemini-2.5-pro",
+                        reasoning_effort: "low")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
+  end
+
+  # The runtime is left to resolution: the launch drops a level the resolved CLI does not take.
+  test "a step without a runtime takes any known level" do
+    assert build(:step, workflow: @workflow, reasoning_effort: "ultra").valid?
+  end
+
+  test "changing the runtime or the model under a saved level the new pair does not take is refused" do
+    step = create(:step, workflow: @workflow, required_agent_runtime: "claude_code", reasoning_effort: "xhigh")
+
+    assert_not step.update(required_agent_runtime: "gemini_cli")
+    assert_equal "claude_code", step.reload.required_agent_runtime
+
+    assert step.update(required_agent_runtime: "kiro_cli"), step.errors.full_messages.to_sentence
+    assert_not step.update(preferred_model: "claude-sonnet-4.6")
+    assert_equal "xhigh", step.reload.reasoning_effort
+  end
+
   test "nested sub_steps via accepts_nested_attributes" do
     step = create(:step, workflow: @workflow, position: 1, sub_steps_attributes: [
       { name: "Sub 1", position: 1 },

@@ -13,6 +13,12 @@ module Agents
 
     API_KEY_CREDS_PATH = "gemini-credentials.json"
 
+    # Gemini 3 models take a thinking level, LOW or HIGH (HIGH is the CLI's default);
+    # Gemini 2.5 models take a token budget instead, which this setting does not cover.
+    # The level goes on `chat-base-3`, the alias every Gemini 3 chat model extends, so
+    # it reaches the session's chat turns and none of the CLI's internal utility calls.
+    THINKING_LEVEL_ALIAS = "chat-base-3"
+
     def self.default_config_paths
       [ "~/.gemini/settings.json", "GEMINI.md" ]
     end
@@ -79,7 +85,7 @@ module Agents
       workspace = workflow_config[:workspace] || "/workspace"
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
-          model: workflow_config[:model], auth_type: "gemini-api-key"
+          model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key"
         ).to_json
       }.merge(trusted_folders_files(workspace))
     end
@@ -145,7 +151,9 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    def session_command(mode:, model: nil)
+    # The effort is not a flag: Gemini CLI sets the thinking level in settings.json
+    # (#generate_settings), so `effort` is unused here.
+    def session_command(mode:, model: nil, effort: nil)
       model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end
 
@@ -265,7 +273,7 @@ module Agents
 
     private
 
-    def generate_settings(model: nil, auth_type: "gemini-api-key")
+    def generate_settings(model: nil, auth_type: "gemini-api-key", effort: nil)
       settings = {
         "security" => {
           "auth" => { "selectedType" => auth_type },
@@ -312,7 +320,19 @@ module Agents
         }
       }
       settings["model"] = { "name" => model } if model.present?
+      settings["modelConfigs"] = thinking_level_settings(effort) if effort.present?
       settings
+    end
+
+    def thinking_level_settings(effort)
+      {
+        "customOverrides" => [ {
+          "match" => { "model" => THINKING_LEVEL_ALIAS },
+          "modelConfig" => {
+            "generateContentConfig" => { "thinkingConfig" => { "thinkingLevel" => effort.to_s.upcase } }
+          }
+        } ]
+      }
     end
 
     # Usage is read from the `gemini_cli.api_response` log record, one per model response.

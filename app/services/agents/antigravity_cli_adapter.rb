@@ -263,9 +263,12 @@ module Agents
       details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
-    def session_command(mode:, model: nil)
+    # `--effort` picks the model's reasoning-effort variant (1.4.7 lists
+    # low|medium|high|xhigh|max); the CLI refuses a level its model does not have.
+    def session_command(mode:, model: nil, effort: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
+      parts += [ "--effort", Shellwords.shellescape(effort) ] if effort.present?
       parts << "--dangerously-skip-permissions"
       # --output-format must precede --print: `agy` treats a bare --print as taking
       # the next token as its own prompt value, so --print immediately followed by

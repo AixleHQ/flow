@@ -54,6 +54,12 @@ governance, community health — carry none.
   It is read-only: the value follows from a subscription existing. Existing
   companies are filled in by a migration, with one that Aixle carries counted as
   billed by nobody even if Stripe still holds a customer for it.
+- **Workflows**: a session in the workflow builder has a **Reasoning Effort**
+  next to its model, and the new-session form has one too. It offers only the
+  levels the chosen runtime and model take, and is disabled, with the reason,
+  where they take none. Unset keeps the CLI's own default. The
+  `create_workflow_step` and `update_workflow_step` tools accept
+  `reasoning_effort`, and `get_workflow_step` returns it.
 
 ### Fixed
 - **Company settings**: a workspace is no longer billed for parts of an hour it

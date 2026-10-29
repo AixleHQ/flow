@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_173000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1534,6 +1534,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
     t.string "preferred_model"
+    t.string "reasoning_effort"
     t.jsonb "repository_ids", default: [], null: false
     t.string "required_agent_runtime"
     t.jsonb "skill_ids", default: [], null: false
@@ -1664,6 +1665,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_120000) do
     t.bigint "project_id"
     t.datetime "queued_at"
     t.datetime "ready_at"
+    t.string "reasoning_effort"
     t.string "requested_model"
     t.string "route_token"
     t.jsonb "session_config", default: {}, null: false
