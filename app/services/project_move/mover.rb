@@ -89,6 +89,7 @@ module ProjectMove
 
       copier.rewrite_references!
       detach_links!(preflight)
+      clear_runner_history!
       preflight.reservation&.destroy! if preflight.reservation_dropped?
       reparent!(preflight)
       report.merge!(resolve_people!(preflight, previous_owner_id))
@@ -107,6 +108,16 @@ module ProjectMove
       # every code asked for to connect one.
       TriggerBinding.release_chat_channels!(TriggerBinding.where(project_id: @project.id))
       ChatConnectCode.where(project_id: @project.id).delete_all
+    end
+
+    # The runner a past run or session ran on is one of the source company's, and
+    # fk_terminal_sessions_runner_company would hold the session to it. None of
+    # them is live (Preflight), so they keep their history without the runner.
+    # A workflow that names a runner blocks the move instead (Preflight#blockers).
+    def clear_runner_history!
+      WorkflowRun.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: Time.current)
+      TerminalSession.where(project_id: @project.id).where.not(runner_id: nil)
+                     .update_all(runner_id: nil, updated_at: Time.current)
     end
 
     def reparent!(preflight)

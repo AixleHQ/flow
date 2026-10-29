@@ -100,6 +100,17 @@
   </section>
 <% end %>
 
+<% cleared = report["cleared_runner_references"] %>
+<% if cleared && (cleared["runs"].to_i + cleared["sessions"].to_i).positive? %>
+  <section class="move-section">
+    <h2><%= verb.call("Runner references to clear", "Runner references cleared") %></h2>
+    <p class="move-muted">
+      <%= pluralize(cleared["runs"].to_i, "past run") %> and <%= pluralize(cleared["sessions"].to_i, "past session") %>
+      ran on, or picked, a runner of <%= source %>. A runner stays with its company, so they keep their history without it.
+    </p>
+  </section>
+<% end %>
+
 <% if report["without_agent_credentials"].any? %>
   <section class="move-section">
     <h2>Agent sign-in needed</h2>

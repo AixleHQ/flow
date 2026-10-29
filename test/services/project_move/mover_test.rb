@@ -166,6 +166,47 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal [ ado.id ], report["deactivated_integrations"].pluck("id")
   end
 
+  test "refuses while a workflow runs on a runner of the source, and changes nothing" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update!(runner: runner)
+
+    error = assert_raises(ProjectMove::Refused) { move(member_policy: "add") }
+
+    assert_match(/Workflow Release runs on runner Prod VPC of Northwind\. Switch it to Hosted before moving\./, error.message)
+    assert_unmoved
+    assert_equal runner, @s.workflow.reload.runner
+  end
+
+  test "clears the runner of past runs and sessions, which keep their history in the target" do
+    runner = create(:runner, company: @s.source)
+    @s.completed_run.update_columns(runner_id: runner.id)
+    @s.finished_session.update_columns(runner_id: runner.id)
+
+    report = move(member_policy: "add")
+
+    assert_equal [ nil, "completed" ], [ @s.completed_run.reload.runner_id, @s.completed_run.state ]
+    assert_equal [ nil, @s.target.id ], [ @s.finished_session.reload.runner_id, @s.finished_session.company_id ]
+    assert_equal({ "runs" => 1, "sessions" => 1 }, report["cleared_runner_references"])
+    assert runner.reload.persisted?, "the runner stays with its company"
+  end
+
+  test "a version from before the move that names a runner of the source is refused on revert" do
+    runner = create(:runner, company: @s.source)
+    @s.workflow.update_column(:current_version_number, @s.entity_version.number)
+    on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: runner) }
+    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil) }
+    move(member_policy: "add")
+
+    workflow = @s.workflow.reload
+    error = assert_raises(ActiveRecord::RecordInvalid) do
+      Versions.revert!(workflow, to: on_runner, actor: Versions::Actor.system)
+    end
+
+    assert_match(/This version runs on runner ##{runner.id}, which this project can no longer use\./, error.message)
+    assert_nil workflow.reload.runner_id
+    assert_equal on_runner.number + 1, workflow.current_version_number
+  end
+
   private
 
   def move(member_policy:, owner: @s.owner, confirm_cancellations: true)
