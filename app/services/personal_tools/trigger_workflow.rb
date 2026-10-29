@@ -14,9 +14,10 @@ module PersonalTools
             description: "Any string unique to this launch, such as a UUID you generate once. Calling again with the " \
                          "same key returns the run the first call started instead of starting another, so pass it " \
                          "when you retry after a timeout or an error. Up to 255 characters."
-      param :runner_id, type: :integer,
-            description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use the " \
-                         "workflow's runner. Refused unless external runners are enabled for the company."
+      runner = param :runner_id, type: :integer,
+                     description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use " \
+                                  "the workflow's runner. Refused unless external runners are enabled for the company."
+      runner["type"] = %w[integer null]
     end
 
     def execute

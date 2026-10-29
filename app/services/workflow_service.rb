@@ -358,9 +358,6 @@ class WorkflowService
       end
     end
 
-    # A crashed run's leftover steps are marked failed, not cancelled: the run
-    # failed, so an unfinished step failed with it. Its session is stopped first
-    # so the container is not left running behind a dead run.
     # Fails a run that never started, before admission and without a Temporal
     # execution. Each step carries the message, which is what the run page, the
     # tracker comment and the chat card read; the board task gets it as a comment.
@@ -397,6 +394,9 @@ class WorkflowService
       Rails.logger.warn("[WorkflowService] Failed to comment on the runner refusal of run ##{run.id}: #{e.message}")
     end
 
+    # A crashed run's leftover steps are marked failed, not cancelled: the run
+    # failed, so an unfinished step failed with it. Its session is stopped first
+    # so the container is not left running behind a dead run.
     def fail_active_step_runs(run)
       run.step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
         session = sr.terminal_session
