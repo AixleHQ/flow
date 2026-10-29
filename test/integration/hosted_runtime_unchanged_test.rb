@@ -16,6 +16,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     stub_traefik_http
     stub_container_settings
+    with_scope_defaults(project: 4)
     Settings.stubs(:container_runtime).returns("kubernetes")
     SessionContextService.stubs(:assemble_session_context)
     mock_temporal_start

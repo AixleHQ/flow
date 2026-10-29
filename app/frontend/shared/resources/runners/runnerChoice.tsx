@@ -93,4 +93,3 @@ export function RunsOnBadge({ runner, projectId }: { runner: RunnerSummary | nul
     </Anchor>
   );
 }
-

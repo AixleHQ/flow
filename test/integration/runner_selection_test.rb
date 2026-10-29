@@ -60,7 +60,7 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
   test "the task trigger API refuses a pick without the flag" do
     task = bound_task
 
-    post trigger_workflow_api_v1_project_board_task_path(@project, task), params: { runner_id: @runner.id }, as: :json
+    post trigger_workflow_api_v1_project_task_path(@project, task), params: { runner_id: @runner.id }, as: :json
 
     assert_response :unprocessable_entity
     assert_equal [ "External runners are not enabled for this company." ], response.parsed_body["errors"]
@@ -71,7 +71,7 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     enable_runners
     task = bound_task
 
-    post trigger_workflow_api_v1_project_board_task_path(@project, task), params: { runner_id: @runner.id }, as: :json
+    post trigger_workflow_api_v1_project_task_path(@project, task), params: { runner_id: @runner.id }, as: :json
 
     assert_response :success
     assert_equal @runner.id, task.workflow_runs.sole.runner_id
@@ -156,11 +156,10 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     @workflow.update!(runner: @runner)
     create(:workflow, scope: @project, name: "Archived", runner: @runner).update!(deleted_at: Time.current)
 
-    get company_settings_runner_path(@runner)
+    get company_settings_runner_path(@runner), headers: { "X-Inertia" => "true" }
 
-    assert_inertia_props do |props|
-      props[:workflowsUsing] == [ { id: @workflow.id, name: "Deploy", projectId: @project.id, projectName: "Payments" } ]
-    end
+    assert_equal [ { "id" => @workflow.id, "name" => "Deploy", "projectId" => @project.id, "projectName" => "Payments" } ],
+                 response.parsed_body.dig("props", "workflowsUsing")
   end
 
   private
