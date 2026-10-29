@@ -32,10 +32,14 @@ class MarketplaceSubscriptionEvent < ApplicationRecord
 
   # Everything still waiting for the licence it names to exist. Matched on
   # either key, because agreement events carry no licence ARN and licence events
-  # carry no agreement of their own that we store.
+  # carry no agreement of their own that we store. A licence that knows no
+  # agreement is matched on its ARN alone: `agreement_id: nil` would be every
+  # other listing's agreement-less event, applied inside the buyer's request.
   scope :awaiting, ->(license) {
-    unapplied.where(license_arn: license.license_arn)
-             .or(unapplied.where(agreement_id: license.agreement_id.presence))
+    by_arn = unapplied.where(license_arn: license.license_arn)
+    next by_arn if license.agreement_id.blank?
+
+    by_arn.or(unapplied.where(agreement_id: license.agreement_id))
   }
 
   def applied? = applied_at.present?
