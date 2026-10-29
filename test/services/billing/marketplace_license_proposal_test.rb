@@ -136,6 +136,23 @@ class Billing::MarketplaceLicenseProposalTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 10, 25, 18, 36), @company.reload.billing_provider_since
   end
 
+  # The model stamps that only when the provider changes, and a workspace moving
+  # from one AWS agreement to the next keeps `aws_marketplace`. Without the
+  # stamp the hour went to the new licence whole, including the minutes the old
+  # one's final meter had already sent: seven billed twice on staging on
+  # 2026-10-29.
+  test "accepting the next AWS agreement records when it took over as well" do
+    create(:marketplace_license, :ended, company: @company)
+    travel_to(Time.utc(2026, 10, 27, 12, 4)) do
+      @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    end
+    propose
+
+    travel_to(Time.utc(2026, 10, 29, 7, 12, 47)) { proposal.accept!(by: @admin) }
+
+    assert_equal Time.utc(2026, 10, 29, 7, 12, 47), @company.reload.billing_provider_since
+  end
+
   # AWS discards metering sent before it confirms the agreement, so a workspace
   # whose licence is still pending waits rather than runs unbilled.
   # Accepting cancels the card in the same breath, and only a confirmation
