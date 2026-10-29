@@ -51,11 +51,22 @@ class Runners::SelectionTest < ActiveSupport::TestCase
 
   test "a workflow's runner is checked only when it changes" do
     workflow = create(:workflow, scope: @project, runner: @runner)
+    other = create(:runner, company: @company, created_by: @user)
     @runner.soft_delete!
 
     with_feature(:external_runners, false, company: @company) do
       assert_nil Runners::Selection.workflow_error(workflow, @runner.id)
-      assert_equal "External runners are not enabled for this company.", Runners::Selection.workflow_error(workflow, nil)
+      assert_equal "External runners are not enabled for this company.", Runners::Selection.workflow_error(workflow, other.id)
+    end
+  end
+
+  test "without the flag a workflow can still be switched back to hosted" do
+    workflow = create(:workflow, scope: @project, runner: @runner)
+
+    with_feature(:external_runners, false, company: @company) do
+      assert_nil Runners::Selection.workflow_error(workflow, nil)
+      assert_nil Runners::Selection.workflow_error(workflow, "")
+      assert_equal "External runners are not enabled for this company.", Runners::Selection.error(nil, project: @project)
     end
   end
 end

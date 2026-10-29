@@ -77,11 +77,23 @@ export function RunnerCredentialNote({ runner }: { runner: RunnerSummary | undef
   );
 }
 
-/** "Runs on": `Hosted`, or the runner's name and type, linking to the runner. Renders nothing without the flag. */
-export function RunsOnBadge({ runner, projectId }: { runner: RunnerBadge | null | undefined; projectId: number }) {
+/**
+ * "Runs on": `Hosted`, or the runner's name and type, linking to the runner. A `runnerId` the server
+ * sent no runner for names a runner outside this project, which is never shown, and is never read
+ * as hosted either. Renders nothing without the flag.
+ */
+export function RunsOnBadge({
+  runner,
+  runnerId,
+  projectId,
+}: {
+  runner: RunnerBadge | null | undefined;
+  runnerId: number | null | undefined;
+  projectId: number;
+}) {
   const externalRunners = useFeatureFlag('externalRunners');
   if (!externalRunners) return null;
-  if (!runner) return <StatusTag plain>Hosted</StatusTag>;
+  if (!runner) return <StatusTag plain>{runnerId == null ? 'Hosted' : 'Runner not available'}</StatusTag>;
 
   const label = `${runner.name} · ${runnerTypeTitle(runner.runnerType)}`;
   // A deleted runner has no page left to open.

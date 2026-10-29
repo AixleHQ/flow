@@ -126,6 +126,15 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     assert_nil @workflow.reload.runner_id
   end
 
+  test "without the flag the builder can still switch a workflow on a runner back to hosted" do
+    @workflow.update!(runner: @runner)
+
+    save_workflow(runner_id: nil)
+
+    assert_response :success
+    assert_nil @workflow.reload.runner_id
+  end
+
   test "with the flag the builder saves the runner as a new version, and keeps one that went away since" do
     enable_runners
 

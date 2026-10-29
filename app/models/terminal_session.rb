@@ -347,6 +347,10 @@ class TerminalSession < ApplicationRecord
 
   def runner_project = project
 
+  # RunnerReference: the session's own tenant columns. A session without a
+  # project owns no runner, like #runner_project.
+  def runner_tenant_ids = project_id ? [ company_id, project_id ] : [ nil, nil ]
+
   def inherit_project_company
     self.company_id ||= project&.company_id
   end

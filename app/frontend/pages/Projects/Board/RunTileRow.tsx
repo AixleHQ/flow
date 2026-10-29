@@ -50,7 +50,7 @@ export function RunTileRow({
         </Box>
         <IconExternalLink size={11} style={{ flexShrink: 0 }} />
       </Text>
-      <RunsOnBadge runner={run.runner} projectId={projectId} />
+      <RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={projectId} />
       {trailing}
       {sessionId != null && (
         <Tooltip label={`Open session #${sessionId}`}>

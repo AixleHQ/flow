@@ -790,6 +790,23 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.queryByRole('combobox', { name: 'Runner' })).not.toBeInTheDocument();
   });
 
+  it('without the flag offers only a switch back to Hosted for a workflow that names a runner', async () => {
+    const workflow = makeWorkflow({ runnerId: 4 });
+    const { bodies } = answerSave(workflow);
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ workflow }) });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+
+    expect(screen.queryByRole('combobox', { name: 'Runner' })).not.toBeInTheDocument();
+    expect(screen.getByText(/external runners are not enabled for this company/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Switch to Hosted' }));
+    expect(screen.queryByText(/external runners are not enabled for this company/)).not.toBeInTheDocument();
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.runnerId).toBeNull();
+  });
+
   it('a selected base repository is sent in base_repository_ids on Save', async () => {
     const workflow = makeWorkflow({ inheritAllProjectResources: false });
     const { bodies } = answerSave(workflow);

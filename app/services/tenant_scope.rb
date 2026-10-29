@@ -33,7 +33,8 @@ module TenantScope
       project ? rel.or(Integration.where(company_id: company.id, project_id: project.id)) : rel
     when "Runner"
       # Deleted runners included: a runner is only soft-deleted, and a
-      # reference to one deleted since stays valid (DESIGN.md §3.4).
+      # reference to one deleted since stays valid (DESIGN.md §3.4). The same
+      # rule for a row already loaded is #owns_runner?.
       return Runner.none unless company
 
       rel = Runner.where(company_id: company.id, project_id: nil)
@@ -45,6 +46,14 @@ module TenantScope
     else
       raise ArgumentError, "no tenant rule for #{klass.name}"
     end
+  end
+
+  # The Runner rule of #owned, for a runner row that is already loaded (a list
+  # that preloads `runner`), so each row is checked without a query: a company
+  # runner of `company_id`, or a runner of the project `project_id`.
+  def owns_runner?(runner, company_id:, project_id:)
+    company_id.present? && runner.company_id == company_id &&
+      (runner.project_id.nil? || runner.project_id == project_id)
   end
 
   # The ids in `ids` that do not belong to the tenant (unknown ids included).

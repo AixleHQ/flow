@@ -71,4 +71,29 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     assert_equal [ first.terminal_session_id, second.terminal_session_id ],
                  steps.map { |s| s["terminalSessionId"] }
   end
+
+  # == the "Runs on" badge (DESIGN.md §11) ==
+
+  test "the badge names the project's runner from the preloaded row, with no further query" do
+    runner = create(:runner, company: @project.company, name: "Prod VPC")
+    @run.update!(runner: runner)
+    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, :runner, step_runs: %i[step terminal_session]).first
+
+    resource = nil
+    assert_no_queries { resource = TaskWorkflowRunResource.new(preloaded).to_h }
+
+    assert_equal [ runner.id, "Prod VPC", "manual" ],
+                 [ resource["runnerId"], resource.dig("runner", "name"), resource.dig("runner", "runnerType") ]
+  end
+
+  test "a stale runner id naming another company's runner serializes none of that runner" do
+    foreign = create(:runner, name: "Their VPC")
+    @run.update_column(:runner_id, foreign.id)
+
+    resource = TaskWorkflowRunResource.new(@run.reload).to_h
+
+    assert_equal foreign.id, resource["runnerId"]
+    assert_nil resource["runner"]
+    assert_not_includes resource.to_json, "Their VPC"
+  end
 end

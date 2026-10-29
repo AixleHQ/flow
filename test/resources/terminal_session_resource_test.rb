@@ -171,4 +171,27 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_equal [ { "path" => "/workspace/.aixle/references/guide.md", "content" => "# Guide" } ],
                  props.dig("sessionConfig", "configFiles")
   end
+
+  # == the "Runs on" badge (DESIGN.md §11) ==
+
+  test "the badge names a runner of the session's company" do
+    runner = create(:runner, company: @project.company, name: "Prod VPC")
+    session = create(:terminal_session, user: @user, project: @project, runner: runner)
+
+    assert_equal "Prod VPC", payload(session).dig("runner", "name")
+  end
+
+  # Another company's runner is kept out by fk_terminal_sessions_runner_company;
+  # another project's runner of the same company is the stale id a session can hold.
+  test "a stale runner id naming another project's runner serializes none of that runner" do
+    other = create(:runner, :project_runner, company: @project.company, name: "Their VPC")
+    session = create(:terminal_session, user: @user, project: @project)
+    session.update_column(:runner_id, other.id)
+
+    props = payload(session)
+
+    assert_equal other.id, props["runnerId"]
+    assert_nil props["runner"]
+    assert_not_includes props.to_json, "Their VPC"
+  end
 end

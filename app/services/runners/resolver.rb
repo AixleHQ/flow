@@ -35,13 +35,17 @@ module Runners
     def resolve!(record, pick_from: "on the workflow")
       return nil if record.runner_id.nil?
 
-      runner = record.runner
       project = record.project
       unless Feature.enabled?(:external_runners, company: project&.company)
         raise Refused.new(UNAVAILABLE, Selection::NOT_ENABLED)
       end
-      unless TenantScope.owned(Runner, project: project).exists?(runner.id)
-        raise Refused.new(FORBIDDEN, "Runner \"#{runner.name}\" is not available to project #{project&.name}.")
+
+      # Looked up through the tenant boundary, never through `record.runner`: a
+      # stale or bypassed id that names another project's or company's runner
+      # finds nothing, and the message names only the id the record already holds.
+      runner = project && TenantScope.owned(Runner, project: project).find_by(id: record.runner_id)
+      if runner.nil?
+        raise Refused.new(FORBIDDEN, "Runner #{record.runner_id} is not available to project #{project&.name}.")
       end
 
       check_status!(runner, pick_from)
