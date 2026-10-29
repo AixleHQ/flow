@@ -40,7 +40,7 @@ module Runners
       unless Feature.enabled?(:external_runners, company: project&.company)
         raise Refused.new(UNAVAILABLE, Selection::NOT_ENABLED)
       end
-      unless project && Runner.within_project_scope(project).exists?(runner.id)
+      unless TenantScope.owned(Runner, project: project).exists?(runner.id)
         raise Refused.new(FORBIDDEN, "Runner \"#{runner.name}\" is not available to project #{project&.name}.")
       end
 

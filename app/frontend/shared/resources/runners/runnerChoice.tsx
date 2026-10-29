@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { Anchor, Select, Text } from '@mantine/core';
 
-import type { RunnerSummary } from '@/types/generated';
+import type { RunnerBadge, RunnerSummary } from '@/types/generated';
 
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { companyProjectRunnerPath } from 'shared/routes';
@@ -78,7 +78,7 @@ export function RunnerCredentialNote({ runner }: { runner: RunnerSummary | undef
 }
 
 /** "Runs on": `Hosted`, or the runner's name and type, linking to the runner. Renders nothing without the flag. */
-export function RunsOnBadge({ runner, projectId }: { runner: RunnerSummary | null | undefined; projectId: number }) {
+export function RunsOnBadge({ runner, projectId }: { runner: RunnerBadge | null | undefined; projectId: number }) {
   const externalRunners = useFeatureFlag('externalRunners');
   if (!externalRunners) return null;
   if (!runner) return <StatusTag plain>Hosted</StatusTag>;

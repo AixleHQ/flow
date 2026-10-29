@@ -89,7 +89,7 @@ module ProjectMove
 
       copier.rewrite_references!
       detach_links!(preflight)
-      clear_runner_history!
+      clear_runner_references!
       preflight.reservation&.destroy! if preflight.reservation_dropped?
       reparent!(preflight)
       report.merge!(resolve_people!(preflight, previous_owner_id))
@@ -110,14 +110,18 @@ module ProjectMove
       ChatConnectCode.where(project_id: @project.id).delete_all
     end
 
-    # The runner a past run or session ran on is one of the source company's, and
-    # fk_terminal_sessions_runner_company would hold the session to it. None of
-    # them is live (Preflight), so they keep their history without the runner.
-    # A workflow that names a runner blocks the move instead (Preflight#blockers).
-    def clear_runner_history!
-      WorkflowRun.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: Time.current)
-      TerminalSession.where(project_id: @project.id).where.not(runner_id: nil)
-                     .update_all(runner_id: nil, updated_at: Time.current)
+    # Every runner the project's rows name is one of the source company's, and
+    # fk_workflows_runner_company and fk_terminal_sessions_runner_company would
+    # hold the rows to it, so this runs before reparent!. The workflows, archived
+    # ones included, switch to Hosted (Preflight lists them). Past runs and
+    # sessions are history, none of it live (Preflight), and keep it without the
+    # runner. Like the asset rewrite, this writes no workflow version: a version
+    # from before the move still names the runner, and a revert to it is refused.
+    def clear_runner_references!
+      now = Time.current
+      Workflow.for_project(@project).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
+      WorkflowRun.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
+      TerminalSession.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
     end
 
     def reparent!(preflight)

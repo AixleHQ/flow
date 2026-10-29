@@ -92,7 +92,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
         next [] unless task
         # The resource renders a row per step run, timed by its session; without the
         # preload a task with a run history costs queries per step run.
-        task.workflow_runs.with_total_cost_cents.includes(:workflow, { runner: %i[company project] }, step_runs: %i[step terminal_session])
+        task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, step_runs: %i[step terminal_session])
             .order(created_at: :desc)
             .map { |r| TaskWorkflowRunResource.new(r).to_h }
       },

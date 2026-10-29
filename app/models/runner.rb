@@ -44,12 +44,12 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
-  # The project's runners and its company's, including deleted ones: what a
-  # reference may name (RunnerReference). Picking one also needs it live.
-  scope :within_project_scope, ->(project) {
-    where(company_id: project.company_id, project_id: nil).or(where(company_id: project.company_id, project_id: project.id))
+  # What a picker offers: the company's runners and the project's own, live
+  # ones only. What a reference may name, deleted ones included, is
+  # TenantScope.owned(Runner, project:).
+  scope :visible_for_project, ->(project) {
+    where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id)).not_deleted
   }
-  scope :visible_for_project, ->(project) { within_project_scope(project).not_deleted }
 
   # Who runs the machines a session's credential goes to (§3.2, §11).
   def operated_by

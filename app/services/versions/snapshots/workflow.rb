@@ -68,7 +68,7 @@ module Versions
         # with what to do instead.
         def refuse_unreachable_runner!(record, runner_id)
           project = record.runner_project
-          return if runner_id.nil? || project.nil? || ::Runner.within_project_scope(project).exists?(runner_id)
+          return if runner_id.nil? || project.nil? || TenantScope.owned(::Runner, project: project).exists?(runner_id)
 
           record.errors.add(:base, "This version runs on runner ##{runner_id}, which this project can no longer use. " \
                                    "Revert to a version that runs on Hosted or on a runner of this project's company.")

@@ -5,10 +5,10 @@ class TaskWorkflowRunResource < ApplicationResource
 
   attributes :id, :state, :mode, :started_at, :completed_at, :created_at
 
-  # Where it runs (DESIGN.md §11): null is hosted. No query for a hosted row.
-  typelize "RunnerSummary | null"
+  # Where it runs (DESIGN.md §11): null is hosted. A list preloads `runner`.
+  typelize "RunnerBadge | null"
   attribute :runner do |record|
-    record.runner_id && RunnerSummaryResource.new(record.runner).to_h
+    record.runner && RunnerBadgeResource.new(record.runner).to_h
   end
 
   typelize "string | null"

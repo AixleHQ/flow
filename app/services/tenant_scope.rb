@@ -31,6 +31,13 @@ module TenantScope
 
       rel = Integration.where(company_id: company.id, project_id: nil)
       project ? rel.or(Integration.where(company_id: company.id, project_id: project.id)) : rel
+    when "Runner"
+      # Deleted runners included: a runner is only soft-deleted, and a
+      # reference to one deleted since stays valid (DESIGN.md §3.4).
+      return Runner.none unless company
+
+      rel = Runner.where(company_id: company.id, project_id: nil)
+      project ? rel.or(Runner.where(company_id: company.id, project_id: project.id)) : rel
     when "Skill", "Repository", "ConfigItem", "Agent", "Workflow"
       project ? klass.where(scope_type: "Project", scope_id: project.id) : klass.none
     when "BoardColumn"

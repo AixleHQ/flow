@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildRunnerSummary } from 'test/factories/runner';
+import { buildRunnerBadge } from 'test/factories/runner';
 import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { buildStepRun } from 'test/factories/stepRun';
 import { buildSubStepRun } from 'test/factories/subStepRun';
@@ -45,7 +45,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('says where the run and each of its sessions runs, with the flag on', () => {
-    const run = makeRun({ runnerId: 4, runner: buildRunnerSummary({ id: 4, name: 'Prod VPC' }) });
+    const run = makeRun({ runnerId: 4, runner: buildRunnerBadge({ id: 4, name: 'Prod VPC' }) });
     renderAuthedPage(<ShowPage />, { props: { ...seed({ run }), features: { externalRunners: true } } });
 
     expect(screen.getByText('Runs on')).toBeInTheDocument();

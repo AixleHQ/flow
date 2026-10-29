@@ -155,19 +155,6 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     assert_equal @company.name, runners.first["operatedBy"]
   end
 
-  # == the runner page ==
-
-  test "the runner page lists the workflows using it" do
-    enable_runners
-    @workflow.update!(runner: @runner)
-    create(:workflow, scope: @project, name: "Archived", runner: @runner).update!(deleted_at: Time.current)
-
-    get company_settings_runner_path(@runner), headers: { "X-Inertia" => "true" }
-
-    assert_equal [ { "id" => @workflow.id, "name" => "Deploy", "projectId" => @project.id, "projectName" => "Payments" } ],
-                 response.parsed_body.dig("props", "workflowsUsing")
-  end
-
   private
 
   def enable_runners

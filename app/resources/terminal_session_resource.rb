@@ -13,10 +13,10 @@ class TerminalSessionResource < ApplicationResource
              :project_id, :user_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at, :runner_id
 
-  # Where it runs (DESIGN.md §11): null is hosted. No query for a hosted row.
-  typelize "RunnerSummary | null"
+  # Where it runs (DESIGN.md §11): null is hosted. A list preloads `runner`.
+  typelize "RunnerBadge | null"
   attribute :runner do |record|
-    record.runner_id && RunnerSummaryResource.new(record.runner).to_h
+    record.runner && RunnerBadgeResource.new(record.runner).to_h
   end
 
   typelize "string | null"

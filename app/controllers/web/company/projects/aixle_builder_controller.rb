@@ -9,7 +9,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
                        .with_cached_resource_counts
                        .includes(:user, :project, :session_admission,
                                  :tools, :skills, :mcp_servers, :config_items,
-                                 :input_assets, :repositories)
+                                 :input_assets, :repositories, :runner)
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)
                        .order(created_at: :desc)
@@ -18,7 +18,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     active_session = sessions.find { |s| %w[not_started queued running ready].include?(s.state) }
 
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
-      sessions: -> { TerminalSession.preload_runners(sessions).map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },
+      sessions: -> { sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },
       active_session_id: -> { active_session&.id },
       configured_agents: -> { current_project_membership&.configured_agents || [] },
       default_agent_runtime: -> { current_project_membership&.default_agent_runtime },

@@ -79,18 +79,20 @@ module ProjectMove
 
     def cancellations? = runs_to_cancel.any? || sessions_to_cancel.any?
 
-    # A runner belongs to its company, and its tenant keys hold a project's runners
-    # and the runner a workflow names to that company (docs/design/agent-runtimes/
-    # DESIGN.md §2, §3.4). Neither can follow the project, so either blocks the
-    # move, a deleted runner included: its row stays, for the history that names it.
+    # A runner belongs to its company, and fk_runners_project_company holds a
+    # project's own runner to it (docs/design/agent-runtimes/DESIGN.md §2, §3.4).
+    # It cannot follow the project, so it blocks the move, a deleted runner
+    # included: its row stays, for the history that names it.
     def own_runners
       @own_runners ||= Runner.where(project_id: project.id).order(:name).to_a
     end
 
-    # Archived workflows included: the move rewrites their company too.
+    # The workflows that name a runner, archived ones included: the move rewrites
+    # their company too. The runner stays with the source, so the move switches
+    # them to Hosted (Mover#clear_runner_references!) rather than refuse.
     def workflows_on_runners
       @workflows_on_runners ||= Workflow.for_project(project).where.not(runner_id: nil)
-                                        .includes(runner: :company).order(:name).to_a
+                                        .includes(:runner).order(:name).to_a
     end
 
     # The runs and sessions that name a runner. They are history (a live session
@@ -174,6 +176,9 @@ module ProjectMove
         "chat_triggers" => chat_bindings.map { |binding| { "id" => binding.id, "name" => binding.name } },
         "copied_assets" => company_assets.map { |asset| { "id" => asset.id, "path" => asset_path(asset) } },
         "dropped_reservation" => reservation_dropped? ? { "max_sessions" => reservation.max_sessions } : nil,
+        "workflows_switched_to_hosted" => workflows_on_runners.map do |workflow|
+          { "id" => workflow.id, "name" => workflow.name, "archived" => workflow.archived?, "runner" => workflow.runner.name }
+        end,
         "cleared_runner_references" => runner_history,
         "without_agent_credentials" => people_without_agent_credentials.map { |user| user_row(user) }
       }
@@ -189,18 +194,10 @@ module ProjectMove
     private
 
     def runner_blockers
-      list = []
-      if own_runners.any?
-        list << "#{own_runners.map { |runner| runner_label(runner) }.to_sentence} belong#{'s' if own_runners.one?} " \
-                "to this project, and a runner cannot move to another company."
-      end
-      workflows_on_runners.group_by(&:runner).each do |runner, workflows|
-        names = workflows.map { |workflow| workflow.archived? ? "#{workflow.name} (archived)" : workflow.name }
-        list << "#{workflows.one? ? 'Workflow' : 'Workflows'} #{names.to_sentence} " \
-                "run#{'s' if workflows.one?} on runner #{runner.name} of #{runner.company.name}. " \
-                "Switch #{workflows.one? ? 'it' : 'them'} to Hosted before moving."
-      end
-      list
+      return [] if own_runners.none?
+
+      [ "#{own_runners.map { |runner| runner_label(runner) }.to_sentence} belong#{'s' if own_runners.one?} " \
+        "to this project, and a runner cannot move to another company." ]
     end
 
     def runner_label(runner) = runner.deleted? ? "Runner #{runner.name} (deleted)" : "Runner #{runner.name}"

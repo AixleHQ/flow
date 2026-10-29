@@ -166,15 +166,27 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal [ ado.id ], report["deactivated_integrations"].pluck("id")
   end
 
-  test "refuses while a workflow runs on a runner of the source, and changes nothing" do
+  test "switches the workflows on a runner of the source to Hosted, archived ones included, and lists them" do
     runner = create(:runner, company: @s.source, name: "Prod VPC")
     @s.workflow.update!(runner: runner)
+    archived = create(:workflow, scope: @s.project, name: "Hotfix", runner: runner, deleted_at: Time.current)
+
+    report = move(member_policy: "add")
+
+    assert_equal [ nil, @s.target.id ], [ @s.workflow.reload.runner_id, @s.workflow.company_id ]
+    assert_equal [ nil, @s.target.id ], [ archived.reload.runner_id, archived.company_id ]
+    assert_equal [ [ archived.id, "Hotfix", true, "Prod VPC" ], [ @s.workflow.id, "Release", false, "Prod VPC" ] ],
+                 report["workflows_switched_to_hosted"].map { |row| row.values_at("id", "name", "archived", "runner") }
+    assert runner.reload.persisted?, "the runner stays with its company"
+  end
+
+  test "refuses while the project owns a runner, and changes nothing" do
+    create(:runner, company: @s.source, project: @s.project, name: "Lab", deleted_at: Time.current)
 
     error = assert_raises(ProjectMove::Refused) { move(member_policy: "add") }
 
-    assert_match(/Workflow Release runs on runner Prod VPC of Northwind\. Switch it to Hosted before moving\./, error.message)
+    assert_match(/Runner Lab \(deleted\) belongs to this project, and a runner cannot move to another company\./, error.message)
     assert_unmoved
-    assert_equal runner, @s.workflow.reload.runner
   end
 
   test "clears the runner of past runs and sessions, which keep their history in the target" do

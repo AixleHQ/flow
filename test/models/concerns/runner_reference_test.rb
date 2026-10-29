@@ -35,11 +35,11 @@ class RunnerReferenceTest < ActiveSupport::TestCase
     [ elsewhere, foreign ].each do |runner|
       workflow = build(:workflow, scope: @project, runner: runner)
       assert_not workflow.valid?
-      assert_includes workflow.errors[:runner], "is not available to this project"
+      assert_includes workflow.errors[:runner], "runner_id must belong to this project (not found: #{runner.id})"
 
       session = build(:terminal_session, :agent_session, user: @user, project: @project, runner: runner)
       assert_not session.valid?
-      assert_includes session.errors[:runner], "is not available to this project"
+      assert_includes session.errors[:runner], "runner_id must belong to this project (not found: #{runner.id})"
     end
   end
 
@@ -49,13 +49,17 @@ class RunnerReferenceTest < ActiveSupport::TestCase
 
     assert workflow.reload.update(name: "Renamed"), workflow.errors.full_messages.to_sentence
     assert_equal @company_runner.id, workflow.runner_id
+
+    # A restore names it again, which the tenant rule lets through: the row is there.
+    restored = create(:workflow, scope: @project)
+    assert restored.update(runner: @company_runner), restored.errors.full_messages.to_sentence
   end
 
   test "a system workflow can only run hosted" do
     workflow = build(:workflow, :system, runner: @company_runner)
 
     assert_not workflow.valid?
-    assert_includes workflow.errors[:runner], "can only be set on a project's workflows"
+    assert_includes workflow.errors[:runner], "runner_id must belong to this project (not found: #{@company_runner.id})"
   end
 
   test "the database ties a workflow's and a session's runner to their company" do
