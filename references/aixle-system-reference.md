@@ -88,6 +88,7 @@ Unknown config keys are rejected.
 | `repository_ids` | repositories cloned for this step |
 | `config_item_ids` | secrets/variables this step may read |
 | `preferred_model` | model id override |
+| `reasoning_effort` | reasoning-effort level for the step's CLI (`low`, `medium`, `high`, …); unset is the CLI's default. Only a level the step's runtime and model take is accepted |
 | `required_agent_runtime` | pin to one runtime (see §5) |
 | `bmad_enabled` | install the BMAD Method in the step's container |
 | `input_asset_specs`, `output_asset_specs` | `[{name, description}]` — what the step expects and produces |

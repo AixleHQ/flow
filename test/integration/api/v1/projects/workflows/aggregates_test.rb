@@ -51,19 +51,27 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert_equal [ package.id ], @test.reload.depends_on_step_ids
   end
 
-  test "a step's reasoning effort is saved, read back and refused where its runtime does not take it" do
+  test "a step's reasoning effort is saved and read back" do
     save([ { id: @build.id, name: "Build", required_agent_runtime: "kiro_cli", reasoning_effort: "high" },
            { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ] } ])
 
     assert_response :success
     assert_equal "high", @build.reload.reasoning_effort
     assert_equal "high", response.parsed_body["steps"].find { |s| s["id"] == @build.id }["reasoningEffort"]
+  end
 
+  test "a reasoning effort the step's runtime does not take is refused and nothing is written" do
+    # The refusal comes from the first step's save, before the sub-steps the sync
+    # preloads are read, which Bullet would report as an unused eager load.
+    Bullet.enable = false
     save([ { id: @build.id, name: "Build", required_agent_runtime: "gemini_cli", reasoning_effort: "medium" },
            { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ] } ])
 
     assert_response :unprocessable_entity
-    assert_equal "kiro_cli", @build.reload.required_agent_runtime
+    assert_match(/Reasoning effort medium is not available for gemini_cli/, response.parsed_body["error"])
+    assert_nil @build.reload.required_agent_runtime
+  ensure
+    Bullet.enable = true
   end
 
   test "steps left out are soft-deleted, not removed" do
