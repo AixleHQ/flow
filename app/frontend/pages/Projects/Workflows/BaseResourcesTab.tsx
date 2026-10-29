@@ -1,4 +1,4 @@
-import { Alert, MultiSelect, Switch } from '@mantine/core';
+import { Alert, Button, MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
 import type { ConfigItemPicker, RunnerSummary, Workflow } from '@/types/generated';
@@ -91,13 +91,17 @@ export function BaseResourcesTab({
           Default resources available to every session. Sessions can add their own on top.
         </div>
 
-        {externalRunners && (
+        {externalRunners ? (
           <RunnerField
             runners={runners}
             runnerId={workflow.runnerId ?? null}
             readOnly={readOnly}
             onChange={(runnerId) => onWorkflowChange('runnerId', runnerId)}
           />
+        ) : (
+          workflow.runnerId != null && (
+            <RunnerDisabledNotice readOnly={readOnly} onSwitchToHosted={() => onWorkflowChange('runnerId', null)} />
+          )
         )}
 
         {/* Inherit toggle card — toggle on LEFT, text on right */}
@@ -286,6 +290,26 @@ function RunnerField({
         </Alert>
       )}
     </div>
+  );
+}
+
+/**
+ * Without the flag a workflow that still names a runner fails every run, and no runner select renders.
+ * Switching it back to Hosted is the one runner change allowed then (DESIGN.md §11).
+ */
+function RunnerDisabledNotice({ readOnly, onSwitchToHosted }: { readOnly: boolean; onSwitchToHosted: () => void }) {
+  return (
+    <Alert color="yellow" variant="light" mb={20} p="xs">
+      This workflow runs on an external runner, and external runners are not enabled for this company.
+      Runs of this workflow fail until you switch it to Hosted.
+      {!readOnly && (
+        <div style={{ marginTop: 8 }}>
+          <Button size="xs" variant="light" onClick={onSwitchToHosted}>
+            Switch to Hosted
+          </Button>
+        </div>
+      )}
+    </Alert>
   );
 }
 
