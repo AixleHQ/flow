@@ -154,11 +154,7 @@ export function RunWorkflowDrawer({
   // A workflow's runner missing from the list was deleted or is out of this project's reach: the
   // run still goes to it and fails, so say so, as the builder's RunnerField does.
   const runnerWarning =
-    runnerId == null
-      ? null
-      : runner
-        ? runnerUnusableReason(runner)
-        : 'This runner is not available to this project.';
+    runnerId == null ? null : runner ? runnerUnusableReason(runner) : 'This runner is not available to this project.';
 
   // Derived on every render, not synced through an effect: the steps come from
   // props, and an Inertia reload can switch a session's auto-run while the
