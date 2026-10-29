@@ -88,6 +88,10 @@ governance, community health — carry none.
   test output). That happens only when the session's own CLI shows its
   provider's message as the last thing on screen and then goes quiet, and the
   credential is flagged only then.
+- **Docs**: *Triggers and Gates* no longer calls the webhook signature and token
+  headers configurable, since every endpoint uses the default header for its
+  strategy, and lists Azure DevOps and Bitbucket among the CI events that
+  resolve a gate.
 
 ## [1.8.0] - 2026-10-28
 
