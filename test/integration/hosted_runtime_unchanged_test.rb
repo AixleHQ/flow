@@ -62,28 +62,30 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
   def trace
     runtime = stub_container_runtime("kubernetes", agent_type: "claude_code")
     session = yield
-    admission = session.session_admission
-    state = run_phases(session)
+    launch_state = session.session_admission.reload.launch_state
+    run_phases(session)
+    admission = session.session_admission.reload
 
     {
       runner_id: session.runner_id,
-      admission: admission.slice(:runtime_kind, :launch_state, :wait_reason).merge(
-        "pool" => admission.session_admission_pool.key
+      launch_state: launch_state,
+      admission: admission.slice(:runtime_kind, :wait_reason).merge(
+        "pool" => admission.session_admission_pool.key, "released" => admission.released_at.present?
       ).transform_values { |v| normalize(v) },
       execs: runtime.execs.map { |cmd| normalize(Array(cmd).join(" ")) },
       uploads: runtime.uploads.map { |upload| normalize(upload.inspect) },
-      phases: state.slice(:status).transform_values(&:to_s),
       state: session.reload.state
     }
   end
 
+  # The phases the hosted container workflow runs for an admitted session.
   def run_phases(session)
-    activity = Activities::Container::PhaseActivity.new
-    state = {}
+    admission = session.session_admission.reload
+    activity = Activities::Container::AdmittedPhaseActivity.new
     %w[pull_image create_container start_container exec].each do |phase|
-      state = activity.run(Hashie::Mash.new(phase: phase, state: state, session_id: session.id))
+      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, permit_token: admission.permit_token))
     end
-    activity.run(Hashie::Mash.new(phase: "cleanup", state: state, session_id: session.id))
+    activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: admission.id))
   end
 
   def normalize(value)
