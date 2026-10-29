@@ -101,10 +101,13 @@ module Activities
 
       # Read only once the screen already shows a quota error, so the sweep's single
       # capture-pane stays the only exec for every other session. False when the
-      # container cannot say: an unknown pane is not a quiet one.
+      # container cannot say: an unknown pane is not a quiet one. Same check as
+      # Sessions::AuthPause#quiet?: the mtime counts only from a read that also
+      # captured the pane, never from a container whose tmux is gone.
       def pane_quiet?(session)
-        last_output_at = Sessions::LiveLogReader.new(session, runtime: runtime).tail(lines: 1).last_output_at
-        last_output_at.present? && last_output_at <= QuotaErrorDetector::QUIET_BEFORE_FAIL.ago
+        tail = Sessions::LiveLogReader.new(session, runtime: runtime).tail(lines: 1)
+        last_output_at = tail.ok? ? tail.last_output_at : nil
+        last_output_at.present? && last_output_at < QuotaErrorDetector::QUIET_BEFORE_FAIL.ago
       end
 
       def live_terminal_output(session)

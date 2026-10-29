@@ -6,17 +6,20 @@
 #
 # Two kinds of caller hand it text:
 #
-#   - .detect reads text that is already about the session's end: a stored error
-#     message, or a finished session's terminal log (CompleteStepActivity).
-#   - .detect_on_screen reads a live pane (ScanQuotaErrorsActivity, Sessions::LogTail).
-#     That text is mostly the agent's own work, and an agent greps, reads, edits and
-#     tests code that names these errors: this class, its tests, the run failure
-#     reasons. Task #195: a Kiro session was failed within a minute of grepping a
-#     line of ShowPage.tsx that held one of OpenAI's identifiers. So the live check
-#     looks only at the session's own provider, and only at the pane's trailing
-#     block, where a CLI renders the error it stopped on. Whether the pane has also
-#     gone quiet is the caller's to check (QUIET_BEFORE_FAIL), because only the
-#     caller can read the pane's last output time.
+#   - .detect reads a session's stored error message. Every caller passes the
+#     session's agent_type, so only its own provider counts.
+#   - .detect_on_screen reads terminal output: a live pane (ScanQuotaErrorsActivity,
+#     Sessions::LogTail) or a finished session's stored log (CompleteStepActivity,
+#     Sessions::LogTail). That text is mostly the agent's own work, and an agent greps,
+#     reads, edits and tests code that names these errors: this class, its tests, the
+#     run failure reasons. Task #195: a Kiro session was failed within a minute of
+#     grepping a line of ShowPage.tsx that held one of OpenAI's identifiers, and runs
+#     that survived the scan were still failed at step completion by the same text in
+#     their stored log. So terminal output is read only for the session's own
+#     provider, and only on its trailing block, where a CLI renders the error it
+#     stopped on. Whether a live pane has also gone quiet is the caller's to check
+#     (QUIET_BEFORE_FAIL), because only the caller can read the pane's last output
+#     time.
 class QuotaErrorDetector
   MAX_MESSAGE_LENGTH = 500
 
@@ -120,10 +123,10 @@ class QuotaErrorDetector
     Result.new(quota_error: false)
   end
 
-  # A live pane: matched on its trailing TAIL_LINES nonblank lines only, with the
-  # session's own provider's patterns.
+  # Terminal output, live or stored: matched on its trailing TAIL_LINES nonblank lines
+  # only, with the session's own provider's patterns.
   #
-  # @param text [String, nil] rendered terminal output (tmux capture-pane)
+  # @param text [String, nil] terminal output: a tmux capture-pane, or an ANSI-stripped log
   # @param agent_type [String, nil] the session's agent_type
   # @return [Result]
   def self.detect_on_screen(text, agent_type:)

@@ -367,6 +367,17 @@ module Activities
         assert_equal "ready", session.reload.state
       end
 
+      # Sessions::AuthPause#quiet? trusts the mtime only from a read whose tmux answered.
+      test "does not fail a session for its own quota message when the pane read finds tmux gone" do
+        session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-no-tmux")
+        stub_pane("container-kiro-no-tmux", [ "#{KIRO_STOP}\n" ], last_output_at: 2.minutes.ago, tmux_up: false)
+
+        result = run_activity(ScanQuotaErrorsActivity)
+
+        assert_equal 0, result[:cleaned]
+        assert_equal "ready", session.reload.state
+      end
+
       test "fails a session whose own CLI stopped on its quota message and went quiet" do
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-quiet")
         stub_pane("container-kiro-quiet", [ "● Thinking...\n", "#{KIRO_STOP}\n", "\n", "\n" ], last_output_at: 2.minutes.ago)
@@ -442,13 +453,13 @@ module Activities
       # The pane the sweep captures, and the pipe-pane log's mtime that
       # Sessions::LiveLogReader reads once a quota error is on screen: a pane counts
       # only once it has been quiet for QuotaErrorDetector::QUIET_BEFORE_FAIL.
-      def stub_pane(container_id, lines, last_output_at: 5.minutes.ago)
+      def stub_pane(container_id, lines, last_output_at: 5.minutes.ago, tmux_up: true)
         container = mock("container")
         @runtime_mock.stubs(:resolve_container).with(container_id).returns(container)
         @runtime_mock.stubs(:exec!).returns([ lines, [], 0 ])
         mtime = last_output_at ? "#{last_output_at.to_i}\n" : ""
         @runtime_mock.stubs(:exec!).with { |_container, cmd, *| cmd.last.start_with?("stat ") }
-                     .returns([ [ "#{mtime}#{Sessions::LiveLogReader::MARKER}\n", *lines ], [], 0 ])
+                     .returns([ [ "#{mtime}#{Sessions::LiveLogReader::MARKER}\n", *lines ], [], tmux_up ? 0 : 1 ])
       end
 
       def stub_trust_prompt_pane(container_id)
