@@ -8,7 +8,7 @@ opening a terminal.
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Built with Rails](https://img.shields.io/badge/built%20with-Rails-cc0000)](https://rubyonrails.org/)
 [![React 19](https://img.shields.io/badge/react-19-61dafb)](https://react.dev/)
-[![Status: Pre-1.0](https://img.shields.io/badge/status-pre--1.0-orange)](ROADMAP.md)
+[![Release](https://img.shields.io/github/v/release/AixleHQ/flow)](https://github.com/AixleHQ/flow/releases)
 
 [![CI](https://github.com/AixleHQ/flow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/AixleHQ/flow/actions/workflows/ci.yml?query=branch%3Adevelop)
 [![Backend coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAixleHQ%2Fflow%2Fbadges%2Fbackend-coverage.json)](https://github.com/AixleHQ/flow/actions/workflows/ci.yml?query=branch%3Adevelop)
