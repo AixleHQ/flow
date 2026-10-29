@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAssetPicker } from 'test/factories/assetPicker';
+import { buildRunnerSummary } from 'test/factories/runner';
 import { answerFetch } from 'test/fetchStub';
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -123,6 +124,7 @@ function savedState({ aggregate }: SaveBody, workflow: ReturnType<typeof makeWor
       ...workflow,
       name: aggregate.name,
       description: aggregate.description,
+      runnerId: aggregate.runnerId,
       ...config,
       currentVersionNumber: 2,
     },
@@ -739,6 +741,52 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // A subset stays a subset — no silent expansion to the whole group.
     expect(aggregate.config.base_tool_ids).toEqual([11]);
+  });
+
+  it('a runner picked under Base Resources is sent as runnerId on Save', async () => {
+    const workflow = makeWorkflow();
+    const { bodies } = answerSave(workflow);
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        workflow,
+        runners: [buildRunnerSummary({ id: 4, name: 'Prod VPC' })],
+        features: { externalRunners: true },
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    expect(screen.getByRole('combobox', { name: 'Runner' })).toHaveDisplayValue('Hosted (default)');
+    await userEvent.click(screen.getByRole('combobox', { name: 'Runner' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Prod VPC · Connected' }));
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.runnerId).toBe(4);
+  });
+
+  it('warns about a runner that is deleted, disabled or revoked, and keeps it selected', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        workflow: makeWorkflow({ runnerId: 4 }),
+        runners: [buildRunnerSummary({ id: 4, name: 'Old box', deleted: true })],
+        features: { externalRunners: true },
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+
+    expect(screen.getByRole('combobox', { name: 'Runner' })).toHaveDisplayValue('Old box · Deleted');
+    expect(screen.getByText(/Runner "Old box" is deleted\. Runs of this workflow fail/)).toBeInTheDocument();
+  });
+
+  it('shows no runner select without the flag', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ runners: [buildRunnerSummary({ id: 4 })] }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+
+    expect(screen.queryByRole('combobox', { name: 'Runner' })).not.toBeInTheDocument();
   });
 
   it('a selected base repository is sent in base_repository_ids on Save', async () => {

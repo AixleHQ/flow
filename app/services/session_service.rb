@@ -34,10 +34,12 @@ class SessionService
         metadata: metadata.presence,
         **params.slice(:mode, :initial_prompt, :requested_model, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
-                       :config_item_ids)
+                       :config_item_ids, :runner_id)
       )
 
+      return session if refuse_runner_pick(session, params)
       return session unless session.save
+      return session if fail_on_runner_refusal(session)
 
       Versions::LaunchRecord.record!(session)
       # The writer lock is taken around the queue write only — never around the
@@ -161,6 +163,9 @@ class SessionService
           run = step_run.workflow_run
           raise SessionAdmissionService::Stopped, "Workflow cancelled" if run.stop_requested_at || run.state == "cancelled"
           preflight_company_active!(run.project&.company)
+          # Before the build, like the credential preflight: a refused runner
+          # leaves no session behind (LaunchStepSessionActivity fails the step).
+          Runners::Resolver.resolve!(run)
           build_for_workflow_step(step_run: step_run)
         end
       end
@@ -197,6 +202,7 @@ class SessionService
         mode: "interactive",
         initial_prompt: prompt,
         requested_model: step.preferred_model.presence || run_model,
+        runner: workflow_run.runner,
         metadata: {
           "workflow_run_id" => workflow_run.id,
           "step_run_id" => step_run.id,
@@ -214,6 +220,32 @@ class SessionService
     end
 
     private
+
+    # A runner picked on the new-session form or in the API (DESIGN.md §3.3);
+    # without one the session is hosted.
+    def refuse_runner_pick(session, params)
+      return false unless params.key?(:runner_id)
+      return false if params[:runner_id].blank? && session.project.nil?
+
+      error = if session.project.nil?
+        "Runner can only be picked for a project's session."
+      else
+        Runners::Selection.error(params[:runner_id], project: session.project,
+                                                     interactive: session.mode != "non_interactive")
+      end
+      session.errors.add(:base, error) if error
+      error.present?
+    end
+
+    # Saved, then failed before admission: the session page shows the message.
+    def fail_on_runner_refusal(session)
+      Runners::Resolver.resolve!(session, pick_from: "for the session")
+      false
+    rescue Runners::Resolver::Refused => e
+      session.update!(error_message: e.message)
+      session.fail!
+      true
+    end
 
     # A run stopped between the build and this point leaves a session nobody
     # will launch; the cancel fan-out skips it, since it has no admission to close.

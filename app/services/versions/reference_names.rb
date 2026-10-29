@@ -7,6 +7,7 @@ module Versions
   module ReferenceNames
     STEP_KEYS = { "agent_id" => "Agent" }.merge(Snapshots::Workflow::STEP_REFERENCES).freeze
     CONFIG_KEYS = Snapshots::Workflow::CONFIG_REFERENCES
+    WORKFLOW_KEYS = { "runner_id" => "Runner" }.freeze
 
     module_function
 
@@ -25,6 +26,7 @@ module Versions
     end
 
     def collect(snapshot, ids)
+      WORKFLOW_KEYS.each { |key, model| ids[model] << snapshot[key].to_i if snapshot[key].present? }
       config = snapshot["config"] || {}
       CONFIG_KEYS.each { |key, model| Array(config[key]).each { |id| ids[model] << id.to_i } }
       Array(snapshot["steps"]).each do |step|

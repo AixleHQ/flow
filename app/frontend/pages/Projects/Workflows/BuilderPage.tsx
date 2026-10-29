@@ -10,6 +10,7 @@ import type {
   MCPServerPicker,
   Picker,
   Project,
+  RunnerSummary,
   SkillPicker,
   Step,
   ToolPicker,
@@ -67,6 +68,7 @@ interface Props {
   repositories?: Picker[];
   configItems?: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
+  runners?: RunnerSummary[];
   readOnly: boolean;
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
@@ -100,6 +102,7 @@ const BuilderPage = () => {
     repositories: rawRepositories,
     configItems: rawConfigItems,
     agentModels: rawAgentModels,
+    runners: rawRunners,
     readOnly,
     configuredAgents,
     defaultAgentRuntime,
@@ -120,6 +123,7 @@ const BuilderPage = () => {
   const configItems = useMemo(() => rawConfigItems ?? [], [rawConfigItems]);
   const repositories = rawRepositories ?? [];
   const agentModels = rawAgentModels ?? [];
+  const runners = rawRunners ?? [];
   const catalogLoading = [rawAssets, rawMcpServers, rawTools, rawSkills, rawConfigItems].some((p) => p === undefined);
 
   const projectId = project?.id ?? null;
@@ -714,6 +718,7 @@ const BuilderPage = () => {
               assets={assets}
               repositories={repositories}
               configItems={configItems}
+              runners={runners}
               readOnly={readOnly}
               onWorkflowChange={updateWorkflowField}
             />
@@ -750,6 +755,7 @@ const BuilderPage = () => {
             {
               id: workflow.id,
               name: workflow.name,
+              runnerId: workflow.runnerId ?? null,
               steps: steps.map((s) => ({
                 id: s.id,
                 name: s.name,
@@ -766,6 +772,7 @@ const BuilderPage = () => {
           agentModels={agentModels}
           repositories={repositories}
           assets={assets}
+          runners={runners}
         />
       )}
     </>

@@ -6,7 +6,7 @@ import type { Project, Runner } from '@/types/generated';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import type { RunnerTypeOption } from 'shared/resources/runners/runnerConfig';
-import { RunnerDetails } from 'shared/resources/runners/RunnerDetails';
+import { RunnerDetails, type RunnerWorkflowUse } from 'shared/resources/runners/RunnerDetails';
 import { projectRunnerPaths } from 'shared/resources/runners/runnerPaths';
 import { companySettingsRunnerPath } from 'shared/routes';
 
@@ -18,11 +18,12 @@ interface PageProps {
   runnerTypes: RunnerTypeOption[];
   /** False for a company runner, which is managed from company settings only. */
   canManage: boolean;
+  workflowsUsing?: RunnerWorkflowUse[];
   [key: string]: unknown;
 }
 
 const RunnerPage = () => {
-  const { project, runner, runnerTypes, canManage } = usePage<PageProps>().props;
+  const { project, runner, runnerTypes, canManage, workflowsUsing } = usePage<PageProps>().props;
   const { canManageCompany } = useProjectPermissions();
   const externalRunners = useFeatureFlag('externalRunners');
 
@@ -48,6 +49,7 @@ const RunnerPage = () => {
           runner={runner}
           runnerTypes={runnerTypes}
           canManage={canManage}
+          workflowsUsing={workflowsUsing}
           paths={projectRunnerPaths(project.id)}
           backLabel="Runners"
         />

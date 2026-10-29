@@ -200,7 +200,9 @@ class TaskService
       asset.destroy
     end
 
-    def trigger_workflow(task:, binding:, actor:)
+    # `runner_id:` is a launch-time pick, as in WorkflowService.enqueue; left
+    # out, the run takes its workflow's runner.
+    def trigger_workflow(task:, binding:, actor:, runner_id: WorkflowService::RUNNER_NOT_PICKED)
       unless [ :manual, :auto ].include?(binding&.trigger_mode&.to_sym)
         return { error: "No workflow binding on current column" }
       end
@@ -209,12 +211,15 @@ class TaskService
         return { error: "Active workflow run already exists for this task" }
       end
 
+      data = { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id,
+               "requested_by_id" => actor&.id }
+      data["runner_id"] = runner_id unless runner_id.equal?(WorkflowService::RUNNER_NOT_PICKED)
+
       event = TriggerEngine.record_event(
         event_type: TriggerEngine::MANUAL_EVENT_TYPE,
         source: "manual",
         subject: task.id,
-        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id,
-                "requested_by_id" => actor&.id },
+        data: data,
         project: task.board.project,
         board_task: task,
         actor: run_owner_for(task, requested_by: actor),

@@ -42,6 +42,8 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     contextMetadata: null,
     metadata: null,
     collectedAt: null,
+    runnerId: null,
+    runner: null,
     updatedAt: '2026-06-26T10:00:00Z',
     websocketUrl: null,
     uploadUrl: null,

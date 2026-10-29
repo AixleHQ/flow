@@ -19,7 +19,7 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
-import type { Picker, Project, Step, Workflow } from '@/types/generated';
+import type { Picker, Project, RunnerSummary, Step, Workflow } from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
@@ -49,6 +49,7 @@ interface Props {
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
+  runners?: RunnerSummary[];
 }
 
 const workflowSchema = z.object({
@@ -68,6 +69,7 @@ const WorkflowsPage = () => {
     configuredAgents,
     defaultAgentRuntime,
     agentModels,
+    runners,
   } = usePage<{ props: Props }>().props as unknown as Props;
   const { canExecute } = useProjectPermissions();
   const assets = rawAssets ?? [];
@@ -556,7 +558,9 @@ const WorkflowsPage = () => {
         <RunWorkflowDrawer
           opened={!!runWorkflow}
           onClose={() => setRunWorkflow(null)}
-          workflows={[{ id: runWorkflow.id, name: runWorkflow.name, steps: runWorkflow.steps }]}
+          workflows={[
+            { id: runWorkflow.id, name: runWorkflow.name, runnerId: runWorkflow.runnerId, steps: runWorkflow.steps },
+          ]}
           initialWorkflowId={runWorkflow.id}
           projectId={project.id}
           configuredAgents={configuredAgents}
@@ -564,6 +568,7 @@ const WorkflowsPage = () => {
           agentModels={agentModels}
           repositories={repositories}
           assets={assets}
+          runners={runners}
         />
       )}
     </>

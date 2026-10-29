@@ -80,4 +80,51 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
 
     assert_equal [ archived.id ], @build.reload.tool_ids
   end
+
+  # == runner (DESIGN.md §2.4, §3.4) ==
+
+  test "the runner is in the snapshot, and a hosted workflow's snapshot is as it was before runners" do
+    runner = create(:runner, company: @company, created_by: @user)
+
+    assert_not Versions::Snapshot.dump(@workflow).key?("runner_id")
+
+    @workflow.update!(runner: runner)
+    assert_equal runner.id, Versions::Snapshot.dump(@workflow)["runner_id"]
+  end
+
+  test "saving an unchanged hosted workflow over a snapshot from before runners records nothing" do
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "v1") }
+
+    assert_no_difference -> { @workflow.entity_versions.count } do
+      Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "v1") }
+    end
+  end
+
+  test "revert restores the runner, one deleted since included, and hosted for a version that had none" do
+    runner = create(:runner, company: @company, created_by: @user)
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "hosted") }
+    hosted = @workflow.latest_version
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: runner) }
+    on_runner = @workflow.latest_version
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: nil) }
+    runner.soft_delete!
+
+    Versions.revert!(@workflow, to: on_runner, actor: @actor)
+    assert_equal runner.id, @workflow.reload.runner_id
+
+    Versions.revert!(@workflow, to: hosted, actor: @actor)
+    assert_nil @workflow.reload.runner_id
+  end
+
+  test "a version restored onto a disabled or revoked runner keeps it" do
+    runner = create(:runner, company: @company, created_by: @user)
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: runner) }
+    on_runner = @workflow.latest_version
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: nil) }
+    runner.revoke!
+
+    Versions.revert!(@workflow, to: on_runner, actor: @actor)
+
+    assert_equal runner.id, @workflow.reload.runner_id
+  end
 end

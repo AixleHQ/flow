@@ -35,6 +35,7 @@ class WorkflowRun < ApplicationRecord
 
   include WorkflowRunStateMachine
   include CreatedWithinDates
+  include RunnerReference
   extend Enumerize
 
   belongs_to :workflow
@@ -54,6 +55,8 @@ class WorkflowRun < ApplicationRecord
   # How the run was launched. A `trigger` run's event and binding are on its
   # TriggerDispatch; runs created before this column existed have none.
   enumerize :source, in: %i[web mcp retry trigger]
+
+  def runner_project = project
 
   def execution_workflow_id
     "workflow-execution-#{id}"

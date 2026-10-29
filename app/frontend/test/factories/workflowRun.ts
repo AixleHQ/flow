@@ -16,6 +16,8 @@ export const buildWorkflowRun = (overrides: Partial<WorkflowRun> = {}): Workflow
   workflowVersionNumbers: [],
   failureReason: null,
   failedAgentCredentialId: null,
+  runnerId: null,
+  runner: null,
   mode: 'interactive',
   stepsCompleted: 1,
   stepsTotal: 3,

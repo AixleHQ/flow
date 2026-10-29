@@ -1,11 +1,14 @@
-import { MultiSelect, Switch } from '@mantine/core';
+import { Alert, MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
-import type { ConfigItemPicker, Workflow } from '@/types/generated';
+import type { ConfigItemPicker, RunnerSummary, Workflow } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
+import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { RunnerSelect } from 'shared/resources/runners/runnerChoice';
+import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 
 interface NamedItem {
   id: number;
@@ -21,6 +24,7 @@ type BaseResources = Pick<
   | 'baseAssetIds'
   | 'baseRepositoryIds'
   | 'baseConfigItemIds'
+  | 'runnerId'
 >;
 
 interface BaseResourcesTabProps {
@@ -32,6 +36,7 @@ interface BaseResourcesTabProps {
   assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
+  runners: RunnerSummary[];
   readOnly: boolean;
   onWorkflowChange: (field: string, value: unknown) => void;
 }
@@ -45,9 +50,11 @@ export function BaseResourcesTab({
   assets,
   repositories,
   configItems,
+  runners,
   readOnly,
   onWorkflowChange,
 }: BaseResourcesTabProps) {
+  const externalRunners = useFeatureFlag('externalRunners');
   const toSelectData = (items: NamedItem[]) =>
     Array.isArray(items)
       ? items.filter((i) => i?.id != null).map((i) => ({ value: String(i.id), label: i.name ?? '' }))
@@ -83,6 +90,15 @@ export function BaseResourcesTab({
         <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
           Default resources available to every session. Sessions can add their own on top.
         </div>
+
+        {externalRunners && (
+          <RunnerField
+            runners={runners}
+            runnerId={workflow.runnerId ?? null}
+            readOnly={readOnly}
+            onChange={(runnerId) => onWorkflowChange('runnerId', runnerId)}
+          />
+        )}
 
         {/* Inherit toggle card — toggle on LEFT, text on right */}
         <div
@@ -226,6 +242,49 @@ export function BaseResourcesTab({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Where every step of a run goes, unless the run drawer picks another runner (DESIGN.md §3.3). A
+ * runner that can no longer be used stays selected and is warned about: the reference is never
+ * cleared, and saving it is allowed because the runner may come back (§3.4).
+ */
+function RunnerField({
+  runners,
+  runnerId,
+  readOnly,
+  onChange,
+}: {
+  runners: RunnerSummary[];
+  runnerId: number | null;
+  readOnly: boolean;
+  onChange: (runnerId: number | null) => void;
+}) {
+  const selected = runners.find((runner) => runner.id === runnerId);
+  const unusable =
+    runnerId == null
+      ? null
+      : selected
+        ? runnerUnusableReason(selected)
+        : 'This runner is not available to this project.';
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <RunnerSelect
+        label="Runner"
+        hostedLabel="Hosted (default)"
+        runners={runners}
+        value={runnerId}
+        onChange={onChange}
+        disabled={readOnly}
+      />
+      {unusable && (
+        <Alert color="yellow" variant="light" mt="xs" p="xs">
+          {unusable} Runs of this workflow fail until you pick another runner or the runner is usable again.
+        </Alert>
+      )}
     </div>
   );
 }

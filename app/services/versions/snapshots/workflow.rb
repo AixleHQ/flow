@@ -8,7 +8,7 @@ module Versions
     # snapshot holds and sets it on the live ones it does not, and
     # `depends_on_step_ids` needs no remapping.
     class Workflow < Base
-      FIELDS = %w[name description config].freeze
+      FIELDS = %w[name description config runner_id].freeze
       EXCLUDED = %w[id scope_type scope_id project_id company_id published_at published_by_id deleted_at
                     current_version_number created_at updated_at].freeze
       STEP_FIELDS = %w[id name instructions position agent_id preferred_model required_agent_runtime skip_policy
@@ -39,13 +39,19 @@ module Versions
               "sub_steps" => sub_steps.map { |sub| sub.attributes.slice(*SUB_STEP_FIELDS) }
             )
           end
-          super.merge("steps" => steps)
+          super.merge("steps" => steps).tap do |snapshot|
+            # Hosted is the absence of a runner, as in every snapshot written
+            # before runner_id existed, so saving an unchanged hosted workflow
+            # still records nothing.
+            snapshot.delete("runner_id") if snapshot["runner_id"].nil?
+          end
         end
 
         def restore!(record, snapshot)
           record.assign_attributes(
             "name" => snapshot["name"], "description" => snapshot["description"],
-            "config" => existing_config(snapshot["config"] || {})
+            "config" => existing_config(snapshot["config"] || {}),
+            "runner_id" => existing_runner_id(snapshot["runner_id"])
           )
           record.save!
           WorkflowStepSync.new(record, Array(snapshot["steps"])).sync!
@@ -53,6 +59,13 @@ module Versions
         end
 
         private
+
+        # A runner deleted, disabled or revoked since is restored as it was, never
+        # as hosted, and the builder warns about it (DESIGN.md §3.4). Runners are
+        # only soft-deleted, so the row is there unless its whole tenant is gone.
+        def existing_runner_id(id)
+          id if id.present? && ::Runner.exists?(id)
+        end
 
         def existing_config(config)
           CONFIG_REFERENCES.each_with_object(config.dup) do |(key, model), memo|

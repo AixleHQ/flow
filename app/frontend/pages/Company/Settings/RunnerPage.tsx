@@ -5,7 +5,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import type { RunnerTypeOption } from 'shared/resources/runners/runnerConfig';
-import { RunnerDetails } from 'shared/resources/runners/RunnerDetails';
+import { RunnerDetails, type RunnerWorkflowUse } from 'shared/resources/runners/RunnerDetails';
 import { companyRunnerPaths } from 'shared/resources/runners/runnerPaths';
 import type { SharedProps } from 'shared/ui';
 
@@ -15,10 +15,11 @@ interface PageProps extends SharedProps {
   runner: Runner;
   runnerTypes: RunnerTypeOption[];
   canManage: boolean;
+  workflowsUsing?: RunnerWorkflowUse[];
 }
 
 export default function RunnerPage() {
-  const { runner, runnerTypes, canManage, currentUser } = usePage<PageProps>().props;
+  const { runner, runnerTypes, canManage, workflowsUsing, currentUser } = usePage<PageProps>().props;
   const externalRunners = useFeatureFlag('externalRunners');
 
   if (!externalRunners) return <AuthLayout>{null}</AuthLayout>;
@@ -31,6 +32,7 @@ export default function RunnerPage() {
           runner={runner}
           runnerTypes={runnerTypes}
           canManage={canManage}
+          workflowsUsing={workflowsUsing}
           paths={companyRunnerPaths()}
           backLabel="All runners"
         />

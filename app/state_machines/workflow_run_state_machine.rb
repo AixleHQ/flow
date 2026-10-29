@@ -34,6 +34,12 @@ module WorkflowRunStateMachine
         transitions from: %i[running paused], to: :failed, after: %i[on_completed announce_failed]
       end
 
+      # A run refused before it was dispatched: its runner cannot take it
+      # (WorkflowService.fail_on_runner_refusal). It never ran, so it never starts.
+      event :fail_before_start do
+        transitions from: :pending, to: :failed, after: %i[on_completed announce_failed]
+      end
+
       event :cancel do
         transitions from: %i[pending running paused], to: :cancelled, after: %i[on_cancelled announce_cancelled]
       end
