@@ -308,6 +308,27 @@ module Activities
         assert_equal credential.id, @run.failed_agent_credential_id
       end
 
+      test "completes a session its agent finished itself even when its log ends on its own provider's message" do
+        session = create_finished_session_with_log("kiro_cli", [
+          *Array.new(QuotaErrorDetector::TAIL_LINES * 2) { |i| "working on the task, step #{i}" },
+          phrase("Summary: the scan no longer fails on \"You have reached your mon", "thly usage lim", "it.\""),
+          "finish_session(note: \"done\")"
+        ])
+        session.update!(finishing_at: 1.minute.ago)
+        create(:agent_credential, user: @user, agent_type: "kiro_cli")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["valid"]
+        assert_nil result["quota_error"]
+        assert_equal "completed", step_run.reload.state
+        assert_nil step_run.error_category
+        @run.reload
+        assert_nil @run.failure_reason
+        assert_nil @run.failed_agent_credential_id
+      end
+
       test "does not fail the step for another provider's message recorded as the session's error" do
         session = create(:terminal_session, :failed,
           user: @user,
