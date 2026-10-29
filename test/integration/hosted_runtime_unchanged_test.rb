@@ -6,8 +6,9 @@ require "test_helper"
 # its hosted sessions. The same hosted admission and launch run twice, once with
 # the flag off and once with it on for the session's company, through the real
 # SessionService → SessionAdmissionService → SessionLaunchRelay path and the
-# container phases on the Kubernetes runtime seam (ContainerRuntime::FakeRuntime),
-# and both runs must make the same runtime calls and leave the same admission.
+# admitted container phases (AdmittedPhaseActivity) on the runtime seam that
+# KubernetesRuntime sits behind (ContainerRuntime::FakeRuntime). Both runs must
+# make the same runtime calls and leave the same admission.
 class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
   setup do
     @company = create(:company, email_domain: "test.com")
@@ -74,6 +75,8 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
       ).transform_values { |v| normalize(v) },
       execs: runtime.execs.map { |cmd| normalize(Array(cmd).join(" ")) },
       uploads: runtime.uploads.map { |upload| normalize(upload.inspect) },
+      written: runtime.written_paths.map { |path| normalize(path) },
+      cleaned: runtime.cleaned_sessions.map { |id| normalize(id) },
       state: session.reload.state
     }
   end
