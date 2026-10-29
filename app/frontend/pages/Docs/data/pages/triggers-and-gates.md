@@ -130,8 +130,9 @@ condition clears.
 A gate is created **by a running workflow**, via the `board_create_gate` tool —
 for example, an agent opens a pull request and then parks the task until CI is
 green. While any gate is pending, the column auto-trigger will not start the
-next run for that task. When the matching CI event arrives
-(GitHub checks / GitHub Actions / GitLab pipeline), the gate resolves and the
+next run for that task. When the matching CI event arrives (GitHub checks /
+GitHub Actions / GitLab pipeline / Azure DevOps build / Azure DevOps pull request
+policies / Bitbucket pull request statuses), the gate resolves and the
 auto-trigger re-evaluates — firing only once the **last** gate clears.
 
 | | Trigger | Gate |
@@ -229,8 +230,8 @@ wants: `aixle flow run <workflow> --project <id>`.
 | Strategy | Header | Notes |
 | -------- | ------ | ----- |
 | `slack_v0` | `X-Slack-Signature` | HMAC-SHA256 over `v0:{ts}:{body}`, 5-min replay window |
-| `hmac_sha256` | `X-Hub-Signature-256` (configurable) | GitHub-style `sha256=…` |
-| `shared_token` | `X-Webhook-Token` (configurable) | constant-time token compare |
+| `hmac_sha256` | `X-Hub-Signature-256` | GitHub-style `sha256=…` |
+| `shared_token` | `X-Webhook-Token` | constant-time token compare |
 | `none` | — | for trusted, network-isolated sources only |
 
 Secrets are stored encrypted per endpoint and verified on the **raw** request
