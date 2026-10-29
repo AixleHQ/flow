@@ -35,6 +35,26 @@ class Admin::ProjectMovesTest < ActionDispatch::IntegrationTest
     assert_includes body, "reserved 2 concurrent sessions"
   end
 
+  test "the preflight and the report list the workflows that switch to Hosted" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update!(runner: runner)
+    create(:workflow, scope: @s.project, name: "Hotfix", runner: runner, deleted_at: Time.current)
+    sign_in_as(@admin)
+
+    get new_admin_project_move_path(@s.project, target_company_id: @s.target.id)
+
+    assert_response :success
+    assert_includes response.body, "Workflows to switch to Hosted"
+    assert_includes response.body, "Hotfix (archived) — was on runner Prod VPC"
+    assert_includes response.body, "Release — was on runner Prod VPC"
+
+    post admin_project_move_path(@s.project), params: move_params
+    follow_redirect!
+
+    assert_includes response.body, "Workflows switched to Hosted"
+    assert_nil @s.workflow.reload.runner_id
+  end
+
   test "moving shows the report and leaves it on the project" do
     sign_in_as(@admin)
 

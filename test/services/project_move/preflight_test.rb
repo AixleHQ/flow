@@ -63,12 +63,16 @@ class ProjectMove::PreflightRunnersTest < ActiveSupport::TestCase
 
   def blockers = ProjectMove::Preflight.new(project: @s.project, target: @s.target).blockers
 
-  test "workflows that name a runner block the move, archived ones included, listed by runner" do
+  test "workflows that name a runner do not block; the report lists them as switching to Hosted, archived ones included" do
     @s.workflow.update!(runner: @runner)
     archived = create(:workflow, scope: @s.project, name: "Hotfix", runner: @runner, deleted_at: Time.current)
 
-    assert_includes blockers, "Workflows #{archived.name} (archived) and Release run on runner Prod VPC of Northwind. " \
-                              "Switch them to Hosted before moving."
+    preflight = ProjectMove::Preflight.new(project: @s.project, target: @s.target)
+
+    assert preflight.movable?, preflight.blockers.to_sentence
+    assert_equal [ { "id" => archived.id, "name" => "Hotfix", "archived" => true, "runner" => "Prod VPC" },
+                   { "id" => @s.workflow.id, "name" => "Release", "archived" => false, "runner" => "Prod VPC" } ],
+                 preflight.to_h["workflows_switched_to_hosted"]
   end
 
   test "a runner the project owns blocks the move, a deleted one included" do
