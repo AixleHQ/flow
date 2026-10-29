@@ -17,8 +17,6 @@ class Web::Company::Projects::RunnersController < Web::Company::Projects::Applic
     Runner.visible_for_project(current_project)
   end
 
-  def workflow_projects = Project.where(id: current_project.id)
-
   def build_runner
     current_project.runners.new(company: current_project.company, created_by: current_user)
   end

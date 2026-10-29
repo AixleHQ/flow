@@ -21,21 +21,12 @@ import { useState, type ReactNode } from 'react';
 import type { Runner } from '@/types/generated';
 
 import { formatDateTime } from 'shared/lib/formatDate';
-import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { accessWideners, humanize, setKeys, type RunnerPaths, type RunnerTypeOption } from './runnerConfig';
 import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
 import { RunnerFormModal } from './RunnerFormModal';
-
-/** A workflow that names the runner, among those the page's viewer can open. */
-export interface RunnerWorkflowUse {
-  id: number;
-  name: string;
-  projectId: number;
-  projectName: string;
-}
 
 interface RunnerDetailsProps {
   runner: Runner;
@@ -44,7 +35,6 @@ interface RunnerDetailsProps {
   paths: RunnerPaths;
   /** Where "back" goes, and what it is called. */
   backLabel: string;
-  workflowsUsing?: RunnerWorkflowUse[];
 }
 
 const HEALTH_STATES: Runner['status'][] = ['pending', 'connected', 'degraded', 'unreachable'];
@@ -66,23 +56,6 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function WorkflowList({ workflows }: { workflows: RunnerWorkflowUse[] }) {
-  return (
-    <List size="sm" spacing={2}>
-      {workflows.map((workflow) => (
-        <List.Item key={workflow.id}>
-          <Anchor component={Link} href={builderCompanyProjectWorkflowPath(workflow.projectId, workflow.id)} fz="sm">
-            {workflow.name}
-          </Anchor>{' '}
-          <Text span fz="xs" c="dimmed">
-            {workflow.projectName}
-          </Text>
-        </List.Item>
-      ))}
-    </List>
-  );
-}
-
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Paper withBorder radius="md" p="lg">
@@ -94,14 +67,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function RunnerDetails({
-  runner,
-  runnerTypes,
-  canManage,
-  paths,
-  backLabel,
-  workflowsUsing = [],
-}: RunnerDetailsProps) {
+export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel }: RunnerDetailsProps) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [busy, setBusy] = useState(false);
@@ -273,16 +239,6 @@ export function RunnerDetails({
         </Stack>
       </Section>
 
-      <Section title="Workflows using it">
-        {workflowsUsing.length === 0 ? (
-          <Text fz="sm" c="dimmed">
-            No workflow names this runner.
-          </Text>
-        ) : (
-          <WorkflowList workflows={workflowsUsing} />
-        )}
-      </Section>
-
       {canManage && option && runner.status !== 'revoked' && (
         <RunnerFormModal
           opened={editing}
@@ -305,14 +261,6 @@ export function RunnerDetails({
             ? `${runner.name} is revoked and removed from the list. Workflows and past sessions keep its name.`
             : `${runner.name} stops accepting sessions for good. A revoked runner cannot be enabled again.`}
         </Text>
-        {confirming === 'delete' && workflowsUsing.length > 0 && (
-          <Alert color="yellow" variant="light" mb="md" title="Workflows still use this runner">
-            <Text fz="sm" mb="xs">
-              Their runs fail until each one picks another runner:
-            </Text>
-            <WorkflowList workflows={workflowsUsing} />
-          </Alert>
-        )}
         <Group justify="flex-end">
           <Button variant="default" onClick={() => setConfirming(null)} disabled={busy}>
             Cancel

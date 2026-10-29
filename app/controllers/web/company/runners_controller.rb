@@ -16,10 +16,6 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
     current_company.runners.not_deleted.where(project_id: nil)
   end
 
-  # A company runner can be named by any of the company's projects; the page
-  # lists the workflows of those its viewer can open.
-  def workflow_projects = Project.for_user(current_user).where(company_id: current_company.id)
-
   def build_runner
     current_company.runners.new(project: nil, created_by: current_user)
   end
