@@ -70,24 +70,28 @@ module Activities
       # credential flagged, because of a grep earlier in the session. So the log is read
       # the way Sessions::LogTail reads a stored log: own provider, tail only.
       #
-      # A session its agent ended with finish_session is not read at all: the agent
-      # reported success itself, which a CLI its provider refused cannot do, and its
-      # log's tail is its own closing summary, free to name these identifiers. A CLI
-      # that exits by itself on quota never goes through finishing, so finishing_at
-      # stays nil and its log is still read.
+      # A session whose finish was requested is not read at all. An agent that called
+      # finish_session reported success itself, which a CLI its provider refused cannot
+      # do, and its log's tail is its own closing summary, free to name these
+      # identifiers. A person's stop is a requested end, not a provider refusal. A CLI
+      # that exits by itself on its provider's refusal never goes through finishing, so
+      # finishing_at stays nil and its log is still read.
       def detect_quota_error(session)
         return QuotaErrorDetector.detect(nil) unless session
 
         recorded = QuotaErrorDetector.detect(session.error_message, agent_type: session.agent_type)
         return recorded if recorded.quota_error?
-        return QuotaErrorDetector.detect(nil) if finished_by_agent?(session)
+        return QuotaErrorDetector.detect(nil) if finish_requested?(session)
 
         QuotaErrorDetector.detect_on_screen(terminal_log_text(session), agent_type: session.agent_type)
       end
 
-      # finish_session (SessionService.finish) moves the session through `finishing`,
-      # which stamps finishing_at, before it ends `finished`.
-      def finished_by_agent?(session)
+      # Ended through `finishing`, which stamps finishing_at before the session ends
+      # `finished`: SessionService.finish (the agent's finish_session, or a person's
+      # stop through the API, the personal tools or the builder) and the stale-session
+      # cleanup (CleanupStaleActivity#full_cleanup). AdmittedPhaseActivity#outcome_state
+      # and #outcome_error read finishing_at the same way, as a requested finish.
+      def finish_requested?(session)
         session.state == "finished" && session.finishing_at.present?
       end
 
