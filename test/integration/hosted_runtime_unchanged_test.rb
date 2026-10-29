@@ -32,6 +32,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
 
     assert_equal off, on
     assert_equal "finished", on[:state]
+    assert on[:execs].any? && on[:cleaned].any?, "the launch reached the runtime"
   end
 
   test "a hosted workflow step is admitted and launched the same with the flag on" do
@@ -40,6 +41,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
 
     assert_equal off, on
     assert_equal "finished", on[:state]
+    assert on[:execs].any? && on[:cleaned].any?, "the launch reached the runtime"
   end
 
   private
