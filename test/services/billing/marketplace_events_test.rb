@@ -94,6 +94,20 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert @events.apply_for(license).active?
   end
 
+  # Matched on its ARN alone: `agreement_id: nil` is every other listing's
+  # licence event, and all of those used to be applied inside the buyer's
+  # registration request.
+  test "a licence that knows no agreement replays only the events naming its ARN" do
+    @events.record(
+      envelope(id: "ev-other", detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+               detail: { "license" => { "arn" => "arn:lic:other" } })
+    )
+    license = create(:marketplace_license, license_arn: "arn:lic:1", agreement_id: nil)
+
+    assert_empty MarketplaceSubscriptionEvent.awaiting(license)
+    assert_equal 1, MarketplaceSubscriptionEvent.unapplied.count, "the other listing's event is still waiting"
+  end
+
   test "an ended agreement closes the licence and stops the company" do
     company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
     license = create(:marketplace_license, :active, agreement_id: "agmt-1", company: company)
@@ -325,6 +339,24 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
 
     assert_equal 0, @events.apply_pending
     assert license.reload.active?
+  end
+
+  # Found by its ARN, the licence is the one going whatever agreement the event
+  # names. A row that never learned its agreement used to read that name as
+  # somebody else's and stay active, and unbilled, for ever.
+  test "a deprovisioning finishes a licence that never learned its agreement" do
+    company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    license = create(:marketplace_license, :active, license_arn: "arn:lic:1", agreement_id: nil, company: company)
+    @meter.expect(:call, "nothing to send", [ license ])
+    @events.record(
+      envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED,
+               detail: { "license" => { "arn" => "arn:lic:1" }, "agreement" => { "id" => "agmt-1" },
+                         "product" => { "code" => OUR_PRODUCT_CODE } })
+    )
+
+    assert_equal 1, @events.apply_pending
+    assert license.reload.ended?
+    assert company.reload.billing_blocked?
   end
 
   # `ended` is unmeterable. Finished around a call that never reached AWS, the

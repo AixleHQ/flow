@@ -70,6 +70,10 @@ governance, community health — carry none.
   the cancellation. Those minutes go to AWS as the old subscription's last usage;
   the new one is now billed from the moment it is applied, not from the top of
   the hour.
+- **Company settings**: a workspace whose capacity was set before the capacity
+  log existed is billed for the part of the hour before its first later change,
+  which used to go to nobody. Operators: a migration writes each company's
+  current capacity into the log once.
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
 - **Sessions & Runs**: an agent session, and the run it belongs to, is no

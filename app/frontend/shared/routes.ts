@@ -1292,31 +1292,6 @@ export function oasRailsPath(options?: object): string {
   return "/" + "api-docs" + $buildOptions(options, []);
 }
 
-/** /letter_opener */
-export function letterOpenerWebPath(options?: object): string {
-  return "/" + "letter_opener" + $buildOptions(options, []);
-}
-
-/** /letter_opener/ */
-export function letterOpenerWebLettersPath(options?: object): string {
-  return "/" + "letter_opener" + "/" + $buildOptions(options, []);
-}
-
-/** /letter_opener/clear(.:format) */
-export function letterOpenerWebClearLettersPath(options?: object): string {
-  return "/" + "letter_opener" + "/" + "clear" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /letter_opener/:id(/:style)(.:format) */
-export function letterOpenerWebLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + ($hasPresentOwnProperty(options, "style") ? "/" + (options as any).style : "") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","style","format"]);
-}
-
-/** /letter_opener/:id/delete(.:format) */
-export function letterOpenerWebDeleteLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + "/" + "delete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
 /** /docs(.:format) */
 export function docsPath(options?: object): string {
   return "/" + "docs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

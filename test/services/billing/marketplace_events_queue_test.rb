@@ -46,15 +46,23 @@ class Billing::MarketplaceEventsQueueTest < ActiveSupport::TestCase
   end
 
   # The rule a fake cannot express: deletion is the acknowledgement, so it must
-  # follow the handler rather than the receive.
-  test "a message whose handling raised is left on the queue" do
-    stub_receive([ message("m-1", { "id" => "ev-1" }) ])
+  # follow the handler rather than the receive. And the one behind it is still
+  # handled: a message that cannot be taken is redelivered later, not allowed to
+  # hold up everything after it.
+  test "a message whose handling raised is left on the queue and the rest are handled" do
+    stub_receive([ message("m-1", { "id" => "ev-1" }), message("m-2", { "id" => "ev-2" }) ])
     deletes = stub_delete
 
-    assert_raises(RuntimeError) do
-      @queue.each_message { |envelope| raise "handler blew up" if envelope["id"] == "ev-1" }
+    seen = []
+    handled = @queue.each_message do |envelope|
+      raise "handler blew up" if envelope["id"] == "ev-1"
+
+      seen << envelope["id"]
     end
-    assert_not_requested deletes
+
+    assert_equal 1, handled
+    assert_equal %w[ev-2], seen
+    assert_requested deletes, times: 1
   end
 
   # A body that is not JSON will not become JSON on redelivery, so it is handed
