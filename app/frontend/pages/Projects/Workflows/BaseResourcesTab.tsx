@@ -300,8 +300,8 @@ function RunnerField({
 function RunnerDisabledNotice({ readOnly, onSwitchToHosted }: { readOnly: boolean; onSwitchToHosted: () => void }) {
   return (
     <Alert color="yellow" variant="light" mb={20} p="xs">
-      This workflow runs on an external runner, and external runners are not enabled for this company.
-      Runs of this workflow fail until you switch it to Hosted.
+      This workflow runs on an external runner, and external runners are not enabled for this company. Runs of this
+      workflow fail until you switch it to Hosted.
       {!readOnly && (
         <div style={{ marginTop: 8 }}>
           <Button size="xs" variant="light" onClick={onSwitchToHosted}>
