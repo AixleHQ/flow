@@ -168,6 +168,7 @@ What the controllers return — no envelope around the resource:
   - `error_on:` → the attribute that gets the error
   - Usually validate only when the value changes (the `if:` above)
 - **Examples:** `Repository#integration_id` (`project: :scope_project, error_on: :integration`), `WorkflowRun#input_asset_ids` / `#repository_ids` (with the change guard), `TriggerBinding#subject_column_id` (`error_on: :subject_column`), the `TerminalSession` associations (`company: :company, on: :create`)
+- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`, so a foreign id is not found. Examples: `SessionContextService` (`:432`), `TriggerEngine` (`:342`), `WorkflowStepStrategy` (`:161`), `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession` (`:310`). The `Tenant/ScopedToolLookup` cop enforces it in `app/services/internal_tools` and `app/services/personal_tools` only
 - **Ownership** is defined in one place: `TenantScope.owned` (`app/services/tenant_scope.rb`). Ownership only, no enabled/attachable filtering; platform-owned rows (code tools, internal MCP servers) belong to every tenant. A new model that can be referenced gets its rule there (otherwise `owned` raises `no tenant rule for …`), not in a model scope of its own
 - **Database keys:** polymorphically scoped tables carry real `project_id` / `company_id` columns, kept in step with the scope pair by `TenantColumns`, with foreign keys, a composite key `(project_id, company_id)` → `projects (id, company_id)` and a check against the scope pair (`AddTenantColumnsToScopedResources`, which also ties `repositories (integration_id, company_id)` to `integrations (id, company_id)`). A table that carries `company_id` directly gets the same composite keys (`CreateRunners`). The company boundary holds in the database itself; a new scoped table follows the same pattern
 
@@ -225,6 +226,7 @@ What the controllers return — no envelope around the resource:
 - **Never** forget `company_id` filter in multi-tenant queries
 - **Never** hand-write a tenant check for a stored id (`validate :x_within_project`) → use `validates :x, tenant_ids: { model: X }`
 - **Never** repeat a `TenantScope` ownership rule in a model scope → add the model to `TenantScope.owned`; `visible_for_*` is for pickers, not for validating references
+- **Never** resolve a stored or user-supplied id across every company (`X.find(id)`, `X.find_by(id:)`) → use `TenantScope.owned(X, project:).find_by(id:)`
 - **Never** skip `# frozen_string_literal: true`
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
