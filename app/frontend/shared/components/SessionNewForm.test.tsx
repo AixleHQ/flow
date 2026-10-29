@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildRunnerSummary } from 'test/factories/runner';
 import { buildSharedUser } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -514,5 +515,44 @@ describe('SessionNewForm', () => {
 
       fetchSpy.mockRestore();
     });
+  });
+});
+
+describe('SessionNewForm — Runs on', () => {
+  const runners = [buildRunnerSummary({ id: 4, name: 'Prod VPC', operatedBy: 'Acme/Payments' })];
+  const props = { ...authProps(['claude_code']), features: { externalRunners: true } };
+
+  it('keeps runners off for an interactive session, and sends an automatic one to the picked runner', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+    } as Response);
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, runners })} />, { props });
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('combobox', { name: 'Runs on' }));
+    expect(
+      await screen.findByRole('option', { name: "Prod VPC · Connected · can't run interactive sessions yet" }),
+    ).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('radio', { name: /Automatic/ }));
+    await user.type(screen.getByLabelText(/Initial Prompt/), 'ship it');
+    await user.click(screen.getByRole('combobox', { name: 'Runs on' }));
+    await user.click(await screen.findByRole('option', { name: 'Prod VPC · Connected' }));
+    expect(screen.getByText(/which is operated by/)).toHaveTextContent('Acme/Payments');
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+    expect(body.terminalSession.runnerId).toBe(4);
+    fetchSpy.mockRestore();
+  });
+
+  it('shows no runner select without the flag', () => {
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, runners })} />, { props: authProps(['claude_code']) });
+
+    expect(screen.queryByRole('combobox', { name: 'Runs on' })).not.toBeInTheDocument();
   });
 });

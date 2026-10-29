@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildRunnerSummary } from 'test/factories/runner';
 import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { buildStepRun } from 'test/factories/stepRun';
 import { buildSubStepRun } from 'test/factories/subStepRun';
@@ -41,6 +42,25 @@ function seed(props: Record<string, unknown> = {}) {
 describe('Projects/WorkflowRuns/ShowPage', () => {
   beforeEach(() => {
     installFakeWebSocket();
+  });
+
+  it('says where the run and each of its sessions runs, with the flag on', () => {
+    const run = makeRun({ runnerId: 4, runner: buildRunnerSummary({ id: 4, name: 'Prod VPC' }) });
+    renderAuthedPage(<ShowPage />, { props: { ...seed({ run }), features: { externalRunners: true } } });
+
+    expect(screen.getByText('Runs on')).toBeInTheDocument();
+    // The header and the two session cards.
+    expect(screen.getAllByRole('link', { name: 'Prod VPC · Manual' })).toHaveLength(3);
+  });
+
+  it('says Hosted for a run without a runner, and nothing without the flag', () => {
+    const { unmount } = renderAuthedPage(<ShowPage />, { props: { ...seed(), features: { externalRunners: true } } });
+    expect(screen.getAllByText('Hosted')).toHaveLength(3);
+    unmount();
+
+    renderAuthedPage(<ShowPage />, { props: seed() });
+    expect(screen.queryByText('Runs on')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hosted')).not.toBeInTheDocument();
   });
 
   it('names the workflow version each session ran, and warns when it changed mid-run', () => {

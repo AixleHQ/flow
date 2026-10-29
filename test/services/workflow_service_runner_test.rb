@@ -47,7 +47,8 @@ class WorkflowServiceRunnerTest < ActiveSupport::TestCase
     assert_equal @runner.id, run.reload.runner_id
 
     run.update_columns(state: "failed")
-    retried = WorkflowService.retry_closed_run(run)
+    TemporalService.stubs(:workflow_open?).returns(false)
+    retried = WorkflowService.retry_step(step_run: run.step_runs.first)
     assert_equal @runner.id, retried[:run].runner_id
   end
 

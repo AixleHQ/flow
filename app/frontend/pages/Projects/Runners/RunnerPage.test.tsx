@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
 import { buildRunner, buildRunnerTypeOption } from 'test/factories/runner';
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import RunnerPage from './RunnerPage';
 
@@ -47,6 +47,24 @@ describe('Projects/Runners/RunnerPage', () => {
     ['Edit', 'Disable', 'Revoke', 'Delete'].forEach((name) =>
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument(),
     );
+  });
+
+  it('lists the workflows using it, and names them again before a delete', async () => {
+    const user = userEvent.setup();
+    render({ workflowsUsing: [{ id: 3, name: 'Deploy', projectId: 7, projectName: 'Aixle Core' }] });
+
+    expect(screen.getByRole('link', { name: 'Deploy' })).toHaveAttribute('href', '/company/projects/7/workflows/3/builder');
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete runner' });
+    expect(within(dialog).getByText('Workflows still use this runner')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Deploy' })).toBeInTheDocument();
+  });
+
+  it('says when no workflow uses it', () => {
+    render({ workflowsUsing: [] });
+
+    expect(screen.getByText('No workflow names this runner.')).toBeInTheDocument();
   });
 
   it('renders nothing with the flag off', () => {
