@@ -64,6 +64,17 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
     assert_includes built.errors[:email_domain].to_sentence, "already has a workspace"
   end
 
+  # The controller lets a live subscription past REGISTRATION_ENABLED, and a
+  # closing one is live. A workspace made on it would be blocked from birth,
+  # waiting on a confirmation that cannot come.
+  test "a Marketplace subscription that is closing or ended cannot take a workspace" do
+    built = stranger(email_domain: "northwind.example", marketplace_license: create(:marketplace_license, :ending))
+
+    assert_not built.save(built.owner_for(nil))
+    assert_includes built.errors[:base].to_sentence, "has ended"
+    assert_not Company.exists?(email_domain: "northwind.example")
+  end
+
   test "the domain defaults to the address they signed in with" do
     assert_equal "acme-robotics.example", WorkspaceOnboardingForm.new(user: @user).email_domain
   end

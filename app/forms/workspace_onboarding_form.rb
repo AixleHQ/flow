@@ -32,6 +32,7 @@ class WorkspaceOnboardingForm
   validate :domain_is_not_a_public_mailbox, if: -> { email_domain.present? }
   validate :domain_belongs_to_the_address, if: -> { email_domain.present? && email.present? }
   validate :marketplace_license_is_free, if: -> { marketplace_license.present? }
+  validate :marketplace_license_is_live, if: -> { marketplace_license.present? }
 
   # `user:` is the person already signed in, whose address is not theirs to
   # choose. A stranger supplies one instead, and proves it by opening the link.
@@ -105,6 +106,19 @@ class WorkspaceOnboardingForm
     return unless marketplace_license.bound?
 
     errors.add(:base, "That AWS Marketplace subscription already has a workspace. Sign in to reach it.")
+  end
+
+  # The controller lets a live licence past REGISTRATION_ENABLED, and `ending`
+  # is live: closing, with nothing left to confirm. A workspace made on it, or
+  # on one already ended, is blocked from birth waiting for a confirmation that
+  # cannot come.
+  def marketplace_license_is_live
+    return if marketplace_license.pending? || marketplace_license.active?
+
+    errors.add(
+      :base,
+      "That AWS Marketplace subscription has ended. Subscribe again in AWS Marketplace to set up a workspace."
+    )
   end
 
   def domain_is_free
