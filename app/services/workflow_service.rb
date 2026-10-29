@@ -391,7 +391,7 @@ class WorkflowService
 
       run.board_task.task_comments.create!(
         author_type: :system,
-        body: "Workflow \"#{run.workflow.name}\" (run ##{run.id}) failed before it started: #{refusal.message}"
+        body: "Run ##{run.id} of workflow \"#{run.workflow.name}\" failed: #{refusal.message}"
       )
     rescue StandardError => e
       Rails.logger.warn("[WorkflowService] Failed to comment on the runner refusal of run ##{run.id}: #{e.message}")
