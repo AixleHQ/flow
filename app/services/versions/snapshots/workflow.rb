@@ -48,10 +48,12 @@ module Versions
         end
 
         def restore!(record, snapshot)
+          runner_id = existing_runner_id(snapshot["runner_id"])
+          refuse_unreachable_runner!(record, runner_id)
           record.assign_attributes(
             "name" => snapshot["name"], "description" => snapshot["description"],
             "config" => existing_config(snapshot["config"] || {}),
-            "runner_id" => existing_runner_id(snapshot["runner_id"])
+            "runner_id" => runner_id
           )
           record.save!
           WorkflowStepSync.new(record, Array(snapshot["steps"])).sync!
@@ -59,6 +61,19 @@ module Versions
         end
 
         private
+
+        # A version written before the project moved to another company can name
+        # a runner of the old one, which no reference may name (RunnerReference)
+        # and a revert does not turn into hosted (§3.4). The revert is refused
+        # with what to do instead.
+        def refuse_unreachable_runner!(record, runner_id)
+          project = record.runner_project
+          return if runner_id.nil? || project.nil? || ::Runner.within_project_scope(project).exists?(runner_id)
+
+          record.errors.add(:base, "This version runs on runner ##{runner_id}, which this project can no longer use. " \
+                                   "Revert to a version that runs on Hosted or on a runner of this project's company.")
+          raise ActiveRecord::RecordInvalid, record
+        end
 
         # A runner deleted, disabled or revoked since is restored as it was, never
         # as hosted, and the builder warns about it (DESIGN.md §3.4). Runners are

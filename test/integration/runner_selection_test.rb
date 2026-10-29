@@ -89,6 +89,12 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     assert_equal @runner.id, WorkflowRun.find(JSON.parse(taken[:stdout])["run_id"]).runner_id
   end
 
+  test "the trigger tools advertise null as the hosted pick" do
+    [ PersonalTools::TriggerWorkflow, PersonalTools::TriggerTaskWorkflow ].each do |tool|
+      assert_equal %w[integer null], tool.tool_definition.input_schema.dig("properties", "runner_id", "type"), tool.name
+    end
+  end
+
   # == the session API ==
 
   test "the session API refuses a pick without the flag" do

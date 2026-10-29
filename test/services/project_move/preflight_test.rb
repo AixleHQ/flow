@@ -54,3 +54,36 @@ class ProjectMove::PreflightTest < ActiveSupport::TestCase
     assert_includes preflight.people_without_agent_credentials, @s.owner
   end
 end
+
+class ProjectMove::PreflightRunnersTest < ActiveSupport::TestCase
+  setup do
+    @s = ProjectMoveScenario.new.build
+    @runner = create(:runner, company: @s.source, name: "Prod VPC")
+  end
+
+  def blockers = ProjectMove::Preflight.new(project: @s.project, target: @s.target).blockers
+
+  test "workflows that name a runner block the move, archived ones included, listed by runner" do
+    @s.workflow.update!(runner: @runner)
+    archived = create(:workflow, scope: @s.project, name: "Hotfix", runner: @runner, deleted_at: Time.current)
+
+    assert_includes blockers, "Workflows #{archived.name} (archived) and Release run on runner Prod VPC of Northwind. " \
+                              "Switch them to Hosted before moving."
+  end
+
+  test "a runner the project owns blocks the move, a deleted one included" do
+    create(:runner, company: @s.source, project: @s.project, name: "Lab", deleted_at: Time.current)
+
+    assert_includes blockers, "Runner Lab (deleted) belongs to this project, and a runner cannot move to another company."
+  end
+
+  test "past runs and sessions on a runner do not block; the report counts what the move clears" do
+    create(:workflow_run, :completed, workflow: @s.workflow, project: @s.project, user: @s.owner, runner: @runner)
+    create(:terminal_session, :agent_session, project: @s.project, user: @s.owner, state: "failed", runner: @runner)
+
+    preflight = ProjectMove::Preflight.new(project: @s.project, target: @s.target)
+
+    assert preflight.movable?, preflight.blockers.to_sentence
+    assert_equal({ "runs" => 1, "sessions" => 1 }, preflight.to_h["cleared_runner_references"])
+  end
+end

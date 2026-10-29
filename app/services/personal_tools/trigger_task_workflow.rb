@@ -17,9 +17,10 @@ module PersonalTools
       param :task_id, type: :integer, description: TASK_ID_PARAM
       param :force, type: :boolean,
                     description: "Cancel the task's in-flight run and re-trigger (default false)."
-      param :runner_id, type: :integer,
-            description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use the " \
-                         "workflow's runner. Refused unless external runners are enabled for the company."
+      runner = param :runner_id, type: :integer,
+                     description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use " \
+                                  "the workflow's runner. Refused unless external runners are enabled for the company."
+      runner["type"] = %w[integer null]
     end
 
     ACTIVE_RUN_STATES = %w[pending running paused].freeze
