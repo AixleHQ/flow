@@ -432,6 +432,15 @@ describe('RunWorkflowDrawer — Runs on', () => {
     expect(screen.getByText('Runner "Spare" is disabled. The run fails at launch.')).toBeInTheDocument();
   });
 
+  it('warns when the workflow runner is not among the runners offered, as for a deleted one', () => {
+    const onGone = workflows.map((w) => (w.id === 9 ? { ...w, runnerId: 20 } : w));
+    renderDrawer({ initialWorkflowId: 9, workflows: onGone, runners: [prodVpc] }, ON);
+
+    expect(
+      screen.getByText('This runner is not available to this project. The run fails at launch.'),
+    ).toBeInTheDocument();
+  });
+
   it('shows no runner select without the flag, and sends no runner', async () => {
     renderDrawer({ initialWorkflowId: 9, workflows: onRunner, runners: [prodVpc] });
 
