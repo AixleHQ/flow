@@ -16,6 +16,12 @@ module PersonalTools
                       description: "Runtime required for this step. Omit or pass null to use normal runtime resolution.",
                       enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
       runtime["type"] = %w[string null]
+      effort = param :reasoning_effort, type: :string,
+                     description: "Reasoning effort the step's CLI runs at. Omit or pass null for the CLI's " \
+                                  "default. Only the levels the step's runtime (and preferred model) takes are " \
+                                  "accepted; see the runtime registry for which those are.",
+                     enum: AgentRuntime.reasoning_effort_levels + [ nil ]
+      effort["type"] = %w[string null]
       param :position, type: :integer, description: "0-based position; auto-assigned if omitted."
       param :tool_ids, type: :array,
             description: "Tool ids available in this step. Replaces the whole list — read the current value " \
@@ -46,8 +52,8 @@ module PersonalTools
       param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
-    OPTIONAL = %i[required_agent_runtime tool_ids skill_ids mcp_server_ids config_item_ids depends_on_step_ids
-                bmad_enabled allow_non_interactive].freeze
+    OPTIONAL = %i[required_agent_runtime reasoning_effort tool_ids skill_ids mcp_server_ids config_item_ids
+                depends_on_step_ids bmad_enabled allow_non_interactive].freeze
 
     def execute
       project = find_project!
@@ -68,7 +74,7 @@ module PersonalTools
               config_item_ids: step.config_item_ids,
               depends_on_step_ids: step.depends_on_step_ids, bmad_enabled: step.bmad_enabled,
               allow_non_interactive: step.allow_non_interactive,
-              required_agent_runtime: step.required_agent_runtime)
+              required_agent_runtime: step.required_agent_runtime, reasoning_effort: step.reasoning_effort)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create step: #{e.message}")
     end

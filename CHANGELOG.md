@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Workflows**: a session in the workflow builder has a **Reasoning Effort**
+  next to its model, and the new-session form has one too. It offers only the
+  levels the chosen runtime and model take, and is disabled, with the reason,
+  where they take none. Unset keeps the CLI's own default. The
+  `create_workflow_step` and `update_workflow_step` tools accept
+  `reasoning_effort`, and `get_workflow_step` returns it.
+
 ### Fixed
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.

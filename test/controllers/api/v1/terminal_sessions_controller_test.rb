@@ -82,6 +82,23 @@ module Api
         assert_equal %w[bmm cis], captured[:session_config]["bmad_modules"]
       end
 
+      test "create passes the requested reasoning effort through to the session" do
+        mock_temporal_start
+        captured = nil
+        SessionService.stubs(:create_and_start).with do |**kwargs|
+          captured = kwargs[:params]
+          true
+        end.returns(create(:terminal_session, :running, user: @user, project: @project))
+
+        post :create, body: {
+          terminalSession: { sessionType: "agent_session", agentType: "claude_code", projectId: @project.id,
+                             reasoningEffort: "high" }
+        }.to_json, as: :json
+
+        assert_response :created
+        assert_equal "high", captured[:reasoning_effort]
+      end
+
       test "create returns 422 with connect links when the OAuth preflight blocks launch" do
         SessionService.stubs(:create_and_start).raises(
           Oauth::PreflightError.new([ { mcp_server_id: 5, name: "Sentry", connect_url: "/oauth/mcp/5/connect" } ])

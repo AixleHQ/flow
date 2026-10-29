@@ -109,6 +109,14 @@ class TerminalSession < ApplicationRecord
   validates :mode, inclusion: { in: %w[interactive non_interactive] }, allow_nil: true
   validates :initial_prompt, presence: true, if: -> { mode == "non_interactive" }
   validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  normalizes :reasoning_effort, with: ->(value) { value.to_s.strip.presence }
+  validates :reasoning_effort, inclusion: { in: ->(_) { AgentRuntime.reasoning_effort_levels } }, allow_nil: true
+  # A session started on its own names its runtime and model up front, so the level is
+  # held to what that CLI takes. A workflow step's session copies its step's level, which
+  # the step already checked; its runtime can still change at resolution, and the
+  # launch then drops a level the resolved CLI does not take.
+  validates :reasoning_effort, reasoning_effort: { runtime: :agent_type, model: :requested_model },
+                               on: :create, if: -> { session_type != "workflow_step" }
   # Whatever the container is handed — a repository cloned with its
   # integration's token, an MCP server with its headers, an asset's bytes, a
   # config item's decrypted value — must be this tenant's. Checked on create,
@@ -317,6 +325,21 @@ class TerminalSession < ApplicationRecord
     base += Tool.shadow_rows_for_names(injected).select(&:enabled?)
 
     base.uniq
+  end
+
+  # The reasoning-effort level to launch the CLI with, for the model it launches on —
+  # nil (the CLI's own default) when none is set or when the resolved runtime does not
+  # take this level for that model. A workflow step's runtime is resolved after the
+  # step saved its level, so the check is repeated here rather than trusted.
+  def launch_reasoning_effort(model)
+    return nil if reasoning_effort.blank?
+
+    runtime = AgentRuntime.all.find { |entry| entry.id == agent_type.to_s }
+    return reasoning_effort if runtime&.reasoning_effort?(reasoning_effort, model)
+
+    Rails.logger.info("[TerminalSession] #{id}: #{agent_type} does not take reasoning effort " \
+                      "#{reasoning_effort.inspect} for model #{model.inspect}; launching on the CLI's default")
+    nil
   end
 
   private

@@ -758,6 +758,16 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.session_admission.present?
   end
 
+  test "a step's session carries its step's reasoning effort" do
+    step_run = workflow_step_run(required_agent_runtime: "claude_code", reasoning_effort: "high")
+
+    assert_equal "high", SessionService.build_for_workflow_step(step_run: step_run).reasoning_effort
+  end
+
+  test "a step without a reasoning effort leaves its session on the CLI's default" do
+    assert_nil SessionService.build_for_workflow_step(step_run: workflow_step_run).reasoning_effort
+  end
+
   test "a run stopped after its step session was built cancels that session instead of queueing it" do
     step_run = workflow_step_run
     built = SessionService.build_for_workflow_step(step_run: step_run)
@@ -808,10 +818,10 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   private
 
-  def workflow_step_run
+  def workflow_step_run(**step_attributes)
     create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     workflow = create(:workflow, scope: @project)
-    step = create(:step, workflow: workflow, instructions: "Do the thing")
+    step = create(:step, workflow: workflow, instructions: "Do the thing", **step_attributes)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     create(:step_run, workflow_run: workflow_run, step: step)
   end

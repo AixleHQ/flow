@@ -876,8 +876,13 @@ module Agents
 
     # Session command for agent terminal.
     # Both modes use full Claude TUI to preserve streamed terminal UX.
-    def session_command(mode:, model: nil)
-      model ? "claude --model #{Shellwords.shellescape(model)}" : "claude"
+    # `--effort` takes low|medium|high|xhigh|max; on a model without xhigh or max the CLI
+    # steps down to the nearest level it has (checked on 2.1.310).
+    def session_command(mode:, model: nil, effort: nil)
+      parts = [ "claude" ]
+      parts += [ "--model", Shellwords.shellescape(model) ] if model
+      parts += [ "--effort", Shellwords.shellescape(effort) ] if effort.present?
+      parts.join(" ")
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)

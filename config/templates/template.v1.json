@@ -945,6 +945,16 @@
                   "type": "string",
                   "maxLength": 128
                 },
+                "reasoning_effort": {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                },
                 "required_agent_runtime": {
                   "enum": [
                     "claude_code",

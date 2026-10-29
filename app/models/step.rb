@@ -19,11 +19,18 @@ class Step < ApplicationRecord
   enumerize :on_failure, in: %i[retry skip fail], default: :fail
 
   decodes_html_entities :name
+  normalizes :reasoning_effort, with: ->(value) { value.to_s.strip.presence }
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
   validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
+  validates :reasoning_effort, inclusion: { in: ->(_) { AgentRuntime.reasoning_effort_levels } }, allow_nil: true
+  # Checked again whenever the runtime or the model it depends on changes, so a saved
+  # level the new pair does not take is refused instead of silently dropped.
+  validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model,
+                                                   allow_unknown_runtime: true },
+                               if: :reasoning_effort_inputs_changed?
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
   validate :resource_ids_belong_to_project
@@ -89,6 +96,11 @@ class Step < ApplicationRecord
   end
 
   private
+
+  def reasoning_effort_inputs_changed?
+    new_record? || will_save_change_to_reasoning_effort? ||
+      will_save_change_to_required_agent_runtime? || will_save_change_to_preferred_model?
+  end
 
   # Appending is the server's job. A soft-deleted step keeps its position and
   # the unique (workflow_id, position) index still covers it, so the next free

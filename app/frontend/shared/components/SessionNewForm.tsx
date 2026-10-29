@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ConfigItemPicker } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -127,6 +128,7 @@ export const SessionNewForm = ({
   );
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const [selectedToolIds, setSelectedToolIds] = useState<number[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -173,6 +175,7 @@ export const SessionNewForm = ({
     let count = 0;
     if (selectedPersona) count++;
     if (selectedModel) count++;
+    if (selectedEffort) count++;
     count +=
       selectedToolIds.length +
       selectedSkills.length +
@@ -185,6 +188,7 @@ export const SessionNewForm = ({
   }, [
     selectedPersona,
     selectedModel,
+    selectedEffort,
     selectedToolIds,
     selectedSkills,
     selectedMcpServers,
@@ -221,6 +225,7 @@ export const SessionNewForm = ({
             mode,
             initialPrompt: mode === 'non_interactive' ? initialPrompt : null,
             requestedModel: selectedModel || undefined,
+            reasoningEffort: selectedEffort || undefined,
             configuredAgentId: selectedPersona ? Number(selectedPersona) : undefined,
             toolIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
             skillIds: selectedSkills.length > 0 ? selectedSkills.map(Number) : undefined,
@@ -271,6 +276,7 @@ export const SessionNewForm = ({
     initialPrompt,
     bmadEnabled,
     selectedModel,
+    selectedEffort,
     selectedPersona,
     selectedToolIds,
     selectedSkills,
@@ -331,6 +337,7 @@ export const SessionNewForm = ({
           onChange={(type) => {
             setAgentType(type);
             setSelectedModel(null);
+            setSelectedEffort(null);
           }}
         />
         {configuredAgents.length === 0 && (
@@ -392,6 +399,14 @@ export const SessionNewForm = ({
         searchable
         clearable
         disabled={!agentType}
+      />
+
+      <ReasoningEffortSelect
+        label="Reasoning effort"
+        runtime={agentType || null}
+        model={selectedModel ?? defaultModelId}
+        value={selectedEffort}
+        onChange={setSelectedEffort}
       />
 
       {agents.length > 0 && (

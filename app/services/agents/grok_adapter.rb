@@ -115,8 +115,14 @@ module Agents
     # Session command: `grok --yolo` (documented alias of `--always-approve`, i.e.
     # permission mode `bypassPermissions`) — the container is the sandbox.
     # A prompt is appended by AgentSessionStrategy, read from its prompt file.
-    def session_command(mode:, model: nil)
-      model ? "grok --yolo --model #{Shellwords.shellescape(model)}" : "grok --yolo"
+    #
+    # `--reasoning-effort` takes low|medium|high|xhigh and works in the TUI as well as
+    # headless (1.0.70); a model without reasoning effort ignores it.
+    def session_command(mode:, model: nil, effort: nil)
+      parts = [ "grok", "--yolo" ]
+      parts += [ "--model", Shellwords.shellescape(model) ] if model
+      parts += [ "--reasoning-effort", Shellwords.shellescape(effort) ] if effort.present?
+      parts.join(" ")
     end
 
     # Context file: a home-level rule file. `$GROK_HOME/rules/*.md` is the root the CLI

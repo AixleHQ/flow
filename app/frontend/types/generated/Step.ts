@@ -14,6 +14,7 @@ type Step = {
   maxRetries: number;
   bmadEnabled: boolean;
   preferredModel: string | null;
+  reasoningEffort: string | null;
   createdAt: string;
   updatedAt: string;
   repositoryIds: Array<number>;

@@ -11,8 +11,8 @@ module Versions
       FIELDS = %w[name description config].freeze
       EXCLUDED = %w[id scope_type scope_id project_id company_id published_at published_by_id deleted_at
                     current_version_number created_at updated_at].freeze
-      STEP_FIELDS = %w[id name instructions position agent_id preferred_model required_agent_runtime skip_policy
-                       on_failure max_retries bmad_enabled allow_non_interactive input_asset_specs
+      STEP_FIELDS = %w[id name instructions position agent_id preferred_model reasoning_effort required_agent_runtime
+                       skip_policy on_failure max_retries bmad_enabled allow_non_interactive input_asset_specs
                        output_asset_specs tool_ids skill_ids mcp_server_ids asset_ids repository_ids
                        config_item_ids depends_on_step_ids].freeze
       STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at].freeze

@@ -36,6 +36,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   costCents: 0,
   models: [],
   requestedModel: null,
+  reasoningEffort: null,
   artifactsReviewed: null,
   initialPrompt: null,
   errorMessage: null,

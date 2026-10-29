@@ -16,10 +16,11 @@ import { useRef, useState } from 'react';
 import type { ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
-import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
+import { AGENT_SELECT_OPTIONS, reasoningEffortLevels } from 'shared/ui/agentRuntimes';
 import { InfoHint } from 'shared/ui/InfoHint';
 
 import classes from './BuilderPage.module.css';
@@ -43,6 +44,7 @@ type SessionStep = Pick<
   | 'agentId'
   | 'requiredAgentRuntime'
   | 'preferredModel'
+  | 'reasoningEffort'
   | 'allowNonInteractive'
   | 'skipPolicy'
   | 'onFailure'
@@ -378,6 +380,10 @@ export function SessionEditorPanel({
                 if (runtime === step.requiredAgentRuntime) return;
                 onFieldChange('requiredAgentRuntime', runtime);
                 if (step.preferredModel) onFieldChange('preferredModel', null);
+                // A level the new runtime takes is kept; the model is cleared with it.
+                if (step.reasoningEffort && !reasoningEffortLevels(runtime).includes(step.reasoningEffort)) {
+                  onFieldChange('reasoningEffort', null);
+                }
               }}
               disabled={readOnly}
               clearable
@@ -409,6 +415,31 @@ export function SessionEditorPanel({
                 searchable
                 placeholder="Default (runtime selects)"
                 aria-label="Preferred model"
+                styles={{
+                  input: {
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    color: 'var(--text-1)',
+                    fontSize: 13,
+                  },
+                }}
+              />
+            </div>
+          )}
+          {step.requiredAgentRuntime && (
+            <div>
+              <label className={classes.fieldLabel}>
+                Reasoning Effort&nbsp;
+                <InfoHint label="How hard the runtime's CLI thinks in this session. Default keeps the CLI's own level." />
+              </label>
+              <ReasoningEffortSelect
+                runtime={step.requiredAgentRuntime}
+                model={step.preferredModel}
+                value={step.reasoningEffort ?? null}
+                onChange={(v) => onFieldChange('reasoningEffort', v)}
+                disabled={readOnly}
+                aria-label="Reasoning effort"
                 styles={{
                   input: {
                     background: 'transparent',

@@ -215,6 +215,41 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_not step.update(required_agent_runtime: "unsupported")
   end
 
+  test "workflow step reasoning effort creates, updates, clears and reads back" do
+    created = payload(call_tool("create_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
+                                  required_agent_runtime: "kiro_cli", reasoning_effort: "high" }))
+    assert_equal "high", created["reasoning_effort"]
+    step = Step.find(created["id"])
+
+    updated = payload(call_tool("update_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                                  reasoning_effort: "max" }))
+    assert_equal [ "reasoning_effort" ], updated["updated_fields"]
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_equal "max", read_back["reasoning_effort"]
+
+    payload(call_tool("update_workflow_step",
+                      { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id, reasoning_effort: nil }))
+    assert_nil step.reload.reasoning_effort
+  end
+
+  test "workflow step reasoning effort the runtime does not take is refused" do
+    [ PersonalTools::CreateWorkflowStep, PersonalTools::UpdateWorkflowStep ].each do |tool|
+      effort = tool.tool_definition.input_schema.dig("properties", "reasoning_effort")
+      assert_equal %w[string null], effort["type"]
+      assert_equal AgentRuntime.reasoning_effort_levels + [ nil ], effort["enum"]
+    end
+
+    invalid = call_tool("create_workflow_step",
+                        { project_id: @project.id, workflow_id: @workflow.id, name: "Too hard",
+                          required_agent_runtime: "gemini_cli", reasoning_effort: "max" })
+    assert error?(invalid)
+    assert_match(/Reasoning effort max is not available for gemini_cli/, text(invalid))
+  end
+
   test "duplicate_workflow copies steps and reports what needs manual setup" do
     step = create(:step, workflow: @workflow, name: "S1", instructions: "work")
     create(:sub_step, step: step, name: "check A")

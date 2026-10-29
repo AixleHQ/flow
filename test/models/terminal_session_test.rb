@@ -514,4 +514,43 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal 0, session.mcp_servers.count
     assert_equal 0, session.config_items.count
   end
+
+  # --- reasoning_effort ---
+
+  test "a standalone session's reasoning effort must be one its runtime takes for its model" do
+    assert build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
+                                    requested_model: "gpt-6-sol", reasoning_effort: "ultra").valid?
+
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
+                                       requested_model: "gpt-5.5", reasoning_effort: "ultra")
+    assert_not session.valid?
+    assert_includes session.errors[:reasoning_effort].first, "ultra is not available for codex with model gpt-5.5"
+  end
+
+  test "a word that is no reasoning-effort level is rejected" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, reasoning_effort: "turbo")
+
+    assert_not session.valid?
+    assert session.errors.added?(:reasoning_effort, :inclusion, value: "turbo")
+  end
+
+  # Its step already checked the level; the runtime can still change at resolution.
+  test "a workflow step's session keeps its step's level whatever its runtime" do
+    session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
+                                       agent_type: "gemini_cli", reasoning_effort: "xhigh")
+
+    assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test "launch_reasoning_effort is the level when the launching runtime and model take it" do
+    session = build(:terminal_session, agent_type: "kiro_cli", reasoning_effort: "xhigh")
+
+    assert_equal "xhigh", session.launch_reasoning_effort("claude-opus-5.5")
+    assert_nil session.launch_reasoning_effort("claude-sonnet-4.6")
+    assert_nil session.launch_reasoning_effort("auto")
+  end
+
+  test "launch_reasoning_effort is nil when no level is set" do
+    assert_nil build(:terminal_session, agent_type: "claude_code").launch_reasoning_effort(nil)
+  end
 end

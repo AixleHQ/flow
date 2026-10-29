@@ -48,6 +48,21 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal v1.snapshot["steps"], @workflow.reload.latest_version.snapshot["steps"]
   end
 
+  test "a step's reasoning effort is part of its snapshot and comes back on revert" do
+    Versions.save!(@workflow, actor: @actor) do
+      @build.update!(required_agent_runtime: "kiro_cli", reasoning_effort: "high")
+    end
+    v1 = @workflow.latest_version
+    assert_equal "high", v1.snapshot["steps"].first["reasoning_effort"]
+
+    Versions.save!(@workflow, actor: @actor) { @build.update!(reasoning_effort: nil) }
+    assert_nil @workflow.latest_version.snapshot["steps"].first["reasoning_effort"]
+
+    Versions.revert!(@workflow, to: v1, actor: @actor)
+
+    assert_equal "high", @build.reload.reasoning_effort
+  end
+
   test "revert restores a dependency chain whatever order the steps were saved in" do
     deploy = create(:step, workflow: @workflow, name: "Deploy", position: 3, depends_on_step_ids: [ @test.id ])
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "chain") }

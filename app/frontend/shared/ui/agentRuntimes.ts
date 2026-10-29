@@ -59,3 +59,55 @@ export function agentLabel(agentType: string | null | undefined): string {
   if (!agentType) return '—';
   return isAgentType(agentType) ? AGENT_RUNTIMES[agentType].label : agentType;
 }
+
+interface ReasoningEffortSpec {
+  levels: string[];
+  requires_model: boolean;
+  models: { match: string; levels: string[] }[];
+}
+
+const REASONING_EFFORT: Record<string, ReasoningEffortSpec | undefined> = Object.fromEntries(
+  registry.runtimes.map((runtime) => [runtime.id, runtime.reasoning_effort as ReasoningEffortSpec | undefined]),
+);
+
+const REASONING_EFFORT_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+  ultra: 'Ultra',
+};
+
+export function reasoningEffortLabel(level: string): string {
+  return REASONING_EFFORT_LABELS[level] ?? level;
+}
+
+/**
+ * The reasoning-effort levels a runtime's CLI takes for `model` (null: its default
+ * model), in config/agent_runtimes.json's order — the same rule as
+ * AgentRuntime#reasoning_effort_levels on the server.
+ */
+export function reasoningEffortLevels(runtime: string | null | undefined, model?: string | null): string[] {
+  const spec = runtime ? REASONING_EFFORT[runtime] : undefined;
+  if (!spec) return [];
+  if (spec.requires_model && !model) return [];
+
+  const rule = model ? spec.models.find((entry) => new RegExp(entry.match).test(model)) : undefined;
+  return rule ? rule.levels : spec.levels;
+}
+
+/** Why a runtime offers no reasoning-effort level for `model`, or null when it offers some. */
+export function reasoningEffortUnavailableReason(
+  runtime: string | null | undefined,
+  model?: string | null,
+): string | null {
+  if (!runtime) return 'Choose a runtime to set a reasoning effort.';
+  if (reasoningEffortLevels(runtime, model).length > 0) return null;
+
+  const label = agentLabel(runtime);
+  const spec = REASONING_EFFORT[runtime];
+  if (spec?.requires_model && !model) return `${label} sets a reasoning effort only on a model you choose.`;
+  if (spec && model) return `${label} has no reasoning-effort setting for ${model}.`;
+  return `${label} has no reasoning-effort setting.`;
+}

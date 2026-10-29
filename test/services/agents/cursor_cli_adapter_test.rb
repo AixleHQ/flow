@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "shellwords"
 
 module Agents
   class CursorCliAdapterTest < ActiveSupport::TestCase
@@ -169,6 +170,24 @@ module Agents
       # Space in the model name must be shell-escaped so it stays one argument.
       assert_equal "agent --force --disable-auto-update --model claude\\ sonnet",
                    @adapter.session_command(mode: "interactive", model: "claude sonnet")
+    end
+
+    # Cursor takes the effort as a bracket override on a parameterized model.
+    test "session_command attaches the reasoning effort to the model as a bracket override" do
+      command = @adapter.session_command(mode: "interactive", model: "claude-opus-4-8", effort: "high")
+
+      assert_equal "agent --force --disable-auto-update --model claude-opus-4-8\\[effort\\=high\\]", command
+      assert_equal [ "agent", "--force", "--disable-auto-update", "--model", "claude-opus-4-8[effort=high]" ],
+                   Shellwords.split(command)
+    end
+
+    test "session_command leaves the effort out without a model, or when the model has overrides" do
+      assert_equal "agent --force --disable-auto-update", @adapter.session_command(mode: "interactive", effort: "high")
+      assert_equal [ "--model", "claude-opus-4-8[context=1m]" ],
+                   Shellwords.split(@adapter.session_command(mode: "interactive", model: "claude-opus-4-8[context=1m]",
+                                                             effort: "high")).last(2)
+      assert_equal "agent --force --disable-auto-update --model gpt-5.1",
+                   @adapter.session_command(mode: "interactive", model: "gpt-5.1", effort: nil)
     end
 
     # =========================================================================

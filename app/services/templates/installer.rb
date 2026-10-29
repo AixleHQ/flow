@@ -18,7 +18,7 @@ module Templates
 
     Result = Struct.new(:install, :project, :plan, :created, :server_ids, keyword_init: true)
 
-    STEP_SETTINGS = %w[on_failure skip_policy max_retries preferred_model required_agent_runtime
+    STEP_SETTINGS = %w[on_failure skip_policy max_retries preferred_model reasoning_effort required_agent_runtime
                        allow_non_interactive bmad_enabled input_asset_specs output_asset_specs].freeze
 
     # @param secrets [Hash{String => String}] secret values typed on the install page

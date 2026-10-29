@@ -32,7 +32,7 @@ class SessionService
         agent_type: agent_type,
         configured_agent: configured_agent,
         metadata: metadata.presence,
-        **params.slice(:mode, :initial_prompt, :requested_model, :session_config,
+        **params.slice(:mode, :initial_prompt, :requested_model, :reasoning_effort, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
                        :config_item_ids)
       )
@@ -197,6 +197,7 @@ class SessionService
         mode: "interactive",
         initial_prompt: prompt,
         requested_model: step.preferred_model.presence || run_model,
+        reasoning_effort: step.reasoning_effort,
         metadata: {
           "workflow_run_id" => workflow_run.id,
           "step_run_id" => step_run.id,

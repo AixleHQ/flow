@@ -422,9 +422,14 @@ module Agents
     # of every V3 TUI session; neither `--trust-all-tools` nor any CLI_SETTINGS
     # key skips it (checked live on 2.34.0). The flag only exists from 2.34.0 — older
     # releases refuse the whole command — so it moves with the pin.
-    def session_command(mode:, model: nil)
+    #
+    # `--effort` (2.6 and later) takes low|medium|high|xhigh|max. Which of them a model
+    # has is the model's: on 2.34.0 claude-sonnet-4.6 has no xhigh, and `auto` and the
+    # Haiku models none. A level the model does not take is a warning, not an error.
+    def session_command(mode:, model: nil, effort: nil)
       flags = [ "--trust-all-tools", "--trust-workspace" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?
+      flags << "--effort #{Shellwords.shellescape(effort)}" if effort.present?
 
       "kiro-cli #{V3_FLAG} chat #{flags.join(' ')}"
     end

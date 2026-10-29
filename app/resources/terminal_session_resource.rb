@@ -7,7 +7,7 @@ class TerminalSessionResource < ApplicationResource
              :started_at, :finishing_at, :finished_at, :created_at,
              :total_tokens, :input_tokens, :output_tokens,
              :cache_read_tokens, :cache_write_tokens,
-             :cost_cents, :models, :requested_model,
+             :cost_cents, :models, :requested_model, :reasoning_effort,
              :artifacts_reviewed,
              :error_message, :container_id,
              :project_id, :user_id, :route_token, :configured_agent_id,

@@ -377,6 +377,18 @@ module Agents
       assert_equal "codex --model gpt-5.3-codex --yolo -c projects./workspace.trust_level=trusted", result
     end
 
+    # Codex 0.164 has no effort flag; the level is the model_reasoning_effort config key.
+    test "session_command sets the reasoning effort as a config override" do
+      assert_equal "codex --model gpt-6-sol -c model_reasoning_effort=ultra --yolo -c projects./workspace.trust_level=trusted",
+                   @adapter.session_command(mode: "non_interactive", model: "gpt-6-sol", effort: "ultra")
+      assert_equal "codex -c model_reasoning_effort=low --yolo -c projects./workspace.trust_level=trusted",
+                   @adapter.session_command(mode: "interactive", effort: "low")
+    end
+
+    test "session_command adds no effort override when none is set" do
+      refute_includes @adapter.session_command(mode: "interactive", effort: nil), "model_reasoning_effort"
+    end
+
     # =========================================================================
     # Workspace-trust prompt (task #605)
     #
