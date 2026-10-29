@@ -59,6 +59,11 @@ governance, community health — carry none.
   before the measurement was billed for the hour by a payer who had not held it
   for any of it. The hour is now measured against the states the workspace was
   actually in during it.
+- **Company settings**: a workspace that cancels its AWS Marketplace subscription
+  and applies another is no longer billed twice for the part of that hour before
+  the cancellation. Those minutes go to AWS as the old subscription's last usage;
+  the new one is now billed from the moment it is applied, not from the top of
+  the hour.
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
 

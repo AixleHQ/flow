@@ -142,8 +142,16 @@ module Billing
     # What the workspace becomes: active, because #accept! refuses anything AWS
     # has not confirmed. A block for an unpaid Stripe invoice lifts with the
     # rest -- the invoice is still owed in Stripe, which is where it is collected.
+    #
+    # `billing_provider_since` is written here as well as by the model, which
+    # stamps it only when the provider changes. A workspace moving from one AWS
+    # agreement to the next keeps `aws_marketplace`, yet the payer did change:
+    # the hour up to the old agreement's cancellation is already on its final
+    # meter, and without the stamp Billing::CapacityWindow hands the new licence
+    # the whole hour, that part included.
     def billing_terms
       { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+        billing_provider_since: Time.current,
         stripe_subscription_id: nil, billing_cancels_at: nil,
         billing_unpaid_invoice_url: nil, billing_event_at: Time.current,
         billing_state: "active", billing_block_reason: nil }
