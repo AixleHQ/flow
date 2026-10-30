@@ -542,8 +542,31 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.valid?, session.errors.full_messages.to_sentence
   end
 
+  # The credential's default model can change at any time, so a level set while the
+  # model is left on Default is neither checked against it nor launched with.
+  test "a standalone session on the default model takes any known level and launches without it" do
+    cursor = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
+                                      reasoning_effort: "high")
+    assert cursor.valid?, cursor.errors.full_messages.to_sentence
+    assert_nil cursor.launch_reasoning_effort("claude-opus-4-8")
+
+    kiro = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
+                                    reasoning_effort: "high")
+    assert kiro.valid?, kiro.errors.full_messages.to_sentence
+    assert_nil kiro.launch_reasoning_effort("auto")
+  end
+
+  test "a Cursor session with a chosen model takes a level and launches with it" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
+                                       requested_model: "claude-opus-4-8", reasoning_effort: "high")
+
+    assert session.valid?, session.errors.full_messages.to_sentence
+    assert_equal "high", session.launch_reasoning_effort("claude-opus-4-8")
+  end
+
   test "launch_reasoning_effort is the level when the launching runtime and model take it" do
-    session = build(:terminal_session, agent_type: "kiro_cli", reasoning_effort: "xhigh")
+    session = build(:terminal_session, agent_type: "kiro_cli", requested_model: "claude-opus-5.5",
+                                       reasoning_effort: "xhigh")
 
     assert_equal "xhigh", session.launch_reasoning_effort("claude-opus-5.5")
     assert_nil session.launch_reasoning_effort("claude-sonnet-4.6")

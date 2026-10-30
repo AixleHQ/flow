@@ -225,7 +225,7 @@ export const SessionNewForm = ({
             mode,
             initialPrompt: mode === 'non_interactive' ? initialPrompt : null,
             requestedModel: selectedModel || undefined,
-            reasoningEffort: selectedEffort || undefined,
+            reasoningEffort: (selectedModel && selectedEffort) || undefined,
             configuredAgentId: selectedPersona ? Number(selectedPersona) : undefined,
             toolIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
             skillIds: selectedSkills.length > 0 ? selectedSkills.map(Number) : undefined,
@@ -393,7 +393,12 @@ export const SessionNewForm = ({
         placeholder={defaultModelLabel}
         title={modelFieldLabel}
         value={selectedModel}
-        onChange={(value) => setSelectedModel(value === DEFAULT_MODEL_OPTION ? null : value)}
+        onChange={(value) => {
+          const model = value === DEFAULT_MODEL_OPTION ? null : value;
+          setSelectedModel(model);
+          // On the default model a level is ignored, so it is not kept hidden.
+          if (!model) setSelectedEffort(null);
+        }}
         data={modelOptions}
         classNames={{ input: classes.modelInput, option: classes.modelOption }}
         searchable
@@ -401,13 +406,16 @@ export const SessionNewForm = ({
         disabled={!agentType}
       />
 
-      <ReasoningEffortSelect
-        label="Reasoning effort"
-        runtime={agentType || null}
-        model={selectedModel ?? defaultModelId}
-        value={selectedEffort}
-        onChange={setSelectedEffort}
-      />
+      {/* A level applies only to a model chosen explicitly: on the default model it is ignored. */}
+      {selectedModel && (
+        <ReasoningEffortSelect
+          label="Reasoning effort"
+          runtime={agentType || null}
+          model={selectedModel}
+          value={selectedEffort}
+          onChange={setSelectedEffort}
+        />
+      )}
 
       {agents.length > 0 && (
         <Select

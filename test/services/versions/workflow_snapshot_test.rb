@@ -63,6 +63,27 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal "high", @build.reload.reasoning_effort
   end
 
+  # A version saved before steps had a reasoning effort has no such key: it means the
+  # CLI's default, not "keep whatever the step has now".
+  test "reverting to a snapshot without a reasoning effort clears the step's level" do
+    Versions.save!(@workflow, actor: @actor) { @build.update!(required_agent_runtime: "gemini_cli") }
+    v1 = @workflow.latest_version
+    legacy = v1.snapshot.merge("steps" => v1.snapshot["steps"].map { |step| step.except("reasoning_effort") })
+    EntityVersion.where(id: v1.id).update_all(snapshot: legacy)
+    v1.reload
+
+    Versions.save!(@workflow, actor: @actor) do
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "xhigh")
+    end
+
+    Versions.revert!(@workflow, to: v1, actor: @actor)
+
+    @build.reload
+    assert_equal "gemini_cli", @build.required_agent_runtime
+    assert_nil @build.preferred_model
+    assert_nil @build.reasoning_effort
+  end
+
   test "revert restores a dependency chain whatever order the steps were saved in" do
     deploy = create(:step, workflow: @workflow, name: "Deploy", position: 3, depends_on_step_ids: [ @test.id ])
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "chain") }

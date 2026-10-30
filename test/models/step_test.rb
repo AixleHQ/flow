@@ -121,10 +121,26 @@ class StepTest < ActiveSupport::TestCase
   end
 
   test "a level the step's runtime does not take is rejected, naming the ones it does" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", reasoning_effort: "medium")
+    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", preferred_model: "gemini-3-pro",
+                        reasoning_effort: "medium")
 
     assert_not step.valid?
-    assert_includes step.errors[:reasoning_effort], "medium is not available for gemini_cli (choose one of: low, high)"
+    assert_includes step.errors[:reasoning_effort],
+                    "medium is not available for gemini_cli with model gemini-3-pro (choose one of: low, high)"
+  end
+
+  # A level applies only to a model chosen explicitly; on the default model the step's
+  # session ignores it, so there is nothing to check it against.
+  test "a level on a step left on the default model is not checked against the runtime" do
+    assert build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", reasoning_effort: "medium").valid?
+    assert build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", reasoning_effort: "high").valid?
+  end
+
+  test "a Cursor step takes a level once it names a model" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", preferred_model: "claude-opus-4-8",
+                        reasoning_effort: "high")
+
+    assert step.valid?, step.errors.full_messages.to_sentence
   end
 
   test "the level is checked against the step's preferred model where the runtime's levels depend on it" do
@@ -151,7 +167,8 @@ class StepTest < ActiveSupport::TestCase
   end
 
   test "changing the runtime or the model under a saved level the new pair does not take is refused" do
-    step = create(:step, workflow: @workflow, required_agent_runtime: "claude_code", reasoning_effort: "xhigh")
+    step = create(:step, workflow: @workflow, required_agent_runtime: "claude_code", preferred_model: "claude-opus-5.5",
+                         reasoning_effort: "xhigh")
 
     assert_not step.update(required_agent_runtime: "gemini_cli")
     assert_equal "claude_code", step.reload.required_agent_runtime

@@ -16,6 +16,9 @@ interface ReasoningEffortSelectProps extends Omit<SelectProps, 'data' | 'value' 
   onChange: (value: string | null) => void;
 }
 
+/** The registry lists a runtime's levels; whether a given model honours each one is up to its CLI. */
+const REASONING_EFFORT_HINT = "The CLI may lower or ignore a level the model doesn't support.";
+
 function unsupportedLevel(
   value: string,
   runtime: string | null | undefined,
@@ -30,7 +33,8 @@ function unsupportedLevel(
  * Picks a reasoning-effort level from the ones the runtime (and, where it matters, the
  * model) takes, per config/agent_runtimes.json. Empty is the CLI's own default. With
  * no level to offer it is disabled and says why; a saved level the runtime or model no
- * longer takes stays visible as an error, so it is cleared on purpose, not lost.
+ * longer takes stays visible as an error, so it is cleared on purpose, not lost. With
+ * levels to offer it says that the CLI may still lower or ignore one the model lacks.
  */
 export function ReasoningEffortSelect({
   runtime,
@@ -60,7 +64,7 @@ export function ReasoningEffortSelect({
       clearable
       allowDeselect
       disabled={disabled || (levels.length === 0 && !value)}
-      description={!unsupported && reason ? reason : props.description}
+      description={!unsupported && reason ? reason : (props.description ?? (levels.length > 0 ? REASONING_EFFORT_HINT : undefined))}
       error={error}
     />
   );

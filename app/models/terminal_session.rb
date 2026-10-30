@@ -111,10 +111,12 @@ class TerminalSession < ApplicationRecord
   validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
   normalizes :reasoning_effort, with: ->(value) { value.to_s.strip.presence }
   validates :reasoning_effort, inclusion: { in: ->(_) { AgentRuntime.reasoning_effort_levels } }, allow_nil: true
-  # A session started on its own names its runtime and model up front, so the level is
-  # held to what that CLI takes. A workflow step's session copies its step's level, which
-  # the step already checked; its runtime can still change at resolution, and the
-  # launch then drops a level the resolved CLI does not take.
+  # A session started on its own names its runtime up front, so a level set with an
+  # explicit model is held to what that CLI takes for it. With the model left on the
+  # default the level is not checked and the launch ignores it: a level applies only to
+  # a model chosen explicitly (see #launch_reasoning_effort). A workflow step's session
+  # copies its step's level, which the step already checked; its runtime can still
+  # change at resolution, and the launch then drops a level the resolved CLI does not take.
   validates :reasoning_effort, reasoning_effort: { runtime: :agent_type, model: :requested_model },
                                on: :create, if: -> { session_type != "workflow_step" }
   # Whatever the container is handed — a repository cloned with its
@@ -328,11 +330,19 @@ class TerminalSession < ApplicationRecord
   end
 
   # The reasoning-effort level to launch the CLI with, for the model it launches on —
-  # nil (the CLI's own default) when none is set or when the resolved runtime does not
-  # take this level for that model. A workflow step's runtime is resolved after the
-  # step saved its level, so the check is repeated here rather than trusted.
+  # nil (the CLI's own default) when none is set, when no model was chosen explicitly
+  # (`requested_model` is blank and the session launches on the credential's default
+  # model, which can change at any time), or when the resolved runtime does not take
+  # this level for that model. A workflow step's runtime is resolved after the step
+  # saved its level, so the check is repeated here rather than trusted.
   def launch_reasoning_effort(model)
     return nil if reasoning_effort.blank?
+
+    if requested_model.blank?
+      Rails.logger.info("[TerminalSession] #{id}: reasoning effort #{reasoning_effort.inspect} ignored, " \
+                        "no model was chosen explicitly; launching on the CLI's default")
+      return nil
+    end
 
     runtime = AgentRuntime.all.find { |entry| entry.id == agent_type.to_s }
     return reasoning_effort if runtime&.reasoning_effort?(reasoning_effort, model)
