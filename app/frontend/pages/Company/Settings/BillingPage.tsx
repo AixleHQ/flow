@@ -227,14 +227,18 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
       body = billing.trial && (
         <>
           You are on the free trial, on one worker: {billing.trial.daysLeft} of {billing.trial.days} days left, the last
-          day is {formatCalendarDay(billing.trial.lastDay)}. Add a card to keep going after it, at the number of workers
-          you set.
+          day is {formatCalendarDay(billing.trial.lastDay)}.{' '}
+          {billing.canPay
+            ? 'Add a card to keep going after it and choose how many workers to run.'
+            : 'Talk to us to keep going after it.'}
         </>
       );
       action = addCard;
       break;
     case 'allowance':
-      body = 'The free trial has ended, so no new sessions start. Anything already running finishes.';
+      body = `The free trial has ended, so no new sessions start. Anything already running finishes. ${
+        billing.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'
+      }`;
       action = addCard;
       break;
     case 'active':

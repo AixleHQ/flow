@@ -17,7 +17,7 @@ module Web
       # runs one worker (Billing::Trial) and chooses a number once it pays.
       def manage_capacity?
         company = context.company
-        admin? && !company&.managed_by_aixle? && !(company && Billing::Trial.applies?(company))
+        admin? && !company&.managed_by_aixle? && !(company && Billing::Trial.workers_fixed?(company))
       end
     end
   end

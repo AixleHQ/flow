@@ -42,7 +42,7 @@ class Admin::CompanyBillingStateTest < ActionDispatch::IntegrationTest
       @company.reload
       assert @company.billing_trialing?
       assert_equal Time.current, @company.trial_started_at
-      assert_equal 720, @company.trial_hours
+      assert_equal Billing::Trial.new_trial_hours, @company.trial_hours
       assert_equal 0, Billing::Trial.used_seconds(@company)
     end
   end

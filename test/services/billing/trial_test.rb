@@ -6,6 +6,8 @@ class Billing::TrialTest < ActiveSupport::TestCase
   setup do
     saas!
     @company = create(:company, :trialing)
+    # Thirty whole days, whatever time of day the suite runs at.
+    @company.update_column(:trial_hours, 720)
   end
 
   def saas!(mode = Deployment::SAAS)
@@ -27,10 +29,18 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal 720, Billing::Trial.default_hours
   end
 
-  test "a new trial is as long as the installation says" do
+  # Today is the first day, and the trial ends with the last one's end — the
+  # same end an operator's last day has.
+  test "a new trial runs to the end of its last day" do
     trial_days!(14)
 
-    assert_equal 336, create(:company, :trialing).trial_hours
+    travel_to Time.utc(2026, 10, 30, 10) do
+      company = create(:company, :trialing)
+
+      assert_equal (13 * 24) + 13, company.trial_hours
+      assert_equal Date.new(2026, 11, 12), Billing::Trial.last_day(company)
+      assert_equal 14, Billing::Trial.days_left(company)
+    end
   end
 
   # A trial promised thirty days stays thirty days.
@@ -162,6 +172,21 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal 1, Billing::Trial.ceiling_for("trialing")
     assert_equal 0, Billing::Trial.ceiling_for("blocked")
     assert_nil Billing::Trial.ceiling_for("active")
+  end
+
+  # Nobody has paid yet, on the trial or once it has ended, so there is no
+  # number of workers to choose.
+  test "the workers are fixed until a card is added" do
+    assert Billing::Trial.workers_fixed?(@company)
+
+    @company.update!(billing_state: "blocked", billing_block_reason: "allowance")
+    assert Billing::Trial.workers_fixed?(@company)
+
+    @company.update!(billing_block_reason: "payment_failed")
+    assert_not Billing::Trial.workers_fixed?(@company)
+
+    @company.update!(billing_state: "active")
+    assert_not Billing::Trial.workers_fixed?(@company)
   end
 
   test "applies only where we host" do

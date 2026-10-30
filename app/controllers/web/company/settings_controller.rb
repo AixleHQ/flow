@@ -57,7 +57,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
   # The single-word key survives prop camelization unchanged, which a
   # `session_concurrency_limit` would not.
   def apply_capacity
-    return { capacity: TRIAL_REFUSAL } if Billing::Trial.applies?(current_company)
+    return { capacity: TRIAL_REFUSAL } if Billing::Trial.workers_fixed?(current_company)
     return { capacity: "Only this installation's administrator can change the session limit" } unless settings_policy.manage_capacity?
 
     requested = params[:capacity].to_s.strip
@@ -107,7 +107,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
       reserved: allocation.allocated,
       allocations: allocation.breakdown,
       project_default: SessionAdmissionPolicy.scope_default("Project"),
-      trial_workers: (Billing::Trial::WORKERS if Billing::Trial.applies?(current_company)),
+      trial_workers: (Billing::Trial::WORKERS if Billing::Trial.workers_fixed?(current_company)),
       can_manage: settings_policy.manage_capacity?
     }
   end

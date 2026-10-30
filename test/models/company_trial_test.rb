@@ -60,9 +60,10 @@ class CompanyTrialTest < ActiveSupport::TestCase
   test "saving anything else leaves the trial as it is" do
     company = create(:company, :trialing)
 
-    company.update!(display_name: "Acme")
-
-    assert_equal 720, company.trial_hours
+    assert_no_changes -> { company.reload.trial_hours } do
+      travel 3.hours
+      company.update!(display_name: "Acme")
+    end
   end
 
   test "a trial is refused to a company a subscription still bills" do

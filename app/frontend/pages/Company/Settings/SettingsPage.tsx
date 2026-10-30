@@ -247,7 +247,7 @@ const SettingsPage = () => {
                   </Box>
                 )}
 
-                {capacity.maxSessions != null && (
+                {capacity.maxSessions != null && capacity.trialWorkers == null && (
                   <Box>
                     <Divider mb="xs" />
                     <Text fz="xs" c="dimmed">

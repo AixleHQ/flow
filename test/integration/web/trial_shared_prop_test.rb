@@ -42,7 +42,7 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
   # Counted in hours, shown in days: 660 hours left is 27 and a half days.
   test "a workspace on the free trial gets the days it has left" do
     freeze_time
-    @company.update!(billing_state: "trialing")
+    @company.update!(billing_state: "trialing", trial_hours: 720)
     used!(60)
 
     props = trial_prop

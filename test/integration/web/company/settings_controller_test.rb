@@ -191,6 +191,17 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/free trial runs one worker/, Array(session["inertia_errors"][:capacity]).to_sentence)
   end
 
+  test "a company whose trial has ended may not change its limit either" do
+    saas!
+    @company.update!(billing_state: "blocked", billing_block_reason: "allowance")
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 1)
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "5" }
+
+    assert_equal 1, limit_for(@company)&.max_sessions
+    assert_match(/free trial runs one worker/, Array(session["inertia_errors"][:capacity]).to_sentence)
+  end
+
   test "a company on the free trial is shown its one worker, not offered the field" do
     saas!
     @company.update!(billing_state: "trialing")

@@ -54,6 +54,8 @@ describe('Company settings page', () => {
     expect(screen.queryByLabelText(/Workers/)).not.toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText(/add a card to choose how many/)).toBeInTheDocument();
+    // The stored limit is not what runs, so its reservations would contradict the one.
+    expect(screen.queryByText(/is reserved by projects/)).not.toBeInTheDocument();
   });
 
   it('tells a Marketplace admin the fewest workers the installation allows', () => {

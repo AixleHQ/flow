@@ -108,7 +108,8 @@ that limit for themselves, and the rest share what is left.
 
 The limit is the **company admin's** to set, on Settings → General, and they may
 raise or lower it whenever they like — once they pay. On the free trial it is
-read-only: the trial runs one worker. They may not clear it: a company with no
+read-only, and stays so once the trial has ended, until a card is added: the
+trial runs one worker. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
 something a company does to itself. In a company **managed by Aixle** (see
 [Billing states](#billing-states)) the limit is read-only for its admins: nobody
@@ -137,7 +138,9 @@ Every new workspace starts with a **free trial on one worker** — `TRIAL_DAYS`,
 30 by default — and is invoiced for none of it.
 
 **Counted in hours, shown in days.** The trial is an allowance of worker-hours
-(30 days is 720), spent from the same hourly measurement an invoice is made from.
+(30 days is at most 720), spent from the same hourly measurement an invoice is
+made from. The day the company signs up is its first, and the trial ends with
+the last day's end (UTC) — the same end a last day set from the admin has.
 A trialing workspace runs one worker whatever limit it set, and a worker is
 counted for every hour it stands ready, so an hour of the trial is an hour on the
 clock and what is left reads as days and a last day. The limit the workspace set

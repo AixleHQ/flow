@@ -75,7 +75,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
 
   test "a trialing company sees its trial and no usage to invoice" do
     freeze_time
-    @company.update!(billing_state: "trialing", stripe_subscription_id: nil)
+    @company.update!(billing_state: "trialing", trial_hours: 720, stripe_subscription_id: nil)
 
     billing = billing_props[:billing]
 

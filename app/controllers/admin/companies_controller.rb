@@ -90,11 +90,11 @@ module Admin
     def start_new_trial(company)
       company.billing_state = "trialing"
       company.trial_started_at = Time.current
-      company.trial_hours = Billing::Trial.default_hours
+      company.trial_hours = Billing::Trial.new_trial_hours
     end
 
     def trial_notice(company)
-      "#{company.name} is on a trial until the end of #{Billing::Trial.last_day(company).to_fs(:long)}, " \
+      "#{company.name} is on a trial until the end of #{Billing::Trial.last_day(company).strftime('%B %-d, %Y')}, " \
         "on one worker, then it needs a card."
     end
 

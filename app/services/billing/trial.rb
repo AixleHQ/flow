@@ -26,10 +26,15 @@ module Billing
     # applies once it pays.
     WORKERS = 1
 
-    # The length of a trial that starts now.
     def days = Settings.trial.days.to_i
 
     def default_hours = days * 24
+
+    # A trial that starts now ends with the last of its days, today counted as
+    # the first — the same day's end an operator's last day has.
+    def new_trial_hours(now: Time.current)
+      hours_ending_on(now.to_date + days - 1, spent_seconds: 0, now: now)
+    end
 
     # The length of the trial the company is on, kept on the company so a new
     # default changes no trial already under way. A trial from before lengths
@@ -38,6 +43,12 @@ module Billing
 
     def applies?(company)
       Deployment.saas? && company.billing_trialing?
+    end
+
+    # On the trial or stopped at its end: nobody has paid, so the company has no
+    # number of workers to choose yet.
+    def workers_fixed?(company)
+      Deployment.saas? && company.billing_status.in?(%w[trialing allowance])
     end
 
     # Counted from the start of the trial the company is on: an operator can

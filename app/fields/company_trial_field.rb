@@ -6,7 +6,7 @@
 class CompanyTrialField < Administrate::Field::Base
   def trialing? = resource&.billing_trialing?
 
-  def last_day = Billing::Trial.last_day(resource)
+  def last_day = Billing::Trial.last_day(resource).strftime("%B %-d, %Y")
 
   def days_left = Billing::Trial.days_left(resource)
 end

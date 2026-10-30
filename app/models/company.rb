@@ -284,7 +284,7 @@ class Company < ApplicationRecord
   end
 
   def give_new_trial_the_default_length
-    self.trial_hours = Billing::Trial.default_hours
+    self.trial_hours = Billing::Trial.new_trial_hours
   end
 
   # A company that is running again has no reason to be stopped, and an unpaid

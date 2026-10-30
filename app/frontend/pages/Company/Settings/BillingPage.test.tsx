@@ -132,6 +132,18 @@ describe('Company billing page', () => {
     expect(screen.queryByRole('button', { name: 'Cancel subscription' })).not.toBeInTheDocument();
   });
 
+  it('points at us, not at a card, where there is nowhere to pay', () => {
+    render({
+      status: 'trialing',
+      usage: null,
+      canPay: false,
+      trial: { days: 30, daysLeft: 12, lastDay: '2026-11-11' },
+    });
+
+    expect(screen.getByText(/Talk to us to keep going after it/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+  });
+
   // Running without ever having paid: an operator set it active by hand.
   it('offers a card, and nothing to cancel, to an active workspace with no subscription', () => {
     render({ hasSubscription: false, periodStartsAt: null, periodEndsAt: null, usage: null });

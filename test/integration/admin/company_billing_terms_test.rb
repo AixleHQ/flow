@@ -102,7 +102,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     }
 
     assert_redirected_to admin_company_path(company)
-    assert_match(/is on a trial until the end of #{Regexp.escape(last_day.to_fs(:long))}, on one worker/, flash[:notice])
+    assert_match(/is on a trial until the end of #{Regexp.escape(last_day.strftime("%B %-d, %Y"))}, on one worker/, flash[:notice])
     company.reload
     assert company.billing_trialing?
     assert_equal last_day, Billing::Trial.last_day(company)
@@ -121,7 +121,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
   end
 
   test "the company page says when its trial ends" do
-    company = create(:company, :trialing)
+    company = create(:company, :trialing, trial_hours: 720)
 
     get admin_company_path(company)
 
