@@ -205,8 +205,9 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
   test "the move drops the source runner from the workflows' versions, and a revert to one restores Hosted" do
     runner = create(:runner, company: @s.source, name: "Prod VPC")
     @s.workflow.update_column(:current_version_number, @s.entity_version.number)
+    # No company asset in the config: a pre-move version naming one is refused on revert for its own reason.
     on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) do |workflow|
-      workflow.update!(runner: runner, description: "on runner")
+      workflow.update!(runner: runner, description: "on runner", config: {})
     end
     Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil, description: "hosted") }
     move(member_policy: "add")
