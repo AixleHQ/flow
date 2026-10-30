@@ -145,17 +145,18 @@ export const RoiCalculator = ({ workerHourlyRate }: RoiCalculatorProps) => {
             </Text>
           </Group>
           <Text size="xs" c="var(--app-text-tertiary)" mt={6}>
-            Enough to carry this workload through its busy weeks. Change it whenever you like.
+            Enough to carry this workload through its busy weeks. The free trial runs one worker; set the number once
+            you add a card, and change it whenever you like.
           </Text>
           <Button
             component="a"
-            href={newWorkspacePath({ sessions: workers })}
+            href={newWorkspacePath()}
             fullWidth
             size="md"
             mt="md"
             rightSection={<IconArrowRight size={16} />}
           >
-            Start with {workers} {workers === 1 ? 'worker' : 'workers'}
+            Start the free trial
           </Button>
         </Box>
       </section>

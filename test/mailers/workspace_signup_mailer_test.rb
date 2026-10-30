@@ -4,7 +4,7 @@ require "test_helper"
 
 class WorkspaceSignupMailerTest < ActionMailer::TestCase
   test "it sends the link to the address that claimed the workspace" do
-    token = WorkspaceSignupTicket.issue(name: "Acme Robotics", email: "dana@acme-robotics.example", max_sessions: 5)
+    token = WorkspaceSignupTicket.issue(name: "Acme Robotics", email: "dana@acme-robotics.example")
 
     mail = WorkspaceSignupMailer.confirm(
       email: "dana@acme-robotics.example", workspace_name: "Acme Robotics", token: token
@@ -18,7 +18,7 @@ class WorkspaceSignupMailerTest < ActionMailer::TestCase
   # The link is the entire feature: a mail that carries a path instead of a URL,
   # or loses the token, is a signup nobody can finish.
   test "the link is absolute and carries the ticket" do
-    token = WorkspaceSignupTicket.issue(name: "Acme", email: "dana@acme.example", max_sessions: 1)
+    token = WorkspaceSignupTicket.issue(name: "Acme", email: "dana@acme.example")
 
     mail = WorkspaceSignupMailer.confirm(email: "dana@acme.example", workspace_name: "Acme", token: token)
     href = mail.body.encoded[/href="([^"]+)"/, 1]

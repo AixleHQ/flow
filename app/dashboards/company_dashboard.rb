@@ -40,6 +40,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
     managed_by_aixle: Field::Boolean,
     trial_started_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
+    trial_last_day: CompanyTrialField.with_options(searchable: false),
     initial_admin_email: Field::Email.with_options(searchable: false),
     invite_emails: Field::Text.with_options(
       searchable: false,
@@ -82,6 +83,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     state
     billing_state
     trial_started_at
+    trial_last_day
     managed_by_aixle
     settings
     session_concurrency_limit
@@ -102,6 +104,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     state_event
     managed_by_aixle
     billing_state
+    trial_last_day
     settings
     session_concurrency_limit
     invite_emails
@@ -117,6 +120,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     primary_color
     secondary_color
     managed_by_aixle
+    trial_last_day
     session_concurrency_limit
     initial_admin_email
     invite_emails
@@ -131,6 +135,11 @@ class CompanyDashboard < Administrate::BaseDashboard
     billing_blocked: ->(resources) { resources.where(billing_state: "blocked") },
     managed_by_aixle: ->(resources) { resources.where(managed_by_aixle: true) }
   }.freeze
+
+  # Trials exist only where we host; anywhere else the field could only be refused.
+  def form_attributes(action = nil)
+    Deployment.saas? ? super : super - [ :trial_last_day ]
+  end
 
   def display_resource(company)
     company.name

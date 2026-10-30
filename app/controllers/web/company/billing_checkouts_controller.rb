@@ -16,8 +16,8 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
     session = client.create_checkout_session(
       company: current_company,
       customer_id: customer_id!,
-      success_url: company_settings_billing_url(billing: "done"),
-      cancel_url: company_settings_billing_url(billing: "cancelled")
+      success_url: return_url("done"),
+      cancel_url: return_url("cancelled")
     )
 
     # 409 + X-Inertia-Location: an Inertia visit is an XHR and cannot follow a
@@ -66,6 +66,12 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
     customer.id
   end
 
+  # The billing tab is the administrators'. Anyone else who paid goes back to
+  # the workspace, where the banner goes once the card is confirmed.
+  def return_url(result)
+    policy_context.membership&.admin? ? company_settings_billing_url(billing: result) : root_url
+  end
+
   def client
     @client ||= Billing::StripeClient.new
   end
@@ -73,6 +79,6 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
   # A flash rather than a form error: the button lives on the banner as well as
   # the billing tab, and the layout shows a flash on any page.
   def refuse(message)
-    redirect_back fallback_location: company_settings_billing_path, alert: message
+    redirect_back fallback_location: root_path, alert: message
   end
 end

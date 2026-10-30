@@ -21,6 +21,21 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     SessionConcurrencyAllocation.new(company_id: @company.id, excluding: excluding)
   end
 
+  # Every path that writes a company's limit lands here, the admin's
+  # Session concurrency limits page included.
+  test "a company on the trial keeps one worker, whoever asks" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    @company.update!(billing_state: "trialing")
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { SessionConcurrencyLimit.set!(scope: @company, max_sessions: 5) }
+    assert_match(/tick Managed by Aixle/, error.message)
+    assert_equal 1, SessionConcurrencyLimit.for_company(@company.id)
+
+    @company.update!(managed_by_aixle: true)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 5)
+    assert_equal 5, SessionConcurrencyLimit.for_company(@company.id)
+  end
+
   test "only Project and Company are scopes" do
     limit = SessionConcurrencyLimit.new(scope_type: "User", scope_id: @user.id, max_sessions: 2)
 
