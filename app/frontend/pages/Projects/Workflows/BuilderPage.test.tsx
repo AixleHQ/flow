@@ -975,14 +975,23 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(aggregate.steps[0].preferredModel).toBe('opus-9');
   });
 
-  it("a Reasoning Effort offers the runtime's levels and is sent on Save", async () => {
+  it("a Reasoning Effort offers the runtime's levels on a chosen model and is sent on Save", async () => {
     const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
-        steps: [makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'gemini_cli' })],
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'gemini_cli',
+            preferredModel: 'gemini-3-pro',
+          }),
+        ],
       }),
     });
 
+    expect(screen.getByText("The CLI may lower or ignore a level the model doesn't support.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
     expect(await screen.findByRole('option', { name: 'Low' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Medium' })).not.toBeInTheDocument();
@@ -1042,22 +1051,44 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(aggregate.steps[0].reasoningEffort).toBe('xhigh');
   });
 
-  it('switching to a runtime that does not take the saved level clears it', async () => {
+  it('a Reasoning Effort is hidden while the model is left on Default', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'claude_code' })],
+      }),
+    });
+
+    expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+  });
+
+  it('switching the runtime clears the model and the level with it', async () => {
     const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
-          makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'claude_code', reasoningEffort: 'max' }),
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'claude_code',
+            preferredModel: 'claude-opus-5',
+            reasoningEffort: 'max',
+          }),
         ],
       }),
     });
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Required agent runtime' }));
-    await userEvent.click(await screen.findByRole('option', { name: 'Grok' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Kiro CLI' }));
 
+    expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
     const aggregate = await save(bodies);
 
-    expect(aggregate.steps[0]).toMatchObject({ requiredAgentRuntime: 'grok', reasoningEffort: null });
+    expect(aggregate.steps[0]).toMatchObject({
+      requiredAgentRuntime: 'kiro_cli',
+      preferredModel: null,
+      reasoningEffort: null,
+    });
   });
 
   it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {

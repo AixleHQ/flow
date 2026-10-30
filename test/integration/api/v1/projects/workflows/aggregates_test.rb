@@ -64,7 +64,8 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     # The refusal comes from the first step's save, before the sub-steps the sync
     # preloads are read, which Bullet would report as an unused eager load.
     Bullet.enable = false
-    save([ { id: @build.id, name: "Build", required_agent_runtime: "gemini_cli", reasoning_effort: "medium" },
+    save([ { id: @build.id, name: "Build", required_agent_runtime: "gemini_cli", preferred_model: "gemini-3-pro",
+             reasoning_effort: "medium" },
            { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ] } ])
 
     assert_response :unprocessable_entity

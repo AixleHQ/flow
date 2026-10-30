@@ -784,11 +784,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   # Gemini CLI takes its thinking level from settings.json, written with the credential.
   test "credential_workflow_config carries the reasoning effort the launching runtime takes for the model" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "gemini_cli",
-                                                        reasoning_effort: "low")
+                                                        requested_model: "gemini-3-pro", reasoning_effort: "low")
 
     assert_equal "low", SessionContextService.credential_workflow_config(session, nil, [])[:reasoning_effort]
 
     session.update!(requested_model: "gemini-2.5-pro")
+    assert_not SessionContextService.credential_workflow_config(session, nil, []).key?(:reasoning_effort)
+  end
+
+  test "credential_workflow_config carries no reasoning effort for a session left on the default model" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "gemini_cli",
+                                                        reasoning_effort: "low")
+
     assert_not SessionContextService.credential_workflow_config(session, nil, []).key?(:reasoning_effort)
   end
 

@@ -16,9 +16,16 @@ module PersonalTools
                       description: "Runtime required for this step. Omit or pass null to use normal runtime resolution.",
                       enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
       runtime["type"] = %w[string null]
+      model = param :preferred_model, type: :string,
+                    description: "Model the step's CLI runs on. Omit or pass null for the credential's default " \
+                                 "model. A reasoning effort applies only with a model set here, and is checked " \
+                                 "against it."
+      model["type"] = %w[string null]
+      model["pattern"] = Step::MODEL_ID_JSON_PATTERN
       effort = param :reasoning_effort, type: :string,
                      description: "Reasoning effort the step's CLI runs at. Omit or pass null for the CLI's " \
-                                  "default. Only the levels the step's runtime (and preferred model) takes are " \
+                                  "default. It applies only with preferred_model set (on the default model it is " \
+                                  "ignored), and only the levels the step's runtime takes for that model are " \
                                   "accepted; see the runtime registry for which those are.",
                      enum: AgentRuntime.reasoning_effort_levels + [ nil ]
       effort["type"] = %w[string null]
@@ -52,8 +59,8 @@ module PersonalTools
       param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
-    OPTIONAL = %i[required_agent_runtime reasoning_effort tool_ids skill_ids mcp_server_ids config_item_ids
-                depends_on_step_ids bmad_enabled allow_non_interactive].freeze
+    OPTIONAL = %i[required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids mcp_server_ids
+                config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive].freeze
 
     def execute
       project = find_project!
@@ -74,7 +81,8 @@ module PersonalTools
               config_item_ids: step.config_item_ids,
               depends_on_step_ids: step.depends_on_step_ids, bmad_enabled: step.bmad_enabled,
               allow_non_interactive: step.allow_non_interactive,
-              required_agent_runtime: step.required_agent_runtime, reasoning_effort: step.reasoning_effort)
+              required_agent_runtime: step.required_agent_runtime, preferred_model: step.preferred_model,
+              reasoning_effort: step.reasoning_effort)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create step: #{e.message}")
     end

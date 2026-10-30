@@ -49,10 +49,20 @@ A step (`steps.reasoning_effort`, next to `preferred_model`, part of the step's 
 snapshot) and a standalone session (`terminal_sessions.reasoning_effort`, set from the
 new-session form and `POST /api/v1/terminal_sessions`) can name a reasoning-effort level.
 Unset is the CLI's own default, and the launch command is then exactly what it was before
-the setting existed. A step's session copies its step's level. Because a step can leave
-its runtime to resolution, the launch checks the level again against the resolved runtime
-and model (`TerminalSession#launch_reasoning_effort`) and launches on the CLI's default
-when they do not take it.
+the setting existed.
+
+A level applies only to a model chosen explicitly: a step's `preferred_model`, or a
+session's `requested_model`. With the model left on Default the UI hides the select, the
+level is not validated, and the launch ignores a saved one, for standalone sessions and
+workflow steps alike. The level is not checked against the credential's default model,
+because that can change at any time and every saved level would then need re-checking. An
+effort for the default model, if it is ever needed, belongs next to the default model in
+the agent profile.
+
+A step's session copies its step's level when the step names a model. Because a step can
+leave its runtime to resolution, the launch checks the level again against the resolved
+runtime and model (`TerminalSession#launch_reasoning_effort`) and launches on the CLI's
+default when they do not take it.
 
 Each CLI was checked at its pin, on the binary the image installs (help text, a launch
 with a bad level, the strings or bundled source of the release), not only in the vendor's
@@ -69,12 +79,20 @@ docs:
 | Kiro CLI | 2.34.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; claude-sonnet-4.6 has no xhigh; `auto` and the Haiku models have none | Yes, checked live on 2.34.0: an unsupported level prints `failed to set effort` and the session continues at the default. |
 
 Every runtime supports a level in some form. The UI disables the select, with the
-reason, where the chosen runtime and model offer none: Cursor without a model,
-Gemini 2.5 models, and Kiro's `auto` and Haiku models.
+reason, where the chosen runtime and model offer none: Gemini 2.5 models, and Kiro's
+`auto` and Haiku models.
+
+The registry does not keep a full per-model matrix. Where a vendor decides per model
+whether a level is honoured (Claude Code's xhigh and max, Grok's models without reasoning
+effort, Cursor's backend parameters), it lists the levels the CLI accepts, and the CLI may
+lower or ignore a level the model doesn't support. The select says so under the field.
 
 When a pin is raised, re-check the CLI's levels and update `reasoning_effort` with it:
 `--help` for a flag, a launch with a bogus level for the accepted list, and for Codex the
-bundled catalog's `supported_reasoning_levels`.
+bundled catalog's `supported_reasoning_levels`. A level no runtime had before must also be
+added to the `reasoning_effort` enum of the template schema
+(`config/templates/template.v1.json`); `Templates::ValidatorTest` fails until the two lists
+match.
 
 ## Raising a CLI pin
 

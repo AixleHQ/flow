@@ -759,9 +759,17 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   test "a step's session carries its step's reasoning effort" do
-    step_run = workflow_step_run(required_agent_runtime: "claude_code", reasoning_effort: "high")
+    step_run = workflow_step_run(required_agent_runtime: "claude_code", preferred_model: "claude-opus-5",
+                                 reasoning_effort: "high")
 
     assert_equal "high", SessionService.build_for_workflow_step(step_run: step_run).reasoning_effort
+  end
+
+  # A level applies only to a model chosen explicitly; the step's session ignores it otherwise.
+  test "a step left on the default model leaves its session on the CLI's default level" do
+    step_run = workflow_step_run(required_agent_runtime: "claude_code", reasoning_effort: "high")
+
+    assert_nil SessionService.build_for_workflow_step(step_run: step_run).reasoning_effort
   end
 
   test "a step without a reasoning effort leaves its session on the CLI's default" do

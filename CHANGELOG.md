@@ -56,11 +56,13 @@ governance, community health — carry none.
   companies are filled in by a migration, with one that Aixle carries counted as
   billed by nobody even if Stripe still holds a customer for it.
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
-  next to its model, and the new-session form has one too. It offers only the
+  next to its model, and the new-session form has one too. It appears once a
+  model is chosen (on the Default model a level is ignored), offers only the
   levels the chosen runtime and model take, and is disabled, with the reason,
   where they take none. Unset keeps the CLI's own default. The
   `create_workflow_step` and `update_workflow_step` tools accept
-  `reasoning_effort`, and `get_workflow_step` returns it.
+  `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
+  them.
 - **Admin**: a company on the dashboard opens a breakdown of its queue for the
   selected period: wait percentiles (p95 among them) and the share of sessions
   that waited, how many sessions were already waiting when one joined, the wait

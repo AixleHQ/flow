@@ -518,15 +518,33 @@ describe('SessionNewForm', () => {
   });
 
   describe('reasoning effort', () => {
-    it("offers the selected runtime's levels and sends the one picked", async () => {
+    const agentModels = [
+      { agentType: 'grok', models: [{ modelId: 'grok-5', displayName: 'Grok 5' }], defaultModel: 'grok-5' },
+      {
+        agentType: 'cursor_cli',
+        models: [{ modelId: 'claude-opus-4-8', displayName: 'Opus 4.8' }],
+        defaultModel: 'claude-opus-4-8',
+      },
+    ];
+
+    async function pickModel(user: ReturnType<typeof userEvent.setup>, name: string) {
+      await user.click(screen.getByRole('combobox', { name: 'Model' }));
+      await user.click(await screen.findByRole('option', { name }));
+    }
+
+    it("offers the selected runtime's levels on a chosen model and sends the one picked", async () => {
       const user = userEvent.setup();
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ data: { id: 'sess-1' } }),
       } as Response);
-      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['grok']) });
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['grok']),
+      });
 
       await user.click(screen.getByText('Grok'));
+      await pickModel(user, 'Grok 5');
+      expect(screen.getByText("The CLI may lower or ignore a level the model doesn't support.")).toBeInTheDocument();
       await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
       const options = await screen.findAllByRole('option');
       expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High', 'Extra high']);
@@ -535,37 +553,61 @@ describe('SessionNewForm', () => {
 
       await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
       const [, init] = fetchSpy.mock.calls[0];
-      expect(JSON.parse(init!.body as string).terminalSession.reasoningEffort).toBe('xhigh');
+      expect(JSON.parse(init!.body as string).terminalSession).toMatchObject({
+        requestedModel: 'grok-5',
+        reasoningEffort: 'xhigh',
+      });
 
       fetchSpy.mockRestore();
     });
 
-    it('sends no reasoning effort when none is picked', async () => {
+    it('is hidden while the model is left on Default', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['grok']) });
+
+      await user.click(screen.getByText('Grok'));
+
+      expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+    });
+
+    it('going back to the Default model drops the level picked', async () => {
       const user = userEvent.setup();
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ data: { id: 'sess-1' } }),
       } as Response);
-      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['grok']) });
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['grok']),
+      });
 
       await user.click(screen.getByText('Grok'));
+      await pickModel(user, 'Grok 5');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+      await user.click(await screen.findByRole('option', { name: 'High' }));
+      await pickModel(user, 'Default · Grok 5');
+
+      expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /start session/i }));
 
       await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
       const [, init] = fetchSpy.mock.calls[0];
-      expect(JSON.parse(init!.body as string).terminalSession).not.toHaveProperty('reasoningEffort');
+      const body = JSON.parse(init!.body as string).terminalSession;
+      expect(body).not.toHaveProperty('requestedModel');
+      expect(body).not.toHaveProperty('reasoningEffort');
 
       fetchSpy.mockRestore();
     });
 
-    it('is disabled, with the reason, for a runtime that needs a model to take one', async () => {
+    it("offers Cursor CLI's levels once a model is chosen", async () => {
       const user = userEvent.setup();
-      renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps(['cursor_cli']) });
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['cursor_cli']) });
 
       await user.click(screen.getByText('Cursor CLI'));
+      await pickModel(user, 'Opus 4.8');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
 
-      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
-      expect(screen.getByText('Cursor CLI sets a reasoning effort only on a model you choose.')).toBeInTheDocument();
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High']);
     });
   });
 });

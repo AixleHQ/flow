@@ -6,6 +6,9 @@ class Step < ApplicationRecord
   include DecodesHtmlEntities
 
   SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
+  MODEL_ID_FORMAT = /\A[a-z0-9][a-z0-9._:-]*\z/
+  # MODEL_ID_FORMAT as a JSON Schema pattern, for the MCP tools that take a model.
+  MODEL_ID_JSON_PATTERN = "^[a-z0-9][a-z0-9._:-]*$"
 
   belongs_to :workflow
   belongs_to :agent, optional: true
@@ -23,11 +26,13 @@ class Step < ApplicationRecord
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
-  validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  validates :preferred_model, format: { with: MODEL_ID_FORMAT, message: "invalid model ID format" }, allow_nil: true
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
   validates :reasoning_effort, inclusion: { in: ->(_) { AgentRuntime.reasoning_effort_levels } }, allow_nil: true
   # Checked again whenever the runtime or the model it depends on changes, so a saved
-  # level the new pair does not take is refused instead of silently dropped.
+  # level the new pair does not take is refused instead of silently dropped. With no
+  # preferred model the level is not checked: it applies only to a model chosen
+  # explicitly, and the step's session ignores it (SessionService.build_for_workflow_step).
   validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model,
                                                    allow_unknown_runtime: true },
                                if: :reasoning_effort_inputs_changed?

@@ -20,7 +20,7 @@ import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
-import { AGENT_SELECT_OPTIONS, reasoningEffortLevels } from 'shared/ui/agentRuntimes';
+import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 import { InfoHint } from 'shared/ui/InfoHint';
 
 import classes from './BuilderPage.module.css';
@@ -380,10 +380,8 @@ export function SessionEditorPanel({
                 if (runtime === step.requiredAgentRuntime) return;
                 onFieldChange('requiredAgentRuntime', runtime);
                 if (step.preferredModel) onFieldChange('preferredModel', null);
-                // A level the new runtime takes is kept; the model is cleared with it.
-                if (step.reasoningEffort && !reasoningEffortLevels(runtime).includes(step.reasoningEffort)) {
-                  onFieldChange('reasoningEffort', null);
-                }
+                // A level applies only to a model chosen explicitly, and the model is cleared.
+                if (step.reasoningEffort) onFieldChange('reasoningEffort', null);
               }}
               disabled={readOnly}
               clearable
@@ -409,7 +407,11 @@ export function SessionEditorPanel({
               <Select
                 data={preferredModelOptions}
                 value={step.preferredModel ?? null}
-                onChange={(v) => onFieldChange('preferredModel', v || null)}
+                onChange={(v) => {
+                  onFieldChange('preferredModel', v || null);
+                  // On the default model a level is ignored, so it is not kept hidden.
+                  if (!v && step.reasoningEffort) onFieldChange('reasoningEffort', null);
+                }}
                 disabled={readOnly}
                 clearable
                 searchable
@@ -427,11 +429,12 @@ export function SessionEditorPanel({
               />
             </div>
           )}
-          {step.requiredAgentRuntime && (
+          {/* A level applies only to a model chosen explicitly: on the default model it is ignored. */}
+          {step.requiredAgentRuntime && step.preferredModel && (
             <div>
               <label className={classes.fieldLabel}>
                 Reasoning Effort&nbsp;
-                <InfoHint label="How hard the runtime's CLI thinks in this session. Default keeps the CLI's own level." />
+                <InfoHint label="How hard the runtime's CLI thinks in this session, on the model chosen above. Default keeps the CLI's own level." />
               </label>
               <ReasoningEffortSelect
                 runtime={step.requiredAgentRuntime}

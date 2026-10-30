@@ -203,7 +203,8 @@ class SessionService
         initial_prompt: prompt,
         requested_model: step.preferred_model.presence || run_model,
         runner_id: workflow_run.runner_id,
-        reasoning_effort: step.reasoning_effort,
+        # A level applies only to a model the step chose; on the default model it is ignored.
+        reasoning_effort: (step.reasoning_effort if step.preferred_model.present?),
         metadata: {
           "workflow_run_id" => workflow_run.id,
           "step_run_id" => step_run.id,

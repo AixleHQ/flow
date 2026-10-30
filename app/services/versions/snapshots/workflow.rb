@@ -16,6 +16,10 @@ module Versions
                        output_asset_specs tool_ids skill_ids mcp_server_ids asset_ids repository_ids
                        config_item_ids depends_on_step_ids].freeze
       STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at].freeze
+      # Step columns added after older snapshots were saved, with the value such a
+      # snapshot means by leaving them out. Without it a revert would keep the step's
+      # current value instead of restoring what that version had.
+      STEP_DEFAULTS = { "reasoning_effort" => nil }.freeze
       SUB_STEP_FIELDS = %w[id name instructions position required].freeze
       SUB_STEP_EXCLUDED = %w[step_id deleted_at created_at updated_at].freeze
 
@@ -54,7 +58,7 @@ module Versions
             "runner_id" => restorable_runner_id(record, snapshot["runner_id"])
           )
           record.save!
-          WorkflowStepSync.new(record, Array(snapshot["steps"])).sync!
+          WorkflowStepSync.new(record, Array(snapshot["steps"]).map { |step| STEP_DEFAULTS.merge(step) }).sync!
           record.steps.reset
         end
 
