@@ -60,11 +60,13 @@ module Runners
     end
 
     # The credential `token` names if it may be used now: not revoked, not
-    # expired and, for a single-use registration token, not used.
+    # expired, not of a `gone` environment (§9.2) and, for a single-use
+    # registration token, not used.
     def usable(token, kind:)
       credential = RunnerCredential.find_by_token(token, kind: kind)
       return nil if credential.nil? || credential.revoked? || credential.expired?
       return nil if credential.registration? && credential.used?
+      return nil if credential.runner_environment&.gone?
 
       credential
     end
@@ -73,25 +75,47 @@ module Runners
     # presented a second time means two holders have it, so the whole family is
     # revoked and the environment records why (§9.2); the revocation commits
     # before the refusal is raised.
+    #
+    # Locks in the one order every issuer and revoker uses: the runner (see
+    # lock_live_runner!), then the environment (Registration.unregister! locks
+    # it to mark it `gone`), then the credential. So a pair is never issued
+    # into a revoked runner or a `gone` environment.
     def rotate!(credential)
       reused = false
-      pair = credential.with_lock do
-        if credential.revoked? || credential.expired?
+      pair = RunnerCredential.transaction do
+        lock_live_runner!(credential.runner_id)
+        environment = RunnerEnvironment.lock.find(credential.runner_environment_id)
+        credential.lock!
+        if credential.revoked? || credential.expired? || environment.gone?
           nil
         elsif credential.used?
           reused = true
           revoke_family!(credential.family_id)
-          credential.runner_environment.update!(state_reason: REUSE_DETECTED)
+          environment.update!(state_reason: REUSE_DETECTED)
           nil
         else
           credential.update!(used_at: Time.current)
-          issue_pair!(credential.runner_environment, family_id: credential.family_id)
+          issue_pair!(environment, family_id: credential.family_id)
         end
       end
       raise Refused.new("credential_reuse_detected", "This refresh token was already used; the machine's credentials are revoked.") if reused
       raise Refused.new("invalid_token", "The refresh token is revoked or expired.") if pair.nil?
 
       pair
+    end
+
+    # Holds the runner's row against a revocation until the caller's
+    # transaction ends, and refuses a runner that is already revoked or
+    # deleted. Revoking updates that row before it revokes the runner's
+    # credentials in the same transaction (Runner#revoke_credentials), so an
+    # issuer that takes this lock first has its pair revoked with the rest, and
+    # one that takes it after sees the runner revoked (§9.3). FOR SHARE lets
+    # issuers of one runner run side by side; only the revocation waits.
+    def lock_live_runner!(runner_id)
+      runner = Runner.lock("FOR SHARE").find(runner_id)
+      raise Refused.new("runner_revoked", "The runner is revoked or deleted.") if runner.revoked? || runner.deleted?
+
+      runner
     end
 
     def revoke_family!(family_id)

@@ -915,16 +915,29 @@ from the UI, and the gateway can be scaled and rate-limited on its own.
 way `config/puma_mcp.rb` serves MCP: `RUNNER_GATEWAY_PORT` (default 4003),
 `RUNNER_GATEWAY_MAX_THREADS` and `RUNNER_GATEWAY_MIN_THREADS` falling back to
 `RAILS_MAX_THREADS`, and `RUNNER_GATEWAY_PIDFILE`. `Procfile.dev` runs it as
-`runner_gateway`, and Compose publishes the port. Every process routes `/runner/v1/*`, as
-every process routes `/mcp`. Keeping the long-polls on the gateway is the ingress's job,
-which sends `/runner/v1` to the gateway workload. That workload, its Helm values and the
-ingress route are a separate `aixle-infra` task, needed before the phase 3 staging
+`runner_gateway`, and Compose publishes the port.
+
+Each process draws only the routes it serves. `config/routes.rb` draws `/up` in every
+process, and the rest by `AIXLE_PROCESS_MODE`, which `config/puma_runner_gateway.rb` sets
+to `runner_gateway` before the app loads, so the deployment sets nothing of its own:
+- the gateway draws `config/routes/runner_gateway.rb`, the `/runner/v1` scope, and nothing
+  else;
+- every other process draws `config/routes/mcp.rb` (`/mcp` and `/action_mcp`) and
+  `config/routes/web.rb` (everything else), and answers `404` on `/runner/v1/*`. MCP is
+  still served by the web and MCP processes alike; a mode of its own for the MCP process
+  is later work.
+
+The ingress sends `/runner/v1` to the gateway workload. That workload, its Helm values and
+the ingress route are a separate `aixle-infra` task, needed before the phase 3 staging
 validation (§12.4). Until then the gateway runs locally and in tests only (§12.2).
+
+The gateway's Puma caps request bodies at 64 KB (`http_content_length_limit`). It answers
+a plain `413` before it reads a body over the cap, chunked bodies included, so an oversized
+body never reaches Rails.
 
 The controllers are `RunnerGateway::V1::*` (`app/controllers/runner_gateway/v1/`),
 `ActionController::API` with no cookie session and no CSRF. Before anything else, every
 request is checked for:
-- **the body cap:** 64 KB, measured on a chunked body too, otherwise `413 body_too_large`;
 - **the protocol header:** `X-Aixle-Runner-Protocol: 1`, otherwise
   `400 unsupported_protocol`, with a message that names the version the gateway speaks;
 - **the version header:** a semver `X-Aixle-Runner-Version`, otherwise
@@ -957,8 +970,9 @@ All requests are `Authorization: Bearer <token>`,
 **What v1 has so far (§15 task 5a):** `register` for a `manual` machine,
 `DELETE registration` and `token`. Every authenticated request then checks, in order:
 1. the bearer token, which must be of the endpoint's kind (`registration` for `register`,
-   `refresh` for `token`, `access` otherwise), unrevoked, unexpired and, for a registration
-   token, unused. Anything else is `401 invalid_token`;
+   `refresh` for `token`, `access` otherwise), unrevoked, unexpired, not of a `gone`
+   environment and, for a registration token, unused. Anything else is
+   `401 invalid_token`;
 2. the runner's status. A revoked or deleted runner is `401 runner_revoked`. The check is
    cached for 5 s in `Rails.cache` (§9.2);
 3. the `external_runners` flag for the runner's company. Off is `403 runners_disabled`, and
@@ -1514,6 +1528,17 @@ The runner page tells the operator to finish with `aixle-runner service uninstal
 Revoke also works **per machine** (the machines table on the runner page), which revokes
 that environment's credential family only. `aixle-runner unregister` is the same thing
 initiated from the machine.
+
+**What v1 has so far (§15 task 5a).** Revoke and Delete (a soft delete that revokes, §2.5)
+set the status and revoke every `runner_credentials` row of the runner in one transaction
+(`Runner#revoke_credentials`, after the status `UPDATE` has locked the runner's row). Every
+issuer locks that row first, `FOR SHARE`, and re-checks the runner under it
+(`Runners::Credentials.lock_live_runner!`, called by `Registration.register!` and
+`Credentials.rotate!`). So a pair issued while a revocation runs is either revoked with the
+rest or refused with `401 runner_revoked`; no unrevoked pair survives. The lock order is
+runner, then environment, then credential: `rotate!` also locks the environment that
+`unregister!` locks to mark it `gone`. Failing and dequeuing sessions, and the teardown,
+come with the tasks that first run sessions on a runner. Per-machine Revoke is task 12.
 
 Removing the `external_runners` override for a company (§12.1) is not a revocation.
 Credentials stay valid, the gateway refuses every request of that company's runners with
@@ -2275,7 +2300,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refuses writes on a company runner, from the record), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config`. The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
-| 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the body cap, the token, the runner status (cached 5 s) and the flag. Rack::Attack throttles per token and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
+| 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token, the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB. Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against issuance by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
 | 5b | 2 | The `runner_operations` queue (§2.3) with `Encryptable :runners_key` for its `encrypted_payload`, the `GET /runner/v1/ops` long-poll woken by LISTEN/NOTIFY, and `POST /runner/v1/ops/:id/result` (§6.2, §6.4). |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
 | 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |

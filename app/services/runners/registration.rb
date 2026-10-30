@@ -13,13 +13,17 @@ module Runners
 
     # `credential` is the registration token's row, already checked by the
     # gateway. It is checked again under its lock, so two machines racing on
-    # one token create one environment.
+    # one token create one environment, and the runner is locked before it, so
+    # a concurrent revocation either refuses this registration or revokes the
+    # pair it issued (Credentials.lock_live_runner!).
     def register!(credential, name:, os:, arch:, facts:, ephemeral:, runner_version:, protocol_version:)
       if ephemeral
         raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
       end
 
-      credential.with_lock do
+      RunnerCredential.transaction do
+        Credentials.lock_live_runner!(credential.runner_id)
+        credential.lock!
         if credential.used? || credential.revoked? || credential.expired?
           raise Credentials::Refused.new("invalid_token", "The registration token is used, revoked or expired.")
         end
@@ -39,8 +43,11 @@ module Runners
       end
     end
 
+    # The environment's row is locked first, as Credentials.rotate! locks it
+    # before it issues a pair, so a rotation racing this either sees the
+    # environment `gone` or has its pair revoked here.
     def unregister!(environment)
-      environment.transaction do
+      environment.with_lock do
         environment.update!(state: :gone)
         now = Time.current
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)

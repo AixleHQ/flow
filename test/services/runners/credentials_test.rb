@@ -98,4 +98,48 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_equal "invalid_token", assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(expiring) }.reason
     assert_not expiring.reload.used?
   end
+
+  test "credentials of a gone environment are refused even when their rows are not revoked" do
+    pair = Runners::Credentials.issue_pair!(@environment)
+    refresh = RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
+    @environment.update!(state: :gone)
+
+    assert_nil Runners::Credentials.usable(pair.access_token, kind: :access)
+    assert_equal "invalid_token", assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(refresh) }.reason
+    assert_not refresh.reload.used?
+    assert_equal 2, RunnerCredential.where(runner_environment: @environment).unrevoked.count
+  end
+
+  test "revoking or deleting a runner revokes every credential it has, and only its own" do
+    pair = Runners::Credentials.issue_pair!(@environment)
+    registration = Runners::Credentials.mint_registration!(@runner)
+    deleted = create(:runner, :manual, company: @runner.company)
+    deleted_registration = Runners::Credentials.mint_registration!(deleted)
+    other = Runners::Credentials.issue_pair!(create(:runner_environment, runner: create(:runner, :manual)))
+
+    @runner.revoke!
+    deleted.soft_delete!
+
+    assert_empty @runner.credentials.unrevoked
+    assert_empty deleted.credentials.unrevoked
+    assert_nil Runners::Credentials.usable(pair.access_token, kind: :access)
+    assert_nil Runners::Credentials.usable(registration, kind: :registration)
+    assert_nil Runners::Credentials.usable(deleted_registration, kind: :registration)
+    assert Runners::Credentials.usable(other.access_token, kind: :access)
+  end
+
+  test "a revoked runner issues no pair, by rotation or by registration" do
+    refresh = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).refresh_token, kind: :refresh)
+    registration = RunnerCredential.find_by_token(Runners::Credentials.mint_registration!(@runner), kind: :registration)
+    @runner.revoke!
+
+    rotation = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(refresh) }
+    registering = assert_raises(Runners::Credentials::Refused) do
+      Runners::Registration.register!(registration, name: "build-01", os: "linux", arch: "amd64", facts: {},
+                                                    ephemeral: false, runner_version: "1.4.0", protocol_version: "1")
+    end
+
+    assert_equal %w[runner_revoked runner_revoked], [ rotation.reason, registering.reason ]
+    assert_equal 1, RunnerEnvironment.count
+  end
 end

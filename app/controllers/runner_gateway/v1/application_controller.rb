@@ -17,19 +17,18 @@ module RunnerGateway
     class ApplicationController < ActionController::API
       PROTOCOL_VERSION = "1"
       SEMVER = /\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
-      MAX_BODY_BYTES = 64.kilobytes
       STATUS_TTL = 5.seconds
 
       REFUSAL_STATUS = {
         "invalid_token" => :unauthorized,
         "credential_reuse_detected" => :unauthorized,
+        "runner_revoked" => :unauthorized,
         "ephemeral_not_supported" => :unprocessable_entity,
         "invalid_registration" => :unprocessable_entity
       }.freeze
 
       wrap_parameters false
 
-      before_action :cap_body
       before_action :check_protocol
 
       rescue_from Runners::Credentials::Refused do |refusal|
@@ -78,19 +77,6 @@ module RunnerGateway
         return if runner_version.match?(SEMVER)
 
         refuse(:bad_request, "invalid_runner_version", "X-Aixle-Runner-Version must be a semantic version.")
-      end
-
-      # A chunked request has no Content-Length, so its body is measured instead.
-      def cap_body
-        length = request.content_length
-        too_large = if length.nil?
-          raw = request.body.read(MAX_BODY_BYTES + 1)
-          request.body.rewind
-          raw.to_s.bytesize > MAX_BODY_BYTES
-        else
-          length > MAX_BODY_BYTES
-        end
-        refuse(:content_too_large, "body_too_large", "Request bodies are capped at #{MAX_BODY_BYTES} bytes.") if too_large
       end
 
       def refuse(status, error, message)

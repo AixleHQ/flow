@@ -6,6 +6,8 @@ require "test_helper"
 # §9.2, §9.3): `manual` registration, refresh rotation and unregistration, and
 # the checks every request goes through.
 class RunnerGatewayTest < ActionDispatch::IntegrationTest
+  include ProcessModeHelper::RunnerGateway
+
   REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" }, ephemeral: false }.freeze
 
   setup do
@@ -158,23 +160,26 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
+  # The revocation revokes every credential of the runner (§9.3), so a token
+  # that is checked for its own state is refused as invalid. A refresh token is
+  # looked up whatever its state, and meets the runner's status.
   test "a revoked or deleted runner gets 401 on every endpoint" do
     pair = registered_pair
     token = Runners::Credentials.mint_registration!(@runner)
     @runner.revoke!
 
     register(token)
-    assert_refused :unauthorized, "runner_revoked"
+    assert_refused :unauthorized, "invalid_token"
     refresh(pair["refresh_token"])
     assert_refused :unauthorized, "runner_revoked"
     unregister(pair["access_token"])
-    assert_refused :unauthorized, "runner_revoked"
+    assert_refused :unauthorized, "invalid_token"
 
     deleted = create(:runner, :manual, company: @company)
     deleted_token = Runners::Credentials.mint_registration!(deleted)
     deleted.soft_delete!
     register(deleted_token)
-    assert_refused :unauthorized, "runner_revoked"
+    assert_refused :unauthorized, "invalid_token"
   end
 
   test "a revocation reaches the gateway within five seconds" do
@@ -201,15 +206,6 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :bad_request, "invalid_runner_version"
 
     assert_not RunnerCredential.find_by_token(token, kind: :registration).used?
-  end
-
-  test "a body over the cap is refused before it is read" do
-    token = Runners::Credentials.mint_registration!(@runner)
-
-    register(token, REGISTRATION.merge(facts: { "padding" => "x" * 70.kilobytes }))
-
-    assert_refused :content_too_large, "body_too_large"
-    assert_equal 0, RunnerEnvironment.count
   end
 
   test "no token reaches the log" do

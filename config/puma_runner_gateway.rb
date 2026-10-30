@@ -5,6 +5,14 @@
 # the long-polls aixle-runner holds open never take a thread from the UI, and
 # the gateway scales and is rate-limited on its own.
 
+# This process draws the gateway's routes and nothing else (config/routes.rb).
+# Set here, before the app loads, so the deployment needs no variable of its own.
+ENV["AIXLE_PROCESS_MODE"] = "runner_gateway"
+
+# Puma answers 413 before it reads a body over the cap, chunked bodies included
+# (§9.5). No runner request comes near it.
+http_content_length_limit 64 * 1024
+
 # Falls back to RAILS_MAX_THREADS, not to a private default: the Active Record
 # pool is sized from RAILS_MAX_THREADS (config/settings.yml), so a separate
 # default here silently oversubscribes the pool and every thread past the pool

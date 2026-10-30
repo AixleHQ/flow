@@ -46,6 +46,7 @@ Read straight from the environment, before or outside the settings files.
 | `RUNNER_GATEWAY_MAX_THREADS`    | no       | `RAILS_MAX_THREADS` | Runner gateway Puma thread budget.                           |
 | `RUNNER_GATEWAY_MIN_THREADS`    | no       | `RUNNER_GATEWAY_MAX_THREADS` | Runner gateway Puma minimum thread count.           |
 | `RUNNER_GATEWAY_PIDFILE`        | no       | `tmp/pids/runner_gateway.pid` | Runner gateway Puma pidfile.                       |
+| `AIXLE_PROCESS_MODE`            | no       | unset               | Which routes the process draws (`config/routes.rb`). `config/puma_runner_gateway.rb` sets it to `runner_gateway`, which routes `/runner/v1/*` and `/up` only; unset routes everything else. Do not set it yourself. |
 | `RAILS_ENV`                     | no       | `development`       | Rails environment; also selects the per-environment settings file. |
 | `RAILS_LOG_TO_STDOUT`           | no       | unset               | Log to stdout — set it in containers.                        |
 | `RAILS_LOG_LEVEL`               | no       | `info`              | Log level in production and QA (`error` in test).            |
