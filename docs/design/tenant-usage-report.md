@@ -107,8 +107,30 @@ A period shows the class of its last measured hour. `unlimited` and `no_customer
 | Worker hours | Worker hours, and Busy hours beside it | A paying tenant is billed for capacity offered, not used, so both are needed. |
 | Min / max workers | The limit's min and max (∞ when unlimited), and Peak workers | The mock-up reads like an autoscaled pool; ours is a configured limit, and the actual concurrency goes beside it. |
 | Utilization % | Busy ÷ worker hours | |
-| Average / max wait | Admission wait | |
+| Average / max wait | Average and p95 admission wait | The p95 replaced the maximum on 2026-10-30, which one outlier decides (§7.1). |
 | Successful / failed sessions | `finished` / `failed` | |
+
+### 7.1 A company's breakdown
+
+Added 2026-10-30. The table raised a question it could not answer: a company with low utilization whose sessions still waited for long stretches. On production every hour with a wait over 30 s had its peak at the limit — the queue was full in working hours and empty at night, and a period's utilization averages the two. Leadership then asked for the wait measured from the moment an item joins the queue, for how many items stood ahead of it, and for the p95 wait rather than the maximum, which one outlier decides.
+
+The company's name in the table opens a dialog for the selected period. It fetches `GET /admin/dashboard/companies/:id.json?from=&to=` (`Admin::DashboardCompaniesController`), which `Usage::CompanyBreakdown` answers from the admissions themselves: a percentile and a queue position cannot be summed from hours. Every aggregate is computed in Postgres, so a year of a busy company never reaches Ruby.
+
+| Figure | Definition |
+| --- | --- |
+| Wait | `admitted_at − created_at` of each project session admitted in the period. The admission is created the moment the session joins the queue (`SessionService` enqueues and drains back to back), so this is already the wait from joining. |
+| Waited | A wait over 30 s. Anything shorter was granted on the first drain after it joined. |
+| Percentiles | Average, median, p90, p95, p99 and max of every session's wait, and p95 among only those that waited. p95 over all sessions alone hides a queue that most sessions skip: when only a few percent of a company's sessions wait, p95 reads a second or two however long those few waited. |
+| Already waiting | For each session, how many of the company's sessions — and of its project's — were waiting when it joined. A running sum over join and leave events: leaving sorts before joining at the same instant, simultaneous joins go by id, and sessions waiting across the start of the period count. |
+| Per workflow run | A run queues once per step, each time at the back of the line, so its wait is the sum of its steps' waits. |
+| Time at capacity | The share of the hours the company had workers (`offered_seconds > 0`) during which every one was held at once. A sweep over admit and release events, with each hour's start as an event too, so a stretch is always read against its own hour's offered workers. An hour's peak would not do: with a limit of one, any session at all makes the peak the limit. |
+| Waits that began at capacity | Of the sessions that waited, how many joined while every worker was held. The rest waited for their project's limit. |
+| Waits by day | Each UTC day of the period that had sessions: how many waited, out of how many, and that day's p95. A chart of hours of the day averaged over the period was tried first and dropped: it averages the bursts away again, the way utilization does. |
+| Projects | Each project's sessions, waits and longest line, with its queue limit — its reservation or the default — as it stands now. |
+
+A company with no worker limit in the period gets no utilization: nothing capped it, and its waits come from its projects' limits alone.
+
+**The table's p95.** For the same reason the table's wait column is the p95 rather than the maximum, and it is not in the page's data either. For the selected period, and for the period it is compared with, the page fetches `GET /admin/dashboard/companies.json?from=&to=` (`Usage::TenantWaits`): every company's p95 over the sessions admitted in those days, the same sessions the breakdown counts. Each range is fetched once while the page is open.
 
 ## 8. Free means managed
 

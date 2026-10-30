@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   comparisonRange,
@@ -9,16 +9,19 @@ import {
   summarize,
   todayOf,
   totalsOf,
+  withP95,
   type DayRange,
   type DeltaField,
   type Grain,
   type TenantSummary,
   type Totals,
 } from './aggregate';
+import CompanyDetail from './CompanyDetail';
 import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatHours, formatPercent, formatWait, formatWorkers } from './format';
 import Tiles from './Tiles';
 import type { BillingClass, DashboardData } from './types';
+import { useTenantP95 } from './useTenantP95';
 
 type SortKey = 'name' | 'billingClass' | DeltaField;
 type Direction = 'ascending' | 'descending';
@@ -38,7 +41,7 @@ const COLUMNS: Column[] = [
   { key: 'peakWorkers', label: 'Peak workers' },
   { key: 'utilization', label: 'Utilization' },
   { key: 'avgWaitSeconds', label: 'Average wait' },
-  { key: 'maxWaitSeconds', label: 'Max wait' },
+  { key: 'p95WaitSeconds', label: 'p95 wait' },
   { key: 'sessionsSucceeded', label: 'Successful sessions' },
   { key: 'sessionsFailed', label: 'Failed sessions' },
 ];
@@ -102,6 +105,8 @@ export default function Dashboard({ data, now = new Date() }: Props) {
   const [custom, setCustom] = useState<DayRange>({ start: `${today.slice(0, 7)}-01`, end: today });
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<{ key: SortKey; direction: Direction }>({ key: 'name', direction: 'ascending' });
+  const [opened, setOpened] = useState<TenantSummary | null>(null);
+  const closeDetail = useCallback(() => setOpened(null), []);
 
   const view = useMemo(() => {
     const lastDataDay = data.days.reduce((last, row) => (row.day > last ? row.day : last), '');
@@ -144,9 +149,24 @@ export default function Dashboard({ data, now = new Date() }: Props) {
     };
   }, [data, grain, chosenPeriod, custom, today]);
 
+  const hasData = data.days.length > 0;
+  const currentP95 = useTenantP95(hasData ? view.range : null);
+  const previousP95 = useTenantP95(view.previousByTenant.size ? view.comparison : null);
+  const rows = useMemo(
+    () => withP95(view.rows, currentP95.status === 'ready' ? currentP95.p95 : undefined),
+    [view.rows, currentP95],
+  );
+  const previousByTenant = useMemo(() => {
+    const previous = withP95(
+      Array.from(view.previousByTenant.values()),
+      previousP95.status === 'ready' ? previousP95.p95 : undefined,
+    );
+    return new Map(previous.map((row) => [row.tenantId, row]));
+  }, [view.previousByTenant, previousP95]);
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = needle ? view.rows.filter((row) => row.name.toLowerCase().includes(needle)) : view.rows;
+    const filtered = needle ? rows.filter((row) => row.name.toLowerCase().includes(needle)) : rows;
     const direction = sort.direction === 'ascending' ? 1 : -1;
     return [...filtered].sort((a, b) => {
       const left = sortValue(a, sort.key);
@@ -157,7 +177,7 @@ export default function Dashboard({ data, now = new Date() }: Props) {
           : String(left).localeCompare(String(right));
       return order * direction;
     });
-  }, [view.rows, query, sort]);
+  }, [rows, query, sort]);
 
   const latestClasses = useMemo(() => {
     const latest = new Map<number, BillingClass>();
@@ -310,6 +330,11 @@ export default function Dashboard({ data, now = new Date() }: Props) {
 
       <p className={classes.span}>{span}</p>
       {compare && <p className={classes.compare}>{compare}</p>}
+      {currentP95.status === 'failed' && (
+        <p className={classes.compare} role="alert">
+          The p95 wait could not be loaded; reload the page to try again.
+        </p>
+      )}
 
       {tiles}
 
@@ -337,12 +362,14 @@ export default function Dashboard({ data, now = new Date() }: Props) {
               </tr>
             ) : (
               visible.map((row) => {
-                const previous = view.previousByTenant.get(row.tenantId);
+                const previous = previousByTenant.get(row.tenantId);
                 const billing = BILLING_LABELS[row.billingClass];
                 return (
                   <tr key={row.tenantId}>
                     <th scope="row" className={classes.tenant}>
-                      <a href={`/admin/companies/${row.tenantId}`}>{row.name}</a>
+                      <button type="button" className={classes.tenantButton} onClick={() => setOpened(row)}>
+                        {row.name}
+                      </button>
                     </th>
                     <td>
                       <span className={`${classes.badge} ${classes[billing.tone]}`}>{billing.label}</span>
@@ -384,8 +411,8 @@ export default function Dashboard({ data, now = new Date() }: Props) {
                       {delta('avgWaitSeconds', row.avgWaitSeconds, previous?.avgWaitSeconds)}
                     </td>
                     <td className={classes.number}>
-                      {formatWait(row.maxWaitSeconds)}
-                      {delta('maxWaitSeconds', row.maxWaitSeconds, previous?.maxWaitSeconds)}
+                      {currentP95.status === 'loading' ? '…' : formatWait(row.p95WaitSeconds)}
+                      {delta('p95WaitSeconds', row.p95WaitSeconds, previous?.p95WaitSeconds)}
                     </td>
                     <td className={classes.number}>
                       {formatCount(row.sessionsSucceeded)}
@@ -426,12 +453,24 @@ export default function Dashboard({ data, now = new Date() }: Props) {
         is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
         Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
         workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
-        session queued before a worker took it. Billing shows whether the company pays, is on a trial, is blocked, or is
-        managed by Aixle; “Not billed” marks a company that runs free without being managed, which should never happen.
-        Days are UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous
-        period; a period still in progress is compared with the same number of days of the one before.
-        {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`}
+        session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Billing
+        shows whether the company pays, is on a trial, is blocked, or is managed by Aixle; “Not billed” marks a company
+        that runs free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday.
+        The small figure under each value is the change from the previous period; a period still in progress is compared
+        with the same number of days of the one before.
+        {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
+        company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
       </p>
+
+      {opened && (
+        <CompanyDetail
+          key={`${opened.tenantId}:${view.range.start}:${view.range.end}`}
+          tenant={opened}
+          range={view.range}
+          span={spanOf(view.range)}
+          onClose={closeDetail}
+        />
+      )}
     </div>
   );
 }

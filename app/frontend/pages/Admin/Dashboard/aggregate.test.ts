@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildUsageDay } from 'test/factories/adminDashboard';
 
-import { comparisonRange, deltaOf, mondayOf, periodsFor, rangeOf, summarize } from './aggregate';
+import { comparisonRange, deltaOf, mondayOf, periodsFor, rangeOf, summarize, withP95 } from './aggregate';
 
 const tenants = [{ id: 1, name: 'Acme' }];
 
@@ -64,7 +64,7 @@ describe('comparisonRange', () => {
 describe('summarize', () => {
   it('sums a tenant across its days', () => {
     const days = [
-      buildUsageDay({ day: '2026-10-13', limitMin: 2, limitMax: 4, peakWorkers: 4, waitSecondsMax: 300 }),
+      buildUsageDay({ day: '2026-10-13', limitMin: 2, limitMax: 4, peakWorkers: 4 }),
       buildUsageDay({ day: '2026-10-14', billingClass: 'no_customer' }),
       buildUsageDay({ day: '2026-10-20' }),
     ];
@@ -80,7 +80,7 @@ describe('summarize', () => {
       maxWorkers: 4,
       peakWorkers: 4,
       avgWaitSeconds: 30,
-      maxWaitSeconds: 300,
+      p95WaitSeconds: null,
       sessionsSucceeded: 76,
       sessionsFailed: 4,
       billingClass: 'no_customer',
@@ -127,7 +127,14 @@ describe('summarize', () => {
     const [acme] = summarize(days, tenants, { start: '2026-10-14', end: '2026-10-14' });
 
     expect(acme.avgWaitSeconds).toBeNull();
-    expect(acme.maxWaitSeconds).toBeNull();
+  });
+
+  it("takes each tenant's p95 from the server, and has none for a tenant it did not measure", () => {
+    const rows = summarize([buildUsageDay()], tenants, { start: '2026-10-14', end: '2026-10-14' });
+
+    expect(withP95(rows, new Map([[1, 600]]))[0].p95WaitSeconds).toBe(600);
+    expect(withP95(rows, new Map())[0].p95WaitSeconds).toBeNull();
+    expect(withP95(rows, undefined)[0].p95WaitSeconds).toBeNull();
   });
 });
 

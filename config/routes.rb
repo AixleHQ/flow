@@ -375,7 +375,9 @@ Rails.application.routes.draw do
       resources :overrides, only: %i[create destroy], param: :company_id, controller: "feature_flag_overrides"
     end
     resource :session_admission, only: %i[show]
-    resource :dashboard, only: %i[show]
+    resource :dashboard, only: %i[show] do
+      resources :companies, only: %i[index show], controller: "dashboard_companies"
+    end
   end
 
   scope module: :web, defaults: { format: :html } do

@@ -36,5 +36,60 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
     get admin_dashboard_path
 
     assert_redirected_to admin_login_path
+
+    get admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", format: :json)
+
+    assert_redirected_to admin_login_path
+
+    get admin_dashboard_companies_path(from: "2026-10-01", to: "2026-10-31", format: :json)
+
+    assert_redirected_to admin_login_path
+  end
+
+  test "a company opened from the dashboard carries its queue over the chosen days" do
+    owner = create(:user, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    pool = SessionAdmissionPool.create!(key: "project:#{project.id}", limit: 4, policy_revision: 1)
+    SessionAdmission.create!(terminal_session: create(:terminal_session, :agent_session, project: project, user: owner),
+                             session_admission_pool: pool, created_at: Time.utc(2026, 10, 14, 9),
+                             admitted_at: Time.utc(2026, 10, 14, 9, 5))
+    sign_in_as(@admin)
+
+    get admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", format: :json)
+
+    assert_response :success
+    body = response.parsed_body
+    assert_equal @company.id, body["companyId"]
+    assert_equal [ 1, 1, 300 ], body["waits"].values_at("sessions", "waited", "p95")
+    assert_equal [ project.name ], body["projects"].pluck("name")
+    assert_equal [ { "day" => "2026-10-14", "sessions" => 1, "waited" => 1, "p95" => 300 } ], body["days"]
+  end
+
+  test "the table reads every company's p95 wait for the chosen days" do
+    owner = create(:user, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    pool = SessionAdmissionPool.create!(key: "project:#{project.id}", limit: 4, policy_revision: 1)
+    SessionAdmission.create!(terminal_session: create(:terminal_session, :agent_session, project: project, user: owner),
+                             session_admission_pool: pool, created_at: Time.utc(2026, 10, 14, 9),
+                             admitted_at: Time.utc(2026, 10, 14, 9, 5))
+    sign_in_as(@admin)
+
+    get admin_dashboard_companies_path(from: "2026-10-01", to: "2026-10-31", format: :json)
+
+    assert_response :success
+    assert_equal [ { "companyId" => @company.id, "p95" => 300 } ], response.parsed_body
+
+    get admin_dashboard_companies_path(from: "2026-10-31", to: "2026-10-01", format: :json)
+    assert_response :bad_request
+  end
+
+  test "a company opened with days that do not parse is a bad request" do
+    sign_in_as(@admin)
+
+    get admin_dashboard_company_path(@company, from: "October", to: "2026-10-31", format: :json)
+    assert_response :bad_request
+
+    get admin_dashboard_company_path(@company, from: "2026-10-31", to: "2026-10-01", format: :json)
+    assert_response :bad_request
   end
 end

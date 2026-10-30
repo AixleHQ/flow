@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildUsageDay } from 'test/factories/adminDashboard';
+import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
 import Dashboard from './Dashboard';
@@ -35,6 +36,10 @@ const rowOf = (name: string) => screen.getByRole('row', { name: new RegExp(`^${n
 const tile = (name: string) => within(screen.getByRole('region', { name }));
 
 describe('Dashboard', () => {
+  beforeEach(() => {
+    answerFetch({ 'GET /admin/dashboard/companies.json': [] });
+  });
+
   it('opens on the current month, one row per company, with why each is billed or not', () => {
     render(<Dashboard data={data} now={now} />);
 
@@ -42,7 +47,7 @@ describe('Dashboard', () => {
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('Paying')).toBeInTheDocument();
     expect(within(rowOf('Globex')).getByText('Free · managed')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Acme' })).toHaveAttribute('href', '/admin/companies/1');
+    expect(screen.getByRole('button', { name: 'Acme' })).toBeInTheDocument();
   });
 
   it('shows the platform as it stands in tiles', () => {
@@ -72,6 +77,31 @@ describe('Dashboard', () => {
 
     expect(within(rowOf('Acme')).getByText('Not billed · no limit')).toBeInTheDocument();
     expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
+  });
+
+  it("shows each company's p95 wait for the period, and its change from the period before", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (input) =>
+        jsonResponse(
+          String(input).includes('from=2026-10-01') ? [{ companyId: 1, p95: 600 }] : [{ companyId: 1, p95: 400 }],
+        ),
+      );
+    render(<Dashboard data={data} now={now} />);
+
+    expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
+    expect(await within(rowOf('Acme')).findByText('▲ +50%')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/admin/dashboard/companies.json?from=2026-10-01&to=2026-10-31',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+  });
+
+  it('says so when the p95 wait cannot be loaded', async () => {
+    answerFetch({ 'GET /admin/dashboard/companies.json': jsonResponse({ error: 'boom' }, 500) });
+    render(<Dashboard data={data} now={now} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('p95 wait could not be loaded');
   });
 
   it('shows a company without a limit as unlimited and fully used', () => {
