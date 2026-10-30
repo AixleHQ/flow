@@ -59,6 +59,9 @@ class FakeSlackClient
   attr_accessor :thread_messages
   # The claims Sign in with Slack's ID token carries (openid_token), unsigned.
   attr_accessor :openid_claims
+  # An exception chat.postMessage and the file upload raise instead of answering,
+  # e.g. Slack::Client::Error.new("not_in_channel") or a RateLimited.
+  attr_accessor :send_error
 
   def initialize
     @oauth_exchanges  = []
@@ -112,6 +115,8 @@ class FakeSlackClient
   # chat.postMessage — { ok, channel, ts, message }. Slack::Notifier reads `ts`
   # out of this to address the message later and to thread file uploads under it.
   def post_message(token:, channel:, text: nil, thread_ts: nil, blocks: nil, reply_broadcast: nil)
+    raise send_error if send_error
+
     ts = next_ts
     # `ts` is the one value here that is a RESPONSE rather than a request field;
     # recorded alongside so a test can assert what the caller did with the
@@ -137,6 +142,8 @@ class FakeSlackClient
   # files.completeUploadExternal — the body the real client returns after the
   # getUploadURLExternal -> PUT bytes -> completeUploadExternal flow.
   def upload_files(token:, channel:, files:, initial_comment: nil, thread_ts: nil)
+    raise send_error if send_error
+
     uploaded = Array(files).map do |f|
       { filename: f[:filename], title: f[:title], content: f[:content] }
     end

@@ -361,6 +361,21 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `MAILER_PASSWORD`       | no       | unset   | SMTP password.                       |
 | `MAILER_AUTHENTICATION` | no       | `plain` | SMTP auth mechanism.                 |
 
+## In-app feedback
+
+**Send feedback** in the user menu delivers each message to every destination
+configured here; with none configured the item is not shown. The sender's name,
+email, company, the page they were on and the release go with the message, and
+so do the files sent with it (up to five, 20 MB each): in the same Slack post,
+and as attachments on the board card.
+
+| Variable                      | Required | Default | Purpose |
+| ----------------------------- | -------- | ------- | ------- |
+| `FEEDBACK_SLACK_BOT_TOKEN`    | no       | unset   | Bot token (`xoxb-…`) of a Slack app with the `chat:write` and `files:write` scopes. An incoming webhook will not do: it cannot carry files. Set together with `FEEDBACK_SLACK_CHANNEL_ID`. |
+| `FEEDBACK_SLACK_CHANNEL_ID`   | no       | unset   | The channel the bot posts to, by id (`C…`). The bot has to be a member: invite it to a private channel, or every delivery is refused with `not_in_channel`. |
+| `FEEDBACK_BOARD_PROJECT_ID`   | no       | unset   | Project whose board gets a card per message, tagged `feedback`. Set together with `FEEDBACK_BOARD_COLUMN_ID`. |
+| `FEEDBACK_BOARD_COLUMN_ID`    | no       | unset   | The column of that project's board the cards are created in. A column of another board fails each delivery rather than guessing. |
+
 ## Storage (S3)
 
 | Variable                | Required | Default | Purpose                                         |

@@ -28,6 +28,7 @@ export interface SharedSettings {
   sentryTracesSampleRate?: number;
   /** Optional: a page served by an older pod does not send it. */
   selfServeSignup?: boolean;
+  feedbackEnabled?: boolean;
 }
 
 export interface SharedPermissions {

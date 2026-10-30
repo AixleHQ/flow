@@ -19,6 +19,13 @@ governance, community health — carry none.
   that waited, how many sessions were already waiting when one joined, the wait
   per workflow run, its projects with their queue limits, how much of the time
   every worker was busy and how many waits began then, and the waits day by day.
+- **Feedback**: **Send feedback** in the user menu sends a bug report, a
+  feature request or a support question, with the sender and the page it came
+  from, to a Slack channel, a board column, or both. Up to five files go with it
+  (a screenshot can be pasted straight into the message), in the Slack post and
+  on the board card. Operators choose where with `FEEDBACK_SLACK_BOT_TOKEN` plus
+  `FEEDBACK_SLACK_CHANNEL_ID`, and with `FEEDBACK_BOARD_PROJECT_ID` plus
+  `FEEDBACK_BOARD_COLUMN_ID`; with neither set the item is hidden.
 
 ### Changed
 - **Admin**: the dashboard's companies table shows each company's p95 queue

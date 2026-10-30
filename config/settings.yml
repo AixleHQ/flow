@@ -402,6 +402,18 @@ slack:
   # mention from, and the name of whoever connected a channel.
   scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,channels:read,groups:read,users:read,files:read,files:write,chat:write,commands' %>
 
+# Where the Send feedback dialog in the user menu delivers. Each destination
+# turns on when its variables are set, and they can be used together; with
+# none set the dialog is not offered.
+feedback:
+  # A Slack bot token (xoxb-, with chat:write and files:write) and the channel
+  # id it posts to. The bot has to be a member of the channel.
+  slack_bot_token: "<%= ENV['FEEDBACK_SLACK_BOT_TOKEN'] %>"
+  slack_channel_id: "<%= ENV['FEEDBACK_SLACK_CHANNEL_ID'] %>"
+  # A card per submission in this column of this project's board.
+  board_project_id: <%= ENV['FEEDBACK_BOARD_PROJECT_ID'] %>
+  board_column_id: <%= ENV['FEEDBACK_BOARD_COLUMN_ID'] %>
+
 jira:
   # One Atlassian OAuth 2.0 (3LO) app per deployment, shared by every customer
   # site: Atlassian's terms do not allow an app per customer. Optional — without
