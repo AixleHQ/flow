@@ -145,7 +145,8 @@ module Workflows
     # --- Single step execution ---
 
     def execute_step(step_data)
-      return :skipped if should_skip?(step_data)
+      skip = policy_skip(step_data)
+      return skip_by_policy(step_data, skip["reason"]) if skip
 
       step_id = step_data["step_id"]
       step_run_id = @retry_overrides.delete(step_id) || step_data["step_run_id"] || create_step_run(step_data)
@@ -182,8 +183,9 @@ module Workflows
 
       steps.each do |step_data|
         step_id = step_data["step_id"]
-        if should_skip?(step_data)
-          results[step_id] = :skipped
+        skip = policy_skip(step_data)
+        if skip
+          results[step_id] = skip_by_policy(step_data, skip["reason"])
           next
         end
 
@@ -379,13 +381,24 @@ module Workflows
         start_to_close_timeout: 30)
     end
 
-    def should_skip?(step_data)
+    def policy_skip(step_data)
       result = execute_activity(activities.workflow_check_skip_activity,
         { workflow_run_id: @workflow_run_id, step_id: step_data["step_id"] },
         start_to_close_timeout: 30)
-      result && result["should_skip"]
+      result if result && result["should_skip"]
     rescue Temporalio::Error::ActivityError
-      false
+      nil
+    end
+
+    # Code without this patch left the skipped step's run `pending`, and its
+    # histories must replay that way.
+    def skip_by_policy(step_data, reason)
+      if Temporalio::Workflow.patched("mark-policy-skipped-step-runs")
+        step_id = step_data["step_id"]
+        step_run_id = @retry_overrides.delete(step_id) || step_data["step_run_id"] || create_step_run(step_data)
+        mark_step_skipped(step_run_id, reason)
+      end
+      :skipped
     end
 
     # --- Signal helpers ---

@@ -26,6 +26,11 @@ governance, community health — carry none.
   headers configurable, since every endpoint uses the default header for its
   strategy, and lists Azure DevOps and Bitbucket among the CI events that
   resolve a gate.
+- **Sessions & Runs**: a session that its skip policy skips ("If outputs
+  exist") shows as Skipped, with the reason, instead of Pending forever after
+  the run has finished. Sessions skipped before they started fold into one row
+  on the run page, and the Sessions count says how many were skipped. Runs that
+  already finished are corrected by a migration.
 
 ## [1.8.0] - 2026-10-28
 
