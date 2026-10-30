@@ -3,8 +3,8 @@
 require "test_helper"
 
 # The drain and the meter read one number (Billing::EffectiveCapacity). These are
-# the drain's half: a company on the free allowance runs one session at a time
-# however high it set its limit, and one that has spent the allowance runs none.
+# the drain's half: a company on the free trial runs one session at a time
+# however high it set its limit, and one whose trial has ended runs none.
 class SessionAdmissionBillingTest < ActiveSupport::TestCase
   setup do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
@@ -24,13 +24,21 @@ class SessionAdmissionBillingTest < ActiveSupport::TestCase
     assert_equal admissions.map(&:id), SessionAdmissionService.drain!
   end
 
-  # The allowance is a quantity, not a smaller workspace: a company on it runs
-  # what its admin chose and spends the hours faster for it.
-  test "a company on the free allowance runs what it asked for" do
+  test "a company on the free trial runs one session, whatever it asked for" do
     @company.update!(billing_state: "trialing")
-    admissions = 3.times.map { enqueue }
+    first, = 3.times.map { enqueue }
 
-    assert_equal admissions.map(&:id), SessionAdmissionService.drain!
+    assert_equal [ first.id ], SessionAdmissionService.drain!
+  end
+
+  # A company given ten before a trial could not keep them still has its
+  # projects' reservations; the trial holds it to one all the same.
+  test "a project's reservation does not get a trialing company past one session" do
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
+    @company.update_column(:billing_state, "trialing")
+    first, = 3.times.map { enqueue }
+
+    assert_equal [ first.id ], SessionAdmissionService.drain!
   end
 
   # Nothing kills what is already running — only nothing new starts.

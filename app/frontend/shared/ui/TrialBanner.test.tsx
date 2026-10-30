@@ -8,10 +8,10 @@ import { TrialBanner } from './TrialBanner';
 
 const trial = buildSharedTrial();
 const admin = buildSharedPermissions();
-const blocked = buildSharedTrial({ state: 'blocked', usedHours: 100, remainingHours: 0, hoursLeftAtCurrentRate: 0 });
+const blocked = buildSharedTrial({ state: 'blocked', daysLeft: 0 });
 
 describe('TrialBanner', () => {
-  // Sent only while an allowance is running or spent, so everyone else must see
+  // Sent only while a trial is running or has ended, so everyone else must see
   // nothing at all rather than an empty bar.
   it('is not drawn for a workspace somebody is paying for', () => {
     renderPage(<TrialBanner />, { props: {} });
@@ -19,76 +19,28 @@ describe('TrialBanner', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
-  it('says what has been spent and what is left', () => {
+  it('says how many days are left and which is the last', () => {
     renderPage(<TrialBanner />, { props: { trial } });
 
-    expect(screen.getByRole('status')).toHaveTextContent('30 of 100 worker-hours used');
-  });
-
-  // The allowance is a quantity and the workspace sets the rate: forty hours is
-  // four days at one session and four hours at ten. Only the second number
-  // answers "when do I have to do something about this".
-  it('turns what is left into hours at the rate they are running', () => {
-    renderPage(<TrialBanner />, { props: { trial } });
-
-    expect(screen.getByRole('status')).toHaveTextContent('At 2 workers that is about 35 hours left');
-  });
-
-  it('says one session without the plural', () => {
-    renderPage(<TrialBanner />, {
-      props: { trial: buildSharedTrial({ maxSessions: 1, hoursLeftAtCurrentRate: 70 }) },
-    });
-
-    expect(screen.getByRole('status')).toHaveTextContent('At 1 worker that is about 70 hours left');
-  });
-
-  // A workspace with no limit has no rate to divide by, and inventing one would
-  // be worse than saying nothing.
-  it('leaves the estimate out when there is no limit to run at', () => {
-    renderPage(<TrialBanner />, {
-      props: { trial: buildSharedTrial({ maxSessions: null, hoursLeftAtCurrentRate: null }) },
-    });
-
-    expect(screen.getByRole('status')).toHaveTextContent('30 of 100 worker-hours used');
-    expect(screen.queryByText(/hours left/)).not.toBeInTheDocument();
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveTextContent('You are on the free trial, on one worker: 21 days left');
+    expect(banner).toHaveTextContent('the last day is Nov 20, 2026');
   });
 
   // ── Running out ─────────────────────────────────────────────────────────
 
-  // Forty hours is plenty at one worker and an afternoon at ten: the deadline,
-  // not the share spent, is what makes it urgent.
-  it('leads with the deadline once less than a day is left at the current rate', () => {
-    renderPage(<TrialBanner />, {
-      props: {
-        trial: buildSharedTrial({ usedHours: 60, remainingHours: 40, maxSessions: 10, hoursLeftAtCurrentRate: 4 }),
-      },
-    });
+  it('leads with the deadline in the last few days', () => {
+    renderPage(<TrialBanner />, { props: { trial: buildSharedTrial({ daysLeft: 3, lastDay: '2026-11-02' }) } });
 
     const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent('Free capacity runs out in about 4 hours at 10 workers');
+    expect(banner).toHaveTextContent('The free trial ends in 3 days — the last day is Nov 2, 2026');
     expect(banner).toHaveTextContent('After that, no new sessions start');
   });
 
-  it('says one hour without the plural', () => {
-    renderPage(<TrialBanner />, {
-      props: {
-        trial: buildSharedTrial({ maxSessions: 1, hoursLeftAtCurrentRate: 1, usedHours: 99, remainingHours: 1 }),
-      },
-    });
+  it('says so on the last day', () => {
+    renderPage(<TrialBanner />, { props: { trial: buildSharedTrial({ daysLeft: 1 }) } });
 
-    expect(screen.getByRole('status')).toHaveTextContent('runs out in about 1 hour at 1 worker');
-  });
-
-  it('warns by the share spent when there is no limit to time it by', () => {
-    renderPage(<TrialBanner />, {
-      props: {
-        trial: buildSharedTrial({ usedHours: 90, remainingHours: 10, maxSessions: null, hoursLeftAtCurrentRate: null }),
-      },
-    });
-
-    const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent('Free capacity is almost gone');
-    expect(banner).toHaveTextContent('90 of 100 worker-hours used');
+    expect(screen.getByRole('status')).toHaveTextContent('Today is the last day of the free trial.');
   });
 
   // ── Paying ──────────────────────────────────────────────────────────────
@@ -99,21 +51,26 @@ describe('TrialBanner', () => {
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
   });
 
-  it('presses for the card once the allowance is running out', () => {
-    renderPage(<TrialBanner />, {
-      props: {
-        trial: buildSharedTrial({ usedHours: 90, remainingHours: 10, hoursLeftAtCurrentRate: 5 }),
-        permissions: admin,
-      },
-    });
+  it('presses for the card once the trial is running out', () => {
+    renderPage(<TrialBanner />, { props: { trial: buildSharedTrial({ daysLeft: 2 }), permissions: admin } });
 
     expect(screen.getByRole('button', { name: 'Add a card now' })).toBeInTheDocument();
   });
 
-  // A member can see where the workspace stands without being offered a button
+  it('offers the card to every member who can change anything, not only an administrator', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial, permissions: buildSharedPermissions({ isAdmin: false, canWrite: true }) },
+    });
+
+    expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  // A viewer can see where the workspace stands without being offered a button
   // the server would refuse.
   it('offers no button to somebody who may not press it', () => {
-    renderPage(<TrialBanner />, { props: { trial, permissions: buildSharedPermissions({ isAdmin: false }) } });
+    renderPage(<TrialBanner />, {
+      props: { trial, permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }) },
+    });
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
@@ -124,15 +81,24 @@ describe('TrialBanner', () => {
     renderPage(<TrialBanner />, { props: { trial: buildSharedTrial({ canPay: false }), permissions: admin } });
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('30 of 100 worker-hours used');
+    expect(screen.getByRole('status')).toHaveTextContent('21 days left');
   });
 
-  it('says plainly when the allowance is gone', () => {
+  it('says plainly when the trial is over', () => {
     renderPage(<TrialBanner />, { props: { trial: blocked } });
 
     const banner = screen.getByRole('status');
-    expect(banner).toHaveTextContent('used all 100 of your free worker-hours');
+    expect(banner).toHaveTextContent('Your free trial has ended');
     expect(banner).toHaveTextContent('Anything already running finishes');
+  });
+
+  it('points a viewer, who has no button, at someone who can add the card', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: blocked, permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }) },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Someone in your workspace can add a card to carry on.');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   // The way out has to match the button beside it: offering "talk to us" next to
@@ -156,14 +122,14 @@ describe('TrialBanner', () => {
     expect(screen.queryByRole('button', { name: /Add a card/ })).not.toBeInTheDocument();
   });
 
-  it('says the subscription ended rather than that free hours ran out', () => {
+  it('says the subscription ended rather than that the trial did', () => {
     renderPage(<TrialBanner />, {
       props: { trial: { ...blocked, status: 'canceled' as const }, permissions: admin },
     });
 
     const banner = screen.getByRole('status');
     expect(banner).toHaveTextContent('Your subscription has ended');
-    expect(banner).not.toHaveTextContent('free worker-hours');
+    expect(banner).not.toHaveTextContent('free trial');
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
   });
 

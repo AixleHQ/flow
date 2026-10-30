@@ -7,6 +7,7 @@ require "test_helper"
 # that are the actor's own business; this list is the whole set of them.
 class Web::Company::ReadOnlyBackstopTest < ActiveSupport::TestCase
   VIEWER_WRITABLE = %w[
+    Web::Company::FeedbackController
     Web::Company::MembershipsController
     Web::Company::Projects::FavoritesController
     Web::Company::SwitchController

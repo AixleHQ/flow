@@ -14,8 +14,8 @@ import classes from './ShowPage.module.css';
 interface Props {
   [key: string]: unknown;
   queueHourlyRate: number;
-  /** Worker-hours a new workspace may spend before anyone asks it for a card. */
-  freeQueueHours: number;
+  /** How long a new workspace's free trial lasts before anyone asks for a card. */
+  trialDays: number;
   signedIn: boolean;
 }
 
@@ -38,7 +38,7 @@ const STEPS = [
 ];
 
 const ShowPage = () => {
-  const { queueHourlyRate, freeQueueHours, signedIn } = usePage<Props>().props;
+  const { queueHourlyRate, trialDays, signedIn } = usePage<Props>().props;
 
   return (
     <PublicLayout>
@@ -109,13 +109,13 @@ const ShowPage = () => {
             </div>
             <div className={classes.priceCard}>
               <div className={classes.price}>
-                <span className={classes.priceFigure}>{freeQueueHours}</span>
-                <Text c="var(--app-text-secondary)">worker-hours free</Text>
+                <span className={classes.priceFigure}>{trialDays}</span>
+                <Text c="var(--app-text-secondary)">days free</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                Every new workspace starts with them, spent at whatever rate it runs — four workers at once use four
-                worker-hours an hour. Capacity is metered hourly, so raising or lowering your limit takes effect
-                immediately rather than next month.
+                Every new workspace starts with a free trial on one worker. Add a card and it runs as many as you set;
+                capacity is metered hourly, so raising or lowering your limit takes effect immediately rather than next
+                month.
               </Text>
             </div>
           </SimpleGrid>
@@ -139,7 +139,8 @@ const ShowPage = () => {
         <Box className={classes.cta}>
           <h2 className={classes.sectionTitle}>Start with one workflow</h2>
           <Text c="var(--app-text-secondary)" mt="sm" maw="52ch" mx="auto">
-            Claim your domain, pick how many workers to keep, and change the number whenever the work changes.
+            Claim your domain and start free on one worker. Once you add a card, keep as many workers as the work needs,
+            and change the number whenever it changes.
           </Text>
           <Group justify="center" mt="xl" gap="sm">
             <Button component="a" href={newWorkspacePath()} size="md" rightSection={<IconArrowRight size={16} />}>

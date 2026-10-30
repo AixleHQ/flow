@@ -19,11 +19,8 @@ class WorkspaceSignupTicket
   TTL = 24.hours
 
   class << self
-    def issue(name:, email:, max_sessions:)
-      verifier.generate(
-        { "name" => name, "email" => email, "max_sessions" => max_sessions },
-        expires_in: TTL
-      )
+    def issue(name:, email:)
+      verifier.generate({ "name" => name, "email" => email }, expires_in: TTL)
     end
 
     # nil for a link that was tampered with, truncated, signed by another
@@ -32,7 +29,7 @@ class WorkspaceSignupTicket
       payload = verifier.verified(token.to_s)
       return nil unless payload.is_a?(Hash)
 
-      payload.symbolize_keys.slice(:name, :email, :max_sessions)
+      payload.symbolize_keys.slice(:name, :email)
     end
 
     private

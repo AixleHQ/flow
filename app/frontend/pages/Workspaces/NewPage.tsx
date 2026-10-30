@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core';
+import { Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
@@ -13,15 +13,14 @@ type Refusal = string | string[];
 interface PageProps {
   suggestedDomain: string | null;
   suggestedName: string | null;
-  defaultMaxSessions: number;
   /** Set once a confirmation link has gone out, which is the whole of that screen. */
   sentTo: string | null;
   /** Carried from the sign-in screen, where the address was typed first. */
   suggestedEmail: string | null;
   /** A stranger names the address they will own the workspace with; a signed-in person has proved theirs. */
   needsEmail: boolean;
-  /** Worker-hours the workspace may spend before anyone asks it for a card. */
-  freeQueueHours: number;
+  /** How long the free trial lasts before anyone asks for a card. */
+  trialDays: number;
   /** Set when a signed-in person's domain already has a workspace, so there is nothing here to create. */
   claimedDomain?: ClaimedDomain | null;
   /**
@@ -42,7 +41,7 @@ const POINTS = [
   },
   {
     title: 'A worker runs one session at a time',
-    body: 'Pick how many run side by side. Raise or lower it in settings whenever the work changes.',
+    body: 'The free trial runs one. Once you add a card, choose how many run side by side, and change it whenever the work changes.',
   },
   {
     title: 'Capacity is the whole bill',
@@ -130,11 +129,10 @@ const NewWorkspacePage = () => {
   const {
     suggestedDomain,
     suggestedName,
-    defaultMaxSessions,
     sentTo,
     needsEmail,
     suggestedEmail,
-    freeQueueHours,
+    trialDays,
     claimedDomain,
     errors = {},
   } = usePage<PageProps>().props;
@@ -142,7 +140,6 @@ const NewWorkspacePage = () => {
   const form = useForm({
     name: suggestedName ?? nameFromEmail(suggestedEmail),
     email: suggestedEmail ?? '',
-    max_sessions: String(defaultMaxSessions),
   });
 
   const submit = (event: React.FormEvent) => {
@@ -160,7 +157,7 @@ const NewWorkspacePage = () => {
 
   // A refusal for a field this page does not draw — the address of someone
   // signed in — would otherwise vanish, and the form would just sit there.
-  const drawnFields = needsEmail ? ['name', 'email', 'emailDomain', 'maxSessions'] : ['name', 'maxSessions'];
+  const drawnFields = needsEmail ? ['name', 'email', 'emailDomain'] : ['name'];
   const undrawn = Object.entries(errors)
     .filter(([key]) => !drawnFields.includes(key))
     .flatMap(([, refusal]) => refusal);
@@ -221,18 +218,6 @@ const NewWorkspacePage = () => {
                     error={joined(errors.email, errors.emailDomain)}
                   />
                 )}
-                <NumberInput
-                  label="Workers"
-                  description="How many sessions this workspace may run at once — one per worker. You can change it later in settings."
-                  min={1}
-                  allowDecimal={false}
-                  allowNegative={false}
-                  required
-                  size="md"
-                  value={form.data.max_sessions}
-                  onChange={(value) => form.setData('max_sessions', value === '' || value == null ? '' : String(value))}
-                  error={joined(errors.maxSessions)}
-                />
                 <Button
                   type="submit"
                   loading={form.processing}
@@ -245,8 +230,7 @@ const NewWorkspacePage = () => {
                 </Button>
                 <p className={classes.footnote}>
                   You become its first administrator and can invite the rest of the team straight away. The first{' '}
-                  {freeQueueHours} worker-hours are free, and they are spent at whatever rate you run: four workers at
-                  once use four worker-hours an hour.
+                  {trialDays} days are free, on one worker; add a card to keep going after that.
                 </p>
               </Stack>
             </form>

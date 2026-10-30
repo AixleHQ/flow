@@ -33,6 +33,7 @@ export interface SessionCardData {
   prompt: string | null;
   note: string | null;
   errorMessage: string | null;
+  skipReason: string | null;
   steps: SessionCardStep[];
 }
 
@@ -154,6 +155,13 @@ export function SessionCard({ data, sessionHref, defaultOpen = false, live = fal
             <section className={classes.section}>
               <h4 className={classes.sectionHead}>Error</h4>
               <div className={classes.errorBox}>{data.errorMessage}</div>
+            </section>
+          )}
+
+          {data.skipReason && (
+            <section className={classes.section}>
+              <h4 className={classes.sectionHead}>Why it was skipped</h4>
+              <p className={classes.note}>{data.skipReason}</p>
             </section>
           )}
         </div>
