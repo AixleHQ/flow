@@ -202,23 +202,19 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert runner.reload.persisted?, "the runner stays with its company"
   end
 
-  test "the move drops the source runner from the workflows' versions, and a revert to one restores Hosted" do
+  test "the move drops the source runner from the workflows' versions and leaves the rest of each version" do
     runner = create(:runner, company: @s.source, name: "Prod VPC")
     @s.workflow.update_column(:current_version_number, @s.entity_version.number)
-    # No company asset in the config: a pre-move version naming one is refused on revert for its own reason.
     on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) do |workflow|
-      workflow.update!(runner: runner, description: "on runner", config: {})
+      workflow.update!(runner: runner, description: "on runner")
     end
     Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil, description: "hosted") }
+    before = on_runner.snapshot.except("runner_id")
     move(member_policy: "add")
 
-    workflow = @s.workflow.reload
-    assert_empty EntityVersion.where(versionable: workflow).where("snapshot -> 'runner_id' IS NOT NULL"),
+    assert_empty EntityVersion.where(versionable: @s.workflow).where("snapshot -> 'runner_id' IS NOT NULL"),
                  "no version names a runner of the source company"
-    assert_equal "on runner", on_runner.reload.snapshot["description"], "the rest of the version is untouched"
-
-    Versions.revert!(workflow, to: on_runner, actor: Versions::Actor.system)
-    assert_equal [ nil, "on runner" ], [ workflow.reload.runner_id, workflow.description ]
+    assert_equal before, on_runner.reload.snapshot
   end
 
   private

@@ -92,7 +92,7 @@ module ProjectMove
     # them to Hosted (Mover#clear_runner_references!) rather than refuse.
     def workflows_on_runners
       @workflows_on_runners ||= Workflow.for_project(project).where.not(runner_id: nil)
-                                        .includes(:runner).order(:name).to_a
+                                        .includes(:runner, :scope).order(:name).to_a
     end
 
     # The runs and sessions that name a runner. They are history (a live session
