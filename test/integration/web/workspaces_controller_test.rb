@@ -114,7 +114,7 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to onboarding_path
     owner = User.find_by(email: "dana@acme-robotics.example")
     assert_equal "admin", owner.company_memberships.find_by(company: acme).role
-    assert_equal 5, SessionConcurrencyLimit.for_company(acme.id)
+    assert_equal 1, SessionConcurrencyLimit.for_company(acme.id)
 
     follow_redirect!
     assert_response :success
