@@ -8,7 +8,7 @@ class MarketplaceProposalMailer < ApplicationMailer
   # been told, because the address it goes to is the only thing that ties the
   # asker to the domain they are asking about.
   def confirm(email:, token:)
-    @url = confirm_marketplace_proposal_url(token: token)
+    @url = marketplace_proposal_link_url(token: token)
     @ttl_hours = (MarketplaceProposalTicket::TTL / 3600).to_i
 
     mail(to: email, subject: "Confirm your request to apply an AWS Marketplace subscription")

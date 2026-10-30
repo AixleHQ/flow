@@ -11,7 +11,7 @@ module Admin
       start_new_trial(company) if new_trial
 
       if company.save
-        notice = new_trial ? new_trial_notice(company) : translate_with_resource("update.success")
+        notice = update_notice(company, new_trial)
         redirect_with_invitations(company, notice, fallback: after_resource_updated_path(company))
       else
         render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
@@ -26,7 +26,8 @@ module Admin
         return render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
 
-      redirect_with_invitations(company, translate_with_resource("create.success"), fallback: [ namespace, company ])
+      notice = company.billing_trialing? ? trial_notice(company) : translate_with_resource("create.success")
+      redirect_with_invitations(company, notice, fallback: [ namespace, company ])
     end
 
     private
@@ -89,10 +90,19 @@ module Admin
     def start_new_trial(company)
       company.billing_state = "trialing"
       company.trial_started_at = Time.current
+      company.trial_hours = Billing::Trial.new_trial_hours
     end
 
-    def new_trial_notice(company)
-      "#{company.name} is on a new trial: #{Billing::Trial.queue_hours} worker-hours, then it needs a card."
+    def update_notice(company, new_trial)
+      started = company.billing_trialing? && company.saved_change_to_billing_state?
+      return trial_notice(company) if new_trial || started || company.trial_last_day
+
+      translate_with_resource("update.success")
+    end
+
+    def trial_notice(company)
+      "#{company.name} is on a trial until the end of #{Billing::Trial.last_day(company).strftime('%B %-d, %Y')}, " \
+        "on one worker, then it needs a card."
     end
 
     # Override this method to specify custom lookup behavior.

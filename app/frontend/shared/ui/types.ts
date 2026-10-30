@@ -28,6 +28,7 @@ export interface SharedSettings {
   sentryTracesSampleRate?: number;
   /** Optional: a page served by an older pod does not send it. */
   selfServeSignup?: boolean;
+  feedbackEnabled?: boolean;
 }
 
 export interface SharedPermissions {
@@ -44,23 +45,22 @@ export interface SharedPermissions {
 
 /**
  * Where a workspace's billing stands. A blocked one carries why, which decides what
- * undoes it: a card for a spent allowance or an ended subscription, the open invoice
- * for a failed payment.
+ * undoes it: a card for a spent trial (`allowance`) or an ended subscription, the open
+ * invoice for a failed payment.
  */
 export type BillingStatus = 'trialing' | 'active' | 'cancelling' | 'allowance' | 'canceled' | 'payment_failed';
 
-/** Sent only while a workspace is on free capacity, or has spent it. */
+/** Sent only while a workspace is on the free trial, or once it has ended. */
 export interface SharedTrial {
   state: 'trialing' | 'blocked';
   /** Optional: a page served by an older pod does not send it. */
   status?: BillingStatus;
-  allowanceHours: number;
-  usedHours: number;
-  remainingHours: number;
-  /** The workspace's own limit, or null when it has set none. */
-  maxSessions: number | null;
-  /** What is left, in wall-clock hours at that limit. Null without one. */
-  hoursLeftAtCurrentRate: number | null;
+  /** How long the trial is, in days. */
+  days: number;
+  /** Days left, counting a part of a day as one. */
+  daysLeft: number;
+  /** The trial's last day, as `YYYY-MM-DD` (UTC). */
+  lastDay: string;
   /** False where this installation has no payment provider configured. */
   canPay: boolean;
 }

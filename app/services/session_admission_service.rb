@@ -17,6 +17,9 @@ class SessionAdmissionService
   # installation on every enqueue.
   POOL_SCAN_LIMIT = 200
 
+  # Waiting admissions read per query while a drain walks the queue in order.
+  QUEUE_BATCH = 100
+
   # A session outside a project is an agent login: interactive, short, and
   # launched by a person watching a dialog. It queues per user so that two
   # logins (say Claude and Codex) start at once while a runaway loop cannot
@@ -54,44 +57,39 @@ class SessionAdmissionService
       end
     end
 
+    # Grants in queue order — the admission id, the FIFO ordinal of AD-3 — across
+    # every pool at once. Pools of one company draw on one budget, so draining
+    # them pool by pool would give a worker the company frees to whichever pool
+    # comes first, not to the session that has waited longest. A session whose
+    # own pool, or whose share of the company, has no room is passed over, and so
+    # is the rest of that pool's queue for this pass, so a pool still starts its
+    # sessions in the order they joined.
     def drain!(limit: 100)
       granted = []
       transaction do |policy|
         # Materialised first so the budget resolves every pool's company in one
         # query instead of one per pool.
-        pools = pools_with_waiting_head.to_a
-        budget = SessionAdmissionBudget.new(pools.map(&:key))
+        pools = pools_with_waiting_head.to_a.index_by(&:id)
+        budget = SessionAdmissionBudget.new(pools.values.map(&:key))
+        room = pools.transform_values { |pool| open_slots!(policy, pool) }
 
-        pools.each do |pool|
-          pool.lock!
-          candidates = pool.session_admissions.unreleased.where(admitted_at: nil, stop_requested_at: nil).order(:id)
-          head = candidates.first
-          next unless head
-
-          key, cap = pool_configuration(policy, head.terminal_session)
-          # A head whose scope no longer maps to this pool is an installation pool
-          # left over from when the installation limit selected which pool a
-          # session belonged to. Nothing is ever added to one again, so it is
-          # drained against the cap it was created with rather than re-scoped.
-          cap = pool.limit unless key == pool.key
-
-          pool.update!(limit: cap, policy_revision: policy.revision) if key == pool.key
-          available = budget.clamp(cap - pool.session_admissions.occupied.count, pool.key)
-          take = [ available, limit - granted.size ].min.clamp(0, limit)
-          candidates.limit(take).each do |admission|
-            session = admission.terminal_session
-            begin
-              ensure_run_active!(session)
-            rescue Stopped
-              close_queued!(admission)
-              next
-            end
-            admission.update!(admitted_at: Time.current, permit_token: SecureRandom.uuid, wait_reason: "dispatch_pending")
-            granted << admission.id
-            budget.spend!(pool.key)
+        waiting_in_queue_order(room) do |admission|
+          pool = pools.fetch(admission.session_admission_pool_id)
+          if budget.clamp(room[pool.id], pool.key).zero?
+            room[pool.id] = 0
+            next
           end
-          # No break on an exhausted remainder: a reserved project further down the
-          # scan is still owed its own slots, and they are not drawn from it.
+
+          begin
+            ensure_run_active!(admission.terminal_session)
+          rescue Stopped
+            close_queued!(admission)
+            next
+          end
+          admission.update!(admitted_at: Time.current, permit_token: SecureRandom.uuid, wait_reason: "dispatch_pending")
+          granted << admission.id
+          budget.spend!(pool.key)
+          room[pool.id] -= 1
           break if granted.size >= limit
         end
       end
@@ -181,12 +179,54 @@ class SessionAdmissionService
 
     private
 
+    # How many more sessions the pool's own cap lets in. Locks the pool, and
+    # refreshes its cap from the policy, before any of its admissions is touched.
+    def open_slots!(policy, pool)
+      pool.lock!
+      head = waiting.where(session_admission_pool_id: pool.id).order(:id).first
+      return 0 unless head
+
+      key, cap = pool_configuration(policy, head.terminal_session)
+      # A head whose scope no longer maps to this pool is an installation pool
+      # left over from when the installation limit selected which pool a
+      # session belonged to. Nothing is ever added to one again, so it is
+      # drained against the cap it was created with rather than re-scoped.
+      if key == pool.key
+        pool.update!(limit: cap, policy_revision: policy.revision)
+      else
+        cap = pool.limit
+      end
+      [ cap - pool.session_admissions.occupied.count, 0 ].max
+    end
+
+    # Yields the waiting admissions of the pools that still have room, oldest
+    # first, a batch at a time. A pool that runs out of room drops out of the
+    # next batch, so a long queue behind a full pool is not walked again.
+    def waiting_in_queue_order(room)
+      after = 0
+      loop do
+        open = room.select { |_, slots| slots.positive? }.keys
+        return if open.empty?
+
+        batch = waiting.where(session_admission_pool_id: open).where("session_admissions.id > ?", after)
+                       .order(:id).limit(QUEUE_BATCH).to_a
+        return if batch.empty?
+
+        batch.each do |admission|
+          after = admission.id
+          yield admission if room[admission.session_admission_pool_id].positive?
+        end
+      end
+    end
+
+    def waiting = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
+
     # Only pools that actually have someone waiting are worth locking, and only
     # a bounded page of them per pass — the minutely reconciler picks up the
     # rest.
     def pools_with_waiting_head
       SessionAdmissionPool
-        .where(id: SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil).select(:session_admission_pool_id))
+        .where(id: waiting.select(:session_admission_pool_id))
         .order(:id)
         .limit(POOL_SCAN_LIMIT)
     end

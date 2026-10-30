@@ -15,6 +15,7 @@ class SessionConcurrencyLimit < ApplicationRecord
   # On change only: a company given fewer before the minimum existed keeps them
   # until its number is changed.
   validate :company_has_minimum_workers, if: -> { company_scope? && will_save_change_to_max_sessions? }
+  validate :trial_company_runs_one_worker, if: -> { company_scope? && will_save_change_to_max_sessions? }
 
   # Here rather than in a caller: three places write these rows, and a raised cap
   # has to reach the pools now rather than at the next reconciliation.
@@ -93,6 +94,13 @@ class SessionConcurrencyLimit < ApplicationRecord
     return if errors.include?(:max_sessions) || max_sessions >= Deployment.minimum_workers
 
     errors.add(:max_sessions, self.class.below_minimum_workers)
+  end
+
+  def trial_company_runs_one_worker
+    return if max_sessions == Billing::Trial::WORKERS
+    return unless scope_record && Billing::Trial.workers_fixed?(scope_record)
+
+    errors.add(:max_sessions, Company::TRIAL_RUNS_ONE_WORKER)
   end
 
   def scope_must_exist

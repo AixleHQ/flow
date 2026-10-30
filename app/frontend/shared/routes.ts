@@ -243,8 +243,13 @@ export function marketplaceProposalPath(options?: object): string {
 }
 
 /** /marketplace/aws/proposal(.:format) */
-export function confirmMarketplaceProposalPath(options?: object): string {
+export function marketplaceProposalLinkPath(options?: object): string {
   return "/" + "marketplace" + "/" + "aws" + "/" + "proposal" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/proposal/confirm(.:format) */
+export function confirmMarketplaceProposalPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "proposal" + "/" + "confirm" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /login/identify(.:format) */

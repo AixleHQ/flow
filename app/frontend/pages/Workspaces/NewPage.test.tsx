@@ -7,11 +7,10 @@ import { makeFormStub, renderPage, screen, userEvent } from 'test/renderPage';
 import NewWorkspacePage from './NewPage';
 
 const stranger = {
-  freeQueueHours: 100,
+  trialDays: 30,
   suggestedDomain: null,
   suggestedName: null,
   suggestedEmail: null,
-  defaultMaxSessions: 4,
   sentTo: null,
   needsEmail: true,
 };
@@ -28,15 +27,15 @@ describe('New workspace page', () => {
     it('offers the free allowance when there is one', () => {
       renderPage(<NewWorkspacePage />, { props: stranger });
 
-      expect(screen.getByText(/100 worker-hours are free/)).toBeInTheDocument();
+      expect(screen.getByText(/30 days are free, on one worker/)).toBeInTheDocument();
     });
 
     // A buyer arriving from AWS Marketplace is billed from the first minute, so
     // the allowance is not theirs to be offered.
     it('promises nothing free when nobody is giving anything away', () => {
-      renderPage(<NewWorkspacePage />, { props: { ...stranger, freeQueueHours: null } });
+      renderPage(<NewWorkspacePage />, { props: { ...stranger, trialDays: null } });
 
-      expect(screen.queryByText(/worker-hours are free/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/days are free/)).not.toBeInTheDocument();
       expect(screen.getByText(/You become its first administrator/)).toBeInTheDocument();
     });
   });
@@ -68,7 +67,7 @@ describe('New workspace page', () => {
     });
 
     it('keeps the typed address in the form', async () => {
-      const form = makeFormStub({ name: '', email: '', max_sessions: '4' });
+      const form = makeFormStub({ name: '', email: '' });
       renderPage(<NewWorkspacePage />, { props: stranger, form });
 
       await userEvent.type(screen.getByLabelText(/Your work email/), 'd');
@@ -95,10 +94,11 @@ describe('New workspace page', () => {
       expect(screen.getByText(/Everyone signing in from/)).toHaveTextContent('northwind-robotics.example');
     });
 
-    it('starts the session limit at the installation default', () => {
+    // The trial runs one worker; the number is theirs once they pay.
+    it('does not ask how many workers', () => {
       renderPage(<NewWorkspacePage />, { props: signedIn });
 
-      expect(screen.getByLabelText(/Workers/)).toHaveValue('4');
+      expect(screen.queryByLabelText(/Workers/)).not.toBeInTheDocument();
     });
 
     // They have no address field, so a refusal about their address used to be
@@ -176,7 +176,7 @@ describe('New workspace page', () => {
       const buyer = (over = {}, props = {}) => ({
         ...claimed(over),
         needsEmail: true,
-        freeQueueHours: null,
+        trialDays: null,
         marketplaceSubscription: true,
         suggestedEmail: 'dana@northwind-robotics.example',
         subscriptionRequest: null,
@@ -286,7 +286,7 @@ describe('New workspace page', () => {
   describe('for a buyer whose subscription has nowhere to go yet', () => {
     const buyer = (props = {}) => ({
       ...stranger,
-      freeQueueHours: null,
+      trialDays: null,
       marketplaceSubscription: true,
       subscriptionRequest: null,
       claimedDomain: null,
@@ -339,7 +339,7 @@ describe('New workspace page', () => {
   });
 
   it('posts the fields nested under workspace', async () => {
-    const form = makeFormStub({ name: 'Northwind Robotics', email: 'dana@northwind.example', max_sessions: '8' });
+    const form = makeFormStub({ name: 'Northwind Robotics', email: 'dana@northwind.example' });
     renderPage(<NewWorkspacePage />, { props: stranger, form });
 
     await userEvent.click(screen.getByRole('button', { name: 'Email me the link' }));
@@ -348,8 +348,8 @@ describe('New workspace page', () => {
     const transform = (form.transform as ReturnType<typeof vi.fn>).mock.calls[0][0] as (
       data: Record<string, unknown>,
     ) => Record<string, unknown>;
-    expect(transform({ name: 'Northwind Robotics', email: 'a@b.example', max_sessions: '8' })).toEqual({
-      workspace: { name: 'Northwind Robotics', email: 'a@b.example', max_sessions: '8' },
+    expect(transform({ name: 'Northwind Robotics', email: 'a@b.example' })).toEqual({
+      workspace: { name: 'Northwind Robotics', email: 'a@b.example' },
     });
     expect(form.post).toHaveBeenCalledWith('/workspace');
   });
@@ -367,12 +367,10 @@ describe('New workspace page', () => {
   // The keys are camelCase because Inertia's prop_transformer runs over every
   // prop, errors included, while the form posts snake_case. Reading the wrong
   // spelling here swallows the refusal and the form just sits there.
-  // The form asks for a number of sessions without ever having said what they
-  // cost or what is free, which is the question anyone filling it in has.
   it('says what the workspace gets before anyone asks for a card', () => {
     renderPage(<NewWorkspacePage />, { props: stranger });
 
-    expect(screen.getByText(/worker-hours are free/)).toHaveTextContent('The first 100 worker-hours are free');
+    expect(screen.getByText(/days are free/)).toHaveTextContent('The first 30 days are free, on one worker');
   });
 
   it('shows what the server refused', () => {
@@ -381,14 +379,6 @@ describe('New workspace page', () => {
     });
 
     expect(screen.getByText(/already has a workspace/)).toBeInTheDocument();
-  });
-
-  it('shows a refused session limit', () => {
-    renderPage(<NewWorkspacePage />, {
-      props: { ...stranger, errors: { maxSessions: 'must be greater than 0' } },
-    });
-
-    expect(screen.getByText('must be greater than 0')).toBeInTheDocument();
   });
 
   it('shows a refusal that belongs to no single field', () => {

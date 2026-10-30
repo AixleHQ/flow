@@ -7,7 +7,7 @@ module AuthConcern
   # Carried across the session reset at sign-in: what the flow signing the person
   # in has just set up for them (the company of an invitation it accepted).
   CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token pending_template_install
-                              pending_bitbucket_connect].freeze
+                              pending_bitbucket_connect pending_marketplace_proposal].freeze
 
   # Login continuation for a template install started as a guest (design §7.1).
   # Only the template and the version the guest saw are kept; the route back is
@@ -28,11 +28,33 @@ module AuthConcern
     session[PENDING_BITBUCKET_CONNECT_KEY] = true
   end
 
+  # Login continuation for an administrator who proved their address on a
+  # Marketplace proposal link: the request is waiting on their workspace's
+  # Billing page. The link does not sign them in (see
+  # Web::MarketplaceProposalsController#administrator_at), so the way to the
+  # request is kept here and taken by whichever sign-in they complete.
+  PENDING_MARKETPLACE_PROPOSAL_KEY = :pending_marketplace_proposal
+
+  def remember_pending_marketplace_proposal(company)
+    session[PENDING_MARKETPLACE_PROPOSAL_KEY] = company.id
+    session[:current_company_id] = company.id
+  end
+
   # Where a sign-in continues when a guest started something that needed one.
   def take_pending_sign_in_path
     template = take_pending_template_install_path
     bitbucket = bitbucket_connect_path if session.delete(PENDING_BITBUCKET_CONNECT_KEY)
-    template || bitbucket
+    template || bitbucket || take_pending_marketplace_proposal_path
+  end
+
+  # Only for a member of the workspace the request is on: the browser that
+  # opened the link is not necessarily the administrator's, and whoever signs
+  # in there lands where they always do.
+  def take_pending_marketplace_proposal_path
+    company_id = session.delete(PENDING_MARKETPLACE_PROPOSAL_KEY)
+    return nil if company_id.nil? || current_company&.id != company_id
+
+    company_settings_billing_path
   end
 
   def take_pending_template_install_path

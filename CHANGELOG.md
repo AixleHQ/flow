@@ -25,8 +25,8 @@ governance, community health — carry none.
   are signed out first and create a new workspace, confirming the address by
   email as any other signup does — the subscription proves the purchase, not the
   address. Returning from Manage subscriptions reaches the workspace they
-  already made. The workspace is billed by AWS rather than by card, is not
-  offered our free worker-hours, and runs as soon as AWS confirms the agreement;
+  already made. The workspace is billed by AWS rather than by card, gets no free
+  trial, and runs as soon as AWS confirms the agreement;
   capacity is reported hourly, and cancelling in AWS stops the workspace and
   reports the part-hour it was still running. Operators: this needs
   `AWS_MARKETPLACE_SAAS_PRODUCT_CODE`, `AWS_MARKETPLACE_SAAS_PRODUCT_ID`,
@@ -43,8 +43,9 @@ governance, community health — carry none.
   exists, before showing any form. The workspace is never chosen — it is
   whichever one holds the asker's own domain — the address is proved by a link
   sent to it, and an administrator still decides. An administrator proving
-  their own address — a workspace subscribing again after cancelling — is
-  signed in by that link and decides on the spot. Accepting stops the card that
+  their own address — a workspace subscribing again after cancelling — is sent
+  to sign in and lands on the request to decide on the spot; the link itself
+  signs nobody in. Accepting stops the card that
   was paying for that workspace, with a final invoice for the capacity it has
   not been billed for yet; the screen says how much that is before anyone
   decides. A workspace AWS bills keeps its Billing tab, which says where its
@@ -60,6 +61,44 @@ governance, community health — carry none.
   where they take none. Unset keeps the CLI's own default. The
   `create_workflow_step` and `update_workflow_step` tools accept
   `reasoning_effort`, and `get_workflow_step` returns it.
+- **Admin**: a company on the dashboard opens a breakdown of its queue for the
+  selected period: wait percentiles (p95 among them) and the share of sessions
+  that waited, how many sessions were already waiting when one joined, the wait
+  per workflow run, its projects with their queue limits, how much of the time
+  every worker was busy and how many waits began then, and the waits day by day.
+- **Feedback**: **Send feedback** in the user menu sends a bug report, a
+  feature request or a support question, with the sender and the page it came
+  from, to a Slack channel, a board column, or both. Up to five files go with it
+  (a screenshot can be pasted straight into the message), in the Slack post and
+  on the board card. Operators choose where with `FEEDBACK_SLACK_BOT_TOKEN` plus
+  `FEEDBACK_SLACK_CHANNEL_ID`, and with `FEEDBACK_BOARD_PROJECT_ID` plus
+  `FEEDBACK_BOARD_COLUMN_ID`; with neither set the item is hidden.
+- **Admin**: a company's edit form takes a **Trial last day**, which puts the
+  company on a free trial that ends with that day, or moves the end of the
+  trial it is on. A company we carry, or one a subscription still bills, is
+  refused. The company's page shows when its trial ends. A company on a trial
+  has one worker, and the admin cannot set another either; a company that needs
+  more is ticked Managed by Aixle. Unticking Managed by Aixle starts a fresh
+  trial, whatever the company ran while we carried it, ending on the last day
+  set in the same save or after the default length.
+
+### Changed
+- **Admin**: the dashboard's companies table shows each company's p95 queue
+  wait, with its change from the previous period, instead of the longest wait.
+- **Company settings**: the free trial of a hosted workspace is a number of days
+  on one worker, instead of 100 worker-hours spent at whatever number of workers
+  it ran. The banner and the Billing tab show the days left and the last day.
+  The signup form no longer asks how many workers: the trial runs one, and the
+  Workers setting and projects' reserved workers are read-only until a card is
+  added. Every member who can make changes, not only an administrator, can add
+  the card or pay a failed invoice from the banner.
+- **Admin**: `TRIAL_DAYS` (default 30) sets the length of a new trial and
+  replaces `TRIAL_QUEUE_HOURS`, which is no longer read. A company already on a
+  trial when this ships gets the default length, counted against what it has
+  already used; it, and one stopped at the end of its trial, has its worker
+  number set to one, and chooses again once a card is added. A company stopped
+  for spending the old 100 hours stays stopped until an operator gives it a
+  trial last day or it adds a card.
 
 ### Fixed
 - **Company settings**: a workspace is no longer billed for parts of an hour it
@@ -80,6 +119,10 @@ governance, community health — carry none.
   log existed is billed for the part of the hour before its first later change,
   which used to go to nobody. Operators: a migration writes each company's
   current capacity into the log once.
+- **Sessions & Runs**: when a company's worker limit is full, a worker that frees
+  up goes to the session that has waited longest, whichever project it is in.
+  Before, one project could take every freed worker while sessions queued
+  earlier in the company's other projects kept waiting.
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
 - **Sessions & Runs**: an agent session, and the run it belongs to, is no
@@ -92,6 +135,11 @@ governance, community health — carry none.
   headers configurable, since every endpoint uses the default header for its
   strategy, and lists Azure DevOps and Bitbucket among the CI events that
   resolve a gate.
+- **Sessions & Runs**: a session that its skip policy skips ("If outputs
+  exist") shows as Skipped, with the reason, instead of Pending forever after
+  the run has finished. Sessions skipped before they started fold into one row
+  on the run page, and the Sessions count says how many were skipped. Runs that
+  already finished are corrected by a migration.
 
 ## [1.8.0] - 2026-10-28
 

@@ -39,15 +39,27 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
     redirect_to new_workspace_path(email: address, asked: "check-email")
   end
 
-  # The link. Opening it is the proof, so this is where the request is actually
-  # raised and where the administrators are told.
+  # The link — SHOW, do not raise. Mail scanners and link-preview bots open
+  # every URL in a message, so a GET that raised the request would put it in
+  # front of the administrators before the buyer had read the mail, as the
+  # magic-link page (Web::MagicLinksController#show) explains at length. The
+  # page carries the token and a button, and the POST below is the proof.
+  def show
+    answers = MarketplaceProposalTicket.decode(params[:token])
+    return refuse(EXPIRED) if answers.nil?
+
+    render inertia: "Marketplace/ProposalPage", props: { token: params[:token], email: answers[:email] }
+  end
+
+  # Pressing the button. This is where the request is actually raised and
+  # where the administrators are told.
   def confirm
     answers = MarketplaceProposalTicket.decode(params[:token])
     return refuse(EXPIRED) if answers.nil?
 
     proposed = MarketplaceLicense.find_by(id: answers[:license_id])
     return refuse(NO_SUBSCRIPTION, email: answers[:email]) if proposed.nil?
-    # Opening the link again inside its two hours is a reload, not a second
+    # Pressing it again inside the link's two hours is a reload, not a second
     # ask: raising again would replace a request already waiting and mail every
     # administrator a second time, which the rate limit on #create does not
     # cover.
@@ -81,9 +93,9 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
   def raise_proposal(proposed, email)
     Billing::MarketplaceLicenseProposal.raise!(license: proposed, email: email)
     proposed.reload
+    notify_admins(proposed)
     administrator = administrator_at(proposed.proposed_company, email)
-    notify_admins(proposed, except: administrator)
-    return land(administrator) if administrator
+    return send_to_sign_in(administrator, proposed.proposed_company) if administrator
 
     # No marker in the URL: the licence itself now says a request is waiting, so
     # the screen reads the same whether this is the redirect or a reload of it
@@ -93,28 +105,26 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
 
   # The proved address is an administrator's of the very workspace being asked
   # -- one that cancelled and subscribed again, as a rule. They are who decides,
-  # so they are not mailed to ask themselves: the proof signs them in, as a
-  # signup link signs its owner in, and the request is in front of them.
-  # Only where an emailed link is a sign-in at all; elsewhere the ask goes the
-  # long way round.
+  # so the request is put in front of them: not by signing them in, which the
+  # link must not do -- it is reusable for two hours, and anyone with a
+  # subscription can have it sent to any administrator's address -- but by
+  # sending them through the sign-in the workspace's own policy allows, with
+  # the Billing page as where it lands.
   def administrator_at(company, email)
-    return nil unless Auth::PolicyResolver.deployment_allowlist_kinds.include?("magic_link")
-
     administrator = company.billing_admins.find_by(email: email.to_s.downcase)
     administrator unless administrator&.deleted?
   end
 
-  def land(administrator)
-    sign_in(administrator, provider: IdentityProvider.deployment!("magic_link"))
-    redirect_to company_settings_billing_path
+  def send_to_sign_in(administrator, company)
+    remember_pending_marketplace_proposal(company)
+    redirect_to login_path(email: administrator.email)
   end
 
   # Every administrator, because there is no billing contact and the decision
-  # moves who pays for their workspace -- except the one who has just asked.
-  def notify_admins(proposed, except: nil)
-    admins = proposed.proposed_company.billing_admins
-    admins = admins.where.not(id: except.id) if except
-    admins.find_each do |admin|
+  # moves who pays for their workspace. The one who asked included: the mail is
+  # the way to the request should they not sign in now.
+  def notify_admins(proposed)
+    proposed.proposed_company.billing_admins.find_each do |admin|
       MarketplaceProposalMailer.raised(proposed, admin).deliver_later
     end
   end

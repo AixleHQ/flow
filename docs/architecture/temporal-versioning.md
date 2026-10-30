@@ -87,6 +87,7 @@ Patches in use:
 | `keep-signals-delivered-before-run` | `WorkflowExecutionWorkflow` (and V2) | `run` no longer clears decisions that signals delivered before it |
 | `keep-signals-delivered-during-launch` | `WorkflowExecutionWorkflow` | a retried step's decision is cleared before its launch, so a signal that arrives while the launch activity runs is kept |
 | `step-state-decides-without-signal` | `WorkflowExecutionWorkflowV2` | a Skip or Approve that is written to the step counts even if its signal is lost |
+| `mark-policy-skipped-step-runs` | `WorkflowExecutionWorkflow` (and V2) | a step its skip policy skips gets its step run marked `skipped`, with the reason, instead of left `pending` |
 
 ## The replay test
 
@@ -106,6 +107,8 @@ The label says which code recorded the history:
 - `2026-09-23-develop-1a9fb535`: `develop` at 1a9fb535, before the patches
   above existed.
 - `2026-09-23`: the code with those patches.
+- `2026-10-30`: the code with `mark-policy-skipped-step-runs`, recorded for the
+  scenarios it changes.
 
 ### When you change workflow code
 

@@ -93,13 +93,14 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
-| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with whether each company is billed) and the administration of companies, users and the rest |
+| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with whether each company is billed, and a breakdown of one company's queue) and the administration of companies, users and the rest |
 
 ### Help
 
 | Area | What it covers |
 | --- | --- |
 | **Docs** | The in-product documentation, linked from the public site as **Documentation** |
+| **Feedback** | **Send feedback** in the user menu: a bug, a feature request or a support question sent to the team that runs the installation |
 
 ## How the pieces fit (for changelog writers)
 

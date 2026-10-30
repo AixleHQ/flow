@@ -22,7 +22,7 @@ class Web::HowItWorksController < Web::ApplicationController
   def show
     render inertia: "HowItWorks/ShowPage", props: {
       queue_hourly_rate: Settings.pricing.queue_hourly_rate.to_f,
-      free_queue_hours: Billing::Trial.queue_hours,
+      trial_days: Billing::Trial.days,
       signed_in: signed_in?
     }
   end

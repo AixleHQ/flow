@@ -4,7 +4,7 @@
 > own servers, nothing here applies — your operator sets the limits and nobody is
 > billed. If you bought Flow through AWS Marketplace, see
 > [AWS Marketplace billing](/docs/aws-marketplace-billing) instead: AWS invoices
-> you, and there is no free allowance or card here.
+> you, and there is no free trial or card here.
 
 ## What you pay for
 
@@ -31,32 +31,28 @@ Your invoice is charged in **whole worker-hours**. A part hour left over at the 
 of a billing period is rounded down and not charged for — we never round a
 fraction up into a chargeable hour.
 
-## Your first 100 worker-hours are free
+## Your first 30 days are free
 
-Every new workspace starts with **100 free worker-hours**, and nothing is charged
-for them.
+Every new workspace starts with a **30-day free trial**, and nothing is charged
+for it.
 
-**They are a quantity, not a trial period, and you set the rate they are spent
-at.** Running ten workers uses ten worker-hours an hour; running one uses one.
-The same hundred hours last about four days at one worker and about ten hours at
-ten.
+**The trial runs one worker**: one session at a time, the rest wait their turn.
+Anyone in the workspace who can make changes can add a card from the banner.
+Once one is added, an administrator chooses how many workers to keep on
+**Settings → General → Workers**.
 
-Your limit is yours throughout — nothing is capped while the free capacity lasts,
-so you are trying the product you would actually be buying. A bigger limit buys a
-shorter trial, not a bigger allowance.
+A banner at the top of every page shows how many days are left and the trial's
+last day.
 
-A banner at the top of every page shows what you have spent and roughly how long
-what is left will last **at the rate you are currently running**.
-
-## When the free capacity runs out
+## When the trial ends
 
 - **No new session starts.** Sessions already running **finish** — nothing is
   stopped part-way.
 - Queued work stays queued, and starts as soon as the workspace is running again.
 - You are not charged for the time you are stopped.
 
-To carry on, an administrator adds a card, from the banner or from **Settings →
-Billing**. The workspace runs again as soon as the card is confirmed.
+To carry on, anyone in the workspace who can make changes adds a card from the
+banner; an administrator can also do it from **Settings → Billing**. The workspace runs again as soon as the card is confirmed.
 
 ## Your bill so far
 
@@ -72,7 +68,7 @@ then a confirmation that says what will happen.
 
 - The subscription ends **at once**. Workers are billed for every hour they are
   available, so it does not run on to the end of the billing period.
-- No new session starts, as when the free capacity runs out. Sessions already
+- No new session starts, as when the trial ends. Sessions already
   running finish.
 - Usage up to the minute of cancelling is billed on a **final invoice**, issued
   and charged a few minutes later. Settings → Billing links to it once it is
@@ -109,7 +105,7 @@ month, because nothing was bought for a month in the first place.
 ## Where the numbers come from
 
 Your capacity is recorded hour by hour, per workspace, exactly to the second — the
-same record the free allowance is counted from and the same one an invoice is
+same record the free trial is counted from and the same one an invoice is
 built from. If a figure ever looks wrong, ask us: we can show you the hours.
 
 ## See also

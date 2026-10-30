@@ -128,7 +128,7 @@ Standalone tool workflows without a session are excluded. Limiting all container
 
 ### 3.3. FIFO and limit changes
 
-Use a globally unique immutable enqueue ordinal from a DB sequence, allocated under the queue lock. Within a pool, this defines enqueue order rather than HTTP arrival time across replicas. Gaps are allowed; cross-pool execution order is not guaranteed.
+Use a globally unique immutable enqueue ordinal from a DB sequence, allocated under the queue lock. Within a pool, this defines enqueue order rather than HTTP arrival time across replicas. Gaps are allowed. A drain walks every waiting pool's queue together in ordinal order, so the pools of one company, which share its budget, are served in the order their sessions joined: a worker the company frees goes to the oldest waiting session whose own pool has room, and a pool with no room is skipped without holding up the rest. Across companies the budgets are independent, so their relative order is not a promise.
 
 Increasing capacity permits more grants. Decreasing from 8 occupied slots to cap 5 does not kill sessions; new grants wait until occupancy is below 5. The invariant concerns new grants, not retroactively eliminating excess occupancy caused by a decrease.
 

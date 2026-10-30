@@ -26,23 +26,25 @@ class Billing::EffectiveCapacityTest < ActiveSupport::TestCase
     assert_not_includes Billing::EffectiveCapacity.for_companies, company.id
   end
 
-  # The free allowance is a quantity, not a smaller workspace: a company on it
-  # runs what its admin chose and simply spends the hours faster.
-  test "a trialing company runs the limit it asked for" do
-    company = create(:company, :trialing)
+  # A company given more before a trial could not be is still held to one: the
+  # stored number is what it runs once it pays.
+  test "a trialing company runs one worker, whatever limit it has" do
+    company = create(:company)
     limit!(company, 12)
+    company.update_column(:billing_state, "trialing")
 
-    assert_equal 12, Billing::EffectiveCapacity.for_companies[company.id]
+    assert_equal 1, Billing::EffectiveCapacity.for_companies[company.id]
   end
 
-  test "an unbounded trialing company is bounded by nothing either" do
-    company = create(:company, :trialing)
+  test "an unbounded trialing company runs one worker too" do
+    company = create(:company)
+    company.update_column(:billing_state, "trialing")
 
-    assert_not_includes Billing::EffectiveCapacity.for_companies, company.id
+    assert_equal 1, Billing::EffectiveCapacity.for_companies[company.id]
   end
 
   test "a blocked company runs nothing" do
-    company = create(:company, :billing_blocked)
+    company = create(:company, billing_state: "blocked", billing_block_reason: "canceled")
     limit!(company, 12)
 
     assert_equal 0, Billing::EffectiveCapacity.for_companies[company.id]
@@ -52,8 +54,8 @@ class Billing::EffectiveCapacityTest < ActiveSupport::TestCase
   # there however the column happens to read.
   test "nothing is capped outside the hosted product" do
     company = create(:company, :trialing)
-    limit!(company, 12)
     with_mode(Deployment::SELF_HOSTED)
+    limit!(company, 12)
 
     assert_empty Billing::EffectiveCapacity.ceilings
     assert_equal 12, Billing::EffectiveCapacity.for_companies[company.id]

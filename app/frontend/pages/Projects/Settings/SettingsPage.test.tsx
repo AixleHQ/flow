@@ -31,6 +31,19 @@ const concurrency = {
 };
 
 describe('Projects/Settings/SettingsPage', () => {
+  it('shows a trialing company its one worker, with nothing to reserve', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: {
+        project,
+        concurrency: { ...concurrency, companyLimit: 5, available: 5, trialWorkers: 1, canManage: false },
+      },
+    });
+
+    expect(screen.queryByLabelText('Reserved workers')).not.toBeInTheDocument();
+    expect(screen.getByText(/one worker until a card is added/)).toBeInTheDocument();
+    expect(screen.queryByText(/is unreserved/)).not.toBeInTheDocument();
+  });
+
   it('renders the page title and section headings', () => {
     renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 

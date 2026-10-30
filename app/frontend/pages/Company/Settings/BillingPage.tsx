@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { formatDateMedium, formatDateTimeShort } from 'shared/lib/formatDate';
+import { formatCalendarDay, formatDateMedium, formatDateTimeShort } from 'shared/lib/formatDate';
 import {
   companyBillingCancellationPath,
   companyBillingCheckoutPath,
@@ -56,7 +56,8 @@ interface Billing {
   periodEndsAt: string | null;
   cancelsAt: string | null;
   usage: Usage | null;
-  allowance: { hours: number; usedHours: number } | null;
+  /** The free trial, while it runs or once it has ended. `lastDay` is `YYYY-MM-DD` (UTC). */
+  trial: { days: number; daysLeft: number; lastDay: string } | null;
   canPay: boolean;
   hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
@@ -104,7 +105,7 @@ interface Props {
 }
 
 const STATUS_BADGE: Record<BillingStatus, { label: string; color: string }> = {
-  trialing: { label: 'Free capacity', color: 'blue' },
+  trialing: { label: 'Free trial', color: 'blue' },
   active: { label: 'Active', color: 'green' },
   cancelling: { label: 'Cancelling', color: 'yellow' },
   allowance: { label: 'Stopped', color: 'red' },
@@ -265,16 +266,21 @@ function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billin
   let action: React.ReactNode = null;
   switch (billing.status) {
     case 'trialing':
-      body = billing.allowance && (
+      body = billing.trial && (
         <>
-          You are on free capacity: {billing.allowance.usedHours} of {billing.allowance.hours} worker-hours used. Add a
-          card to keep going once it runs out.
+          You are on the free trial, on one worker: {billing.trial.daysLeft} of {billing.trial.days} days left, the last
+          day is {formatCalendarDay(billing.trial.lastDay)}.{' '}
+          {billing.canPay
+            ? 'Add a card to keep going after it and choose how many workers to run.'
+            : 'Talk to us to keep going after it.'}
         </>
       );
       action = addCard;
       break;
     case 'allowance':
-      body = 'The free worker-hours are used up, so no new sessions start. Anything already running finishes.';
+      body = `The free trial has ended, so no new sessions start. Anything already running finishes. ${
+        billing.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'
+      }`;
       action = addCard;
       break;
     case 'active':

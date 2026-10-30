@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_173000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -588,6 +588,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_173000) do
     t.datetime "trial_started_at"
     t.string "billing_provider", default: "none", null: false
     t.datetime "billing_provider_since"
+    t.integer "trial_hours"
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
@@ -803,6 +804,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_173000) do
     t.datetime "updated_at", null: false
     t.index ["key"], name: "index_feature_flags_on_key", unique: true
     t.index ["updated_by_id"], name: "index_feature_flags_on_updated_by_id"
+  end
+
+  create_table "feedback_attachments", force: :cascade do |t|
+    t.bigint "feedback_submission_id", null: false
+    t.string "name", null: false
+    t.jsonb "file_data"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["feedback_submission_id"], name: "index_feedback_attachments_on_feedback_submission_id"
+  end
+
+  create_table "feedback_submissions", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "user_id"
+    t.string "kind", null: false
+    t.text "message", null: false
+    t.string "page_url"
+    t.string "app_version"
+    t.datetime "slack_delivered_at"
+    t.datetime "board_delivered_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_feedback_submissions_on_company_id"
+    t.index ["user_id", "created_at"], name: "index_feedback_submissions_on_user_id_and_created_at"
   end
 
   create_table "folders", force: :cascade do |t|
@@ -2234,6 +2259,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_173000) do
   add_foreign_key "feature_flag_overrides", "feature_flags", on_delete: :cascade
   add_foreign_key "feature_flag_overrides", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "feature_flags", "users", column: "updated_by_id", on_delete: :nullify
+  add_foreign_key "feedback_attachments", "feedback_submissions", on_delete: :cascade
+  add_foreign_key "feedback_submissions", "companies", on_delete: :cascade
+  add_foreign_key "feedback_submissions", "users", on_delete: :nullify
   add_foreign_key "folders", "companies", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_folders_project_company", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", on_delete: :cascade, validate: false

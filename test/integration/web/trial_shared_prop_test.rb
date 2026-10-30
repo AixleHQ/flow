@@ -3,7 +3,7 @@
 require "test_helper"
 
 # The banner is fed by a shared Inertia prop, so every screen can say a workspace
-# is on free capacity rather than leaving a person to work out why nothing
+# is on the free trial rather than leaving a person to work out why nothing
 # starts.
 class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
   setup do
@@ -15,12 +15,6 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
 
   def with_mode(mode)
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
-  end
-
-  def used!(hours)
-    CompanyCapacityUsage.record!(
-      company_id: @company.id, period_start: Time.utc(2026, 9, 29, 10), quantity_seconds: hours * 3600
-    )
   end
 
   def trial_prop = shared_prop(:trial)
@@ -42,36 +36,16 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     assert_nil trial_prop
   end
 
-  test "a workspace on free capacity gets what it has spent" do
+  test "a workspace on the free trial gets the days it has left and its last day" do
+    freeze_time
     @company.update!(billing_state: "trialing")
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))
-    with_company_limit(@company, 10)
-    used!(60)
 
     props = trial_prop
 
     assert_equal "trialing", props[:state]
-    assert_equal 100, props[:allowanceHours]
-    assert_in_delta 60.0, props[:usedHours]
-    assert_in_delta 40.0, props[:remainingHours]
-    assert_equal 10, props[:maxSessions]
-  end
-
-  # Forty queue-hours is four days at one session and four hours at ten, and only
-  # the second number answers when they have to do something about it.
-  test "it turns what is left into hours at the rate they are running" do
-    @company.update!(billing_state: "trialing")
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))
-    with_company_limit(@company, 10)
-    used!(60)
-
-    assert_in_delta 4.0, trial_prop[:hoursLeftAtCurrentRate]
-  end
-
-  test "a workspace with no limit has no rate to divide by" do
-    @company.update!(billing_state: "trialing")
-
-    assert_nil trial_prop[:hoursLeftAtCurrentRate]
+    assert_equal 30, props[:days]
+    assert_equal 30, props[:daysLeft]
+    assert_equal (Date.current + 29).iso8601, props[:lastDay]
   end
 
   # The banner must not offer a card where there is nowhere to pay.

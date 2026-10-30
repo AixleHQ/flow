@@ -46,6 +46,18 @@ describe('Company settings page', () => {
     expect(patch.mock.calls[0][1]).toMatchObject({ capacity: '30' });
   });
 
+  it('shows the trial its one worker, with no number to choose', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { company, capacity: { ...capacity, trialWorkers: 1, canManage: false }, canManage: true },
+    });
+
+    expect(screen.queryByLabelText(/Workers/)).not.toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText(/one worker until a card is added/)).toBeInTheDocument();
+    // The stored limit is not what runs, so its reservations would contradict the one.
+    expect(screen.queryByText(/is reserved by projects/)).not.toBeInTheDocument();
+  });
+
   it('tells a Marketplace admin the fewest workers the installation allows', () => {
     renderAuthedPage(<SettingsPage />, {
       props: { company, capacity: { ...capacity, minimum: 3 }, canManage: true },

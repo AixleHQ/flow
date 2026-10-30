@@ -58,7 +58,7 @@ module Workflows
         "on_failure" => "fail"
       }
 
-      @workflow.stubs(:should_skip?).returns(false)
+      @workflow.stubs(:policy_skip).returns(nil)
       @workflow.stubs(:prepare_step).returns(:ok)
       @workflow.stubs(:wait_for_all_parallel).returns({ 1 => :completed })
 
@@ -85,7 +85,7 @@ module Workflows
         "on_failure" => "fail"
       }
 
-      @workflow.stubs(:should_skip?).returns(false)
+      @workflow.stubs(:policy_skip).returns(nil)
       @workflow.stubs(:prepare_step).returns(:ok)
 
       @workflow.stubs(:launch_step_session).with(42) do
@@ -164,7 +164,7 @@ module Workflows
       end
 
       def execute(_input = nil)
-        { "should_skip" => self.class.should_skip }
+        { "should_skip" => self.class.should_skip, "reason" => ("Outputs exist" if self.class.should_skip) }
       end
     end
 
@@ -215,7 +215,12 @@ module Workflows
 
     class FakeMarkStepSkippedActivity < Temporalio::Activity::Definition
       activity_name "workflow_mark_step_skipped_activity"
-      def execute(_input = nil)
+      class << self
+        attr_accessor :calls
+      end
+
+      def execute(input = nil)
+        (self.class.calls ||= []) << input
         {}
       end
     end
@@ -290,6 +295,42 @@ module Workflows
       )
 
       assert_equal %w[running failed], RecordingUpdateStatusActivity.statuses
+    end
+
+    test "a step its skip policy skips is marked skipped, with the reason" do
+      RecordingUpdateStatusActivity.statuses = []
+      FakeMarkStepSkippedActivity.calls = []
+      FakePrepareStepListActivity.steps = [
+        { "step_id" => 1, "step_run_id" => 42, "depends_on_step_ids" => [], "on_failure" => "fail" }
+      ]
+      FakeFetchModeActivity.mode = "non_interactive"
+      FakeCheckSkipActivity.should_skip = true
+      stub_activities_proxy!
+
+      run_workflow(
+        WorkflowExecutionWorkflow, { workflow_run_id: 123 },
+        activities: e2e_activities, task_queue: E2E_TASK_QUEUE
+      )
+
+      assert_equal [ { "step_run_id" => 42, "reason" => "Outputs exist" } ], FakeMarkStepSkippedActivity.calls
+    end
+
+    test "a skipped step with no step run yet gets one, marked skipped" do
+      RecordingUpdateStatusActivity.statuses = []
+      FakeMarkStepSkippedActivity.calls = []
+      FakePrepareStepListActivity.steps = [
+        { "step_id" => 1, "step_run_id" => nil, "depends_on_step_ids" => [], "on_failure" => "fail" }
+      ]
+      FakeFetchModeActivity.mode = "non_interactive"
+      FakeCheckSkipActivity.should_skip = true
+      stub_activities_proxy!
+
+      run_workflow(
+        WorkflowExecutionWorkflow, { workflow_run_id: 123 },
+        activities: e2e_activities, task_queue: E2E_TASK_QUEUE
+      )
+
+      assert_equal [ 999 ], FakeMarkStepSkippedActivity.calls.map { |call| call["step_run_id"] }
     end
 
     test "run honors step dependencies across loop iterations when all steps skip" do

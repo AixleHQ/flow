@@ -114,14 +114,18 @@ Rails.application.routes.draw do
                                   as: :marketplace_registration
   # A buyer whose email domain already has a workspace cannot create a second
   # one, so instead they ask the administrators of that one to apply the
-  # subscription. The POST only sends a link to the address they typed; the GET
-  # is that link, and opening it is what proves the address and raises the
-  # request. Both are unauthenticated, like the fulfilment URL above: the buyer
-  # was signed out on arrival and has nothing to sign in as yet.
+  # subscription. The first POST only sends a link to the address they typed;
+  # the GET is that link, which shows a button and nothing more -- as the magic
+  # link below, so that a mail scanner opening it proves nothing -- and the
+  # second POST is the button, which proves the address and raises the request.
+  # All unauthenticated, like the fulfilment URL above: the buyer was signed out
+  # on arrival and has nothing to sign in as yet.
   post "marketplace/aws/proposal", to: "web/marketplace_proposals#create",
                                    as: :marketplace_proposal
-  get "marketplace/aws/proposal", to: "web/marketplace_proposals#confirm",
-                                  as: :confirm_marketplace_proposal
+  get "marketplace/aws/proposal", to: "web/marketplace_proposals#show",
+                                  as: :marketplace_proposal_link
+  post "marketplace/aws/proposal/confirm", to: "web/marketplace_proposals#confirm",
+                                           as: :confirm_marketplace_proposal
 
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.
@@ -405,7 +409,10 @@ Rails.application.routes.draw do
       resources :overrides, only: %i[create destroy], param: :company_id, controller: "feature_flag_overrides"
     end
     resource :session_admission, only: %i[show]
-    resource :dashboard, only: %i[show]
+    resource :dashboard, only: %i[show] do
+      get :waits, to: "dashboard_companies#waits"
+      resources :companies, only: %i[show], controller: "dashboard_companies"
+    end
   end
 
   scope module: :web, defaults: { format: :html } do
@@ -557,6 +564,7 @@ Rails.application.routes.draw do
 
     namespace :company do
       post "switch", to: "switch#create", as: :switch
+      post "feedback", to: "feedback#create", as: :feedback
       # Self-removal ("Leave company" on the profile page) — id is the
       # MEMBERSHIP id, and it may belong to any of the user's companies.
       resources :memberships, only: %i[destroy]

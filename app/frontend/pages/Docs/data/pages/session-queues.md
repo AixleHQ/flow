@@ -119,7 +119,9 @@ A session that is not running yet tells you which of these it is waiting for:
 | **Waiting for cluster capacity** | A slot was granted, but the cluster has nowhere to put the container yet. |
 | **Starting session…** | The slot is granted and the container is coming up. |
 
-Sessions start in the order they were asked for. Cancelling a queued session
+Sessions start in the order they were asked for, across all of a company's
+projects: a worker that frees up goes to the session that has waited longest,
+unless that session's own project is at its limit. Cancelling a queued session
 gives its place to the next one immediately.
 
 ## Things worth knowing

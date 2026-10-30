@@ -43,6 +43,7 @@ import {
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
 import classes from './ShowPage.module.css';
+import { SkippedSessions } from './SkippedSessions';
 
 // ── Types ──────────────────────────────────────────
 
@@ -64,6 +65,10 @@ const RUN_STATE_LABELS: Record<string, string> = {
   pending: 'Pending',
 };
 
+function stepTitle(stepRun: StepRun, index: number) {
+  return stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`;
+}
+
 /** Sessions inside a run are numbered; their checklist items are the steps. */
 function toCardData(stepRun: StepRun, index: number): SessionCardData {
   return {
@@ -72,7 +77,7 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
       stepRun.workflowVersionNumber === null
         ? `Session ${index + 1}`
         : `Session ${index + 1} · v${stepRun.workflowVersionNumber}`,
-    title: stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`,
+    title: stepTitle(stepRun, index),
     state: stepRun.terminalSessionState === 'queued' ? 'queued' : stepRun.state,
     terminalSessionId: stepRun.terminalSessionId,
     agentType: stepRun.agentType ?? null,
@@ -84,12 +89,31 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
     prompt: stepRun.initialPrompt ?? null,
     note: stepRun.stepNote,
     errorMessage: stepRun.errorMessage,
+    skipReason: stepRun.skipReason,
     steps: stepRun.subStepRuns.map((ss) => ({
       id: ss.id,
       label: ss.subStepName ?? `Step #${ss.id}`,
       state: ss.state ?? 'pending',
     })),
   };
+}
+
+type SessionListEntry =
+  { kind: 'card'; step: StepRun; index: number } | { kind: 'skipped'; steps: { step: StepRun; index: number }[] };
+
+// A step skipped before it opened a session has nothing to show but its reason.
+function groupSkippedSessions(steps: StepRun[]): SessionListEntry[] {
+  const entries: SessionListEntry[] = [];
+  steps.forEach((step, index) => {
+    if (step.state !== 'skipped' || step.terminalSessionId !== null) {
+      entries.push({ kind: 'card', step, index });
+      return;
+    }
+    const last = entries[entries.length - 1];
+    if (last?.kind === 'skipped') last.steps.push({ step, index });
+    else entries.push({ kind: 'skipped', steps: [{ step, index }] });
+  });
+  return entries;
 }
 
 /** One live step's terminal; it shows its own "connecting…" state, so several load independently. */
@@ -165,6 +189,7 @@ const WorkflowRunShowPage = () => {
 
   const failedSteps = useMemo(() => sortedSteps.filter((s) => s.state === 'failed'), [sortedSteps]);
   const failedStep = failedSteps[0] ?? null;
+  const skippedCount = sortedSteps.filter((s) => s.state === 'skipped').length;
 
   const post = useCallback((path: string, data: Parameters<typeof router.post>[1] = {}) => {
     setActionLoading(true);
@@ -223,7 +248,10 @@ const WorkflowRunShowPage = () => {
   // Failed runs swap "Started" for where they stopped — the one fact you open a
   // failed run to learn.
   const stats = [
-    { label: 'Sessions', value: `${run.stepsCompleted}/${run.stepsTotal}` },
+    {
+      label: 'Sessions',
+      value: `${run.stepsCompleted}/${run.stepsTotal}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ''}`,
+    },
     { label: 'Duration', value: formatDuration(run.executionStartedAt, run.completedAt, run.state, now) },
     { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
     ...(run.workflowVersionNumbers.length > 0
@@ -248,16 +276,28 @@ const WorkflowRunShowPage = () => {
   const liveStepIds = useMemo(() => new Set(liveSteps.map((s) => s.id)), [liveSteps]);
 
   // Every step runs on the run's runner (DESIGN.md §3.3): there is no step-level runner.
-  const sessionCards = sortedSteps.map((step, i) => (
-    <SessionCard
-      key={step.id}
-      runsOn={<RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={project.id} />}
-      data={toCardData(step, i)}
-      live={isActive && liveStepIds.has(step.id)}
-      defaultOpen={isActive ? liveStepIds.has(step.id) : isTerminal || step.state === 'failed'}
-      sessionHref={step.terminalSessionId ? `${basePath}/sessions/${step.terminalSessionId}` : null}
-    />
-  ));
+  const sessionCards = groupSkippedSessions(sortedSteps).map((entry) =>
+    entry.kind === 'skipped' ? (
+      <SkippedSessions
+        key={`skipped-${entry.steps[0].step.id}`}
+        sessions={entry.steps.map(({ step, index }) => ({
+          id: step.id,
+          number: index + 1,
+          title: stepTitle(step, index),
+          reason: step.skipReason,
+        }))}
+      />
+    ) : (
+      <SessionCard
+        key={entry.step.id}
+        runsOn={<RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={project.id} />}
+        data={toCardData(entry.step, entry.index)}
+        live={isActive && liveStepIds.has(entry.step.id)}
+        defaultOpen={isActive ? liveStepIds.has(entry.step.id) : isTerminal || entry.step.state === 'failed'}
+        sessionHref={entry.step.terminalSessionId ? `${basePath}/sessions/${entry.step.terminalSessionId}` : null}
+      />
+    ),
+  );
 
   const renderConsoles = () => {
     if (liveSteps.length === 0) return null;

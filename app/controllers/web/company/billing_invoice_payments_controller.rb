@@ -33,6 +33,6 @@ class Web::Company::BillingInvoicePaymentsController < Web::Company::Application
   end
 
   def refuse(message)
-    redirect_back fallback_location: company_settings_billing_path, alert: message
+    redirect_back fallback_location: root_path, alert: message
   end
 end
