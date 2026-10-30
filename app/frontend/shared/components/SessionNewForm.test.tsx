@@ -18,7 +18,9 @@ function makeProps(overrides: Partial<SessionNewFormProps> = {}): SessionNewForm
 
 // Seed SharedProps with a currentUser whose configured agents we control.
 function authProps(
-  configuredAgents: ('claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'antigravity_cli' | 'grok')[] = [],
+  configuredAgents: (
+    'claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'antigravity_cli' | 'grok' | 'kiro_cli'
+  )[] = [],
 ) {
   return { currentUser: buildSharedUser({ configuredAgents }) };
 }
@@ -399,12 +401,16 @@ describe('SessionNewForm', () => {
       {
         agentType: 'claude_code',
         models: [
-          { modelId: 'opus-9', displayName: 'Opus 9' },
-          { modelId: 'sonnet-9', displayName: 'Sonnet 9' },
+          { modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] },
+          { modelId: 'sonnet-9', displayName: 'Sonnet 9', reasoningEffortLevels: [] },
         ],
         defaultModel: 'opus-9',
       },
-      { agentType: 'codex', models: [{ modelId: 'gpt-9', displayName: 'GPT 9' }], defaultModel: null },
+      {
+        agentType: 'codex',
+        models: [{ modelId: 'gpt-9', displayName: 'GPT 9', reasoningEffortLevels: [] }],
+        defaultModel: null,
+      },
       { agentType: 'cursor_cli', models: [], defaultModel: 'arn:aws:bedrock:us-east-1:1234:profile/abc' },
     ];
 
@@ -514,6 +520,196 @@ describe('SessionNewForm', () => {
       expect(JSON.parse(init!.body as string).terminalSession).not.toHaveProperty('requestedModel');
 
       fetchSpy.mockRestore();
+    });
+  });
+
+  describe('reasoning effort', () => {
+    const agentModels = [
+      {
+        agentType: 'grok',
+        models: [
+          { modelId: 'grok-5', displayName: 'Grok 5', reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'] },
+        ],
+        defaultModel: 'grok-5',
+      },
+      {
+        agentType: 'cursor_cli',
+        models: [
+          { modelId: 'claude-opus-4-8', displayName: 'Opus 4.8', reasoningEffortLevels: ['low', 'medium', 'high'] },
+        ],
+        defaultModel: 'claude-opus-4-8',
+      },
+      {
+        agentType: 'kiro_cli',
+        models: [
+          {
+            modelId: 'claude-opus-5.5',
+            displayName: 'Opus 5.5',
+            reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+          {
+            modelId: 'claude-sonnet-4.6',
+            displayName: 'Sonnet 4.6',
+            reasoningEffortLevels: ['low', 'medium', 'high', 'max'],
+          },
+          { modelId: 'auto', displayName: 'Auto', reasoningEffortLevels: [] },
+        ],
+        defaultModel: 'auto',
+      },
+    ];
+
+    async function pickModel(user: ReturnType<typeof userEvent.setup>, name: string) {
+      await user.click(screen.getByRole('combobox', { name: 'Model' }));
+      await user.click(await screen.findByRole('option', { name }));
+    }
+
+    it("offers the selected runtime's levels on a chosen model and sends the one picked", async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['grok']),
+      });
+
+      await user.click(screen.getByText('Grok'));
+      await pickModel(user, 'Grok 5');
+      expect(screen.getByText("The CLI may lower or ignore a level the model doesn't support.")).toBeInTheDocument();
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High', 'Extra high']);
+      await user.click(screen.getByRole('option', { name: 'Extra high' }));
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).toMatchObject({
+        requestedModel: 'grok-5',
+        reasoningEffort: 'xhigh',
+      });
+
+      fetchSpy.mockRestore();
+    });
+
+    it('is hidden while the model is left on Default', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['grok']) });
+
+      await user.click(screen.getByText('Grok'));
+
+      expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+    });
+
+    it('going back to the Default model drops the level picked', async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['grok']),
+      });
+
+      await user.click(screen.getByText('Grok'));
+      await pickModel(user, 'Grok 5');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+      await user.click(await screen.findByRole('option', { name: 'High' }));
+      await pickModel(user, 'Default · Grok 5');
+
+      expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(init!.body as string).terminalSession;
+      expect(body).not.toHaveProperty('requestedModel');
+      expect(body).not.toHaveProperty('reasoningEffort');
+
+      fetchSpy.mockRestore();
+    });
+
+    it("switching to a model that doesn't take the level picked clears it, and keeps one it takes", async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['kiro_cli']),
+      });
+      const effort = () => screen.getByRole('combobox', { name: 'Reasoning effort' });
+
+      await user.click(screen.getByText('Kiro CLI'));
+      await pickModel(user, 'Opus 5.5');
+      await user.click(effort());
+      await user.click(await screen.findByRole('option', { name: 'Extra high' }));
+      expect(effort()).toHaveValue('Extra high');
+
+      await pickModel(user, 'Sonnet 4.6');
+      expect(effort()).toHaveValue('');
+      expect(screen.queryByText(/is not available for/)).not.toBeInTheDocument();
+
+      await user.click(effort());
+      await user.click(await screen.findByRole('option', { name: 'High' }));
+      await pickModel(user, 'Opus 5.5');
+      expect(effort()).toHaveValue('High');
+
+      await pickModel(user, 'Sonnet 4.6');
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).toMatchObject({
+        requestedModel: 'claude-sonnet-4.6',
+        reasoningEffort: 'high',
+      });
+
+      fetchSpy.mockRestore();
+    });
+
+    it("offers Cursor CLI's levels once a model is chosen", async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['cursor_cli']) });
+
+      await user.click(screen.getByText('Cursor CLI'));
+      await pickModel(user, 'Opus 4.8');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High']);
+    });
+
+    it('offers exactly the levels the server sent for the selected model', async () => {
+      const user = userEvent.setup();
+      const serverModels = [
+        {
+          agentType: 'codex',
+          models: [{ modelId: 'gpt-next', displayName: 'GPT Next', reasoningEffortLevels: ['medium', 'ultra'] }],
+          defaultModel: null,
+        },
+      ];
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels: serverModels })} />, {
+        props: authProps(['codex']),
+      });
+
+      await user.click(screen.getByText('Codex'));
+      await pickModel(user, 'GPT Next');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Medium', 'Ultra']);
+    });
+
+    it('is disabled, with the reason, for a model the server sent no levels for', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['kiro_cli']) });
+
+      await user.click(screen.getByText('Kiro CLI'));
+      await pickModel(user, 'Auto');
+
+      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+      expect(screen.getByText('Kiro CLI has no reasoning-effort setting for auto.')).toBeInTheDocument();
     });
   });
 });

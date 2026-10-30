@@ -13,6 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Workflows**: a session in the workflow builder has a **Reasoning Effort**
+  next to its model, and the new-session form has one too. It appears once a
+  model is chosen (a level needs an explicit runtime and model), offers only the
+  levels the chosen runtime and model take, and is disabled, with the reason,
+  where they take none. Unset keeps the CLI's own default. The
+  `create_workflow_step` and `update_workflow_step` tools accept
+  `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
+  them.
+
 ## [1.9.0] - 2026-10-30
 
 ### Added

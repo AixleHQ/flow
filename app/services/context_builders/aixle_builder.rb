@@ -153,6 +153,11 @@ module ContextBuilders
           (#{Step::SUPPORTED_AGENT_RUNTIMES.join(', ')}) pin a step when it needs a
           particular model or runtime. The project snapshot lists the runtimes this
           user can actually run.
+        - `reasoning_effort` sets how hard the step's CLI thinks (`low`, `medium`,
+          `high`, …). Leave it unset for the CLI's default. A level needs both
+          `required_agent_runtime` and `preferred_model` set explicitly: without
+          either it is refused, so clear the level with them. Only a level that
+          runtime takes for that model is accepted.
         - `bmad_enabled: true` installs the BMAD Method into the step's container
           (skills, templates, agents). Use it for planning, PRD, architecture, story
           and review steps — `#{REFERENCE_DIR}/bmad-guide.md` says which BMAD skill

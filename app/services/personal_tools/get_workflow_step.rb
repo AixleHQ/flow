@@ -6,6 +6,7 @@ module PersonalTools
       display_name "Get Workflow Step"
       description "Return one workflow step with every wiring field (agent, tools, skills, MCP servers, " \
                   "config items, dependencies, BMAD, retries, failure and skip policy, preferred model, " \
+                  "reasoning effort, " \
                   "asset specs) and its sub-steps. get_workflow already carries instructions in full; " \
                   "this adds the fields it leaves out."
       audience :user
@@ -33,6 +34,7 @@ module PersonalTools
               max_retries: step.max_retries, on_failure: step.on_failure.to_s,
               skip_policy: step.skip_policy.to_s, preferred_model: step.preferred_model,
               required_agent_runtime: step.required_agent_runtime,
+              reasoning_effort: step.reasoning_effort,
               repository_ids: step.repository_ids,
               input_asset_specs: step.input_asset_specs, output_asset_specs: step.output_asset_specs,
               asset_ids: step.asset_ids,

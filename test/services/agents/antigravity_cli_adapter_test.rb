@@ -77,6 +77,12 @@ module Agents
                    @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
     end
 
+    test "session_command passes the reasoning effort as --effort" do
+      assert_equal "agy --model gemini-3.5-pro --effort high --dangerously-skip-permissions",
+                   @adapter.session_command(mode: "interactive", model: "gemini-3.5-pro", effort: "high")
+      assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "interactive", effort: nil)
+    end
+
     # Confirmed against the real 1.1.27 binary: --print immediately followed by
     # another flag swallows it as literal prompt text instead of parsing it, so
     # --output-format must come first.

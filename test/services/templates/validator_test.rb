@@ -179,4 +179,72 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     files = Templates::Package.from_directory(FIXTURE).files.except("assets/coding-standards.md")
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"
   end
+
+  # Steps take their runtimes from config/agent_runtimes.json; a runtime missing here
+  # makes a workflow exported with it fail validation.
+  test "the template schema's runtimes are the registry's" do
+    schema = JSON.parse(Templates::Package::SCHEMA_PATH.read)
+    runtimes = schema.dig("properties", "workflows", "items", "properties", "steps", "items", "properties",
+                          "required_agent_runtime", "enum")
+
+    assert_equal AgentRuntime.ids.sort, runtimes.sort
+  end
+
+  test "a step's reasoning effort needs its preferred model and runtime" do
+    without_model = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_not_empty Templates::Validator.new(without_model).errors
+
+    complete = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "claude-opus-5.5",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_empty Templates::Validator.new(complete).errors
+  end
+
+  test "a step's reasoning effort must be one its runtime takes for its model" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = lambda do |runtime, model, level|
+      errors_for do |definition|
+        definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => runtime,
+                                                            "preferred_model" => model,
+                                                            "reasoning_effort" => level)
+      end
+    end
+
+    assert_equal [ "#{label}: gemini_cli with model gemini-2.5-pro takes no reasoning effort" ],
+                 errors.call("gemini_cli", "gemini-2.5-pro", "low")
+    assert_equal [ "#{label}: xhigh is not available for kiro_cli with model claude-sonnet-4.6 " \
+                   "(choose one of: low, medium, high, max)" ],
+                 errors.call("kiro_cli", "claude-sonnet-4.6", "xhigh")
+    assert_empty errors.call("gemini_cli", "gemini-3-pro", "low")
+  end
+
+  # Step refuses a level on a blank model at install, so the package is refused here first.
+  test "a step's reasoning effort on a blank preferred model is refused" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = errors_for do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "",
+                                                          "reasoning_effort" => "high")
+    end
+
+    assert_equal [ "#{label}: needs an explicitly chosen model" ], errors
+  end
+
+  test "the installer refuses a step whose runtime and model take no such reasoning effort" do
+    invalid = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "gemini_cli",
+                                                          "preferred_model" => "gemini-2.5-pro",
+                                                          "reasoning_effort" => "low")
+    end
+
+    error = assert_raises(Templates::Validator::InvalidPackage) { Templates::Validator.validate!(invalid) }
+    assert_match(/reasoning_effort: gemini_cli with model gemini-2\.5-pro takes no reasoning effort/, error.message)
+  end
 end

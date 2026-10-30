@@ -382,6 +382,18 @@ module Agents
                    @adapter.session_command(mode: "interactive", model: "a b;rm")
     end
 
+    test "session_command passes the reasoning effort as --effort" do
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --model claude-opus-5.5 --effort high",
+                   @adapter.session_command(mode: "interactive", model: "claude-opus-5.5", effort: "high")
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --effort max",
+                   @adapter.session_command(mode: "non_interactive", effort: "max")
+    end
+
+    test "session_command adds no effort flag when none is set" do
+      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace",
+                   @adapter.session_command(mode: "interactive", effort: nil)
+    end
+
     # The command travels inside a single-quoted `tmux send-keys` argument
     # (AgentBaseStrategy#send_tmux_sequence), where one quote would end it early and
     # leave the CLI unlaunched.

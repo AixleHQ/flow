@@ -19,7 +19,7 @@ module Api
             params.require(:step).permit(
               :name, :instructions, :position, :agent_id,
               :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
-              :bmad_enabled, :required_agent_runtime, :preferred_model,
+              :bmad_enabled, :required_agent_runtime, :preferred_model, :reasoning_effort,
               input_asset_specs: [ :name, :asset_type, :required ],
               output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
               tool_ids: [], mcp_server_ids: [], skill_ids: [], asset_ids: [], repository_ids: [],

@@ -102,6 +102,20 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_match(/not pinned by digest/, error.message)
   end
 
+  test "a Kiro step with a reasoning effort exports to a valid package and installs with it" do
+    step = @source.workflows.sole.steps.order(:position).first
+    step.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "high")
+
+    result = export
+
+    exported = result.package.definition["workflows"].first["steps"].first
+    assert_equal %w[kiro_cli claude-opus-5.5 high],
+                 exported.values_at("required_agent_runtime", "preferred_model", "reasoning_effort")
+    copied = install(result.package).project.workflows.sole.steps.order(:position).first
+    assert_equal %w[kiro_cli claude-opus-5.5 high],
+                 [ copied.required_agent_runtime, copied.preferred_model, copied.reasoning_effort ]
+  end
+
   test "inherit_all_project_resources is flattened into explicit lists" do
     workflow = @source.workflows.sole
     workflow.update!(config: workflow.config.merge("inherit_all_project_resources" => true))

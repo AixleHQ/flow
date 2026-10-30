@@ -48,6 +48,54 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal v1.snapshot["steps"], @workflow.reload.latest_version.snapshot["steps"]
   end
 
+  test "a step's reasoning effort is part of its snapshot and comes back on revert" do
+    Versions.save!(@workflow, actor: @actor) do
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "high")
+    end
+    v1 = @workflow.latest_version
+    assert_equal "high", v1.snapshot["steps"].first["reasoning_effort"]
+
+    Versions.save!(@workflow, actor: @actor) { @build.update!(reasoning_effort: nil) }
+    assert_nil @workflow.latest_version.snapshot["steps"].first["reasoning_effort"]
+
+    Versions.revert!(@workflow, to: v1, actor: @actor)
+
+    assert_equal "high", @build.reload.reasoning_effort
+  end
+
+  # A key a snapshot lacks is a column added after that version was saved, so the
+  # revert gives it the column's default rather than keeping the row's current value.
+  test "reverting to a snapshot without a column restores that column's default" do
+    Versions.save!(@workflow, actor: @actor) { @build.update!(required_agent_runtime: "gemini_cli") }
+    v1 = @workflow.latest_version
+    legacy = v1.snapshot.except("description").merge(
+      "steps" => v1.snapshot["steps"].map do |step|
+        step.except("reasoning_effort", "on_failure", "max_retries")
+            .merge("sub_steps" => step["sub_steps"].map { |sub| sub.except("required") })
+      end
+    )
+    EntityVersion.where(id: v1.id).update_all(snapshot: legacy)
+    v1.reload
+
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.update!(description: "later")
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "xhigh",
+                     on_failure: "skip", max_retries: 3)
+      @check.update!(required: false)
+    end
+
+    Versions.revert!(@workflow, to: v1, actor: @actor)
+
+    @build.reload
+    assert_nil @workflow.reload.description
+    assert_equal "gemini_cli", @build.required_agent_runtime
+    assert_nil @build.preferred_model
+    assert_nil @build.reasoning_effort, "a nullable column with no default comes back nil"
+    assert_equal "fail", @build.on_failure, "a NOT NULL column comes back as its default"
+    assert_equal 0, @build.max_retries
+    assert @check.reload.required, "a sub-step column comes back as its default"
+  end
+
   test "revert restores a dependency chain whatever order the steps were saved in" do
     deploy = create(:step, workflow: @workflow, name: "Deploy", position: 3, depends_on_step_ids: [ @test.id ])
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "chain") }

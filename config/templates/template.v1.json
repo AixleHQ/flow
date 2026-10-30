@@ -945,13 +945,18 @@
                   "type": "string",
                   "maxLength": 128
                 },
+                "reasoning_effort": {
+                  "type": "string"
+                },
                 "required_agent_runtime": {
                   "enum": [
                     "claude_code",
                     "cursor_cli",
                     "codex",
                     "gemini_cli",
-                    "antigravity_cli"
+                    "antigravity_cli",
+                    "grok",
+                    "kiro_cli"
                   ]
                 },
                 "allow_non_interactive": {
@@ -994,7 +999,13 @@
               "required": [
                 "key",
                 "name"
-              ]
+              ],
+              "dependentRequired": {
+                "reasoning_effort": [
+                  "preferred_model",
+                  "required_agent_runtime"
+                ]
+              }
             }
           }
         },

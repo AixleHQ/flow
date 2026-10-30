@@ -32,6 +32,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @step2 = create(:step, workflow: @source, position: 2, name: "Second",
                            depends_on_step_ids: [ @step1.id ],
                            preferred_model: "claude-sonnet-4",
+                           reasoning_effort: "high",
                            bmad_enabled: true,
                            required_agent_runtime: "claude_code")
     create(:sub_step, step: @step1, name: "Sub 1")
@@ -48,6 +49,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal [ "First", "Second" ], copied_steps.map(&:name)
     assert_equal copied_steps[0].id, copied_steps[1].depends_on_step_ids.first
     assert_equal "claude-sonnet-4", copied_steps[1].preferred_model
+    assert_equal "high", copied_steps[1].reasoning_effort
     assert copied_steps[1].bmad_enabled
     assert_equal "claude_code", copied_steps[1].required_agent_runtime
     assert_equal 1, copied_steps[0].sub_steps.active.count

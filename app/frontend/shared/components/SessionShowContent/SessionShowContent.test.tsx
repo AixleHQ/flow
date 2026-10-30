@@ -32,6 +32,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     costCents: 0,
     models: [],
     requestedModel: null,
+    reasoningEffort: null,
     artifactsReviewed: null,
     initialPrompt: null,
     errorMessage: null,
