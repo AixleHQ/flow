@@ -53,6 +53,8 @@ export function ReasoningEffortSelect({
   if (value && unsupported) data.push({ value, label: reasoningEffortLabel(value) });
 
   const error = unsupported ? (reason ?? unsupportedLevel(value, runtime, model, levels)) : undefined;
+  const hint = levels.length > 0 ? REASONING_EFFORT_HINT : undefined;
+  const description = !unsupported && reason ? reason : (props.description ?? hint);
 
   return (
     <Select
@@ -64,7 +66,7 @@ export function ReasoningEffortSelect({
       clearable
       allowDeselect
       disabled={disabled || (levels.length === 0 && !value)}
-      description={!unsupported && reason ? reason : (props.description ?? (levels.length > 0 ? REASONING_EFFORT_HINT : undefined))}
+      description={description}
       error={error}
     />
   );
