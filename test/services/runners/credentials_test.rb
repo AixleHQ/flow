@@ -26,6 +26,40 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_match(/manual/, error.message)
   end
 
+  test "a revoked or deleted runner mints no registration token" do
+    deleted = create(:runner, :manual, company: @runner.company)
+    @runner.revoke!
+    deleted.soft_delete!
+
+    refusals = [ @runner, deleted ].map do |runner|
+      assert_raises(Runners::Credentials::Refused) { Runners::Credentials.mint_registration!(runner) }
+    end
+
+    assert_equal %w[runner_revoked runner_revoked], refusals.map(&:reason)
+    assert_empty RunnerCredential.where(kind: :registration)
+  end
+
+  test "a refresh token is refreshable unless revoked, of a gone environment, or expired unspent" do
+    spent = Runners::Credentials.issue_pair!(@environment).refresh_token
+    Runners::Credentials.rotate!(RunnerCredential.find_by_token(spent, kind: :refresh))
+    expiring = Runners::Credentials.issue_pair!(@environment).refresh_token
+    travel 30.days + 1.second
+    live = Runners::Credentials.issue_pair!(@environment)
+    revoked = Runners::Credentials.issue_pair!(@environment).refresh_token
+    RunnerCredential.find_by_token(revoked, kind: :refresh).update!(revoked_at: Time.current)
+    gone_environment = create(:runner_environment, runner: @runner)
+    gone = Runners::Credentials.issue_pair!(gone_environment).refresh_token
+    gone_environment.update!(state: :gone)
+
+    assert Runners::Credentials.refreshable(live.refresh_token)
+    assert Runners::Credentials.refreshable(spent), "a spent token passes so that rotate! detects its reuse"
+    assert_nil Runners::Credentials.refreshable(live.access_token)
+    assert_nil Runners::Credentials.refreshable(expiring)
+    assert_nil Runners::Credentials.refreshable(revoked)
+    assert_nil Runners::Credentials.refreshable(gone)
+    assert_nil Runners::Credentials.refreshable("arref_not-a-token")
+  end
+
   test "a registration token is unusable once used, revoked or expired" do
     used = Runners::Credentials.mint_registration!(@runner)
     RunnerCredential.find_by_token(used, kind: :registration).update!(used_at: Time.current, runner_environment: @environment)

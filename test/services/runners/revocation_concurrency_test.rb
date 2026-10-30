@@ -9,7 +9,7 @@ require "test_helper"
 # row, and one that waits for it is refused. Each race is forced into its order
 # by holding one side's transaction open until the other is seen waiting on a
 # lock. An unregister races a revocation the same way, since both revoke the
-# same credential rows. The racing work commits on its own connections, so this
+# same credential rows, and so does the minting of a registration token. The racing work commits on its own connections, so this
 # test opts out of the transactional wrapper and cleans up after itself.
 class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
@@ -66,6 +66,20 @@ class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
     assert refusals.all?(Runners::Credentials::Refused), refusals.inspect
     assert_equal 1, RunnerEnvironment.where(runner_id: @runner.id).count
     assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
+  end
+
+  test "a revocation that waits on a registration-token mint revokes the token it minted" do
+    token = issue_then_revoke { Runners::Credentials.mint_registration!(Runner.find(@runner.id)) }
+
+    assert RunnerCredential.find_by_token(token, kind: :registration).revoked?
+    assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
+  end
+
+  test "a registration-token mint that waits on a revocation is refused" do
+    refusals = revoke_then_issue(-> { Runners::Credentials.mint_registration!(Runner.find(@runner.id)) })
+
+    assert_equal [ "runner_revoked" ], refusals.map(&:reason)
+    assert_empty RunnerCredential.where(runner_id: @runner.id)
   end
 
   test "a revocation that waits on an unregister finds the machine gone and its credentials revoked" do

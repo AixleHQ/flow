@@ -37,11 +37,11 @@ module RunnerGateway
 
       private
 
-      # A refresh token is looked up whatever its state, so that
+      # A spent refresh token passes the token check, so that
       # Runners::Credentials.rotate! sees a second use of one.
       def authenticate(kind)
         @credential = if kind == :refresh
-          RunnerCredential.find_by_token(bearer_token, kind: kind)
+          Runners::Credentials.refreshable(bearer_token)
         else
           Runners::Credentials.usable(bearer_token, kind: kind)
         end

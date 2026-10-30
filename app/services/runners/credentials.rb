@@ -35,13 +35,18 @@ module Runners
 
     # A single-use token that registers one machine of a `manual` runner within
     # an hour. There is no endpoint for it yet: tests and local development call
-    # this, and "Add machine" will (§15 task 12).
+    # this, and "Add machine" will (§15 task 12). Like every issuer, it locks
+    # the runner first (lock_live_runner!), so a revoked or deleted runner gets
+    # no token and a revocation running alongside revokes the one minted here.
     def mint_registration!(runner)
       raise ArgumentError, "registration tokens are minted for manual runners only" unless runner.manual?
 
       token = generate(:registration)
-      RunnerCredential.create!(runner: runner, kind: :registration, token_digest: RunnerCredential.digest(token),
-                               expires_at: REGISTRATION_TTL.from_now)
+      RunnerCredential.transaction do
+        live = lock_live_runner!(runner.id)
+        RunnerCredential.create!(runner: live, kind: :registration, token_digest: RunnerCredential.digest(token),
+                                 expires_at: REGISTRATION_TTL.from_now)
+      end
       token
     end
 
@@ -66,6 +71,20 @@ module Runners
       credential = RunnerCredential.find_by_token(token, kind: kind)
       return nil if credential.nil? || credential.revoked? || credential.expired?
       return nil if credential.registration? && credential.used?
+      return nil if credential.runner_environment&.gone?
+
+      credential
+    end
+
+    # The refresh credential `token` names if it may be presented to rotate!:
+    # not revoked, not of a `gone` environment, and either unexpired or spent.
+    # A spent one passes, even past its own expiry, so that rotate! can detect
+    # its reuse (§9.2). Anything else is refused before the runner or the flag
+    # is checked (§6.2).
+    def refreshable(token)
+      credential = RunnerCredential.find_by_token(token, kind: :refresh)
+      return nil if credential.nil? || credential.revoked?
+      return nil if credential.expired? && !credential.used?
       return nil if credential.runner_environment&.gone?
 
       credential

@@ -160,9 +160,8 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
-  # The revocation revokes every credential of the runner (§9.3), so a token
-  # that is checked for its own state is refused as invalid. A refresh token is
-  # looked up whatever its state, and meets the runner's status.
+  # The revocation revokes every credential of the runner (§9.3), so every
+  # token is refused as invalid before the runner's status is checked.
   test "a revoked or deleted runner gets 401 on every endpoint" do
     pair = registered_pair
     token = Runners::Credentials.mint_registration!(@runner)
@@ -171,7 +170,7 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     register(token)
     assert_refused :unauthorized, "invalid_token"
     refresh(pair["refresh_token"])
-    assert_refused :unauthorized, "runner_revoked"
+    assert_refused :unauthorized, "invalid_token"
     unregister(pair["access_token"])
     assert_refused :unauthorized, "invalid_token"
 
@@ -182,16 +181,43 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
   end
 
+  # Only the status changes here, so the credentials' own revocation does not
+  # answer first and the cached status check is what refuses.
   test "a revocation reaches the gateway within five seconds" do
     Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
     freeze_time
     pair = registered_pair
-    @runner.revoke!
+    @runner.update_columns(status: "revoked")
 
     travel 5.seconds + 0.1
     refresh(pair["refresh_token"])
 
     assert_refused :unauthorized, "runner_revoked"
+  end
+
+  # §6.2: the token is checked first, so a dead refresh token learns nothing
+  # about the runner or the flag.
+  test "a revoked, gone or unused expired refresh token is invalid whatever the runner and the flag" do
+    expired = registered_pair(name: "build-01")
+    travel 30.days + 1.second
+    revoked = registered_pair(name: "build-02")
+    RunnerCredential.find_by_token(revoked["refresh_token"], kind: :refresh).update!(revoked_at: Time.current)
+    gone = registered_pair(name: "build-03")
+    RunnerEnvironment.find_by!(display_name: "build-03").update!(state: :gone)
+    tokens = [ expired, revoked, gone ].map { |pair| pair["refresh_token"] }
+
+    with_feature(:external_runners, false, company: @company) do
+      tokens.each do |token|
+        refresh(token)
+        assert_refused :unauthorized, "invalid_token"
+      end
+    end
+    # Only the status, so that the rows keep the states above.
+    @runner.update_columns(status: "revoked")
+    tokens.each do |token|
+      refresh(token)
+      assert_refused :unauthorized, "invalid_token"
+    end
   end
 
   test "an unknown protocol or a missing runner version is refused with a clear error" do
