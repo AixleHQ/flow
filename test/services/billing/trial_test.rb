@@ -3,8 +3,14 @@
 require "test_helper"
 
 class Billing::TrialTest < ActiveSupport::TestCase
+  # A company that signs up at 10:00 on Oct 30 gets thirty days, Oct 30 to the
+  # end of Nov 28: 29 days and 13 whole hours.
+  SIGNUP = Time.utc(2026, 10, 30, 10)
+  LENGTH = (29 * 24) + 13
+
   setup do
     saas!
+    travel_to SIGNUP
     @company = create(:company, :trialing)
   end
 
@@ -12,35 +18,99 @@ class Billing::TrialTest < ActiveSupport::TestCase
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
   end
 
-  def used!(hours, at: Time.utc(2026, 9, 29, 10))
-    CompanyCapacityUsage.record!(
-      company_id: @company.id, period_start: at, quantity_seconds: (hours * 3600).to_i
+  # What the hourly meter writes: one row per closed hour the company was
+  # offered anything.
+  def metered!(company, hours, from:)
+    CompanyCapacityUsage.insert_all(
+      Array.new(hours) { |offset| { company_id: company.id, period_start: from + offset.hours, quantity_seconds: 3600 } }
     )
   end
 
-  test "it reads the allowance from the settings" do
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 250))
-
-    assert_equal 250, Billing::Trial.queue_hours
-    assert_equal 900_000, Billing::Trial.seconds
+  def used!(hours, at: SIGNUP)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: at, quantity_seconds: hours * 3600)
   end
 
-  test "a fresh company has the whole allowance" do
-    assert_equal Billing::Trial.seconds, Billing::Trial.remaining_seconds(@company)
-    assert_not Billing::Trial.exhausted?(@company)
+  def trial_days!(days)
+    Settings.stubs(:trial).returns(Hashie::Mash.new(days: days))
+  end
+
+  test "a trial is thirty days unless the installation says otherwise" do
+    assert_equal 30, Billing::Trial.days
+    assert_equal 720, Billing::Trial.default_hours
+  end
+
+  # Today is the first day, and the trial ends with the last one's end — the
+  # same end an operator's last day has.
+  test "a new trial runs to the end of its last day" do
+    assert_equal LENGTH, @company.trial_hours
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(@company)
+    assert_equal 30, Billing::Trial.days_left(@company)
+    assert_equal 30, Billing::Trial.length_in_days(@company)
+  end
+
+  test "a new trial is as long as the installation says" do
+    trial_days!(14)
+
+    assert_equal (13 * 24) + 13, create(:company, :trialing).trial_hours
+  end
+
+  # A trial promised thirty days stays thirty days.
+  test "a company keeps the length of the trial it started" do
+    trial_days!(7)
+
+    assert_equal LENGTH * 3600, Billing::Trial.allowance_seconds(@company)
+  end
+
+  test "a trial from before lengths were kept follows the default" do
+    @company.update_column(:trial_hours, nil)
+    trial_days!(10)
+
+    assert_equal 240 * 3600, Billing::Trial.allowance_seconds(@company)
+  end
+
+  # The meter lags the clock by the hour under way and counts the hour a trial
+  # began in as a part hour, so what is left is counted on from where it got
+  # to. Counted from now, a trial ending at 23:40 would show the day after as
+  # its last.
+  test "the last day holds while the meter counts the hours" do
+    travel 40.minutes
+    company = create(:company, :trialing)
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: SIGNUP, quantity_seconds: 20 * 60)
+
+    metered!(company, 47, from: SIGNUP + 1.hour)
+    travel_to SIGNUP + 2.days + 55.minutes
+
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
+    assert_equal 28, Billing::Trial.days_left(company)
+
+    metered!(company, 708 - 47, from: SIGNUP + 48.hours)
+    travel_to Time.utc(2026, 11, 28, 23, 20)
+
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
+    assert_equal 1, Billing::Trial.days_left(company)
+  end
+
+  # The meter writes whole hours, so a trial that began at 10:40 begins in the
+  # 10:00 row.
+  test "the hour a trial began in counts towards it" do
+    @company.update!(trial_started_at: SIGNUP + 40.minutes)
+    used!(1, at: SIGNUP - 1.hour)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: SIGNUP, quantity_seconds: 20 * 60)
+
+    assert_equal 20 * 60, Billing::Trial.used_seconds(@company)
   end
 
   # The spend is a sum over the usage log rather than a counter beside it, so
   # there is nothing that can drift from what was actually offered.
   test "what it has spent is the sum of the hours it was offered" do
-    used!(30, at: Time.utc(2026, 9, 29, 10))
-    used!(20, at: Time.utc(2026, 9, 29, 11))
+    used!(30, at: SIGNUP)
+    used!(20, at: SIGNUP + 1.hour)
 
     assert_equal 50 * 3600, Billing::Trial.used_seconds(@company)
-    assert_in_delta 50.0, Billing::Trial.remaining_hours(@company)
+    assert_equal (LENGTH - 50) * 3600, Billing::Trial.remaining_seconds(@company)
   end
 
-  # An operator restarting a company by hand gives it a new allowance; what it
+  # An operator restarting a company by hand gives it a new trial; what it
   # spent before that is not held against it.
   test "a new trial counts only what was used since it began" do
     used!(80, at: Time.utc(2026, 9, 29, 10))
@@ -50,21 +120,29 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal 3 * 3600, Billing::Trial.used_seconds(@company)
   end
 
-  test "spending the allowance exactly is spending it" do
-    used!(Billing::Trial.queue_hours)
+  test "a trial set to end with a day lasts until that day's end and no further" do
+    hours = Billing::Trial.hours_ending_on(Date.new(2026, 11, 2), spent_seconds: 10 * 3600, from: SIGNUP)
+
+    assert_equal 10 + 85, hours, "what was spent, then 3 days and 13 whole hours"
+    assert_equal Date.new(2026, 11, 2), (SIGNUP + (hours - 10).hours).to_date
+  end
+
+  test "spending the trial exactly is spending it" do
+    used!(LENGTH)
 
     assert Billing::Trial.exhausted?(@company)
     assert_equal 0, Billing::Trial.remaining_seconds(@company)
+    assert_equal 0, Billing::Trial.days_left(@company)
   end
 
   test "remaining never goes below nothing" do
-    used!(Billing::Trial.queue_hours + 40)
+    used!(LENGTH + 40)
 
     assert_equal 0, Billing::Trial.remaining_seconds(@company)
   end
 
   test "enforce stops a company that has spent it" do
-    used!(Billing::Trial.queue_hours)
+    used!(LENGTH)
 
     assert_equal [ @company.id ], Billing::Trial.enforce!
 
@@ -79,47 +157,52 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert @company.reload.billing_trialing?
   end
 
-  # A company someone is paying for has no allowance to spend, whatever its usage
+  test "enforce stops a company at the length of its own trial" do
+    @company.update!(trial_hours: 48)
+    used!(48)
+
+    assert_equal [ @company.id ], Billing::Trial.enforce!
+  end
+
+  # A company someone is paying for has no trial to spend, whatever its usage
   # says.
   test "enforce leaves a paying company alone" do
     paying = create(:company)
-    CompanyCapacityUsage.record!(
-      company_id: paying.id, period_start: Time.utc(2026, 9, 29, 10),
-      quantity_seconds: Billing::Trial.seconds * 10
-    )
+    CompanyCapacityUsage.record!(company_id: paying.id, period_start: SIGNUP, quantity_seconds: 7200 * 3600)
 
     assert_empty Billing::Trial.enforce!
     assert paying.reload.billing_active?
   end
 
   # A self-hosted operator pays nobody and a Marketplace customer bought their
-  # capacity from AWS, so neither has an allowance to run out of.
+  # capacity from AWS, so neither has a trial to run out of.
   test "nothing is enforced outside the hosted product" do
-    used!(Billing::Trial.queue_hours)
+    used!(LENGTH)
     saas!(Deployment::SELF_HOSTED)
 
     assert_empty Billing::Trial.enforce!
     assert @company.reload.billing_trialing?
   end
 
-  test "only a company that has spent the allowance is stopped" do
+  test "a trialing company runs one worker and a blocked one none" do
+    assert_equal 1, Billing::Trial.ceiling_for("trialing")
     assert_equal 0, Billing::Trial.ceiling_for("blocked")
-    assert_nil Billing::Trial.ceiling_for("trialing")
     assert_nil Billing::Trial.ceiling_for("active")
   end
 
-  # What is left is a quantity; what an admin wants to know is how long it lasts
-  # at the rate they are running.
-  test "it says how long what is left lasts at the current rate" do
-    used!(60)
+  # Nobody has paid yet, on the trial or once it has ended, so there is no
+  # number of workers to choose.
+  test "the workers are fixed until a card is added" do
+    assert Billing::Trial.workers_fixed?(@company)
 
-    assert_in_delta 40.0, Billing::Trial.hours_left_at(@company, 1)
-    assert_in_delta 4.0, Billing::Trial.hours_left_at(@company, 10)
-  end
+    @company.update!(billing_state: "blocked", billing_block_reason: "allowance")
+    assert Billing::Trial.workers_fixed?(@company)
 
-  test "there is no rate to divide by when no limit is set" do
-    assert_nil Billing::Trial.hours_left_at(@company, nil)
-    assert_nil Billing::Trial.hours_left_at(@company, 0)
+    @company.update!(billing_block_reason: "payment_failed")
+    assert_not Billing::Trial.workers_fixed?(@company)
+
+    @company.update!(billing_state: "active")
+    assert_not Billing::Trial.workers_fixed?(@company)
   end
 
   test "applies only where we host" do

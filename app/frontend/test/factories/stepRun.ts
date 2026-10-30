@@ -9,6 +9,7 @@ export const buildStepRun = (overrides: Partial<StepRun> = {}): StepRun => ({
   stepNote: null,
   errorMessage: null,
   errorCategory: null,
+  skipReason: null,
   terminalSessionId: null,
   startedAt: null,
   executionStartedAt: null,

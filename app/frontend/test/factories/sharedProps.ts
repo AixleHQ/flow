@@ -69,11 +69,9 @@ export const buildSharedPermissions = (overrides: Partial<SharedPermissions> = {
 
 export const buildSharedTrial = (overrides: Partial<SharedTrial> = {}): SharedTrial => ({
   state: 'trialing',
-  allowanceHours: 100,
-  usedHours: 30,
-  remainingHours: 70,
-  maxSessions: 2,
-  hoursLeftAtCurrentRate: 35,
+  days: 30,
+  daysLeft: 21,
+  lastDay: '2026-11-20',
   canPay: true,
   ...overrides,
 });

@@ -47,6 +47,7 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   # single-word key survives prop camelization unchanged, which a
   # `session_concurrency_limit` would not.
   def apply_concurrency_limit
+    return { concurrency: Web::Company::SettingsController::TRIAL_REFUSAL } if Billing::Trial.workers_fixed?(current_company)
     return { concurrency: "Only a company admin can change the session limit" } unless settings_policy.manage_concurrency?
 
     requested = params[:concurrency].to_s.strip
@@ -79,6 +80,7 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
       # What this project could be raised to right now. Nil means no limit.
       available: headroom,
       allocations: budget.breakdown,
+      trial_workers: (Billing::Trial::WORKERS if Billing::Trial.workers_fixed?(current_company)),
       can_manage: settings_policy.manage_concurrency?
     }
   end

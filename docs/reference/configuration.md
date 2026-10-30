@@ -97,7 +97,7 @@ and test fall back to fixed non-secret values.
 | `STRIPE_SECRET_KEY`                   | no       | unset   | Stripe API key for the hosted product's metered billing. Without it (and `STRIPE_PRICE_ID`) nothing calls Stripe: no card can be added, and capacity is measured and recorded but never sent. |
 | `STRIPE_PRICE_ID`                     | no       | unset   | The metered price capacity is billed against. The meter counts worker-MINUTES and the price buys them sixty at a time, so its unit amount is `PRICING_QUEUE_HOURLY_RATE` itself — the two are copies of one number and drift if nobody checks. |
 | `STRIPE_WEBHOOK_SECRET`               | no       | unset   | Signing secret for `/webhooks/stripe`, shown once when the endpoint is created. Without it every delivery is refused, which is the right default: the URL is not a secret, so the signature is the whole of the authentication. |
-| `TRIAL_QUEUE_HOURS`                   | no       | `100`   | Free capacity, in worker-hours, that a company which signed itself up may spend before anyone has paid. Hosted (`saas`) deployments only. A quantity rather than a period: capacity is billed by the hour it is offered, so the allowance is spent at whatever rate the workspace runs — ten workers use ten worker-hours an hour. The company's own limit is untouched while it lasts; a larger one buys a shorter trial. Spending it stops the company until its billing state is moved on. |
+| `TRIAL_DAYS`                          | no       | `30`    | How long the free trial of a company that signed itself up lasts, in days. Hosted (`saas`) deployments only. A trialing company runs one worker whatever limit it has, and the trial is counted in worker-hours from the same hourly measurement an invoice is made from, so 30 days is at most 720 hours: the signup day is the first, and the trial ends with the last day's end (UTC). A company keeps the length of the trial it started; a platform administrator moves a company's last day from its admin page. When it ends the company is stopped until a card is added. |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Workers a project may use when it has set no limit of its own. Read live — takes effect on the next boot of each pod. |
 | `SESSION_PINNED_RELEASE_ENABLED` | no | `true` | `false` stops the reconciler from ending a pinned reservation on its own, leaving it for an operator. A reservation is pinned when a create or start never reported its outcome; the slot is held so a late Pod cannot land on someone else's. |
 | `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` | no | `5` | How long the reconciler must keep re-proving that no workload exists before it abandons such an operation and releases the slot. A pass that sees the workload again resets the clock. |
@@ -366,6 +366,21 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `MAILER_USERNAME`       | no       | unset   | SMTP username.                       |
 | `MAILER_PASSWORD`       | no       | unset   | SMTP password.                       |
 | `MAILER_AUTHENTICATION` | no       | `plain` | SMTP auth mechanism.                 |
+
+## In-app feedback
+
+**Send feedback** in the user menu delivers each message to every destination
+configured here; with none configured the item is not shown. The sender's name,
+email, company, the page they were on and the release go with the message, and
+so do the files sent with it (up to five, 20 MB each): in the same Slack post,
+and as attachments on the board card.
+
+| Variable                      | Required | Default | Purpose |
+| ----------------------------- | -------- | ------- | ------- |
+| `FEEDBACK_SLACK_BOT_TOKEN`    | no       | unset   | Bot token (`xoxb-…`) of a Slack app with the `chat:write` and `files:write` scopes. An incoming webhook will not do: it cannot carry files. Set together with `FEEDBACK_SLACK_CHANNEL_ID`. |
+| `FEEDBACK_SLACK_CHANNEL_ID`   | no       | unset   | The channel the bot posts to, by id (`C…`). The bot has to be a member: invite it to a private channel, or every delivery is refused with `not_in_channel`. |
+| `FEEDBACK_BOARD_PROJECT_ID`   | no       | unset   | Project whose board gets a card per message, tagged `feedback`. Set together with `FEEDBACK_BOARD_COLUMN_ID`. |
+| `FEEDBACK_BOARD_COLUMN_ID`    | no       | unset   | The column of that project's board the cards are created in. A column of another board fails each delivery rather than guessing. |
 
 ## Storage (S3)
 

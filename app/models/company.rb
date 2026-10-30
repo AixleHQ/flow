@@ -41,6 +41,7 @@ class Company < ApplicationRecord
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
   has_many :billing_cancellations, dependent: :delete_all
+  has_many :feedback_submissions, dependent: :destroy
   # Nullified rather than destroyed: deleting a workspace does not cancel an AWS
   # subscription, and a licence that outlives its company is exactly the state
   # somebody has to see — AWS is still billing and nobody can reach the product.
@@ -66,11 +67,14 @@ class Company < ApplicationRecord
   # admin, and the people invited with a save (Admin::CompaniesController).
   attr_accessor :initial_admin_email, :invite_emails, :invite_role
 
-  # Where we host, a company that signs itself up runs on a free allowance of
-  # capacity before anyone has paid for anything (Billing::Trial).
+  # Also the admin's: puts the company on a trial that ends with this day, or
+  # moves the end of the one it is on. Blank leaves the trial as it is.
+  attribute :trial_last_day, :date
+
+  # Where we host, a company that signs itself up runs on a free trial before
+  # anyone has paid for anything (Billing::Trial).
   #
-  #   trialing  spending the allowance, capped to one session at a time,
-  #             invoiced for nothing
+  #   trialing  on the trial: one worker, invoiced for nothing
   #   active    someone is paying; the company's own limit is the only bound
   #   blocked   runs nothing, for the reason in `billing_block_reason`
   #
@@ -113,6 +117,11 @@ class Company < ApplicationRecord
   # free.
   UNBOUNDED_PAYING_COMPANY = "is required for a company that pays — tick Managed by Aixle for one that does not"
 
+  # Until a card is added the company runs one worker (Billing::Trial), and
+  # nobody chooses another — we included. A company that needs more is one we
+  # carry.
+  TRIAL_RUNS_ONE_WORKER = "is one until a card is added — tick Managed by Aixle to set another"
+
   # Constants
   RESERVED_DOMAINS = %w[
     admin.com api.com www.com app.com mail.com ftp.com
@@ -132,6 +141,8 @@ class Company < ApplicationRecord
   validate :email_domain_not_reserved
   validate :session_concurrency_limit_is_a_positive_integer
   validate :company_we_stop_carrying_is_bounded, if: :leaving_management?
+  validate :trial_last_day_allowed, if: :setting_trial_last_day?
+  validate :trial_keeps_one_worker, if: -> { @session_concurrency_limit_assigned && Billing::Trial.workers_fixed?(self) }
   validate :initial_admin_invitable, on: :create, if: -> { initial_admin_email.present? }
 
   # Callbacks
@@ -144,6 +155,9 @@ class Company < ApplicationRecord
   # its block reason with its block.
   before_validation :keep_managed_company_running, if: :managed_by_aixle?
   before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
+  before_validation :put_on_trial_until_last_day, if: -> { setting_trial_last_day? && trial_last_day_refusal.nil? }
+  before_validation :give_new_trial_the_default_length, if: :starting_trial_of_default_length?
+  before_validation :start_trial_on_one_worker, if: :entering_one_worker?
   before_validation :forget_billing_block, unless: :billing_blocked?
   # Three paths write a Stripe customer — Checkout, the webhook, the admin — and
   # the column has to be true for all of them or the admin shows `none` beside a
@@ -263,26 +277,94 @@ class Company < ApplicationRecord
 
   # Left `active`, a company we stop carrying shows a subscription it never had:
   # Cancel that refuses, no way to add a card, minutes the meter drops for want
-  # of a Stripe customer. The allowance counts what it ran while we carried it,
-  # so one already past it is stopped until a card is added. A subscription from
-  # before we took it on keeps billing it — unless it has ended, which
-  # keep_managed_company_running hid by leaving the end date on an active row.
+  # of a Stripe customer. It starts a fresh trial instead — what it ran while we
+  # carried it is not held against it — of the default length unless a last day
+  # comes with the same save. A subscription from before we took it on keeps
+  # billing it — unless it has ended, which keep_managed_company_running hid by
+  # leaving the end date on an active row.
   def start_billing_company_we_stop_carrying
     if stripe_subscription_id.present?
       return unless billing_cancels_at&.past?
 
       self.billing_state = "blocked"
       self.billing_block_reason = "canceled"
-    elsif Billing::Trial.exhausted?(self)
-      self.billing_state = "blocked"
-      self.billing_block_reason = "allowance"
     else
       self.billing_state = "trialing"
+      self.trial_started_at = Time.current
     end
   end
 
   def company_we_stop_carrying_is_bounded
     errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY) if session_concurrency_limit.blank?
+  end
+
+  def setting_trial_last_day? = trial_last_day.present? && trial_last_day_changed?
+
+  def trial_last_day_allowed
+    refusal = trial_last_day_refusal
+    errors.add(:trial_last_day, refusal) if refusal
+  end
+
+  def trial_last_day_refusal
+    if !Deployment.saas?
+      "is only for the hosted product, where companies pay"
+    elsif managed_by_aixle?
+      "is for a company that pays — untick Managed by Aixle to put this one on a trial"
+    elsif subscription_running?
+      "cannot be set while a subscription bills this company — it would be billed and on a trial at once"
+    elsif trial_last_day < Date.current
+      "cannot be in the past"
+    end
+  end
+
+  # Stored state, not the form's: an operator changing the billing state in the
+  # same save does not end a subscription. The id outlives an ended subscription,
+  # so the state says whether it still bills: paying, or stopped with an invoice
+  # Stripe is still collecting.
+  def subscription_running?
+    stripe_subscription_id.present? &&
+      (billing_state_in_database == "active" || billing_block_reason_in_database == "payment_failed")
+  end
+
+  # A company already on a trial keeps its start, and what it has spent counts
+  # towards the new length; any other starts one now.
+  def put_on_trial_until_last_day
+    if billing_state_in_database == "trialing"
+      spent = Billing::Trial.used_seconds(self)
+      from = Billing::Trial.measured_until(self)
+    else
+      self.trial_started_at = from = Time.current
+      spent = 0
+    end
+    self.billing_state = "trialing"
+    self.trial_hours = Billing::Trial.hours_ending_on(trial_last_day, spent_seconds: spent, from: from)
+  end
+
+  # Onto the trial, or stopped at its end — a company we stop carrying lands on
+  # either. Whatever the form still holds, or what it paid for before, it runs
+  # one until a card is added.
+  def entering_one_worker? = Deployment.saas? && billing_state_changed? && Billing::Trial.workers_fixed?(self)
+
+  def start_trial_on_one_worker
+    self.session_concurrency_limit = Billing::Trial::WORKERS
+  end
+
+  # Only a change is refused: a company that was given more before this rule
+  # keeps it, and runs one anyway (Billing::EffectiveCapacity).
+  def trial_keeps_one_worker
+    requested = @session_concurrency_limit.to_s
+    return if requested == Billing::Trial::WORKERS.to_s
+    return if persisted? && requested == SessionConcurrencyLimit.for_company(id).to_s
+
+    errors.add(:session_concurrency_limit, TRIAL_RUNS_ONE_WORKER)
+  end
+
+  def starting_trial_of_default_length?
+    billing_trialing? && billing_state_changed? && !trial_hours_changed?
+  end
+
+  def give_new_trial_the_default_length
+    self.trial_hours = Billing::Trial.new_trial_hours
   end
 
   # A company that is running again has no reason to be stopped, and an unpaid

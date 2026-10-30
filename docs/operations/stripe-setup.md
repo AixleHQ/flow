@@ -165,7 +165,7 @@ prints its own.
 
 A stopped company is `blocked`, with `billing_block_reason` saying why
 (`allowance`, `canceled` or `payment_failed`). It goes to `blocked`, never back to
-`trialing`: the free allowance was spent once, and cancelling does not give it back.
+`trialing`: the free trial was spent once, and cancelling does not give it back.
 
 **A failed payment stops the company at once.** Stripe sends `past_due` and
 `invoice.payment_failed` together, in no promised order, so both stop it. The admin
@@ -284,14 +284,14 @@ missing parts land.
 `REGISTRATION_ENABLED=true` on a hosted deployment with no Stripe key **refuses
 to boot** (`config/initializers/required_env.rb`). The two switches are the kind
 that drift apart quietly and are found out by a customer: people sign up, spend
-the free allowance, and reach a stop with no card to add and no button to press.
+the free trial, and reach a stop with no card to add and no button to press.
 
 So the order is: configure Stripe, then open registration. Never the other way,
 and the deploy will not let you.
 
 ## Before switching live mode on
 
-- [ ] The whole flow driven on test: signup → allowance spent → blocked → card
+- [ ] The whole flow driven on test: signup → trial spent → blocked → card
       added → running again
 - [ ] Cancel from the Billing tab → `customer.subscription.deleted` → `canceled`
       → the final invoice issued within a few minutes, with the hour under way on it

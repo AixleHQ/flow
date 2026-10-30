@@ -100,6 +100,8 @@ interface Concurrency {
   /** The most this project could be set to right now; null when there is no limit. */
   available: number | null;
   allocations: ConcurrencyAllocation[];
+  /** What the company runs on the free trial, where nothing can be reserved; absent otherwise. */
+  trialWorkers?: number | null;
   canManage: boolean;
 }
 
@@ -298,6 +300,18 @@ const SettingsPage = () => {
                       setSaved(false);
                     }}
                   />
+                ) : concurrency.trialWorkers != null ? (
+                  <>
+                    <Text size="sm" fw={500} mb={4}>
+                      Reserved workers
+                    </Text>
+                    <Text size="sm">
+                      {concurrency.trialWorkers}
+                      <Text span size="xs" c="dimmed" ml={6}>
+                        the company&rsquo;s one worker until a card is added — then choose how many
+                      </Text>
+                    </Text>
+                  </>
                 ) : (
                   <>
                     <Text size="sm" fw={500} mb={4}>
@@ -313,7 +327,7 @@ const SettingsPage = () => {
                   </>
                 )}
 
-                {concurrency.companyLimit != null && (
+                {concurrency.companyLimit != null && concurrency.trialWorkers == null && (
                   <Box mt={8}>
                     <Text size="xs" c="dimmed">
                       {concurrency.available} of the company&rsquo;s {concurrency.companyLimit} is unreserved — shared

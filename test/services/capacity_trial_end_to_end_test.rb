@@ -9,15 +9,14 @@ require "test_helper"
 class CapacityTrialEndToEndTest < ActiveSupport::TestCase
   setup do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
-    # Ten queue-hours of allowance against a limit of ten, so one hour spends it
-    # exactly — which is the point: the limit sets the rate.
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 10))
 
     @user = create(:user, :with_company)
     @company = @user.companies.first
-    @company.update!(billing_state: "trialing")
-    @project = create(:project, owner: @user, company: @company)
+    # Ten before the trial, which brings it down to one; and a one-hour trial,
+    # so the hour the meter closes below spends it exactly.
     with_company_limit(@company, 10)
+    @company.update!(billing_state: "trialing", trial_hours: 1)
+    @project = create(:project, owner: @user, company: @company)
   end
 
   def enqueue
@@ -28,26 +27,25 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
     Billing::CapacityMeter.new(adapters: [ Billing::Meter::Null.new ], now: hour + 1.hour + 5.minutes).call
   end
 
-  test "a company spends its free capacity and stops" do
-    # It runs the ten it asked for; nothing is capped while the allowance lasts.
-    running = 3.times.map { enqueue }
-    assert_equal running.map(&:id), SessionAdmissionService.drain!
+  test "a company spends its free trial and stops" do
+    # It asked for ten and runs one while the trial lasts.
+    running, waiting, = 3.times.map { enqueue }
+    assert_equal [ running.id ], SessionAdmissionService.drain!
 
-    # An hour passes at that capacity, and the meter closes it.
+    # An hour passes, and the meter closes it.
     hour = Time.current.utc.beginning_of_hour - 1.hour
     CompanyCapacityChange.record!(company_id: @company.id, max_sessions: 10, occurred_at: hour - 1.hour)
     meter_the_hour(hour)
 
-    # Ours to read, and the sum the allowance is spent from: an hour at ten is
-    # ten queue-hours, which is the whole of a ten-hour allowance.
-    assert_equal 10 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
+    # Ours to read, and the sum the trial is spent from: an hour at the trial's
+    # one worker is one worker-hour, which is the whole of this trial.
+    assert_equal 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
     assert @company.reload.billing_blocked?
 
     # And now the drain grants nothing, including what was already queued.
-    queued = enqueue
-    running.each { |admission| SessionAdmissionService.cancel!(admission.terminal_session) }
+    SessionAdmissionService.cancel!(running.terminal_session)
     assert_empty SessionAdmissionService.drain!
-    assert_nil queued.reload.admitted_at
+    assert_nil waiting.reload.admitted_at
   end
 
   # The other half of the bargain: paying starts it again without anyone
@@ -73,6 +71,6 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
     report = CapacityMeterReport.find_by(provider: Billing::Meter::Null.provider, period_start: hour)
     assert_equal 0, report.quantity_seconds, "a trialing company is invoiced for nothing"
     assert_empty report.breakdown
-    assert_equal 10 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
+    assert_equal 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
   end
 end

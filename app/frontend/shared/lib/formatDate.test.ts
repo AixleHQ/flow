@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDate, formatExpiry, parseDate } from './formatDate';
+import { formatCalendarDay, formatDate, formatExpiry, parseDate } from './formatDate';
 
 describe('parseDate', () => {
   it('parses ISO8601', () => {
@@ -23,6 +23,17 @@ describe('parseDate', () => {
 describe('formatDate', () => {
   it('returns an em dash for null', () => {
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('formatCalendarDay', () => {
+  it('shows the day it names in every time zone', () => {
+    expect(formatCalendarDay('2026-11-28')).toMatch(/28/);
+    expect(formatCalendarDay('2026-11-28')).not.toMatch(/27/);
+  });
+
+  it('returns an em dash for nothing', () => {
+    expect(formatCalendarDay(null)).toBe('—');
   });
 });
 

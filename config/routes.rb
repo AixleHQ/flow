@@ -403,7 +403,10 @@ Rails.application.routes.draw do
       resources :overrides, only: %i[create destroy], param: :company_id, controller: "feature_flag_overrides"
     end
     resource :session_admission, only: %i[show]
-    resource :dashboard, only: %i[show]
+    resource :dashboard, only: %i[show] do
+      get :waits, to: "dashboard_companies#waits"
+      resources :companies, only: %i[show], controller: "dashboard_companies"
+    end
   end
 
   scope module: :web, defaults: { format: :html } do
@@ -555,6 +558,7 @@ Rails.application.routes.draw do
 
     namespace :company do
       post "switch", to: "switch#create", as: :switch
+      post "feedback", to: "feedback#create", as: :feedback
       # Self-removal ("Leave company" on the profile page) — id is the
       # MEMBERSHIP id, and it may belong to any of the user's companies.
       resources :memberships, only: %i[destroy]

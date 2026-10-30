@@ -233,8 +233,6 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
   class WithTrial < Billing::CapacityWindowTest
     setup { Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS)) }
 
-    # The allowance does not shrink the workspace; it is spent at whatever rate
-    # the workspace runs.
     test "a workspace started mid-hour is billed from then, not from the top of the hour" do
       change(@acme, 2, @hour - 2.hours)
       state(@acme, "blocked", @hour - 2.hours)
@@ -252,8 +250,8 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       state(@acme, "trialing", @hour - 2.hours)
 
       assert_minutes 0, window, "the allowance paid for it"
-      assert_equal 120, window.offered_per_company[@acme.id] / 60,
-                   "and it is still counted, because that is what the allowance is spent from"
+      assert_equal 60, window.offered_per_company[@acme.id] / 60,
+                   "and it is still counted, at the trial's one worker, because that is what the allowance is spent from"
     end
 
     test "a trial that starts paying mid-hour owes only from then" do
@@ -301,11 +299,13 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       assert_minutes 180, window
     end
 
-    test "a trialing company is measured at the limit it asked for" do
+    # The drain grants it one, so one is what it is measured at: the trial is
+    # spent an hour an hour, whatever limit the workspace set.
+    test "a trialing company is measured at one worker, whatever limit it asked for" do
       @acme.update!(billing_state: "trialing")
       change(@acme, 10, @hour - 2.hours)
 
-      assert_equal 600, window.offered_per_company[@acme.id] / 60
+      assert_equal 60, window.offered_per_company[@acme.id] / 60
     end
 
     # Its hours are ours to count and nobody's to invoice: the allowance is spent
@@ -328,11 +328,10 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     # the company existed, which is the same bug wearing the other hat.
     test "a company whose first entry lands mid-hour is not measured at its ceiling before it" do
       @acme.update!(billing_state: "trialing")
-      SessionConcurrencyLimit.set!(scope: @acme, max_sessions: 7)
       CompanyCapacityChange.delete_all
-      change(@acme, 7, @hour + 26.minutes)
+      change(@acme, 1, @hour + 26.minutes)
 
-      assert_equal 238, window.offered_per_company[@acme.id] / 60
+      assert_equal 34, window.offered_per_company[@acme.id] / 60
     end
 
     test "a company we carry is measured but not billed" do
@@ -355,23 +354,24 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       assert_minutes 0, window
     end
 
-    # An unbounded company is unbillable whoever it is, so there is nothing to
-    # spend the allowance on either.
-    test "an unbounded trialing company is measured at nothing" do
+    # "No limit" is not a way past the trial's one worker, nor a way to spend
+    # none of it.
+    # Going onto the trial sets the limit to one and logs it, so an unbounded
+    # trialing company is one from before that: no limit and nothing in the log.
+    test "an unbounded trialing company is measured at one worker too" do
       @acme.update!(billing_state: "trialing")
+      SessionConcurrencyLimit.for_companies.delete_all
+      CompanyCapacityChange.delete_all
 
-      assert_not_includes window.offered_per_company, @acme.id
+      assert_equal 60, window.offered_per_company[@acme.id] / 60
     end
 
-    # Raising the limit mid-hour spends the allowance faster from that moment,
-    # which is the whole of the deal.
-    test "a raise during the hour is measured for the part of it that followed" do
+    test "a raise during the trial does not spend it any faster" do
       @acme.update!(billing_state: "trialing")
       change(@acme, 2, @hour - 2.hours)
       change(@acme, 40, @hour + 30.minutes)
 
-      assert_equal 60 + 1200, window.offered_per_company[@acme.id] / 60,
-                   "half an hour at two and half at forty"
+      assert_equal 60, window.offered_per_company[@acme.id] / 60
     end
   end
 

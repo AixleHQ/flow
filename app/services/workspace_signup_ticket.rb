@@ -19,8 +19,8 @@ class WorkspaceSignupTicket
   TTL = 24.hours
 
   class << self
-    def issue(name:, email:, max_sessions:, marketplace_license_id: nil)
-      answers = { "name" => name, "email" => email, "max_sessions" => max_sessions }
+    def issue(name:, email:, marketplace_license_id: nil)
+      answers = { "name" => name, "email" => email }
       # Only when there is one, so an ordinary signup's ticket keeps the shape it
       # had. The link may be opened in another browser, where the session that
       # held the licence does not exist.
@@ -35,7 +35,7 @@ class WorkspaceSignupTicket
       payload = verifier.verified(token.to_s)
       return nil unless payload.is_a?(Hash)
 
-      payload.symbolize_keys.slice(:name, :email, :max_sessions, :marketplace_license_id)
+      payload.symbolize_keys.slice(:name, :email, :marketplace_license_id)
     end
 
     private

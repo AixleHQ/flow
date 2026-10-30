@@ -290,14 +290,28 @@
   font-weight: 500;
 }
 
-.root .table .tenant a {
+.root .table .tenantButton {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--app-text-primary);
-  text-decoration: none;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
 }
 
-.root .table .tenant a:hover {
+.root .table .tenantButton:hover,
+.root .table .tenantButton:focus {
+  background: none;
   color: var(--app-primary-strong);
   text-decoration: underline;
+}
+
+.root .table .tenantButton:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
 }
 
 .root .table .number {
@@ -386,4 +400,171 @@
   margin: 12px 0 0;
   color: var(--app-text-secondary);
   font-size: 13px;
+}
+
+/* ── Company detail dialog ───────────────────────── */
+
+.root .scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+  background: rgb(0 0 0 / 45%);
+}
+
+.root .dialog {
+  width: min(1040px, 100%);
+  margin: auto 0;
+  border: 1px solid var(--app-border-default);
+  border-radius: 12px;
+  background: var(--app-bg-default);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 25%);
+}
+
+.root .dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--app-border-default);
+  border-radius: 12px 12px 0 0;
+  background: var(--app-bg-paper);
+}
+
+.root .dialogHeading {
+  flex: 1;
+  min-width: 0;
+}
+
+.root .dialogTitle {
+  margin: 0;
+  font-family: var(--app-font-heading);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.root .dialogMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 6px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.root .dialogMeta a {
+  color: var(--app-primary-strong);
+}
+
+.root .dialogHeader .close {
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background: var(--app-bg-paper);
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.root .dialogHeader .close:hover,
+.root .dialogHeader .close:focus {
+  background: var(--app-bg-hover);
+  color: var(--app-text-primary);
+}
+
+.root .dialogHeader .close:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
+}
+
+.root .dialogBody {
+  padding: 4px 20px 20px;
+}
+
+.root .detailSection {
+  margin-top: 20px;
+}
+
+.root .detailTitle {
+  margin: 0;
+  font-family: var(--app-font-heading);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.root .detailSection .tiles {
+  margin-top: 10px;
+}
+
+.root .sectionNote {
+  max-width: 820px;
+  margin: 10px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.root .spread {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 12px 0 0;
+  padding: 12px 16px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 10px;
+  background: var(--app-bg-paper);
+}
+
+.root .spread dt {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-mono-label);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.root .spread dd {
+  margin: 2px 0 0;
+  font-family: var(--app-font-heading);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* ── Waits by day ────────────────────────────────── */
+
+.root .table .waitedColumn {
+  width: 60%;
+}
+
+.root .dayBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.root .dayTrack {
+  flex: 1;
+  max-width: 420px;
+  height: 10px;
+}
+
+.root .dayFill {
+  display: block;
+  min-width: 2px;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--app-primary);
 }

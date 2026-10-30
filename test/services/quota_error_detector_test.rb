@@ -342,4 +342,78 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_nil result.provider
     assert_nil result.message
   end
+
+  # --- Scoping to the session's own agent, and to the current screen (task #195) ---
+  #
+  # Pattern text below is split with `phrase` so this file's new tests never match a
+  # pattern themselves when an agent reads or greps them in its terminal.
+
+  def phrase(*parts) = parts.join
+
+  test "agent_type limits detection to that agent's provider" do
+    gemini_status = phrase("{\"status\": \"RESOURCE_EXH", "AUSTED\"}")
+
+    assert_equal :gemini, QuotaErrorDetector.detect(gemini_status, agent_type: "gemini_cli").provider
+    assert_equal :gemini, QuotaErrorDetector.detect(gemini_status, agent_type: "antigravity_cli").provider
+    assert_not QuotaErrorDetector.detect(gemini_status, agent_type: "kiro_cli").quota_error?
+    assert_not QuotaErrorDetector.detect(gemini_status, agent_type: "codex").quota_error?
+  end
+
+  test "an OpenAI identifier in a Kiro session's grep output is not a quota error" do
+    grep_line = phrase("app/frontend/pages/Projects/WorkflowRuns/ShowPage.tsx:442:  {run.failureReason === 'quo",
+                       "ta_exc", "eeded' && (")
+
+    assert_not QuotaErrorDetector.detect(grep_line, agent_type: "kiro_cli").quota_error?
+    assert_not QuotaErrorDetector.detect_on_screen(grep_line, agent_type: "kiro_cli").quota_error?
+    assert_equal :openai, QuotaErrorDetector.detect(grep_line, agent_type: "codex").provider
+  end
+
+  test "without an agent_type, or with one it does not know, every provider is matched" do
+    anthropic_code = phrase("insufficient_qu", "ota")
+
+    assert_equal :anthropic, QuotaErrorDetector.detect(anthropic_code).provider
+    assert_equal :anthropic, QuotaErrorDetector.detect(anthropic_code, agent_type: "a_future_cli").provider
+  end
+
+  test "every agent type is mapped to a provider" do
+    assert_equal AgentCredentialsService::ADAPTERS.keys.sort, QuotaErrorDetector::AGENT_PROVIDERS.keys.sort
+    assert_empty QuotaErrorDetector::AGENT_PROVIDERS.values - QuotaErrorDetector::PATTERNS.keys
+  end
+
+  test "detect_on_screen finds the session's own message on the pane's trailing block" do
+    pane = [ "● Thinking...", phrase("You have reached your mon", "thly usage lim", "it."), "", "", "" ].join("\n")
+
+    result = QuotaErrorDetector.detect_on_screen(pane, agent_type: "kiro_cli")
+
+    assert result.quota_error?
+    assert_equal :kiro, result.provider
+    assert_equal phrase("You have reached your mon", "thly usage lim", "it."), result.message
+  end
+
+  test "detect_on_screen ignores the session's own message once it has scrolled above the current screen" do
+    pane = [
+      phrase("You have reached your mon", "thly usage lim", "it."),
+      *Array.new(QuotaErrorDetector::TAIL_LINES) { |i| "test #{i} passed" }
+    ].join("\n")
+
+    assert QuotaErrorDetector.detect(pane, agent_type: "kiro_cli").quota_error?
+    assert_not QuotaErrorDetector.detect_on_screen(pane, agent_type: "kiro_cli").quota_error?
+  end
+
+  test "detect_on_screen does not count blank padding lines against the current screen" do
+    pane = [ phrase("Credit bal", "ance too low"), *Array.new(QuotaErrorDetector::TAIL_LINES * 2, "") ].join("\n")
+
+    assert QuotaErrorDetector.detect_on_screen(pane, agent_type: "claude_code").quota_error?
+  end
+
+  test "detect_on_screen reads a pane holding an invalid UTF-8 sequence" do
+    pane = "\xFF partial\n#{phrase('Credit bal', 'ance too low')}\n".b
+
+    assert QuotaErrorDetector.detect_on_screen(pane, agent_type: "claude_code").quota_error?
+  end
+
+  test "detect_on_screen returns false for a blank pane" do
+    assert_not QuotaErrorDetector.detect_on_screen(nil, agent_type: "kiro_cli").quota_error?
+    assert_not QuotaErrorDetector.detect_on_screen("\n\n", agent_type: "kiro_cli").quota_error?
+  end
 end

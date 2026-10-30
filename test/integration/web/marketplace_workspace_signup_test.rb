@@ -20,8 +20,8 @@ class Web::MarketplaceWorkspaceSignupTest < ActionDispatch::IntegrationTest
     MarketplaceLicense.last
   end
 
-  def fill_in_the_form(email: "buyer@acme-marketplace.test", name: "Acme", sessions: 4)
-    post workspace_path, params: { workspace: { name: name, email: email, max_sessions: sessions } }
+  def fill_in_the_form(email: "buyer@acme-marketplace.test", name: "Acme")
+    post workspace_path, params: { workspace: { name: name, email: email } }
   end
 
   # .decoded because the body is quoted-printable, and the query is parsed rather
@@ -44,23 +44,23 @@ class Web::MarketplaceWorkspaceSignupTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  # AWS bills from the first minute, so a page that promises free worker-hours is
+  # AWS bills from the first minute, so a page that promises free trial days is
   # promising something nobody can deliver.
-  test "a Marketplace buyer is not offered a free allowance on the form" do
+  test "a Marketplace buyer is not offered a free trial on the form" do
     arrive_from_marketplace
 
     get new_workspace_path
 
     assert_inertia_page "Workspaces/NewPage"
-    assert_inertia_props { |props| props[:freeQueueHours].nil? }
+    assert_inertia_props { |props| assert_nil props[:trialDays] }
   end
 
-  test "an ordinary visitor still sees the allowance" do
+  test "an ordinary visitor still sees the trial" do
     Deployment.stubs(:self_serve_signup?).returns(true)
 
     get new_workspace_path
 
-    assert_inertia_props { |props| props[:freeQueueHours] == Billing::Trial.queue_hours }
+    assert_inertia_props { |props| assert_equal Billing::Trial.days, props[:trialDays] }
   end
 
   test "without a licence that door stays shut" do

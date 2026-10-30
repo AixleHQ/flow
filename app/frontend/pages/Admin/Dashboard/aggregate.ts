@@ -21,7 +21,8 @@ export interface TenantSummary {
   peakWorkers: number;
   utilization: number | null;
   avgWaitSeconds: number | null;
-  maxWaitSeconds: number | null;
+  /** Fetched per period by withP95: a percentile cannot be summed from days. */
+  p95WaitSeconds: number | null;
   sessionsSucceeded: number;
   sessionsFailed: number;
   billingClass: BillingClass;
@@ -139,12 +140,18 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
       peakWorkers: Math.max(...rows.map((row) => row.peakWorkers)),
       utilization: worker > 0 ? busy / worker : null,
       avgWaitSeconds: admitted > 0 ? sum((row) => row.waitSecondsTotal) / admitted : null,
-      maxWaitSeconds: admitted > 0 ? Math.max(...rows.map((row) => row.waitSecondsMax)) : null,
+      p95WaitSeconds: null,
       sessionsSucceeded: sum((row) => row.sessionsSucceeded),
       sessionsFailed: sum((row) => row.sessionsFailed),
       billingClass: rows[rows.length - 1].billingClass,
     };
   });
+}
+
+/** The rows with each tenant's p95 wait for the same days, as the server measured it. */
+export function withP95(rows: TenantSummary[], p95: Map<number, number> | undefined): TenantSummary[] {
+  if (!p95) return rows;
+  return rows.map((row) => ({ ...row, p95WaitSeconds: p95.get(row.tenantId) ?? null }));
 }
 
 export function totalsOf(rows: TenantSummary[]): Totals | null {
@@ -166,7 +173,7 @@ export type DeltaField =
   | 'peakWorkers'
   | 'utilization'
   | 'avgWaitSeconds'
-  | 'maxWaitSeconds'
+  | 'p95WaitSeconds'
   | 'sessionsSucceeded'
   | 'sessionsFailed';
 
@@ -180,7 +187,7 @@ export interface Delta {
 const BETTER: Partial<Record<DeltaField, 1 | -1>> = {
   utilization: 1,
   avgWaitSeconds: -1,
-  maxWaitSeconds: -1,
+  p95WaitSeconds: -1,
   sessionsSucceeded: 1,
   sessionsFailed: -1,
 };

@@ -4,7 +4,8 @@
 # Finds active workflow_step sessions and checks their error_message and live
 # terminal output for conditions that mean the session will never finish on its own:
 #
-#   - provider quota exhaustion (QuotaErrorDetector)
+#   - provider quota exhaustion (QuotaErrorDetector): the session's own CLI stopped
+#     on its provider's error, on a pane that has gone quiet — task #195
 #   - a CLI startup prompt a non_interactive session cannot answer
 #     (InteractivePromptDetector) — task #605
 #
@@ -73,8 +74,8 @@ module Activities
 
       # nil when the session looks healthy.
       def blocker_message_for(session, terminal)
-        quota = QuotaErrorDetector.detect([ session.error_message, terminal ].compact_blank.join("\n"))
-        return quota.message if quota.quota_error?
+        quota = quota_stop(session, terminal)
+        return quota.message if quota&.quota_error?
 
         # Only for sessions nobody can rescue by typing: an interactive session's
         # owner can answer the dialog in the web terminal, so killing it would take
@@ -83,6 +84,30 @@ module Activities
 
         prompt = InteractivePromptDetector.detect(terminal, agent_type: session.agent_type)
         prompt.blocked? ? prompt.message : nil
+      end
+
+      # The session's own CLI stopped on a quota error. The live pane is mostly the agent's
+      # work, and that work can print the very text these patterns look for (task #195:
+      # a grep of ShowPage.tsx failed a Kiro session with an OpenAI identifier). So the
+      # pane counts only for the session's own provider, only on its current screen, and
+      # only once it has gone quiet: a CLI stopped on quota prints nothing more.
+      def quota_stop(session, terminal)
+        recorded = QuotaErrorDetector.detect(session.error_message, agent_type: session.agent_type)
+        return recorded if recorded.quota_error?
+
+        on_screen = QuotaErrorDetector.detect_on_screen(terminal, agent_type: session.agent_type)
+        on_screen if on_screen.quota_error? && pane_quiet?(session)
+      end
+
+      # Read only once the screen already shows a quota error, so the sweep's single
+      # capture-pane stays the only exec for every other session. False when the
+      # container cannot say: an unknown pane is not a quiet one. Same check as
+      # Sessions::AuthPause#quiet?: the mtime counts only from a read that also
+      # captured the pane, never from a container whose tmux is gone.
+      def pane_quiet?(session)
+        tail = Sessions::LiveLogReader.new(session, runtime: runtime).tail(lines: 1)
+        last_output_at = tail.ok? ? tail.last_output_at : nil
+        last_output_at.present? && last_output_at < QuotaErrorDetector::QUIET_BEFORE_FAIL.ago
       end
 
       def live_terminal_output(session)

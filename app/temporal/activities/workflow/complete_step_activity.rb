@@ -62,32 +62,62 @@ module Activities
 
       private
 
+      # A real stop leaves the session's own CLI's message either in error_message (the
+      # quota scan failed the session with it) or as the last thing in its terminal log
+      # (a CLI that exits by itself on quota, as Kiro does). The rest of the log is the
+      # agent's work, which can print the very text these patterns look for: task #195,
+      # where runs that survived the scan were still failed here, and their healthy
+      # credential flagged, because of a grep earlier in the session. So the log is read
+      # the way Sessions::LogTail reads a stored log: own provider, tail only.
+      #
+      # A session whose finish was requested is not read at all. An agent that called
+      # finish_session reported success itself, which a CLI its provider refused cannot
+      # do, and its log's tail is its own closing summary, free to name these
+      # identifiers. A person's stop is a requested end, not a provider refusal. A CLI
+      # that exits by itself on its provider's refusal never goes through finishing, so
+      # finishing_at stays nil and its log is still read.
       def detect_quota_error(session)
         return QuotaErrorDetector.detect(nil) unless session
 
-        QuotaErrorDetector.detect(quota_detection_text(session))
+        recorded = QuotaErrorDetector.detect(session.error_message, agent_type: session.agent_type)
+        return recorded if recorded.quota_error?
+        return QuotaErrorDetector.detect(nil) if finish_requested?(session)
+
+        QuotaErrorDetector.detect_on_screen(terminal_log_text(session), agent_type: session.agent_type)
+      end
+
+      # Ended through `finishing`, which stamps finishing_at before the session ends
+      # `finished`: SessionService.finish (the agent's finish_session, or a person's
+      # stop through the API, the personal tools or the builder) and the stale-session
+      # cleanup (CleanupStaleActivity#full_cleanup). AdmittedPhaseActivity#outcome_state
+      # and #outcome_error read finishing_at the same way, as a requested finish.
+      def finish_requested?(session)
+        session.state == "finished" && session.finishing_at.present?
       end
 
       # An expired login is silent: the CLI prints its banner, renders a prompt nobody
       # answers, and the step would otherwise be judged only on the absence of output.
-      # Same text as the quota check, which is already read and ANSI-stripped.
+      # The error message and the whole ANSI-stripped log: this runs only on a session
+      # that already ended badly (see #execute).
       def detect_auth_error(session)
         return AuthErrorDetector.detect(nil) unless session
 
-        AuthErrorDetector.detect(quota_detection_text(session))
+        AuthErrorDetector.detect(auth_detection_text(session))
       end
 
-      def quota_detection_text(session)
-        parts = [ session.error_message ]
+      def auth_detection_text(session)
+        [ session.error_message, terminal_log_text(session) ].compact_blank.join("\n")
+      end
+
+      def terminal_log_text(session)
         log = session.session_logs.find_by(name: "terminal_output.log")
         # The terminal log now carries raw ANSI escape sequences (see
         # AgentSessionStrategy#start_terminal_capture). Strip them so quota-error
         # patterns still match on the plain text.
-        parts << strip_ansi(log.file.read) if log&.file
-        parts.compact_blank.join("\n")
+        log&.file ? strip_ansi(log.file.read) : ""
       rescue StandardError => e
         Rails.logger.warn("[CompleteStepActivity] Failed to read terminal log: #{e.message}")
-        session.error_message.to_s
+        ""
       end
 
       # The terminal log is now the raw PTY stream (see AgentSessionStrategy#collect_terminal_output),
