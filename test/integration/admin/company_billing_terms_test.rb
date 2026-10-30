@@ -108,6 +108,42 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert_equal last_day, Billing::Trial.last_day(company)
   end
 
+  def set_trial_last_day(company, day)
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, trial_last_day: day.iso8601 }
+    }
+  end
+
+  test "an operator gives a company whose trial ended a new one" do
+    company = create(:company, billing_state: "blocked", billing_block_reason: "allowance",
+                               session_concurrency_limit: "1")
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: 3.days.ago.beginning_of_hour,
+                                 quantity_seconds: 720 * 3600)
+    last_day = 14.days.from_now.to_date
+
+    set_trial_last_day(company, last_day)
+
+    assert_redirected_to admin_company_path(company)
+    company.reload
+    assert company.billing_trialing?
+    assert_nil company.billing_block_reason
+    assert_equal 0, Billing::Trial.used_seconds(company)
+    assert_equal last_day, Billing::Trial.last_day(company)
+  end
+
+  test "an operator extends a trial under way to a later day, or brings it closer" do
+    company = create(:company, :trialing, session_concurrency_limit: "1", trial_started_at: 5.days.ago)
+    started = company.reload.trial_started_at
+
+    set_trial_last_day(company, 40.days.from_now.to_date)
+    assert_equal 40.days.from_now.to_date, Billing::Trial.last_day(company.reload)
+
+    set_trial_last_day(company, 3.days.from_now.to_date)
+    company.reload
+    assert_equal 3.days.from_now.to_date, Billing::Trial.last_day(company)
+    assert_equal started, company.trial_started_at
+  end
+
   test "a trial for a company we carry is refused on the form" do
     company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
 
@@ -121,7 +157,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
   end
 
   test "the company page says when its trial ends" do
-    company = create(:company, :trialing, trial_hours: 720)
+    company = create(:company, :trialing)
 
     get admin_company_path(company)
 

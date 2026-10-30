@@ -240,7 +240,7 @@ const SettingsPage = () => {
                       <IconLock size={14} />
                       <Text fz="xs" c="dimmed">
                         {capacity.trialWorkers != null
-                          ? 'the free trial runs one worker — add a card to choose how many'
+                          ? 'one worker until a card is added — then choose how many'
                           : 'contact us to change this'}
                       </Text>
                     </Group>

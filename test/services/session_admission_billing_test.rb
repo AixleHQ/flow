@@ -31,6 +31,16 @@ class SessionAdmissionBillingTest < ActiveSupport::TestCase
     assert_equal [ first.id ], SessionAdmissionService.drain!
   end
 
+  # A project's reservation is drawn from the company's workers, and on the
+  # trial that is one, whatever the reservation says.
+  test "a project's reservation does not get a trialing company past one session" do
+    @company.update!(billing_state: "trialing")
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
+    first, = 3.times.map { enqueue }
+
+    assert_equal [ first.id ], SessionAdmissionService.drain!
+  end
+
   # Nothing kills what is already running — only nothing new starts.
   test "a company that has spent it runs nothing new" do
     @company.update!(billing_state: "blocked")

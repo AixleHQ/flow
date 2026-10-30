@@ -3,21 +3,31 @@
 require "test_helper"
 
 class Billing::TrialTest < ActiveSupport::TestCase
+  # A company that signs up at 10:00 on Oct 30 gets thirty days, Oct 30 to the
+  # end of Nov 28: 29 days and 13 whole hours.
+  SIGNUP = Time.utc(2026, 10, 30, 10)
+  LENGTH = (29 * 24) + 13
+
   setup do
     saas!
+    travel_to SIGNUP
     @company = create(:company, :trialing)
-    # Thirty whole days, whatever time of day the suite runs at.
-    @company.update_column(:trial_hours, 720)
   end
 
   def saas!(mode = Deployment::SAAS)
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
   end
 
-  def used!(hours, at: Time.utc(2026, 9, 29, 10))
-    CompanyCapacityUsage.record!(
-      company_id: @company.id, period_start: at, quantity_seconds: (hours * 3600).to_i
+  # What the hourly meter writes: one row per closed hour the company was
+  # offered anything.
+  def metered!(company, hours, from:)
+    CompanyCapacityUsage.insert_all(
+      Array.new(hours) { |offset| { company_id: company.id, period_start: from + offset.hours, quantity_seconds: 3600 } }
     )
+  end
+
+  def used!(hours, at: SIGNUP)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: at, quantity_seconds: hours * 3600)
   end
 
   def trial_days!(days)
@@ -32,22 +42,23 @@ class Billing::TrialTest < ActiveSupport::TestCase
   # Today is the first day, and the trial ends with the last one's end — the
   # same end an operator's last day has.
   test "a new trial runs to the end of its last day" do
+    assert_equal LENGTH, @company.trial_hours
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(@company)
+    assert_equal 30, Billing::Trial.days_left(@company)
+    assert_equal 30, Billing::Trial.length_in_days(@company)
+  end
+
+  test "a new trial is as long as the installation says" do
     trial_days!(14)
 
-    travel_to Time.utc(2026, 10, 30, 10) do
-      company = create(:company, :trialing)
-
-      assert_equal (13 * 24) + 13, company.trial_hours
-      assert_equal Date.new(2026, 11, 12), Billing::Trial.last_day(company)
-      assert_equal 14, Billing::Trial.days_left(company)
-    end
+    assert_equal (13 * 24) + 13, create(:company, :trialing).trial_hours
   end
 
   # A trial promised thirty days stays thirty days.
   test "a company keeps the length of the trial it started" do
     trial_days!(7)
 
-    assert_equal 720 * 3600, Billing::Trial.allowance_seconds(@company)
+    assert_equal LENGTH * 3600, Billing::Trial.allowance_seconds(@company)
   end
 
   test "a trial from before lengths were kept follows the default" do
@@ -57,21 +68,46 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal 240 * 3600, Billing::Trial.allowance_seconds(@company)
   end
 
-  test "a fresh company has the whole trial" do
-    assert_equal 720 * 3600, Billing::Trial.remaining_seconds(@company)
-    assert_equal 30, Billing::Trial.days_left(@company)
-    assert_equal 30, Billing::Trial.length_in_days(@company)
-    assert_not Billing::Trial.exhausted?(@company)
+  # The meter lags the clock by the hour under way and counts the hour a trial
+  # began in as a part hour, so what is left is counted on from where it got
+  # to. Counted from now, a trial ending at 23:40 would show the day after as
+  # its last.
+  test "the last day holds while the meter counts the hours" do
+    travel 40.minutes
+    company = create(:company, :trialing)
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: SIGNUP, quantity_seconds: 20 * 60)
+
+    metered!(company, 47, from: SIGNUP + 1.hour)
+    travel_to SIGNUP + 2.days + 55.minutes
+
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
+    assert_equal 28, Billing::Trial.days_left(company)
+
+    metered!(company, 708 - 47, from: SIGNUP + 48.hours)
+    travel_to Time.utc(2026, 11, 28, 23, 20)
+
+    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
+    assert_equal 1, Billing::Trial.days_left(company)
+  end
+
+  # The meter writes whole hours, so a trial that began at 10:40 begins in the
+  # 10:00 row.
+  test "the hour a trial began in counts towards it" do
+    @company.update!(trial_started_at: SIGNUP + 40.minutes)
+    used!(1, at: SIGNUP - 1.hour)
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: SIGNUP, quantity_seconds: 20 * 60)
+
+    assert_equal 20 * 60, Billing::Trial.used_seconds(@company)
   end
 
   # The spend is a sum over the usage log rather than a counter beside it, so
   # there is nothing that can drift from what was actually offered.
   test "what it has spent is the sum of the hours it was offered" do
-    used!(30, at: Time.utc(2026, 9, 29, 10))
-    used!(20, at: Time.utc(2026, 9, 29, 11))
+    used!(30, at: SIGNUP)
+    used!(20, at: SIGNUP + 1.hour)
 
     assert_equal 50 * 3600, Billing::Trial.used_seconds(@company)
-    assert_equal 670 * 3600, Billing::Trial.remaining_seconds(@company)
+    assert_equal (LENGTH - 50) * 3600, Billing::Trial.remaining_seconds(@company)
   end
 
   # An operator restarting a company by hand gives it a new trial; what it
@@ -84,33 +120,15 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert_equal 3 * 3600, Billing::Trial.used_seconds(@company)
   end
 
-  test "a part of a day left counts as a day" do
-    used!(720 - 25)
-
-    assert_equal 2, Billing::Trial.days_left(@company)
-  end
-
-  # One worker spends an hour of the trial an hour, so what is left is also
-  # when it ends.
-  test "the last day is when what is left runs out" do
-    used!(720 - 25)
-
-    travel_to Time.utc(2026, 10, 30, 10) do
-      assert_equal Date.new(2026, 10, 31), Billing::Trial.last_day(@company)
-    end
-  end
-
   test "a trial set to end with a day lasts until that day's end and no further" do
-    travel_to Time.utc(2026, 10, 30, 10) do
-      hours = Billing::Trial.hours_ending_on(Date.new(2026, 11, 2), spent_seconds: 10 * 3600)
+    hours = Billing::Trial.hours_ending_on(Date.new(2026, 11, 2), spent_seconds: 10 * 3600, from: SIGNUP)
 
-      assert_equal 10 + 85, hours, "what was spent, then 3 days and 13 whole hours"
-      assert_equal Date.new(2026, 11, 2), (Time.current + (hours - 10).hours).to_date
-    end
+    assert_equal 10 + 85, hours, "what was spent, then 3 days and 13 whole hours"
+    assert_equal Date.new(2026, 11, 2), (SIGNUP + (hours - 10).hours).to_date
   end
 
   test "spending the trial exactly is spending it" do
-    used!(720)
+    used!(LENGTH)
 
     assert Billing::Trial.exhausted?(@company)
     assert_equal 0, Billing::Trial.remaining_seconds(@company)
@@ -118,13 +136,13 @@ class Billing::TrialTest < ActiveSupport::TestCase
   end
 
   test "remaining never goes below nothing" do
-    used!(720 + 40)
+    used!(LENGTH + 40)
 
     assert_equal 0, Billing::Trial.remaining_seconds(@company)
   end
 
   test "enforce stops a company that has spent it" do
-    used!(720)
+    used!(LENGTH)
 
     assert_equal [ @company.id ], Billing::Trial.enforce!
 
@@ -150,9 +168,7 @@ class Billing::TrialTest < ActiveSupport::TestCase
   # says.
   test "enforce leaves a paying company alone" do
     paying = create(:company)
-    CompanyCapacityUsage.record!(
-      company_id: paying.id, period_start: Time.utc(2026, 9, 29, 10), quantity_seconds: 720 * 3600 * 10
-    )
+    CompanyCapacityUsage.record!(company_id: paying.id, period_start: SIGNUP, quantity_seconds: 7200 * 3600)
 
     assert_empty Billing::Trial.enforce!
     assert paying.reload.billing_active?
@@ -161,7 +177,7 @@ class Billing::TrialTest < ActiveSupport::TestCase
   # A self-hosted operator pays nobody and a Marketplace customer bought their
   # capacity from AWS, so neither has a trial to run out of.
   test "nothing is enforced outside the hosted product" do
-    used!(720)
+    used!(LENGTH)
     saas!(Deployment::SELF_HOSTED)
 
     assert_empty Billing::Trial.enforce!

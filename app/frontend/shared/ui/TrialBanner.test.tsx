@@ -37,10 +37,10 @@ describe('TrialBanner', () => {
     expect(banner).toHaveTextContent('After that, no new sessions start');
   });
 
-  it('says the last day is close without counting it', () => {
+  it('says so on the last day', () => {
     renderPage(<TrialBanner />, { props: { trial: buildSharedTrial({ daysLeft: 1 }) } });
 
-    expect(screen.getByRole('status')).toHaveTextContent('The free trial ends within a day');
+    expect(screen.getByRole('status')).toHaveTextContent('Today is the last day of the free trial.');
   });
 
   // ── Paying ──────────────────────────────────────────────────────────────

@@ -109,7 +109,7 @@ that limit for themselves, and the rest share what is left.
 The limit is the **company admin's** to set, on Settings → General, and they may
 raise or lower it whenever they like — once they pay. On the free trial it is
 read-only, and stays so once the trial has ended, until a card is added: the
-trial runs one worker. They may not clear it: a company with no
+trial runs one worker. So are its projects' reservations. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
 something a company does to itself. In a company **managed by Aixle** (see
 [Billing states](#billing-states)) the limit is read-only for its admins: nobody

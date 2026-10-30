@@ -262,21 +262,26 @@ class Company < ApplicationRecord
   end
 
   # Stored state, not the form's: an operator changing the billing state in the
-  # same save does not end a subscription.
+  # same save does not end a subscription. The id outlives an ended subscription,
+  # so the state says whether it still bills: paying, or stopped with an invoice
+  # Stripe is still collecting.
   def subscription_running?
     stripe_subscription_id.present? &&
-      !(billing_state_in_database == "blocked" && billing_block_reason_in_database == "canceled")
+      (billing_state_in_database == "active" || billing_block_reason_in_database == "payment_failed")
   end
 
-  # A company already on a trial keeps its start, and what it has spent since
-  # counts towards the new length; any other starts one now.
+  # A company already on a trial keeps its start, and what it has spent counts
+  # towards the new length; any other starts one now.
   def put_on_trial_until_last_day
-    now = Time.current
-    continuing = billing_state_in_database == "trialing"
-    self.trial_started_at = now unless continuing
+    if billing_state_in_database == "trialing"
+      spent = Billing::Trial.used_seconds(self)
+      from = Billing::Trial.measured_until(self)
+    else
+      self.trial_started_at = from = Time.current
+      spent = 0
+    end
     self.billing_state = "trialing"
-    spent = continuing ? Billing::Trial.used_seconds(self) : 0
-    self.trial_hours = Billing::Trial.hours_ending_on(trial_last_day, spent_seconds: spent, now: now)
+    self.trial_hours = Billing::Trial.hours_ending_on(trial_last_day, spent_seconds: spent, from: from)
   end
 
   def starting_trial_of_default_length?

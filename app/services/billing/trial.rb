@@ -33,7 +33,7 @@ module Billing
     # A trial that starts now ends with the last of its days, today counted as
     # the first — the same day's end an operator's last day has.
     def new_trial_hours(now: Time.current)
-      hours_ending_on(now.to_date + days - 1, spent_seconds: 0, now: now)
+      hours_ending_on(now.to_date + days - 1, spent_seconds: 0, from: now)
     end
 
     # The length of the trial the company is on, kept on the company so a new
@@ -51,13 +51,25 @@ module Billing
       Deployment.saas? && company.billing_status.in?(%w[trialing allowance])
     end
 
+    def used_seconds(company) = trial_usage(company).sum(:quantity_seconds)
+
     # Counted from the start of the trial the company is on: an operator can
     # start a new one (Admin::CompaniesController#update), and only what is spent
-    # after that counts against it.
-    def used_seconds(company)
+    # after that counts against it. The meter records whole hours, so that is
+    # from the hour the trial began in.
+    def trial_usage(company)
       usage = CompanyCapacityUsage.where(company_id: company.id)
-      usage = usage.since(company.trial_started_at) if company.trial_started_at
-      usage.sum(:quantity_seconds)
+      company.trial_started_at ? usage.since(company.trial_started_at.beginning_of_hour) : usage
+    end
+
+    def started_at(company) = company.trial_started_at || company.created_at
+
+    # How far the meter has counted: the end of the last hour it recorded, or the
+    # start before it has recorded one. What is left runs on from there, not from
+    # now — the hour under way has not been counted yet.
+    def measured_until(company)
+      last_hour = trial_usage(company).maximum(:period_start)
+      last_hour ? last_hour + 1.hour : started_at(company)
     end
 
     def remaining_seconds(company)
@@ -68,18 +80,24 @@ module Billing
       used_seconds(company) >= allowance_seconds(company)
     end
 
-    def length_in_days(company) = (allowance_seconds(company) / 1.day.to_f).ceil
-
-    def days_left(company) = (remaining_seconds(company) / 1.day.to_f).ceil
-
     # At one worker what is left is also how long it lasts.
-    def last_day(company, now: Time.current) = (now + remaining_seconds(company)).to_date
+    def last_day(company) = (measured_until(company) + remaining_seconds(company)).to_date
+
+    # Calendar days, the first and the last both counted.
+    def length_in_days(company) = (last_day(company) - started_at(company).to_date).to_i + 1
+
+    # Calendar days to the last one, today counted.
+    def days_left(company, today: Date.current)
+      return 0 if remaining_seconds(company).zero?
+
+      [ (last_day(company) - today).to_i + 1, 0 ].max
+    end
 
     # The length, in worker-hours, of a trial that ends with `last_day`: what it
-    # has spent so far plus the hours from now to that day's end. Rounded down,
-    # so the trial never reaches into the day after.
-    def hours_ending_on(last_day, spent_seconds:, now: Time.current)
-      ((spent_seconds + (last_day.end_of_day - now)) / 3600).floor
+    # has spent by `from` plus the hours from then to that day's end. Rounded
+    # down, so the trial never reaches into the day after.
+    def hours_ending_on(last_day, spent_seconds:, from:)
+      ((spent_seconds + (last_day.end_of_day - from)) / 3600).floor
     end
 
     # The ceiling a company's own limit is clamped to, or nil where nothing

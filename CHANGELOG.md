@@ -38,7 +38,8 @@ governance, community health — carry none.
   on one worker, instead of 100 worker-hours spent at whatever number of workers
   it ran. The banner and the Billing tab show the days left and the last day.
   The signup form no longer asks how many workers: the trial runs one, and the
-  Workers setting is read-only until a card is added.
+  Workers setting and projects' reserved workers are read-only until a card is
+  added.
 - **Admin**: `TRIAL_DAYS` (default 30) sets the length of a new trial and
   replaces `TRIAL_QUEUE_HOURS`, which is no longer read. A company already on a
   trial when this ships gets the default length, counted against what it has

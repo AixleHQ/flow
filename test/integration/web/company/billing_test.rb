@@ -75,12 +75,12 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
 
   test "a trialing company sees its trial and no usage to invoice" do
     freeze_time
-    @company.update!(billing_state: "trialing", trial_hours: 720, stripe_subscription_id: nil)
+    @company.update!(billing_state: "trialing", stripe_subscription_id: nil)
 
     billing = billing_props[:billing]
 
     assert_equal "trialing", billing[:status]
-    assert_equal({ "days" => 30, "daysLeft" => 30, "lastDay" => (Time.current + 720.hours).to_date.iso8601 }, billing[:trial])
+    assert_equal({ "days" => 30, "daysLeft" => 30, "lastDay" => (Date.current + 29).iso8601 }, billing[:trial])
     assert_nil billing[:usage]
   end
 

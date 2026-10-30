@@ -55,14 +55,16 @@ export const TrialBanner = () => {
             {carryOn}
           </>
         ) : urgent ? (
-          <>
-            <strong>
-              {trial.daysLeft <= 1
-                ? 'The free trial ends within a day'
-                : `The free trial ends in ${days(trial.daysLeft)}`}
-            </strong>{' '}
-            — the last day is {lastDay}. After that, no new sessions start.
-          </>
+          trial.daysLeft <= 1 ? (
+            <>
+              <strong>Today is the last day of the free trial.</strong> After that, no new sessions start.
+            </>
+          ) : (
+            <>
+              <strong>The free trial ends in {days(trial.daysLeft)}</strong> — the last day is {lastDay}. After that, no
+              new sessions start.
+            </>
+          )
         ) : (
           <>
             You are on the free trial, on one worker: <span className={classes.figure}>{days(trial.daysLeft)}</span>{' '}

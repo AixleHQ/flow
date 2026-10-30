@@ -17,12 +17,6 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
   end
 
-  def used!(hours)
-    CompanyCapacityUsage.record!(
-      company_id: @company.id, period_start: Time.utc(2026, 9, 29, 10), quantity_seconds: hours * 3600
-    )
-  end
-
   def trial_prop
     get company_projects_path
     captured = {}
@@ -39,18 +33,16 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     assert_nil trial_prop
   end
 
-  # Counted in hours, shown in days: 660 hours left is 27 and a half days.
-  test "a workspace on the free trial gets the days it has left" do
+  test "a workspace on the free trial gets the days it has left and its last day" do
     freeze_time
-    @company.update!(billing_state: "trialing", trial_hours: 720)
-    used!(60)
+    @company.update!(billing_state: "trialing")
 
     props = trial_prop
 
     assert_equal "trialing", props[:state]
     assert_equal 30, props[:days]
-    assert_equal 28, props[:daysLeft]
-    assert_equal (Time.current + 660.hours).to_date.iso8601, props[:lastDay]
+    assert_equal 30, props[:daysLeft]
+    assert_equal (Date.current + 29).iso8601, props[:lastDay]
   end
 
   # The banner must not offer a card where there is nowhere to pay.
