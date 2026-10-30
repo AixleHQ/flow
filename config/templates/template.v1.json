@@ -946,14 +946,7 @@
                   "maxLength": 128
                 },
                 "reasoning_effort": {
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high",
-                    "xhigh",
-                    "max",
-                    "ultra"
-                  ]
+                  "type": "string"
                 },
                 "required_agent_runtime": {
                   "enum": [

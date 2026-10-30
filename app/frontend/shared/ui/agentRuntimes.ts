@@ -60,15 +60,6 @@ export function agentLabel(agentType: string | null | undefined): string {
   return isAgentType(agentType) ? AGENT_RUNTIMES[agentType].label : agentType;
 }
 
-interface ReasoningEffortSpec {
-  levels: string[];
-  models: { match: string; levels: string[] }[];
-}
-
-const REASONING_EFFORT: Record<string, ReasoningEffortSpec | undefined> = Object.fromEntries(
-  registry.runtimes.map((runtime) => [runtime.id, runtime.reasoning_effort as ReasoningEffortSpec | undefined]),
-);
-
 const REASONING_EFFORT_LABELS: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
@@ -80,32 +71,4 @@ const REASONING_EFFORT_LABELS: Record<string, string> = {
 
 export function reasoningEffortLabel(level: string): string {
   return REASONING_EFFORT_LABELS[level] ?? level;
-}
-
-/**
- * The reasoning-effort levels a runtime's CLI takes for `model`, in
- * config/agent_runtimes.json's order — the same rule as
- * AgentRuntime#reasoning_effort_levels on the server. A level is set only on an
- * explicitly chosen model, so without one there is none.
- */
-export function reasoningEffortLevels(runtime: string | null | undefined, model?: string | null): string[] {
-  const spec = runtime ? REASONING_EFFORT[runtime] : undefined;
-  if (!spec || !model) return [];
-
-  const rule = spec.models.find((entry) => new RegExp(entry.match).test(model));
-  return rule ? rule.levels : spec.levels;
-}
-
-/** Why a runtime offers no reasoning-effort level for `model`, or null when it offers some. */
-export function reasoningEffortUnavailableReason(
-  runtime: string | null | undefined,
-  model?: string | null,
-): string | null {
-  if (!runtime) return 'Choose a runtime to set a reasoning effort.';
-  if (!model) return 'Choose a model to set a reasoning effort.';
-  if (reasoningEffortLevels(runtime, model).length > 0) return null;
-
-  const label = agentLabel(runtime);
-  if (REASONING_EFFORT[runtime]) return `${label} has no reasoning-effort setting for ${model}.`;
-  return `${label} has no reasoning-effort setting.`;
 }

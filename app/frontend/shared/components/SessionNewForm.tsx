@@ -17,7 +17,7 @@ import { type ToolGroup } from 'shared/lib/toolPicker';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
-import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS, reasoningEffortLevels } from 'shared/ui/agentRuntimes';
+import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
@@ -78,6 +78,8 @@ const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 interface AgentModel {
   modelId: string;
   displayName: string;
+  /** The reasoning-effort levels the runtime takes for this model, from the server. */
+  reasoningEffortLevels: string[];
 }
 
 interface AgentModelsEntry {
@@ -159,6 +161,9 @@ export const SessionNewForm = ({
   }, [agentModels]);
 
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
+
+  const effortLevelsFor = (model: string | null) =>
+    model ? models.find((m) => m.modelId === model)?.reasoningEffortLevels : undefined;
 
   const defaultModelId = agentType ? (agentModels.find((e) => e.agentType === agentType)?.defaultModel ?? null) : null;
   const defaultModelLabel = defaultModelId
@@ -439,7 +444,7 @@ export const SessionNewForm = ({
           setSelectedModel(model);
           // A level needs an explicitly chosen model that takes it, so one the new
           // model doesn't take (or Default, which takes none) clears it.
-          if (selectedEffort && !reasoningEffortLevels(agentType, model).includes(selectedEffort)) {
+          if (selectedEffort && !(effortLevelsFor(model) ?? []).includes(selectedEffort)) {
             setSelectedEffort(null);
           }
         }}
@@ -456,6 +461,7 @@ export const SessionNewForm = ({
           label="Reasoning effort"
           runtime={agentType || null}
           model={selectedModel}
+          levels={effortLevelsFor(selectedModel)}
           value={selectedEffort}
           onChange={setSelectedEffort}
         />

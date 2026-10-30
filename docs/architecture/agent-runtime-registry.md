@@ -24,14 +24,14 @@ repository's matrix still lacked it after that.
 | `cli_version` | The CLI release the image installs, passed as the `CLI_VERSION` build arg. `null` would mean the image installs whatever the vendor ships that day, so the image tag, not the registry, fixes what a deployment runs; every runtime is pinned today. |
 | `cli_latest` | Where the weekly canary finds the vendor's newest release (`bin/agent-cli-latest` reads it): `{ "npm": "<package>" }`, or `{ "url": "<endpoint>" }` with a body that is the version, or that URL plus `"jq": "<filter>"` for a JSON body (Kiro's manifest) or `"pattern": "<regex>"` whose first group is the version (Cursor's install script, the only place it publishes one). `null` means the canary builds the pin. |
 | `cli_releases` | Where the vendor's release notes are. `{ "github": "<owner/repo>", "tag_prefix": "<prefix before the version>" }`: the canary report quotes them, and they give the newest version when `cli_latest` is `null`; pre-releases and tags that are not `X.Y.Z` are ignored. `{ "url": "<changelog page>" }`: the report links it. |
-| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels` and `reasoningEffortLevels` (`app/frontend/shared/ui/agentRuntimes.ts`) apply the same rule, and both return no level for a blank model. See [Reasoning effort](#reasoning-effort). |
+| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels(model)` applies the rule, the only place that does, and returns no level for a blank model. See [Reasoning effort](#reasoning-effort). |
 
 ## Who reads it
 
 | Consumer | Uses |
 | --- | --- |
-| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. `reasoning_effort_levels(model)` is what a step's or session's reasoning effort is validated against. |
-| `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`, and the levels the reasoning-effort select offers. Badge colors stay in the frontend. |
+| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. `reasoning_effort_levels(model)` is what a step's or session's reasoning effort is validated against, and what `CompanyMembership#agent_models_for_props` puts on each model option as `reasoning_effort_levels`. The class method `AgentRuntime.reasoning_effort_levels`, the union of every runtime's levels, is only the enum of the `create_workflow_step` and `update_workflow_step` MCP tools. |
+| `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`. Badge colors stay in the frontend. The reasoning-effort select does not read the registry: it offers the `reasoningEffortLevels` the server sent on the selected model option. |
 | `.github/workflows/images.yml` | The `agent-images` build matrix, the `CLI_VERSION` build arg, the canary's newest-release lookup (`bin/agent-cli-latest`), and its update report (`bin/agent-cli-report`). |
 | `bin/build-agent-images` (`make build-agents`) | Local builds, with the same build args. |
 | The deployment repository | Its agent image build matrix, read from the release tag it deploys. |
@@ -61,9 +61,12 @@ Two rules apply, on steps and sessions alike:
 `ReasoningEffortValidator` checks both, with one message per failure, so the REST API and
 the MCP tools answer 422. A step is checked on every save; a session, workflow step
 sessions included, when it is created. Clearing the model or the runtime while a level is
-set is refused the same way, so the caller clears the level with them. The UI hides the
-select until a model is chosen and clears the level when the model goes back to Default;
-the new-session form also clears it when the new model doesn't take it. The level is never checked against the
+set is refused the same way, so the caller clears the level with them. The step editor
+and the new-session form hide the select until a model is chosen. They offer the levels
+the server put on that model option (`CompanyMembership#agent_models_for_props`), so the
+rule is evaluated only on the server, and a model switch clears a level the new model
+doesn't take (Default takes none). A saved step whose model the credential doesn't list
+shows its level with the levels marked unknown. The level is never checked against the
 credential's default model, because that can change at any time and every saved level
 would then need re-checking. An effort for the default model, if it is ever needed,
 belongs next to the default model in the agent profile.
@@ -97,10 +100,10 @@ lower or ignore a level the model doesn't support. The select says so under the 
 
 When a pin is raised, re-check the CLI's levels and update `reasoning_effort` with it:
 `--help` for a flag, a launch with a bogus level for the accepted list, and for Codex the
-bundled catalog's `supported_reasoning_levels`. A level no runtime had before must also be
-added to the `reasoning_effort` enum of the template schema
-(`config/templates/template.v1.json`); `Templates::ValidatorTest` fails until the two lists
-match. A level the new pin no longer takes (for the CLI or for one model) comes with a data
+bundled catalog's `supported_reasoning_levels`. The template schema
+(`config/templates/template.v1.json`) types `reasoning_effort` only as a string;
+`Templates::Validator#check_reasoning_efforts` checks the level against the step's runtime
+and model through `AgentRuntime`, so a new level needs no schema edit. A level the new pin no longer takes (for the CLI or for one model) comes with a data
 migration that clears or replaces it on the steps that have it, because a step is validated
 on every save and would otherwise refuse unrelated edits.
 

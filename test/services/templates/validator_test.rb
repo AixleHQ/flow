@@ -180,17 +180,6 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"
   end
 
-  # Steps and the MCP tools take their levels from config/agent_runtimes.json; the
-  # template schema lists them by hand, so a level added to the registry must be added
-  # here too, or a template carrying it fails validation on install.
-  test "the template schema's reasoning-effort levels are the registry's" do
-    schema = JSON.parse(Templates::Package::SCHEMA_PATH.read)
-    levels = schema.dig("properties", "workflows", "items", "properties", "steps", "items", "properties",
-                        "reasoning_effort", "enum")
-
-    assert_equal AgentRuntime.reasoning_effort_levels.sort, levels.sort
-  end
-
   # Steps take their runtimes from config/agent_runtimes.json; a runtime missing here
   # makes a workflow exported with it fail validation.
   test "the template schema's runtimes are the registry's" do

@@ -200,6 +200,21 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_equal "claude-opus-4-8", props.first[:default_model]
   end
 
+  # The model pickers offer these levels as they are, so the per-model rule is
+  # applied once, here on the server.
+  test "agent_models_for_props gives each model the reasoning-effort levels its runtime takes for it" do
+    membership = create(:company_membership, user: @user, company: @company)
+    create(:agent_credential, :kiro_cli, user: @user, company: @company,
+           metadata: { "kiro_models" => [ { "model_id" => "claude-opus-5.5" }, { "model_id" => "claude-sonnet-4.6" },
+                                          { "model_id" => "auto" } ] })
+
+    models = membership.agent_models_for_props.first[:models]
+
+    assert_equal({ "claude-opus-5.5" => %w[low medium high xhigh max], "claude-sonnet-4.6" => %w[low medium high max],
+                   "auto" => [] },
+                 models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+  end
+
   test "agent_models_for_props reports a nil default model when none is pinned" do
     membership = create(:company_membership, user: @user, company: @company)
     create(:agent_credential, :claude_code, user: @user, company: @company)

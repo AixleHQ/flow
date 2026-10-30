@@ -179,6 +179,8 @@ function AssetRows({ specs, onChange, showNamePattern, disabled, kind, placehold
 interface AgentModel {
   modelId: string;
   displayName: string;
+  /** The reasoning-effort levels the runtime takes for this model, from the server. */
+  reasoningEffortLevels: string[];
 }
 interface AgentModelsEntry {
   agentType: string;
@@ -246,6 +248,8 @@ export function SessionEditorPanel({
   const modelOptions = runtimeModels
     .filter((m) => m.modelId)
     .map((m) => ({ value: m.modelId, label: m.displayName || m.modelId }));
+  const effortLevelsFor = (model: string | null) =>
+    model ? runtimeModels.find((m) => m.modelId === model)?.reasoningEffortLevels : undefined;
   const preferredModelOptions =
     step.preferredModel && !modelOptions.some((o) => o.value === step.preferredModel)
       ? [...modelOptions, { value: step.preferredModel, label: step.preferredModel }]
@@ -408,9 +412,13 @@ export function SessionEditorPanel({
                 data={preferredModelOptions}
                 value={step.preferredModel ?? null}
                 onChange={(v) => {
-                  onFieldChange('preferredModel', v || null);
-                  // A level needs an explicitly chosen model, so it is cleared with it.
-                  if (!v && step.reasoningEffort) onFieldChange('reasoningEffort', null);
+                  const model = v || null;
+                  onFieldChange('preferredModel', model);
+                  // A level needs an explicitly chosen model that takes it, so one the new
+                  // model doesn't take (or Default, which takes none) clears it.
+                  if (step.reasoningEffort && !(effortLevelsFor(model) ?? []).includes(step.reasoningEffort)) {
+                    onFieldChange('reasoningEffort', null);
+                  }
                 }}
                 disabled={readOnly}
                 clearable
@@ -439,6 +447,7 @@ export function SessionEditorPanel({
               <ReasoningEffortSelect
                 runtime={step.requiredAgentRuntime}
                 model={step.preferredModel}
+                levels={effortLevelsFor(step.preferredModel)}
                 value={step.reasoningEffort ?? null}
                 onChange={(v) => onFieldChange('reasoningEffort', v)}
                 disabled={readOnly}

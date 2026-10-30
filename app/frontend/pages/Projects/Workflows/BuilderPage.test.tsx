@@ -175,6 +175,21 @@ afterEach(() => {
   notifications.clean();
 });
 
+// Model options as the server sends them, each with the levels its runtime takes for it.
+const KIRO_MODELS = [
+  {
+    agentType: 'kiro_cli',
+    models: [
+      {
+        modelId: 'claude-opus-5.5',
+        displayName: 'Opus 5.5',
+        reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      { modelId: 'claude-sonnet-4.6', displayName: 'Sonnet 4.6', reasoningEffortLevels: ['low', 'medium', 'high', 'max'] },
+    ],
+  },
+];
+
 describe('Projects/Workflows/BuilderPage', () => {
   it('renders the sessions sidebar and the first session selected in the detail panel', () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
@@ -925,7 +940,7 @@ describe('Projects/Workflows/BuilderPage', () => {
             preferredModel: 'opus-9',
           }),
         ],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] }],
       }),
     });
 
@@ -943,7 +958,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] }],
       }),
     });
 
@@ -959,8 +974,8 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
         agentModels: [
-          { agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] },
-          { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X' }] },
+          { agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] },
+          { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X', reasoningEffortLevels: [] }] },
         ],
       }),
     });
@@ -988,6 +1003,15 @@ describe('Projects/Workflows/BuilderPage', () => {
             preferredModel: 'gemini-3-pro',
           }),
         ],
+        agentModels: [
+          {
+            agentType: 'gemini_cli',
+            models: [
+              { modelId: 'gemini-3-pro', displayName: 'Gemini 3 Pro', reasoningEffortLevels: ['low', 'high'] },
+              { modelId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', reasoningEffortLevels: [] },
+            ],
+          },
+        ],
       }),
     });
 
@@ -1014,6 +1038,15 @@ describe('Projects/Workflows/BuilderPage', () => {
             preferredModel: 'gemini-2.5-pro',
           }),
         ],
+        agentModels: [
+          {
+            agentType: 'gemini_cli',
+            models: [
+              { modelId: 'gemini-3-pro', displayName: 'Gemini 3 Pro', reasoningEffortLevels: ['low', 'high'] },
+              { modelId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', reasoningEffortLevels: [] },
+            ],
+          },
+        ],
       }),
     });
 
@@ -1035,6 +1068,7 @@ describe('Projects/Workflows/BuilderPage', () => {
             reasoningEffort: 'xhigh',
           }),
         ],
+        agentModels: KIRO_MODELS,
       }),
     });
 
@@ -1049,6 +1083,67 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.steps[0].reasoningEffort).toBe('xhigh');
+  });
+
+  it("switching to a model that doesn't take the level clears it, and keeps one it takes", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-opus-5.5',
+            reasoningEffort: 'xhigh',
+          }),
+        ],
+        agentModels: KIRO_MODELS,
+      }),
+    });
+    const effort = () => screen.getByRole('combobox', { name: 'Reasoning effort' });
+    const pickModel = async (name: string) => {
+      await userEvent.click(screen.getByRole('combobox', { name: 'Preferred model' }));
+      await userEvent.click(await screen.findByRole('option', { name }));
+    };
+
+    expect(effort()).toHaveValue('Extra high');
+    await pickModel('Sonnet 4.6');
+    expect(effort()).toHaveValue('');
+    expect(screen.queryByText(/is not available for/)).not.toBeInTheDocument();
+
+    await userEvent.click(effort());
+    await userEvent.click(await screen.findByRole('option', { name: 'High' }));
+    await pickModel('Opus 5.5');
+    expect(effort()).toHaveValue('High');
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ preferredModel: 'claude-opus-5.5', reasoningEffort: 'high' });
+  });
+
+  it("a Reasoning Effort says the levels are unknown for a model the server doesn't list", () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-opus-9',
+            reasoningEffort: 'high',
+          }),
+        ],
+        agentModels: KIRO_MODELS,
+      }),
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toHaveValue('High');
+    expect(
+      screen.getByText("Kiro CLI doesn't list claude-opus-9, so its reasoning-effort levels are unknown."),
+    ).toBeInTheDocument();
   });
 
   it('a Reasoning Effort is hidden while the model is left on Default', () => {

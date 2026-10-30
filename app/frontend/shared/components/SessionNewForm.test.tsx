@@ -401,12 +401,12 @@ describe('SessionNewForm', () => {
       {
         agentType: 'claude_code',
         models: [
-          { modelId: 'opus-9', displayName: 'Opus 9' },
-          { modelId: 'sonnet-9', displayName: 'Sonnet 9' },
+          { modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] },
+          { modelId: 'sonnet-9', displayName: 'Sonnet 9', reasoningEffortLevels: [] },
         ],
         defaultModel: 'opus-9',
       },
-      { agentType: 'codex', models: [{ modelId: 'gpt-9', displayName: 'GPT 9' }], defaultModel: null },
+      { agentType: 'codex', models: [{ modelId: 'gpt-9', displayName: 'GPT 9', reasoningEffortLevels: [] }], defaultModel: null },
       { agentType: 'cursor_cli', models: [], defaultModel: 'arn:aws:bedrock:us-east-1:1234:profile/abc' },
     ];
 
@@ -521,17 +521,28 @@ describe('SessionNewForm', () => {
 
   describe('reasoning effort', () => {
     const agentModels = [
-      { agentType: 'grok', models: [{ modelId: 'grok-5', displayName: 'Grok 5' }], defaultModel: 'grok-5' },
+      { agentType: 'grok', models: [{ modelId: 'grok-5', displayName: 'Grok 5', reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'] }], defaultModel: 'grok-5' },
       {
         agentType: 'cursor_cli',
-        models: [{ modelId: 'claude-opus-4-8', displayName: 'Opus 4.8' }],
+        models: [
+          { modelId: 'claude-opus-4-8', displayName: 'Opus 4.8', reasoningEffortLevels: ['low', 'medium', 'high'] },
+        ],
         defaultModel: 'claude-opus-4-8',
       },
       {
         agentType: 'kiro_cli',
         models: [
-          { modelId: 'claude-opus-5.5', displayName: 'Opus 5.5' },
-          { modelId: 'claude-sonnet-4.6', displayName: 'Sonnet 4.6' },
+          {
+            modelId: 'claude-opus-5.5',
+            displayName: 'Opus 5.5',
+            reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+          },
+          {
+            modelId: 'claude-sonnet-4.6',
+            displayName: 'Sonnet 4.6',
+            reasoningEffortLevels: ['low', 'medium', 'high', 'max'],
+          },
+          { modelId: 'auto', displayName: 'Auto', reasoningEffortLevels: [] },
         ],
         defaultModel: 'auto',
       },
@@ -657,6 +668,38 @@ describe('SessionNewForm', () => {
 
       const options = await screen.findAllByRole('option');
       expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High']);
+    });
+
+    it('offers exactly the levels the server sent for the selected model', async () => {
+      const user = userEvent.setup();
+      const serverModels = [
+        {
+          agentType: 'codex',
+          models: [{ modelId: 'gpt-next', displayName: 'GPT Next', reasoningEffortLevels: ['medium', 'ultra'] }],
+          defaultModel: null,
+        },
+      ];
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels: serverModels })} />, {
+        props: authProps(['codex']),
+      });
+
+      await user.click(screen.getByText('Codex'));
+      await pickModel(user, 'GPT Next');
+      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+
+      const options = await screen.findAllByRole('option');
+      expect(options.map((o) => o.textContent)).toEqual(['Medium', 'Ultra']);
+    });
+
+    it('is disabled, with the reason, for a model the server sent no levels for', async () => {
+      const user = userEvent.setup();
+      renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['kiro_cli']) });
+
+      await user.click(screen.getByText('Kiro CLI'));
+      await pickModel(user, 'Auto');
+
+      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+      expect(screen.getByText('Kiro CLI has no reasoning-effort setting for auto.')).toBeInTheDocument();
     });
   });
 });

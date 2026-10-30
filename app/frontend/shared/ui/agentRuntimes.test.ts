@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import registry from '../../../../config/agent_runtimes.json';
 
-import {
-  AGENT_RUNTIMES,
-  AGENT_TYPES,
-  agentLabel,
-  reasoningEffortLevels,
-  reasoningEffortUnavailableReason,
-} from './agentRuntimes';
+import { AGENT_RUNTIMES, AGENT_TYPES, agentLabel, reasoningEffortLabel } from './agentRuntimes';
 
 describe('AGENT_RUNTIMES', () => {
   it('lists the registry runtimes in the registry order', () => {
@@ -27,31 +21,9 @@ describe('AGENT_RUNTIMES', () => {
   });
 });
 
-describe('reasoningEffortLevels', () => {
-  it("offers a runtime's own levels for a model no rule names", () => {
-    expect(reasoningEffortLevels('claude_code', 'claude-opus-5.5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    expect(reasoningEffortLevels('gemini_cli', 'gemini-3-pro')).toEqual(['low', 'high']);
-  });
-
-  it('lets a model rule replace them, first match wins', () => {
-    expect(reasoningEffortLevels('kiro_cli', 'claude-sonnet-4.6')).toEqual(['low', 'medium', 'high', 'max']);
-    expect(reasoningEffortLevels('kiro_cli', 'auto')).toEqual([]);
-    expect(reasoningEffortLevels('codex', 'gpt-6-sol')).toContain('ultra');
-    expect(reasoningEffortLevels('gemini_cli', 'gemini-2.5-pro')).toEqual([]);
-  });
-
-  it('offers nothing without an explicitly chosen runtime and model', () => {
-    expect(reasoningEffortLevels(null, 'claude-opus-5.5')).toEqual([]);
-    expect(reasoningEffortLevels('claude_code', null)).toEqual([]);
-    expect(reasoningEffortLevels('cursor_cli', null)).toEqual([]);
-    expect(reasoningEffortLevels('cursor_cli', 'claude-opus-4-8')).toEqual(['low', 'medium', 'high']);
-  });
-
-  it('says why a runtime offers no level', () => {
-    expect(reasoningEffortUnavailableReason('claude_code', 'claude-opus-5.5')).toBeNull();
-    expect(reasoningEffortUnavailableReason('claude_code', null)).toBe('Choose a model to set a reasoning effort.');
-    expect(reasoningEffortUnavailableReason('kiro_cli', 'auto')).toBe(
-      'Kiro CLI has no reasoning-effort setting for auto.',
-    );
+describe('reasoningEffortLabel', () => {
+  it('names a known level and falls back to the raw word', () => {
+    expect(reasoningEffortLabel('xhigh')).toBe('Extra high');
+    expect(reasoningEffortLabel('turbo')).toBe('turbo');
   });
 });

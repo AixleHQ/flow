@@ -19,8 +19,9 @@ AgentRuntime = Data.define(:id, :image, :cli_version, :reasoning_effort) do
     all.find { |runtime| runtime.id == id.to_s } || raise(KeyError, "unknown agent runtime: #{id}")
   end
 
-  # Every effort level any runtime accepts for any model, for the places that store
-  # one before the runtime is known.
+  # Every effort level any runtime takes for any model. Only the enum of the
+  # create_workflow_step and update_workflow_step MCP tools uses it: a step's level is
+  # checked against its own runtime and model by reasoning_effort_levels(model).
   def self.reasoning_effort_levels
     @reasoning_effort_levels ||= all.flat_map do |runtime|
       spec = runtime.reasoning_effort || {}
