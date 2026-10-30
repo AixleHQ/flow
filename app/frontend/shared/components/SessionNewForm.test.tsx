@@ -18,7 +18,9 @@ function makeProps(overrides: Partial<SessionNewFormProps> = {}): SessionNewForm
 
 // Seed SharedProps with a currentUser whose configured agents we control.
 function authProps(
-  configuredAgents: ('claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'antigravity_cli' | 'grok' | 'kiro_cli')[] = [],
+  configuredAgents: (
+    'claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'antigravity_cli' | 'grok' | 'kiro_cli'
+  )[] = [],
 ) {
   return { currentUser: buildSharedUser({ configuredAgents }) };
 }
