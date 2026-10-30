@@ -13,6 +13,17 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Admin**: a company on the dashboard opens a breakdown of its queue for the
+  selected period: wait percentiles (p95 among them) and the share of sessions
+  that waited, how many sessions were already waiting when one joined, the wait
+  per workflow run, its projects with their queue limits, how much of the time
+  every worker was busy and how many waits began then, and the waits day by day.
+
+### Changed
+- **Admin**: the dashboard's companies table shows each company's p95 queue
+  wait, with its change from the previous period, instead of the longest wait.
+
 ### Fixed
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
