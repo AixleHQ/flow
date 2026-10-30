@@ -168,6 +168,25 @@ class WorkflowServiceRunnerTest < ActiveSupport::TestCase
     assert_match(/Runner "Prod VPC" is disabled\./, task.task_comments.sole.body)
   end
 
+  test "two ready steps refused by the same runner each fail, and the board task gets one comment" do
+    @workflow.update!(runner: @runner)
+    task = create_task
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task,
+                                          runner: @runner)
+    build_run = create(:step_run, workflow_run: run, step: @build)
+    ship_run = create(:step_run, workflow_run: run, step: @ship)
+    refusal = Runners::Resolver::Refused.new("runner_unavailable", "Runner \"Prod VPC\" is disabled.")
+
+    [ build_run, ship_run ].each do |step_run|
+      WorkflowService.fail_step_on_runner_refusal(step_run: step_run, refusal: refusal)
+    end
+
+    assert_equal [ [ "failed", "Runner \"Prod VPC\" is disabled." ] ] * 2,
+                 [ build_run, ship_run ].map { |step_run| step_run.reload.values_at(:state, :error_message) }
+    assert_equal "runner_unavailable", run.reload.failure_reason
+    assert_equal 1, task.task_comments.count
+  end
+
   private
 
   def enqueue(**args)
