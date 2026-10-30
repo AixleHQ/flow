@@ -31,7 +31,9 @@ governance, community health — carry none.
   trial it is on. A company we carry, or one a subscription still bills, is
   refused. The company's page shows when its trial ends. A company on a trial
   has one worker, and the admin cannot set another either; a company that needs
-  more is ticked Managed by Aixle.
+  more is ticked Managed by Aixle. Unticking Managed by Aixle starts a fresh
+  trial, whatever the company ran while we carried it, ending on the last day
+  set in the same save or after the default length.
 
 ### Changed
 - **Admin**: the dashboard's companies table shows each company's p95 queue

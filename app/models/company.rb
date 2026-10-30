@@ -227,21 +227,20 @@ class Company < ApplicationRecord
 
   # Left `active`, a company we stop carrying shows a subscription it never had:
   # Cancel that refuses, no way to add a card, minutes the meter drops for want
-  # of a Stripe customer. The allowance counts what it ran while we carried it,
-  # so one already past it is stopped until a card is added. A subscription from
-  # before we took it on keeps billing it — unless it has ended, which
-  # keep_managed_company_running hid by leaving the end date on an active row.
+  # of a Stripe customer. It starts a fresh trial instead — what it ran while we
+  # carried it is not held against it — of the default length unless a last day
+  # comes with the same save. A subscription from before we took it on keeps
+  # billing it — unless it has ended, which keep_managed_company_running hid by
+  # leaving the end date on an active row.
   def start_billing_company_we_stop_carrying
     if stripe_subscription_id.present?
       return unless billing_cancels_at&.past?
 
       self.billing_state = "blocked"
       self.billing_block_reason = "canceled"
-    elsif Billing::Trial.exhausted?(self)
-      self.billing_state = "blocked"
-      self.billing_block_reason = "allowance"
     else
       self.billing_state = "trialing"
+      self.trial_started_at = Time.current
     end
   end
 

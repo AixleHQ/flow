@@ -116,10 +116,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 
-  # Unticked alone, a company we carry starts on whatever is left of a trial
-  # counted over everything it ever ran; a last day in the same save starts a
-  # fresh one.
-  test "a company we carry moves onto a fresh trial with a last day" do
+  test "a company we carry moves onto a trial that ends on the last day set with it" do
     company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
     CompanyCapacityUsage.record!(company_id: company.id, period_start: 40.days.ago.beginning_of_hour,
                                  quantity_seconds: 2000 * 3600)
@@ -221,9 +218,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 
-  # Unticked with no last day, the trial is counted over everything the company
-  # ran while we carried it — the operator has to be told when that stops it.
-  test "unticking a company that already ran past a trial says it is stopped" do
+  test "unticking a company we carry gives it a fresh trial however much it ran" do
     company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
     CompanyCapacityUsage.record!(company_id: company.id, period_start: 40.days.ago.beginning_of_hour,
                                  quantity_seconds: 2000 * 3600)
@@ -233,9 +228,10 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
                  session_concurrency_limit: "2" }
     }
 
-    assert_match(/has used up a free trial .* Set a Trial last day to give it a new one/, flash[:notice])
+    assert_match(/is on a trial until the end of .+, on one worker/, flash[:notice])
     company.reload
-    assert_equal "allowance", company.billing_status
+    assert company.billing_trialing?
+    assert_equal 0, Billing::Trial.used_seconds(company)
     assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 end

@@ -42,18 +42,19 @@ class CompanyManagedByAixleTest < ActiveSupport::TestCase
     assert_equal "trialing", company.reload.billing_state
   end
 
-  # The trial counts every hour the company was offered, ours included.
-  test "a company we stop carrying that already ran past the trial is stopped until it adds a card" do
+  # What it ran while we carried it is not held against it.
+  test "a company we stop carrying starts a fresh trial however much it ran" do
     saas!
     company = managed_company
-    CompanyCapacityUsage.record!(company_id: company.id, period_start: Time.utc(2026, 9, 29, 10),
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: 40.days.ago.beginning_of_hour,
                                  quantity_seconds: Billing::Trial.default_hours * 3600)
 
     company.update!(managed_by_aixle: false)
 
     company.reload
-    assert_equal "blocked", company.billing_state
-    assert_equal "allowance", company.billing_status
+    assert company.billing_trialing?
+    assert_equal 0, Billing::Trial.used_seconds(company)
+    assert_equal Date.current + Billing::Trial.days - 1, Billing::Trial.last_day(company)
   end
 
   test "a company we stop carrying keeps paying through the subscription it already had" do

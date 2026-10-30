@@ -218,7 +218,10 @@ carry — ours, a partner's, a pilot. It is never invoiced, never trialing or
 blocked, has no Billing tab, and cannot start Checkout. It starts with
 **two workers**, and only a platform administrator can change that, from the
 admin. Every company that was already `active` with no Stripe customer when the
-flag shipped was given it.
+flag shipped was given it. Unticking it puts the company on a fresh trial — what
+it ran while we carried it is not counted — of the default length, or to the
+Trial last day set in the same save; a company with a live subscription keeps
+paying through it instead.
 
 ---
 
