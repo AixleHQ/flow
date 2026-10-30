@@ -87,7 +87,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
       written: runtime.written_paths.map { |path| normalize(path) },
       cleaned: runtime.cleaned_sessions.map { |id| normalize(id) },
       state: session.reload.state,
-      runner_gateway_queries: sql.grep(/runner_(environments|credentials)/)
+      runner_gateway_queries: sql.grep(/runner_(environments|credentials|operations)/)
     }
   end
 

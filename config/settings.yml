@@ -197,12 +197,17 @@ encryption:
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] %>
   oauth_key: <%= ENV['OAUTH_SECRET_KEY'] %>
+  # External runners' op payloads (RunnerOperation#encrypted_payload). Not
+  # required at boot: without it everything else runs, and only encrypting or
+  # decrypting a payload fails (docs/design/agent-runtimes/DESIGN.md §2).
+  runners_key: <%= ENV['RUNNERS_SECRET_KEY'] %>
   # Retired keys, comma-separated, still accepted for reading while
   # `bin/rails encryption:reencrypt` moves every stored secret onto the new one.
   credentials_key_previous: <%= ENV['CREDENTIALS_SECRET_KEY_PREVIOUS'] %>
   config_items_key_previous: <%= ENV['CONFIG_ITEMS_SECRET_KEY_PREVIOUS'] %>
   integrations_key_previous: <%= ENV['INTEGRATIONS_SECRET_KEY_PREVIOUS'] %>
   oauth_key_previous: <%= ENV['OAUTH_SECRET_KEY_PREVIOUS'] %>
+  runners_key_previous: <%= ENV['RUNNERS_SECRET_KEY_PREVIOUS'] %>
   # Bind new ciphertexts to their model and column. Off until no pod of the
   # previous release can run (it reads a bound value as empty); after turning it
   # on, `bin/rails encryption:reencrypt` binds what is already stored.

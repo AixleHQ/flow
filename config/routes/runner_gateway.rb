@@ -7,4 +7,6 @@ scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, default
   post "register", to: "registrations#create"
   delete "registration", to: "registrations#destroy"
   post "token", to: "tokens#create"
+  get "ops", to: "operations#index"
+  post "ops/:id/result", to: "operation_results#create", as: :op_result
 end
