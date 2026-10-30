@@ -563,9 +563,9 @@ from the workflow's runner), `POST …/board/tasks/:id/trigger_workflow`, and th
 and `trigger_task_workflow` tools; a manual task trigger records the pick on its
 `TriggerEvent`. Column bindings, tracker and chat triggers pass none
 (`TriggerEngine.fire_workflow`). A standalone session takes `runner_id` from
-`POST /api/v1/terminal_sessions`, refused the same way and, while no runner has
-`interactive_terminal` (§4), for an interactive session; a workflow-step session copies its
-run's runner.
+`POST /api/v1/terminal_sessions`, refused the same way and, for an interactive session,
+refused for every external runner until the tunnel (§4, §15 task 16); a workflow-step
+session copies its run's runner.
 
 ### 3.4 When the referenced runner is gone, disabled or revoked
 
@@ -1609,7 +1609,7 @@ changes is the pool an external session belongs to:
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
-| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`; before the tunnel that is every runner (§4). |
+| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out every external runner until the tunnel (§4, §15 task 16). |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
 | **Admin (Administrate)** | Runners and environments dashboards for support. |
 
