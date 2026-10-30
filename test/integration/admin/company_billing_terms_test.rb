@@ -93,6 +93,42 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert_equal "trialing", company.billing_state
   end
 
+  test "an operator puts a company on a trial that ends on a day they choose" do
+    company = create(:company, session_concurrency_limit: "4")
+    last_day = 10.days.from_now.to_date
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, trial_last_day: last_day.iso8601 }
+    }
+
+    assert_redirected_to admin_company_path(company)
+    assert_match(/is on a trial until the end of #{Regexp.escape(last_day.to_fs(:long))}, on one worker/, flash[:notice])
+    company.reload
+    assert company.billing_trialing?
+    assert_equal last_day, Billing::Trial.last_day(company)
+  end
+
+  test "a trial for a company we carry is refused on the form" do
+    company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, trial_last_day: Date.tomorrow.iso8601 }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match(/untick Managed by Aixle/, response.body)
+    assert company.reload.billing_active?
+  end
+
+  test "the company page says when its trial ends" do
+    company = create(:company, :trialing)
+
+    get admin_company_path(company)
+
+    assert_response :success
+    assert_match(/30 days left, on one worker/, response.body)
+  end
+
   test "unticking a company we carry that has no limit is refused" do
     company = create(:company, :managed_by_aixle)
 

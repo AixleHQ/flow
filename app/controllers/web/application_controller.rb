@@ -72,7 +72,7 @@ class Web::ApplicationController < ApplicationController
                  { id: id, name: name, slug: slug, state: state, favorite: favorite_project_ids.include?(id) }
                end
         },
-        # Present only while a free allowance is running or spent, so every screen
+        # Present only while a free trial is running or spent, so every screen
         # can say so rather than leaving a person to work out why nothing starts.
         trial: InertiaRails.always { trial_share }
       )
@@ -89,20 +89,15 @@ class Web::ApplicationController < ApplicationController
     return nil unless Deployment.saas?
     return nil if current_company.nil? || current_company.billing_active?
 
-    max_sessions = SessionConcurrencyLimit.for_company(current_company.id)
     {
       state: current_company.billing_state,
       # Why a blocked company is blocked, which decides what undoes it: a card
-      # for a spent allowance or an ended subscription, the open invoice for a
+      # for a spent trial or an ended subscription, the open invoice for a
       # failed payment.
       status: current_company.billing_status,
-      allowance_hours: ::Billing::Trial.queue_hours,
-      used_hours: ::Billing::Trial.used_hours(current_company).to_f,
-      remaining_hours: ::Billing::Trial.remaining_hours(current_company).to_f,
-      max_sessions: max_sessions,
-      # How long what is left lasts at the rate they are running, which is the
-      # number they actually want. Nil when no limit is set, and so no rate.
-      hours_left_at_current_rate: ::Billing::Trial.hours_left_at(current_company, max_sessions)&.to_f,
+      days: ::Billing::Trial.length_in_days(current_company),
+      days_left: ::Billing::Trial.days_left(current_company),
+      last_day: ::Billing::Trial.last_day(current_company).iso8601,
       # Whether there is a card to add at all. An installation with no Stripe
       # credentials must offer a button that leads somewhere, so it offers none.
       can_pay: ::Billing::StripeClient.new.configured?

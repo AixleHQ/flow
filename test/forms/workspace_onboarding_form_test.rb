@@ -8,38 +8,28 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
   def form(**attrs)
     WorkspaceOnboardingForm.new(
       user: @user,
-      **{ name: "Acme Robotics", email_domain: "acme-robotics.example", max_sessions: 5 }.merge(attrs)
+      **{ name: "Acme Robotics", email_domain: "acme-robotics.example" }.merge(attrs)
     )
   end
 
   # A stranger's form: no account yet, and the address is whatever they typed.
   def stranger(**attrs)
     WorkspaceOnboardingForm.new(
-      **{ name: "Acme Robotics", email: "dana@northwind.example", max_sessions: 5 }.merge(attrs)
+      **{ name: "Acme Robotics", email: "dana@northwind.example" }.merge(attrs)
     )
   end
 
-  test "creates the company, an admin membership and the limit together" do
+  # The whole reason the limit is set here: a company made anywhere else may
+  # have none, and one that signs itself up may not — no limit is unbilled.
+  test "creates the company on the trial, an admin membership and the trial's one worker together" do
     built = form
     assert built.save(@user), built.errors.full_messages.to_sentence
 
     company = built.company
     assert_equal "Acme Robotics", company.name
+    assert company.billing_trialing?
     assert_equal "admin", @user.company_memberships.find_by(company: company).role
-    assert_equal 5, SessionConcurrencyLimit.for_company(company.id)
-  end
-
-  # The whole reason this rule lives here: a company made anywhere else may have
-  # no limit, and one that signs itself up may not.
-  test "a limit is required" do
-    built = form(max_sessions: nil)
-
-    assert_not built.save(@user)
-    assert_includes built.errors[:max_sessions].to_sentence, "is not a number"
-  end
-
-  test "zero is not a limit" do
-    assert_not form(max_sessions: 0).save(@user)
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 
   test "a name is required" do
@@ -78,7 +68,7 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
 
   test "a refused save leaves nothing behind" do
     assert_no_difference [ "Company.count", "CompanyMembership.count", "SessionConcurrencyLimit.count" ] do
-      form(max_sessions: 0).save(@user)
+      form(name: " ").save(@user)
     end
   end
 
@@ -151,7 +141,7 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
   # The account is written inside the same transaction as the company, so a
   # signup that fails on the last step does not leave a stray person behind.
   test "a refused save leaves no account behind either" do
-    built = stranger(max_sessions: 0)
+    built = stranger(name: " ")
 
     assert_no_difference "User.count" do
       assert_not built.save(built.owner_for(nil))
@@ -169,7 +159,7 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
 
   test "the same goes for someone already signed in" do
     user = create(:user, email: "dana@yandex.ru")
-    built = WorkspaceOnboardingForm.new(user: user, name: "Acme", max_sessions: 5)
+    built = WorkspaceOnboardingForm.new(user: user, name: "Acme")
 
     assert_not built.valid?
     assert_includes built.errors[:email_domain].to_sentence, "public email service"

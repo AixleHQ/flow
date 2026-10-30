@@ -32,16 +32,17 @@ class Admin::CompanyBillingStateTest < ActionDispatch::IntegrationTest
   test "a company with no Stripe customer made active by hand starts a new trial" do
     @company.update!(stripe_customer_id: nil)
     CompanyCapacityUsage.record!(company_id: @company.id, period_start: 2.days.ago.beginning_of_hour,
-                                 quantity_seconds: Billing::Trial.seconds)
+                                 quantity_seconds: Billing::Trial.default_hours * 3600)
 
     freeze_time do
       update!("active")
 
       assert_redirected_to admin_company_path(@company)
-      assert_match(/new trial/, flash[:notice])
+      assert_match(/is on a trial until the end of .+, on one worker/, flash[:notice])
       @company.reload
       assert @company.billing_trialing?
       assert_equal Time.current, @company.trial_started_at
+      assert_equal 720, @company.trial_hours
       assert_equal 0, Billing::Trial.used_seconds(@company)
     end
   end

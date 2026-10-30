@@ -715,14 +715,11 @@ pricing:
 registration:
   enabled: <%= ENV.fetch('REGISTRATION_ENABLED', 'false') == 'true' %>
 
-# The free capacity a company that signs itself up may spend before anyone has
-# paid, in queue-hours. Hosted deployments only. A quantity rather than a period
-# on purpose: capacity is billed by the hour it is offered, so the company spends
-# the allowance at whatever rate it runs — ten sessions at once uses ten
-# queue-hours an hour, and the same hundred hours that last one workspace four
-# days last that one ten.
+# How long the free trial of a company that signs itself up lasts, in days, on
+# one worker. Hosted deployments only. A company keeps the length of the trial it
+# started; an operator moves its last day from the company's admin page.
 trial:
-  queue_hours: <%= (ENV['TRIAL_QUEUE_HOURS'] || 100).to_i %>
+  days: <%= (ENV['TRIAL_DAYS'] || 30).to_i %>
 
 # Stripe, for the hosted product's metered capacity. Absent everywhere else, and
 # absent here until an operator sets it — nothing calls Stripe without all three,

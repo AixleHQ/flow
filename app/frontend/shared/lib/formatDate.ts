@@ -35,6 +35,17 @@ export function formatDateMedium(value: string | null | undefined): string {
   return d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 }
 
+/**
+ * A calendar day sent as `YYYY-MM-DD`, e.g. "Feb 28, 2026". Parsed, such a string is
+ * midnight UTC, which west of Greenwich is still the day before.
+ */
+export function formatCalendarDay(value: string | null | undefined): string {
+  const d = parseDate(value);
+  return d
+    ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })
+    : '—';
+}
+
 /** e.g. "Feb 28, 2026, 14:20" — the date alone hides an 8-hour token's renewal. */
 export function formatDateTimeShort(value: string | null | undefined): string {
   const d = parseDate(value);

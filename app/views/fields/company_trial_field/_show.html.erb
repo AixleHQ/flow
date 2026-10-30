@@ -1,0 +1,5 @@
+<% if field.trialing? %>
+  <%= field.last_day.to_fs(:long) %> — <%= pluralize(field.days_left, "day") %> left, on one worker
+<% else %>
+  <span style="opacity:.6">Not on a trial</span>
+<% end %>

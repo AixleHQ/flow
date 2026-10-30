@@ -20,7 +20,7 @@ module Billing
         period_ends_at: company.billing_period_ends_at,
         cancels_at: company.billing_cancels_at,
         usage: usage,
-        allowance: allowance,
+        trial: trial,
         can_pay: client.configured?,
         has_subscription: company.stripe_subscription_id.present?,
         has_unpaid_invoice: company.billing_unpaid_invoice_url.present?,
@@ -92,11 +92,11 @@ module Billing
       cancellation && { state: cancellation.settlement_state, url: cancellation.final_invoice_url }
     end
 
-    # The free allowance, for a company still on it or stopped for spending it.
-    def allowance
+    # The free trial, for a company still on it or stopped for spending it.
+    def trial
       return nil unless company.billing_status.in?(%w[trialing allowance])
 
-      { hours: Trial.queue_hours, used_hours: Trial.used_hours(company).to_f }
+      { days: Trial.length_in_days(company), days_left: Trial.days_left(company), last_day: Trial.last_day(company).iso8601 }
     end
   end
 end

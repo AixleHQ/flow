@@ -5,13 +5,13 @@ require "test_helper"
 class WorkspaceSignupTicketTest < ActiveSupport::TestCase
   def token(**over)
     WorkspaceSignupTicket.issue(
-      **{ name: "Acme Robotics", email: "dana@acme-robotics.example", max_sessions: 5 }.merge(over)
+      **{ name: "Acme Robotics", email: "dana@acme-robotics.example" }.merge(over)
     )
   end
 
   test "it carries the answers there and back" do
     assert_equal(
-      { name: "Acme Robotics", email: "dana@acme-robotics.example", max_sessions: 5 },
+      { name: "Acme Robotics", email: "dana@acme-robotics.example" },
       WorkspaceSignupTicket.decode(token)
     )
   end
@@ -50,12 +50,13 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
   end
 
   # Anything else in the payload is not a signup answer and has no business
-  # reaching the form.
+  # reaching the form — a worker count included, which links sent before the
+  # trial ran one worker still carry.
   test "it hands back only the answers the form asked for" do
     smuggled = Rails.application.message_verifier(WorkspaceSignupTicket::PURPOSE).generate(
       { "name" => "Acme", "email" => "dana@acme.example", "max_sessions" => 5, "role" => "super_admin" }
     )
 
-    assert_equal %i[name email max_sessions], WorkspaceSignupTicket.decode(smuggled).keys
+    assert_equal %i[name email], WorkspaceSignupTicket.decode(smuggled).keys
   end
 end

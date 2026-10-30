@@ -4,6 +4,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
   # A company with no limit is one nobody is invoiced for. Granting that is ours,
   # from the admin; it is not something a company does to itself.
   UNBOUNDED_REFUSAL = "The session limit cannot be left empty — ask us if this company should run without one"
+  TRIAL_REFUSAL = "The free trial runs one worker — add a card to choose how many"
 
   def show
     render inertia: "Company/Settings/SettingsPage", props: props
@@ -56,6 +57,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
   # The single-word key survives prop camelization unchanged, which a
   # `session_concurrency_limit` would not.
   def apply_capacity
+    return { capacity: TRIAL_REFUSAL } if Billing::Trial.applies?(current_company)
     return { capacity: "Only this installation's administrator can change the session limit" } unless settings_policy.manage_capacity?
 
     requested = params[:capacity].to_s.strip
@@ -105,6 +107,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
       reserved: allocation.allocated,
       allocations: allocation.breakdown,
       project_default: SessionAdmissionPolicy.scope_default("Project"),
+      trial_workers: (Billing::Trial::WORKERS if Billing::Trial.applies?(current_company)),
       can_manage: settings_policy.manage_capacity?
     }
   end

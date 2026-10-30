@@ -57,11 +57,14 @@ class Company < ApplicationRecord
   # admin, and the people invited with a save (Admin::CompaniesController).
   attr_accessor :initial_admin_email, :invite_emails, :invite_role
 
-  # Where we host, a company that signs itself up runs on a free allowance of
-  # capacity before anyone has paid for anything (Billing::Trial).
+  # Also the admin's: puts the company on a trial that ends with this day, or
+  # moves the end of the one it is on. Blank leaves the trial as it is.
+  attribute :trial_last_day, :date
+
+  # Where we host, a company that signs itself up runs on a free trial before
+  # anyone has paid for anything (Billing::Trial).
   #
-  #   trialing  spending the allowance, capped to one session at a time,
-  #             invoiced for nothing
+  #   trialing  on the trial: one worker, invoiced for nothing
   #   active    someone is paying; the company's own limit is the only bound
   #   blocked   runs nothing, for the reason in `billing_block_reason`
   #
@@ -102,6 +105,7 @@ class Company < ApplicationRecord
   validate :email_domain_not_reserved
   validate :session_concurrency_limit_is_a_positive_integer
   validate :company_we_stop_carrying_is_bounded, if: :leaving_management?
+  validate :trial_last_day_allowed, if: :setting_trial_last_day?
   validate :initial_admin_invitable, on: :create, if: -> { initial_admin_email.present? }
 
   # Callbacks
@@ -114,6 +118,8 @@ class Company < ApplicationRecord
   # its block reason with its block.
   before_validation :keep_managed_company_running, if: :managed_by_aixle?
   before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
+  before_validation :put_on_trial_until_last_day, if: -> { setting_trial_last_day? && trial_last_day_refusal.nil? }
+  before_validation :give_new_trial_the_default_length, if: :starting_trial_of_default_length?
   before_validation :forget_billing_block, unless: :billing_blocked?
   after_save :apply_session_concurrency_limit
 
@@ -234,6 +240,51 @@ class Company < ApplicationRecord
 
   def company_we_stop_carrying_is_bounded
     errors.add(:session_concurrency_limit, UNBOUNDED_PAYING_COMPANY) if session_concurrency_limit.blank?
+  end
+
+  def setting_trial_last_day? = trial_last_day.present? && trial_last_day_changed?
+
+  def trial_last_day_allowed
+    refusal = trial_last_day_refusal
+    errors.add(:trial_last_day, refusal) if refusal
+  end
+
+  def trial_last_day_refusal
+    if !Deployment.saas?
+      "is only for the hosted product, where companies pay"
+    elsif managed_by_aixle?
+      "is for a company that pays — untick Managed by Aixle to put this one on a trial"
+    elsif subscription_running?
+      "cannot be set while a subscription bills this company — it would be billed and on a trial at once"
+    elsif trial_last_day < Date.current
+      "cannot be in the past"
+    end
+  end
+
+  # Stored state, not the form's: an operator changing the billing state in the
+  # same save does not end a subscription.
+  def subscription_running?
+    stripe_subscription_id.present? &&
+      !(billing_state_in_database == "blocked" && billing_block_reason_in_database == "canceled")
+  end
+
+  # A company already on a trial keeps its start, and what it has spent since
+  # counts towards the new length; any other starts one now.
+  def put_on_trial_until_last_day
+    now = Time.current
+    continuing = billing_state_in_database == "trialing"
+    self.trial_started_at = now unless continuing
+    self.billing_state = "trialing"
+    spent = continuing ? Billing::Trial.used_seconds(self) : 0
+    self.trial_hours = Billing::Trial.hours_ending_on(trial_last_day, spent_seconds: spent, now: now)
+  end
+
+  def starting_trial_of_default_length?
+    billing_trialing? && billing_state_changed? && !trial_hours_changed?
+  end
+
+  def give_new_trial_the_default_length
+    self.trial_hours = Billing::Trial.default_hours
   end
 
   # A company that is running again has no reason to be stopped, and an unpaid

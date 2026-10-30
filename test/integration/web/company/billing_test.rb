@@ -73,14 +73,14 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_equal "https://invoice.stripe.test/in_1", invoice[:url]
   end
 
-  test "a trialing company sees its allowance and no usage to invoice" do
+  test "a trialing company sees its trial and no usage to invoice" do
+    freeze_time
     @company.update!(billing_state: "trialing", stripe_subscription_id: nil)
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))
 
     billing = billing_props[:billing]
 
     assert_equal "trialing", billing[:status]
-    assert_equal 100, billing[:allowance][:hours]
+    assert_equal({ "days" => 30, "daysLeft" => 30, "lastDay" => (Time.current + 720.hours).to_date.iso8601 }, billing[:trial])
     assert_nil billing[:usage]
   end
 

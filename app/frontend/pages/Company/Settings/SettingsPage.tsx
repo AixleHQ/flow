@@ -62,6 +62,8 @@ interface Capacity {
   reserved: number;
   allocations: CapacityAllocation[];
   projectDefault: number;
+  /** What the company runs on the free trial, where it has no number to choose; absent otherwise. */
+  trialWorkers?: number | null;
   /** False in the hosted product: the number we invoice for is not self-serve. */
   canManage: boolean;
 }
@@ -233,11 +235,13 @@ const SettingsPage = () => {
                     </Text>
                     <Group gap={6} mt={4}>
                       <Text fz="xl" fw={600}>
-                        {capacity.maxSessions ?? 'No limit'}
+                        {capacity.trialWorkers ?? capacity.maxSessions ?? 'No limit'}
                       </Text>
                       <IconLock size={14} />
                       <Text fz="xs" c="dimmed">
-                        contact us to change this
+                        {capacity.trialWorkers != null
+                          ? 'the free trial runs one worker — add a card to choose how many'
+                          : 'contact us to change this'}
                       </Text>
                     </Group>
                   </Box>

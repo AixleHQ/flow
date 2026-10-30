@@ -1,0 +1,11 @@
+<div class="field-unit__label">
+  <%= f.label field.attribute %>
+</div>
+<div class="field-unit__field">
+  <%= f.date_field field.attribute, min: Date.current %>
+  <% if field.trialing? %>
+    <div class="field-unit__hint">
+      On a trial now: the last day is <%= field.last_day.to_fs(:long) %>, <%= pluralize(field.days_left, "day") %> left.
+    </div>
+  <% end %>
+</div>

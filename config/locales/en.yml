@@ -68,6 +68,7 @@ en:
       company:
         initial_admin_email: "Gets an invitation to join as the company's admin and sets their own password."
         invite_emails: "Email addresses, one per line or separated by commas. Each gets an invitation to join."
+        trial_last_day: "Puts the company on a trial on one worker until the end of this day (UTC), or moves the end of the trial it is on. Leave blank to keep the trial as it is."
 
   admin:
     integration:

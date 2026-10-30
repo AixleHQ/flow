@@ -26,10 +26,25 @@ governance, community health — carry none.
   on the board card. Operators choose where with `FEEDBACK_SLACK_BOT_TOKEN` plus
   `FEEDBACK_SLACK_CHANNEL_ID`, and with `FEEDBACK_BOARD_PROJECT_ID` plus
   `FEEDBACK_BOARD_COLUMN_ID`; with neither set the item is hidden.
+- **Admin**: a company's edit form takes a **Trial last day**, which puts the
+  company on a free trial that ends with that day, or moves the end of the
+  trial it is on. A company we carry, or one a subscription still bills, is
+  refused. The company's page shows when its trial ends.
 
 ### Changed
 - **Admin**: the dashboard's companies table shows each company's p95 queue
   wait, with its change from the previous period, instead of the longest wait.
+- **Company settings**: the free trial of a hosted workspace is a number of days
+  on one worker, instead of 100 worker-hours spent at whatever number of workers
+  it ran. The banner and the Billing tab show the days left and the last day.
+  The signup form no longer asks how many workers: the trial runs one, and the
+  Workers setting is read-only until a card is added.
+- **Admin**: `TRIAL_DAYS` (default 30) sets the length of a new trial and
+  replaces `TRIAL_QUEUE_HOURS`, which is no longer read. A company already on a
+  trial when this ships gets the default length, counted against what it has
+  already used, and runs one worker from then on; a company stopped for spending
+  the old 100 hours stays stopped until an operator gives it a trial last day or
+  it adds a card.
 
 ### Fixed
 - **Sessions & Runs**: when a company's worker limit is full, a worker that frees

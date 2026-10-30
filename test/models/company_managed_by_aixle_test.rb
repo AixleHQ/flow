@@ -42,13 +42,12 @@ class CompanyManagedByAixleTest < ActiveSupport::TestCase
     assert_equal "trialing", company.reload.billing_state
   end
 
-  # The allowance counts every hour the company was offered, ours included.
-  test "a company we stop carrying that already ran past the allowance is stopped until it adds a card" do
+  # The trial counts every hour the company was offered, ours included.
+  test "a company we stop carrying that already ran past the trial is stopped until it adds a card" do
     saas!
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 1))
     company = managed_company
     CompanyCapacityUsage.record!(company_id: company.id, period_start: Time.utc(2026, 9, 29, 10),
-                                 quantity_seconds: 3600)
+                                 quantity_seconds: Billing::Trial.default_hours * 3600)
 
     company.update!(managed_by_aixle: false)
 

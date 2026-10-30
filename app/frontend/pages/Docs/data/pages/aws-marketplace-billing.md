@@ -13,7 +13,7 @@ repositories or your data, and we never charge your card — AWS meters the
 installation and puts it on your AWS bill, under the agreement you accepted when
 you subscribed.
 
-There is **no free allowance and no card** in this product. The trial and the
+There is **no free trial and no card** in this product. The trial and the
 payment screens belong to the hosted product; here the subscription you already
 have is the arrangement.
 

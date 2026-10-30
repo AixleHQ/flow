@@ -3,27 +3,21 @@ import { Button } from '@mantine/core';
 import { IconAlertTriangle, IconCreditCard, IconHourglassHigh } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { formatCalendarDay } from 'shared/lib/formatDate';
 import { companyBillingCheckoutPath, companyBillingInvoicePaymentPath } from 'shared/routes';
 
 import classes from './TrialBanner.module.css';
 import type { SharedProps } from './types';
 
-const URGENT_SPENT_PERCENT = 85;
-const URGENT_HOURS_LEFT = 24;
+const URGENT_DAYS_LEFT = 3;
 
-const workers = (count: number | null) => `${count} worker${count === 1 ? '' : 's'}`;
-const hours = (count: number) => `${count} hour${count === 1 ? '' : 's'}`;
+const days = (count: number) => `${count} day${count === 1 ? '' : 's'}`;
 
 /**
- * What a workspace on free capacity has spent, across the top of every screen.
+ * Where a workspace on the free trial stands, across the top of every screen.
  *
- * The allowance is a quantity and the workspace sets the rate it burns at, so
- * "40 hours left" means four days at one worker and four hours at ten. Both
- * numbers are shown, because only the second one answers "when do I need to do
- * something about this".
- *
- * Absent for everyone else: the prop is only sent while an allowance is running
- * or spent.
+ * Absent for everyone else: the prop is only sent while a trial is running or
+ * has ended.
  */
 export const TrialBanner = () => {
   const { trial, permissions } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
@@ -31,9 +25,9 @@ export const TrialBanner = () => {
   if (!trial) return null;
 
   const blocked = trial.state === 'blocked';
-  const spent = Math.min(100, Math.round((trial.usedHours / Math.max(trial.allowanceHours, 1)) * 100));
-  const hoursLeft = trial.hoursLeftAtCurrentRate;
-  const urgent = !blocked && (spent >= URGENT_SPENT_PERCENT || (hoursLeft != null && hoursLeft < URGENT_HOURS_LEFT));
+  const spent = Math.min(100, Math.round(((trial.days - trial.daysLeft) / Math.max(trial.days, 1)) * 100));
+  const urgent = !blocked && trial.daysLeft <= URGENT_DAYS_LEFT;
+  const lastDay = formatCalendarDay(trial.lastDay);
   // A failed payment is undone by paying its invoice; a new card would open a
   // second subscription and bill the same minutes twice.
   const unpaid = blocked && trial.status === 'payment_failed';
@@ -57,34 +51,22 @@ export const TrialBanner = () => {
           </>
         ) : blocked ? (
           <>
-            <strong>
-              You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free
-              worker-hours,
-            </strong>{' '}
-            so no new sessions start. Anything already running finishes. {carryOn}
-          </>
-        ) : urgent && hoursLeft != null ? (
-          <>
-            <strong>Free capacity runs out in about {hours(hoursLeft)}</strong> at {workers(trial.maxSessions)}. After
-            that, no new sessions start.
+            <strong>Your free trial has ended,</strong> so no new sessions start. Anything already running finishes.{' '}
+            {carryOn}
           </>
         ) : urgent ? (
           <>
-            <strong>Free capacity is almost gone:</strong> <span className={classes.figure}>{trial.usedHours}</span> of{' '}
-            <span className={classes.figure}>{trial.allowanceHours}</span> worker-hours used. When it runs out, no new
-            sessions start.
+            <strong>
+              {trial.daysLeft <= 1
+                ? 'The free trial ends within a day'
+                : `The free trial ends in ${days(trial.daysLeft)}`}
+            </strong>{' '}
+            — the last day is {lastDay}. After that, no new sessions start.
           </>
         ) : (
           <>
-            You are on free capacity: <span className={classes.figure}>{trial.usedHours}</span> of{' '}
-            <span className={classes.figure}>{trial.allowanceHours}</span> worker-hours used.
-            {hoursLeft != null && (
-              <>
-                {' '}
-                At {workers(trial.maxSessions)} that is about <span className={classes.figure}>{hoursLeft}</span> hours
-                left.
-              </>
-            )}
+            You are on the free trial, on one worker: <span className={classes.figure}>{days(trial.daysLeft)}</span>{' '}
+            left, the last day is {lastDay}.
           </>
         )}
       </p>
