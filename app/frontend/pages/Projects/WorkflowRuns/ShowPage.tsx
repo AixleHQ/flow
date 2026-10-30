@@ -22,6 +22,8 @@ import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
+import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
+import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
@@ -156,6 +158,7 @@ const WorkflowRunShowPage = () => {
   const notYoursNote = `Started by ${run.userName ?? 'someone else'} — only they or a company admin can control this run.`;
   const now = useElapsedTimer(isActive);
   const canWrite = useCanWrite();
+  const runsOnMeta = useRunsOnMeta(run.runner, run.runnerId, project.id);
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
   const [skipStepId, setSkipStepId] = useState<number | null>(null);
@@ -272,6 +275,7 @@ const WorkflowRunShowPage = () => {
 
   const liveStepIds = useMemo(() => new Set(liveSteps.map((s) => s.id)), [liveSteps]);
 
+  // Every step runs on the run's runner (DESIGN.md §3.3): there is no step-level runner.
   const sessionCards = groupSkippedSessions(sortedSteps).map((entry) =>
     entry.kind === 'skipped' ? (
       <SkippedSessions
@@ -286,6 +290,7 @@ const WorkflowRunShowPage = () => {
     ) : (
       <SessionCard
         key={entry.step.id}
+        runsOn={<RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={project.id} />}
         data={toCardData(entry.step, entry.index)}
         live={isActive && liveStepIds.has(entry.step.id)}
         defaultOpen={isActive ? liveStepIds.has(entry.step.id) : isTerminal || entry.step.state === 'failed'}
@@ -409,7 +414,7 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={run.userName}
           mode={run.mode}
-          extraMeta={chatOriginMeta(run.chatOrigin)}
+          extraMeta={[...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={

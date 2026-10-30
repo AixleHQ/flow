@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
+import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
+
 import { NeutralStatusChip } from './NeutralStatusChip';
 import { runSessionId } from './taskRuns';
 
@@ -48,6 +50,7 @@ export function RunTileRow({
         </Box>
         <IconExternalLink size={11} style={{ flexShrink: 0 }} />
       </Text>
+      <RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={projectId} />
       {trailing}
       {sessionId != null && (
         <Tooltip label={`Open session #${sessionId}`}>

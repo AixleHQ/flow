@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildAssetPicker } from 'test/factories/assetPicker';
+import { buildRunnerSummary } from 'test/factories/runner';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { RunWorkflowDrawer, type RunWorkflowOption } from './RunWorkflowDrawer';
@@ -33,7 +34,10 @@ function withStepAutoRun(allowNonInteractive: boolean): RunWorkflowOption[] {
   );
 }
 
-function renderDrawer(overrides: Partial<React.ComponentProps<typeof RunWorkflowDrawer>> = {}) {
+function renderDrawer(
+  overrides: Partial<React.ComponentProps<typeof RunWorkflowDrawer>> = {},
+  props: Record<string, unknown> = {},
+) {
   return renderAuthedPage(
     <RunWorkflowDrawer
       opened
@@ -46,6 +50,7 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof RunWorkflow
       assets={[buildAssetPicker({ id: 2, name: 'brand.css', folder: null })]}
       {...overrides}
     />,
+    { props },
   );
 }
 
@@ -381,5 +386,68 @@ describe('RunWorkflowDrawer', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+});
+
+describe('RunWorkflowDrawer — Runs on', () => {
+  const prodVpc = buildRunnerSummary({ id: 4, name: 'Prod VPC', operatedBy: 'Acme/Payments' });
+  const spare = buildRunnerSummary({ id: 5, name: 'Spare', status: 'disabled' });
+  const onRunner = workflows.map((w) => (w.id === 9 ? { ...w, runnerId: 4 } : w));
+  const ON = { features: { externalRunners: true } };
+
+  const postedRun = () => vi.mocked(router.post).mock.calls.at(-1)?.[1] as { workflowRun: Record<string, unknown> };
+
+  it('starts from the workflow runner, says whose machine it is, and sends no override', async () => {
+    renderDrawer({ initialWorkflowId: 9, workflows: onRunner, runners: [prodVpc, spare] }, ON);
+
+    expect(screen.getByRole('combobox', { name: 'Runs on' })).toHaveDisplayValue('Prod VPC · Connected');
+    expect(screen.getByText(/Your agent login is used on this runner, which is operated by/)).toHaveTextContent(
+      'Acme/Payments',
+    );
+
+    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(postedRun().workflowRun).not.toHaveProperty('runnerId');
+  });
+
+  it('sends a different pick, hosted included, as the override', async () => {
+    renderDrawer({ initialWorkflowId: 9, workflows: onRunner, runners: [prodVpc, spare] }, ON);
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Runs on' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Hosted' }));
+    expect(screen.queryByText(/Your agent login is used/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(postedRun().workflowRun.runnerId).toBeNull();
+  });
+
+  it('warns when the chosen runner is disabled', async () => {
+    renderDrawer({ initialWorkflowId: 9, workflows: onRunner, runners: [prodVpc, spare] }, ON);
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Runs on' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Spare · Disabled' }));
+
+    expect(screen.getByText('Runner "Spare" is disabled. The run fails at launch.')).toBeInTheDocument();
+  });
+
+  it('warns when the workflow runner is not among the runners offered, as for a deleted one', () => {
+    const onGone = workflows.map((w) => (w.id === 9 ? { ...w, runnerId: 20 } : w));
+    renderDrawer({ initialWorkflowId: 9, workflows: onGone, runners: [prodVpc] }, ON);
+
+    expect(
+      screen.getByText('This runner is not available to this project. The run fails at launch.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no runner select without the flag, and sends no runner', async () => {
+    renderDrawer({ initialWorkflowId: 9, workflows: onRunner, runners: [prodVpc] });
+
+    expect(screen.queryByRole('combobox', { name: 'Runs on' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(postedRun().workflowRun).not.toHaveProperty('runnerId');
   });
 });

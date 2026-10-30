@@ -166,6 +166,89 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal [ ado.id ], report["deactivated_integrations"].pluck("id")
   end
 
+  test "switches the workflows on a runner of the source to Hosted, archived ones included, and lists them" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update!(runner: runner)
+    archived = create(:workflow, scope: @s.project, name: "Hotfix", runner: runner, deleted_at: Time.current)
+
+    report = move(member_policy: "add")
+
+    assert_equal [ nil, @s.target.id ], [ @s.workflow.reload.runner_id, @s.workflow.company_id ]
+    assert_equal [ nil, @s.target.id ], [ archived.reload.runner_id, archived.company_id ]
+    assert_equal [ [ archived.id, "Hotfix", true, "Prod VPC" ], [ @s.workflow.id, "Release", false, "Prod VPC" ] ],
+                 report["workflows_switched_to_hosted"].map { |row| row.values_at("id", "name", "archived", "runner") }
+    assert runner.reload.persisted?, "the runner stays with its company"
+  end
+
+  test "refuses while the project owns a runner, and changes nothing" do
+    create(:runner, company: @s.source, project: @s.project, name: "Lab", deleted_at: Time.current)
+
+    error = assert_raises(ProjectMove::Refused) { move(member_policy: "add") }
+
+    assert_match(/Runner Lab \(deleted\) belongs to this project, and a runner cannot move to another company\./, error.message)
+    assert_unmoved
+  end
+
+  test "clears the runner of past runs and sessions, which keep their history in the target" do
+    runner = create(:runner, company: @s.source)
+    @s.completed_run.update_columns(runner_id: runner.id)
+    @s.finished_session.update_columns(runner_id: runner.id)
+
+    report = move(member_policy: "add")
+
+    assert_equal [ nil, "completed" ], [ @s.completed_run.reload.runner_id, @s.completed_run.state ]
+    assert_equal [ nil, @s.target.id ], [ @s.finished_session.reload.runner_id, @s.finished_session.company_id ]
+    assert_equal({ "runs" => 1, "sessions" => 1 }, report["cleared_runner_references"])
+    assert runner.reload.persisted?, "the runner stays with its company"
+  end
+
+  test "the move drops the source runner from the workflows' versions and leaves the rest of each version" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update_column(:current_version_number, @s.entity_version.number)
+    on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) do |workflow|
+      workflow.update!(runner: runner, description: "on runner")
+    end
+    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil, description: "hosted") }
+    before = on_runner.snapshot.except("runner_id")
+    move(member_policy: "add")
+
+    assert_empty EntityVersion.where(versionable: @s.workflow).where("snapshot -> 'runner_id' IS NOT NULL"),
+                 "no version names a runner of the source company"
+    assert_equal before, on_runner.reload.snapshot
+  end
+
+  # Versions.save! locks the workflow row, not the project. The move locks every
+  # workflow of the project, archived ones included, right after the project and
+  # before it reads the second preflight or strips the versions, so a save cannot
+  # commit a snapshot naming a source runner in between.
+  test "locks the project's workflows right after the project, before the second preflight and the version strip" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update_column(:current_version_number, @s.entity_version.number)
+    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: runner) }
+    statements = []
+    record = lambda do |*, payload|
+      sql = payload[:sql]
+      if sql.include?("FOR UPDATE")
+        statements << [ :lock, sql[/FROM "(\w+)"/, 1], sql ]
+      elsif sql.start_with?('UPDATE "entity_versions"')
+        statements << [ :strip_versions ]
+      elsif sql.match?(/\ASELECT .*FROM "workflows"/)
+        statements << [ :read_workflows ]
+      end
+    end
+
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { move(member_policy: "add") }
+
+    project_lock = statements.rindex { |kind, table| kind == :lock && table == "projects" }
+    assert project_lock, "the move locks the project"
+    kind, table, sql = statements[project_lock + 1]
+    assert_equal [ :lock, "workflows" ], [ kind, table ], "the next thing the move does is lock the project's workflows"
+    assert_no_match(/deleted_at/, sql, "archived workflows are locked too")
+    strip = statements.index([ :strip_versions ])
+    assert strip, "the move strips the runner from the versions"
+    assert_operator project_lock + 1, :<, strip
+  end
+
   private
 
   def move(member_policy:, owner: @s.owner, confirm_cancellations: true)

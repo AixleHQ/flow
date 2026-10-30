@@ -1,6 +1,8 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
+import type { RunnerSummary } from '@/types/generated';
+
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { ConfigItemOption } from 'shared/components/SessionNewForm';
 import type { ToolGroup } from 'shared/lib/toolPicker';
@@ -13,6 +15,7 @@ interface NamedItem {
 interface WorkflowOption {
   id: number;
   name: string;
+  runnerId?: number | null;
   steps: {
     id: number;
     name: string;
@@ -39,6 +42,8 @@ export interface CreateOptions {
   defaultAgentRuntime: string | null;
   workflows: WorkflowOption[];
   configItems: ConfigItemOption[];
+  /** Absent from a server that predates runners. */
+  runners?: RunnerSummary[];
   costHint?: { avgCostCentsByRuntime: Record<string, number>; monthToDateCents: number };
 }
 

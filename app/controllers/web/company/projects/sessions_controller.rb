@@ -2,6 +2,7 @@
 
 class Web::Company::Projects::SessionsController < Web::Company::Projects::ApplicationController
   include SessionListQuery
+  include RunnerOptions
 
   ROWS_LIMIT = 100
 
@@ -135,6 +136,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
       workflows: runnable_workflows,
+      runners: runner_options,
       # Cost is shown on every screen AFTER a session runs and nowhere on the
       # screen where the spend is actually committed. These two numbers put the
       # decision in context: what a session on this runtime has typically cost,
@@ -151,6 +153,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       {
         id: workflow.id,
         name: workflow.name,
+        runner_id: workflow.runner_id,
         steps: workflow.visible_steps.map { |step| StepResource.new(step).to_h }
       }
     end

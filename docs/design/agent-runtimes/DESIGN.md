@@ -311,13 +311,26 @@ company and project keys cascade, as in the tenant migration. The integration ke
 restrictive: what disconnecting a Coder integration does to its runners is decided with
 the Coder adapter (task 17).
 
-Sketch of the references, added by tasks 4 and 5 (not written yet):
+**What v1 has so far (§15 task 4).** `db/migrate/20261029100000_add_runner_references.rb`
+adds the nullable `runner_id` to `workflows`, `workflow_runs` and `terminal_sessions`, each
+with an index and a foreign key to `runners`. `workflows` and `terminal_sessions` carry
+`company_id`, so they also get the §2 composite key `(runner_id, company_id) → runners (id,
+company_id)` (on the new unique index `runners (id, company_id)`); `workflow_runs` has no
+company column and relies on the model. The models share `RunnerReference`
+(`app/models/concerns/runner_reference.rb`): on write, a runner must belong to the record's
+project's tenant, the company's runners or the project's own, deleted or not. The check is the
+project's tenant-reference rule, `TenantScope.owned(Runner, project:)`, declared as
+`validates :runner_id, tenant_ids: { model: Runner, … }` like the other tenant references. The
+resolver's `runner_forbidden` check and the version revert use the same rule. A version restore
+or a frozen run therefore keeps naming a runner that went away, and a System workflow, which has
+no project, refuses any runner. What a person may *pick* (the flag, a runner that is not deleted,
+`Runner.visible_for_project`) is `Runners::Selection`, checked at the endpoints that take a pick
+(§3.3). A runner leaves the database only with its project or company, and
+`has_many … dependent: :nullify` clears the references first so that delete is not blocked.
+`terminal_sessions.runner_environment_id` waits for task 5:
 
 ```ruby
-add_reference :workflows, :runner, foreign_key: true          # nullable, no default
-add_reference :workflow_runs, :runner, foreign_key: true
-add_reference :terminal_sessions, :runner, foreign_key: true
-add_reference :terminal_sessions, :runner_environment, foreign_key: true
+add_reference :terminal_sessions, :runner_environment, foreign_key: true   # task 5
 ```
 
 The migrations only add nullable columns and new tables. Every existing row reads as
@@ -528,9 +541,24 @@ chosen deliberately.
 later steps use it. Changing the workflow's runner mid-run does not move a running run,
 which matches how `agent_runtime` is frozen per run.
 
+**What v1 has so far (§15 task 4).** `WorkflowService.enqueue(runner_id:)` freezes the runner
+on the run: a pick given at launch (an id, or `nil` for hosted), otherwise the runner of the
+run it retries, otherwise `workflows.runner_id`. A pick is refused, with no run created, unless
+`Runners::Selection` allows it: the flag is on for the company (a `nil` pick included, since it
+would move a run off its workflow's runner) and the runner is visible to the project and not
+deleted. The picks come from the run drawer (`workflow_runs#create`, sent only when it differs
+from the workflow's runner), `POST …/board/tasks/:id/trigger_workflow`, and the `trigger_workflow`
+and `trigger_task_workflow` tools; a manual task trigger records the pick on its
+`TriggerEvent`. Column bindings, tracker and chat triggers pass none
+(`TriggerEngine.fire_workflow`). A standalone session takes `runner_id` from
+`POST /api/v1/terminal_sessions`, refused the same way and, while no runner has
+`interactive_terminal` (§4), for an interactive session; a workflow-step session copies its
+run's runner.
+
 ### 3.4 When the referenced runner is gone, disabled or revoked
 
-A reference is never cleared automatically and never falls back to `hosted`.
+A reference is never cleared automatically and never falls back to `hosted`. The one
+exception is a project move, which clears it on the rows that move (below).
 
 - **Workflow builder:** the runner field shows "Runner *X* is disabled / revoked / deleted",
   with a link to pick another. Publishing a workflow whose runner is not
@@ -539,14 +567,60 @@ A reference is never cleared automatically and never falls back to `hosted`.
 - **Launch** (`SessionService.create_for_workflow_step`, the standalone create, and run
   creation): `Runners::Resolver.resolve!(session)` re-checks visibility (§9.4) and status.
   If the runner is `disabled`, `revoked`, deleted, `unreachable`, or no longer visible
-  (e.g. moved project), the run or session fails before admission with
+  to the project, the run or session fails before admission with
   `failure_reason: "runner_unavailable"` and a message like *"Runner "Prod VPC" is
   disabled. Pick another runner on the workflow or re-enable it."* The board task gets the
   same message through the existing failure-comment path.
 - **Deletion** is a soft delete, so workflows and past sessions can still name what they
-  used. Deleting a runner that workflows still reference requires confirmation listing those
-  workflows. Hard deletion (by a later purge) only happens once no `workflows` or
+  used. Deleting a runner asks for an ordinary confirmation; the runner pages do not list
+  the workflows that name it. Hard deletion (by a later purge) only happens once no `workflows` or
   `workflow_runs` rows reference it.
+
+**What v1 has so far (§15 task 4).** `Runners::Resolver.resolve!` (`app/services/runners/resolver.rb`)
+runs at three points, each before admission:
+
+- **Run creation:** `WorkflowService.dispatch!`, the one path every launcher and the relay take
+  to Temporal. A refused run goes `pending → failed` (`fail_before_start`), with no execution
+  and no session. Its `failure_reason` is the refusal's reason, every step carries the message,
+  and the board task gets a system comment, "Run #N of workflow "X" failed: <message>", next
+  to the `workflow_failed` activity. The tracker and chat reporters read the step's message.
+- **A workflow step:** `SessionService.create_for_workflow_step`, before the session is built.
+  `LaunchStepSessionActivity` fails the step with the message, sets the run's reason, comments
+  on the task, and raises non-retryable (`RunnerRefused`).
+- **A standalone session:** `SessionService.create_and_start`, after the save. The session is
+  failed with the message as its `error_message` and never admitted.
+
+A record without a runner returns `nil` before anything is read, the flag included (§12.3).
+Otherwise it checks the flag for the project's company (`runner_unavailable`, "External runners
+are not enabled for this company."), that the runner is in the project's scope
+(`runner_forbidden`; the runner is found through `TenantScope.owned(Runner, project:)`, never
+through `record.runner`, so the message names only the id), and its status
+(`runner_unavailable`: deleted, revoked, disabled, with §8's wording). A runner that passes all three is refused with `runner_execution_not_enabled`,
+"Runner "X" can't take sessions yet: runner execution not enabled." (§12.2, phase 1).
+`runner_unreachable` and the capacity waits come with tasks 9 and 12.
+
+The workflow version snapshot holds `runner_id` (`Versions::Snapshots::Workflow`), left out while
+it is null so a hosted workflow's snapshot is the one it had before runners. A revert restores
+a runner the project still owns (`TenantScope.owned(Runner, project:)`) as it was, a deleted,
+disabled or revoked one included, and the builder warns. A snapshot runner whose row is gone,
+or one the project can no longer use, restores Hosted rather than refuse, so that version can
+still be reverted to. The version diff names a snapshot's runner through the same tenant rule
+(`Versions::ReferenceNames`), so another tenant's runner shows only as its id.
+
+A project move (`ProjectMove`) cannot take a runner reference into another company: a runner
+stays with its company, and `fk_workflows_runner_company`, `fk_terminal_sessions_runner_company`
+and `fk_runners_project_company` hold the rows to it. So `ProjectMove::Preflight` blocks the move
+while the project owns a runner, a deleted one included ("Runner *X* belongs to this project, and
+a runner cannot move to another company."). The project's workflows that name a runner, archived
+ones included, do not block it: the move switches them to Hosted, and the preflight and the
+move report list them (`workflows_switched_to_hosted`) so the admin can pick a runner of the
+target company afterwards. The project's runs and sessions are history by then (a live session
+blocks the move, and work that has not started is cancelled), so the move clears their
+`runner_id` too and the report counts them (`cleared_runner_references`). The move also drops
+`runner_id` from the snapshots of the moved workflows' versions (Hosted is the absent key, as in
+`Snapshot.dump`), so no version of a moved project names a runner of its old company. This is a
+deliberate exception to "history is never rewritten" (`docs/design/entity-versioning.md`, D3).
+Otherwise the move writes no workflow version, as with the other references it rewrites.
 
 ---
 
@@ -1220,7 +1294,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | Condition | Detected at | Outcome | Message (to the run, session and board comment) |
 | --- | --- | --- | --- |
 | Runner deleted, disabled or revoked | Launch (`Runners::Resolver`) | Fails before admission, `runner_unavailable` | "Runner "X" is disabled. Re-enable it or pick another runner on the workflow." |
-| Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner "X" is not available to project P." |
+| Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner 12 is not available to project P." (by id: the runner is looked up through `TenantScope.owned`, so a foreign runner's name is never read) |
 | Runner `unreachable` (health or controller silent) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." |
 | Agent runtime or session mode not supported by the runner | Selection, publish, launch | Refused or fails | "Runner "X" can't run interactive sessions yet." |
 | At `max_concurrency` | Admission | Queued, wait reason `runner_limit` | Shown as queued with the runner named |
@@ -1497,7 +1571,7 @@ changes is the pool an external session belongs to:
 | **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, environments busy/total, last seen. "New runner" for admins. |
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
 | **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
-| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), workflows using it, Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
+| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4) or incompatible with an interactive step (§4). |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
 | **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`. |
@@ -1531,12 +1605,39 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   called out above them. Edit (the same form without the type step), Disable, Enable,
   Revoke and Delete (the soft delete) only with `canManage`; a company runner seen from a
   project is read-only there and links a company admin to company settings. Machines,
-  environments, tokens, the runner version, the egress list and "workflows using it" are
-  not there yet (tasks 4, 5, 12 and 13).
+  environments, tokens, the runner version and the egress list are not there yet (tasks 5,
+  12 and 13).
+
+**What v1 has so far (§15 task 4).** Behind the same flag, the selects and the badges, built from
+`shared/resources/runners/runnerChoice.tsx`. The selects are fed by `RunnerSummaryResource` (name,
+type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `RunnerBadgeResource`
+(name, type, `deleted`), which the session and run lists load with a plain `preload(:runner)`:
+
+- **Base Resources** has a "Runner" select, `Hosted (default)` plus the visible runners with their
+  status. The builder's list also holds the workflow's own runner once deleted, so the select can
+  keep it, and an inline warning names a disabled, revoked or deleted runner. Saving is allowed
+  with it. The interactive-step warning waits for `interactive_terminal` (§4).
+- **The run drawer** (`shared/components/RunWorkflowDrawer.tsx`, used by the builder, the workflows
+  page and Sessions & Runs) has "Runs on", starting from the workflow's runner, with the §11 note
+  naming who operates it. **The new-session form** has the same select and note; in interactive
+  mode every runner is disabled with "can't run interactive sessions yet".
+- **"Runs on"** shows `Hosted` or "name · type", linking to the runner, in the session and run
+  headers, on each session card of the run page, and on the board task's run tiles. The badge
+  serializes a runner only when it is in the record's tenant (`RunnerReference#owned_runner`,
+  the `TenantScope` rule checked on the preloaded row). A stale `runner_id` that names another
+  project's or company's runner sends no name or type, and the badge reads "Runner not
+  available" rather than `Hosted`.
+- **The runner page** does not show where the runner is used: no "Workflows using it" list,
+  and the delete confirmation is the ordinary one.
 
 **Everything ships behind `external_runners` (§12.1).** For a company without the flag
 none of these surfaces render, the controllers answer `404`, and the API refuses
-`runner_id`. The server decides every write; the frontend only hides.
+`runner_id`. The server decides every write; the frontend only hides. One write is let through
+without the flag: switching a **workflow's own** runner back to Hosted (`runner_id` blank on the
+builder save, `Runners::Selection.workflow_error`). Turning the flag off for a company whose
+workflows still name a runner makes every run of them fail with "External runners are not
+enabled for this company."; Base Resources then shows that warning with a "Switch to Hosted"
+action instead of the select. A hosted pick on a run or a session stays refused.
 
 - **How the frontend reads it.** Both flags are `client: true`. They reach the browser
   resolved server-side, through the `features` shared prop (`FeaturesResource`, each value
@@ -1700,7 +1801,10 @@ with `external_runners` **enabled for the test's company**, through the helpers 
 `test/support/feature_flags_helper.rb`
 (`with_feature(:external_runners, true, company: company) { ... }`), and asserts that the
 same Kubernetes calls are made as with the flag off. "Unchanged" is then checked by a test
-and not assumed. In phase 6 the same test runs with `external_runners_kubernetes` enabled
+and not assumed. It is `test/integration/hosted_runtime_unchanged_test.rb` (task 4): a
+standalone session and a workflow step go through the real admission and launch relay and the
+container phases on the runtime seam, once with the flag off and once on, and the runtime
+calls, the admission and the outcome must match. In phase 6 the same test runs with `external_runners_kubernetes` enabled
 for that company too.
 
 **Tech debt this creates, with its exit condition.** Leaving hosted untouched means **two
@@ -2039,7 +2143,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 1b | 1 | **The `runners` table and the `Runner` model**, only what task 2 reads and writes. The `runners` migration (§2.1, without `encrypted_secrets`): the unique name index, the four check constraints and the two composite tenant keys (§2, §2.4). `Runner` with enumerize `runner_type` and `reuse_policy` (defaulted by type, §2.7), validations mirroring the database, the §2.6 integration rule, `visible_for_project` (§3.1), and the status state machine with soft delete (§2.5). No flag check here: nothing reaches the model until task 2's controllers, which check it. Every other table and column of §2 lands with the first task that reads or writes it. |
 | 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refuses writes on a company runner, from the record), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config`. The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
-| 4 | 1 | Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. The "hosted unchanged with the flag enabled" regression test of §12.3. |
+| 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5 | 2 | Gateway process type, the `runner_environments` (`origin`, `display_name`, `ephemeral`) and `runner_credentials` tables and `terminal_sessions.runner_environment_id` (§2.2–§2.4), `runner_operations` queue with LISTEN/NOTIFY long-poll and `Encryptable :runners_key` for its `encrypted_payload`, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
 | 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |

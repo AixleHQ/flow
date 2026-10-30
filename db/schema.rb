@@ -1221,6 +1221,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.index "company_id, COALESCE(project_id, (0)::bigint), lower((name)::text)", name: "index_runners_on_scope_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["company_id"], name: "index_runners_on_company_id"
     t.index ["created_by_id"], name: "index_runners_on_created_by_id"
+    t.index ["id", "company_id"], name: "index_runners_on_id_and_company_id", unique: true
     t.index ["integration_id"], name: "index_runners_on_integration_id"
     t.index ["project_id"], name: "index_runners_on_project_id"
     t.check_constraint "(runner_type::text = 'coder'::text) = (integration_id IS NOT NULL)", name: "runners_coder_integration"
@@ -1697,12 +1698,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id"
     t.jsonb "version_ids", default: {}, null: false
+    t.bigint "runner_id"
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["finished_at"], name: "index_terminal_sessions_on_finished_at"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
+    t.index ["runner_id"], name: "index_terminal_sessions_on_runner_id"
     t.index ["session_type"], name: "index_terminal_sessions_on_session_type"
     t.index ["state"], name: "index_terminal_sessions_on_state"
     t.index ["temporal_workflow_id"], name: "index_terminal_sessions_on_temporal_workflow_id"
@@ -2104,11 +2107,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id"
     t.bigint "workflow_id", null: false
+    t.bigint "runner_id"
     t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["relay_state", "created_at"], name: "index_workflow_runs_pending_relay", where: "((relay_state)::text = 'pending'::text)"
     t.index ["retried_from_run_id"], name: "index_workflow_runs_on_retried_from_run_id"
+    t.index ["runner_id"], name: "index_workflow_runs_on_runner_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
     t.index ["user_id", "idempotency_key"], name: "index_workflow_runs_on_user_id_and_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
@@ -2131,11 +2136,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
+    t.bigint "runner_id"
     t.index ["company_id"], name: "index_workflows_on_company_id"
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
     t.index ["project_id"], name: "index_workflows_on_project_id"
     t.index ["published_at"], name: "index_workflows_on_published_at", where: "(published_at IS NOT NULL)"
     t.index ["published_by_id"], name: "index_workflows_on_published_by_id"
+    t.index ["runner_id"], name: "index_workflows_on_runner_id"
     t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
@@ -2346,6 +2353,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "companies"
   add_foreign_key "terminal_sessions", "projects", on_delete: :nullify
+  add_foreign_key "terminal_sessions", "runners"
+  add_foreign_key "terminal_sessions", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_terminal_sessions_runner_company"
   add_foreign_key "terminal_sessions", "users", on_delete: :nullify
   add_foreign_key "tool_files", "tools", on_delete: :cascade
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify
@@ -2391,12 +2400,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
   add_foreign_key "workflow_runs", "projects", on_delete: :cascade
+  add_foreign_key "workflow_runs", "runners"
   add_foreign_key "workflow_runs", "users", on_delete: :nullify
   add_foreign_key "workflow_runs", "workflow_runs", column: "retried_from_run_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "workflows", on_delete: :cascade
   add_foreign_key "workflows", "companies", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_project_company", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "workflows", "runners"
+  add_foreign_key "workflows", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_runner_company"
   add_foreign_key "workflows", "users", column: "published_by_id", on_delete: :nullify
   add_foreign_key "youtrack_pairings", "companies", on_delete: :cascade
   add_foreign_key "youtrack_pairings", "integrations", on_delete: :nullify

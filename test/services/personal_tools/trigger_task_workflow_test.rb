@@ -169,5 +169,44 @@ module PersonalTools
 
       assert_raises(PersonalTools::Base::UnauthorizedError) { execute(actor: viewer) }
     end
+
+    # == runner_id (DESIGN.md §3.3, §11) ==
+
+    test "a refused runner pick leaves the in-flight run alone, even with force" do
+      runner = create(:runner, company: @company, created_by: @user)
+      blocking = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
+                        board_task_id: @task.id, state: "running")
+      TemporalService.expects(:send_signal).never
+
+      result = assert_no_difference "WorkflowRun.count" do
+        with_feature(:external_runners, false, company: @company) { execute(force: true, runner_id: runner.id) }
+      end
+
+      assert_equal 1, result[:exit_code]
+      assert_match(/External runners are not enabled for this company/, result[:stderr])
+      blocking.reload
+      assert_equal "running", blocking.state
+      assert_nil blocking.stop_requested_at
+    end
+
+    test "with the flag a pick is frozen on the new run, and a null pick runs hosted" do
+      workflow_runner = create(:runner, company: @company, created_by: @user, name: "Workflow's")
+      picked_runner = create(:runner, company: @company, created_by: @user, name: "Picked")
+      @workflow.update!(runner: workflow_runner)
+      create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
+      create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+      mock_workflow_execution_start
+
+      picked, hosted = with_feature(:external_runners, true, company: @company) do
+        picked = WorkflowRun.find(payload(execute(runner_id: picked_runner.id))["run_id"])
+        hosted = WorkflowRun.find(payload(execute(runner_id: nil))["run_id"])
+        [ picked, hosted ]
+      end
+
+      assert_equal [ picked_runner.id, "failed", "runner_execution_not_enabled" ],
+                   [ picked.runner_id, picked.state, picked.failure_reason ]
+      assert_nil hosted.runner_id
+      assert_not_equal "failed", hosted.state
+    end
   end
 end

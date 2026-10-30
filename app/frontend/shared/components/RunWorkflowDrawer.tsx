@@ -4,8 +4,13 @@ import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSitemap } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import type { RunnerSummary } from '@/types/generated';
+
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
+import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
@@ -23,6 +28,8 @@ interface RunWorkflowStep {
 export interface RunWorkflowOption {
   id: number;
   name: string;
+  /** The workflow's runner, null for hosted: what "Runs on" starts from. */
+  runnerId?: number | null;
   steps: RunWorkflowStep[];
 }
 
@@ -49,6 +56,8 @@ interface RunWorkflowDrawerProps {
   agentModels?: AgentModelsEntry[];
   repositories: NamedItem[];
   assets: AssetPickerItem[];
+  /** The runners the project can see; only read with the externalRunners flag. */
+  runners?: RunnerSummary[];
 }
 
 type ExecutionMode = 'interactive' | 'automatic' | 'custom';
@@ -103,8 +112,12 @@ export function RunWorkflowDrawer({
   agentModels = [],
   repositories,
   assets,
+  runners = [],
 }: RunWorkflowDrawerProps) {
+  const externalRunners = useFeatureFlag('externalRunners');
   const [workflowId, setWorkflowId] = useState<number | null>(initialWorkflowId ?? null);
+  // Undefined until the person picks: the run then takes its workflow's runner.
+  const [runnerPick, setRunnerPick] = useState<number | null | undefined>(undefined);
   const [mode, setMode] = useState<ExecutionMode>('automatic');
   // The member's default agent for this company wins; the first configured
   // credential is only a fallback (its order is whatever Postgres returns).
@@ -130,10 +143,18 @@ export function RunWorkflowDrawer({
     setSelectedAssetIds([]);
     setCustomAutoRun({});
     setRequestedModel(null);
+    setRunnerPick(undefined);
   }, [opened, initialWorkflowId]);
 
   const workflow = useMemo(() => workflows.find((w) => w.id === workflowId) ?? null, [workflows, workflowId]);
   const steps = workflow?.steps ?? [];
+  const workflowRunnerId = workflow?.runnerId ?? null;
+  const runnerId = runnerPick === undefined ? workflowRunnerId : runnerPick;
+  const runner = runners.find((r) => r.id === runnerId);
+  // A workflow's runner missing from the list was deleted or is out of this project's reach: the
+  // run still goes to it and fails, so say so, as the builder's RunnerField does.
+  const runnerWarning =
+    runnerId == null ? null : runner ? runnerUnusableReason(runner) : 'This runner is not available to this project.';
 
   // Derived on every render, not synced through an effect: the steps come from
   // props, and an Inertia reload can switch a session's auto-run while the
@@ -165,7 +186,8 @@ export function RunWorkflowDrawer({
     effectiveMode !== defaultMode ||
     selectedRepoIds.length > 0 ||
     selectedAssetIds.length > 0 ||
-    requestedModel !== null;
+    requestedModel !== null ||
+    runnerId !== workflowRunnerId;
   const requestClose = useConfirmClose(dirty, onClose);
 
   const handleSubmit = () => {
@@ -182,6 +204,8 @@ export function RunWorkflowDrawer({
           requestedModel: requestedModel || undefined,
           repositoryIds: selectedRepoIds.map(Number),
           inputAssetIds: selectedAssetIds,
+          // Only a pick that differs from the workflow's is an override (DESIGN.md §3.3); null is hosted.
+          ...(externalRunners && runnerId !== workflowRunnerId && { runnerId }),
           ...(effectiveMode === 'custom' && {
             stepOverrides: Object.fromEntries(steps.map((s) => [s.id, { autoRun: stepAutoRun(s) }])),
           }),
@@ -227,10 +251,32 @@ export function RunWorkflowDrawer({
             placeholder="Select a workflow…"
             data={workflows.map((w) => ({ value: String(w.id), label: w.name }))}
             value={workflowId ? String(workflowId) : null}
-            onChange={(v) => setWorkflowId(v ? Number(v) : null)}
+            onChange={(v) => {
+              setWorkflowId(v ? Number(v) : null);
+              setRunnerPick(undefined);
+            }}
             searchable
           />
         </Box>
+
+        {externalRunners && workflow && (
+          <Box>
+            <RunnerSelect
+              label="Runs on"
+              hostedLabel="Hosted"
+              description="Defaults to the workflow's runner"
+              runners={runners}
+              value={runnerId}
+              onChange={setRunnerPick}
+            />
+            <RunnerCredentialNote runner={runner} />
+            {runnerWarning && (
+              <Text size="xs" c="var(--app-warning-fg)" mt={4}>
+                {runnerWarning} The run fails at launch.
+              </Text>
+            )}
+          </Box>
+        )}
 
         <Box>
           <FormSection icon={<IconRobot size={14} />}>Fallback agent runtime</FormSection>

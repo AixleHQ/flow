@@ -49,7 +49,7 @@ module Api
           private
 
           def aggregate_params
-            params.require(:aggregate).permit(:name, :description, config: {}, steps: STEP_FIELDS).to_h
+            params.require(:aggregate).permit(:name, :description, :runner_id, config: {}, steps: STEP_FIELDS).to_h
           end
         end
       end

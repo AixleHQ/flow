@@ -9,6 +9,8 @@ class WorkflowService
   # would be the worse answer.
   DispatchFailed = Class.new(StandardError)
   SignalLost = Class.new(StandardError)
+  # The default of #enqueue's `runner_id:`, telling "no pick" apart from a pick of nil.
+  RUNNER_NOT_PICKED = Object.new.freeze
 
   class << self
     # Raises Versions::StaleVersion when `base_version` is behind.
@@ -35,9 +37,16 @@ class WorkflowService
     # (#dispatch_or_leave_to_relay), never inside the transaction — a rolled-back
     # run whose execution already started, or a started run whose row a failed
     # RPC rolled back, is what that ordering produced.
+    #
+    # `runner_id` is a pick made at launch (the run drawer, the API, a trigger_*
+    # tool): an id, or nil for hosted. Left out, the run takes the runner of the
+    # run it retries, otherwise its workflow's (DESIGN.md §3.3). Either way it is
+    # frozen on the run here; retries and later steps read it from the run.
     def enqueue(workflow:, project:, user:, source:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {},
-                retried_from: nil, idempotency_key: nil)
+                retried_from: nil, idempotency_key: nil, runner_id: RUNNER_NOT_PICKED)
+      runner_picked = !runner_id.equal?(RUNNER_NOT_PICKED)
       run = project.workflow_runs.new(
+        runner_id: runner_picked ? runner_id.presence : (retried_from ? retried_from.runner_id : workflow.runner_id),
         workflow: workflow,
         user: user,
         source: source,
@@ -54,6 +63,11 @@ class WorkflowService
 
       run.errors.add(:workflow, "has been deleted") if workflow.deleted?
       return run if run.errors.any?
+
+      if runner_picked && (error = Runners::Selection.error(runner_id, project: project))
+        run.errors.add(:base, error)
+        return run
+      end
 
       validate_agent_credentials!(run, project, user)
       return run if run.errors.any?
@@ -106,7 +120,12 @@ class WorkflowService
     # Safe to call again, which is what makes the relay safe: the execution id is
     # per-run and duplicates are rejected, with a rejected duplicate reported as
     # success — the execution this run needs already exists.
+    #
+    # A run on a runner is checked here, so every launch path and the relay pass
+    # through Runners::Resolver before anything executes (DESIGN.md §3.4).
     def dispatch!(run)
+      return if fail_on_runner_refusal(run)
+
       run.increment!(:relay_attempts)
       result = TemporalWorkflowRegistry.start_workflow_execution(run)
 
@@ -170,6 +189,23 @@ class WorkflowService
       fail_active_step_runs(run)
       record_activity(run, :workflow_failed)
       broadcast_task_updated(run)
+    end
+
+    # A step whose runner is refused when its session is about to be built
+    # (SessionService.create_for_workflow_step). The step carries the message;
+    # the run's execution then ends failed the way a credential preflight does.
+    # Several ready steps can be refused at once; the one that records the run's
+    # failure_reason, under the run's lock, is the one that comments on the task.
+    def fail_step_on_runner_refusal(step_run:, refusal:)
+      step_run.mark_failed!(refusal.message)
+      run = step_run.workflow_run
+      first = run.with_lock do
+        next false if run.failure_reason.present?
+
+        run.update!(failure_reason: refusal.reason)
+        true
+      end
+      post_runner_refusal_comment(run, refusal) if first
     end
 
     def approve_step(step_run:)
@@ -327,6 +363,42 @@ class WorkflowService
       rescue StandardError => e
         Rails.logger.warn("[WorkflowService] Failed to cancel step_run ##{sr.id}: #{e.message}")
       end
+    end
+
+    # Fails a run that never started, before admission and without a Temporal
+    # execution. Each step carries the message, which is what the run page, the
+    # tracker comment and the chat card read; the board task gets it as a comment.
+    def fail_on_runner_refusal(run)
+      return false if run.runner_id.nil?
+
+      Runners::Resolver.resolve!(run)
+      false
+    rescue Runners::Resolver::Refused => e
+      failed = run.with_lock do
+        next false unless run.pending?
+
+        run.update!(failure_reason: e.reason)
+        run.step_runs.where(state: "pending").find_each { |step_run| step_run.mark_failed!(e.message) }
+        run.fail_before_start!
+        true
+      end
+      if failed
+        record_activity(run, :workflow_failed)
+        post_runner_refusal_comment(run, e)
+        broadcast_task_updated(run)
+      end
+      true
+    end
+
+    def post_runner_refusal_comment(run, refusal)
+      return unless run.board_task_id.present?
+
+      run.board_task.task_comments.create!(
+        author_type: :system,
+        body: "Run ##{run.id} of workflow \"#{run.workflow.name}\" failed: #{refusal.message}"
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] Failed to comment on the runner refusal of run ##{run.id}: #{e.message}")
     end
 
     # A crashed run's leftover steps are marked failed, not cancelled: the run
