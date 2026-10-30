@@ -961,7 +961,9 @@
                     "cursor_cli",
                     "codex",
                     "gemini_cli",
-                    "antigravity_cli"
+                    "antigravity_cli",
+                    "grok",
+                    "kiro_cli"
                   ]
                 },
                 "allow_non_interactive": {
@@ -1004,7 +1006,13 @@
               "required": [
                 "key",
                 "name"
-              ]
+              ],
+              "dependentRequired": {
+                "reasoning_effort": [
+                  "preferred_model",
+                  "required_agent_runtime"
+                ]
+              }
             }
           }
         },

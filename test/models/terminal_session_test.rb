@@ -542,18 +542,24 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.valid?, session.errors.full_messages.to_sentence
   end
 
-  # The credential's default model can change at any time, so a level set while the
-  # model is left on Default is neither checked against it nor launched with.
-  test "a standalone session on the default model takes any known level and launches without it" do
-    cursor = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
-                                      reasoning_effort: "high")
-    assert cursor.valid?, cursor.errors.full_messages.to_sentence
-    assert_nil cursor.launch_reasoning_effort("claude-opus-4-8")
+  # The credential's default model can change at any time, so a level needs a model
+  # chosen explicitly: one set on Default is refused.
+  test "a standalone session on the default model refuses a level" do
+    %w[cursor_cli kiro_cli].each do |agent_type|
+      session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: agent_type,
+                                         reasoning_effort: "high")
 
-    kiro = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
-                                    reasoning_effort: "high")
-    assert kiro.valid?, kiro.errors.full_messages.to_sentence
-    assert_nil kiro.launch_reasoning_effort("auto")
+      assert_not session.valid?, agent_type
+      assert_includes session.errors[:reasoning_effort], "needs an explicitly chosen model"
+    end
+  end
+
+  # A row written before the explicit-model rule still launches on the CLI's default level.
+  test "launch_reasoning_effort ignores a level saved without a model" do
+    session = build(:terminal_session, agent_type: "kiro_cli", reasoning_effort: "high")
+
+    assert_nil session.launch_reasoning_effort("auto")
+    assert_nil session.launch_reasoning_effort("claude-opus-5.5")
   end
 
   test "a Cursor session with a chosen model takes a level and launches with it" do

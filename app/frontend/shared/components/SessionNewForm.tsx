@@ -396,7 +396,7 @@ export const SessionNewForm = ({
         onChange={(value) => {
           const model = value === DEFAULT_MODEL_OPTION ? null : value;
           setSelectedModel(model);
-          // On the default model a level is ignored, so it is not kept hidden.
+          // A level needs an explicitly chosen model, so it is cleared with it.
           if (!model) setSelectedEffort(null);
         }}
         data={modelOptions}
@@ -406,7 +406,7 @@ export const SessionNewForm = ({
         disabled={!agentType}
       />
 
-      {/* A level applies only to a model chosen explicitly: on the default model it is ignored. */}
+      {/* A level needs an explicitly chosen model; the server refuses one without it. */}
       {selectedModel && (
         <ReasoningEffortSelect
           label="Reasoning effort"

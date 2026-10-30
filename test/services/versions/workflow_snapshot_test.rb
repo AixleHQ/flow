@@ -50,7 +50,7 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
 
   test "a step's reasoning effort is part of its snapshot and comes back on revert" do
     Versions.save!(@workflow, actor: @actor) do
-      @build.update!(required_agent_runtime: "kiro_cli", reasoning_effort: "high")
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "high")
     end
     v1 = @workflow.latest_version
     assert_equal "high", v1.snapshot["steps"].first["reasoning_effort"]

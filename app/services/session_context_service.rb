@@ -384,13 +384,12 @@ class SessionContextService
     end
 
     # Resolve model for a session: step preferred > session requested > credential default > nil
+    # The model the session launches on, resolved the way AgentSessionStrategy#resolve_model
+    # resolves it for the launch command. A workflow step's session captured the step's
+    # preferred model in `requested_model` when it was built (SessionService.build_for_workflow_step);
+    # the live step is not read, since it can be edited between queueing and provisioning,
+    # and the generated config would then disagree with the CLI that launches.
     def resolve_session_model(session, credential)
-      # For workflow steps, check the step's preferred model first
-      if session.session_type == "workflow_step" && session.step_run&.step&.preferred_model.present?
-        return session.step_run.step.preferred_model
-      end
-
-      # Session-level requested model
       return session.requested_model if session.requested_model.present?
 
       # User's default model from credential metadata (retired ids mapped forward)

@@ -107,8 +107,9 @@ class StepTest < ActiveSupport::TestCase
     assert_nil create(:step, workflow: @workflow, reasoning_effort: "").reasoning_effort
   end
 
-  test "a reasoning effort the step's runtime takes is valid" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", reasoning_effort: "high")
+  test "a reasoning effort the step's runtime takes for its model is valid" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                        reasoning_effort: "high")
 
     assert step.valid?, step.errors.full_messages.to_sentence
   end
@@ -129,11 +130,13 @@ class StepTest < ActiveSupport::TestCase
                     "medium is not available for gemini_cli with model gemini-3-pro (choose one of: low, high)"
   end
 
-  # A level applies only to a model chosen explicitly; on the default model the step's
-  # session ignores it, so there is nothing to check it against.
-  test "a level on a step left on the default model is not checked against the runtime" do
-    assert build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", reasoning_effort: "medium").valid?
-    assert build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", reasoning_effort: "high").valid?
+  # A level and its model are kept consistent: on the default model there is nothing to
+  # check a level against, so it is refused.
+  test "a level on a step left on the default model is refused" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", reasoning_effort: "high")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen model"
   end
 
   test "a Cursor step takes a level once it names a model" do
@@ -161,9 +164,24 @@ class StepTest < ActiveSupport::TestCase
     assert_includes step.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
   end
 
-  # The runtime is left to resolution: the launch drops a level the resolved CLI does not take.
-  test "a step without a runtime takes any known level" do
-    assert build(:step, workflow: @workflow, reasoning_effort: "ultra").valid?
+  test "a level on a step that leaves its runtime to resolution is refused" do
+    step = build(:step, workflow: @workflow, preferred_model: "gpt-6-sol", reasoning_effort: "ultra")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen runtime"
+  end
+
+  test "clearing the model or the runtime under a saved level is refused, and clearing all of them is not" do
+    step = create(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                         reasoning_effort: "high")
+
+    assert_not step.update(preferred_model: nil)
+    assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen model"
+    assert_not step.update(preferred_model: "claude-opus-5.5", required_agent_runtime: nil)
+    assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen runtime"
+
+    assert step.update(required_agent_runtime: nil, preferred_model: nil, reasoning_effort: nil),
+           step.errors.full_messages.to_sentence
   end
 
   test "changing the runtime or the model under a saved level the new pair does not take is refused" do

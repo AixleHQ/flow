@@ -190,4 +190,29 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
 
     assert_equal AgentRuntime.reasoning_effort_levels.sort, levels.sort
   end
+
+  # Steps take their runtimes from config/agent_runtimes.json; a runtime missing here
+  # makes a workflow exported with it fail validation.
+  test "the template schema's runtimes are the registry's" do
+    schema = JSON.parse(Templates::Package::SCHEMA_PATH.read)
+    runtimes = schema.dig("properties", "workflows", "items", "properties", "steps", "items", "properties",
+                          "required_agent_runtime", "enum")
+
+    assert_equal AgentRuntime.ids.sort, runtimes.sort
+  end
+
+  test "a step's reasoning effort needs its preferred model and runtime" do
+    without_model = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_not_empty Templates::Validator.new(without_model).errors
+
+    complete = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "claude-opus-5.5",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_empty Templates::Validator.new(complete).errors
+  end
 end

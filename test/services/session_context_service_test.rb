@@ -792,9 +792,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not SessionContextService.credential_workflow_config(session, nil, []).key?(:reasoning_effort)
   end
 
+  # A level needs an explicit model now; a row saved before that rule launches without it.
   test "credential_workflow_config carries no reasoning effort for a session left on the default model" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "gemini_cli",
-                                                        reasoning_effort: "low")
+                                                        requested_model: "gemini-3-pro", reasoning_effort: "low")
+    session.update_columns(requested_model: nil)
 
     assert_not SessionContextService.credential_workflow_config(session, nil, []).key?(:reasoning_effort)
   end

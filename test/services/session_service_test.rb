@@ -765,11 +765,27 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal "high", SessionService.build_for_workflow_step(step_run: step_run).reasoning_effort
   end
 
-  # A level applies only to a model chosen explicitly; the step's session ignores it otherwise.
+  # A level needs an explicit model, so a step cannot be saved with one on Default; a row
+  # written before that rule still launches on the CLI's default level.
   test "a step left on the default model leaves its session on the CLI's default level" do
-    step_run = workflow_step_run(required_agent_runtime: "claude_code", reasoning_effort: "high")
+    step_run = workflow_step_run(required_agent_runtime: "claude_code", preferred_model: "claude-opus-5",
+                                 reasoning_effort: "high")
+    step_run.step.update_columns(preferred_model: nil)
 
     assert_nil SessionService.build_for_workflow_step(step_run: step_run).reasoning_effort
+  end
+
+  test "a step session's generated config keeps the model and level it captured when the step changes after queueing" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "gemini_cli")
+    step_run = workflow_step_run(required_agent_runtime: "gemini_cli", preferred_model: "gemini-3-pro",
+                                 reasoning_effort: "low")
+    session = SessionService.build_for_workflow_step(step_run: step_run)
+
+    step_run.step.update!(preferred_model: "gemini-2.5-pro", reasoning_effort: nil)
+
+    config = SessionContextService.credential_workflow_config(session.reload, nil, [])
+    assert_equal "gemini-3-pro", config[:model]
+    assert_equal "low", config[:reasoning_effort]
   end
 
   test "a step without a reasoning effort leaves its session on the CLI's default" do

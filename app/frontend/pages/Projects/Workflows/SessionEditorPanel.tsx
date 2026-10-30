@@ -380,7 +380,7 @@ export function SessionEditorPanel({
                 if (runtime === step.requiredAgentRuntime) return;
                 onFieldChange('requiredAgentRuntime', runtime);
                 if (step.preferredModel) onFieldChange('preferredModel', null);
-                // A level applies only to a model chosen explicitly, and the model is cleared.
+                // A level needs an explicitly chosen model, and the model is cleared.
                 if (step.reasoningEffort) onFieldChange('reasoningEffort', null);
               }}
               disabled={readOnly}
@@ -409,7 +409,7 @@ export function SessionEditorPanel({
                 value={step.preferredModel ?? null}
                 onChange={(v) => {
                   onFieldChange('preferredModel', v || null);
-                  // On the default model a level is ignored, so it is not kept hidden.
+                  // A level needs an explicitly chosen model, so it is cleared with it.
                   if (!v && step.reasoningEffort) onFieldChange('reasoningEffort', null);
                 }}
                 disabled={readOnly}
@@ -429,7 +429,7 @@ export function SessionEditorPanel({
               />
             </div>
           )}
-          {/* A level applies only to a model chosen explicitly: on the default model it is ignored. */}
+          {/* A level needs an explicitly chosen runtime and model; the server refuses one without them. */}
           {step.requiredAgentRuntime && step.preferredModel && (
             <div>
               <label className={classes.fieldLabel}>

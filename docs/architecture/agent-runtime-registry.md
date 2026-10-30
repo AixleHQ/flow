@@ -51,18 +51,22 @@ new-session form and `POST /api/v1/terminal_sessions`) can name a reasoning-effo
 Unset is the CLI's own default, and the launch command is then exactly what it was before
 the setting existed.
 
-A level applies only to a model chosen explicitly: a step's `preferred_model`, or a
-session's `requested_model`. With the model left on Default the UI hides the select, the
-level is not validated, and the launch ignores a saved one, for standalone sessions and
-workflow steps alike. The level is not checked against the credential's default model,
-because that can change at any time and every saved level would then need re-checking. An
-effort for the default model, if it is ever needed, belongs next to the default model in
-the agent profile.
+A level and its model are always kept consistent. A level needs an explicitly chosen
+runtime and model: a step's `required_agent_runtime` and `preferred_model`, or a session's
+`agent_type` and `requested_model`. `ReasoningEffortValidator` refuses a level without
+them, on steps and sessions alike, so the REST API and the MCP tools answer 422. Clearing
+the model or the runtime while a level is set is refused the same way, so the caller
+clears the level with them; the UI hides the select until a model is chosen and clears the
+level when the model goes back to Default. The level is never checked against the
+credential's default model, because that can change at any time and every saved level
+would then need re-checking. An effort for the default model, if it is ever needed,
+belongs next to the default model in the agent profile.
 
-A step's session copies its step's level when the step names a model. Because a step can
-leave its runtime to resolution, the launch checks the level again against the resolved
-runtime and model (`TerminalSession#launch_reasoning_effort`) and launches on the CLI's
-default when they do not take it.
+A step's session copies its step's level together with its model, and the launch and the
+generated CLI config both resolve the model from the session's captured `requested_model`,
+not from the live step. The launch still checks the level against the runtime and model it
+launches on (`TerminalSession#launch_reasoning_effort`) and launches on the CLI's default
+when they do not take it, or when a row saved before this rule has a level and no model.
 
 Each CLI was checked at its pin, on the binary the image installs (help text, a launch
 with a bad level, the strings or bundled source of the release), not only in the vendor's

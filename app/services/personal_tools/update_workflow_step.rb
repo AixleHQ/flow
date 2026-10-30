@@ -20,15 +20,15 @@ module PersonalTools
                       enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
       runtime["type"] = %w[string null]
       model = param :preferred_model, type: :string,
-                    description: "Model the step's CLI runs on. Pass null for the credential's default model, on " \
-                                 "which a reasoning effort is ignored. Set it together with reasoning_effort to " \
-                                 "change both at once."
+                    description: "Model the step's CLI runs on. Pass null for the credential's default model; " \
+                                 "a step with a reasoning effort refuses that, so pass reasoning_effort: null with " \
+                                 "it. Set it together with reasoning_effort to change both at once."
       model["type"] = %w[string null]
       model["pattern"] = Step::MODEL_ID_JSON_PATTERN
       effort = param :reasoning_effort, type: :string,
                      description: "Reasoning effort the step's CLI runs at. Pass null for the CLI's default. " \
-                                  "It applies only with preferred_model set (on the default model it is " \
-                                  "ignored), and only the levels the step's runtime takes for that model are " \
+                                  "A level needs both required_agent_runtime and preferred_model set; without " \
+                                  "either it is refused. Only the levels that runtime takes for that model are " \
                                   "accepted.",
                      enum: AgentRuntime.reasoning_effort_levels + [ nil ]
       effort["type"] = %w[string null]

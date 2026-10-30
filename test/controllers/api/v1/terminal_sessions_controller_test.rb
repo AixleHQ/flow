@@ -92,7 +92,7 @@ module Api
 
         post :create, body: {
           terminalSession: { sessionType: "agent_session", agentType: "claude_code", projectId: @project.id,
-                             reasoningEffort: "high" }
+                             requestedModel: "claude-opus-5", reasoningEffort: "high" }
         }.to_json, as: :json
 
         assert_response :created
