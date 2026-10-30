@@ -57,6 +57,20 @@ class CompanyTrialTest < ActiveSupport::TestCase
     assert company.billing_trialing?
   end
 
+  # The ended subscription's id stays on the company, and must not read as one
+  # that still bills.
+  test "a trial that followed an ended subscription can still be moved" do
+    company = create(:company, :subscribed, billing_state: "blocked", billing_block_reason: "canceled")
+    company.update!(trial_last_day: Date.new(2026, 11, 15))
+
+    company.update!(trial_last_day: Date.new(2026, 12, 1))
+    assert_equal Date.new(2026, 12, 1), Billing::Trial.last_day(company)
+
+    company.update!(billing_state: "blocked", billing_block_reason: "allowance")
+    assert company.update(trial_last_day: Date.new(2026, 12, 15)), company.errors.full_messages.to_sentence
+    assert company.billing_trialing?
+  end
+
   test "saving anything else leaves the trial as it is" do
     company = create(:company, :trialing)
 
