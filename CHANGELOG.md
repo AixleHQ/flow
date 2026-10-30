@@ -32,6 +32,10 @@ governance, community health — carry none.
   wait, with its change from the previous period, instead of the longest wait.
 
 ### Fixed
+- **Sessions & Runs**: when a company's worker limit is full, a worker that frees
+  up goes to the session that has waited longest, whichever project it is in.
+  Before, one project could take every freed worker while sessions queued
+  earlier in the company's other projects kept waiting.
 - A browser tab left open across a release reloads into the new version on its
   next navigation, instead of failing to open the page and asking for a reload.
 - **Sessions & Runs**: an agent session, and the run it belongs to, is no

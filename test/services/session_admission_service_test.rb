@@ -291,6 +291,32 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_equal 2, SessionAdmissionService.drain!.size
   end
 
+  test "a worker the company frees goes to the session that has waited longest, whichever project it is in" do
+    with_company_limit(@company, 1, project: 5)
+    other_project = create(:project, owner: @user, company: @company)
+    running = enqueue
+    SessionAdmissionService.drain!
+    theirs = enqueue(project: other_project)
+    mine = enqueue
+
+    SessionAdmissionService.cancel!(running.terminal_session)
+
+    assert_equal [ theirs.id ], SessionAdmissionService.drain!
+    assert_nil mine.reload.admitted_at, "a newer session in an older project does not jump the queue"
+  end
+
+  test "a session whose project is full does not hold up a later one in a project with room" do
+    with_company_limit(@company, 3, project: 1)
+    other_project = create(:project, owner: @user, company: @company)
+    enqueue
+    SessionAdmissionService.drain!
+    mine = enqueue
+    theirs = enqueue(project: other_project)
+
+    assert_equal [ theirs.id ], SessionAdmissionService.drain!
+    assert_nil mine.reload.admitted_at
+  end
+
   test "raising a company limit takes effect without a cutover" do
     # Pinned so the company is the binding constraint: left to the ambient
     # default, the project's own pool fills first and the test proves nothing
