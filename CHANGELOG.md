@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-30
+
 ### Added
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
@@ -136,6 +138,10 @@ governance, community health — carry none.
   the run has finished. Sessions skipped before they started fold into one row
   on the run page, and the Sessions count says how many were skipped. Runs that
   already finished are corrected by a migration.
+- **Profile**: connecting Claude Code through Amazon Bedrock no longer fails
+  verification with "Timed out after 60s waiting for AWS" when the Identity
+  Center sign-in takes longer than a minute. The login terminal now waits up to
+  120 seconds, the same as agent sessions.
 
 ## [1.8.0] - 2026-10-28
 
@@ -204,10 +210,6 @@ governance, community health — carry none.
   pages use the same names.
 
 ### Fixed
-- **Profile**: connecting Claude Code through Amazon Bedrock no longer fails
-  verification with "Timed out after 60s waiting for AWS" when the Identity
-  Center sign-in takes longer than a minute. The login terminal now waits up to
-  120 seconds, the same as agent sessions.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.
@@ -1023,7 +1025,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.8.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.9.0...develop
+[1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0
