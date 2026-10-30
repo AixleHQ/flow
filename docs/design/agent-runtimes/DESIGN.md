@@ -46,9 +46,10 @@ this list does not touch it:
   own per-session preparation and cleanup stays. On `manual`, scrub uses a throwaway OS
   user per session in host-side execution and the session container in container mode, and
   `reuse_policy` is defined per type (§7).
-- **Delivery order.** `manual` is the first customer-usable type (phase 3), the
-  interactive tunnel follows (phase 4), then Coder, Kubernetes and the host execution
-  mode (§12.2, §15). The breakdown is a map: tasks are cut one at a time (§15).
+- **Delivery order.** `manual` is the first type (phase 3), the interactive tunnel
+  follows (phase 4), then Coder, Kubernetes and the host execution mode (§12.2, §15).
+  Named companies get the override only after the tunnel (decided 2026-10-30, §12.2).
+  The breakdown is a map: tasks are cut one at a time (§15).
 
 **Revision 3** applies the correction to the revision 2 review. The design no longer
 depends on `aixle-infra`, the infrastructure of our own production and staging
@@ -622,6 +623,19 @@ blocks the move, and work that has not started is cancelled), so the move clears
 deliberate exception to "history is never rewritten" (`docs/design/entity-versioning.md`, D3).
 Otherwise the move writes no workflow version, as with the other references it rewrites.
 
+**Known limitations of the move, accepted (decided 2026-10-30).** A project move is a rare
+super-admin operation, so these cases stay as they are and are not fixed:
+
+- **A queued manual launch.** A manual task trigger that is still queued in the trigger
+  outbox when the project moves, and that names a runner (the pick recorded on its
+  `TriggerEvent`), is dropped by the relay: after the move the runner is not in the
+  project's tenant any more, so the pick is refused.
+- **Lock order.** The move and a concurrent workflow save take their locks in opposite
+  order, so they can deadlock. The admin then gets an error and retries the move. This
+  existed before task 4.
+- **A project that owns a runner**, a deleted one included, cannot be moved (the preflight
+  blocker above). A way out is to be decided later.
+
 ---
 
 ## 4. Capability flags
@@ -644,7 +658,7 @@ container mode, so they are the same across the three external types; the `host`
 | `reusable` | false | true | true | false (v1) | Lifecycle (§7), affinity, scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
-| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Blocks interactive sessions and steps on the runner |
+| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Blocks interactive standalone sessions on the runner (the step checks are not built, below) |
 | `max_concurrency` | admission pools | `runners.max_concurrency` | `runners.max_concurrency` | `runners.max_concurrency` | Admission (§10) |
 | `max_environments` | n/a | number of registered machines (a fact) | `runners.max_environments` (a setting) | `runners.max_concurrency` | Allocation (§7.3) |
 | `concurrency_per_environment` | 1 | 1 | 1 | 1 | Allocation (§7.3) |
@@ -659,10 +673,16 @@ relays ports the image already serves, so it lifts on all types at once.
 Validation that uses these flags:
 
 - An interactive standalone session cannot pick a runner without `interactive_terminal`.
-  The select shows it disabled with the reason.
-- A workflow with an interactive step cannot be **published** with such a runner.
-- A run cannot be launched with an override to one.
-- An agent runtime outside `agent_runtimes` is refused in the same three places.
+  The select shows it disabled with the reason. This is the one check that is built
+  (§15 task 4): `POST /api/v1/terminal_sessions` refuses the pick (§3.3).
+- **Not built, by decision (2026-10-30):** refusing a run launched with an override to a
+  runner without `interactive_terminal`, and refusing to publish a workflow that has an
+  interactive step on such a runner. No real user has `external_runners` before the
+  tunnel (§12.2, phase 4), and the tunnel gives every type `interactive_terminal`, so
+  these checks would guard a state no customer reaches. No interim stub is built for them.
+- `agent_runtimes` is `all` on every type in v1 (container mode, above), so no check reads
+  it yet. A type or execution mode that narrows it adds the refusal at selection and
+  launch with it.
 
 ---
 
@@ -1296,7 +1316,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | Runner deleted, disabled or revoked | Launch (`Runners::Resolver`) | Fails before admission, `runner_unavailable` | "Runner "X" is disabled. Re-enable it or pick another runner on the workflow." |
 | Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner 12 is not available to project P." (by id: the runner is looked up through `TenantScope.owned`, so a foreign runner's name is never read) |
 | Runner `unreachable` (health or controller silent) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." |
-| Agent runtime or session mode not supported by the runner | Selection, publish, launch | Refused or fails | "Runner "X" can't run interactive sessions yet." |
+| Session mode not supported by the runner (an interactive standalone session, §4) | Selection | Refused | "Runner "X" can't run interactive sessions yet." |
 | At `max_concurrency` | Admission | Queued, wait reason `runner_limit` | Shown as queued with the runner named |
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
 | `provision` fails (template error, image pull, RBAC) | `create_container` | Diagnosed failure, environment `failed` | Provider message, e.g. "Coder: template parameter `instance_type` invalid" |
@@ -1572,7 +1592,7 @@ changes is the pool an external session belongs to:
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
 | **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
-| **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4) or incompatible with an interactive step (§4). |
+| **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
 | **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`. |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
@@ -1616,7 +1636,8 @@ type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `Runne
 - **Base Resources** has a "Runner" select, `Hosted (default)` plus the visible runners with their
   status. The builder's list also holds the workflow's own runner once deleted, so the select can
   keep it, and an inline warning names a disabled, revoked or deleted runner. Saving is allowed
-  with it. The interactive-step warning waits for `interactive_terminal` (§4).
+  with it. There is no interactive-step warning, and none is planned: it is not built, for the
+  same reason as the §4 publish check.
 - **The run drawer** (`shared/components/RunWorkflowDrawer.tsx`, used by the builder, the workflows
   page and Sessions & Runs) has "Runs on", starting from the workflow's runner, with the §11 note
   naming who operates it. **The new-session form** has the same select and note; in interactive
@@ -1741,8 +1762,8 @@ one at a time, each with a reason. The flags never go `default: true` before rem
 | --- | --- | --- | --- | --- |
 | 1 | Model and CRUD, no execution. A run with an external runner fails with "runner execution not enabled". This validates scopes, permissions and failure messages before any code runs remotely | Declared. `default: false`. Override **on for the test company only** | Not declared | Members of the test company: the Runners pages (Manual type card only), the builder, drawer and session-form selects, the badge |
 | 2 | Protocol, gateway, `aixle-runner` (`host` and `session` modes), the conformance fixtures, the dev `local` adapter | Unchanged: test company only | Not declared | Test company. Developers locally, through the `local` adapter and the test helpers |
-| 3 | **`manual` type, container mode, end to end**, non-interactive. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner | Not declared | Members of those companies. Type cards: Manual |
-| 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false` | Unchanged (same overrides) | Not declared | Same companies. Interactive sessions and steps become selectable on runners |
+| 3 | **`manual` type, container mode, end to end**, non-interactive. Validated on staging (§12.4); not yet given to customers | Unchanged: test company only | Not declared | Test company. Type cards: Manual |
+| 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false`. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner, only once this phase is done | Not declared | Members of those companies. Type cards: Manual. Interactive sessions and steps are selectable on runners from the start |
 | 5 | **Coder adapter**: provisioning, pooling, warm disk. Staging validation (§12.5) | Unchanged. Coder becomes available to every company that already has the override; no new flag | Not declared | Same companies. Type cards: Manual, Coder |
 | 6 | **Kubernetes controller, Helm chart**, the second flag | Unchanged | **Declared.** `default: false`. Override on for the test company, then named companies | Kubernetes card only for companies with both overrides |
 | 7 | **`host` execution mode** (services in containers, CLI on the host), toolcache kits, P2 (§6.8) | Unchanged | Unchanged | The `execution_mode` option appears on `manual` and `coder` runner forms of companies with the override |
@@ -1774,17 +1795,19 @@ it is a relay of ports the image already serves (§6.8), so it does not depend o
 type and is built once for all of them. It is developed against the `local` adapter from
 phase 2, so it does not wait on a provider.
 
-- **Why phase 3 can ship without it.** The reasons for a runner are about the work an agent
-  does, and that work mostly arrives through non-interactive workflow steps (board-column
-  automation, tracker and chat triggers). `human_accessible: true` on `manual` means the
-  operator can debug on their own machine (`docker exec` into the session container)
-  without anything from us.
-- **What it costs to wait without it.** Every interactive step in a workflow blocks that
-  workflow from being published on a runner (§4), which is the first support question for
-  mixed workflows. That is why it comes before any second type.
+- **Why real users wait for it (decided 2026-10-30).** Named companies get the override
+  only after phase 4, and until then `external_runners` stays on for the test company only.
+  Phase 3 is complete as a non-interactive path and is validated on staging (§12.4), but
+  without the tunnel a runner cannot run the interactive sessions and steps hosted runs.
+  So no interim checks are built for the gap: the publish check, the run-override check
+  and the builder's interactive-step warning are dropped (§4, §11), because no real user
+  has the flag before the tunnel and the tunnel lifts the restriction. The standalone
+  session check stays as task 4 built it.
+- **Why it still comes right after phase 3.** It is what lets the first named company in,
+  so it comes before any second type.
 - **What would change this order.** If the first named company needs Coder before it needs
   interactive sessions, swap phases 4 and 5. They are independent, so the swap costs
-  nothing.
+  nothing. Either way, named companies get the override only once the tunnel is done.
 
 ### 12.3 The hosted runtime is not touched
 
@@ -1987,7 +2010,7 @@ these happens:
   by a PR, and the Rails side keeps running the fixtures against the gateway.
 
 **Where the Helm chart lives.** The chart belongs with the runner. Trigger 2 is expected
-right after phase 3, the first customer-usable slice, so **the extract is expected before
+right after phase 4, the first customer-usable slice, so **the extract is expected before
 the Kubernetes adapter ships in phase 6**. So the chart lane is built in
 `AixleHQ/aixle-runner` from the start, and **`charts/` is never created in `flow`**. If the
 extract slips past the start of phase 6 after all, the chart goes under `runner/chart/`.
@@ -2155,7 +2178,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
-| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. |
+| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. Once it is done, named companies can get the `external_runners` override (§12.2). |
 | 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; the `coder` keys of §2.7 (template, `config.container`) and their validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. |
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
@@ -2190,9 +2213,10 @@ reviewable and lands behind the flags. The number in the second column is the ph
   same adapter contract). Settled by the first customer who asks for it.
 - **Step-level runner.** Deliberately out of scope (§3.3). Revisit if users split
   workflows only to change network.
-- **Interactive sessions in the first slice.** Decided in §12.2: the first slice
-  (`manual`, phase 3) is non-interactive only, and the tunnel is phase 4, ahead of every
-  second type.
+- **Interactive sessions in the first slice.** Decided in §12.2: the `manual` type
+  (phase 3) is non-interactive only, and the tunnel is phase 4, ahead of every second type.
+  Named companies get the override only after phase 4, so the first customer-usable slice
+  includes interactive sessions (decided 2026-10-30).
 - **Billing for external sessions.** Still an open product decision, not a design one.
   The design keeps every answer possible:
   - `runner_id` is recorded on sessions and usage rows;
