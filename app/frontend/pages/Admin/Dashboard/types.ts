@@ -107,7 +107,7 @@ export interface CompanyBreakdown {
   days: WaitDay[];
 }
 
-/** One company's p95 wait over a range, from Admin::DashboardCompaniesController#index. */
+/** One company's p95 wait over a range, from Admin::DashboardCompaniesController#waits. */
 export interface TenantWait {
   companyId: number;
   p95: number;

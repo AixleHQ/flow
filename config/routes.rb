@@ -376,7 +376,8 @@ Rails.application.routes.draw do
     end
     resource :session_admission, only: %i[show]
     resource :dashboard, only: %i[show] do
-      resources :companies, only: %i[index show], controller: "dashboard_companies"
+      get :waits, to: "dashboard_companies#waits"
+      resources :companies, only: %i[show], controller: "dashboard_companies"
     end
   end
 

@@ -7,7 +7,7 @@ module Admin
   class DashboardCompaniesController < Admin::ApplicationController
     rescue_from Date::Error, with: -> { head :bad_request }
 
-    def index
+    def waits
       from, to = days
       return head :bad_request if to < from
 

@@ -18,7 +18,7 @@ export function useTenantP95(range: DayRange | null): P95State {
     if (!start || !end || known) return;
     const key = `${start}:${end}`;
     const controller = new AbortController();
-    fetch(`/admin/dashboard/companies.json?${new URLSearchParams({ from: start, to: end })}`, {
+    fetch(`/admin/dashboard/waits.json?${new URLSearchParams({ from: start, to: end })}`, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     })

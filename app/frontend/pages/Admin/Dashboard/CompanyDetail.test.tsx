@@ -20,7 +20,7 @@ const data: DashboardData = {
 const BREAKDOWN = 'GET /admin/dashboard/companies/:id.json';
 
 async function openAcme(answer: CompanyBreakdown | Response = buildCompanyBreakdown()) {
-  const fetchSpy = answerFetch({ [BREAKDOWN]: answer, 'GET /admin/dashboard/companies.json': [] });
+  const fetchSpy = answerFetch({ [BREAKDOWN]: answer, 'GET /admin/dashboard/waits.json': [] });
   render(<Dashboard data={data} now={now} />);
   await userEvent.click(screen.getByRole('button', { name: 'Acme' }));
   const dialog = within(screen.getByRole('dialog', { name: 'Acme' }));

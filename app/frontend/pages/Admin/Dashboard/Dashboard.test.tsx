@@ -37,7 +37,7 @@ const tile = (name: string) => within(screen.getByRole('region', { name }));
 
 describe('Dashboard', () => {
   beforeEach(() => {
-    answerFetch({ 'GET /admin/dashboard/companies.json': [] });
+    answerFetch({ 'GET /admin/dashboard/waits.json': [] });
   });
 
   it('opens on the current month, one row per company, with why each is billed or not', () => {
@@ -92,13 +92,13 @@ describe('Dashboard', () => {
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(await within(rowOf('Acme')).findByText('▲ +50%')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/admin/dashboard/companies.json?from=2026-10-01&to=2026-10-31',
+      '/admin/dashboard/waits.json?from=2026-10-01&to=2026-10-31',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
   });
 
   it('says so when the p95 wait cannot be loaded', async () => {
-    answerFetch({ 'GET /admin/dashboard/companies.json': jsonResponse({ error: 'boom' }, 500) });
+    answerFetch({ 'GET /admin/dashboard/waits.json': jsonResponse({ error: 'boom' }, 500) });
     render(<Dashboard data={data} now={now} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('p95 wait could not be loaded');

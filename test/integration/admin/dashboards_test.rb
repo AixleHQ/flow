@@ -41,7 +41,7 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to admin_login_path
 
-    get admin_dashboard_companies_path(from: "2026-10-01", to: "2026-10-31", format: :json)
+    get waits_admin_dashboard_path(from: "2026-10-01", to: "2026-10-31", format: :json)
 
     assert_redirected_to admin_login_path
   end
@@ -74,12 +74,12 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
                              admitted_at: Time.utc(2026, 10, 14, 9, 5))
     sign_in_as(@admin)
 
-    get admin_dashboard_companies_path(from: "2026-10-01", to: "2026-10-31", format: :json)
+    get waits_admin_dashboard_path(from: "2026-10-01", to: "2026-10-31", format: :json)
 
     assert_response :success
     assert_equal [ { "companyId" => @company.id, "p95" => 300 } ], response.parsed_body
 
-    get admin_dashboard_companies_path(from: "2026-10-31", to: "2026-10-01", format: :json)
+    get waits_admin_dashboard_path(from: "2026-10-31", to: "2026-10-01", format: :json)
     assert_response :bad_request
   end
 

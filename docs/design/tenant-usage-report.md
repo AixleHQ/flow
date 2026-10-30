@@ -130,7 +130,7 @@ The company's name in the table opens a dialog for the selected period. It fetch
 
 A company with no worker limit in the period gets no utilization: nothing capped it, and its waits come from its projects' limits alone.
 
-**The table's p95.** For the same reason the table's wait column is the p95 rather than the maximum, and it is not in the page's data either. For the selected period, and for the period it is compared with, the page fetches `GET /admin/dashboard/companies.json?from=&to=` (`Usage::TenantWaits`): every company's p95 over the sessions admitted in those days, the same sessions the breakdown counts. Each range is fetched once while the page is open.
+**The table's p95.** For the same reason the table's wait column is the p95 rather than the maximum, and it is not in the page's data either. For the selected period, and for the period it is compared with, the page fetches `GET /admin/dashboard/waits.json?from=&to=` (`Usage::TenantWaits`): every company's p95 over the sessions admitted in those days, the same sessions the breakdown counts. Each range is fetched once while the page is open.
 
 ## 8. Free means managed
 
