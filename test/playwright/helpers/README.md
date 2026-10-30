@@ -129,10 +129,16 @@ throws with a readable message when it fails.
 `role` is `'companyAdmin'` or `'companyEmployee'`, the keys of `loadCredentialsAsset`, and `env` is what
 `loadCredentialsAsset` returns. Returns `{ role, reused }`.
 
-- It sends one `GET /profile` and reads the shared `currentUser` prop with `readInertiaPage`. If that is the role's
-  account, it returns `{ role, reused: true }` without submitting the sign-in form.
-- Otherwise (a redirect to `/login`, or another account) it signs in with `login`, reads `/profile` again to confirm
-  the account, and returns `{ role, reused: false }`. It throws if the session still is not that account.
+- It sends one `GET /profile` without following redirects. A `302` to `/login` means signed out. A `200` carries the
+  shared `currentUser` prop in its Inertia payload: if that is the role's account, it returns `{ role, reused: true }`
+  without submitting the sign-in form.
+- When the session is signed out or is another account, it signs in with `login`, reads `/profile` again to confirm the
+  account, and returns `{ role, reused: false }`. It throws if the session still is not that account.
+- Any other answer from `/profile` (no response, another status or redirect, a page without a readable `currentUser`)
+  throws, naming the path and the status, and does not sign in or clear the cookies. A transient staging error then
+  costs no sign-in; run the call again.
+- It does not navigate when the session is reused: the page stays where the last call left it. Open the page you need
+  with `goTo…` before you interact with it or take a screenshot. (After a sign-in, the page is where `login` landed.)
 - The email is compared inside the helper. It is not returned, and errors do not include it.
 
 ```js
@@ -437,6 +443,8 @@ async (page) => {
     requests: [{ path: '/company/assets' }, { path: '/company/sessions' }],
     baseUrl,
   });
+  // A reused session does not navigate, so open the page before the screenshot.
+  await goToProjects(page, staging);
   const evidence = await shot(page, {
     round: 1,
     name: 'employee-projects',
