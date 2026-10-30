@@ -108,14 +108,18 @@ Rails.application.routes.draw do
                                   as: :marketplace_registration
   # A buyer whose email domain already has a workspace cannot create a second
   # one, so instead they ask the administrators of that one to apply the
-  # subscription. The POST only sends a link to the address they typed; the GET
-  # is that link, and opening it is what proves the address and raises the
-  # request. Both are unauthenticated, like the fulfilment URL above: the buyer
-  # was signed out on arrival and has nothing to sign in as yet.
+  # subscription. The first POST only sends a link to the address they typed;
+  # the GET is that link, which shows a button and nothing more -- as the magic
+  # link below, so that a mail scanner opening it proves nothing -- and the
+  # second POST is the button, which proves the address and raises the request.
+  # All unauthenticated, like the fulfilment URL above: the buyer was signed out
+  # on arrival and has nothing to sign in as yet.
   post "marketplace/aws/proposal", to: "web/marketplace_proposals#create",
                                    as: :marketplace_proposal
-  get "marketplace/aws/proposal", to: "web/marketplace_proposals#confirm",
-                                  as: :confirm_marketplace_proposal
+  get "marketplace/aws/proposal", to: "web/marketplace_proposals#show",
+                                  as: :marketplace_proposal_link
+  post "marketplace/aws/proposal/confirm", to: "web/marketplace_proposals#confirm",
+                                           as: :confirm_marketplace_proposal
 
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.

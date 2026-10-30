@@ -37,8 +37,9 @@ governance, community health — carry none.
   exists, before showing any form. The workspace is never chosen — it is
   whichever one holds the asker's own domain — the address is proved by a link
   sent to it, and an administrator still decides. An administrator proving
-  their own address — a workspace subscribing again after cancelling — is
-  signed in by that link and decides on the spot. Accepting stops the card that
+  their own address — a workspace subscribing again after cancelling — is sent
+  to sign in and lands on the request to decide on the spot; the link itself
+  signs nobody in. Accepting stops the card that
   was paying for that workspace, with a final invoice for the capacity it has
   not been billed for yet; the screen says how much that is before anyone
   decides. A workspace AWS bills keeps its Billing tab, which says where its

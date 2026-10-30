@@ -33,6 +33,12 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     post marketplace_proposal_path, params: { email: email }
   end
 
+  # The button on the page the link opens. The link itself is a GET that shows
+  # the page and nothing else (see "opening the link shows a page").
+  def confirm(token)
+    post confirm_marketplace_proposal_path, params: { token: token }
+  end
+
   # The HTML part, decoded. The mail is multipart -- the layout carries an
   # inline logo -- so `body` is the multipart envelope and holds no link at all;
   # and `decoded` rather than `to_s` because quoted-printable soft-wraps a long
@@ -57,12 +63,34 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     assert_nil MarketplaceLicense.last.proposal_state
   end
 
-  test "opening the link raises the request against the workspace at that domain" do
+  # Mail scanners and link-preview bots open every link in a message. Were the
+  # GET the proof, the request would be raised -- and every administrator
+  # mailed -- by whoever scanned the mail, before its owner had read it.
+  test "opening the link shows a page and raises nothing" do
+    arrive_from_marketplace
+    ask
+    perform_enqueued_jobs
+    token = link_from_mail
+    ActionMailer::Base.deliveries.clear
+
+    get marketplace_proposal_link_path(token: token)
+    perform_enqueued_jobs
+
+    assert_response :success
+    assert_inertia_props do |props|
+      assert_equal token, props[:token]
+      assert_equal "dana@northwind.example", props[:email]
+    end
+    assert_nil MarketplaceLicense.last.proposed_company
+    assert_empty ActionMailer::Base.deliveries
+  end
+
+  test "confirming raises the request against the workspace at that domain" do
     arrive_from_marketplace
     ask
     perform_enqueued_jobs
 
-    get confirm_marketplace_proposal_path(token: link_from_mail)
+    confirm(link_from_mail)
 
     license = MarketplaceLicense.last
     assert_equal @company, license.proposed_company
@@ -78,7 +106,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     token = link_from_mail
     ActionMailer::Base.deliveries.clear
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     perform_enqueued_jobs
 
     assert_equal [ @admin.email, other.email ].sort, ActionMailer::Base.deliveries.map { |m| m.to.first }.sort
@@ -86,10 +114,12 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
   # The address the link proved is an administrator's of the very workspace
   # being asked: a workspace that cancelled its subscription and took out a
-  # new one. Asking themselves by mail and waiting for their own answer was the
-  # long way round; the proof signs them in and puts the request in front of
-  # them, and the other administrators are told as before.
-  test "an administrator proving their own address lands on the request, signed in" do
+  # new one. They are who decides, so the request is put in front of them --
+  # through the sign-in, not by the link. The link is reusable for two hours
+  # and anyone holding a subscription can have it sent to any administrator's
+  # address, so it must sign nobody in; the sign-in the workspace allows does,
+  # and lands on the request.
+  test "an administrator proving their own address signs in and lands on the request" do
     other = create(:user, :admin, :onboarding_completed, company: @company)
     arrive_from_marketplace
     ask(email: @admin.email)
@@ -97,18 +127,52 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     token = link_from_mail
     ActionMailer::Base.deliveries.clear
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     perform_enqueued_jobs
 
-    assert_redirected_to company_settings_billing_path
+    assert_redirected_to login_path(email: @admin.email)
+    assert_nil session[:user_id], "the link signs nobody in"
     assert MarketplaceLicense.last.proposal_pending?
-    assert_equal [ other.email ], ActionMailer::Base.deliveries.map { |m| m.to.first },
-                 "the other administrator is told; the one asking is not"
+    assert_equal [ @admin.email, other.email ].sort, ActionMailer::Base.deliveries.map { |m| m.to.first }.sort,
+                 "every administrator is told, the one asking included"
+
+    sign_in_as(@admin)
+
+    assert_redirected_to company_settings_billing_path
     follow_redirect!
     assert_inertia_props do |props|
       assert_equal @admin.email, props.dig(:marketplaceProposal, :askedBy)
       assert props.dig(:marketplaceProposal, :canDecide)
     end
+  end
+
+  # The browser that pressed the button is not necessarily the administrator's.
+  test "the way to the request is taken only by a member of that workspace" do
+    arrive_from_marketplace
+    ask(email: @admin.email)
+    perform_enqueued_jobs
+    confirm(link_from_mail)
+    elsewhere = create(:user, :admin, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
+
+    sign_in_as(elsewhere)
+
+    assert_redirected_to company_projects_path
+  end
+
+  # Pressing the button a second time, or the same link opened in two tabs,
+  # must not sign anyone in either: the first press has already sent the
+  # administrator to sign in, and a second press is a reload of the request.
+  test "a link already confirmed still signs nobody in" do
+    arrive_from_marketplace
+    ask(email: @admin.email)
+    perform_enqueued_jobs
+    token = link_from_mail
+    confirm(token)
+
+    confirm(token)
+
+    assert_redirected_to new_workspace_path(email: @admin.email)
+    assert_nil session[:user_id]
   end
 
   # The link lives two hours and the buyer has it in front of them, so opening
@@ -122,11 +186,11 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     perform_enqueued_jobs
     token = link_from_mail
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     perform_enqueued_jobs
     ActionMailer::Base.deliveries.clear
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     perform_enqueued_jobs
 
     assert_redirected_to new_workspace_path(email: "dana@northwind.example")
@@ -143,7 +207,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     ask
     perform_enqueued_jobs
     token = link_from_mail
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     license = MarketplaceLicense.last
     # The administrator answers from their own browser; the buyer keeps theirs.
     admin = open_session
@@ -153,7 +217,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     perform_enqueued_jobs
     ActionMailer::Base.deliveries.clear
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
     perform_enqueued_jobs
 
     follow_redirect!
@@ -169,7 +233,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     arrive_from_marketplace
     ask
     perform_enqueued_jobs
-    get confirm_marketplace_proposal_path(token: link_from_mail)
+    confirm(link_from_mail)
     license = MarketplaceLicense.last
     admin = open_session
     admin.post login_path, params: { user: { email: @admin.email, password: AuthHelper::TEST_PASSWORD } }
@@ -182,7 +246,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     travel 1.minute
     ask
     perform_enqueued_jobs
-    get confirm_marketplace_proposal_path(token: link_from_mail)
+    confirm(link_from_mail)
     perform_enqueued_jobs
 
     assert license.reload.proposal_pending?, "a fresh ask, not a reload of the declined one"
@@ -197,7 +261,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
   # their claimed domain makes unusable anyway -- with no trace of what they had
   # just done, and nothing sensible left to try but subscribing again.
   test "a token that is not ours raises nothing, and says so where it can be read" do
-    get confirm_marketplace_proposal_path(token: "not-a-token")
+    confirm("not-a-token")
 
     follow_redirect!
     assert_inertia_props { |props| assert_match(/expired/i, props.dig(:errors, :base).to_s) }
@@ -213,7 +277,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     token = link_from_mail
     create(:marketplace_license, :active, company: @company)
 
-    get confirm_marketplace_proposal_path(token: token)
+    confirm(token)
 
     follow_redirect!
     assert_inertia_props do |props|
@@ -229,7 +293,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     token = link_from_mail
 
     travel(MarketplaceProposalTicket::TTL + 1.minute) do
-      get confirm_marketplace_proposal_path(token: token)
+      confirm(token)
     end
 
     assert_nil MarketplaceLicense.last.proposed_company
@@ -259,7 +323,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     perform_enqueued_jobs
     gone.destroy!
 
-    get confirm_marketplace_proposal_path(token: link_from_mail)
+    confirm(link_from_mail)
 
     assert_redirected_to new_workspace_path(email: "dana@somewhere-else.example")
     assert_nil MarketplaceLicense.last.proposed_company
@@ -281,7 +345,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     arrive_from_marketplace
     ask
     perform_enqueued_jobs
-    get confirm_marketplace_proposal_path(token: link_from_mail)
+    confirm(link_from_mail)
     MarketplaceLicense.last
   end
 
