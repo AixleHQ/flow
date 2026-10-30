@@ -12,6 +12,15 @@ Rails.application.routes.draw do
   match "/action_mcp", to: "mcp#handle", via: %i[get post delete]
   match "/mcp", to: "mcp#handle", via: %i[get post delete]
 
+  # The runner gateway (docs/design/agent-runtimes/DESIGN.md §6): the JSON API
+  # aixle-runner calls with a bearer token, served by its own Puma
+  # (config/puma_runner_gateway.rb).
+  scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, defaults: { format: :json } do
+    post "register", to: "registrations#create"
+    delete "registration", to: "registrations#destroy"
+    post "token", to: "tokens#create"
+  end
+
   # Credential vending for agent containers (Amazon Bedrock and friends). Called by the
   # in-container credential_process helper, authenticated by a derived per-session key
   # rather than a user session — see CloudAuth::SessionKey.

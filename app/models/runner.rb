@@ -25,6 +25,9 @@ class Runner < ApplicationRecord
   has_many :workflows, dependent: :nullify
   has_many :workflow_runs, dependent: :nullify
   has_many :terminal_sessions, dependent: :nullify
+  # Removed with the runner by their foreign keys' ON DELETE CASCADE.
+  has_many :environments, class_name: "RunnerEnvironment", inverse_of: :runner
+  has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner
 
   before_validation :default_reuse_policy
 

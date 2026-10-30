@@ -1,3 +1,4 @@
 web: bundle exec puma -C config/puma.rb
 mcp: bundle exec puma -C config/puma_mcp.rb
+runner_gateway: bundle exec puma -C config/puma_runner_gateway.rb
 vite: bin/vite dev

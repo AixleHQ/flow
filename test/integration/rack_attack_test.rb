@@ -132,6 +132,36 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_nil Rack::Attack.mcp_credential(rack_request({}))
   end
 
+  test "registering runners from one address is cut off" do
+    30.times { post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" } }
+    assert_not_equal 429, response.status
+
+    post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }
+    assert_response :too_many_requests
+
+    post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
+    assert_not_equal 429, response.status
+  end
+
+  test "the runner gateway is capped per credential, whichever address it calls from" do
+    600.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
+    assert_not_equal 429, response.status
+
+    post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
+    assert_response :too_many_requests
+
+    post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
+    assert_not_equal 429, response.status
+  end
+
+  test "the runner gateway count never keys on the raw token" do
+    key = Rack::Attack.runner_credential(rack_request({ "HTTP_AUTHORIZATION" => "Bearer aracc_secret-value" }, path: "/runner/v1/registration"))
+
+    assert_equal 32, key.length
+    assert_not_includes key, "aracc_secret-value"
+    assert_nil Rack::Attack.runner_credential(rack_request({}, path: "/runner/v1/register"))
+  end
+
   test "member invites and re-sends are what the invite limit counts" do
     assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/members"))
     assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/members/12/resend"))

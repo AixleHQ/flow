@@ -42,6 +42,10 @@ Read straight from the environment, before or outside the settings files.
 | `MCP_MAX_THREADS`               | no       | `RAILS_MAX_THREADS` | MCP Puma thread budget.                                      |
 | `MCP_MIN_THREADS`               | no       | `MCP_MAX_THREADS`   | MCP Puma minimum thread count.                               |
 | `MCP_PIDFILE`                   | no       | `tmp/pids/mcp.pid`  | MCP Puma pidfile.                                            |
+| `RUNNER_GATEWAY_PORT`           | no       | `4003`              | Port the runner gateway Puma listens on (`config/puma_runner_gateway.rb`), which serves `/runner/v1/*`. |
+| `RUNNER_GATEWAY_MAX_THREADS`    | no       | `RAILS_MAX_THREADS` | Runner gateway Puma thread budget.                           |
+| `RUNNER_GATEWAY_MIN_THREADS`    | no       | `RUNNER_GATEWAY_MAX_THREADS` | Runner gateway Puma minimum thread count.           |
+| `RUNNER_GATEWAY_PIDFILE`        | no       | `tmp/pids/runner_gateway.pid` | Runner gateway Puma pidfile.                       |
 | `RAILS_ENV`                     | no       | `development`       | Rails environment; also selects the per-environment settings file. |
 | `RAILS_LOG_TO_STDOUT`           | no       | unset               | Log to stdout — set it in containers.                        |
 | `RAILS_LOG_LEVEL`               | no       | `info`              | Log level in production and QA (`error` in test).            |
