@@ -582,11 +582,16 @@ function aixleInertiaData(html, where, status) {
     /<script\b(?=[^>]*\bdata-page="app")(?=[^>]*\btype="application\/json")[^>]*>([\s\S]*?)<\/script>/i,
   );
   if (!script) throw new Error(`No Inertia page payload at ${aixlePathname(where)} (HTTP ${status})`);
+  let data;
   try {
-    return JSON.parse(script[1]) || {};
+    data = JSON.parse(script[1]);
   } catch {
     throw new Error(`The Inertia page payload at ${aixlePathname(where)} is not valid JSON`);
   }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`The Inertia page payload at ${aixlePathname(where)} is not a JSON object`);
+  }
+  return data;
 }
 
 /**
