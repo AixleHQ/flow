@@ -921,7 +921,7 @@ Each process draws only the routes it serves. `config/routes.rb` draws `/up` in 
 process, and the rest by `AIXLE_PROCESS_MODE`, which `config/puma_runner_gateway.rb` sets
 to `runner_gateway` before the app loads, so the deployment sets nothing of its own:
 - the gateway draws `config/routes/runner_gateway.rb`, the `/runner/v1` scope, and nothing
-  else;
+  else. `config/application.rb` also leaves Action Cable's own `/cable` mount out of it;
 - every other process draws `config/routes/mcp.rb` (`/mcp` and `/action_mcp`) and
   `config/routes/web.rb` (everything else), and answers `404` on `/runner/v1/*`. MCP is
   still served by the web and MCP processes alike; a mode of its own for the MCP process
