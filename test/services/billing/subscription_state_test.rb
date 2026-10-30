@@ -45,4 +45,13 @@ class Billing::SubscriptionStateTest < ActiveSupport::TestCase
     incomplete = Billing::SubscriptionState.from(subscription(status: "incomplete"))
     assert_not incomplete.running? || incomplete.unpaid? || incomplete.ended?
   end
+
+  # `invoice_now` names the final invoice in `latest_invoice`: an id, or the
+  # whole invoice when the response was asked for expanded.
+  test "it reads the latest invoice whether or not it came back expanded" do
+    assert_equal "in_1", Billing::SubscriptionState.from(subscription(latest_invoice: "in_1")).latest_invoice_id
+    assert_equal "in_1", Billing::SubscriptionState.from(subscription(latest_invoice: { id: "in_1", object: "invoice" }))
+                                                   .latest_invoice_id
+    assert_nil Billing::SubscriptionState.from(subscription).latest_invoice_id
+  end
 end

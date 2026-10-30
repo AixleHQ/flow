@@ -25,13 +25,22 @@ class Web::WorkspacesController < Web::ApplicationController
   rate_limit to: 10, within: 1.hour, only: :create, by: -> { request.remote_ip }, if: -> { !signed_in? },
              with: -> { refuse(base: "Too many attempts. Try again in an hour.") }
 
+  # `new` says whether a typed domain has a workspace, so repeated with a
+  # different address each time it is a probe, and a Marketplace subscription
+  # costs nothing to take out. Generous, because a buyer who mistypes and tries
+  # again is the ordinary case.
+  rate_limit to: 30, within: 1.hour, only: :new, by: -> { request.remote_ip }, if: -> { !signed_in? },
+             with: -> { redirect_to login_path(error: "too_many_attempts") }
+
   def new
     render inertia: "Workspaces/NewPage", props: props
   end
 
   def create
-    form = WorkspaceOnboardingForm.new(user: current_user, **workspace_params.to_h.symbolize_keys)
-    return refuse(**form.errors.to_hash(true)) unless form.valid?
+    form = WorkspaceOnboardingForm.new(
+      user: current_user, marketplace_license: marketplace_license, **workspace_params.to_h.symbolize_keys
+    )
+    return refuse_signup(form) unless form.valid?
 
     return refuse(base: EMAIL_SIGNUP_UNAVAILABLE) unless signed_in? || emailed_proof_accepted?
 
@@ -44,10 +53,10 @@ class Web::WorkspacesController < Web::ApplicationController
   def confirm
     return refuse(base: EMAIL_SIGNUP_UNAVAILABLE) unless emailed_proof_accepted?
 
-    answers = WorkspaceSignupTicket.decode(params[:token])
+    answers = ticket_answers
     return refuse(base: "That link has expired. Fill the form in again and we will send a new one.") if answers.nil?
 
-    form = WorkspaceOnboardingForm.new(**answers)
+    form = WorkspaceOnboardingForm.new(marketplace_license: marketplace_license, **answers.except(:marketplace_license_id))
     existing = User.find_by(email: form.email)
     return refuse(base: "That account cannot create a workspace.") if existing&.deleted?
     return refuse(base: "You already belong to a workspace.") if existing&.company_memberships&.exists?
@@ -59,6 +68,7 @@ class Web::WorkspacesController < Web::ApplicationController
     # it is what makes the session one the new company's policy accepts. Without
     # it the person lands on step-up holding no credential to step up with.
     sign_in(owner, provider: IdentityProvider.deployment!("magic_link"))
+    forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
   end
 
@@ -73,7 +83,13 @@ class Web::WorkspacesController < Web::ApplicationController
   def create_now(form)
     return refuse(**form.errors.to_hash(true)) unless form.save(current_user)
 
+    forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
+  end
+
+  # sign_in resets the session, so this runs after it rather than before.
+  def forget_marketplace_license
+    session.delete(:marketplace_license_id)
   end
 
   def send_confirmation(form)
@@ -84,11 +100,41 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def ticket_for(form)
-    WorkspaceSignupTicket.issue(name: form.name, email: form.email)
+    WorkspaceSignupTicket.issue(name: form.name, email: form.email, marketplace_license_id: marketplace_license&.id)
+  end
+
+  # The emailed link first, the session second: the ticket says which
+  # subscription this arrival is about, the session holds whatever was left
+  # there last, and they differ when a confirmation link for one subscription
+  # is opened in a browser still holding another.
+  def marketplace_license
+    return @marketplace_license if defined?(@marketplace_license)
+
+    id = ticket_answers&.dig(:marketplace_license_id) || session[:marketplace_license_id]
+    @marketplace_license = id && MarketplaceLicense.find_by(id: id)
+  end
+
+  def ticket_answers
+    return nil if params[:token].blank?
+
+    @ticket_answers = WorkspaceSignupTicket.decode(params[:token]) unless defined?(@ticket_answers)
+    @ticket_answers
   end
 
   def refuse(**errors)
     redirect_to new_workspace_path, inertia: { errors: errors }
+  end
+
+  # The address goes back into the URL rather than only into the form, so the
+  # next render can work out whether the domain is already taken. Without it a
+  # buyer who is not signed in gets "already has a workspace — ask someone there
+  # to invite you" on a field, which is advice for a stranger and wrong for
+  # somebody who has just paid.
+  #
+  # Separate from `refuse` rather than a keyword on it: `email` is itself one of
+  # the error keys this form produces, and a keyword would swallow it.
+  def refuse_signup(form)
+    redirect_to new_workspace_path(email: form.email), inertia: { errors: form.errors.to_hash(true) }
   end
 
   def props
@@ -104,13 +150,41 @@ class Web::WorkspacesController < Web::ApplicationController
       # A stranger types the address they will own the workspace with; someone
       # signed in has already proved theirs and is not asked again.
       needs_email: !signed_in?,
-      # Where the signed-in person's domain already has a workspace, which is the
-      # whole of that screen: the form could only be refused.
-      claimed_domain: (Auth::ClaimedDomain.for(current_user)&.to_h if signed_in?),
+      # Where the domain already has a workspace, which is the whole of that
+      # screen: the form could only be refused, so what the person needs is the
+      # way into the workspace that exists.
+      claimed_domain: claimed_domain&.to_h,
+      # A buyer reaching that screen has paid for a subscription that now has no
+      # workspace to attach to, and the screen has to say so.
+      marketplace_subscription: marketplace_license.present?,
+      # How far their request to have it applied has got, if they made one.
+      subscription_request: subscription_request,
       # What they get before anyone asks them for a card, which is the part of
-      # the bargain the form was silent about.
-      trial_days: Billing::Trial.days
+      # the bargain the form was silent about. Nil for a Marketplace buyer: AWS
+      # bills them from the first minute, so there is no trial to promise.
+      trial_days: (Billing::Trial.days if marketplace_license.nil?)
     }
+  end
+
+  # `check-email` is the only one that comes from the URL, because it is the one
+  # moment nothing has been written yet: a link has gone out and until it is
+  # opened there is no request to read. The rest is read off the licence, so a
+  # reload an hour later says the same thing as the redirect did.
+  def subscription_request
+    return "check-email" if params[:asked] == "check-email"
+    return nil if marketplace_license.nil?
+
+    marketplace_license.proposal_state
+  end
+
+  # Read off a proved address for somebody signed in, and off the typed one for
+  # a Marketplace buyer, who is signed out on purpose and has nothing else. Not
+  # for anyone else: see Auth::ClaimedDomain.for_email.
+  def claimed_domain
+    return Auth::ClaimedDomain.for(current_user) if signed_in?
+    return nil if marketplace_license.nil?
+
+    Auth::ClaimedDomain.for_email(safe_email_param)
   end
 
   # Echoed back into the form only when it actually looks like an address, so the
@@ -124,8 +198,15 @@ class Web::WorkspacesController < Web::ApplicationController
     params.fetch(:workspace, {}).permit(:name, :email, :email_domain)
   end
 
+  # A Marketplace buyer is not a stranger signing up: a LIVE subscription is
+  # the authorisation REGISTRATION_ENABLED withholds from everyone else. An
+  # ended one authorises nothing, and a workspace made on it would be blocked
+  # from birth.
   def require_self_serve_signup
-    redirect_to login_path(error: "no_workspace") unless Deployment.self_serve_signup?
+    return if Deployment.self_serve_signup?
+    return if marketplace_license&.live?
+
+    redirect_to login_path(error: "no_workspace")
   end
 
   # Someone who already belongs somewhere has no business here, and a super admin

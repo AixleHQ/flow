@@ -223,6 +223,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.string "final_invoice_url"
     t.datetime "settled_at"
     t.text "settlement_error"
+    t.string "stripe_subscription_id"
     t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
     t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
   end
@@ -353,6 +354,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.string "state", default: "pending", null: false
     t.integer "unbounded_companies", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.jsonb "receipts", default: {}, null: false
     t.index ["provider", "period_start"], name: "index_capacity_meter_reports_on_provider_and_period_start", unique: true
     t.index ["state", "period_start"], name: "index_capacity_meter_reports_on_state_and_period_start"
   end
@@ -583,7 +585,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.datetime "billing_event_at"
     t.boolean "managed_by_aixle", default: false, null: false
     t.datetime "trial_started_at"
+    t.string "billing_provider", default: "none", null: false
+    t.datetime "billing_provider_since"
     t.integer "trial_hours"
+    t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
@@ -601,6 +606,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.index ["company_id", "identity_provider_id"], name: "index_company_auth_policies_unique_pair", unique: true
     t.index ["company_id"], name: "index_company_auth_policies_on_company_id"
     t.index ["identity_provider_id"], name: "index_company_auth_policies_on_identity_provider_id"
+  end
+
+  create_table "company_billing_state_changes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.string "billing_state", null: false
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "occurred_at"], name: "index_billing_state_changes_on_company_and_time"
+    t.index ["company_id"], name: "index_company_billing_state_changes_on_company_id"
+    t.index ["occurred_at"], name: "index_company_billing_state_changes_on_occurred_at"
   end
 
   create_table "company_capacity_changes", force: :cascade do |t|
@@ -921,6 +937,54 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.index ["expires_at"], name: "index_magic_link_tokens_on_expires_at"
     t.index ["token_digest"], name: "index_magic_link_tokens_on_token_digest", unique: true
     t.index ["user_id"], name: "index_magic_link_tokens_on_user_id"
+  end
+
+  create_table "marketplace_licenses", force: :cascade do |t|
+    t.string "license_arn", null: false
+    t.string "customer_aws_account_id", null: false
+    t.string "product_code", null: false
+    t.string "agreement_id"
+    t.string "customer_identifier"
+    t.bigint "company_id"
+    t.string "subscription_state", default: "pending", null: false
+    t.string "offer_identifier"
+    t.string "registered_offer_type"
+    t.datetime "subscribed_at"
+    t.datetime "ended_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "proposed_company_id"
+    t.string "proposed_by_email"
+    t.datetime "proposed_at"
+    t.datetime "proposal_decided_at"
+    t.string "proposal_state"
+    t.string "previous_agreement_id"
+    t.index ["agreement_id"], name: "index_marketplace_licenses_on_agreement_id"
+    t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "((company_id IS NOT NULL) AND ((subscription_state)::text <> 'ended'::text))"
+    t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"
+    t.index ["license_arn"], name: "index_marketplace_licenses_on_license_arn", unique: true
+    t.index ["proposed_company_id"], name: "index_marketplace_licenses_on_proposed_company_id"
+    t.index ["subscription_state"], name: "index_marketplace_licenses_on_subscription_state"
+  end
+
+  create_table "marketplace_subscription_events", force: :cascade do |t|
+    t.string "event_id", null: false
+    t.string "detail_type", null: false
+    t.string "agreement_id"
+    t.string "license_arn"
+    t.bigint "marketplace_license_id"
+    t.datetime "occurred_at", null: false
+    t.datetime "applied_at"
+    t.jsonb "detail", default: {}, null: false
+    t.string "failure"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "metered"
+    t.jsonb "metered_receipts", default: {}, null: false
+    t.index ["agreement_id"], name: "index_marketplace_subscription_events_on_agreement_id"
+    t.index ["applied_at", "occurred_at"], name: "idx_on_applied_at_occurred_at_9b9f6d64f1"
+    t.index ["event_id"], name: "index_marketplace_subscription_events_on_event_id", unique: true
+    t.index ["marketplace_license_id"], name: "idx_on_marketplace_license_id_bbeb7c9440"
   end
 
   create_table "mcp_servers", force: :cascade do |t|
@@ -2162,6 +2226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
+  add_foreign_key "company_billing_state_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
   add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
@@ -2200,6 +2265,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
+  add_foreign_key "marketplace_licenses", "companies"
+  add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify
+  add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false

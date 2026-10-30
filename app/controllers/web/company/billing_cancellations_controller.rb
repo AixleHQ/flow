@@ -66,7 +66,8 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
     billed = final_usage.billed
     response = client.cancel_subscription(subscription_id: current_company.stripe_subscription_id,
                                           reason: reason, comment: comment)
-    ended_at = Billing::SubscriptionState.from(response).ended_at || Time.current
+    subscription = Billing::SubscriptionState.from(response)
+    ended_at = subscription.ended_at || Time.current
 
     final_usage.record!
     current_company.update!(billing_state: "blocked", billing_block_reason: "canceled",
@@ -74,14 +75,8 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
     current_company.billing_cancellations.create!(
       user: current_user, reason: reason, comment: comment, cancels_at: ended_at,
       settlement_state: "settling", final_usage: billed.transform_keys(&:iso8601),
-      final_invoice_id: final_invoice_id(response)
+      final_invoice_id: subscription.latest_invoice_id
     )
-  end
-
-  # The draft `invoice_now` made, unless the response came back expanded.
-  def final_invoice_id(subscription)
-    invoice = subscription.try(:latest_invoice)
-    invoice.respond_to?(:id) ? invoice.id : invoice.presence
   end
 
   # Every admin, the one who cancelled included: there is no billing contact,

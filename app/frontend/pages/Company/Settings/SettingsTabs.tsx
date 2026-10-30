@@ -49,7 +49,7 @@ export function SettingsTabs({
         <Tabs.List mb="lg">
           <Tabs.Tab value="general">General</Tabs.Tab>
           <Tabs.Tab value="access">Access</Tabs.Tab>
-          {permissions?.canManageBilling && <Tabs.Tab value="billing">Billing</Tabs.Tab>}
+          {permissions?.canViewBilling && <Tabs.Tab value="billing">Billing</Tabs.Tab>}
           {externalRunners && <Tabs.Tab value="runners">Runners</Tabs.Tab>}
         </Tabs.List>
       </Tabs>

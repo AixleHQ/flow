@@ -14,7 +14,9 @@ class BillingCancellation < ApplicationRecord
   COMMENT_MAX = 1000
 
   # nil on a cancellation made before the final invoice was settled here.
-  SETTLEMENT_STATES = %w[settling settled failed].freeze
+  # `cancelling` is one recorded before Stripe has been told: the subscription
+  # named in `stripe_subscription_id` is still to be stopped from the job.
+  SETTLEMENT_STATES = %w[cancelling settling settled failed].freeze
 
   belongs_to :company
   belongs_to :user, optional: true
@@ -26,6 +28,7 @@ class BillingCancellation < ApplicationRecord
 
   scope :pending, -> { where(resumed_at: nil) }
 
+  def cancelling? = settlement_state == "cancelling"
   def settling? = settlement_state == "settling"
 
   # Hour => worker-seconds, as the meter keys an hour: the capacity this

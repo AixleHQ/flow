@@ -17,16 +17,19 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
   end
 
-  def trial_prop
+  def trial_prop = shared_prop(:trial)
+  def marketplace_prop = shared_prop(:marketplace)
+
+  def shared_prop(name)
     get company_projects_path
     captured = {}
     # The block's own return value is what the helper asserts on, and a workspace
     # with no allowance shares nothing — so capture and answer separately.
     assert_inertia_props do |shared|
-      captured[:trial] = shared[:trial]
+      captured[name] = shared[name]
       true
     end
-    captured[:trial]
+    captured[name]
   end
 
   test "a workspace somebody is paying for gets nothing" do
@@ -84,5 +87,60 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     with_mode(Deployment::SELF_HOSTED)
 
     assert_nil trial_prop
+  end
+  # A workspace AWS bills was never offered an allowance, and Checkout refuses
+  # that payer -- so telling it that it had spent its free worker-hours offered
+  # a button that could only lead to a refusal.
+  test "a workspace AWS bills is told nothing about an allowance" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+
+    assert_nil trial_prop
+  end
+
+  test "nor when its subscription has ended" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "canceled")
+
+    assert_nil trial_prop
+  end
+
+  # The Stripe side is untouched: the same states still say what undoes them.
+  test "a workspace we bill still is" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE,
+                     billing_state: "blocked", billing_block_reason: "allowance")
+
+    assert_equal "allowance", trial_prop[:status]
+  end
+  # The other half of withholding the allowance banner from this payer: it now
+  # has a banner of its own, or a stopped workspace would say nothing at all.
+  test "a workspace AWS bills is told why it is stopped" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "canceled")
+
+    assert_equal "canceled", marketplace_prop[:status]
+  end
+
+  test "and told that a subscription not yet confirmed needs nothing doing" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+
+    assert_equal "awaiting_subscription", marketplace_prop[:status]
+  end
+
+  # Nothing while it runs: the subscription is managed in the buyer's own AWS
+  # account, and no number of ours belongs on every screen.
+  test "a running Marketplace workspace is told nothing" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "active", billing_block_reason: nil)
+
+    assert_nil marketplace_prop
+  end
+
+  test "and a workspace we bill is never told about a Marketplace subscription" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE,
+                     billing_state: "blocked", billing_block_reason: "allowance")
+
+    assert_nil marketplace_prop
   end
 end

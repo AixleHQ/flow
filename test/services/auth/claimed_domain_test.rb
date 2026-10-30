@@ -67,6 +67,26 @@ class Auth::ClaimedDomainTest < ActiveSupport::TestCase
     assert_empty claim[:join_methods]
   end
 
+  # The address was typed, not proved, so it may be anybody's. Auto-join does
+  # not run for it whatever the method, so naming the workspace buys the person
+  # nothing they can act on -- and the screen is reachable with any address, one
+  # at a time.
+  test "a typed address is told the domain is taken and nothing else" do
+    claim = Auth::ClaimedDomain.for_email("someone@claimed-acme.test").to_h
+
+    assert_equal "claimed-acme.test", claim[:domain]
+    assert_nil claim[:workspace_name], "a stranger is not read the workspace's name"
+    assert_empty claim[:join_methods], "nor its sign-ins"
+    assert_not claim[:approval_required], "nor whether joining it waits for an administrator"
+  end
+
+  test "a proved address still gets the whole answer" do
+    claim = Auth::ClaimedDomain.for(outsider).to_h
+
+    assert_equal "Claimed Acme", claim[:workspace_name]
+    assert_not_empty claim[:join_methods]
+  end
+
   test "nobody who belongs somewhere, a super admin, or an unclaimed domain" do
     member = create(:user, email: "member@claimed-acme.test")
     create(:company_membership, user: member, company: create(:company), state: "invited")

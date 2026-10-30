@@ -29,8 +29,9 @@ module Billing
     attr_reader :cancellation, :client
 
     def call
-      return unless cancellation.settling?
+      return unless cancellation.cancelling? || cancellation.settling?
 
+      stop_the_subscription if cancellation.cancelling?
       client.hold_invoice(invoice_id: invoice_id) if invoice_id
       send_usage
       uncounted = uncounted_hours
@@ -54,6 +55,22 @@ module Billing
     def invoice_id = cancellation.final_invoice_id.presence
 
     def company = cancellation.company
+
+    # A cancellation recorded before Stripe was told, which is how a handover to
+    # AWS Marketplace keeps the call to Stripe out of its transaction. Read
+    # before it is cancelled: a retry after a cancel that landed but was not
+    # recorded would otherwise be refused by Stripe for ever.
+    def stop_the_subscription
+      id = cancellation.stripe_subscription_id
+      subscription = client.retrieve_subscription(subscription_id: id)
+      unless SubscriptionState.from(subscription).ended?
+        subscription = client.cancel_subscription(subscription_id: id, reason: nil, comment: nil)
+      end
+      state = SubscriptionState.from(subscription)
+
+      cancellation.update!(settlement_state: "settling", cancels_at: state.ended_at || Time.current,
+                           final_invoice_id: state.latest_invoice_id)
+    end
 
     def send_usage
       cancellation.final_usage_by_hour.each do |hour, seconds|

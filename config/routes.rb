@@ -93,6 +93,34 @@ Rails.application.routes.draw do
   get "/share/:token", to: "web/public_assets#show", as: :public_asset
   get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
 
+  # Where AWS Marketplace sends a buyer who has just subscribed to the SaaS
+  # listing. The POST is cross-site and carries no session cookie — SameSite=Lax
+  # withholds it — so it only exchanges the token and hands the licence to the
+  # GET below in a signed ticket. This is the product's fulfilment URL, and it
+  # must stay reachable without authentication of any kind.
+  post "marketplace/aws/register", to: "web/marketplace_registrations#create",
+                                   as: :marketplace_registration_landing
+  # The same path on GET. AWS fetches the fulfilment URL when it is set and
+  # refuses one that does not answer 200, so a POST-only route cannot be given
+  # to them at all -- and anyone who keeps the link arrives this way too.
+  get "marketplace/aws/register", to: "web/marketplace_registrations#landing"
+  get "marketplace/aws/continue", to: "web/marketplace_registrations#show",
+                                  as: :marketplace_registration
+  # A buyer whose email domain already has a workspace cannot create a second
+  # one, so instead they ask the administrators of that one to apply the
+  # subscription. The first POST only sends a link to the address they typed;
+  # the GET is that link, which shows a button and nothing more -- as the magic
+  # link below, so that a mail scanner opening it proves nothing -- and the
+  # second POST is the button, which proves the address and raises the request.
+  # All unauthenticated, like the fulfilment URL above: the buyer was signed out
+  # on arrival and has nothing to sign in as yet.
+  post "marketplace/aws/proposal", to: "web/marketplace_proposals#create",
+                                   as: :marketplace_proposal
+  get "marketplace/aws/proposal", to: "web/marketplace_proposals#show",
+                                  as: :marketplace_proposal_link
+  post "marketplace/aws/proposal/confirm", to: "web/marketplace_proposals#confirm",
+                                           as: :confirm_marketplace_proposal
+
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.
   # Step one of signing in: an address, and nothing else. What comes back is
@@ -571,6 +599,12 @@ Rails.application.routes.draw do
       resource :billing_cancellation, only: %i[create destroy], controller: "billing_cancellations"
       # The invoice whose failed payment stopped the workspace, paid on Stripe's page.
       resource :billing_invoice_payment, only: :create, controller: "billing_invoice_payments"
+      # A subscription somebody bought in AWS Marketplace asking to be applied
+      # to this workspace. `create` accepts it and `destroy` declines: accepting
+      # changes who bills the workspace, so it is an administrator's decision
+      # here and never an automatic consequence of the purchase.
+      resource :marketplace_license_proposal, only: %i[create destroy],
+               controller: "marketplace_license_proposals"
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]

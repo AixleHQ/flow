@@ -1,8 +1,15 @@
 # frozen_string_literal: true
 
 module Billing
-  # Measures the hours the installation has closed and hands each one to the
-  # provider its deployment mode bills through.
+  # Measures the hours the installation has closed and hands each one to every
+  # provider that bills someone on it.
+  #
+  # More than one can, and that is the whole reason this takes a list: the hosted
+  # product invoices some companies through Stripe and AWS invoices others, on
+  # the same installation and in the same hour. The hour is measured once —
+  # capacity offered is not a per-provider fact — and each provider claims its own
+  # ledger row for it, which is what `capacity_meter_reports` was already keyed
+  # for.
   #
   # ONE ATTEMPT PER HOUR, NOT ONE RETRY LOOP. AWS Marketplace enforces its
   # once-per-hour rule per EKS pod, so a retry that lands on a different replica
@@ -12,25 +19,26 @@ module Billing
   # bounds what AWS will still accept.
   class CapacityMeter
     ADAPTERS = {
-      Deployment::SELF_HOSTED => Meter::Null,
-      Deployment::SAAS => Meter::Stripe,
-      Deployment::AWS_MARKETPLACE => Meter::AwsMarketplace
+      Deployment::SELF_HOSTED => [ Meter::Null ],
+      Deployment::SAAS => [ Meter::Stripe, Meter::AwsMarketplaceSaas ],
+      Deployment::AWS_MARKETPLACE => [ Meter::AwsMarketplace ]
     }.freeze
 
-    def self.adapter_for(mode = Deployment.mode)
-      ADAPTERS.fetch(mode, Meter::Null).new
+    def self.adapters_for(mode = Deployment.mode)
+      ADAPTERS.fetch(mode, [ Meter::Null ]).map(&:new).select(&:enabled?)
     end
 
-    def initialize(adapter: self.class.adapter_for, now: Time.current)
-      @adapter = adapter
+    def initialize(adapters: self.class.adapters_for, now: Time.current)
+      @adapters = adapters
       @now = now.utc
     end
 
-    attr_reader :adapter, :now
+    attr_reader :adapters, :now
 
     # Records the hour that has just closed, then sends everything still unsent
     # inside the replay window — including the hour just recorded.
     def call
+      CompanyBillingStateChange.reconcile!(now: now)
       measure!(now.beginning_of_hour - 1.hour)
       # After the hour is recorded and before anything is sent: the hour that
       # spends the last of a company's free allowance is the hour that stops it,
@@ -39,8 +47,8 @@ module Billing
       deliver_pending
     end
 
-    # Claims the row for an hour, or returns the existing one. Measuring is
-    # separate from sending so a provider outage never loses the measurement.
+    # Measures once and claims one row per provider. Measuring is separate from
+    # sending so a provider outage never loses the measurement.
     def measure!(period_start)
       window = CapacityWindow.for_hour(period_start)
       # Ours, and written for everyone — including the companies no provider is
@@ -48,19 +56,7 @@ module Billing
       # when they want to know what a single company had.
       record_usage(window)
 
-      report = CapacityMeterReport.find_or_initialize_by(provider: adapter.provider, period_start: window.period_start)
-      return report if report.persisted?
-
-      report.update!(
-        quantity_seconds: window.quantity_seconds,
-        peak_concurrent: window.peak_concurrent,
-        breakdown: window.per_company,
-        unbounded_companies: window.unbounded_companies,
-        state: "pending"
-      )
-      report
-    rescue ActiveRecord::RecordNotUnique
-      CapacityMeterReport.find_by!(provider: adapter.provider, period_start: window.period_start)
+      adapters.map { |adapter| claim(adapter, window) }
     end
 
     def record_usage(window)
@@ -71,7 +67,43 @@ module Billing
       end
     end
 
+    # Summed across providers, so a caller still reads one number for "hours sent
+    # this run", with the per-provider detail beside it.
     def deliver_pending
+      per_provider = adapters.map { |adapter| deliver_for(adapter) }
+
+      {
+        sent: per_provider.sum { |result| result[:sent] },
+        failed: per_provider.sum { |result| result[:failed] },
+        providers: per_provider
+      }
+    end
+
+    private
+
+    # One row per provider per hour, carrying that provider's share and no
+    # more. Asking here also freezes the attribution: a payer that moves
+    # between measurement and delivery would otherwise have the hour claimed
+    # by whoever holds the company at delivery. `peak_concurrent` stays
+    # installation-wide: the cluster does not have one per payer.
+    def claim(adapter, window)
+      report = CapacityMeterReport.find_or_initialize_by(provider: adapter.provider, period_start: window.period_start)
+      return report if report.persisted?
+
+      breakdown = window.per_company.slice(*adapter.companies_billed(window.per_company.keys))
+      report.update!(
+        quantity_seconds: breakdown.values.sum,
+        peak_concurrent: window.peak_concurrent,
+        breakdown: breakdown,
+        unbounded_companies: window.unbounded_companies,
+        state: "pending"
+      )
+      report
+    rescue ActiveRecord::RecordNotUnique
+      CapacityMeterReport.find_by!(provider: adapter.provider, period_start: window.period_start)
+    end
+
+    def deliver_for(adapter)
       sent = []
       failed = []
 
@@ -85,15 +117,13 @@ module Billing
         end
       end
 
-      abandon_expired
+      abandon_expired(adapter)
       { provider: adapter.provider, sent: sent.size, failed: failed.size }
     end
 
-    private
-
     # Past the replay window AWS will not accept the record whatever we do, so
     # leaving it "failed" forever would make the ledger a list nobody can act on.
-    def abandon_expired
+    def abandon_expired(adapter)
       CapacityMeterReport
         .unsent
         .where(provider: adapter.provider)

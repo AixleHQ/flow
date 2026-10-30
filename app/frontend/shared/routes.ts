@@ -222,6 +222,36 @@ export function publicAssetRawPath(token: ScalarType, options?: object): string 
   return "/" + "share" + "/" + token + "/" + "raw" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
 }
 
+/** /marketplace/aws/register(.:format) */
+export function marketplaceRegistrationLandingPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "register" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/register(.:format) */
+export function marketplaceAwsRegisterPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "register" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/continue(.:format) */
+export function marketplaceRegistrationPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "continue" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/proposal(.:format) */
+export function marketplaceProposalPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "proposal" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/proposal(.:format) */
+export function marketplaceProposalLinkPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "proposal" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /marketplace/aws/proposal/confirm(.:format) */
+export function confirmMarketplaceProposalPath(options?: object): string {
+  return "/" + "marketplace" + "/" + "aws" + "/" + "proposal" + "/" + "confirm" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /login/identify(.:format) */
 export function loginIdentifyPath(options?: object): string {
   return "/" + "login" + "/" + "identify" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1675,6 +1705,11 @@ export function companyBillingCancellationPath(options?: object): string {
 /** /company/billing_invoice_payment(.:format) */
 export function companyBillingInvoicePaymentPath(options?: object): string {
   return "/" + "company" + "/" + "billing_invoice_payment" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/marketplace_license_proposal(.:format) */
+export function companyMarketplaceLicenseProposalPath(options?: object): string {
+  return "/" + "company" + "/" + "marketplace_license_proposal" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/identity_providers(.:format) */

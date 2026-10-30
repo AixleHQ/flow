@@ -1,0 +1,163 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# The hour AWS gives after a licence is deprovisioned, and what gets sent into
+# it. The schedule cannot do this: it reports a closed hour at five past the
+# next one, which for most deprovisioning times is already too late.
+class Billing::MarketplaceFinalMeterTest < ActiveSupport::TestCase
+  setup do
+    @client = FakeMarketplaceSellerClient.new
+    @meter = Billing::MarketplaceFinalMeter.new(client: @client)
+    @company = create(:company, billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    @license = create(:marketplace_license, :active, company: @company)
+  end
+
+  def change(max_sessions, at)
+    CompanyCapacityChange.record!(company_id: @company.id, max_sessions: max_sessions, occurred_at: at)
+  end
+
+  # An hour the schedule has already delivered, carrying AWS's receipt per
+  # licence exactly as the adapter writes it.
+  def reported(hour, receipts:)
+    CapacityMeterReport.create!(
+      provider: Billing::Meter::AwsMarketplaceSaas.provider, period_start: hour,
+      quantity_seconds: 3600, state: "reported", receipts: receipts
+    )
+  end
+
+  # The whole point: the minutes since the hour began have not closed and so
+  # belong to no scheduled run, yet they are inside the window AWS just opened.
+  test "it sends the hour that has not closed yet" do
+    change(2, Time.utc(2026, 10, 23, 8))
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      @meter.call(@license)
+    end
+
+    partial = @client.recorded.find { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
+    assert_equal 40, partial.quantity, "two queues for twenty minutes is forty worker-minutes"
+    assert_equal Billing::Meter::AwsMarketplaceSaas::DIMENSION, partial.dimension
+    assert_equal @license.license_arn, partial.license_arn
+  end
+
+  # A licence deprovisioned at 10:02 is ahead of the 10:05 schedule, so the
+  # closed hour has not been sent either. Sending it twice is answered
+  # DuplicateRecord; sending it never cannot be recovered.
+  test "it also sends the hour before, which the schedule may not have reached" do
+    change(1, Time.utc(2026, 10, 23, 8))
+
+    travel_to Time.utc(2026, 10, 23, 10, 2) do
+      @meter.call(@license)
+    end
+
+    assert_equal [ Time.utc(2026, 10, 23, 9), Time.utc(2026, 10, 23, 10) ],
+                 @client.recorded.map(&:occurred_at).sort
+  end
+
+  test "an hour with nothing in it is not sent" do
+    travel_to Time.utc(2026, 10, 23, 10, 20) { @meter.call(@license) }
+
+    assert_empty @client.recorded
+  end
+
+  # Under a minute rounds to nothing rather than to a billed minute.
+  test "a part of a minute is not billed as one" do
+    change(1, Time.utc(2026, 10, 23, 9, 59, 30))
+
+    travel_to Time.utc(2026, 10, 23, 10, 0, 20) do
+      @meter.call(@license)
+    end
+
+    assert_empty @client.recorded.select { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
+  end
+
+  # Minutes as well as counts, and AWS's own receipt beside them: this path
+  # exists for the part-hour the schedule cannot reach, nothing else records
+  # it, and "sent" on our own word is weaker than an id the service issued.
+  test "it says what it sent, and what AWS called it" do
+    change(2, Time.utc(2026, 10, 23, 8))
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      sent = @meter.call(@license)
+
+      assert_equal "sent=2:already=0:minutes=160:receipt=mr-1,mr-2", sent.line
+      # The hour under way goes first, the closed one second: 20 minutes at two
+      # workers, then the whole of the hour before it.
+      assert_equal({ "mr-1" => 40, "mr-2" => 120 }, sent.receipts,
+                   "each receipt carries the minutes it bought, so a figure can be built from them")
+    end
+  end
+
+  # AWS answered the repeat of an already-billed hour with `Success` and the
+  # same `MeteringRecordId` rather than `DuplicateRecord`, so a line counting on
+  # its answer read sixty already-billed minutes as newly sent. The receipt we
+  # hold is the only thing that tells a replay from a second charge.
+  test "an hour the schedule already holds a receipt for is not sent again" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    reported(Time.utc(2026, 10, 23, 9), receipts: { @license.license_arn => "mr-earlier" })
+
+    travel_to Time.utc(2026, 10, 23, 10, 2) do
+      assert_equal "sent=1:already=0:minutes=2:receipt=mr-1", @meter.call(@license).line
+    end
+
+    assert_equal [ Time.utc(2026, 10, 23, 10) ], @client.recorded.map(&:occurred_at)
+  end
+
+  # Another licence's receipt on the same hour says nothing about this one, and
+  # an hour the schedule tried and failed on is exactly what this path is for.
+  test "an hour reported for somebody else, or not accepted, is still sent" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    reported(Time.utc(2026, 10, 23, 9), receipts: { "arn:aws:license-manager::1:license/l-other" => "mr-other" })
+
+    travel_to(Time.utc(2026, 10, 23, 10, 2)) { @meter.call(@license) }
+
+    assert_includes @client.recorded.map(&:occurred_at), Time.utc(2026, 10, 23, 9)
+  end
+
+  test "a licence AWS no longer accepts usage for is not metered" do
+    @license.finish!
+    change(5, Time.utc(2026, 10, 23, 8))
+
+    travel_to(Time.utc(2026, 10, 23, 10, 20)) { @meter.call(@license) }
+
+    assert_empty @client.recorded
+  end
+
+  test "an installation that sells nothing meters nothing" do
+    @client.configured = false
+
+    assert_equal Billing::MarketplaceFinalMeter::NOTHING, @meter.call(@license).line
+  end
+
+  # A call that never reached AWS has sent nothing, and the minutes it was
+  # carrying are the ones the schedule can no longer reach. Swallowing it here
+  # measured them once and lost them: the licence closed, the workspace stopped,
+  # and the next attempt found a stopped workspace and measured zero. So it
+  # propagates, and Billing::MarketplaceEvents ends the licence either way and
+  # leaves the event to be tried again.
+  test "a call that did not reach AWS raises rather than reporting a refusal" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    @client.failure = Billing::MarketplaceSellerClient::Error.new("AWS said no")
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      error = assert_raises(Billing::MarketplaceSellerClient::Error) { @meter.call(@license) }
+
+      assert_equal "AWS said no", error.message
+    end
+  end
+
+  # The other half of that: a workspace stopped by the cancellation still has
+  # the minutes it ran before it, and those are what the window was opened for.
+  test "a stopped workspace is still measured for the time it was running" do
+    change(1, Time.utc(2026, 10, 23, 8))
+    @license.company.update!(billing_state: "blocked", billing_block_reason: "canceled")
+
+    travel_to Time.utc(2026, 10, 23, 10, 20) do
+      @meter.call(@license)
+    end
+
+    partial = @client.recorded.find { |usage| usage.occurred_at == Time.utc(2026, 10, 23, 10) }
+    assert_equal 20, partial&.quantity, "one queue for the twenty minutes before it was stopped"
+  end
+end
