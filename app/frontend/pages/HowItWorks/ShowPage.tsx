@@ -139,8 +139,8 @@ const ShowPage = () => {
         <Box className={classes.cta}>
           <h2 className={classes.sectionTitle}>Start with one workflow</h2>
           <Text c="var(--app-text-secondary)" mt="sm" maw="52ch" mx="auto">
-            Claim your domain and start free on one worker. Once you add a card, keep as many workers as the work
-            needs, and change the number whenever it changes.
+            Claim your domain and start free on one worker. Once you add a card, keep as many workers as the work needs,
+            and change the number whenever it changes.
           </Text>
           <Group justify="center" mt="xl" gap="sm">
             <Button component="a" href={newWorkspacePath()} size="md" rightSection={<IconArrowRight size={16} />}>
