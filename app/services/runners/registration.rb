@@ -7,8 +7,6 @@ module Runners
   # access/refresh pair, and `aixle-runner unregister` marks the environment
   # `gone` and revokes its credentials.
   module Registration
-    NAME_MAX = 255
-
     Result = Data.define(:environment, :pair)
 
     module_function

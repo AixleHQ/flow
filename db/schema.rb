@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1197,6 +1197,47 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
 
   add_check_constraint "repositories", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "repositories_tenant_columns", validate: false
 
+  create_table "runner_credentials", force: :cascade do |t|
+    t.bigint "runner_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "runner_environment_id"
+    t.string "kind", null: false
+    t.string "token_digest", null: false
+    t.uuid "family_id"
+    t.datetime "expires_at", null: false
+    t.datetime "used_at"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_runner_credentials_on_company_id"
+    t.index ["family_id"], name: "index_runner_credentials_on_family_id"
+    t.index ["runner_environment_id"], name: "index_runner_credentials_on_runner_environment_id"
+    t.index ["runner_id"], name: "index_runner_credentials_on_runner_id"
+    t.index ["token_digest"], name: "index_runner_credentials_on_token_digest", unique: true
+  end
+
+  create_table "runner_environments", force: :cascade do |t|
+    t.bigint "runner_id", null: false
+    t.bigint "company_id", null: false
+    t.string "key", null: false
+    t.string "origin", null: false
+    t.string "display_name"
+    t.boolean "ephemeral", default: false, null: false
+    t.string "state", null: false
+    t.string "state_reason"
+    t.string "os"
+    t.string "arch"
+    t.jsonb "facts", default: {}, null: false
+    t.string "runner_version"
+    t.string "protocol_version"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_runner_environments_on_company_id"
+    t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
+    t.index ["runner_id", "key"], name: "index_runner_environments_on_runner_id_and_key", unique: true
+    t.index ["runner_id"], name: "index_runner_environments_on_runner_id"
+  end
+
   create_table "runners", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.bigint "project_id"
@@ -2298,6 +2339,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "repositories", "integrations", on_delete: :cascade
   add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "runner_credentials", "companies", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_credentials_environment_runner", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_environments", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_credentials_runner_company", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runners", on_delete: :cascade
+  add_foreign_key "runner_environments", "companies", on_delete: :cascade
+  add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
+  add_foreign_key "runner_environments", "runners", on_delete: :cascade
   add_foreign_key "runners", "companies", on_delete: :cascade
   add_foreign_key "runners", "integrations"
   add_foreign_key "runners", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runners_integration_company"
