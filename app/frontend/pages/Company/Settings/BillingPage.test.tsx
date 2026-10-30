@@ -28,7 +28,7 @@ const billing = {
     measuredUntil: '2026-10-02T11:00:00Z',
     estimate: { amountCents: 1000, currency: 'usd', unitAmountCents: 500, minutesPerUnit: 60 },
   },
-  allowance: null,
+  trial: null,
   canPay: true,
   hasSubscription: true,
   hasUnpaidInvoice: false,
@@ -124,12 +124,24 @@ describe('Company billing page', () => {
     expect(post.mock.calls[0][0]).toBe('/company/billing_invoice_payment');
   });
 
-  it('offers a card, and nothing to cancel, to a workspace on free capacity', () => {
-    render({ status: 'trialing', usage: null, allowance: { hours: 100, usedHours: 40 } });
+  it('offers a card, and nothing to cancel, to a workspace on the free trial', () => {
+    render({ status: 'trialing', usage: null, trial: { days: 30, daysLeft: 12, lastDay: '2026-11-11' } });
 
-    expect(screen.getByText(/40 of 100 worker-hours used/)).toBeInTheDocument();
+    expect(screen.getByText(/12 of 30 days left, the last day is Nov 11, 2026/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel subscription' })).not.toBeInTheDocument();
+  });
+
+  it('points at us, not at a card, where there is nowhere to pay', () => {
+    render({
+      status: 'trialing',
+      usage: null,
+      canPay: false,
+      trial: { days: 30, daysLeft: 12, lastDay: '2026-11-11' },
+    });
+
+    expect(screen.getByText(/Talk to us to keep going after it/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
   });
 
   // Running without ever having paid: an operator set it active by hand.
@@ -193,7 +205,7 @@ describe('Company billing page', () => {
 
   // Stripe confirms the card by webhook, which can land after the redirect back.
   it('says the card is being confirmed when Checkout returns before the webhook', () => {
-    render({ status: 'trialing', usage: null, allowance: { hours: 100, usedHours: 40 } }, 'done');
+    render({ status: 'trialing', usage: null, trial: { days: 30, daysLeft: 12, lastDay: '2026-11-11' } }, 'done');
 
     expect(screen.getByText('Card received')).toBeInTheDocument();
   });

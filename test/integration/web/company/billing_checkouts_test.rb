@@ -24,6 +24,31 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     assert_equal @client.checkout_url, response.headers["X-Inertia-Location"]
   end
 
+  # The banner offers the card to everyone in the workspace; the billing tab it
+  # would come back to is the administrators', so anyone else comes home.
+  test "an employee may add the card, and comes back to the workspace" do
+    employee = create(:user, :onboarding_completed, company: @company, membership_role: "employee",
+                      password: AuthHelper::TEST_PASSWORD)
+    delete logout_path
+    sign_in_as(employee)
+
+    post company_billing_checkout_path, headers: { "X-Inertia" => "true" }
+
+    assert_equal @client.checkout_url, response.headers["X-Inertia-Location"]
+    assert_equal root_url, @client.checkout_sessions.sole[:success_url]
+  end
+
+  test "a viewer may not" do
+    viewer = create(:user, :onboarding_completed, company: @company, membership_role: "viewer",
+                    password: AuthHelper::TEST_PASSWORD)
+    delete logout_path
+    sign_in_as(viewer)
+
+    post company_billing_checkout_path
+
+    assert_empty @client.checkout_sessions
+  end
+
   test "the company gets a customer, and keeps it" do
     post company_billing_checkout_path
     customer_id = @company.reload.stripe_customer_id
@@ -96,16 +121,6 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     post company_billing_checkout_path
 
     assert_equal 1, @client.checkout_sessions.size
-  end
-
-  test "a member cannot start it" do
-    member = create(:user, :onboarding_completed, company: @company, membership_role: "employee",
-                    password: AuthHelper::TEST_PASSWORD)
-    sign_in_as(member)
-
-    post company_billing_checkout_path
-
-    assert_empty @client.checkout_sessions
   end
 
   # An installation with no Stripe credentials must not offer a button that leads

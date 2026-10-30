@@ -4,8 +4,9 @@ require "test_helper"
 
 # Request-level authorization matrix for the billing tab and its controls.
 #
-# Policies: Web::Company::{Billing,BillingCancellations,BillingInvoicePayments}Policy
-#   every action => admin?
+# Policies: Web::Company::{Billing,BillingCancellations}Policy => admin?
+#   Web::Company::{BillingCheckouts,BillingInvoicePayments}Policy => !read_only?
+#   (anyone who can change anything may pay; the tab and cancelling stay the admins')
 #
 # Unscoped, like settings#update: a foreign admin acts on THEIR own company, so
 # both companies are paying and Stripe answers for both.
@@ -16,6 +17,8 @@ class Web::Company::BillingAuthorizationTest < ActionDispatch::IntegrationTest
                        owner: :denied, collaborator: :denied, viewer: :denied, stranger: :denied }.freeze
   ADMINS_ONLY_WRITE = { admin: :allowed_write, foreign_admin: :allowed_write,
                         owner: :denied, collaborator: :denied, viewer: :denied, stranger: :denied }.freeze
+  WRITERS = { admin: :allowed_write, foreign_admin: :allowed_write, owner: :allowed_write,
+              collaborator: :allowed_write, stranger: :allowed_write, viewer: :denied }.freeze
 
   setup do
     setup_company_authz_personas
@@ -43,14 +46,14 @@ class Web::Company::BillingAuthorizationTest < ActionDispatch::IntegrationTest
     assert_role_matrix(ADMINS_ONLY_WRITE, transport: :web) { delete company_billing_cancellation_path }
   end
 
-  test "paying the open invoice is for admins" do
+  test "paying the open invoice is for everyone who can change anything" do
     [ @company, @foreign_company ].each do |company|
       company.update!(billing_state: "blocked", billing_block_reason: "payment_failed",
                       billing_unpaid_invoice_url: "https://invoice.stripe.test/#{company.id}")
     end
 
     # 409 + X-Inertia-Location for the allowed: the invoice is on Stripe's domain.
-    assert_role_matrix(ADMINS_ONLY_WRITE, transport: :web, allowed_status: :conflict) do
+    assert_role_matrix(WRITERS, transport: :web, allowed_status: :conflict) do
       post company_billing_invoice_payment_path, headers: { "X-Inertia" => "true" }
     end
   end

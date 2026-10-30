@@ -7,7 +7,7 @@ import ShowPage from './ShowPage';
 
 const props = {
   queueHourlyRate: 5,
-  freeQueueHours: 100,
+  trialDays: 30,
   signedIn: false,
 };
 
@@ -24,11 +24,11 @@ describe('How it works page', () => {
     expect(within(prices()).getByText('$3,600')).toBeInTheDocument();
   });
 
-  it('says how much capacity a new workspace gets free', () => {
+  it('says how long a new workspace is free', () => {
     renderPage(<ShowPage />, { props });
 
-    expect(within(prices()).getByText('100')).toBeInTheDocument();
-    expect(within(prices()).getByText('worker-hours free')).toBeInTheDocument();
+    expect(within(prices()).getByText('30')).toBeInTheDocument();
+    expect(within(prices()).getByText('days free')).toBeInTheDocument();
   });
 
   it('follows the installation to a different list price', () => {
@@ -72,13 +72,11 @@ describe('How it works page', () => {
     expect(within(results()).getByText('Pays back in never')).toBeInTheDocument();
   });
 
-  it('carries the worker count it worked out into the signup form', () => {
+  // The trial runs one worker whatever the workload, so nothing is carried over.
+  it('sends the visitor to the signup form to start the trial', () => {
     renderPage(<ShowPage />, { props });
 
-    expect(screen.getByRole('link', { name: /Start with 1 worker/ })).toHaveAttribute(
-      'href',
-      '/workspace/new?sessions=1',
-    );
+    expect(screen.getByRole('link', { name: 'Start the free trial' })).toHaveAttribute('href', '/workspace/new');
   });
 
   it('sizes the reservation up for a workload that outgrows one worker', async () => {
@@ -88,9 +86,6 @@ describe('How it works page', () => {
     await userEvent.clear(hours);
     await userEvent.type(hours, '18000');
 
-    expect(screen.getByRole('link', { name: /Start with 9 workers/ })).toHaveAttribute(
-      'href',
-      '/workspace/new?sessions=9',
-    );
+    expect(screen.getByText('9 workers')).toBeInTheDocument();
   });
 });

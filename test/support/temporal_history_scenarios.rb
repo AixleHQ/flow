@@ -66,7 +66,9 @@ module TemporalHistoryScenarios
         "workflow_update_workflow_run_status_activity" => lambda { |input, _call|
           { "workflow_run_id" => RUN_ID, "state" => input["status"] }
         },
-        "workflow_check_skip_activity" => ->(_input, _call) { { "should_skip" => skip, "reason" => nil } },
+        "workflow_check_skip_activity" => lambda { |_input, _call|
+          { "should_skip" => skip, "reason" => ("All required outputs already exist from previous steps" if skip) }
+        },
         "workflow_create_step_run_activity" => ->(_input, call) { { "step_run_id" => 900 + call } },
         "workflow_prepare_step_activity" => lambda { |input, _call|
           { "step_run_id" => input["step_run_id"], "step_id" => 1, "workflow_run_id" => RUN_ID }
@@ -91,6 +93,8 @@ module TemporalHistoryScenarios
       [
         execution_scenario(workflow, "empty_workflow", steps: [], mode: "non_interactive"),
         execution_scenario(workflow, "skipped_by_condition", steps: [ step(1, 11) ], mode: "non_interactive", skip: true),
+        execution_scenario(workflow, "skipped_by_condition_without_step_run",
+          steps: [ step(1, nil) ], mode: "non_interactive", skip: true),
         execution_scenario(workflow, "steps_waiting_on_each_other",
           steps: [ step(1, 11, deps: [ 2 ]), step(2, 12, deps: [ 1 ]) ], mode: "non_interactive"),
         execution_scenario(workflow, "auto_steps_in_dependency_order",

@@ -2,10 +2,10 @@
 
 module Web
   module Company
-    # Paying for the workspace is an administrator's act, like setting the limit
-    # that decides what it costs.
+    # Anyone in the workspace who can change anything may add the card that
+    # keeps it running; what it costs, and cancelling, stay the administrators'.
     class BillingCheckoutsPolicy < ApplicationPolicy
-      def create? = admin?
+      def create? = !read_only?
     end
   end
 end

@@ -4,7 +4,7 @@ import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Membership } from '@/types/generated';
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { buildSharedProps, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
 import type { SharedProject } from './types';
@@ -240,6 +240,33 @@ describe('AppSidebar', () => {
     await user.click(signOut);
 
     expect(router.delete).toHaveBeenCalledWith('/logout');
+  });
+
+  it('opens the feedback dialog from the user footer menu while feedback is configured', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: {
+        currentUser: { ...buildUser(), name: 'Cassia Vega' },
+        settings: { ...buildSharedProps().settings, feedbackEnabled: true },
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Send feedback' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Send feedback' })).toBeInTheDocument();
+  });
+
+  it('offers no feedback item where nothing is configured to receive it', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: { currentUser: { ...buildUser(), name: 'Cassia Vega' } },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Send feedback' })).not.toBeInTheDocument();
   });
 
   it('toggles the collapsed state via the collapse button', async () => {
