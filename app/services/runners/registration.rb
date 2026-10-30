@@ -43,11 +43,16 @@ module Runners
       end
     end
 
-    # The environment's row is locked first, as Credentials.rotate! locks it
-    # before it issues a pair, so a rotation racing this either sees the
-    # environment `gone` or has its pair revoked here.
+    # Locks in the one order every issuer and revoker uses: the runner, then
+    # the environment, then the credentials (Credentials.rotate!). Holding the
+    # runner first keeps this from deadlocking with a runner Revoke, which
+    # revokes the same credential rows (Runner#revoke_credentials); a rotation
+    # racing this either sees the environment `gone` or has its pair revoked
+    # here.
     def unregister!(environment)
-      environment.with_lock do
+      RunnerEnvironment.transaction do
+        Credentials.lock_live_runner!(environment.runner_id)
+        environment.lock!
         environment.update!(state: :gone)
         now = Time.current
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)

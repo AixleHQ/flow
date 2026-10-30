@@ -8,8 +8,9 @@ require "test_helper"
 # issuance that holds the row has its pair revoked once the revocation gets the
 # row, and one that waits for it is refused. Each race is forced into its order
 # by holding one side's transaction open until the other is seen waiting on a
-# lock. The racing work commits on its own connections, so this test opts out of
-# the transactional wrapper and cleans up after itself.
+# lock. An unregister races a revocation the same way, since both revoke the
+# same credential rows. The racing work commits on its own connections, so this
+# test opts out of the transactional wrapper and cleans up after itself.
 class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
@@ -64,6 +65,28 @@ class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
 
     assert refusals.all?(Runners::Credentials::Refused), refusals.inspect
     assert_equal 1, RunnerEnvironment.where(runner_id: @runner.id).count
+    assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
+  end
+
+  test "a revocation that waits on an unregister finds the machine gone and its credentials revoked" do
+    environment = create(:runner_environment, runner: @runner)
+    Runners::Credentials.issue_pair!(environment)
+
+    issue_then_revoke { Runners::Registration.unregister!(RunnerEnvironment.find(environment.id)) }
+
+    assert environment.reload.gone?
+    assert @runner.reload.revoked?
+    assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
+  end
+
+  test "an unregister that waits on a revocation is refused" do
+    environment = create(:runner_environment, runner: @runner)
+    Runners::Credentials.issue_pair!(environment)
+
+    refusals = revoke_then_issue(-> { Runners::Registration.unregister!(RunnerEnvironment.find(environment.id)) })
+
+    assert_equal [ "runner_revoked" ], refusals.map(&:reason)
+    assert environment.reload.registered?
     assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
   end
 
