@@ -48,9 +48,10 @@ governance, community health — carry none.
 - **Admin**: `TRIAL_DAYS` (default 30) sets the length of a new trial and
   replaces `TRIAL_QUEUE_HOURS`, which is no longer read. A company already on a
   trial when this ships gets the default length, counted against what it has
-  already used, and runs one worker from then on; a company stopped for spending
-  the old 100 hours stays stopped until an operator gives it a trial last day or
-  it adds a card.
+  already used; it, and one stopped at the end of its trial, has its worker
+  number set to one, and chooses again once a card is added. A company stopped
+  for spending the old 100 hours stays stopped until an operator gives it a
+  trial last day or it adds a card.
 
 ### Fixed
 - **Sessions & Runs**: when a company's worker limit is full, a worker that frees
