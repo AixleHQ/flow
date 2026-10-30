@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::WorkflowsController < Web::Company::Projects::ApplicationController
+  include RunnerOptions
+
   def index
     # `steps: :sub_steps` because StepResource serializes the sub-steps of every step;
     # `visible_steps` filters in Ruby so the preload survives (see Workflow#visible_steps).
@@ -36,7 +38,8 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
-      }
+      },
+      runners: InertiaRails.defer(group: "resources") { runner_options }
     }
   end
 
@@ -96,7 +99,8 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
-      }
+      },
+      runners: InertiaRails.defer(group: "resources") { runner_options(including: workflow.owned_runner) }
     }
   end
 

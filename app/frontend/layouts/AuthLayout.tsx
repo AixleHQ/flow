@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
-import { AppSidebar, BrandLockup, FullPageLoader, type SharedProps, TrialBanner } from 'shared/ui';
+import { AppSidebar, BrandLockup, FullPageLoader, MarketplaceBanner, type SharedProps, TrialBanner } from 'shared/ui';
 
 import classes from './AuthLayout.module.css';
 
@@ -67,6 +67,7 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
           its free capacity looks, from every other screen, like sessions that
           silently never start. */}
       <TrialBanner />
+      <MarketplaceBanner />
       <Box className={classes.shell}>
         {showChrome && (
           <AppSidebar

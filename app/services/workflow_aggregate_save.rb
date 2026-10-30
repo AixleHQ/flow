@@ -26,11 +26,15 @@ class WorkflowAggregateSave
       unknown = Array(step["depends_on_step_ids"]).map(&:to_s) - keys
       raise Invalid, "#{step['name']} depends on a step that is not in the workflow" if unknown.any?
     end
+    if @payload.key?("runner_id") && (error = Runners::Selection.workflow_error(@workflow, @payload["runner_id"]))
+      raise Invalid, error
+    end
     self
   end
 
   def apply!
     @workflow.assign_attributes(@payload.slice("name", "description"))
+    @workflow.runner_id = @payload["runner_id"].presence if @payload.key?("runner_id")
     @workflow.config = (@workflow.config || {}).merge(@payload["config"]) if @payload.key?("config")
     @workflow.save!
     WorkflowStepSync.new(@workflow, @steps).sync!

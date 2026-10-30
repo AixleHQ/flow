@@ -4,15 +4,18 @@ import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSparkles } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { ConfigItemPicker } from '@/types/generated';
+import type { ConfigItemPicker, RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
+import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
@@ -51,6 +54,8 @@ export interface SessionNewFormProps {
   repositories?: NamedItem[];
   assets?: AssetPickerItem[];
   configItems?: ConfigItemOption[];
+  /** The runners the fixed project can see; only read with the externalRunners flag. */
+  runners?: RunnerSummary[];
   /** Where to redirect after session creation */
   onCreatedPath: (sessionId: string, projectId: number) => string;
   /** Fallback redirect if no session id returned */
@@ -97,6 +102,7 @@ export const SessionNewForm = ({
   repositories = [],
   assets = [],
   configItems = [],
+  runners = [],
   onCreatedPath,
   fallbackPath,
   preSelectedProjectId,
@@ -106,6 +112,7 @@ export const SessionNewForm = ({
 }: SessionNewFormProps) => {
   const { currentUser } = usePage().props as unknown as SharedProps;
   const { canExecute } = useProjectPermissions();
+  const externalRunners = useFeatureFlag('externalRunners');
   const configuredAgents = currentUser?.configuredAgents ?? [];
   const defaultRuntime = currentUser?.defaultAgentRuntime;
   const initialAgent = defaultRuntime && configuredAgents.includes(defaultRuntime) ? defaultRuntime : '';
@@ -136,9 +143,14 @@ export const SessionNewForm = ({
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
+  const [runnerId, setRunnerId] = useState<number | null>(null);
 
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
   const showProjectSelector = !fixedProjectId && projects && projects.length > 0;
+  // Runners belong to a project, so the pick needs one fixed by the page.
+  const showRunner = externalRunners && !!fixedProjectId;
+  const runner = runners.find((r) => r.id === runnerId);
+  const runnerWarning = runner ? runnerUnusableReason(runner) : null;
 
   const modelsMap = useMemo(() => {
     const m: Record<string, AgentModel[]> = {};
@@ -199,7 +211,11 @@ export const SessionNewForm = ({
   ]);
 
   const dirty =
-    projectId !== seed.projectId || agentType !== seed.agentType || mode !== 'interactive' || configCount > 0;
+    projectId !== seed.projectId ||
+    agentType !== seed.agentType ||
+    mode !== 'interactive' ||
+    configCount > 0 ||
+    runnerId !== null;
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -234,6 +250,7 @@ export const SessionNewForm = ({
             inputAssetIds: selectedAssets.length > 0 ? selectedAssets : undefined,
             configItemIds: selectedConfigItems.length > 0 ? selectedConfigItems.map(Number) : undefined,
             sessionConfig: bmadEnabled ? { bmadEnabled: true } : {},
+            ...(showRunner && runnerId !== null && { runnerId }),
           },
         }),
       });
@@ -284,6 +301,8 @@ export const SessionNewForm = ({
     selectedRepos,
     selectedAssets,
     selectedConfigItems,
+    showRunner,
+    runnerId,
     onCreatedPath,
     fallbackPath,
   ]);
@@ -354,7 +373,10 @@ export const SessionNewForm = ({
           value={mode}
           onChange={(val) => {
             setMode(val);
-            if (val === 'interactive') setInitialPrompt('');
+            if (val === 'interactive') {
+              setInitialPrompt('');
+              setRunnerId(null);
+            }
           }}
           options={[
             { value: 'interactive', title: 'Interactive', description: 'You steer each turn' },
@@ -387,6 +409,25 @@ export const SessionNewForm = ({
 
       {/* ── Configuration ───────────────────────────── */}
       <FormSection icon={<IconAdjustments size={14} />}>Configuration</FormSection>
+
+      {showRunner && (
+        <Box>
+          <RunnerSelect
+            label="Runs on"
+            hostedLabel="Hosted"
+            runners={runners}
+            value={runnerId}
+            onChange={setRunnerId}
+            interactive={mode === 'interactive'}
+          />
+          <RunnerCredentialNote runner={runner} />
+          {runnerWarning && (
+            <Text size="xs" c="var(--app-warning-fg)" mt={4}>
+              {runnerWarning} The session fails at launch.
+            </Text>
+          )}
+        </Box>
+      )}
 
       <Select
         label="Model"

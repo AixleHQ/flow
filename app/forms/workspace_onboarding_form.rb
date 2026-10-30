@@ -20,7 +20,7 @@ class WorkspaceOnboardingForm
   attribute :email, :string
   attribute :email_domain, :string
 
-  attr_reader :user, :company
+  attr_reader :user, :company, :marketplace_license
 
   validates :name, presence: true, length: { maximum: 100 }
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP, message: "is not an email address" }
@@ -28,11 +28,14 @@ class WorkspaceOnboardingForm
   validate :domain_is_free, if: -> { email_domain.present? }
   validate :domain_is_not_a_public_mailbox, if: -> { email_domain.present? }
   validate :domain_belongs_to_the_address, if: -> { email_domain.present? && email.present? }
+  validate :marketplace_license_is_free, if: -> { marketplace_license.present? }
+  validate :marketplace_license_is_live, if: -> { marketplace_license.present? }
 
   # `user:` is the person already signed in, whose address is not theirs to
   # choose. A stranger supplies one instead, and proves it by opening the link.
-  def initialize(user: nil, **attributes)
+  def initialize(user: nil, marketplace_license: nil, **attributes)
     @user = user
+    @marketplace_license = marketplace_license
     super(**attributes)
     self.email = user.email if user
     self.email = email.to_s.strip.downcase.presence
@@ -45,21 +48,27 @@ class WorkspaceOnboardingForm
     ActiveRecord::Base.transaction do
       # Said out loud rather than left to the column default, which is `active`
       # for the seeds and every other path that does not choose.
-      @company = Company.create!(
-        name: name.strip, email_domain: email_domain, state: "active", billing_state: "trialing"
-      )
+      @company = Company.create!(name: name.strip, email_domain: email_domain, state: "active", **billing_terms)
       owner.save! if owner.new_record?
       owner.company_memberships.create!(company: @company, role: "admin", state: "active", accepted_at: Time.current)
       # The trial's one worker, and a number to bill once it pays: no limit is
       # unbounded and unbilled, which is ours to grant from the admin. The
-      # company raises it from settings after adding a card.
+      # company raises it from settings after adding a card -- or at once, for
+      # a Marketplace workspace, which AWS bills from the first minute.
       SessionConcurrencyLimit.set!(scope: @company, max_sessions: Billing::Trial::WORKERS)
+      marketplace_license&.update!(company: @company)
     end
     true
   rescue ActiveRecord::RecordInvalid => e
     # Company's own validations — a reserved domain, a name already taken — and a
     # domain that was claimed between the check above and this write.
     e.record.errors.each { |error| errors.add(mapped_attribute(error.attribute), error.message) }
+    false
+  rescue ActiveRecord::RecordNotUnique
+    # The same races, lost at the index rather than at the validation: two
+    # confirmations of one subscription arriving together -- a buyer
+    # double-clicking the link -- answered the second with a 500.
+    errors.add(:email_domain, "That domain already has a workspace.")
     false
   end
 
@@ -75,6 +84,43 @@ class WorkspaceOnboardingForm
   end
 
   private
+
+  # AWS bills a Marketplace workspace, so it has no allowance to spend; and it
+  # waits rather than runs until AWS confirms the agreement, because metering
+  # sent before that confirmation is discarded.
+  # Blocked only while AWS has not confirmed the agreement. It usually has by
+  # now -- registration asks DescribeAgreement rather than waiting for the
+  # event -- and a workspace created blocked with nothing to unblock it is a
+  # customer who pays and cannot start.
+  def billing_terms
+    return { billing_state: "trialing" } if marketplace_license.nil?
+
+    terms = { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE }
+    return terms.merge(billing_state: "active") if marketplace_license.active?
+
+    terms.merge(billing_state: "blocked", billing_block_reason: "awaiting_subscription")
+  end
+
+  # The controller sends a bound licence to sign-in instead, so reaching here
+  # means two signups raced for one subscription.
+  def marketplace_license_is_free
+    return unless marketplace_license.bound?
+
+    errors.add(:base, "That AWS Marketplace subscription already has a workspace. Sign in to reach it.")
+  end
+
+  # The controller lets a live licence past REGISTRATION_ENABLED, and `ending`
+  # is live: closing, with nothing left to confirm. A workspace made on it, or
+  # on one already ended, is blocked from birth waiting for a confirmation that
+  # cannot come.
+  def marketplace_license_is_live
+    return if marketplace_license.pending? || marketplace_license.active?
+
+    errors.add(
+      :base,
+      "That AWS Marketplace subscription has ended. Subscribe again in AWS Marketplace to set up a workspace."
+    )
+  end
 
   def domain_is_free
     return unless Company.exists?(email_domain: email_domain)

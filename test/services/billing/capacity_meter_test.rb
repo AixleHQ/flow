@@ -34,10 +34,21 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
   end
 
   def meter(adapter: RecordingAdapter.new, now: @now)
-    Billing::CapacityMeter.new(adapter: adapter, now: now)
+    Billing::CapacityMeter.new(adapters: [ adapter ], now: now)
   end
 
   def report_for(hour) = CapacityMeterReport.find_by(provider: "recording", period_start: hour)
+
+  # The state log is what an hour is measured against, and a write that went
+  # round its callback leaves it wrong until the next change. Every run brings
+  # it back to the row first, so the drift lasts an hour at most.
+  test "a run reconciles the state log with the live rows before measuring" do
+    @company.update_columns(billing_state: "blocked", billing_block_reason: "canceled")
+
+    meter.call
+
+    assert_equal "blocked", CompanyBillingStateChange.where(company_id: @company.id).order(:id).last.billing_state
+  end
 
   # The tests below define the whole installation's capacity themselves, so the
   # company `setup` gave a limit to must not be counted alongside it.
@@ -112,7 +123,7 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     travel_to(hour + 40.minutes) { SessionConcurrencyLimit.set!(scope: company, max_sessions: 4) }
 
     adapter = RecordingAdapter.new
-    Billing::CapacityMeter.new(adapter: adapter, now: hour + 1.hour + 5.minutes).call
+    Billing::CapacityMeter.new(adapters: [ adapter ], now: hour + 1.hour + 5.minutes).call
 
     report = CapacityMeterReport.find_by(provider: "recording", period_start: hour)
     # 20 min at 4, 20 min at 40, 20 min at 4 = 80 + 800 + 80
@@ -135,7 +146,7 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     travel_to(hour + 40.minutes) { SessionConcurrencyLimit.set!(scope: company, max_sessions: 4) }
 
     adapter = RecordingAdapter.new
-    Billing::CapacityMeter.new(adapter: adapter, now: hour + 2.hours + 5.minutes).call
+    Billing::CapacityMeter.new(adapters: [ adapter ], now: hour + 2.hours + 5.minutes).call
 
     next_hour = CapacityMeterReport.find_by(provider: "recording", period_start: hour + 1.hour)
     assert_equal BigDecimal("240"), next_hour.quantity_minutes, "four for a whole hour, and the burst is not carried"
@@ -156,7 +167,7 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     travel_to(hour + 15.minutes) { SessionConcurrencyLimit.set!(scope: acme, max_sessions: 30) }
     travel_to(hour + 45.minutes) { SessionConcurrencyLimit.set!(scope: globex, max_sessions: 2) }
 
-    Billing::CapacityMeter.new(adapter: RecordingAdapter.new, now: hour + 1.hour + 5.minutes).call
+    Billing::CapacityMeter.new(adapters: [ RecordingAdapter.new ], now: hour + 1.hour + 5.minutes).call
 
     report = CapacityMeterReport.find_by(provider: "recording", period_start: hour)
     # acme: 15 min at 10 + 45 at 30 = 1500. globex: 45 min at 10 + 15 at 2 = 480.
@@ -192,9 +203,13 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
   end
 
   test "each deployment mode meters through its own provider" do
-    assert_instance_of Billing::Meter::Null, Billing::CapacityMeter.adapter_for(Deployment::SELF_HOSTED)
-    assert_instance_of Billing::Meter::Stripe, Billing::CapacityMeter.adapter_for(Deployment::SAAS)
-    assert_instance_of Billing::Meter::AwsMarketplace, Billing::CapacityMeter.adapter_for(Deployment::AWS_MARKETPLACE)
+    assert_equal [ Billing::Meter::Null ],
+                 Billing::CapacityMeter.adapters_for(Deployment::SELF_HOSTED).map(&:class)
+    assert_equal [ Billing::Meter::AwsMarketplace ],
+                 Billing::CapacityMeter.adapters_for(Deployment::AWS_MARKETPLACE).map(&:class)
+    # The SaaS listing is unconfigured here, so only Stripe is left standing.
+    assert_equal [ Billing::Meter::Stripe ],
+                 Billing::CapacityMeter.adapters_for(Deployment::SAAS).map(&:class)
   end
 
   # ── Our own ledger ────────────────────────────────────────────────────────

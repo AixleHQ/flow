@@ -161,7 +161,7 @@ module Api
       def session_params
         params.require(:terminal_session).permit(
           :project_id, :session_type, :agent_type, :configured_agent_id, :mode,
-          :initial_prompt, :requested_model, :reasoning_effort, :auth_kind,
+          :initial_prompt, :requested_model, :reasoning_effort, :auth_kind, :runner_id,
           tool_ids: [], skill_ids: [], mcp_server_ids: [],
           input_asset_ids: [], repository_ids: [], config_item_ids: [],
           session_config: [ :bmad_enabled, { bmad_modules: [] } ]

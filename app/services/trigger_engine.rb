@@ -209,7 +209,8 @@ class TriggerEngine
     # committed, relay-enrolled run rather than rolling the run back while the
     # event is replayed later, which would report a failure and then fire anyway,
     # or fire twice.
-    def fire_workflow(workflow:, project:, actor:, event:, source:, trigger_binding: nil, task: nil)
+    def fire_workflow(workflow:, project:, actor:, event:, source:, trigger_binding: nil, task: nil,
+                      runner_id: WorkflowService::RUNNER_NOT_PICKED)
       dedup_key = dispatch_dedup_key(event, trigger_binding, source)
 
       dispatch = find_or_create_dispatch(
@@ -230,7 +231,7 @@ class TriggerEngine
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
             workflow: workflow, project: project, user: actor, source: :trigger,
-            task: subject, mode: :non_interactive,
+            task: subject, mode: :non_interactive, runner_id: runner_id,
             input_asset_ids: input_asset_ids_for(event, project),
             shared_context: Chat.run_context(event).merge(
               Trackers::TriggerSupport.run_context(event), Webhooks::TriggerSupport.run_context(event)
@@ -275,9 +276,12 @@ class TriggerEngine
       actor = event.actor
       return [] if workflow.nil? || task.nil? || actor.nil?
 
+      # Only a manual launch records a runner pick (TaskService.trigger_workflow);
+      # a column binding carries none, so its run takes the workflow's runner.
+      picked = event.data.to_h.key?("runner_id") ? { runner_id: event.data["runner_id"] } : {}
       [ fire_workflow(
         workflow: workflow, project: event.project, task: task,
-        actor: actor, event: event, source: source
+        actor: actor, event: event, source: source, **picked
       ) ].compact
     end
 

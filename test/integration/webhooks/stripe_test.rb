@@ -79,6 +79,134 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
     assert_equal "sub_1", @company.stripe_subscription_id
   end
 
+  # The narrow race the guards in front of Checkout leave open: a card entered
+  # while no licence was bound, and a Marketplace subscription applied before
+  # Stripe said the card had gone through. Adopting it would leave a live
+  # subscription on each side, one of them with nobody to cancel it.
+  test "a card that arrives for a workspace AWS now bills is cancelled, not adopted" do
+    create(:marketplace_license, :active, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+    # A real client with one method replaced: the controller verifies the
+    # webhook signature through this same object, so a bare mock would refuse
+    # the request before reaching what is being tested.
+    client = Billing::StripeClient.new
+    client.expects(:cancel_subscription).with(subscription_id: "sub_1", reason: nil, comment: nil)
+    Billing::StripeClient.stubs(:new).returns(client)
+
+    deliver("checkout.session.completed", checkout_object)
+
+    assert_response :ok
+    assert_nil @company.reload.stripe_subscription_id, "it is not the company's subscription"
+    assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.billing_provider
+  end
+
+  # The card a workspace left behind goes on reporting. Its subscription is
+  # cancelled and its last invoice is collected, and both arrive as events about
+  # a company that is now AWS's -- where `stripe_subscription_id` is nil, which
+  # #current_subscription? reads as "any subscription is the current one".
+  # Nothing Stripe says about a subscription AWS replaced may stop the
+  # workspace AWS is being paid for.
+  # `accept!` clears `stripe_subscription_id`, which #current_subscription?
+  # reads as "any subscription is the current one" -- so every one of these
+  # events reaches the company unless something else turns it away.
+  def handed_over_to_aws
+    create(:marketplace_license, :active, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "active", billing_block_reason: nil,
+                     stripe_subscription_id: nil)
+  end
+
+  test "the end of the subscription a Marketplace workspace left does not stop it" do
+    handed_over_to_aws
+
+    deliver("customer.subscription.deleted", subscription_object(status: "canceled", ended_at: Time.current.to_i))
+
+    assert_response :ok
+    assert @company.reload.billing_active?, "stopped by the end of a subscription it had already left"
+  end
+
+  # The debt is real and Stripe collects it; it simply buys nothing here. It is
+  # not recorded on the company either -- `billing_unpaid_invoice_url` is
+  # cleared on every save of a company that is not blocked, so an active
+  # workspace cannot hold one -- and the handover already wrote the invoice onto
+  # a BillingCancellation.
+  test "a declined final invoice from the card it left does not stop it" do
+    handed_over_to_aws
+
+    deliver("invoice.payment_failed", invoice_object)
+
+    assert_response :ok
+    @company.reload
+    assert @company.billing_active?, "stopped by an invoice for capacity AWS no longer bills"
+    assert_equal "aws_marketplace", @company.billing_provider
+  end
+
+  test "a past_due subscription does not stop a Marketplace workspace either" do
+    handed_over_to_aws
+
+    deliver("customer.subscription.updated", subscription_object(status: "past_due"))
+
+    assert_response :ok
+    assert @company.reload.billing_active?
+  end
+
+  # The guards above read the licence, and the licence ends. What outlives it
+  # is the handover's record of the subscription it stopped: a late event
+  # about that subscription is about a card the workspace left, however long
+  # ago the Marketplace subscription that replaced it has itself ended.
+  def card_left_behind(subscription_id: "sub_old")
+    create(:marketplace_license, :ended, company: @company)
+    create(:billing_cancellation, company: @company, settlement_state: "failed", stripe_subscription_id: subscription_id)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE,
+                     billing_state: "active", billing_block_reason: nil, stripe_subscription_id: nil)
+  end
+
+  test "a late failed invoice for the card a handover stopped does not stop the workspace, even once AWS has finished" do
+    card_left_behind
+
+    deliver("invoice.payment_failed", invoice_object(subscription: "sub_old"))
+    deliver("customer.subscription.deleted", subscription_object(id: "sub_old", status: "canceled"))
+
+    assert_response :ok
+    assert @company.reload.billing_active?
+  end
+
+  # The settlement job gave up before Stripe answered, so the card is still
+  # running. Adopting it would make the card the payer again behind the
+  # workspace's back; it is stopped instead, as the handover meant to.
+  test "the card a handover failed to stop is stopped when Stripe next mentions it, not adopted" do
+    card_left_behind
+    client = Billing::StripeClient.new
+    client.expects(:cancel_subscription).with(subscription_id: "sub_old", reason: nil, comment: nil)
+    Billing::StripeClient.stubs(:new).returns(client)
+
+    deliver("customer.subscription.updated", subscription_object(id: "sub_old", status: "active"))
+
+    assert_response :ok
+    @company.reload
+    assert_nil @company.stripe_subscription_id
+    assert_equal Company::BILLING_PROVIDER_AWS_MARKETPLACE, @company.billing_provider
+  end
+
+  # Leaving AWS Marketplace keeps the Stripe customer -- Checkout reuses it --
+  # so the id never changes and the callback that watches it never fires. The
+  # payer has to move here instead, or the workspace falls between the two
+  # meters: Stripe skips it for being AWS's, AWS skips it for having no live
+  # licence, and nobody bills a workspace that is running.
+  test "a card taken out after a Marketplace subscription ended makes Stripe the payer" do
+    create(:marketplace_license, :ended, company: @company)
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    deliver("checkout.session.completed", checkout_object)
+
+    assert_response :ok
+    @company.reload
+    assert_equal Company::BILLING_PROVIDER_STRIPE, @company.billing_provider
+    assert_equal "sub_1", @company.stripe_subscription_id
+    assert @company.billing_active?
+    assert @company.billing_provider_since.present?, "and the hour of the switch splits between them"
+  end
+
   test "a company blocked for spending its allowance starts again on payment" do
     @company.update!(billing_state: "blocked")
 

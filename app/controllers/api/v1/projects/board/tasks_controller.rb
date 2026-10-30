@@ -126,7 +126,7 @@ module Api
           # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])
-            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, step_runs: %i[step terminal_session])
+            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, step_runs: %i[step terminal_session])
                        .order(created_at: :desc)
             render json: runs.map { |r| TaskWorkflowRunResource.new(r).to_h }
           end
@@ -135,7 +135,9 @@ module Api
           def trigger_workflow
             task = current_board.board_tasks.find(params[:id])
             binding = task.board_column.column_workflow_binding
-            result = TaskService.trigger_workflow(task: task, binding: binding, actor: current_user)
+            # `runner_id` (null for hosted) overrides the workflow's runner for this run.
+            pick = params.key?(:runner_id) ? { runner_id: params[:runner_id].presence } : {}
+            result = TaskService.trigger_workflow(task: task, binding: binding, actor: current_user, **pick)
 
             if result.is_a?(Hash) && result[:error]
               render json: { errors: [ result[:error] ] }, status: :unprocessable_entity

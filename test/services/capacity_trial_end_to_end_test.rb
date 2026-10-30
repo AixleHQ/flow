@@ -24,7 +24,7 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
   end
 
   def meter_the_hour(hour)
-    Billing::CapacityMeter.new(adapter: Billing::Meter::Null.new, now: hour + 1.hour + 5.minutes).call
+    Billing::CapacityMeter.new(adapters: [ Billing::Meter::Null.new ], now: hour + 1.hour + 5.minutes).call
   end
 
   test "a company spends its free trial and stops" do

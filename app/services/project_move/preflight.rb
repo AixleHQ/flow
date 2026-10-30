@@ -27,6 +27,7 @@ module ProjectMove
       if live_sessions.any?
         list << "#{live_sessions.size} session(s) are running in this project. Stop them before moving it."
       end
+      list.concat(runner_blockers)
       list
     end
 
@@ -77,6 +78,32 @@ module ProjectMove
     end
 
     def cancellations? = runs_to_cancel.any? || sessions_to_cancel.any?
+
+    # A runner belongs to its company, and fk_runners_project_company holds a
+    # project's own runner to it (docs/design/agent-runtimes/DESIGN.md §2, §3.4).
+    # It cannot follow the project, so it blocks the move, a deleted runner
+    # included: its row stays, for the history that names it.
+    def own_runners
+      @own_runners ||= Runner.where(project_id: project.id).order(:name).to_a
+    end
+
+    # The workflows that name a runner, archived ones included: the move rewrites
+    # their company too. The runner stays with the source, so the move switches
+    # them to Hosted (Mover#clear_runner_references!) rather than refuse.
+    def workflows_on_runners
+      @workflows_on_runners ||= Workflow.for_project(project).where.not(runner_id: nil)
+                                        .includes(:runner, :scope).order(:name).to_a
+    end
+
+    # The runs and sessions that name a runner. They are history (a live session
+    # blocks the move, and work that has not started is cancelled), so the move
+    # clears their runner_id rather than refuse.
+    def runner_history
+      {
+        "runs" => project.workflow_runs.where.not(runner_id: nil).count,
+        "sessions" => project.terminal_sessions.where.not(runner_id: nil).count
+      }
+    end
 
     # Repositories cloned through an integration that stays with the source.
     def detached_repositories
@@ -149,6 +176,10 @@ module ProjectMove
         "chat_triggers" => chat_bindings.map { |binding| { "id" => binding.id, "name" => binding.name } },
         "copied_assets" => company_assets.map { |asset| { "id" => asset.id, "path" => asset_path(asset) } },
         "dropped_reservation" => reservation_dropped? ? { "max_sessions" => reservation.max_sessions } : nil,
+        "workflows_switched_to_hosted" => workflows_on_runners.map do |workflow|
+          { "id" => workflow.id, "name" => workflow.name, "archived" => workflow.archived?, "runner" => runner_name(workflow) }
+        end,
+        "cleared_runner_references" => runner_history,
         "without_agent_credentials" => people_without_agent_credentials.map { |user| user_row(user) }
       }
     end
@@ -161,6 +192,19 @@ module ProjectMove
     end
 
     private
+
+    def runner_blockers
+      return [] if own_runners.none?
+
+      [ "#{own_runners.map { |runner| runner_label(runner) }.to_sentence} belong#{'s' if own_runners.one?} " \
+        "to this project, and a runner cannot move to another company." ]
+    end
+
+    # Through the tenant rule (RunnerReference#owned_runner): a stale id naming
+    # another project's runner shows as its id.
+    def runner_name(workflow) = workflow.owned_runner&.name || "##{workflow.runner_id}"
+
+    def runner_label(runner) = runner.deleted? ? "Runner #{runner.name} (deleted)" : "Runner #{runner.name}"
 
     def assignee_ids
       BoardTask.joins(:board).where(boards: { project_id: project.id }).where.not(assignee_id: nil).distinct.pluck(:assignee_id)

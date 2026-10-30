@@ -23,6 +23,7 @@ import {
   companyBillingCancellationPath,
   companyBillingCheckoutPath,
   companyBillingInvoicePaymentPath,
+  companyMarketplaceLicenseProposalPath,
 } from 'shared/routes';
 import type { BillingStatus } from 'shared/ui';
 
@@ -44,8 +45,8 @@ interface Usage {
 }
 
 interface FinalInvoice {
-  /** `settling` while the last usage is still on its way to Stripe. */
-  state: 'settling' | 'settled' | 'failed';
+  /** `cancelling` until the card has been stopped at Stripe; `settling` while the last usage is on its way to it. */
+  state: 'cancelling' | 'settling' | 'settled' | 'failed';
   url: string | null;
 }
 
@@ -64,10 +65,42 @@ interface Billing {
   cancellationReasons: string[];
 }
 
+/** Somebody's AWS Marketplace subscription asking to be applied to this workspace. */
+interface MarketplaceProposal {
+  /** The address the asker proved by opening a link sent to it. */
+  askedBy: string;
+  /** The AWS account that would be billed — and that can end the subscription. */
+  awsAccountId: string;
+  askedAt: string;
+  /** Whether accepting also stops a card subscription paying for this workspace. */
+  replacesCard: boolean;
+  /** Worker-minutes the card has not been billed for yet, which accepting puts on its final invoice. */
+  finalInvoiceMinutes: number | null;
+  /** AWS has confirmed the agreement. Until it has, applying is refused: it would stop the card and leave nothing paying. */
+  confirmed: boolean;
+  canDecide: boolean;
+}
+
+/** Set once AWS Marketplace bills this workspace: what this page shows instead of controls. */
+interface Marketplace {
+  awsAccountId: string | null;
+  subscribedAt: string | null;
+  /** The subscription has ended; the workspace is stopped until somebody renews it in AWS. */
+  ended: boolean;
+  /** AWS is the payer now. False once a card has taken over — the panel is then about this month, not an offer to renew. */
+  billsNow: boolean;
+  /** Worker-minutes reported towards the AWS bill so far this month. */
+  reportedMinutes: number;
+  /** The listing's page in AWS Marketplace, where an ended subscription is taken out again. */
+  listingUrl: string;
+}
+
 interface Props {
   company: { name: string };
   billing: Billing;
   checkoutResult: 'done' | 'cancelled' | null;
+  marketplaceProposal: MarketplaceProposal | null;
+  marketplaceBilling: Marketplace | null;
   [key: string]: unknown;
 }
 
@@ -182,6 +215,7 @@ function CancelModal({ opened, onClose, reasons }: { opened: boolean; onClose: (
 
 function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
   switch (invoice.state) {
+    case 'cancelling':
     case 'settling':
       return (
         <Group gap="xs">
@@ -204,11 +238,19 @@ function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
   }
 }
 
-function SubscriptionCard({ billing }: { billing: Billing }) {
+function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billing; title?: string }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const badge = STATUS_BADGE[billing.status];
   const endsOn = formatDateMedium(billing.cancelsAt ?? billing.periodEndsAt);
+  // Only a cancellation we recorded dates an ending. `periodEndsAt` stands in
+  // while the subscription is still running towards one, but it outlives the
+  // subscription: a workspace handed over to AWS Marketplace keeps the period
+  // end of the Stripe subscription it left, which is in the future.
+  const endedOn = billing.cancelsAt && formatDateMedium(billing.cancelsAt);
+  const ended = endedOn
+    ? `On ${endedOn} the subscription ended, so no new sessions start.`
+    : 'The subscription has ended, so no new sessions start.';
 
   const post = (path: string) => {
     setBusy(true);
@@ -281,12 +323,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
       break;
     case 'canceled':
       if (billing.hasUnpaidInvoice) {
-        body = (
-          <>
-            On {endsOn} the subscription ended, so no new sessions start. Your data is kept. The final invoice is
-            unpaid: pay it to add a card again.
-          </>
-        );
+        body = <>{ended} Your data is kept. The final invoice is unpaid: pay it to add a card again.</>;
         action = (
           <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
             Pay final invoice
@@ -294,11 +331,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
         );
         break;
       }
-      body = (
-        <>
-          On {endsOn} the subscription ended, so no new sessions start. Your data is kept. Add a card to restore access.
-        </>
-      );
+      body = <>{ended} Your data is kept. Add a card to restore access.</>;
       action = addCard;
       break;
     case 'payment_failed':
@@ -317,7 +350,7 @@ function SubscriptionCard({ billing }: { billing: Billing }) {
     <Card withBorder padding="lg">
       <Stack gap="sm">
         <Group justify="space-between">
-          <Text fw={600}>Subscription</Text>
+          <Text fw={600}>{title}</Text>
           <Badge color={badge.color} variant="light">
             {badge.label}
           </Badge>
@@ -379,9 +412,176 @@ function useRefreshWhileSettling(settling: boolean) {
   }, [settling]);
 }
 
+function MarketplaceProposalCard({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [deciding, setDeciding] = useState(false);
+
+  const apply = () => {
+    setDeciding(true);
+    router.post(
+      companyMarketplaceLicenseProposalPath(),
+      {},
+      { onSuccess: () => setApplyOpen(false), onFinish: () => setDeciding(false) },
+    );
+  };
+
+  return (
+    <Card withBorder padding="lg">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600}>A request to bill this workspace through AWS Marketplace</Text>
+          <Badge color="yellow">Waiting</Badge>
+        </Group>
+        <Text size="sm" c="var(--app-text-secondary)">
+          <b>{proposal.askedBy}</b> bought an AWS Marketplace subscription to Aixle Flow and asks for it to be applied
+          to {companyName}. They confirmed that address on {formatDateMedium(proposal.askedAt)}.
+        </Text>
+        <ProposalConsequences proposal={proposal} companyName={companyName} />
+        {!proposal.confirmed && (
+          <Alert color="gray" title="Waiting for AWS">
+            AWS has not confirmed this subscription yet, so it cannot be applied. This usually takes a few minutes.
+            Applying it before then would stop the card and leave the workspace with nothing paying for it.
+          </Alert>
+        )}
+        {proposal.canDecide ? (
+          <Group>
+            <Button loading={deciding} disabled={!proposal.confirmed} onClick={() => setApplyOpen(true)}>
+              Apply the subscription
+            </Button>
+            <Button
+              variant="default"
+              disabled={deciding}
+              onClick={() => router.delete(companyMarketplaceLicenseProposalPath())}
+            >
+              Decline
+            </Button>
+          </Group>
+        ) : (
+          <Text size="sm" c="var(--app-text-tertiary)">
+            An administrator of {companyName} decides this.
+          </Text>
+        )}
+      </Stack>
+      <Modal
+        opened={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        title="Apply the AWS Marketplace subscription?"
+        size="md"
+      >
+        <Stack gap="md">
+          <Text size="sm">This takes effect now and is not undone by declining later:</Text>
+          <ProposalConsequences proposal={proposal} companyName={companyName} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setApplyOpen(false)} disabled={deciding}>
+              Keep things as they are
+            </Button>
+            <Button loading={deciding} onClick={apply}>
+              Apply it
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Card>
+  );
+}
+
+// What accepting does, spelled out rather than summarised: billing goes to an
+// AWS account that may belong to somebody else, who can stop the workspace by
+// unsubscribing, and the card paying for it today is stopped at once.
+function ProposalConsequences({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
+  return (
+    <List size="sm" spacing={4}>
+      <List.Item>
+        {companyName} would be billed through AWS account <b>{proposal.awsAccountId}</b>, which you may not control.
+      </List.Item>
+      <List.Item>Whoever holds that subscription can end it, and this workspace stops when they do.</List.Item>
+      {proposal.replacesCard && (
+        <List.Item>
+          The card subscription paying for this workspace is stopped at the same moment, and a final invoice follows
+          {proposal.finalInvoiceMinutes != null ? (
+            <>
+              {' '}
+              for the <b>{formatMinutes(proposal.finalInvoiceMinutes)}</b> worker-minutes it has not been billed for yet
+            </>
+          ) : (
+            <> for the capacity used up to then</>
+          )}
+          .
+        </List.Item>
+      )}
+    </List>
+  );
+}
+
+const AWS_SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
+
+// A workspace AWS bills has nothing to change here. Taken away from the page
+// entirely, its billing read as gone missing rather than kept somewhere else,
+// so the card says where the bill comes from and what has been reported
+// towards it -- the one figure not visible in AWS until the invoice exists.
+function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplace; companyName: string }) {
+  return (
+    <Card withBorder padding="lg">
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="nowrap">
+          <Text fw={600}>Billed through AWS Marketplace</Text>
+          <Badge color={marketplace.ended ? 'red' : 'green'}>{marketplace.ended ? 'Ended' : 'Active'}</Badge>
+        </Group>
+        <Text size="sm" c="var(--app-text-secondary)">
+          {!marketplace.billsNow ? (
+            <>
+              A card pays for {companyName} now, so nothing more is reported to AWS. The minutes below ran through AWS
+              Marketplace earlier this month and are on that account&apos;s AWS bill for it.
+            </>
+          ) : marketplace.ended ? (
+            <>
+              The AWS Marketplace subscription for {companyName} has ended, so the workspace is stopped. Renewing it in
+              AWS starts it again.
+            </>
+          ) : (
+            <>
+              {companyName} is paid for through AWS Marketplace
+              {marketplace.awsAccountId && (
+                <>
+                  {' '}
+                  on AWS account <b>{marketplace.awsAccountId}</b>
+                </>
+              )}
+              . Your usage appears on that account&apos;s AWS bill, and the subscription is cancelled there rather than
+              here.
+            </>
+          )}
+        </Text>
+        <List size="sm" spacing={4}>
+          <List.Item>
+            <b>{formatMinutes(marketplace.reportedMinutes)}</b> worker-minutes reported to AWS this calendar month —
+            what the AWS bill for the month is counted from, including any earlier subscription in it.
+          </List.Item>
+          {marketplace.subscribedAt && (
+            <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
+          )}
+        </List>
+        {/* The library manages a running subscription; an ended one is taken
+            out again on the listing's own page, which the library never leads
+            to. */}
+        {marketplace.billsNow && !marketplace.ended && (
+          <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
+            Manage the subscription in AWS Marketplace
+          </Anchor>
+        )}
+        {marketplace.billsNow && marketplace.ended && (
+          <Anchor href={marketplace.listingUrl} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
+            Subscribe again in AWS Marketplace
+          </Anchor>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
 const BillingPage = () => {
-  const { company, billing, checkoutResult } = usePage<Props>().props;
-  useRefreshWhileSettling(billing.finalInvoice?.state === 'settling');
+  const { company, billing, checkoutResult, marketplaceProposal, marketplaceBilling } = usePage<Props>().props;
+  useRefreshWhileSettling(billing.finalInvoice?.state === 'cancelling' || billing.finalInvoice?.state === 'settling');
 
   return (
     <AuthLayout>
@@ -389,8 +589,26 @@ const BillingPage = () => {
       <SettingsTabs active="billing" companyName={company.name}>
         <Stack gap="lg" maw={720}>
           <CheckoutResult result={checkoutResult} billing={billing} />
-          <SubscriptionCard billing={billing} />
-          {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
+          {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
+          {/* Whichever pays now comes first. Both are shown once the AWS
+              subscription has ended: the panel says what happened and where to
+              renew, and the card is the other way to carry on -- and once a
+              card has taken over, the AWS panel is a statement about this
+              month's bill, beneath the subscription that runs the workspace.
+              While the AWS subscription is live there is no card to offer: it
+              would be a second bill for the same capacity. */}
+          {marketplaceBilling?.billsNow && (
+            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
+          )}
+          {(!marketplaceBilling || marketplaceBilling.ended) && (
+            <>
+              <SubscriptionCard billing={billing} title={marketplaceBilling ? 'Billed by card' : 'Subscription'} />
+              {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
+            </>
+          )}
+          {marketplaceBilling && !marketplaceBilling.billsNow && (
+            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
+          )}
         </Stack>
       </SettingsTabs>
     </AuthLayout>

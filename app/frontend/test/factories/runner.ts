@@ -1,4 +1,6 @@
 import type Runner from '@/types/generated/Runner';
+import type RunnerBadge from '@/types/generated/RunnerBadge';
+import type RunnerSummary from '@/types/generated/RunnerSummary';
 
 import type { JsonSchema, RunnerTypeOption } from 'shared/resources/runners/runnerConfig';
 
@@ -24,6 +26,27 @@ export const buildRunner = (overrides: Partial<Runner> = {}): Runner => ({
   config: {},
   capabilities: { provisionable: false, rebuildable: false },
   createdByName: 'Ada',
+  ...overrides,
+});
+
+// A runner as the pickers receive it (RunnerSummaryResource).
+export const buildRunnerSummary = (overrides: Partial<RunnerSummary> = {}): RunnerSummary => ({
+  id: 1,
+  name: 'build-box',
+  projectId: null,
+  runnerType: 'manual',
+  status: 'connected',
+  deleted: false,
+  operatedBy: 'Acme',
+  ...overrides,
+});
+
+// A runner as the "Runs on" badge receives it on sessions and runs (RunnerBadgeResource).
+export const buildRunnerBadge = (overrides: Partial<RunnerBadge> = {}): RunnerBadge => ({
+  id: 1,
+  name: 'build-box',
+  runnerType: 'manual',
+  deleted: false,
   ...overrides,
 });
 

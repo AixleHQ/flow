@@ -6,7 +6,8 @@ module ProjectMove
   # number, Temporal schedule id and webhook slug stays what it was.
   #
   # Before the transaction it cancels the work that has not started and copies the
-  # company assets the project points at. Inside it, under the project's row lock,
+  # company assets the project points at. Inside it, under the project's row lock
+  # and the row locks of the project's workflows (lock_workflows!),
   # it reads the preflight again and refuses if anything changed: a run or session
   # created in the meantime waits on that lock (their foreign key to the project
   # takes a share lock on its row), so whatever the second reading finds is all
@@ -79,6 +80,7 @@ module ProjectMove
 
     def move!(first_reading, copier)
       @project.lock!
+      lock_workflows!
       preflight = Preflight.new(project: @project, target: @target)
       refuse!(preflight.blockers.join(" ")) unless preflight.movable?
       refuse!("A run or session started in #{@project.name} while it was being moved. Try again.") if preflight.cancellations?
@@ -89,12 +91,23 @@ module ProjectMove
 
       copier.rewrite_references!
       detach_links!(preflight)
+      clear_runner_references!
       preflight.reservation&.destroy! if preflight.reservation_dropped?
       reparent!(preflight)
       report.merge!(resolve_people!(preflight, previous_owner_id))
       verify_tenant_columns!
       audit!(report)
       report
+    end
+
+    # Versions.save! locks the workflow row, not the project, so the project lock
+    # alone lets a save commit a snapshot naming a source runner after
+    # clear_runner_references! has stripped the versions. Every workflow of the
+    # project, archived ones included, is locked in id order before the second
+    # preflight reads them and is held until the move commits: a save already
+    # under way finishes first, and a later one waits and then sees the moved row.
+    def lock_workflows!
+      Workflow.for_project(@project).order(:id).lock.pluck(:id)
     end
 
     def detach_links!(preflight)
@@ -107,6 +120,27 @@ module ProjectMove
       # every code asked for to connect one.
       TriggerBinding.release_chat_channels!(TriggerBinding.where(project_id: @project.id))
       ChatConnectCode.where(project_id: @project.id).delete_all
+    end
+
+    # Every runner the project's rows name is one of the source company's, and
+    # fk_workflows_runner_company and fk_terminal_sessions_runner_company would
+    # hold the rows to it, so this runs before reparent!. The workflows, archived
+    # ones included, switch to Hosted (Preflight lists them). Past runs and
+    # sessions are history, none of it live (Preflight), and keep it without the
+    # runner. The workflows' versions drop the runner too, Hosted being the
+    # absent key as in Snapshot.dump, so no version names a runner of the source
+    # company: a deliberate exception to "history is never rewritten"
+    # (docs/design/entity-versioning.md, D3). Otherwise, like the asset rewrite,
+    # this writes no workflow version.
+    def clear_runner_references!
+      now = Time.current
+      workflows = Workflow.for_project(@project)
+      EntityVersion.where(versionable_type: "Workflow", versionable_id: workflows.select(:id))
+                   .where("snapshot -> 'runner_id' IS NOT NULL")
+                   .update_all(Arel.sql("snapshot = snapshot - 'runner_id'"))
+      workflows.where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
+      WorkflowRun.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
+      TerminalSession.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
     end
 
     def reparent!(preflight)

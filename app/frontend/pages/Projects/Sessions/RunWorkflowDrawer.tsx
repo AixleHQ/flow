@@ -39,6 +39,7 @@ export function RunWorkflowDrawer({ projectId, opened, onClose }: Props) {
       agentModels={options.agentModels}
       repositories={options.repositories}
       assets={options.assets}
+      runners={options.runners}
     />
   );
 }

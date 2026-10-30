@@ -17,6 +17,10 @@ module PersonalTools
       param :task_id, type: :integer, description: TASK_ID_PARAM
       param :force, type: :boolean,
                     description: "Cancel the task's in-flight run and re-trigger (default false)."
+      runner = param :runner_id, type: :integer,
+                     description: "Runner to run on instead of the workflow's own (null for hosted). Omit it to use " \
+                                  "the workflow's runner. Refused unless external runners are enabled for the company."
+      runner["type"] = %w[integer null]
     end
 
     ACTIVE_RUN_STATES = %w[pending running paused].freeze
@@ -36,13 +40,19 @@ module PersonalTools
 
       find_controllable_run!(project, active_run.id) if active_run
 
+      # Refused before the in-flight run is cancelled for a launch that cannot happen.
+      if params.key?(:runner_id) && (refusal = Runners::Selection.error(params[:runner_id], project: project))
+        return error(refusal)
+      end
+
       # Not just a state change: WorkflowService.cancel drives each active step's
       # session through SessionService.cancel, and that Temporal cancellation
       # still runs the container workflow's cleanup phase — so the pod is
       # reclaimed and the terminal log collected before the retrigger.
       WorkflowService.cancel(run: active_run) if active_run
 
-      result = TaskService.trigger_workflow(task: task, binding: task.board_column.column_workflow_binding, actor: user)
+      result = TaskService.trigger_workflow(task: task, binding: task.board_column.column_workflow_binding, actor: user,
+                                            **runner_pick)
       return error(result[:error]) if result.is_a?(Hash) && result[:error]
 
       # `runs_as` is read off the run rather than predicted here. TaskService owns
@@ -55,6 +65,8 @@ module PersonalTools
     end
 
     private
+
+    def runner_pick = params.key?(:runner_id) ? { runner_id: params[:runner_id] } : {}
 
     def active_run_for(task)
       task.workflow_runs.where(state: ACTIVE_RUN_STATES).order(created_at: :desc).first

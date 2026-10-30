@@ -35,6 +35,12 @@ class CompanyDashboard < Administrate::BaseDashboard
       include_blank: false,
       collection: Company::BILLING_STATES
     ),
+    # Read-only, and deliberately absent from the form attributes: the provider
+    # follows from a subscription existing, so an operator who could type it
+    # here could claim a company is billed by a system that has never heard of
+    # it. Shown because once an installation holds more than one, "who is
+    # charging this customer" stops being answerable from the fact that they pay.
+    billing_provider: Field::String.with_options(searchable: true),
     # Virtual, so never searchable: Administrate would build a LIKE against a
     # column that is not there.
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
@@ -63,6 +69,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     email_domain
     state
     billing_state
+    billing_provider
     managed_by_aixle
     session_concurrency_limit
     users
@@ -82,6 +89,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     secondary_color
     state
     billing_state
+    billing_provider
     trial_started_at
     trial_last_day
     managed_by_aixle

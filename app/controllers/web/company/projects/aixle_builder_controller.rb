@@ -9,7 +9,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
                        .with_cached_resource_counts
                        .includes(:user, :project, :session_admission,
                                  :tools, :skills, :mcp_servers, :config_items,
-                                 :input_assets, :repositories)
+                                 :input_assets, :repositories, :runner)
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)
                        .order(created_at: :desc)

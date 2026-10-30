@@ -22,6 +22,41 @@ governance, community health — carry none.
   `create_workflow_step` and `update_workflow_step` tools accept
   `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
   them.
+- **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
+  who subscribes is sent to a page of ours that sets their workspace up: they
+  are signed out first and create a new workspace, confirming the address by
+  email as any other signup does — the subscription proves the purchase, not the
+  address. Returning from Manage subscriptions reaches the workspace they
+  already made. The workspace is billed by AWS rather than by card, gets no free
+  trial, and runs as soon as AWS confirms the agreement;
+  capacity is reported hourly, and cancelling in AWS stops the workspace and
+  reports the part-hour it was still running. Operators: this needs
+  `AWS_MARKETPLACE_SAAS_PRODUCT_CODE`, `AWS_MARKETPLACE_SAAS_PRODUCT_ID`,
+  `AWS_MARKETPLACE_SELLER_ROLE_ARN` and `AWS_MARKETPLACE_EVENTS_QUEUE_URL`, and
+  `aws-marketplace:DescribeAgreement` on the seller role; the optional
+  `AWS_MARKETPLACE_SAAS_LISTING_URL` is the listing's page, where a workspace
+  whose subscription ended is sent to subscribe again. Without them the
+  registration page answers 404 and nothing else changes; without the queue,
+  metering still runs but cancellations are never noticed.
+- **Company settings**: a buyer whose email domain already has a workspace can
+  ask its administrators to apply the subscription to it, instead of being left
+  with a subscription attached to nothing. The page AWS sends a buyer to asks
+  where the subscription should go, a new workspace or one that already
+  exists, before showing any form. The workspace is never chosen — it is
+  whichever one holds the asker's own domain — the address is proved by a link
+  sent to it, and an administrator still decides. An administrator proving
+  their own address — a workspace subscribing again after cancelling — is sent
+  to sign in and lands on the request to decide on the spot; the link itself
+  signs nobody in. Accepting stops the card that
+  was paying for that workspace, with a final invoice for the capacity it has
+  not been billed for yet; the screen says how much that is before anyone
+  decides. A workspace AWS bills keeps its Billing tab, which says where its
+  bill is rather than offering controls that would be a second bill.
+- **Admin**: a company's page and the companies list show which system bills it
+  — `none`, `stripe` or `aws_marketplace` — and the list can be searched by it.
+  It is read-only: the value follows from a subscription existing. Existing
+  companies are filled in by a migration, with one that Aixle carries counted as
+  billed by nobody even if Stripe still holds a customer for it.
 - **Admin**: a company on the dashboard opens a breakdown of its queue for the
   selected period: wait percentiles (p95 among them) and the share of sessions
   that waited, how many sessions were already waiting when one joined, the wait
@@ -62,6 +97,24 @@ governance, community health — carry none.
   trial last day or it adds a card.
 
 ### Fixed
+- **Company settings**: a workspace is no longer billed for parts of an hour it
+  did not owe for — before it was created, while it was stopped, while it was on
+  free capacity, or before it changed who bills it. An hour is measured after it
+  closes, and it used to be measured against the workspace as it was at that
+  moment: one created at 04:26 was billed for the whole of 04:00, one restarted
+  at :47 for the whole hour, and one that changed payer in the five minutes
+  before the measurement was billed for the hour by a payer who had not held it
+  for any of it. The hour is now measured against the states the workspace was
+  actually in during it.
+- **Company settings**: a workspace that cancels its AWS Marketplace subscription
+  and applies another is no longer billed twice for the part of that hour before
+  the cancellation. Those minutes go to AWS as the old subscription's last usage;
+  the new one is now billed from the moment it is applied, not from the top of
+  the hour.
+- **Company settings**: a workspace whose capacity was set before the capacity
+  log existed is billed for the part of the hour before its first later change,
+  which used to go to nobody. Operators: a migration writes each company's
+  current capacity into the log once.
 - **Sessions & Runs**: when a company's worker limit is full, a worker that frees
   up goes to the session that has waited longest, whichever project it is in.
   Before, one project could take every freed worker while sessions queued
@@ -151,6 +204,10 @@ governance, community health — carry none.
   pages use the same names.
 
 ### Fixed
+- **Profile**: connecting Claude Code through Amazon Bedrock no longer fails
+  verification with "Timed out after 60s waiting for AWS" when the Identity
+  Center sign-in takes longer than a minute. The login terminal now waits up to
+  120 seconds, the same as agent sessions.
 - **Company members**: the link in an invitation reminder email stops working on
   the date the email gives, 7 days after the invitation was sent. It used to keep
   working for up to a week longer.

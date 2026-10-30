@@ -27,6 +27,33 @@ class Web::Company::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Company/Sessions/Index"
   end
 
+  test "index loads a page of hosted sessions without N+1 queries or unused eager loading" do
+    project = create(:project, company: @company, owner: @user)
+    create_list(:terminal_session, 2, :agent_session, user: @user, project: project)
+
+    get company_sessions_path
+    assert_inertia_page "Company/Sessions/Index"
+
+    assert_equal [ nil, nil ], inertia.props[:sessions].as_json.map { |row| row["runner"] }
+  end
+
+  test "index loads the runner badges of sessions on runners without N+1 queries" do
+    project = create(:project, company: @company, owner: @user)
+    company_runner = create(:runner, company: @company, created_by: @user, name: "Company box")
+    project_runner = create(:runner, company: @company, project: project, created_by: @user, name: "Project box")
+    create(:terminal_session, :agent_session, user: @user, project: project)
+    [ company_runner, company_runner, project_runner ].each do |runner|
+      create(:terminal_session, :agent_session, user: @user, project: project, runner: runner)
+    end
+
+    get company_sessions_path
+    assert_inertia_page "Company/Sessions/Index"
+
+    badges = inertia.props[:sessions].as_json.map { |row| row["runner"] }
+    assert_equal [ "Project box", "Company box", "Company box", nil ], badges.map { |badge| badge&.dig("name") }
+    assert_equal %w[deleted id name runnerType], badges.first.keys.sort
+  end
+
   test "index exposes the Sessions & Runs props: type, total and user options" do
     project = create(:project, company: @company, owner: @user)
     create(:terminal_session, :agent_session, user: @user, project: project)

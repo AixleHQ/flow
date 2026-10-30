@@ -153,7 +153,7 @@ class Web::ProfileController < Web::ApplicationController
               .joins(:project).where(projects: { company_id: company.id })
               .with_cached_resource_counts
               .includes(:user, :project, :session_admission,
-                        :tools, :skills, :mcp_servers, :input_assets, :repositories, :config_items)
+                        :tools, :skills, :mcp_servers, :input_assets, :repositories, :config_items, :runner)
               .where.not(session_type: "auth_setup")
               .order(created_at: :desc)
               .limit(per_page)

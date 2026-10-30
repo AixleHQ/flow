@@ -50,10 +50,6 @@ module Deployment
     def saas? = mode == SAAS
     def aws_marketplace? = mode == AWS_MARKETPLACE
 
-    # Who may set a company's own limit. The customer owns the number wherever
-    # they are the one buying the capacity; where we invoice for it, they do not.
-    def customer_owns_capacity? = !saas?
-
     # A company with no limit is unbounded, and "unlimited" has no encoding in a
     # metering record — AWS Marketplace takes a quantity or nothing. So where the
     # installation meters itself to AWS, every company must carry a number.

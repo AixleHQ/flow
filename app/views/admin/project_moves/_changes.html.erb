@@ -100,6 +100,30 @@
   </section>
 <% end %>
 
+<% switched = report["workflows_switched_to_hosted"] || [] %>
+<% if switched.any? %>
+  <section class="move-section move-section--warning">
+    <h2><%= verb.call("Workflows to switch to Hosted", "Workflows switched to Hosted") %></h2>
+    <p class="move-muted">They run on a runner of <%= source %>, and a runner stays with its company. Pick a runner of <%= target %> in the builder afterwards if they need one.</p>
+    <ul>
+      <% switched.each do |workflow| %>
+        <li><%= workflow["name"] %><%= " (archived)" if workflow["archived"] %> — was on runner <%= workflow["runner"] %></li>
+      <% end %>
+    </ul>
+  </section>
+<% end %>
+
+<% cleared = report["cleared_runner_references"] %>
+<% if cleared && (cleared["runs"].to_i + cleared["sessions"].to_i).positive? %>
+  <section class="move-section">
+    <h2><%= verb.call("Runner references to clear", "Runner references cleared") %></h2>
+    <p class="move-muted">
+      <%= pluralize(cleared["runs"].to_i, "past run") %> and <%= pluralize(cleared["sessions"].to_i, "past session") %>
+      ran on, or picked, a runner of <%= source %>. A runner stays with its company, so they keep their history without it.
+    </p>
+  </section>
+<% end %>
+
 <% if report["without_agent_credentials"].any? %>
   <section class="move-section">
     <h2>Agent sign-in needed</h2>

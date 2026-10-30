@@ -37,7 +37,8 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
       input_asset_ids: workflow_run_params[:input_asset_ids] || [],
       repository_ids: workflow_run_params[:repository_ids] || [],
       agent_runtime: workflow_run_params[:agent_runtime],
-      requested_model: workflow_run_params[:requested_model]
+      requested_model: workflow_run_params[:requested_model],
+      **runner_pick
     )
 
     if run.persisted?
@@ -129,6 +130,13 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     return run.step_runs.find(params[:step_run_id]) if params[:step_run_id].present?
 
     run.current_step_run
+  end
+
+  # Sent only when the drawer's "Runs on" select is shown; null is a pick of
+  # hosted. Absent, the run takes its workflow's runner (DESIGN.md §3.3).
+  def runner_pick
+    run_params = params.require(:workflow_run)
+    run_params.key?(:runner_id) ? { runner_id: run_params[:runner_id].presence } : {}
   end
 
   def workflow_run_params

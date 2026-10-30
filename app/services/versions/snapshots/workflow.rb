@@ -8,7 +8,7 @@ module Versions
     # snapshot holds and sets it on the live ones it does not, and
     # `depends_on_step_ids` needs no remapping.
     class Workflow < Base
-      FIELDS = %w[name description config].freeze
+      FIELDS = %w[name description config runner_id].freeze
       EXCLUDED = %w[id scope_type scope_id project_id company_id published_at published_by_id deleted_at
                     current_version_number created_at updated_at].freeze
       STEP_FIELDS = %w[id name instructions position agent_id preferred_model reasoning_effort required_agent_runtime
@@ -43,13 +43,19 @@ module Versions
               "sub_steps" => sub_steps.map { |sub| sub.attributes.slice(*SUB_STEP_FIELDS) }
             )
           end
-          super.merge("steps" => steps)
+          super.merge("steps" => steps).tap do |snapshot|
+            # Hosted is the absence of a runner, as in every snapshot written
+            # before runner_id existed, so saving an unchanged hosted workflow
+            # still records nothing.
+            snapshot.delete("runner_id") if snapshot["runner_id"].nil?
+          end
         end
 
         def restore!(record, snapshot)
           record.assign_attributes(
             "name" => snapshot["name"], "description" => snapshot["description"],
-            "config" => existing_config(snapshot["config"] || {})
+            "config" => existing_config(snapshot["config"] || {}),
+            "runner_id" => restorable_runner_id(record, snapshot["runner_id"])
           )
           record.save!
           WorkflowStepSync.new(record, Array(snapshot["steps"]).map { |step| STEP_DEFAULTS.merge(step) }).sync!
@@ -57,6 +63,18 @@ module Versions
         end
 
         private
+
+        # A runner the project still owns (TenantScope's Runner rule) is restored
+        # as it was, a deleted, disabled or revoked one included, and the builder
+        # warns about it (DESIGN.md §3.4). A runner whose row is gone, or one the
+        # project can no longer use, restores Hosted: refusing would leave that
+        # version with no way to revert.
+        def restorable_runner_id(record, id)
+          project = record.runner_project
+          return if id.blank? || project.nil?
+
+          id if TenantScope.owned(::Runner, project: project).exists?(id)
+        end
 
         def existing_config(config)
           CONFIG_REFERENCES.each_with_object(config.dup) do |(key, model), memo|

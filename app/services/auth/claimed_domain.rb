@@ -20,18 +20,37 @@ module Auth
       return nil if user.super_admin? || user.company_memberships.exists?
 
       company = Company.find_by_email_domain(user.email.to_s)
-      company && new(company, tried: tried)
+      company && new(company, tried: tried, proved: true)
     end
 
-    def initialize(company, tried: nil)
+    # For a typed address rather than a proved one, which is all an AWS
+    # Marketplace buyer has: they are signed out on arrival. Answered narrowly
+    # (#to_h), because a pay-as-you-go subscription costs nothing to take out.
+    #
+    # Any company, not only an active one: the form refuses the domain whatever
+    # state its workspace is in (WorkspaceOnboardingForm#domain_is_free), so
+    # scoping to active would refuse the buyer and then explain nothing.
+    def self.for_email(email)
+      return nil if email.blank?
+
+      company = Company.find_by(email_domain: email.to_s.split("@").last)
+      company && new(company, proved: false)
+    end
+
+    def initialize(company, tried: nil, proved: true)
       @company = company
       @tried = tried
+      @proved = proved
     end
 
-    # The workspace is named, and its ways in listed, only for a proved domain.
-    # An unproved claim may be somebody else's, and auto-join does not run for it
-    # whatever the method, so an invitation is the only way in.
+    # The workspace is named, and its ways in listed, only for an address its
+    # owner has proved. Auto-join does not run for a typed one whatever the
+    # method, so naming it would hand a stranger the workspace's name, sign-ins
+    # and approval rule for any domain they care to type. The narrow answer
+    # still says why the form refused: the domain is taken.
     def to_h
+      return { domain: company.email_domain, workspace_name: nil, join_methods: [], approval_required: false } unless proved?
+
       {
         domain: company.email_domain,
         workspace_name: (company.branded_name if company.domain_verified?),
@@ -40,9 +59,15 @@ module Auth
       }
     end
 
+    def proved? = @proved
+
     private
 
+    # Nothing joins a workspace that is not running, so a suspended or archived
+    # one is named with no way in rather than with one that would be refused.
     def join_methods
+      return [] unless company.active?
+
       Auth::PolicyResolver.allowed_providers(company)
                           .select { |provider| joins?(provider) && provider != @tried }
                           .sort_by { |provider| [ provider.company? ? 1 : 0, provider.display_name ] }

@@ -35,6 +35,7 @@ class WorkflowRun < ApplicationRecord
 
   include WorkflowRunStateMachine
   include CreatedWithinDates
+  include RunnerReference
   extend Enumerize
 
   belongs_to :workflow
@@ -54,6 +55,8 @@ class WorkflowRun < ApplicationRecord
   # How the run was launched. A `trigger` run's event and binding are on its
   # TriggerDispatch; runs created before this column existed have none.
   enumerize :source, in: %i[web mcp retry trigger]
+
+  def runner_project = project
 
   def execution_workflow_id
     "workflow-execution-#{id}"
@@ -211,6 +214,11 @@ class WorkflowRun < ApplicationRecord
   end
 
   private
+
+  # RunnerReference: the run's own project, and its company read off the
+  # workflow (same project, TenantColumns keeps workflows.company_id), which
+  # every list that renders the badge already loads, so no project is loaded.
+  def runner_tenant_ids = [ workflow&.company_id, project_id ]
 
   # Id only, like TerminalSession#broadcast_session_list_update: the page
   # fetches the row back through its own authorized endpoint.

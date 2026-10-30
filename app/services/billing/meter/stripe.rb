@@ -37,6 +37,11 @@ module Billing
         unbilled = 0
 
         report.breakdown_minutes.each do |company_id, minutes|
+          # Absent from the hash means AWS bills it, which is not the same as
+          # nobody billing it: counting it here would read as a company we fail
+          # to charge.
+          next unless customers.key?(company_id.to_i)
+
           customer_id = customers[company_id.to_i]
           next unbilled += 1 if customer_id.blank?
 
@@ -55,10 +60,26 @@ module Billing
         "stripe:#{report.period_start.utc.iso8601}:sent=#{sent}:already=#{already}:unbilled=#{unbilled}"
       end
 
+      # Everyone AWS does not bill. A company with no customer yet is still this
+      # provider's: its minutes go on the row as unbilled, which says "nobody
+      # has paid for this yet" rather than "somebody else did".
+      def companies_billed(company_ids)
+        ::Company.where(id: company_ids)
+                 .where.not(billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+                 .pluck(:id)
+      end
+
       private
 
+      # Narrowed rather than re-keyed: the rule is still "has a Stripe customer",
+      # with AWS's own companies taken out. Left in, one would be counted as
+      # unbilled — which reads as "nobody pays for this" when AWS does.
       def customer_ids_for(report)
-        ::Company.where(id: report.breakdown_minutes.keys).pluck(:id, :stripe_customer_id).to_h
+        ::Company
+          .where(id: report.breakdown_minutes.keys)
+          .where.not(billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+          .pluck(:id, :stripe_customer_id)
+          .to_h
       end
     end
   end

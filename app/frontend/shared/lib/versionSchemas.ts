@@ -98,6 +98,7 @@ const STEP: FieldSpec[] = [
 const WORKFLOW: FieldSpec[] = [
   { kind: 'scalar', key: 'name', label: 'Name' },
   { kind: 'text', key: 'description', label: 'Description' },
+  { kind: 'ref', key: 'runner_id', label: 'Runner', model: 'Runner' },
   { kind: 'scalar', key: 'config.inherit_all_project_resources', label: 'Inherit all project resources' },
   { kind: 'refs', key: 'config.base_tool_ids', label: 'Workflow tools', model: 'Tool' },
   { kind: 'refs', key: 'config.base_skill_ids', label: 'Workflow skills', model: 'Skill' },

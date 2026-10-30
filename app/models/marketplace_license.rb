@@ -1,0 +1,92 @@
+# frozen_string_literal: true
+
+# One AWS Marketplace agreement for the SaaS listing, and the company it bought.
+#
+# Keyed on the licence rather than the customer or the AWS account: under
+# Concurrent Agreements one account may hold several live agreements for the same
+# product, and `CustomerIdentifier` is no longer populated at all.
+class MarketplaceLicense < ApplicationRecord
+  # State machine (pending -> active, close, finish); `ended` is terminal.
+  include MarketplaceLicenseStateMachine
+
+  belongs_to :company, optional: true
+  # The workspace this licence has asked to be applied to, which is not the one
+  # it belongs to until an administrator there says so.
+  belongs_to :proposed_company, class_name: "Company", optional: true
+
+  REGISTRATION_VALID_FOR = 15.minutes
+  # Carries the licence from the POST AWS makes to the GET that follows it; the
+  # POST holds no session to put it in (SameSite withholds the cookie).
+  generates_token_for :registration, expires_in: REGISTRATION_VALID_FOR
+
+  #   pending  resolved at registration; AWS discards metering sent now
+  #   active   confirmed, and metering is accepted
+  #   ending   closing, with about one hour left to report the last usage
+  #   ended    over; AWS accepts nothing further
+  #
+  # Which moves are legal is MarketplaceLicenseStateMachine's; this list is what
+  # the column itself will hold, so a write that goes round the machine still
+  # cannot invent a state.
+  STATES = %w[pending active ending ended].freeze
+
+  #   pending   raised by the buyer, waiting on an administrator
+  #   accepted  applied; the licence is bound and the workspace bills through AWS
+  #   declined  refused; the licence stays bound to nothing
+  #
+  # A licence holds at most one, and raising a second replaces it, so these are
+  # the state of the current proposal rather than a history of them.
+  PROPOSAL_STATES = %w[pending accepted declined].freeze
+
+  validates :license_arn, presence: true, uniqueness: true
+  validates :customer_aws_account_id, presence: true
+  validates :product_code, presence: true
+  validates :subscription_state, inclusion: { in: STATES }
+  # Among live ones only. A workspace keeps the licences it has finished with --
+  # which subscription paid for which month is a billing record, not clutter --
+  # so the slot is held by whichever licence bills it now and released when that
+  # one ends. Scoped the same way as the partial unique index behind it.
+  validates :company_id, uniqueness: { conditions: -> { live } }, allow_nil: true, if: :live?
+  validates :proposal_state, inclusion: { in: PROPOSAL_STATES }, allow_nil: true
+
+  scope :bound, -> { where.not(company_id: nil) }
+  # Everything AWS has not finished with. `ended` is terminal, so this is the
+  # one that can still be billed, cancelled, or stand in the way of another.
+  scope :live, -> { where.not(subscription_state: "ended") }
+  scope :proposed_to, ->(company) { where(proposed_company: company, proposal_state: "pending") }
+  # Bound to nothing, and with a future to apply: `ending` is already closing,
+  # and a request to apply it would wait on a confirmation that cannot come.
+  scope :proposable, -> { where(company_id: nil, subscription_state: %w[pending active]) }
+  # Somebody is being billed and has no way into the product. The first report of
+  # that must not be theirs.
+  scope :unregistered, -> { where(company_id: nil).where.not(subscription_state: "ended") }
+
+  def bound? = company_id.present?
+
+  def live? = !ended?
+
+  def proposal_pending? = proposal_state == "pending"
+
+  # A licence with nothing to apply has nothing to propose: one already bound
+  # belongs somewhere, and one closing or closed accepts no usage.
+  def proposable? = !bound? && (pending? || active?)
+
+  # `ending` counts: the hour AWS allows after an agreement closes is exactly
+  # when the last usage has to go.
+  def meterable? = bound? && (active? || ending?)
+
+  private
+
+  # When AWS first confirmed the agreement. `||=` because `confirm` accepts its
+  # own result, so a redelivered creation must not move the date.
+  def set_subscribed_at
+    self.subscribed_at ||= Time.current
+  end
+
+  # When the licence was finished here, which is within a minute or so of AWS
+  # deprovisioning it rather than AWS's own timestamp. Nothing bills off this —
+  # the last usage is bounded by the final meter's own `until_time` — so it is
+  # a record of what happened, not an input to it.
+  def set_ended_at
+    self.ended_at = Time.current
+  end
+end

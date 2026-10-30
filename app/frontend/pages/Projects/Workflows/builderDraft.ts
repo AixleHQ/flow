@@ -80,6 +80,7 @@ export function aggregatePayload(workflow: Workflow, sortedSteps: Step[]) {
   return {
     name: workflow.name,
     description: workflow.description ?? '',
+    runnerId: workflow.runnerId ?? null,
     config: Object.fromEntries(Object.entries(CONFIG_KEYS).map(([key, field]) => [key, workflow[field]])),
     steps: sortedSteps.map((step) => ({
       id: isDraftId(step.id) ? null : step.id,

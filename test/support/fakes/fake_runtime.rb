@@ -32,7 +32,7 @@ module ContainerRuntime
       end
     end
 
-    attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads
+    attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads, :cleaned_sessions
 
     def initialize(agent_type: "claude_code", filesystem: nil)
       super()
@@ -56,6 +56,7 @@ module ContainerRuntime
       @session_resources = []
       @deleted_session_resources = []
       @undeletable_resource_names = []
+      @cleaned_sessions = []
     end
 
     # Liveness injection: answer #container_status with `status` for one container
@@ -281,6 +282,26 @@ module ContainerRuntime
 
     # What was written where, for tests that care who owns it.
     def file_attributes(path) = @written_files[path]
+
+    # Every path written, in order.
+    def written_paths = @written_files.keys
+
+    # -- Session objects (the admitted launch path) ----------------------------
+    #
+    # AdmittedPhaseActivity names a session's objects before it creates them and
+    # removes them by that name at cleanup. The identity has KubernetesRuntime's
+    # shape, namespace/name.
+
+    def session_identity(session)
+      "aixle-project-#{session.project_id}/terminal-#{session.route_token}"
+    end
+
+    def cleanup_session(id)
+      @cleaned_sessions << id
+      nil
+    end
+
+    def session_absent?(id) = @cleaned_sessions.include?(id)
 
     def read_file(_id, path)
       return nil if @unreadable_paths.include?(path.to_s)
