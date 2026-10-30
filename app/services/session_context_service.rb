@@ -383,7 +383,6 @@ class SessionContextService
       adapter.mcp_config(all_servers)
     end
 
-    # Resolve model for a session: step preferred > session requested > credential default > nil
     # The model the session launches on, resolved the way AgentSessionStrategy#resolve_model
     # resolves it for the launch command. A workflow step's session captured the step's
     # preferred model in `requested_model` when it was built (SessionService.build_for_workflow_step);

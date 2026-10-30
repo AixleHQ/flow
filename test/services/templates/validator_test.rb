@@ -215,4 +215,34 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     end
     assert_empty Templates::Validator.new(complete).errors
   end
+
+  test "a step's reasoning effort must be one its runtime takes for its model" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = lambda do |runtime, model, level|
+      errors_for do |definition|
+        definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => runtime,
+                                                            "preferred_model" => model,
+                                                            "reasoning_effort" => level)
+      end
+    end
+
+    assert_equal [ "#{label}: gemini_cli with model gemini-2.5-pro takes no reasoning effort" ],
+                 errors.call("gemini_cli", "gemini-2.5-pro", "low")
+    assert_equal [ "#{label}: xhigh is not available for kiro_cli with model claude-sonnet-4.6 " \
+                   "(choose one of: low, medium, high, max)" ],
+                 errors.call("kiro_cli", "claude-sonnet-4.6", "xhigh")
+    assert_empty errors.call("gemini_cli", "gemini-3-pro", "low")
+  end
+
+  test "the installer refuses a step whose runtime and model take no such reasoning effort" do
+    invalid = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "gemini_cli",
+                                                          "preferred_model" => "gemini-2.5-pro",
+                                                          "reasoning_effort" => "low")
+    end
+
+    error = assert_raises(Templates::Validator::InvalidPackage) { Templates::Validator.validate!(invalid) }
+    assert_match(/reasoning_effort: gemini_cli with model gemini-2\.5-pro takes no reasoning effort/, error.message)
+  end
 end

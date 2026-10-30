@@ -16,7 +16,8 @@ module PersonalTools
       param :instructions, type: :string, description: "Updated instructions (markdown)."
       param :agent_id, type: :integer, description: "Agent id to run this step."
       runtime = param :required_agent_runtime, type: :string,
-                      description: "Runtime required for this step. Pass null to restore normal runtime resolution.",
+                      description: "Runtime required for this step. Pass null to restore normal runtime resolution; " \
+                                   "a step with a reasoning effort refuses that, so pass reasoning_effort: null with it.",
                       enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
       runtime["type"] = %w[string null]
       model = param :preferred_model, type: :string,
