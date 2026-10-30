@@ -87,6 +87,11 @@ class Company < ApplicationRecord
   # free.
   UNBOUNDED_PAYING_COMPANY = "is required for a company that pays — tick Managed by Aixle for one that does not"
 
+  # Until a card is added the company runs one worker (Billing::Trial), and
+  # nobody chooses another — we included. A company that needs more is one we
+  # carry.
+  TRIAL_RUNS_ONE_WORKER = "is one until a card is added — tick Managed by Aixle to set another"
+
   # Constants
   RESERVED_DOMAINS = %w[
     admin.com api.com www.com app.com mail.com ftp.com
@@ -106,6 +111,7 @@ class Company < ApplicationRecord
   validate :session_concurrency_limit_is_a_positive_integer
   validate :company_we_stop_carrying_is_bounded, if: :leaving_management?
   validate :trial_last_day_allowed, if: :setting_trial_last_day?
+  validate :trial_keeps_one_worker, if: -> { @session_concurrency_limit_assigned && Billing::Trial.workers_fixed?(self) }
   validate :initial_admin_invitable, on: :create, if: -> { initial_admin_email.present? }
 
   # Callbacks
@@ -120,6 +126,7 @@ class Company < ApplicationRecord
   before_validation :start_billing_company_we_stop_carrying, if: :leaving_management?
   before_validation :put_on_trial_until_last_day, if: -> { setting_trial_last_day? && trial_last_day_refusal.nil? }
   before_validation :give_new_trial_the_default_length, if: :starting_trial_of_default_length?
+  before_validation :start_trial_on_one_worker, if: :entering_one_worker?
   before_validation :forget_billing_block, unless: :billing_blocked?
   after_save :apply_session_concurrency_limit
 
@@ -282,6 +289,25 @@ class Company < ApplicationRecord
     end
     self.billing_state = "trialing"
     self.trial_hours = Billing::Trial.hours_ending_on(trial_last_day, spent_seconds: spent, from: from)
+  end
+
+  # Onto the trial, or stopped at its end — a company we stop carrying lands on
+  # either. Whatever the form still holds, or what it paid for before, it runs
+  # one until a card is added.
+  def entering_one_worker? = Deployment.saas? && billing_state_changed? && Billing::Trial.workers_fixed?(self)
+
+  def start_trial_on_one_worker
+    self.session_concurrency_limit = Billing::Trial::WORKERS
+  end
+
+  # Only a change is refused: a company that was given more before this rule
+  # keeps it, and runs one anyway (Billing::EffectiveCapacity).
+  def trial_keeps_one_worker
+    requested = @session_concurrency_limit.to_s
+    return if requested == Billing::Trial::WORKERS.to_s
+    return if persisted? && requested == SessionConcurrencyLimit.for_company(id).to_s
+
+    errors.add(:session_concurrency_limit, TRIAL_RUNS_ONE_WORKER)
   end
 
   def starting_trial_of_default_length?

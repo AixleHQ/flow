@@ -109,7 +109,10 @@ that limit for themselves, and the rest share what is left.
 The limit is the **company admin's** to set, on Settings → General, and they may
 raise or lower it whenever they like — once they pay. On the free trial it is
 read-only, and stays so once the trial has ended, until a card is added: the
-trial runs one worker. So are its projects' reservations. They may not clear it: a company with no
+trial runs one worker. So are its projects' reservations. A platform
+administrator cannot set another number either (`Company` and
+`SessionConcurrencyLimit` refuse it); a company that needs more is ticked
+Managed by Aixle, and going onto a trial sets the limit back to one. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
 something a company does to itself. In a company **managed by Aixle** (see
 [Billing states](#billing-states)) the limit is read-only for its admins: nobody
@@ -171,7 +174,9 @@ before the next run stops it.
 
 ### Starting again
 
-An admin adds a card, from the banner or from **Company Settings → Billing**.
+Any member who can make changes (an admin or an employee, not a viewer) adds a
+card from the banner, or pays a failed invoice there; an admin can also do it
+from **Company Settings → Billing**, which with cancelling stays theirs.
 Stripe Checkout takes it, and the workspace runs again once Stripe confirms it.
 An installation with no Stripe credentials offers no button: there, a platform
 administrator moves the company's **Billing state** to `active` in the admin, and

@@ -12,10 +12,11 @@ class CapacityTrialEndToEndTest < ActiveSupport::TestCase
 
     @user = create(:user, :with_company)
     @company = @user.companies.first
-    # A one-hour trial, so the hour the meter closes below spends it exactly.
+    # Ten before the trial, which brings it down to one; and a one-hour trial,
+    # so the hour the meter closes below spends it exactly.
+    with_company_limit(@company, 10)
     @company.update!(billing_state: "trialing", trial_hours: 1)
     @project = create(:project, owner: @user, company: @company)
-    with_company_limit(@company, 10)
   end
 
   def enqueue

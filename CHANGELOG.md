@@ -29,7 +29,9 @@ governance, community health — carry none.
 - **Admin**: a company's edit form takes a **Trial last day**, which puts the
   company on a free trial that ends with that day, or moves the end of the
   trial it is on. A company we carry, or one a subscription still bills, is
-  refused. The company's page shows when its trial ends.
+  refused. The company's page shows when its trial ends. A company on a trial
+  has one worker, and the admin cannot set another either; a company that needs
+  more is ticked Managed by Aixle.
 
 ### Changed
 - **Admin**: the dashboard's companies table shows each company's p95 queue
@@ -39,7 +41,8 @@ governance, community health — carry none.
   it ran. The banner and the Billing tab show the days left and the last day.
   The signup form no longer asks how many workers: the trial runs one, and the
   Workers setting and projects' reserved workers are read-only until a card is
-  added.
+  added. Every member who can make changes, not only an administrator, can add
+  the card or pay a failed invoice from the banner.
 - **Admin**: `TRIAL_DAYS` (default 30) sets the length of a new trial and
   replaces `TRIAL_QUEUE_HOURS`, which is no longer read. A company already on a
   trial when this ships gets the default length, counted against what it has

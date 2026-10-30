@@ -68,6 +68,8 @@ en:
       company:
         initial_admin_email: "Gets an invitation to join as the company's admin and sets their own password."
         invite_emails: "Email addresses, one per line or separated by commas. Each gets an invitation to join."
+        managed_by_aixle: "We carry it: never billed, and it runs the workers set here. To put it on a trial instead, untick this and set a Trial last day in the same save."
+        session_concurrency_limit: "On the free trial, and once it has ended without a card, this is one and cannot be changed. Tick Managed by Aixle to set another."
         trial_last_day: "Puts the company on a trial on one worker until the end of this day (UTC), or moves the end of the trial it is on. Leave blank to keep the trial as it is."
 
   admin:

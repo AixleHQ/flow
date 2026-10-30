@@ -37,7 +37,8 @@ Every new workspace starts with a **30-day free trial**, and nothing is charged
 for it.
 
 **The trial runs one worker**: one session at a time, the rest wait their turn.
-Once an administrator adds a card, they choose how many workers to keep on
+Anyone in the workspace who can make changes can add a card from the banner.
+Once one is added, an administrator chooses how many workers to keep on
 **Settings → General → Workers**.
 
 A banner at the top of every page shows how many days are left and the trial's
@@ -50,8 +51,8 @@ last day.
 - Queued work stays queued, and starts as soon as the workspace is running again.
 - You are not charged for the time you are stopped.
 
-To carry on, an administrator adds a card, from the banner or from **Settings →
-Billing**. The workspace runs again as soon as the card is confirmed.
+To carry on, anyone in the workspace who can make changes adds a card from the
+banner; an administrator can also do it from **Settings → Billing**. The workspace runs again as soon as the card is confirmed.
 
 ## Your bill so far
 

@@ -24,23 +24,45 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     Company.find_by(email_domain: "tuesday.example")
   end
 
-  test "a company made here pays: it starts on the allowance, at the limit it was given" do
+  # The trial runs one worker, so the number typed — or none — is not the one it
+  # gets; a company that needs more is one we carry.
+  test "a company made here pays: it starts on the trial, on one worker" do
     company = create_company(session_concurrency_limit: "3")
 
     assert_equal "trialing", company.billing_state
     assert_equal false, company.managed_by_aixle # rubocop:disable Minitest/RefuteFalse
-    assert_equal 3, SessionConcurrencyLimit.for_company(company.id)
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 
-  # No limit means nothing is metered, so a paying company without one would
-  # run for free.
-  test "a paying company is refused without a limit" do
-    assert_no_difference("Company.count") do
-      create_company(session_concurrency_limit: "")
-    end
+  test "a company made here without a number starts on one worker too" do
+    company = create_company(session_concurrency_limit: "")
+
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+  end
+
+  test "a trialing company cannot be given more than one worker, by us either" do
+    company = create(:company, :trialing)
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, session_concurrency_limit: "5" }
+    }
 
     assert_response :unprocessable_entity
-    assert_match(/required for a company that pays/, response.body)
+    assert_match(/one until a card is added — tick Managed by Aixle to set another/, response.body)
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+  end
+
+  test "ticking Managed by Aixle frees a trialing company's workers" do
+    company = create(:company, :trialing)
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, managed_by_aixle: "1",
+                 session_concurrency_limit: "5" }
+    }
+
+    company.reload
+    assert_equal "active", company.billing_state
+    assert_equal 5, SessionConcurrencyLimit.for_company(company.id)
   end
 
   test "a company we carry is not billed and gets two workers" do
@@ -91,6 +113,27 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     company.reload
     assert_equal false, company.managed_by_aixle # rubocop:disable Minitest/RefuteFalse
     assert_equal "trialing", company.billing_state
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+  end
+
+  # Unticked alone, a company we carry starts on whatever is left of a trial
+  # counted over everything it ever ran; a last day in the same save starts a
+  # fresh one.
+  test "a company we carry moves onto a fresh trial with a last day" do
+    company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: 40.days.ago.beginning_of_hour,
+                                 quantity_seconds: 2000 * 3600)
+    last_day = 14.days.from_now.to_date
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, managed_by_aixle: "0",
+                 session_concurrency_limit: "2", trial_last_day: last_day.iso8601 }
+    }
+
+    company.reload
+    assert company.billing_trialing?
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+    assert_equal last_day, Billing::Trial.last_day(company)
   end
 
   test "an operator puts a company on a trial that ends on a day they choose" do
@@ -165,7 +208,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     assert_match(/30 days left, on one worker/, response.body)
   end
 
-  test "unticking a company we carry that has no limit is refused" do
+  test "unticking a company we carry that has no limit puts it on one worker" do
     company = create(:company, :managed_by_aixle)
 
     patch admin_company_path(company), params: {
@@ -173,8 +216,26 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
                  session_concurrency_limit: "" }
     }
 
-    assert_response :unprocessable_entity
-    assert_match(/required for a company that pays/, response.body)
-    assert company.reload.managed_by_aixle
+    company.reload
+    assert company.billing_trialing?
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+  end
+
+  # Unticked with no last day, the trial is counted over everything the company
+  # ran while we carried it — the operator has to be told when that stops it.
+  test "unticking a company that already ran past a trial says it is stopped" do
+    company = create(:company, :managed_by_aixle, session_concurrency_limit: "2")
+    CompanyCapacityUsage.record!(company_id: company.id, period_start: 40.days.ago.beginning_of_hour,
+                                 quantity_seconds: 2000 * 3600)
+
+    patch admin_company_path(company), params: {
+      company: { name: company.name, email_domain: company.email_domain, managed_by_aixle: "0",
+                 session_concurrency_limit: "2" }
+    }
+
+    assert_match(/has used up a free trial .* Set a Trial last day to give it a new one/, flash[:notice])
+    company.reload
+    assert_equal "allowance", company.billing_status
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
   end
 end

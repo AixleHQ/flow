@@ -11,7 +11,7 @@ module Admin
       start_new_trial(company) if new_trial
 
       if company.save
-        notice = new_trial || company.trial_last_day ? trial_notice(company) : translate_with_resource("update.success")
+        notice = update_notice(company, new_trial)
         redirect_with_invitations(company, notice, fallback: after_resource_updated_path(company))
       else
         render :edit, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
@@ -91,6 +91,20 @@ module Admin
       company.billing_state = "trialing"
       company.trial_started_at = Time.current
       company.trial_hours = Billing::Trial.new_trial_hours
+    end
+
+    def update_notice(company, new_trial)
+      return trial_notice(company) if new_trial || company.trial_last_day
+      return spent_trial_notice(company) if company.saved_change_to_billing_state? && company.billing_status == "allowance"
+
+      translate_with_resource("update.success")
+    end
+
+    # What unticking Managed by Aixle leads to when the company already ran past
+    # a trial's worth (Company#start_billing_company_we_stop_carrying).
+    def spent_trial_notice(company)
+      "#{company.name} has used up a free trial — counted over everything it ran while we carried it — and is " \
+        "stopped until a card is added. Set a Trial last day to give it a new one."
     end
 
     def trial_notice(company)

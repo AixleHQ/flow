@@ -32,7 +32,12 @@ export const TrialBanner = () => {
   // second subscription and bill the same minutes twice.
   const unpaid = blocked && trial.status === 'payment_failed';
   const ended = blocked && trial.status === 'canceled';
-  const carryOn = trial.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.';
+  const mayPay = trial.canPay && (permissions?.canWrite ?? permissions?.isAdmin);
+  const carryOn = mayPay
+    ? 'Add a card to carry on.'
+    : trial.canPay
+      ? 'Someone in your workspace can add a card to carry on.'
+      : 'Talk to us to carry on.';
   const Icon = urgent || blocked ? IconAlertTriangle : IconHourglassHigh;
 
   return (
@@ -77,7 +82,7 @@ export const TrialBanner = () => {
           <div className={classes.meterFill} style={{ width: `${spent}%` }} />
         </div>
       )}
-      {trial.canPay && permissions?.isAdmin && (
+      {mayPay && (
         <Button
           className={classes.cta}
           leftSection={<IconCreditCard size={16} />}

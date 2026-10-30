@@ -87,9 +87,11 @@ class CompanyManagedByAixleTest < ActiveSupport::TestCase
     assert_equal "cancelling", company.reload.billing_status
   end
 
+  # One with no subscription goes onto the trial, and with it one worker; one a
+  # subscription still bills keeps paying, and needs a number to pay for.
   test "a company we stop carrying needs a limit to be metered against" do
     saas!
-    company = create(:company, :managed_by_aixle)
+    company = create(:company, :managed_by_aixle, stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")
 
     assert_not company.update(managed_by_aixle: false)
     assert_includes company.errors[:session_concurrency_limit], Company::UNBOUNDED_PAYING_COMPANY

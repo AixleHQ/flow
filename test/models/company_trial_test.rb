@@ -71,6 +71,23 @@ class CompanyTrialTest < ActiveSupport::TestCase
     assert company.billing_trialing?
   end
 
+  test "a company that goes onto a trial drops to one worker" do
+    company = create(:company, session_concurrency_limit: "4")
+
+    company.update!(trial_last_day: Date.new(2026, 11, 15))
+
+    assert_equal 1, SessionConcurrencyLimit.for_company(company.id)
+  end
+
+  test "moving the last day leaves a company given more before as it was" do
+    company = create(:company, session_concurrency_limit: "4")
+    company.update_column(:billing_state, "trialing")
+
+    company.update!(trial_last_day: Date.new(2026, 11, 15), session_concurrency_limit: "4")
+
+    assert_equal 4, SessionConcurrencyLimit.for_company(company.id)
+  end
+
   test "saving anything else leaves the trial as it is" do
     company = create(:company, :trialing)
 

@@ -57,10 +57,20 @@ describe('TrialBanner', () => {
     expect(screen.getByRole('button', { name: 'Add a card now' })).toBeInTheDocument();
   });
 
-  // A member can see where the workspace stands without being offered a button
+  it('offers the card to every member who can change anything, not only an administrator', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial, permissions: buildSharedPermissions({ isAdmin: false, canWrite: true }) },
+    });
+
+    expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  // A viewer can see where the workspace stands without being offered a button
   // the server would refuse.
   it('offers no button to somebody who may not press it', () => {
-    renderPage(<TrialBanner />, { props: { trial, permissions: buildSharedPermissions({ isAdmin: false }) } });
+    renderPage(<TrialBanner />, {
+      props: { trial, permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }) },
+    });
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
@@ -80,6 +90,15 @@ describe('TrialBanner', () => {
     const banner = screen.getByRole('status');
     expect(banner).toHaveTextContent('Your free trial has ended');
     expect(banner).toHaveTextContent('Anything already running finishes');
+  });
+
+  it('points a viewer, who has no button, at someone who can add the card', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: blocked, permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }) },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Someone in your workspace can add a card to carry on.');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   // The way out has to match the button beside it: offering "talk to us" next to
