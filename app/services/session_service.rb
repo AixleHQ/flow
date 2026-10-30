@@ -202,7 +202,7 @@ class SessionService
         mode: "interactive",
         initial_prompt: prompt,
         requested_model: step.preferred_model.presence || run_model,
-        runner: workflow_run.runner,
+        runner_id: workflow_run.runner_id,
         metadata: {
           "workflow_run_id" => workflow_run.id,
           "step_run_id" => step_run.id,

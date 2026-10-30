@@ -164,6 +164,17 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     assert_equal @company.name, runners.first["operatedBy"]
   end
 
+  test "the builder does not offer a stale reference to another project's runner" do
+    other_project = create(:project, company: @company, owner: @user, name: "Lab")
+    foreign = create(:runner, company: @company, project: other_project, created_by: @user, name: "Lab box")
+    @workflow.update_column(:runner_id, foreign.id)
+    enable_runners
+
+    get builder_company_project_workflow_path(@project, @workflow), headers: deferred("runners")
+
+    assert_equal [ "Prod VPC" ], response.parsed_body.dig("props", "runners").pluck("name")
+  end
+
   private
 
   def enable_runners
