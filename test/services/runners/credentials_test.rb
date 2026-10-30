@@ -88,6 +88,21 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert Runners::Credentials.usable(other_machine.access_token, kind: :access)
   end
 
+  test "a spent refresh token replayed after its own expiry still revokes the live family" do
+    first = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).refresh_token, kind: :refresh)
+    second = RunnerCredential.find_by_token(Runners::Credentials.rotate!(first).refresh_token, kind: :refresh)
+    travel 29.days
+    newest = Runners::Credentials.rotate!(second)
+    travel 2.days
+
+    error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(first.reload) }
+
+    assert_equal "credential_reuse_detected", error.reason
+    assert_equal "credential reuse detected", @environment.reload.state_reason
+    assert RunnerCredential.find_by_token(newest.refresh_token, kind: :refresh).revoked?
+    assert_empty RunnerCredential.where(family_id: first.family_id).unrevoked
+  end
+
   test "a refresh token unused for 30 days, or revoked, rotates into nothing" do
     expiring = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).refresh_token, kind: :refresh)
     revoked = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).refresh_token, kind: :refresh)

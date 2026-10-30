@@ -74,7 +74,9 @@ module Runners
     # Spends a refresh token on a new pair of the same family. A refresh token
     # presented a second time means two holders have it, so the whole family is
     # revoked and the environment records why (§9.2); the revocation commits
-    # before the refusal is raised.
+    # before the refusal is raised. A spent token counts as reused even past
+    # its own expiry: the 30-day limit is for a token left unused, and the
+    # family it was rotated into may still be live.
     #
     # Locks in the one order every issuer and revoker uses: the runner (see
     # lock_live_runner!), then the environment (Registration.unregister! locks
@@ -86,12 +88,14 @@ module Runners
         lock_live_runner!(credential.runner_id)
         environment = RunnerEnvironment.lock.find(credential.runner_environment_id)
         credential.lock!
-        if credential.revoked? || credential.expired? || environment.gone?
+        if credential.revoked? || environment.gone?
           nil
         elsif credential.used?
           reused = true
           revoke_family!(credential.family_id)
           environment.update!(state_reason: REUSE_DETECTED)
+          nil
+        elsif credential.expired?
           nil
         else
           credential.update!(used_at: Time.current)
