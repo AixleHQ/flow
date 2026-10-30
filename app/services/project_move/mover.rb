@@ -115,11 +115,18 @@ module ProjectMove
     # hold the rows to it, so this runs before reparent!. The workflows, archived
     # ones included, switch to Hosted (Preflight lists them). Past runs and
     # sessions are history, none of it live (Preflight), and keep it without the
-    # runner. Like the asset rewrite, this writes no workflow version: a version
-    # from before the move still names the runner, and a revert to it is refused.
+    # runner. The workflows' versions drop the runner too, Hosted being the
+    # absent key as in Snapshot.dump, so no version names a runner of the source
+    # company: a deliberate exception to "history is never rewritten"
+    # (docs/design/entity-versioning.md, D3). Otherwise, like the asset rewrite,
+    # this writes no workflow version.
     def clear_runner_references!
       now = Time.current
-      Workflow.for_project(@project).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
+      workflows = Workflow.for_project(@project)
+      EntityVersion.where(versionable_type: "Workflow", versionable_id: workflows.select(:id))
+                   .where("snapshot -> 'runner_id' IS NOT NULL")
+                   .update_all(Arel.sql("snapshot = snapshot - 'runner_id'"))
+      workflows.where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
       WorkflowRun.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
       TerminalSession.where(project_id: @project.id).where.not(runner_id: nil).update_all(runner_id: nil, updated_at: now)
     end

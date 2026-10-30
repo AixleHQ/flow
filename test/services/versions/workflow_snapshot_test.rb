@@ -127,4 +127,29 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
 
     assert_equal runner.id, @workflow.reload.runner_id
   end
+
+  test "a version whose runner row is gone restores Hosted" do
+    runner = create(:runner, company: @company, created_by: @user)
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: runner, description: "on runner") }
+    on_runner = @workflow.latest_version
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(runner: nil, description: "hosted") }
+    runner.delete
+
+    Versions.revert!(@workflow, to: on_runner, actor: @actor)
+
+    assert_equal [ nil, "on runner" ], [ @workflow.reload.runner_id, @workflow.description ]
+  end
+
+  test "a version naming a runner the project can no longer use restores Hosted" do
+    other_project = create(:project, company: @company, owner: @user)
+    foreign = create(:runner, company: @company, project: other_project, created_by: @user)
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "stale") }
+    stale = @workflow.latest_version
+    EntityVersion.where(id: stale.id).update_all(snapshot: stale.snapshot.merge("runner_id" => foreign.id))
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "now") }
+
+    Versions.revert!(@workflow, to: stale.reload, actor: @actor)
+
+    assert_equal [ nil, "stale" ], [ @workflow.reload.runner_id, @workflow.description ]
+  end
 end
