@@ -168,6 +168,7 @@ class WorkflowDuplicator
       on_failure: step.on_failure,
       max_retries: step.max_retries,
       preferred_model: step.preferred_model,
+      reasoning_effort: step.reasoning_effort,
       bmad_enabled: step.bmad_enabled,
       required_agent_runtime: step.required_agent_runtime,
       input_asset_specs: step.input_asset_specs,

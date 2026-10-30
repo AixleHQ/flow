@@ -1597,6 +1597,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
     t.string "preferred_model"
+    t.string "reasoning_effort"
     t.jsonb "repository_ids", default: [], null: false
     t.string "required_agent_runtime"
     t.jsonb "skill_ids", default: [], null: false
@@ -1727,6 +1728,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
     t.bigint "project_id"
     t.datetime "queued_at"
     t.datetime "ready_at"
+    t.string "reasoning_effort"
     t.string "requested_model"
     t.string "route_token"
     t.jsonb "session_config", default: {}, null: false

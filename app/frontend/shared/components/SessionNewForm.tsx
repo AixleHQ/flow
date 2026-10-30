@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ConfigItemPicker, RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
@@ -77,6 +78,8 @@ const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 interface AgentModel {
   modelId: string;
   displayName: string;
+  /** The reasoning-effort levels the runtime takes for this model, from the server. */
+  reasoningEffortLevels: string[];
 }
 
 interface AgentModelsEntry {
@@ -134,6 +137,7 @@ export const SessionNewForm = ({
   );
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedEffort, setSelectedEffort] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
   const [selectedToolIds, setSelectedToolIds] = useState<number[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -157,6 +161,9 @@ export const SessionNewForm = ({
   }, [agentModels]);
 
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
+
+  const effortLevelsFor = (model: string | null) =>
+    model ? models.find((m) => m.modelId === model)?.reasoningEffortLevels : undefined;
 
   const defaultModelId = agentType ? (agentModels.find((e) => e.agentType === agentType)?.defaultModel ?? null) : null;
   const defaultModelLabel = defaultModelId
@@ -185,6 +192,7 @@ export const SessionNewForm = ({
     let count = 0;
     if (selectedPersona) count++;
     if (selectedModel) count++;
+    if (selectedEffort) count++;
     count +=
       selectedToolIds.length +
       selectedSkills.length +
@@ -197,6 +205,7 @@ export const SessionNewForm = ({
   }, [
     selectedPersona,
     selectedModel,
+    selectedEffort,
     selectedToolIds,
     selectedSkills,
     selectedMcpServers,
@@ -237,6 +246,7 @@ export const SessionNewForm = ({
             mode,
             initialPrompt: mode === 'non_interactive' ? initialPrompt : null,
             requestedModel: selectedModel || undefined,
+            reasoningEffort: (selectedModel && selectedEffort) || undefined,
             configuredAgentId: selectedPersona ? Number(selectedPersona) : undefined,
             toolIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
             skillIds: selectedSkills.length > 0 ? selectedSkills.map(Number) : undefined,
@@ -288,6 +298,7 @@ export const SessionNewForm = ({
     initialPrompt,
     bmadEnabled,
     selectedModel,
+    selectedEffort,
     selectedPersona,
     selectedToolIds,
     selectedSkills,
@@ -350,6 +361,7 @@ export const SessionNewForm = ({
           onChange={(type) => {
             setAgentType(type);
             setSelectedModel(null);
+            setSelectedEffort(null);
           }}
         />
         {configuredAgents.length === 0 && (
@@ -427,13 +439,33 @@ export const SessionNewForm = ({
         placeholder={defaultModelLabel}
         title={modelFieldLabel}
         value={selectedModel}
-        onChange={(value) => setSelectedModel(value === DEFAULT_MODEL_OPTION ? null : value)}
+        onChange={(value) => {
+          const model = value === DEFAULT_MODEL_OPTION ? null : value;
+          setSelectedModel(model);
+          // A level needs an explicitly chosen model that takes it, so one the new
+          // model doesn't take (or Default, which takes none) clears it.
+          if (selectedEffort && !(effortLevelsFor(model) ?? []).includes(selectedEffort)) {
+            setSelectedEffort(null);
+          }
+        }}
         data={modelOptions}
         classNames={{ input: classes.modelInput, option: classes.modelOption }}
         searchable
         clearable
         disabled={!agentType}
       />
+
+      {/* A level needs an explicitly chosen model; the server refuses one without it. */}
+      {selectedModel && (
+        <ReasoningEffortSelect
+          label="Reasoning effort"
+          runtime={agentType || null}
+          model={selectedModel}
+          levels={effortLevelsFor(selectedModel)}
+          value={selectedEffort}
+          onChange={setSelectedEffort}
+        />
+      )}
 
       {agents.length > 0 && (
         <Select

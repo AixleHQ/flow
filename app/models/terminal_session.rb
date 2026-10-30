@@ -110,6 +110,11 @@ class TerminalSession < ApplicationRecord
   validates :mode, inclusion: { in: %w[interactive non_interactive] }, allow_nil: true
   validates :initial_prompt, presence: true, if: -> { mode == "non_interactive" }
   validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  normalizes :reasoning_effort, with: ->(value) { value.to_s.strip.presence }
+  # A level needs the session's runtime and an explicitly chosen model, and must be one
+  # that runtime takes for that model. A workflow step's session copies its step's
+  # runtime, model and level, so it passes the same check.
+  validates :reasoning_effort, reasoning_effort: { runtime: :agent_type, model: :requested_model }, on: :create
   # Whatever the container is handed — a repository cloned with its
   # integration's token, an MCP server with its headers, an asset's bytes, a
   # config item's decrypted value — must be this tenant's. Checked on create,

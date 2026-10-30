@@ -49,6 +49,7 @@ type AssetSpec = Step['outputAssetSpecs'][number];
 interface AgentModel {
   modelId: string;
   displayName: string;
+  reasoningEffortLevels: string[];
 }
 interface AgentModelsEntry {
   agentType: string;

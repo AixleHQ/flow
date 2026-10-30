@@ -24,13 +24,14 @@ repository's matrix still lacked it after that.
 | `cli_version` | The CLI release the image installs, passed as the `CLI_VERSION` build arg. `null` would mean the image installs whatever the vendor ships that day, so the image tag, not the registry, fixes what a deployment runs; every runtime is pinned today. |
 | `cli_latest` | Where the weekly canary finds the vendor's newest release (`bin/agent-cli-latest` reads it): `{ "npm": "<package>" }`, or `{ "url": "<endpoint>" }` with a body that is the version, or that URL plus `"jq": "<filter>"` for a JSON body (Kiro's manifest) or `"pattern": "<regex>"` whose first group is the version (Cursor's install script, the only place it publishes one). `null` means the canary builds the pin. |
 | `cli_releases` | Where the vendor's release notes are. `{ "github": "<owner/repo>", "tag_prefix": "<prefix before the version>" }`: the canary report quotes them, and they give the newest version when `cli_latest` is `null`; pre-releases and tags that are not `X.Y.Z` are ignored. `{ "url": "<changelog page>" }`: the report links it. |
+| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels(model)` applies the rule, the only place that does, and returns no level for a blank model. See [Reasoning effort](#reasoning-effort). |
 
 ## Who reads it
 
 | Consumer | Uses |
 | --- | --- |
-| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. |
-| `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`. Badge colors stay in the frontend. |
+| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. `reasoning_effort_levels(model)` is what a step's or session's reasoning effort is validated against, and what `CompanyMembership#agent_models_for_props` puts on each model option as `reasoning_effort_levels`. The class method `AgentRuntime.reasoning_effort_levels`, the union of every runtime's levels, is only the enum of the `create_workflow_step` and `update_workflow_step` MCP tools. |
+| `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`. Badge colors stay in the frontend. The reasoning-effort select does not read the registry: it offers the `reasoningEffortLevels` the server sent on the selected model option. |
 | `.github/workflows/images.yml` | The `agent-images` build matrix, the `CLI_VERSION` build arg, the canary's newest-release lookup (`bin/agent-cli-latest`), and its update report (`bin/agent-cli-report`). |
 | `bin/build-agent-images` (`make build-agents`) | Local builds, with the same build args. |
 | The deployment repository | Its agent image build matrix, read from the release tag it deploys. |
@@ -41,6 +42,70 @@ keeps per-release checksums has a pair for its pin, and `agents.images`
 overrides plus both launch command maps cover every runtime. The Dependabot directory
 list is not checked — the test image is built without `.github/` — so step 1 below is
 on the reviewer.
+
+## Reasoning effort
+
+A step (`steps.reasoning_effort`, next to `preferred_model`, part of the step's version
+snapshot) and a standalone session (`terminal_sessions.reasoning_effort`, set from the
+new-session form and `POST /api/v1/terminal_sessions`) can name a reasoning-effort level.
+Unset is the CLI's own default, and the launch command is then exactly what it was before
+the setting existed.
+
+Two rules apply, on steps and sessions alike:
+
+1. A level can be set only when both the runtime and the model are chosen explicitly: a
+   step's `required_agent_runtime` and `preferred_model`, or a session's `agent_type` and
+   `requested_model`.
+2. A level that is set must be one that this runtime takes for this model.
+
+`ReasoningEffortValidator` checks both, with one message per failure, so the REST API and
+the MCP tools answer 422. A step is checked on every save; a session, workflow step
+sessions included, when it is created. Clearing the model or the runtime while a level is
+set is refused the same way, so the caller clears the level with them. The step editor
+and the new-session form hide the select until a model is chosen. They offer the levels
+the server put on that model option (`CompanyMembership#agent_models_for_props`), so the
+rule is evaluated only on the server, and a model switch clears a level the new model
+doesn't take (Default takes none). A saved step whose model the credential doesn't list
+shows its level with the levels marked unknown. The level is never checked against the
+credential's default model, because that can change at any time and every saved level
+would then need re-checking. An effort for the default model, if it is ever needed,
+belongs next to the default model in the agent profile.
+
+A step's session copies its step's runtime, model and level, and the launch and the
+generated CLI config both read the model from the session's captured `requested_model`,
+not from the live step. Both pass `session.reasoning_effort` to the adapter as it is.
+
+Each CLI was checked at its pin, on the binary the image installs (help text, a launch
+with a bad level, the strings or bundled source of the release), not only in the vendor's
+docs:
+
+| Runtime | Pin | How the level is set | Levels offered | Depends on the model |
+| --- | --- | --- | --- | --- |
+| Claude Code | 2.1.310 | `claude --effort <level>` | low, medium, high, xhigh, max | Yes: xhigh and max exist on some models only, and the CLI steps an unsupported level down silently. An unknown word is a warning, and the session runs at the default. |
+| Cursor CLI | 2026.10.22-27dcf5f | No flag. A parameterized model takes it as a bracket override: `agent --model 'claude-opus-4-8[effort=high]'` | low, medium, high, and only with an explicit model | Yes: the parameters a model takes come from Cursor's backend (`--list-models`, signed in). The common levels are offered. With no model there is nothing to attach the level to, and a model id that already carries `[...]` keeps its own overrides. |
+| Codex | 0.164.0 | No flag: the `model_reasoning_effort` config key, passed as `codex -c model_reasoning_effort=<level>` | low…xhigh; up to max on `gpt-6-luna` / `gpt-5.6-luna`; up to ultra on the Sol, Terra, Astra and Daybreak models | Yes: from the model catalog bundled in the binary (`supported_reasoning_levels`). The CLI's enum also has `none` and `minimal`, which no bundled model lists. |
+| Gemini CLI | 0.60.0 | No flag: `modelConfigs.customOverrides` in `~/.gemini/settings.json`, matching the `chat-base-3` alias with `thinkingConfig.thinkingLevel` `LOW` or `HIGH` (written by `GeminiCliAdapter#generate_settings`) | low, high | Yes: Gemini 3 models take a thinking level (HIGH is the default), Gemini 2.5 models take a token budget instead, which this setting does not cover, so `gemini-2.*` offers none. Matching the alias keeps the level off the CLI's internal utility calls. |
+| Antigravity CLI | 1.4.7 | `agy --effort <level>` | low, medium, high | Yes: the CLI's grammar is low…max, but each model has its own variants, and the CLI refuses a level its model lacks (`--effort=… is not supported for model …`). Without a signed-in account the per-model list cannot be read, so only the levels every model offers are offered. |
+| Grok | 1.0.70 | `grok --reasoning-effort <level>` (alias `--effort`), honoured in the TUI as well as headless | low, medium, high, xhigh | Yes: the model catalogue says which models support it, and a model without reasoning effort ignores the flag. |
+| Kiro CLI | 2.34.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; claude-sonnet-4.6 has no xhigh; `auto` and the Haiku models have none | Yes, checked live on 2.34.0: an unsupported level prints `failed to set effort` and the session continues at the default. |
+
+Every runtime supports a level in some form. The UI disables the select, with the
+reason, where the chosen runtime and model offer none: Gemini 2.5 models, and Kiro's
+`auto` and Haiku models.
+
+The registry does not keep a full per-model matrix. Where a vendor decides per model
+whether a level is honoured (Claude Code's xhigh and max, Grok's models without reasoning
+effort, Cursor's backend parameters), it lists the levels the CLI accepts, and the CLI may
+lower or ignore a level the model doesn't support. The select says so under the field.
+
+When a pin is raised, re-check the CLI's levels and update `reasoning_effort` with it:
+`--help` for a flag, a launch with a bogus level for the accepted list, and for Codex the
+bundled catalog's `supported_reasoning_levels`. The template schema
+(`config/templates/template.v1.json`) types `reasoning_effort` only as a string;
+`Templates::Validator#check_reasoning_efforts` checks the level against the step's runtime
+and model through `AgentRuntime`, so a new level needs no schema edit. A level the new pin no longer takes (for the CLI or for one model) comes with a data
+migration that clears or replaces it on the steps that have it, because a step is validated
+on every save and would otherwise refuse unrelated edits.
 
 ## Raising a CLI pin
 

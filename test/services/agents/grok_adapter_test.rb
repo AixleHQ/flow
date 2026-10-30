@@ -146,6 +146,12 @@ module Agents
       assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive")
     end
 
+    test "session_command passes the reasoning effort as --reasoning-effort" do
+      assert_equal "grok --yolo --model grok-4.5 --reasoning-effort xhigh",
+                   @adapter.session_command(mode: "interactive", model: "grok-4.5", effort: "xhigh")
+      assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive", effort: nil)
+    end
+
     test "session_command shell-escapes the requested model" do
       assert_equal "grok --yolo --model grok-4.5", @adapter.session_command(mode: "interactive", model: "grok-4.5")
       assert_equal "grok --yolo --model grok\\ 4.5\\;rm", @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import registry from '../../../../config/agent_runtimes.json';
 
-import { AGENT_RUNTIMES, AGENT_TYPES, agentLabel } from './agentRuntimes';
+import { AGENT_RUNTIMES, AGENT_TYPES, agentLabel, reasoningEffortLabel } from './agentRuntimes';
 
 describe('AGENT_RUNTIMES', () => {
   it('lists the registry runtimes in the registry order', () => {
@@ -18,5 +18,12 @@ describe('AGENT_RUNTIMES', () => {
   it('labels a runtime from the registry and falls back to the raw id', () => {
     expect(agentLabel('codex')).toBe('Codex');
     expect(agentLabel('retired_cli')).toBe('retired_cli');
+  });
+});
+
+describe('reasoningEffortLabel', () => {
+  it('names a known level and falls back to the raw word', () => {
+    expect(reasoningEffortLabel('xhigh')).toBe('Extra high');
+    expect(reasoningEffortLabel('turbo')).toBe('turbo');
   });
 });

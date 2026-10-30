@@ -16,6 +16,7 @@ import { useRef, useState } from 'react';
 import type { ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
@@ -43,6 +44,7 @@ type SessionStep = Pick<
   | 'agentId'
   | 'requiredAgentRuntime'
   | 'preferredModel'
+  | 'reasoningEffort'
   | 'allowNonInteractive'
   | 'skipPolicy'
   | 'onFailure'
@@ -177,6 +179,8 @@ function AssetRows({ specs, onChange, showNamePattern, disabled, kind, placehold
 interface AgentModel {
   modelId: string;
   displayName: string;
+  /** The reasoning-effort levels the runtime takes for this model, from the server. */
+  reasoningEffortLevels: string[];
 }
 interface AgentModelsEntry {
   agentType: string;
@@ -244,6 +248,8 @@ export function SessionEditorPanel({
   const modelOptions = runtimeModels
     .filter((m) => m.modelId)
     .map((m) => ({ value: m.modelId, label: m.displayName || m.modelId }));
+  const effortLevelsFor = (model: string | null) =>
+    model ? runtimeModels.find((m) => m.modelId === model)?.reasoningEffortLevels : undefined;
   const preferredModelOptions =
     step.preferredModel && !modelOptions.some((o) => o.value === step.preferredModel)
       ? [...modelOptions, { value: step.preferredModel, label: step.preferredModel }]
@@ -378,6 +384,8 @@ export function SessionEditorPanel({
                 if (runtime === step.requiredAgentRuntime) return;
                 onFieldChange('requiredAgentRuntime', runtime);
                 if (step.preferredModel) onFieldChange('preferredModel', null);
+                // A level needs an explicitly chosen model, and the model is cleared.
+                if (step.reasoningEffort) onFieldChange('reasoningEffort', null);
               }}
               disabled={readOnly}
               clearable
@@ -403,12 +411,47 @@ export function SessionEditorPanel({
               <Select
                 data={preferredModelOptions}
                 value={step.preferredModel ?? null}
-                onChange={(v) => onFieldChange('preferredModel', v || null)}
+                onChange={(v) => {
+                  const model = v || null;
+                  onFieldChange('preferredModel', model);
+                  // A level needs an explicitly chosen model that takes it, so one the new
+                  // model doesn't take (or Default, which takes none) clears it.
+                  if (step.reasoningEffort && !(effortLevelsFor(model) ?? []).includes(step.reasoningEffort)) {
+                    onFieldChange('reasoningEffort', null);
+                  }
+                }}
                 disabled={readOnly}
                 clearable
                 searchable
                 placeholder="Default (runtime selects)"
                 aria-label="Preferred model"
+                styles={{
+                  input: {
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    color: 'var(--text-1)',
+                    fontSize: 13,
+                  },
+                }}
+              />
+            </div>
+          )}
+          {/* A level needs an explicitly chosen runtime and model; the server refuses one without them. */}
+          {step.requiredAgentRuntime && step.preferredModel && (
+            <div>
+              <label className={classes.fieldLabel}>
+                Reasoning Effort&nbsp;
+                <InfoHint label="How hard the runtime's CLI thinks in this session, on the model chosen above. Default keeps the CLI's own level." />
+              </label>
+              <ReasoningEffortSelect
+                runtime={step.requiredAgentRuntime}
+                model={step.preferredModel}
+                levels={effortLevelsFor(step.preferredModel)}
+                value={step.reasoningEffort ?? null}
+                onChange={(v) => onFieldChange('reasoningEffort', v)}
+                disabled={readOnly}
+                aria-label="Reasoning effort"
                 styles={{
                   input: {
                     background: 'transparent',

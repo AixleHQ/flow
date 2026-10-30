@@ -23,6 +23,7 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   agentId: null,
   requiredAgentRuntime: null,
   preferredModel: null,
+  reasoningEffort: null,
   allowNonInteractive: false,
   skipPolicy: 'never',
   onFailure: 'fail',
@@ -173,6 +174,25 @@ afterEach(() => {
   vi.restoreAllMocks();
   notifications.clean();
 });
+
+// Model options as the server sends them, each with the levels its runtime takes for it.
+const KIRO_MODELS = [
+  {
+    agentType: 'kiro_cli',
+    models: [
+      {
+        modelId: 'claude-opus-5.5',
+        displayName: 'Opus 5.5',
+        reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      {
+        modelId: 'claude-sonnet-4.6',
+        displayName: 'Sonnet 4.6',
+        reasoningEffortLevels: ['low', 'medium', 'high', 'max'],
+      },
+    ],
+  },
+];
 
 describe('Projects/Workflows/BuilderPage', () => {
   it('renders the sessions sidebar and the first session selected in the detail panel', () => {
@@ -924,7 +944,12 @@ describe('Projects/Workflows/BuilderPage', () => {
             preferredModel: 'opus-9',
           }),
         ],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+        agentModels: [
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
+        ],
       }),
     });
 
@@ -942,7 +967,12 @@ describe('Projects/Workflows/BuilderPage', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+        agentModels: [
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
+        ],
       }),
     });
 
@@ -958,8 +988,11 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
         agentModels: [
-          { agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] },
-          { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X' }] },
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
+          { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X', reasoningEffortLevels: [] }] },
         ],
       }),
     });
@@ -972,6 +1005,202 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.steps[0].preferredModel).toBe('opus-9');
+  });
+
+  it("a Reasoning Effort offers the runtime's levels on a chosen model and is sent on Save", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'gemini_cli',
+            preferredModel: 'gemini-3-pro',
+          }),
+        ],
+        agentModels: [
+          {
+            agentType: 'gemini_cli',
+            models: [
+              { modelId: 'gemini-3-pro', displayName: 'Gemini 3 Pro', reasoningEffortLevels: ['low', 'high'] },
+              { modelId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', reasoningEffortLevels: [] },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByText("The CLI may lower or ignore a level the model doesn't support.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+    expect(await screen.findByRole('option', { name: 'Low' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Medium' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'High' }));
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].reasoningEffort).toBe('high');
+  });
+
+  it('a Reasoning Effort is disabled, with the reason, where the runtime and model take none', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'gemini_cli',
+            preferredModel: 'gemini-2.5-pro',
+          }),
+        ],
+        agentModels: [
+          {
+            agentType: 'gemini_cli',
+            models: [
+              { modelId: 'gemini-3-pro', displayName: 'Gemini 3 Pro', reasoningEffortLevels: ['low', 'high'] },
+              { modelId: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', reasoningEffortLevels: [] },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+    expect(screen.getByText('Gemini CLI has no reasoning-effort setting for gemini-2.5-pro.')).toBeInTheDocument();
+  });
+
+  it('a saved level the model does not take is shown as an error, not dropped', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-sonnet-4.6',
+            reasoningEffort: 'xhigh',
+          }),
+        ],
+        agentModels: KIRO_MODELS,
+      }),
+    });
+
+    expect(
+      screen.getByText(
+        'Extra high is not available for Kiro CLI with claude-sonnet-4.6. Choose one of: Low, Medium, High, Max.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('textbox', { name: 'Session name' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), ' 2');
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].reasoningEffort).toBe('xhigh');
+  });
+
+  it("switching to a model that doesn't take the level clears it, and keeps one it takes", async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-opus-5.5',
+            reasoningEffort: 'xhigh',
+          }),
+        ],
+        agentModels: KIRO_MODELS,
+      }),
+    });
+    const effort = () => screen.getByRole('combobox', { name: 'Reasoning effort' });
+    const pickModel = async (name: string) => {
+      await userEvent.click(screen.getByRole('combobox', { name: 'Preferred model' }));
+      await userEvent.click(await screen.findByRole('option', { name }));
+    };
+
+    expect(effort()).toHaveValue('Extra high');
+    await pickModel('Sonnet 4.6');
+    expect(effort()).toHaveValue('');
+    expect(screen.queryByText(/is not available for/)).not.toBeInTheDocument();
+
+    await userEvent.click(effort());
+    await userEvent.click(await screen.findByRole('option', { name: 'High' }));
+    await pickModel('Opus 5.5');
+    expect(effort()).toHaveValue('High');
+
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ preferredModel: 'claude-opus-5.5', reasoningEffort: 'high' });
+  });
+
+  it("a Reasoning Effort says the levels are unknown for a model the server doesn't list", () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'kiro_cli',
+            preferredModel: 'claude-opus-9',
+            reasoningEffort: 'high',
+          }),
+        ],
+        agentModels: KIRO_MODELS,
+      }),
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toHaveValue('High');
+    expect(
+      screen.getByText("Kiro CLI doesn't list claude-opus-9, so its reasoning-effort levels are unknown."),
+    ).toBeInTheDocument();
+  });
+
+  it('a Reasoning Effort is hidden while the model is left on Default', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Review', position: 1, requiredAgentRuntime: 'claude_code' })],
+      }),
+    });
+
+    expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+  });
+
+  it('switching the runtime clears the model and the level with it', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Review',
+            position: 1,
+            requiredAgentRuntime: 'claude_code',
+            preferredModel: 'claude-opus-5',
+            reasoningEffort: 'max',
+          }),
+        ],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Required agent runtime' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Kiro CLI' }));
+
+    expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).not.toBeInTheDocument();
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({
+      requiredAgentRuntime: 'kiro_cli',
+      preferredModel: null,
+      reasoningEffort: null,
+    });
   });
 
   it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {

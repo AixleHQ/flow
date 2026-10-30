@@ -77,6 +77,7 @@ const STEP: FieldSpec[] = [
   { kind: 'ref', key: 'agent_id', label: 'Agent', model: 'Agent' },
   { kind: 'stepRefs', key: 'depends_on_step_ids', label: 'Depends on' },
   { kind: 'scalar', key: 'preferred_model', label: 'Model' },
+  { kind: 'scalar', key: 'reasoning_effort', label: 'Reasoning effort' },
   { kind: 'scalar', key: 'required_agent_runtime', label: 'Agent runtime' },
   { kind: 'refs', key: 'tool_ids', label: 'Tools', model: 'Tool' },
   { kind: 'refs', key: 'skill_ids', label: 'Skills', model: 'Skill' },

@@ -59,3 +59,16 @@ export function agentLabel(agentType: string | null | undefined): string {
   if (!agentType) return '—';
   return isAgentType(agentType) ? AGENT_RUNTIMES[agentType].label : agentType;
 }
+
+const REASONING_EFFORT_LABELS: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+  ultra: 'Ultra',
+};
+
+export function reasoningEffortLabel(level: string): string {
+  return REASONING_EFFORT_LABELS[level] ?? level;
+}

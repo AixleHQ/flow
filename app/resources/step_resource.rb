@@ -3,7 +3,7 @@
 class StepResource < ApplicationResource
   attributes :id, :name, :instructions, :position,
              :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
-             :bmad_enabled, :preferred_model,
+             :bmad_enabled, :preferred_model, :reasoning_effort,
              :created_at, :updated_at
 
   typelize "number[]"

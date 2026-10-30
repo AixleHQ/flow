@@ -185,8 +185,11 @@ module Agents
     # a file in the container. `mode` is for the flags a runtime needs to take it.
     # @param mode [String] "interactive" or "non_interactive"
     # @param model [String, nil] requested model ID (nil = runtime default)
+    # @param effort [String, nil] reasoning-effort level, which TerminalSession validated
+    #   against what this runtime takes for its explicitly chosen model; nil = the CLI's
+    #   default. A runtime that sets it in a file instead ignores it here.
     # @return [String] CLI command string
-    def session_command(mode:, model: nil)
+    def session_command(mode:, model: nil, effort: nil)
       raise NotImplementedError, "#{self.class} must implement #session_command"
     end
 

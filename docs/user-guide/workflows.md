@@ -42,6 +42,7 @@ One Step = one agent session = one container = one major deliverable.
 | `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
+| `reasoning_effort`     | Reasoning effort the step's CLI runs at (`low`, `high`, …). Unset keeps the CLI's default. It needs an explicit `required_agent_runtime` and `preferred_model`: a level without either is refused, so clear the level with them. Only the levels that runtime takes for that model are accepted. The CLI may still lower or ignore a level the model doesn't support. |
 | `input_asset_specs`    | Expected inputs. A required one is checked before the step starts; a missing one fails the step ("Required input missing"). Needed only for files picked when a run starts: an `@` reference is checked without one. |
 | `output_asset_specs`   | Expected outputs. A required one is checked when the step ends; a missing one fails the step ("Output validation failed"). A name is the file's path under `/workspace/outputs/` (a `/workspace/…` prefix is dropped), or a glob such as `reports/*.md`; `dir/**` takes everything under `dir`. |
 

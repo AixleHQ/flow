@@ -479,6 +479,17 @@ module Agents
       assert_equal "claude", @adapter.session_command(mode: "non_interactive")
     end
 
+    test "session_command passes the reasoning effort as --effort" do
+      assert_equal "claude --effort high", @adapter.session_command(mode: "interactive", effort: "high")
+      assert_equal "claude --model claude-opus-5 --effort max",
+                   @adapter.session_command(mode: "non_interactive", model: "claude-opus-5", effort: "max")
+    end
+
+    test "session_command adds no effort flag when none is set" do
+      assert_equal "claude --model claude-opus-5", @adapter.session_command(mode: "interactive", model: "claude-opus-5")
+      assert_equal "claude", @adapter.session_command(mode: "interactive", effort: nil)
+    end
+
     # == Tools ==
 
     test "allowed_tools returns builtin tools" do

@@ -215,6 +215,103 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_not step.update(required_agent_runtime: "unsupported")
   end
 
+  test "workflow step reasoning effort creates, updates, clears and reads back" do
+    created = payload(call_tool("create_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
+                                  required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                                  reasoning_effort: "high" }))
+    assert_equal "high", created["reasoning_effort"]
+    step = Step.find(created["id"])
+
+    updated = payload(call_tool("update_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                                  reasoning_effort: "max" }))
+    assert_equal [ "reasoning_effort" ], updated["updated_fields"]
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_equal "max", read_back["reasoning_effort"]
+
+    payload(call_tool("update_workflow_step",
+                      { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id, reasoning_effort: nil }))
+    assert_nil step.reload.reasoning_effort
+  end
+
+  test "workflow step reasoning effort the runtime does not take is refused" do
+    [ PersonalTools::CreateWorkflowStep, PersonalTools::UpdateWorkflowStep ].each do |tool|
+      effort = tool.tool_definition.input_schema.dig("properties", "reasoning_effort")
+      assert_equal %w[string null], effort["type"]
+      assert_equal AgentRuntime.reasoning_effort_levels + [ nil ], effort["enum"]
+    end
+
+    invalid = call_tool("create_workflow_step",
+                        { project_id: @project.id, workflow_id: @workflow.id, name: "Too hard",
+                          required_agent_runtime: "gemini_cli", preferred_model: "gemini-3-pro",
+                          reasoning_effort: "max" })
+    assert error?(invalid)
+    assert_match(/Reasoning effort max is not available for gemini_cli/, text(invalid))
+  end
+
+  # A level and its model are kept consistent: neither the default model nor a step that
+  # leaves its runtime to resolution has anything to check it against.
+  test "workflow step reasoning effort without an explicit model or runtime is refused" do
+    no_model = call_tool("create_workflow_step",
+                         { project_id: @project.id, workflow_id: @workflow.id, name: "Default",
+                           required_agent_runtime: "kiro_cli", reasoning_effort: "high" })
+    assert error?(no_model)
+    assert_match(/Reasoning effort needs an explicitly chosen model/, text(no_model))
+
+    no_runtime = call_tool("create_workflow_step",
+                           { project_id: @project.id, workflow_id: @workflow.id, name: "Resolved",
+                             preferred_model: "claude-opus-5.5", reasoning_effort: "high" })
+    assert error?(no_runtime)
+    assert_match(/Reasoning effort needs an explicitly chosen runtime/, text(no_runtime))
+
+    step = Step.find(payload(call_tool("create_workflow_step",
+                                       { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
+                                         required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                                         reasoning_effort: "high" }))["id"])
+    clear_model = call_tool("update_workflow_step",
+                            { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                              preferred_model: nil })
+    assert error?(clear_model)
+    assert_equal [ "claude-opus-5.5", "high" ], [ step.reload.preferred_model, step.reasoning_effort ]
+  end
+
+  # Cursor CLI takes a level only on a model the step names, so the model and the
+  # level have to be writable through the same tools.
+  test "a Cursor step's preferred model and reasoning effort are set, changed and cleared together" do
+    [ PersonalTools::CreateWorkflowStep, PersonalTools::UpdateWorkflowStep ].each do |tool|
+      model = tool.tool_definition.input_schema.dig("properties", "preferred_model")
+      assert_equal %w[string null], model["type"]
+      assert_equal Step::MODEL_ID_JSON_PATTERN, model["pattern"]
+    end
+
+    created = payload(call_tool("create_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
+                                  required_agent_runtime: "cursor_cli", preferred_model: "claude-opus-4-8",
+                                  reasoning_effort: "high" }))
+    assert_equal({ "preferred_model" => "claude-opus-4-8", "reasoning_effort" => "high" },
+                 created.slice("preferred_model", "reasoning_effort"))
+    step = Step.find(created["id"])
+
+    updated = payload(call_tool("update_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                                  preferred_model: "gpt-6-sol", reasoning_effort: "low" }))
+    assert_equal %w[preferred_model reasoning_effort], updated["updated_fields"].sort
+    assert_equal [ "gpt-6-sol", "low" ], [ step.reload.preferred_model, step.reasoning_effort ]
+
+    payload(call_tool("update_workflow_step",
+                      { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                        preferred_model: nil, reasoning_effort: nil }))
+    assert_equal [ nil, nil ], [ step.reload.preferred_model, step.reasoning_effort ]
+
+    invalid = call_tool("update_workflow_step",
+                        { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                          preferred_model: "Not A Model" })
+    assert error?(invalid)
+  end
+
   test "duplicate_workflow copies steps and reports what needs manual setup" do
     step = create(:step, workflow: @workflow, name: "S1", instructions: "work")
     create(:sub_step, step: step, name: "check A")

@@ -6,6 +6,9 @@ class Step < ApplicationRecord
   include DecodesHtmlEntities
 
   SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
+  MODEL_ID_FORMAT = /\A[a-z0-9][a-z0-9._:-]*\z/
+  # MODEL_ID_FORMAT as a JSON Schema pattern, for the MCP tools that take a model.
+  MODEL_ID_JSON_PATTERN = "^[a-z0-9][a-z0-9._:-]*$"
 
   belongs_to :workflow
   belongs_to :agent, optional: true
@@ -19,11 +22,16 @@ class Step < ApplicationRecord
   enumerize :on_failure, in: %i[retry skip fail], default: :fail
 
   decodes_html_entities :name
+  normalizes :reasoning_effort, with: ->(value) { value.to_s.strip.presence }
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
-  validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  validates :preferred_model, format: { with: MODEL_ID_FORMAT, message: "invalid model ID format" }, allow_nil: true
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
+  # A level needs an explicit runtime and preferred model and must be one that pair
+  # takes. Clearing either while a level is set is refused, so the caller clears the
+  # level with it.
+  validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model }
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
   validate :resource_ids_belong_to_project
