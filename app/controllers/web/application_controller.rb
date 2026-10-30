@@ -37,7 +37,8 @@ class Web::ApplicationController < ApplicationController
         sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f,
         # Whether a stranger may sign a company up here, which is also what
         # decides that /how-it-works — the page that sells it — exists at all.
-        self_serve_signup: Deployment.self_serve_signup?
+        self_serve_signup: Deployment.self_serve_signup?,
+        feedback_enabled: signed_in? && Feedback.enabled?
       },
       # Flags declared `client: true` only, read by useFeatureFlag. Always
       # re-evaluated, so a partial reload picks up a flip. Anonymous pages get

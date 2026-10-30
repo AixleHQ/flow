@@ -530,6 +530,7 @@ Rails.application.routes.draw do
 
     namespace :company do
       post "switch", to: "switch#create", as: :switch
+      post "feedback", to: "feedback#create", as: :feedback
       # Self-removal ("Leave company" on the profile page) — id is the
       # MEMBERSHIP id, and it may belong to any of the user's companies.
       resources :memberships, only: %i[destroy]

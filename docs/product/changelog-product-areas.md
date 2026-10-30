@@ -100,6 +100,7 @@ they name a flow users would recognize.
 | Area | What it covers |
 | --- | --- |
 | **Docs** | The in-product documentation, linked from the public site as **Documentation** |
+| **Feedback** | **Send feedback** in the user menu: a bug, a feature request or a support question sent to the team that runs the installation |
 
 ## How the pieces fit (for changelog writers)
 

@@ -41,6 +41,7 @@ class Company < ApplicationRecord
   has_many :agent_credentials, dependent: :destroy
   has_many :trigger_events, dependent: :destroy
   has_many :billing_cancellations, dependent: :delete_all
+  has_many :feedback_submissions, dependent: :destroy
   has_many :feature_flag_overrides, dependent: :delete_all
   # Read-only preload for the admin index; writes go through #session_concurrency_limit=.
   # No `dependent:` — the row's before_destroy would abort destroying a metered company.
