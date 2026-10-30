@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 # Creating a company for yourself, which is the one path where the customer —
-# not us — decides what the company is called and how much it may run.
+# not us — decides what the company is called.
 #
-# WHY A FORM AND NOT VALIDATIONS ON Company. Requiring a session limit is a rule
-# of the paths that create a paying company — this one, and the admin's create
-# action. The seeds, the factories and a company we carry legitimately make one
-# without a limit, and a model validation would refuse them all.
+# WHY A FORM AND NOT VALIDATIONS ON Company. Giving the company a session limit
+# is a rule of the paths that create a paying company — this one, and the
+# admin's create action. The seeds, the factories and a company we carry
+# legitimately make one without a limit, and a model validation would refuse
+# them all.
 #
 # The form is built twice for a stranger: once to check the answers before they
 # are emailed, and again from the signed link to write them. Only the second
@@ -15,19 +16,15 @@
 class WorkspaceOnboardingForm
   include ApplicationFormWithoutActiveRecord
 
-  # A number is required. Absence means unbounded and unbilled, which is ours to
-  # grant from the admin — a company cannot arrive that way by signing itself up.
   attribute :name, :string
   attribute :email, :string
   attribute :email_domain, :string
-  attribute :max_sessions, :integer
 
   attr_reader :user, :company
 
   validates :name, presence: true, length: { maximum: 100 }
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP, message: "is not an email address" }
   validates :email_domain, presence: true
-  validates :max_sessions, numericality: { only_integer: true, greater_than: 0 }
   validate :domain_is_free, if: -> { email_domain.present? }
   validate :domain_is_not_a_public_mailbox, if: -> { email_domain.present? }
   validate :domain_belongs_to_the_address, if: -> { email_domain.present? && email.present? }
@@ -53,7 +50,10 @@ class WorkspaceOnboardingForm
       )
       owner.save! if owner.new_record?
       owner.company_memberships.create!(company: @company, role: "admin", state: "active", accepted_at: Time.current)
-      SessionConcurrencyLimit.set!(scope: @company, max_sessions: max_sessions)
+      # The trial's one worker, and a number to bill once it pays: no limit is
+      # unbounded and unbilled, which is ours to grant from the admin. The
+      # company raises it from settings after adding a card.
+      SessionConcurrencyLimit.set!(scope: @company, max_sessions: Billing::Trial::WORKERS)
     end
     true
   rescue ActiveRecord::RecordInvalid => e

@@ -15,12 +15,12 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
   end
 
   def valid_params(**over)
-    { workspace: { name: "Acme Robotics", email: "dana@acme-robotics.example", max_sessions: "5" }.merge(over) }
+    { workspace: { name: "Acme Robotics", email: "dana@acme-robotics.example" }.merge(over) }
   end
 
   def ticket(**over)
     WorkspaceSignupTicket.issue(
-      **{ name: "Acme Robotics", email: "dana@acme-robotics.example", max_sessions: 5 }.merge(over)
+      **{ name: "Acme Robotics", email: "dana@acme-robotics.example" }.merge(over)
     )
   end
 
@@ -35,14 +35,12 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| assert props[:needsEmail] }
   end
 
-  # The form asks for a number of sessions; this is what it costs to run them, and
-  # what it does not.
-  test "the form says how much capacity is free" do
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 250))
+  test "the form says how long the workspace is free" do
+    Settings.stubs(:trial).returns(Hashie::Mash.new(days: 14))
 
     get new_workspace_path
 
-    assert_inertia_props { |props| assert_equal 250, props[:freeQueueHours] }
+    assert_inertia_props { |props| assert_equal 14, props[:trialDays] }
   end
 
   # Nothing is written on their say-so: the address is unproved until the link
@@ -65,7 +63,7 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
 
   test "answers that do not validate are not emailed" do
     assert_enqueued_emails 0 do
-      post workspace_path, params: valid_params(max_sessions: "0")
+      post workspace_path, params: valid_params(name: " ")
     end
   end
 
@@ -116,7 +114,7 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to onboarding_path
     owner = User.find_by(email: "dana@acme-robotics.example")
     assert_equal "admin", owner.company_memberships.find_by(company: acme).role
-    assert_equal 5, SessionConcurrencyLimit.for_company(acme.id)
+    assert_equal 1, SessionConcurrencyLimit.for_company(acme.id)
 
     follow_redirect!
     assert_response :success
@@ -177,11 +175,11 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
 
     assert_enqueued_emails 0 do
-      post workspace_path, params: { workspace: { name: "Acme Robotics", max_sessions: "5" } }
+      post workspace_path, params: { workspace: { name: "Acme Robotics" } }
     end
 
     assert_redirected_to onboarding_path
-    assert_equal 5, SessionConcurrencyLimit.for_company(acme.id)
+    assert_equal 1, SessionConcurrencyLimit.for_company(acme.id)
   end
 
   # Their address is the one they proved, whatever the form body claims.
@@ -282,19 +280,12 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # -- The calculator's hand-off ---------------------------------------------
+  # The trial runs one worker; the number is the company's to choose once it pays.
+  test "a worker count sent with the form is ignored" do
+    sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
 
-  test "the form opens on the queue count the calculator sent" do
-    get new_workspace_path(sessions: 9)
+    post workspace_path, params: { workspace: { name: "Acme Robotics", max_sessions: "9" } }
 
-    assert_inertia_props { |props| assert_equal 9, props[:defaultMaxSessions] }
-  end
-
-  test "a nonsense queue count falls back to the installation default" do
-    get new_workspace_path(sessions: "lots")
-
-    assert_inertia_props do |props|
-      assert_equal SessionAdmissionPolicy.scope_default("Project"), props[:defaultMaxSessions]
-    end
+    assert_equal 1, SessionConcurrencyLimit.for_company(acme.id)
   end
 end

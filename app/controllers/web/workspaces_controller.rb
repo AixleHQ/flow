@@ -84,7 +84,7 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def ticket_for(form)
-    WorkspaceSignupTicket.issue(name: form.name, email: form.email, max_sessions: form.max_sessions)
+    WorkspaceSignupTicket.issue(name: form.name, email: form.email)
   end
 
   def refuse(**errors)
@@ -96,7 +96,6 @@ class Web::WorkspacesController < Web::ApplicationController
     {
       suggested_domain: form.email_domain,
       suggested_name: form.email_domain.to_s.split(".").first&.capitalize,
-      default_max_sessions: requested_sessions || SessionAdmissionPolicy.scope_default("Project"),
       # Present once a link has gone out, which is the whole of that screen: the
       # address it went to, so the person knows which inbox to open.
       sent_to: params[:sent].presence,
@@ -110,13 +109,10 @@ class Web::WorkspacesController < Web::ApplicationController
       claimed_domain: (Auth::ClaimedDomain.for(current_user)&.to_h if signed_in?),
       # What they get before anyone asks them for a card, which is the part of
       # the bargain the form was silent about.
-      free_queue_hours: Billing::Trial.queue_hours
+      trial_days: Billing::Trial.days
     }
   end
 
-  # The /how-it-works calculator works out how many workers a workload needs and
-  # sends the visitor here with that number, so the form opens on the figure they
-  # were just shown rather than on the installation default.
   # Echoed back into the form only when it actually looks like an address, so the
   # page cannot be made to display arbitrary text through a link.
   def safe_email_param
@@ -124,13 +120,8 @@ class Web::WorkspacesController < Web::ApplicationController
     email.match?(URI::MailTo::EMAIL_REGEXP) ? email : nil
   end
 
-  def requested_sessions
-    count = params[:sessions].to_i
-    count.positive? ? count : nil
-  end
-
   def workspace_params
-    params.fetch(:workspace, {}).permit(:name, :email, :email_domain, :max_sessions)
+    params.fetch(:workspace, {}).permit(:name, :email, :email_domain)
   end
 
   def require_self_serve_signup

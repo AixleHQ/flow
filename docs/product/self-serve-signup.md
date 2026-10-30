@@ -22,18 +22,18 @@ existed.
 
 **`/how-it-works`** is the public page: what the product does, the list price of a
 worker, and a calculator driven by the visitor's own numbers. It works out how many
-workers their workload needs and carries that number into the form
-(`/workspace/new?sessions=N`).
+workers their workload needs once they pay; the trial itself runs one.
 
-**`/workspace/new`** asks three things: a workspace name, the work email address
-the workspace will be owned with, and how many sessions it may run at once.
-Someone already signed in is not asked for an address — theirs is the one they
-already proved.
+**`/workspace/new`** asks two things: a workspace name and the work email address
+the workspace will be owned with. It does not ask how many workers: the trial runs
+one, and the company chooses its number once it adds a card. Someone already
+signed in is not asked for an address — theirs is the one they already proved.
 
 **Nothing is written when the form is submitted.** The answers travel in a signed
 link to the address that was typed, and opening that link is what proves the
-mailbox and creates the company, the account, the admin membership and the session
-limit — in one transaction. A link nobody opens leaves nothing behind. The link
+mailbox and creates the company, the account, the admin membership and a session
+limit of one — in one transaction. A company with no limit is invoiced for
+nothing, so one that signs itself up gets one from the start. A link nobody opens leaves nothing behind. The link
 lasts 24 hours.
 
 A second click on the same link does not make a second workspace: it collides on
@@ -46,7 +46,6 @@ the company's unique domain, which is the same answer by a shorter route.
 | A domain that is not the one your address is at | A workspace claims a whole domain; claiming one you have no address at is claiming somebody else's |
 | A domain another workspace already has | One workspace per domain |
 | A public mail service (`gmail.com`, `outlook.com`, `yandex.ru`, …) | The first person to sign up would take the service, funnel every later visitor from it into their workspace, and lock it away for everyone. See `PublicEmailDomains` |
-| No session limit, or zero | Everywhere else a company may have no limit and be invoiced for nothing; a company that signs *itself* up may not |
 
 ### Where the sign-in screen sends people
 
@@ -108,7 +107,12 @@ sessions side by side; the fifth waits. Projects inside it can reserve part of
 that limit for themselves, and the rest share what is left.
 
 The limit is the **company admin's** to set, on Settings → General, and they may
-raise or lower it whenever they like. They may not clear it: a company with no
+raise or lower it whenever they like — once they pay. On the free trial it is
+read-only, and stays so once the trial has ended, until a card is added: the
+trial runs one worker. So are its projects' reservations. A platform
+administrator cannot set another number either (`Company` and
+`SessionConcurrencyLimit` refuse it); a company that needs more is ticked
+Managed by Aixle, and going onto a trial sets the limit back to one. They may not clear it: a company with no
 limit is one nobody is invoiced for, and that is ours to grant from the admin, not
 something a company does to itself. In a company **managed by Aixle** (see
 [Billing states](#billing-states)) the limit is read-only for its admins: nobody
@@ -131,20 +135,28 @@ rather than next month.
 
 ---
 
-## 4. The free allowance
+## 4. The free trial
 
-Every new workspace starts with **`TRIAL_QUEUE_HOURS` of free capacity** (default
-**100 worker-hours**) and is invoiced for none of it.
+Every new workspace starts with a **free trial on one worker** — `TRIAL_DAYS`,
+30 by default — and is invoiced for none of it.
 
-**It is a quantity, not a period, and the workspace sets the rate it burns at.**
-Ten workers use ten worker-hours an hour, so the same hundred hours that
-last one workspace about four days last that one about ten. A bigger limit buys a
-shorter trial rather than a larger gift. The limit is theirs throughout — nothing
-is capped while the allowance lasts, so they are evaluating the product they are
-actually being sold.
+**Counted in hours, shown in days.** The trial is an allowance of worker-hours
+(30 days is at most 720), spent from the same hourly measurement an invoice is
+made from. The day the company signs up is its first, and the trial ends with
+the last day's end (UTC) — the same end a last day set from the admin has.
+A trialing workspace runs one worker whatever limit it set, and a worker is
+counted for every hour it stands ready, so an hour of the trial is an hour on the
+clock and what is left reads as days and a last day. The limit the workspace set
+applies once a card is added, and the admin cannot change it before then.
 
-A banner sits above every screen while this is running: what has been spent of the
-allowance, and how long what is left lasts **at the rate they are running**.
+Each company keeps the length of the trial it started, so changing the default
+changes only the trials started after it. A platform administrator can put any
+company on a trial, or move the end of the one it is on, by setting **Trial last
+day** on the company's admin page: the trial then ends with that day (UTC). A
+company we carry, or one a live subscription still bills, is refused.
+
+A banner sits above every screen while this is running: how many days are left and
+the trial's last day.
 
 ### When it runs out
 
@@ -157,12 +169,14 @@ The hourly meter notices at five minutes past the hour, and the workspace is
 - Nothing is billed for the stopped period either: a workspace that cannot use its
   capacity is not charged for it.
 
-The check is hourly, so a workspace that set a very high limit can spend somewhat
-past the allowance before the next run stops it.
+The check is hourly, so a workspace runs up to an hour past its last moment
+before the next run stops it.
 
 ### Starting again
 
-An admin adds a card, from the banner or from **Company Settings → Billing**.
+Any member who can make changes (an admin or an employee, not a viewer) adds a
+card from the banner, or pays a failed invoice there; an admin can also do it
+from **Company Settings → Billing**, which with cancelling stays theirs.
 Stripe Checkout takes it, and the workspace runs again once Stripe confirms it.
 An installation with no Stripe credentials offers no button: there, a platform
 administrator moves the company's **Billing state** to `active` in the admin, and
@@ -177,7 +191,7 @@ worker-minutes, rounded down.
 
 - **Cancelling** takes effect at the end of the current period. Until then the
   workspace runs as before, and its usage up to the end date is billed on the final
-  invoice. After it, the workspace stops as it does when the allowance runs out.
+  invoice. After it, the workspace stops as it does when the trial ends.
   Nothing is deleted, admins can still sign in, and a new card restores access.
   The admin can resume the subscription before the end date. The reason they gave
   is kept, and every admin gets an email.
@@ -189,9 +203,9 @@ worker-minutes, rounded down.
 
 | State | Meaning | Runs | Invoiced |
 | --- | --- | --- | --- |
-| `trialing` | Spending the free allowance | Its own limit | Nothing |
+| `trialing` | On the free trial | One worker | Nothing |
 | `active` | Somebody is paying, including a cancellation not yet due | Its own limit | Everything it is offered |
-| `blocked` | Stopped: allowance spent, subscription ended, or a payment failed | Nothing new | Nothing |
+| `blocked` | Stopped: trial spent, subscription ended, or a payment failed | Nothing new | Nothing |
 
 A company made in the admin pays the same way a signup does: it starts
 `trialing` and needs a session limit. Both are said out loud by the path that
@@ -204,7 +218,10 @@ carry — ours, a partner's, a pilot. It is never invoiced, never trialing or
 blocked, has no Billing tab, and cannot start Checkout. It starts with
 **two workers**, and only a platform administrator can change that, from the
 admin. Every company that was already `active` with no Stripe customer when the
-flag shipped was given it.
+flag shipped was given it. Unticking it puts the company on a fresh trial — what
+it ran while we carried it is not counted — of the default length, or to the
+Trial last day set in the same save; a company with a live subscription keeps
+paying through it instead.
 
 ---
 
@@ -213,7 +230,7 @@ flag shipped was given it.
 Two ledgers, for two different questions.
 
 **`company_capacity_usages`** — what **every** company was offered, hour by hour,
-in worker-seconds. Ours to read: it is what the free allowance is counted from and
+in worker-seconds. Ours to read: it is what the free trial is counted from and
 what answers "how much has this company used" for an invoice conversation. Written
 for trialing and blocked companies too.
 
@@ -221,7 +238,7 @@ for trialing and blocked companies too.
 Stripe or AWS Marketplace, with the per-company split. Only companies somebody is
 paying for appear in it.
 
-So the allowance needs no counter of its own: what a company has spent is a sum
+So the trial needs no counter of its own: what a company has spent is a sum
 over the first ledger, and a sum cannot drift from the thing it sums.
 
 ---
@@ -233,7 +250,7 @@ over the first ledger, and a sum cannot drift from the thing it sums.
 | `DEPLOYMENT_MODE` | `saas` | Whether any of this exists at all |
 | `REGISTRATION_ENABLED` | `false` | Whether a stranger may sign a company up |
 | `PRICING_QUEUE_HOURLY_RATE` | `5` | The list price shown on `/how-it-works` |
-| `TRIAL_QUEUE_HOURS` | `100` | The free allowance |
-| `SESSION_PROJECT_CONCURRENCY_DEFAULT` | `4` | What the signup form offers, and a project's share when it has reserved none |
+| `TRIAL_DAYS` | `30` | How long a new company's free trial lasts |
+| `SESSION_PROJECT_CONCURRENCY_DEFAULT` | `4` | A project's share when it has reserved none |
 
 Full descriptions in [reference/configuration.md](../reference/configuration.md).

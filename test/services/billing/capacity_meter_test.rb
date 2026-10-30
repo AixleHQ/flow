@@ -221,20 +221,18 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     assert_equal 12 * 3600, CompanyCapacityUsage.where(company: @company).sum(:quantity_seconds)
   end
 
-  test "the allowance is spent from those rows, and spending it stops the company" do
+  test "the trial is spent from those rows, and spending it stops the company" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 1))
-    @company.update!(billing_state: "trialing")
+    @company.update!(billing_state: "trialing", trial_hours: 1)
 
     meter.call
 
     assert @company.reload.billing_blocked?,
-           "one queue-hour of allowance is spent by an hour at the cap"
+           "a one-hour trial is spent by an hour at the trial's one worker"
   end
 
-  test "a company still inside its allowance keeps running" do
+  test "a company still inside its trial keeps running" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
-    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))
     @company.update!(billing_state: "trialing")
 
     meter.call

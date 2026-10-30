@@ -211,6 +211,58 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     expect(screen.getByText('Heads up: this step is flaky')).toBeInTheDocument();
   });
 
+  it('folds sessions skipped before they started into one row that lists why', async () => {
+    const reason = 'All required outputs already exist from previous steps';
+    const run = makeRun({
+      state: 'completed',
+      stepsCompleted: 2,
+      stepsTotal: 4,
+      stepRuns: [
+        buildStepRun({ id: 1, stepName: 'Draft', stepPosition: 1, state: 'completed', terminalSessionId: 11 }),
+        buildStepRun({ id: 2, stepName: 'Research', stepPosition: 2, state: 'skipped', skipReason: reason }),
+        buildStepRun({ id: 3, stepName: 'Interview', stepPosition: 3, state: 'skipped', skipReason: reason }),
+        buildStepRun({ id: 4, stepName: 'Publish', stepPosition: 4, state: 'completed', terminalSessionId: 14 }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText('2/4 · 2 skipped')).toBeInTheDocument();
+    expect(screen.getByText('Research, Interview')).toBeInTheDocument();
+    expect(screen.getByText('2 skipped')).toBeInTheDocument();
+    expect(screen.getByText('Session 4')).toBeInTheDocument();
+    expect(screen.queryByText(reason)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand skipped sessions 2–3' }));
+
+    expect(screen.getByText('Session 2')).toBeInTheDocument();
+    expect(screen.getByText('Session 3')).toBeInTheDocument();
+    expect(screen.getAllByText(reason)).toHaveLength(2);
+  });
+
+  it('keeps a session skipped after it ran as a full card that says why', () => {
+    const run = makeRun({
+      state: 'completed',
+      stepRuns: [
+        buildStepRun({
+          id: 1,
+          stepName: 'Lint',
+          stepPosition: 1,
+          state: 'skipped',
+          terminalSessionId: 21,
+          skipReason: 'Skipped after failure (on_failure: skip)',
+        }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByRole('link', { name: /open session/i })).toHaveAttribute(
+      'href',
+      '/company/projects/7/sessions/21',
+    );
+    expect(screen.getByText('Why it was skipped')).toBeInTheDocument();
+    expect(screen.getByText('Skipped after failure (on_failure: skip)')).toBeInTheDocument();
+  });
+
   it('fires a cancel request when Cancel run is clicked on an active run', async () => {
     renderAuthedPage(<ShowPage />, { props: seed() });
 

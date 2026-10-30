@@ -75,6 +75,26 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
     assert_equal @project.name, @project.reload.name, "the name must not survive a refused save"
   end
 
+  # The trial runs one worker for the whole company, so a project has nothing to
+  # reserve until the company pays.
+  test "a project of a company on the free trial cannot reserve workers" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    @company.update!(billing_state: "trialing")
+
+    patch company_project_settings_path(@project), params: {
+      project: { name: @project.name }, concurrency: "3"
+    }
+
+    assert_nil limit_for(@project)
+    assert_match(/free trial runs one worker/, Array(session["inertia_errors"][:concurrency]).to_sentence)
+
+    get company_project_settings_path(@project)
+    assert_inertia_props do |props|
+      assert_not props[:concurrency][:canManage]
+      assert_equal 1, props[:concurrency][:trialWorkers]
+    end
+  end
+
   test "a member who is not a company admin cannot set the limit" do
     member = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     create(:project_collaborator, project: @project, user: member)

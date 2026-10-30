@@ -43,3 +43,10 @@ paths = [
   '''^app/frontend/pages/Docs/data/''',
   '''^docs/''',
 ]
+
+[[allowlists]]
+description = "Admin dashboard table columns: a sort key named after its field (`key: 'p95WaitSeconds'`), not a credential"
+condition = "AND"
+paths = ['''^app/frontend/pages/Admin/Dashboard/Dashboard\.tsx$''']
+regexTarget = "line"
+regexes = ['''^\s*\{ key: '[A-Za-z0-9]+', label: '[^']+' \},$''']

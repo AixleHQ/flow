@@ -17,6 +17,7 @@ import {
   IconLayoutSidebar,
   IconLogout,
   IconMenu2,
+  IconMessage,
   IconPlug,
   IconPlugConnected,
   IconRobot,
@@ -38,6 +39,7 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 import type { Membership } from '@/types/generated';
 
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
+import { FeedbackModal } from 'shared/components/FeedbackModal';
 import { getInitials } from 'shared/lib/getInitials';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import {
@@ -647,9 +649,12 @@ function SidebarWorkspaceSwitcher({
 interface SidebarUserFooterProps {
   userName: string;
   collapsed: boolean;
+  feedbackEnabled: boolean;
 }
 
-function SidebarUserFooter({ userName, collapsed }: SidebarUserFooterProps) {
+function SidebarUserFooter({ userName, collapsed, feedbackEnabled }: SidebarUserFooterProps) {
+  const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
+
   return (
     <div className={`${classes.navFoot} ${collapsed ? classes.navFootCollapsed : ''}`}>
       <Menu position="top-start" width={200} shadow="md">
@@ -671,12 +676,18 @@ function SidebarUserFooter({ userName, collapsed }: SidebarUserFooterProps) {
           <Menu.Item component={Link} href="/profile" leftSection={<IconUser size={16} />}>
             My Profile
           </Menu.Item>
+          {feedbackEnabled && (
+            <Menu.Item leftSection={<IconMessage size={16} />} onClick={openFeedback}>
+              Send feedback
+            </Menu.Item>
+          )}
           <Menu.Divider />
           <Menu.Item leftSection={<IconLogout size={16} />} onClick={handleLogout}>
             Sign Out
           </Menu.Item>
         </Menu.Dropdown>
       </Menu>
+      {feedbackEnabled && <FeedbackModal opened={feedbackOpened} onClose={closeFeedback} />}
     </div>
   );
 }
@@ -713,7 +724,7 @@ function SidebarContent({
   toggleCollapsed: () => void;
   onNavigate?: () => void;
 }) {
-  const { currentUser } = usePage<SharedProps>().props;
+  const { currentUser, settings } = usePage<SharedProps>().props;
   const isAdmin = permissions?.isAdmin ?? false;
   const companyName = currentUser?.currentCompany?.name ?? '';
 
@@ -773,7 +784,13 @@ function SidebarContent({
         </UnstyledButton>
       </div>
 
-      {currentUser && <SidebarUserFooter userName={currentUser.name} collapsed={collapsed} />}
+      {currentUser && (
+        <SidebarUserFooter
+          userName={currentUser.name}
+          collapsed={collapsed}
+          feedbackEnabled={settings?.feedbackEnabled ?? false}
+        />
+      )}
     </>
   );
 }
