@@ -62,7 +62,6 @@ export function agentLabel(agentType: string | null | undefined): string {
 
 interface ReasoningEffortSpec {
   levels: string[];
-  requires_model: boolean;
   models: { match: string; levels: string[] }[];
 }
 
@@ -84,16 +83,16 @@ export function reasoningEffortLabel(level: string): string {
 }
 
 /**
- * The reasoning-effort levels a runtime's CLI takes for `model` (null: its default
- * model), in config/agent_runtimes.json's order — the same rule as
- * AgentRuntime#reasoning_effort_levels on the server.
+ * The reasoning-effort levels a runtime's CLI takes for `model`, in
+ * config/agent_runtimes.json's order — the same rule as
+ * AgentRuntime#reasoning_effort_levels on the server. A level is set only on an
+ * explicitly chosen model, so without one there is none.
  */
 export function reasoningEffortLevels(runtime: string | null | undefined, model?: string | null): string[] {
   const spec = runtime ? REASONING_EFFORT[runtime] : undefined;
-  if (!spec) return [];
-  if (spec.requires_model && !model) return [];
+  if (!spec || !model) return [];
 
-  const rule = model ? spec.models.find((entry) => new RegExp(entry.match).test(model)) : undefined;
+  const rule = spec.models.find((entry) => new RegExp(entry.match).test(model));
   return rule ? rule.levels : spec.levels;
 }
 
@@ -103,11 +102,10 @@ export function reasoningEffortUnavailableReason(
   model?: string | null,
 ): string | null {
   if (!runtime) return 'Choose a runtime to set a reasoning effort.';
+  if (!model) return 'Choose a model to set a reasoning effort.';
   if (reasoningEffortLevels(runtime, model).length > 0) return null;
 
   const label = agentLabel(runtime);
-  const spec = REASONING_EFFORT[runtime];
-  if (spec?.requires_model && !model) return `${label} sets a reasoning effort only on a model you choose.`;
-  if (spec && model) return `${label} has no reasoning-effort setting for ${model}.`;
+  if (REASONING_EFFORT[runtime]) return `${label} has no reasoning-effort setting for ${model}.`;
   return `${label} has no reasoning-effort setting.`;
 }

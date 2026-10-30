@@ -804,16 +804,6 @@ module ContainerStrategies
       assert_equal "claude --model claude-opus-5", launched_command(build_strategy)
     end
 
-    # A step's runtime is resolved after the step saved its level; a level the
-    # resolved CLI does not take for the model is dropped, not passed through.
-    test "a level the launching runtime does not take for the model is left out" do
-      @session.update!(agent_type: "kiro_cli", mode: "interactive", requested_model: "claude-sonnet-4.6",
-                       reasoning_effort: "xhigh")
-
-      assert_equal "kiro-cli --v3 chat --trust-all-tools --trust-workspace --model claude-sonnet-4.6",
-                   launched_command(build_strategy(agent_type: "kiro_cli"))
-    end
-
     test "build_env_vars carries no prompt" do
       @session.update!(mode: "non_interactive", initial_prompt: "Refactor the billing module")
 

@@ -10,7 +10,7 @@ import {
 interface ReasoningEffortSelectProps extends Omit<SelectProps, 'data' | 'value' | 'onChange' | 'error'> {
   /** The runtime whose levels are offered; null offers none. */
   runtime: string | null | undefined;
-  /** The model the session launches on — null for the runtime's default model. */
+  /** The explicitly chosen model the session launches on; null offers none. */
   model: string | null | undefined;
   value: string | null;
   onChange: (value: string | null) => void;
@@ -30,8 +30,8 @@ function unsupportedLevel(
 }
 
 /**
- * Picks a reasoning-effort level from the ones the runtime (and, where it matters, the
- * model) takes, per config/agent_runtimes.json. Empty is the CLI's own default. With
+ * Picks a reasoning-effort level from the ones the runtime takes for the model, per
+ * config/agent_runtimes.json. Empty is the CLI's own default. With
  * no level to offer it is disabled and says why; a saved level the runtime or model no
  * longer takes stays visible as an error, so it is cleared on purpose, not lost. With
  * levels to offer it says that the CLI may still lower or ignore one the model lacks.

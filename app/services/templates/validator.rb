@@ -120,8 +120,9 @@ module Templates
 
     # The rule Step applies (ReasoningEffortValidator), checked here so that a package
     # whose level its runtime and model do not take is refused before catalog sync and
-    # planning instead of failing at install. The schema's dependentRequired guarantees the runtime and model keys are set
-    # next to a level, and its enums that the runtime and the level are known ones.
+    # planning instead of failing at install. The schema's dependentRequired guarantees
+    # the runtime and model keys are set next to a level, and its enum that the runtime
+    # is a known one; a blank model has no levels, so it is refused here.
     def check_reasoning_efforts
       @package.section("workflows").each do |workflow|
         workflow["steps"].each do |step|
@@ -139,6 +140,8 @@ module Templates
     end
 
     def unsupported_effort(runtime, level, model)
+      return "needs an explicitly chosen model" if model.blank?
+
       levels = runtime.reasoning_effort_levels(model)
       target = "#{runtime.id} with model #{model}"
       return "#{target} takes no reasoning effort" if levels.empty?

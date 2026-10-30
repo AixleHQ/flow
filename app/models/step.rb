@@ -28,13 +28,10 @@ class Step < ApplicationRecord
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
   validates :preferred_model, format: { with: MODEL_ID_FORMAT, message: "invalid model ID format" }, allow_nil: true
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
-  validates :reasoning_effort, inclusion: { in: ->(_) { AgentRuntime.reasoning_effort_levels } }, allow_nil: true
-  # Checked again whenever the runtime or the model it depends on changes, so a saved
-  # level the new pair does not take is refused instead of silently dropped. A level
-  # needs an explicit runtime and preferred model: clearing either while a level is set
-  # is refused, so the caller clears the level with it.
-  validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model },
-                               if: :reasoning_effort_inputs_changed?
+  # A level needs an explicit runtime and preferred model and must be one that pair
+  # takes. Clearing either while a level is set is refused, so the caller clears the
+  # level with it.
+  validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model }
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
   validate :resource_ids_belong_to_project
@@ -100,11 +97,6 @@ class Step < ApplicationRecord
   end
 
   private
-
-  def reasoning_effort_inputs_changed?
-    new_record? || will_save_change_to_reasoning_effort? ||
-      will_save_change_to_required_agent_runtime? || will_save_change_to_preferred_model?
-  end
 
   # Appending is the server's job. A soft-deleted step keeps its position and
   # the unique (workflow_id, position) index still covers it, so the next free

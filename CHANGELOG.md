@@ -13,8 +13,6 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-10-30
-
 ### Added
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
@@ -24,6 +22,10 @@ governance, community health — carry none.
   `create_workflow_step` and `update_workflow_step` tools accept
   `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
   them.
+
+## [1.9.0] - 2026-10-30
+
+### Added
 - **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
   who subscribes is sent to a page of ours that sets their workspace up: they
   are signed out first and create a new workspace, confirming the address by

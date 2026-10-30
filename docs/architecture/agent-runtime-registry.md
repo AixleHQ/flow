@@ -24,7 +24,7 @@ repository's matrix still lacked it after that.
 | `cli_version` | The CLI release the image installs, passed as the `CLI_VERSION` build arg. `null` would mean the image installs whatever the vendor ships that day, so the image tag, not the registry, fixes what a deployment runs; every runtime is pinned today. |
 | `cli_latest` | Where the weekly canary finds the vendor's newest release (`bin/agent-cli-latest` reads it): `{ "npm": "<package>" }`, or `{ "url": "<endpoint>" }` with a body that is the version, or that URL plus `"jq": "<filter>"` for a JSON body (Kiro's manifest) or `"pattern": "<regex>"` whose first group is the version (Cursor's install script, the only place it publishes one). `null` means the canary builds the pin. |
 | `cli_releases` | Where the vendor's release notes are. `{ "github": "<owner/repo>", "tag_prefix": "<prefix before the version>" }`: the canary report quotes them, and they give the newest version when `cli_latest` is `null`; pre-releases and tags that are not `X.Y.Z` are ignored. `{ "url": "<changelog page>" }`: the report links it. |
-| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for the CLI's default model and any model no rule names), `requires_model` (the CLI can only attach a level to a model the session names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels` and `reasoningEffortLevels` (`app/frontend/shared/ui/agentRuntimes.ts`) apply the same rule. See [Reasoning effort](#reasoning-effort). |
+| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels` and `reasoningEffortLevels` (`app/frontend/shared/ui/agentRuntimes.ts`) apply the same rule, and both return no level for a blank model. See [Reasoning effort](#reasoning-effort). |
 
 ## Who reads it
 
@@ -51,22 +51,26 @@ new-session form and `POST /api/v1/terminal_sessions`) can name a reasoning-effo
 Unset is the CLI's own default, and the launch command is then exactly what it was before
 the setting existed.
 
-A level and its model are always kept consistent. A level needs an explicitly chosen
-runtime and model: a step's `required_agent_runtime` and `preferred_model`, or a session's
-`agent_type` and `requested_model`. `ReasoningEffortValidator` refuses a level without
-them, on steps and sessions alike, so the REST API and the MCP tools answer 422. Clearing
-the model or the runtime while a level is set is refused the same way, so the caller
-clears the level with them; the UI hides the select until a model is chosen and clears the
-level when the model goes back to Default. The level is never checked against the
+Two rules apply, on steps and sessions alike:
+
+1. A level can be set only when both the runtime and the model are chosen explicitly: a
+   step's `required_agent_runtime` and `preferred_model`, or a session's `agent_type` and
+   `requested_model`.
+2. A level that is set must be one that this runtime takes for this model.
+
+`ReasoningEffortValidator` checks both, with one message per failure, so the REST API and
+the MCP tools answer 422. A step is checked on every save; a session, workflow step
+sessions included, when it is created. Clearing the model or the runtime while a level is
+set is refused the same way, so the caller clears the level with them. The UI hides the
+select until a model is chosen and clears the level when the model goes back to Default;
+the new-session form also clears it when the new model doesn't take it. The level is never checked against the
 credential's default model, because that can change at any time and every saved level
 would then need re-checking. An effort for the default model, if it is ever needed,
 belongs next to the default model in the agent profile.
 
-A step's session copies its step's level together with its model, and the launch and the
-generated CLI config both resolve the model from the session's captured `requested_model`,
-not from the live step. The launch still checks the level against the runtime and model it
-launches on (`TerminalSession#launch_reasoning_effort`) and launches on the CLI's default
-when they do not take it, or when a row saved before this rule has a level and no model.
+A step's session copies its step's runtime, model and level, and the launch and the
+generated CLI config both read the model from the session's captured `requested_model`,
+not from the live step. Both pass `session.reasoning_effort` to the adapter as it is.
 
 Each CLI was checked at its pin, on the binary the image installs (help text, a launch
 with a bad level, the strings or bundled source of the release), not only in the vendor's
@@ -96,7 +100,9 @@ When a pin is raised, re-check the CLI's levels and update `reasoning_effort` wi
 bundled catalog's `supported_reasoning_levels`. A level no runtime had before must also be
 added to the `reasoning_effort` enum of the template schema
 (`config/templates/template.v1.json`); `Templates::ValidatorTest` fails until the two lists
-match.
+match. A level the new pin no longer takes (for the CLI or for one model) comes with a data
+migration that clears or replaces it on the steps that have it, because a step is validated
+on every save and would otherwise refuse unrelated edits.
 
 ## Raising a CLI pin
 

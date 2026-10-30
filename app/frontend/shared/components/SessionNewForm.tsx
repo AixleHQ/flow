@@ -17,7 +17,7 @@ import { type ToolGroup } from 'shared/lib/toolPicker';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
-import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
+import { AGENT_RUNTIMES, isAgentType, NO_AGENT_CREDENTIALS, reasoningEffortLevels } from 'shared/ui/agentRuntimes';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
@@ -437,8 +437,11 @@ export const SessionNewForm = ({
         onChange={(value) => {
           const model = value === DEFAULT_MODEL_OPTION ? null : value;
           setSelectedModel(model);
-          // A level needs an explicitly chosen model, so it is cleared with it.
-          if (!model) setSelectedEffort(null);
+          // A level needs an explicitly chosen model that takes it, so one the new
+          // model doesn't take (or Default, which takes none) clears it.
+          if (selectedEffort && !reasoningEffortLevels(agentType, model).includes(selectedEffort)) {
+            setSelectedEffort(null);
+          }
         }}
         data={modelOptions}
         classNames={{ input: classes.modelInput, option: classes.modelOption }}

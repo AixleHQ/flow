@@ -189,9 +189,8 @@ class SessionContextService
 
     def credential_workflow_config(session, credential, mcp_server_names = nil)
       mcp_server_names ||= build_all_servers(session).map { |server| MCPServer.config_key_for(server.name) }
-      model = resolve_session_model(session, credential)
-      { enabled_mcp_servers: mcp_server_names, model: model, mode: session.mode,
-        reasoning_effort: session.launch_reasoning_effort(model) }.compact
+      { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(session, credential), mode: session.mode,
+        reasoning_effort: session.reasoning_effort }.compact
     end
 
     # == Story 9.2: Config File Injection ==

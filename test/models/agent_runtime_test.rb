@@ -13,9 +13,9 @@ class AgentRuntimeTest < ActiveSupport::TestCase
     end
   end
 
-  test "the levels are the runtime's own, for its default model" do
-    assert_equal %w[low medium high xhigh max], AgentRuntime.fetch(:kiro_cli).reasoning_effort_levels
-    assert_equal %w[low high], AgentRuntime.fetch(:gemini_cli).reasoning_effort_levels
+  test "a model no rule names takes the runtime's own levels" do
+    assert_equal %w[low medium high xhigh max], AgentRuntime.fetch(:kiro_cli).reasoning_effort_levels("claude-opus-5.5")
+    assert_equal %w[low high], AgentRuntime.fetch(:gemini_cli).reasoning_effort_levels("gemini-3-pro")
   end
 
   test "a model rule replaces the runtime's levels, first match wins" do
@@ -28,11 +28,13 @@ class AgentRuntimeTest < ActiveSupport::TestCase
     assert_equal %w[low medium high xhigh max ultra], AgentRuntime.fetch(:codex).reasoning_effort_levels("gpt-6-sol")
   end
 
-  test "a runtime that needs a model offers nothing without one" do
-    cursor = AgentRuntime.fetch(:cursor_cli)
-
-    assert_equal [], cursor.reasoning_effort_levels(nil)
-    assert_equal %w[low medium high], cursor.reasoning_effort_levels("claude-opus-4-8")
+  test "no runtime offers a level without an explicitly chosen model" do
+    AgentRuntime.all.each do |runtime|
+      assert_equal [], runtime.reasoning_effort_levels(nil), runtime.id
+      assert_equal [], runtime.reasoning_effort_levels(""), runtime.id
+      assert_not runtime.reasoning_effort?("low", nil), runtime.id
+    end
+    assert_equal %w[low medium high], AgentRuntime.fetch(:cursor_cli).reasoning_effort_levels("claude-opus-4-8")
   end
 
   test "reasoning_effort_levels lists every level some runtime takes" do

@@ -114,11 +114,13 @@ class StepTest < ActiveSupport::TestCase
     assert step.valid?, step.errors.full_messages.to_sentence
   end
 
-  test "a word that is no reasoning-effort level is rejected" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", reasoning_effort: "turbo")
+  test "a word that is no reasoning-effort level is rejected with one message" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                        reasoning_effort: "turbo")
 
     assert_not step.valid?
-    assert step.errors.added?(:reasoning_effort, :inclusion, value: "turbo")
+    assert_equal [ "turbo is not available for kiro_cli with model claude-opus-5.5 (choose one of: low, medium, high, xhigh, max)" ],
+                 step.errors[:reasoning_effort]
   end
 
   test "a level the step's runtime does not take is rejected, naming the ones it does" do
@@ -194,6 +196,15 @@ class StepTest < ActiveSupport::TestCase
     assert step.update(required_agent_runtime: "kiro_cli"), step.errors.full_messages.to_sentence
     assert_not step.update(preferred_model: "claude-sonnet-4.6")
     assert_equal "xhigh", step.reload.reasoning_effort
+  end
+
+  test "the level is checked on every save, not only when its inputs change" do
+    step = create(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                         reasoning_effort: "high")
+    step.update_column(:reasoning_effort, "ultra")
+
+    assert_not step.update(name: "Renamed")
+    assert_includes step.errors[:reasoning_effort].first, "ultra is not available for kiro_cli"
   end
 
   test "nested sub_steps via accepts_nested_attributes" do

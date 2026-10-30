@@ -202,9 +202,7 @@ class SessionService
         mode: "interactive",
         initial_prompt: prompt,
         requested_model: step.preferred_model.presence || run_model,
-        # A step's level needs its preferred model (ReasoningEffortValidator); a row saved
-        # before that rule, with a level and no model, launches on the CLI's default.
-        reasoning_effort: (step.reasoning_effort if step.preferred_model.present?),
+        reasoning_effort: step.reasoning_effort,
         runner_id: workflow_run.runner_id,
         metadata: {
           "workflow_run_id" => workflow_run.id,

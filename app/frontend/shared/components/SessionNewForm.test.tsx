@@ -525,6 +525,14 @@ describe('SessionNewForm', () => {
         models: [{ modelId: 'claude-opus-4-8', displayName: 'Opus 4.8' }],
         defaultModel: 'claude-opus-4-8',
       },
+      {
+        agentType: 'kiro_cli',
+        models: [
+          { modelId: 'claude-opus-5.5', displayName: 'Opus 5.5' },
+          { modelId: 'claude-sonnet-4.6', displayName: 'Sonnet 4.6' },
+        ],
+        defaultModel: 'auto',
+      },
     ];
 
     async function pickModel(user: ReturnType<typeof userEvent.setup>, name: string) {
@@ -594,6 +602,45 @@ describe('SessionNewForm', () => {
       const body = JSON.parse(init!.body as string).terminalSession;
       expect(body).not.toHaveProperty('requestedModel');
       expect(body).not.toHaveProperty('reasoningEffort');
+
+      fetchSpy.mockRestore();
+    });
+
+    it("switching to a model that doesn't take the level picked clears it, and keeps one it takes", async () => {
+      const user = userEvent.setup();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { id: 'sess-1' } }),
+      } as Response);
+      renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, agentModels })} />, {
+        props: authProps(['kiro_cli']),
+      });
+      const effort = () => screen.getByRole('combobox', { name: 'Reasoning effort' });
+
+      await user.click(screen.getByText('Kiro CLI'));
+      await pickModel(user, 'Opus 5.5');
+      await user.click(effort());
+      await user.click(await screen.findByRole('option', { name: 'Extra high' }));
+      expect(effort()).toHaveValue('Extra high');
+
+      await pickModel(user, 'Sonnet 4.6');
+      expect(effort()).toHaveValue('');
+      expect(screen.queryByText(/is not available for/)).not.toBeInTheDocument();
+
+      await user.click(effort());
+      await user.click(await screen.findByRole('option', { name: 'High' }));
+      await pickModel(user, 'Opus 5.5');
+      expect(effort()).toHaveValue('High');
+
+      await pickModel(user, 'Sonnet 4.6');
+      await user.click(screen.getByRole('button', { name: /start session/i }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [, init] = fetchSpy.mock.calls[0];
+      expect(JSON.parse(init!.body as string).terminalSession).toMatchObject({
+        requestedModel: 'claude-sonnet-4.6',
+        reasoningEffort: 'high',
+      });
 
       fetchSpy.mockRestore();
     });

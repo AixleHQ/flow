@@ -276,9 +276,8 @@ module ContainerStrategies
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
-      model = resolve_model(session)
-      cmd = agent_service.adapter.session_command(mode: session.mode, model: model,
-                                                  effort: session.launch_reasoning_effort(model))
+      cmd = agent_service.adapter.session_command(mode: session.mode, model: resolve_model(session),
+                                                  effort: session.reasoning_effort)
 
       tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
         write_prompt!(container, agent_prompt(session), agent_service.adapter.container_uid)

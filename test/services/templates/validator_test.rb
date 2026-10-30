@@ -235,6 +235,19 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_empty errors.call("gemini_cli", "gemini-3-pro", "low")
   end
 
+  # Step refuses a level on a blank model at install, so the package is refused here first.
+  test "a step's reasoning effort on a blank preferred model is refused" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = errors_for do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "",
+                                                          "reasoning_effort" => "high")
+    end
+
+    assert_equal [ "#{label}: needs an explicitly chosen model" ], errors
+  end
+
   test "the installer refuses a step whose runtime and model take no such reasoning effort" do
     invalid = package do |definition|
       definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "gemini_cli",
