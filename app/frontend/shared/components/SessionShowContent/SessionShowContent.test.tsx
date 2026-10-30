@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildRunnerBadge } from 'test/factories/runner';
 import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -211,6 +212,37 @@ describe('SessionShowContent', () => {
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Ada')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sessions & Runs' })).toHaveAttribute('href', '/sessions');
+  });
+
+  it("shows the session's runner in the header, linking to the runner, with the flag on", () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ projectId: 3, runnerId: 4, runner: buildRunnerBadge({ id: 4, name: 'Prod VPC' }) })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+      { props: { features: { externalRunners: true } } },
+    );
+
+    expect(screen.getByText('Runs on')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Prod VPC · Manual' })).toHaveAttribute(
+      'href',
+      '/company/projects/3/runners/4',
+    );
+  });
+
+  it('says Hosted in the header for a session without a runner, and nothing without the flag', () => {
+    const session = makeSession({ projectId: 3 });
+    const { unmount } = renderPage(<SessionShowContent session={session} cableStream="signed-stream" context={ctx} />, {
+      props: { features: { externalRunners: true } },
+    });
+    expect(screen.getByText('Runs on')).toBeInTheDocument();
+    expect(screen.getByText('Hosted')).toBeInTheDocument();
+    unmount();
+
+    renderPage(<SessionShowContent session={session} cableStream="signed-stream" context={ctx} />);
+    expect(screen.queryByText('Runs on')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hosted')).not.toBeInTheDocument();
   });
 
   it('labels a standalone session as such and a workflow-step session by its position', () => {
