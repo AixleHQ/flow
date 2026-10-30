@@ -11,7 +11,7 @@ require "test_helper"
 # cluster both set the variable, so nothing caught it.
 class ThreadBudgetTest < ActiveSupport::TestCase
   SETTINGS_FILE = Rails.root.join("config/settings.yml")
-  PUMA_FILES = %w[config/puma.rb config/puma_mcp.rb].freeze
+  PUMA_FILES = %w[config/puma.rb config/puma_mcp.rb config/puma_runner_gateway.rb].freeze
 
   test "settings and every Puma config agree on the RAILS_MAX_THREADS fallback" do
     settings_default = SETTINGS_FILE.read[/max_threads\s*=\s*\(ENV\["RAILS_MAX_THREADS"\]\s*\|\|\s*(\d+)\)/, 1]

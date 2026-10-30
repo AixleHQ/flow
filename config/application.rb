@@ -30,6 +30,11 @@ module Aixle
 
     config.middleware.use Rack::Attack
 
+    # The runner gateway routes /runner/v1/* and /up only (config/routes.rb), so
+    # Action Cable's own /cable mount stays out of it as well. The web process
+    # keeps it, and draws the same mount itself in config/routes/web.rb.
+    config.action_cable.mount_path = nil if ENV["AIXLE_PROCESS_MODE"] == "runner_gateway"
+
     # Drop the X-Runtime header — it exposes per-request server processing time
     # (a timing side-channel / fingerprinting aid) for no operational benefit (F4).
     config.middleware.delete Rack::Runtime

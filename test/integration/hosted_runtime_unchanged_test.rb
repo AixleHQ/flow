@@ -8,7 +8,8 @@ require "test_helper"
 # SessionService → SessionAdmissionService → SessionLaunchRelay path and the
 # admitted container phases (AdmittedPhaseActivity) on the runtime seam that
 # KubernetesRuntime sits behind (ContainerRuntime::FakeRuntime). Both runs must
-# make the same runtime calls and leave the same admission.
+# make the same runtime calls and leave the same admission, and neither reads
+# the runner gateway's tables.
 class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
   setup do
     @company = create(:company, email_domain: "test.com")
@@ -33,6 +34,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     assert_equal off, on
     assert_equal "finished", on[:state]
     assert on[:execs].any? && on[:cleaned].any?, "the launch reached the runtime"
+    assert_empty on[:runner_gateway_queries]
   end
 
   test "a hosted workflow step is admitted and launched the same with the flag on" do
@@ -42,6 +44,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     assert_equal off, on
     assert_equal "finished", on[:state]
     assert on[:execs].any? && on[:cleaned].any?, "the launch reached the runtime"
+    assert_empty on[:runner_gateway_queries]
   end
 
   private
@@ -64,9 +67,13 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
   # runtime is asked to do must not.
   def trace
     runtime = stub_container_runtime("kubernetes", agent_type: "claude_code")
-    session = yield
-    launch_state = session.session_admission.reload.launch_state
-    run_phases(session)
+    sql = []
+    session, launch_state = ActiveSupport::Notifications.subscribed(->(*, payload) { sql << payload[:sql] }, "sql.active_record") do
+      launched = yield
+      launch_state = launched.session_admission.reload.launch_state
+      run_phases(launched)
+      [ launched, launch_state ]
+    end
     admission = session.session_admission.reload
 
     {
@@ -79,7 +86,8 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
       uploads: runtime.uploads.map { |upload| normalize(upload.inspect) },
       written: runtime.written_paths.map { |path| normalize(path) },
       cleaned: runtime.cleaned_sessions.map { |id| normalize(id) },
-      state: session.reload.state
+      state: session.reload.state,
+      runner_gateway_queries: sql.grep(/runner_(environments|credentials)/)
     }
   end
 
