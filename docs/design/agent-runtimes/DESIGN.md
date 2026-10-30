@@ -1,9 +1,21 @@
 # External runners for agent sessions — design
 
 **Status:** proposed, revision 5 (design only, no implementation in this change)
-**Created:** 2026-10-20 · **Revised:** 2026-10-26
+**Created:** 2026-10-20 · **Revised:** 2026-10-30
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
 **Baseline:** `origin/develop` @ `a837d6fd` (the feature flag chain #166–#172 is in)
+
+**Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
+and are not a new numbered revision:
+
+- **Interactive work on runners waits for the tunnel, with no interim checks.** Named
+  companies get the `external_runners` override only after phase 4 (§12.2, §15 task 16);
+  until then the flag stays on for the test company only. The run-override and publish
+  `interactive_terminal` checks and the Base Resources interactive-step warning are not
+  built (§4, §11).
+- **Project-move edge cases are accepted, not fixed:** a queued manual launch naming a
+  runner, the lock order against a concurrent workflow save, and a project that owns a
+  runner (§3.4, "Known limitations of the move").
 
 **Revision 5** applies the six edits of the revision 4 review. Revision 4 (`2d5532f3`)
 stands where this list does not touch it; the delivery order, the flag design and the
@@ -48,7 +60,6 @@ this list does not touch it:
   `reuse_policy` is defined per type (§7).
 - **Delivery order.** `manual` is the first type (phase 3), the interactive tunnel
   follows (phase 4), then Coder, Kubernetes and the host execution mode (§12.2, §15).
-  Named companies get the override only after the tunnel (decided 2026-10-30, §12.2).
   The breakdown is a map: tasks are cut one at a time (§15).
 
 **Revision 3** applies the correction to the revision 2 review. The design no longer
@@ -629,7 +640,8 @@ super-admin operation, so these cases stay as they are and are not fixed:
 - **A queued manual launch.** A manual task trigger that is still queued in the trigger
   outbox when the project moves, and that names a runner (the pick recorded on its
   `TriggerEvent`), is dropped by the relay: after the move the runner is not in the
-  project's tenant any more, so the pick is refused.
+  project's tenant any more, so the pick is refused. The `TriggerDispatch` is left
+  `skipped` with the refusal as its reason, and no run or comment is created.
 - **Lock order.** The move and a concurrent workflow save take their locks in opposite
   order, so they can deadlock. The admin then gets an error and retries the move. This
   existed before task 4.
@@ -658,11 +670,11 @@ container mode, so they are the same across the three external types; the `host`
 | `reusable` | false | true | true | false (v1) | Lifecycle (§7), affinity, scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
-| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Blocks interactive standalone sessions on the runner (the step checks are not built, below) |
+| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Not declared or read in v1. Its first reader comes with the tunnel (§15 task 16); until then interactive standalone sessions refuse every external runner unconditionally (below) |
 | `max_concurrency` | admission pools | `runners.max_concurrency` | `runners.max_concurrency` | `runners.max_concurrency` | Admission (§10) |
 | `max_environments` | n/a | number of registered machines (a fact) | `runners.max_environments` (a setting) | `runners.max_concurrency` | Allocation (§7.3) |
 | `concurrency_per_environment` | 1 | 1 | 1 | 1 | Allocation (§7.3) |
-| `agent_runtimes` | all | all | all | all | Validation at selection and launch |
+| `agent_runtimes` | all | all | all | all | Not read in v1. Validation at selection and launch once a type narrows it (below) |
 | `provisioning_seconds_p50` | n/a | n/a | from history | from history | UI hint, bootstrap timeout |
 
 The agent runs in the same image hosted uses on every type, so `agent_runtimes: all`
@@ -672,9 +684,12 @@ relays ports the image already serves, so it lifts on all types at once.
 
 Validation that uses these flags:
 
-- An interactive standalone session cannot pick a runner without `interactive_terminal`.
-  The select shows it disabled with the reason. This is the one check that is built
-  (§15 task 4): `POST /api/v1/terminal_sessions` refuses the pick (§3.3).
+- **Built (§15 task 4), and not a capability check:** an interactive standalone session
+  cannot pick any external runner before the tunnel. `Runners::Selection.error` refuses
+  every runner when `interactive: true`, so `POST /api/v1/terminal_sessions` refuses the
+  pick (§3.3), and the runner select disables every runner with the reason. No
+  `interactive_terminal` capability is declared or read today. It gets its first reader
+  with the tunnel (§15 task 16), which replaces this unconditional refusal.
 - **Not built, by decision (2026-10-30):** refusing a run launched with an override to a
   runner without `interactive_terminal`, and refusing to publish a workflow that has an
   interactive step on such a runner. No real user has `external_runners` before the
@@ -1594,7 +1609,7 @@ changes is the pool an external session belongs to:
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
-| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`. |
+| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`; before the tunnel that is every runner (§4). |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
 | **Admin (Administrate)** | Runners and environments dashboards for support. |
 
