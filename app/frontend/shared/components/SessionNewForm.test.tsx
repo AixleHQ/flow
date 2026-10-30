@@ -406,7 +406,11 @@ describe('SessionNewForm', () => {
         ],
         defaultModel: 'opus-9',
       },
-      { agentType: 'codex', models: [{ modelId: 'gpt-9', displayName: 'GPT 9', reasoningEffortLevels: [] }], defaultModel: null },
+      {
+        agentType: 'codex',
+        models: [{ modelId: 'gpt-9', displayName: 'GPT 9', reasoningEffortLevels: [] }],
+        defaultModel: null,
+      },
       { agentType: 'cursor_cli', models: [], defaultModel: 'arn:aws:bedrock:us-east-1:1234:profile/abc' },
     ];
 
@@ -521,7 +525,13 @@ describe('SessionNewForm', () => {
 
   describe('reasoning effort', () => {
     const agentModels = [
-      { agentType: 'grok', models: [{ modelId: 'grok-5', displayName: 'Grok 5', reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'] }], defaultModel: 'grok-5' },
+      {
+        agentType: 'grok',
+        models: [
+          { modelId: 'grok-5', displayName: 'Grok 5', reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'] },
+        ],
+        defaultModel: 'grok-5',
+      },
       {
         agentType: 'cursor_cli',
         models: [

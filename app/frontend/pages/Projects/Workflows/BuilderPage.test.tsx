@@ -185,7 +185,11 @@ const KIRO_MODELS = [
         displayName: 'Opus 5.5',
         reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'],
       },
-      { modelId: 'claude-sonnet-4.6', displayName: 'Sonnet 4.6', reasoningEffortLevels: ['low', 'medium', 'high', 'max'] },
+      {
+        modelId: 'claude-sonnet-4.6',
+        displayName: 'Sonnet 4.6',
+        reasoningEffortLevels: ['low', 'medium', 'high', 'max'],
+      },
     ],
   },
 ];
@@ -940,7 +944,12 @@ describe('Projects/Workflows/BuilderPage', () => {
             preferredModel: 'opus-9',
           }),
         ],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] }],
+        agentModels: [
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
+        ],
       }),
     });
 
@@ -958,7 +967,12 @@ describe('Projects/Workflows/BuilderPage', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] }],
+        agentModels: [
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
+        ],
       }),
     });
 
@@ -974,7 +988,10 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
         agentModels: [
-          { agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }] },
+          {
+            agentType: 'claude_code',
+            models: [{ modelId: 'opus-9', displayName: 'Opus 9', reasoningEffortLevels: [] }],
+          },
           { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X', reasoningEffortLevels: [] }] },
         ],
       }),
