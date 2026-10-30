@@ -100,7 +100,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       },
-      runners: InertiaRails.defer(group: "resources") { runner_options(including: workflow.runner) }
+      runners: InertiaRails.defer(group: "resources") { runner_options(including: workflow.owned_runner) }
     }
   end
 

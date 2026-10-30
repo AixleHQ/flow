@@ -92,7 +92,7 @@ module ProjectMove
     # them to Hosted (Mover#clear_runner_references!) rather than refuse.
     def workflows_on_runners
       @workflows_on_runners ||= Workflow.for_project(project).where.not(runner_id: nil)
-                                        .includes(:runner).order(:name).to_a
+                                        .includes(:runner, :scope).order(:name).to_a
     end
 
     # The runs and sessions that name a runner. They are history (a live session
@@ -177,7 +177,7 @@ module ProjectMove
         "copied_assets" => company_assets.map { |asset| { "id" => asset.id, "path" => asset_path(asset) } },
         "dropped_reservation" => reservation_dropped? ? { "max_sessions" => reservation.max_sessions } : nil,
         "workflows_switched_to_hosted" => workflows_on_runners.map do |workflow|
-          { "id" => workflow.id, "name" => workflow.name, "archived" => workflow.archived?, "runner" => workflow.runner.name }
+          { "id" => workflow.id, "name" => workflow.name, "archived" => workflow.archived?, "runner" => runner_name(workflow) }
         end,
         "cleared_runner_references" => runner_history,
         "without_agent_credentials" => people_without_agent_credentials.map { |user| user_row(user) }
@@ -199,6 +199,10 @@ module ProjectMove
       [ "#{own_runners.map { |runner| runner_label(runner) }.to_sentence} belong#{'s' if own_runners.one?} " \
         "to this project, and a runner cannot move to another company." ]
     end
+
+    # Through the tenant rule (RunnerReference#owned_runner): a stale id naming
+    # another project's runner shows as its id.
+    def runner_name(workflow) = workflow.owned_runner&.name || "##{workflow.runner_id}"
 
     def runner_label(runner) = runner.deleted? ? "Runner #{runner.name} (deleted)" : "Runner #{runner.name}"
 

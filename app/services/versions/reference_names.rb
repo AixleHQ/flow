@@ -16,7 +16,7 @@ module Versions
 
       ids = Hash.new { |h, k| h[k] = Set.new }
       snapshots(version).each { |snapshot| collect(snapshot, ids) }
-      ids.to_h { |model, set| [ model, names(model, set.to_a) ] }
+      ids.to_h { |model, set| [ model, names(model, set.to_a, workflow: version.versionable) ] }
     end
 
     def snapshots(version)
@@ -34,10 +34,20 @@ module Versions
       end
     end
 
-    def names(model, ids)
-      model.constantize.where(id: ids).to_h do |record|
+    def names(model, ids, workflow:)
+      scope(model, workflow).where(id: ids).to_h do |record|
         [ record.id.to_s, { name: display_name(record), archived: archived?(record) } ]
       end
+    end
+
+    # A runner id is read through the workflow's tenant (TenantScope's Runner
+    # rule), so a version that names another tenant's runner shows "#N
+    # (deleted)", never that runner's name.
+    def scope(model, workflow)
+      return model.constantize unless model == "Runner"
+
+      project = workflow&.runner_project
+      project ? TenantScope.owned(Runner, project: project) : Runner.none
     end
 
     def display_name(record)

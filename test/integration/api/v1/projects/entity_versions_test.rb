@@ -54,6 +54,24 @@ class Api::V1::Projects::EntityVersionsTest < ActionDispatch::IntegrationTest
     assert_equal({ "name" => "Deployer", "archived" => true }, response.parsed_body.dig("references", "Tool", tool.id.to_s))
   end
 
+  test "show names a runner of the workflow's tenant, and never another project's" do
+    own = create(:runner, company: @company, name: "Prod VPC")
+    other_project = create(:project, company: @company, owner: @owner)
+    foreign = create(:runner, company: @company, project: other_project, name: "Lab box")
+    workflow = create(:workflow, scope: @project)
+    Versions.save!(workflow, actor: @actor) { workflow.update!(runner: own) }
+    version = workflow.latest_version
+    EntityVersion.where(id: version.id).update_all(snapshot: version.snapshot.merge("runner_id" => foreign.id))
+    Versions.save!(workflow, actor: @actor) { workflow.update!(description: "after") }
+
+    get api_v1_project_entity_version_path(@project, workflow.latest_version)
+
+    runners = response.parsed_body.dig("references", "Runner")
+    assert_equal({ "name" => "Prod VPC", "archived" => false }, runners[own.id.to_s])
+    assert_not runners.key?(foreign.id.to_s), "another project's runner is not named"
+    assert_not_includes response.body, "Lab box"
+  end
+
   test "revert from a stale base version answers 409 and changes nothing" do
     agent = create(:agent, scope: @project, title: "One")
     Versions.save!(agent, actor: @actor) { agent.update!(title: "Two") }

@@ -202,21 +202,19 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert runner.reload.persisted?, "the runner stays with its company"
   end
 
-  test "a version from before the move that names a runner of the source is refused on revert" do
-    runner = create(:runner, company: @s.source)
+  test "the move drops the source runner from the workflows' versions and leaves the rest of each version" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
     @s.workflow.update_column(:current_version_number, @s.entity_version.number)
-    on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: runner) }
-    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil) }
+    on_runner = Versions.save!(@s.workflow, actor: Versions::Actor.system) do |workflow|
+      workflow.update!(runner: runner, description: "on runner")
+    end
+    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: nil, description: "hosted") }
+    before = on_runner.snapshot.except("runner_id")
     move(member_policy: "add")
 
-    workflow = @s.workflow.reload
-    error = assert_raises(ActiveRecord::RecordInvalid) do
-      Versions.revert!(workflow, to: on_runner, actor: Versions::Actor.system)
-    end
-
-    assert_match(/This version runs on runner ##{runner.id}, which this project can no longer use\./, error.message)
-    assert_nil workflow.reload.runner_id
-    assert_equal on_runner.number + 1, workflow.current_version_number
+    assert_empty EntityVersion.where(versionable: @s.workflow).where("snapshot -> 'runner_id' IS NOT NULL"),
+                 "no version names a runner of the source company"
+    assert_equal before, on_runner.reload.snapshot
   end
 
   private

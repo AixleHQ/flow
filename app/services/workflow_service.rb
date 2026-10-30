@@ -194,11 +194,18 @@ class WorkflowService
     # A step whose runner is refused when its session is about to be built
     # (SessionService.create_for_workflow_step). The step carries the message;
     # the run's execution then ends failed the way a credential preflight does.
+    # Several ready steps can be refused at once; the one that records the run's
+    # failure_reason, under the run's lock, is the one that comments on the task.
     def fail_step_on_runner_refusal(step_run:, refusal:)
       step_run.mark_failed!(refusal.message)
       run = step_run.workflow_run
-      run.update!(failure_reason: refusal.reason) if run.failure_reason.blank?
-      post_runner_refusal_comment(run, refusal)
+      first = run.with_lock do
+        next false if run.failure_reason.present?
+
+        run.update!(failure_reason: refusal.reason)
+        true
+      end
+      post_runner_refusal_comment(run, refusal) if first
     end
 
     def approve_step(step_run:)
