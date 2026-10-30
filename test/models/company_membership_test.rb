@@ -215,6 +215,22 @@ class CompanyMembershipTest < ActiveSupport::TestCase
                  models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
   end
 
+  # AgentCredential validates agent_type against the registry, so a credential
+  # for an unknown runtime only exists after that runtime is removed from it.
+  test "agent_models_for_props gives no levels to the models of a runtime the registry no longer lists" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    membership = create(:company_membership, user: @user, company: @company)
+    cred = create(:agent_credential, :kiro_cli, user: @user, company: @company)
+    cred.update_column(:agent_type, "retired_cli")
+    Rails.cache.write(cred.reload.models_cache_key, [ { model_id: "old-model", display_name: "Old model" } ])
+
+    props = membership.agent_models_for_props
+
+    assert_equal "retired_cli", props.first[:agent_type]
+    assert_equal [ { model_id: "old-model", display_name: "Old model", description: nil, reasoning_effort_levels: [] } ],
+                 props.first[:models]
+  end
+
   test "agent_models_for_props reports a nil default model when none is pinned" do
     membership = create(:company_membership, user: @user, company: @company)
     create(:agent_credential, :claude_code, user: @user, company: @company)

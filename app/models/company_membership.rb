@@ -298,13 +298,15 @@ class CompanyMembership < ApplicationRecord
   # so the New Session form can name it instead of "runtime selects". Each model
   # carries the reasoning-effort levels its runtime takes for it
   # (AgentRuntime#reasoning_effort_levels), which the model pickers offer as they
-  # are: the rule lives only on the server.
+  # are: the rule lives only on the server. A credential whose runtime is no
+  # longer in the registry gets no levels, the same as ReasoningEffortValidator
+  # treats it, instead of failing every page that renders a model picker.
   def agent_models_for_props
     default_models = credentials.to_h { |cred| [ cred.agent_type, cred.default_model ] }
 
     agent_models_by_type.map do |agent_type, models|
-      runtime = AgentRuntime.fetch(agent_type)
-      models = models.map { |m| m.merge(reasoning_effort_levels: runtime.reasoning_effort_levels(m[:model_id])) }
+      runtime = AgentRuntime.all.find { |r| r.id == agent_type }
+      models = models.map { |m| m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id]) || []) }
       { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end
   end
