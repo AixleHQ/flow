@@ -4,6 +4,8 @@ require "test_helper"
 
 # Rack::Attack is off in the test env; these turn it on against a private store.
 class RackAttackTest < ActionDispatch::IntegrationTest
+  include ProcessModeHelper
+
   setup do
     # Throttles count in fixed windows of Time.now / period; a burst that
     # straddles a boundary on a slow runner is split across two counters.
@@ -132,26 +134,31 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_nil Rack::Attack.mcp_credential(rack_request({}))
   end
 
+  # The gateway's own routes, as its Puma draws them (config/routes.rb).
   test "registering runners from one address is cut off" do
-    30.times { post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" } }
-    assert_not_equal 429, response.status
+    with_process_mode("runner_gateway") do
+      30.times { post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" } }
+      assert_not_equal 429, response.status
 
-    post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }
-    assert_response :too_many_requests
+      post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }
+      assert_response :too_many_requests
 
-    post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
-    assert_not_equal 429, response.status
+      post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
+      assert_not_equal 429, response.status
+    end
   end
 
   test "the runner gateway is capped per credential, whichever address it calls from" do
-    600.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
-    assert_not_equal 429, response.status
+    with_process_mode("runner_gateway") do
+      600.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
+      assert_not_equal 429, response.status
 
-    post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
-    assert_response :too_many_requests
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
+      assert_response :too_many_requests
 
-    post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
-    assert_not_equal 429, response.status
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
+      assert_not_equal 429, response.status
+    end
   end
 
   test "the runner gateway count never keys on the raw token" do

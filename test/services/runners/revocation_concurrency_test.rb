@@ -142,11 +142,12 @@ class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
     ActiveRecord::Base.connection.select_value("SELECT pg_backend_pid()")
   end
 
+  # Uncached: the test runs inside the executor, whose query cache would answer
+  # every poll with the first one's result.
   def wait_until_waiting_on_lock(pid)
     deadline = Time.current + LOCK_WAIT_TIMEOUT
-    until ActiveRecord::Base.connection.select_value(
-      "SELECT wait_event_type FROM pg_stat_activity WHERE pid = #{Integer(pid)}"
-    ) == "Lock"
+    query = "SELECT wait_event_type FROM pg_stat_activity WHERE pid = #{Integer(pid)}"
+    until ActiveRecord::Base.uncached { ActiveRecord::Base.connection.select_value(query) } == "Lock"
       flunk "backend #{pid} never waited on a lock" if Time.current > deadline
       sleep 0.01
     end
