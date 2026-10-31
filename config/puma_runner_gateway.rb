@@ -10,13 +10,16 @@
 ENV["AIXLE_PROCESS_MODE"] = "runner_gateway"
 
 # Puma answers 413 before it reads a body over the cap, chunked bodies included
-# (§9.5). No runner request comes near it.
-http_content_length_limit 64 * 1024
+# (§9.5). The largest runner request is an op result, which may carry up to
+# 1 MiB of output (§6.4, `op_output_limit`).
+http_content_length_limit 2 * 1024 * 1024
 
 # Falls back to RAILS_MAX_THREADS, not to a private default: the Active Record
 # pool is sized from RAILS_MAX_THREADS (config/settings.yml), so a separate
-# default here silently oversubscribes the pool and every thread past the pool
-# size dies on ConnectionTimeoutError after the 5s checkout wait.
+# default here silently oversubscribes the pool. A long-poll waiting for an op
+# holds a thread but no connection (Runners::Operations.poll), so a deployment
+# may set RUNNER_GATEWAY_MAX_THREADS above the pool to hold more machines'
+# polls at once (§6.1).
 max_threads_count = ENV.fetch("RUNNER_GATEWAY_MAX_THREADS") { ENV.fetch("RAILS_MAX_THREADS", 10) }
 min_threads_count = ENV.fetch("RUNNER_GATEWAY_MIN_THREADS") { max_threads_count }
 threads min_threads_count, max_threads_count

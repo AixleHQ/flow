@@ -84,6 +84,8 @@ and test fall back to fixed non-secret values.
 | `INTEGRATIONS_SECRET_KEY_PREVIOUS` | Optional. Retired `INTEGRATIONS_SECRET_KEY` value(s), as above. |
 | `OAUTH_SECRET_KEY_PREVIOUS`        | Optional. Retired `OAUTH_SECRET_KEY` value(s), as above.        |
 | `ENCRYPTION_BIND_PURPOSE`          | Optional, default `false`. `true` binds every new ciphertext to its model and column. Turn it on once no pod of the previous release can run (that release reads a bound value as empty), then run `bin/rails encryption:reencrypt`. |
+| `RUNNERS_SECRET_KEY`               | Optional at boot. Encrypts the op payloads queued for external runners (`runner_operations`), which carry the credentials a session receives, and the results the runners report. Not checked by `required_env.rb`: without it the app boots and serves everything else, and only queueing, delivering or recording the result of a runner op fails. Development and test fall back to a fixed value. |
+| `RUNNERS_SECRET_KEY_PREVIOUS`      | Optional. Retired `RUNNERS_SECRET_KEY` value(s), as above. |
 
 ## Session queue
 
