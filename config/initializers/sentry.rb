@@ -11,6 +11,9 @@ module SentryConfiguration
   # view, and one code path. Tracing and breadcrumbing it cost more than they tell.
   USAGE_INGEST_PATH = "/api/v1/internal/usage_statistics"
   USAGE_INGEST_CONTROLLER = "Api::V1::Internal::UsageStatisticsController"
+  # The runner gateway (/runner/v1/*). Its bodies carry op results, which hold
+  # command output and file contents, and are kept out of every log.
+  RUNNER_GATEWAY_CONTROLLER_PREFIX = "RunnerGateway::"
 
   # Request headers that authenticate someone; never sent.
   SENSITIVE_HEADERS = %w[
@@ -67,13 +70,16 @@ module SentryConfiguration
 
     # The active_support_logger breadcrumb carries the controller's params, which
     # on the ingest route is the entire OTLP envelope — Sentry could not even
-    # serialise it ("nesting of 10 is too deep", once per request).
+    # serialise it ("nesting of 10 is too deep", once per request). On the
+    # runner gateway they are op results, which no log may hold.
     config.before_breadcrumb = lambda do |breadcrumb, _hint|
       data = breadcrumb.data
       next breadcrumb unless data.is_a?(Hash)
 
-      controller = data[:controller] || data["controller"]
-      next breadcrumb unless controller.to_s == USAGE_INGEST_CONTROLLER
+      controller = (data[:controller] || data["controller"]).to_s
+      unless controller == USAGE_INGEST_CONTROLLER || controller.start_with?(RUNNER_GATEWAY_CONTROLLER_PREFIX)
+        next breadcrumb
+      end
 
       breadcrumb.data = data.except(:params, "params").merge(params: "[FILTERED]")
       breadcrumb

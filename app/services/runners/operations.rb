@@ -77,7 +77,8 @@ module Runners
 
     # The runner's outcome of an op. The first result wins: an op that is
     # already completed, failed or expired is returned unchanged. The same
-    # update stores the result and nulls the payload (§2.3).
+    # update stores the result, encrypted like the payload, and nulls the
+    # payload (§2.3).
     def record_result!(operation, status:, result:)
       state = RESULT_STATES.fetch(status)
       RunnerOperation.transaction do

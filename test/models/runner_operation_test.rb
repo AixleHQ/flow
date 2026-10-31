@@ -22,6 +22,23 @@ class RunnerOperationTest < ActiveSupport::TestCase
     end
   end
 
+  test "the result is stored encrypted with runners_key" do
+    operation = build_operation(result: { "stdout" => "s3cr3t-token", "data" => { "content" => "s3cr3t-token" } })
+    operation.save!
+
+    stored = RunnerOperation.connection.select_value(
+      RunnerOperation.where(id: operation.id).select(:encrypted_result).to_sql
+    )
+    assert_not_includes stored, "s3cr3t-token"
+    assert_equal({ "stdout" => "s3cr3t-token", "data" => { "content" => "s3cr3t-token" } },
+                 RunnerOperation.find(operation.id).result)
+    assert_nil build_operation.result
+
+    with_runners_key("another-runners-key-0123456789abcdef") do
+      assert_raises(Encryptable::DecryptionError) { RunnerOperation.find(operation.id).result }
+    end
+  end
+
   test "without runners_key only encrypting or decrypting a payload fails" do
     with_runners_key(nil) do
       operation = build_operation(payload: nil)

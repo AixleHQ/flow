@@ -159,6 +159,43 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     assert_refused :bad_request, "invalid_request"
   end
 
+  test "an after past the bigint range of sequence is refused, and the largest one is not" do
+    poll(@pair, after: "9223372036854775808", wait: 0)
+    assert_refused :bad_request, "invalid_request"
+
+    poll(@pair, after: "9223372036854775807", wait: 0)
+    assert_equal [], sequences
+  end
+
+  # The checks of the before_action ran before the wait: a change during it
+  # must still refuse the payload a wake-up then brings.
+  {
+    "a credential revoked" => [ :unauthorized, "invalid_token",
+                                -> { RunnerCredential.where(runner_environment: @environment).update_all(revoked_at: Time.current) } ],
+    "a runner revoked" => [ :unauthorized, "invalid_token", -> { @runner.revoke! } ],
+    "an environment gone" => [ :unauthorized, "invalid_token", -> { @environment.update!(state: :gone) } ],
+    "the flag turned off" => [ :forbidden, "runners_disabled",
+                               -> { FeatureFlag.find_by!(key: "external_runners").overrides.find_by!(company: @company).update!(enabled: false) } ]
+  }.each do |change, (status, error, apply)|
+    test "#{change} during the wait refuses the woken poll without the payload" do
+      operation = nil
+      on_wait = OnStart.new do
+        next if operation
+
+        instance_exec(&apply)
+        operation = enqueue(payload: { "content" => SECRET })
+      end
+
+      ActiveSupport::Notifications.subscribed(on_wait, "wait.runner_operations") { poll(@pair, wait: 10) }
+
+      assert_refused status, error
+      assert_not_includes response.body, SECRET
+      assert_nil response.parsed_body["ops"]
+      assert operation.reload.deliverable?
+      assert_equal({ "content" => SECRET }, operation.payload)
+    end
+  end
+
   # == POST /runner/v1/ops/:id/result ==
 
   test "each status maps to its state, and the result is stored with the payload nulled" do
@@ -269,7 +306,7 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
   # == secrets ==
 
-  test "the payload is encrypted at rest, and neither it nor a result reaches the log" do
+  test "the payload and the result are encrypted at rest, and neither reaches the log" do
     io = StringIO.new
     logger = ActiveSupport::Logger.new(io, level: :debug)
     Rails.logger.broadcast_to(logger)
@@ -283,6 +320,11 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
     assert_match %r{/runner/v1/ops/#{operation.id}/result}, io.string
     assert_not_includes io.string, SECRET
+    stored = RunnerOperation.connection.select_value(
+      RunnerOperation.where(id: operation.id).select(:encrypted_result).to_sql
+    )
+    assert_not_includes stored, SECRET
+    assert_equal "token=#{SECRET}", operation.reload.result["stdout"]
   ensure
     Rails.logger.stop_broadcasting_to(logger)
   end

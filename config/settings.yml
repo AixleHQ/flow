@@ -197,9 +197,10 @@ encryption:
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] %>
   oauth_key: <%= ENV['OAUTH_SECRET_KEY'] %>
-  # External runners' op payloads (RunnerOperation#encrypted_payload). Not
-  # required at boot: without it everything else runs, and only encrypting or
-  # decrypting a payload fails (docs/design/agent-runtimes/DESIGN.md §2).
+  # External runners' op payloads and results (RunnerOperation#encrypted_payload
+  # and #encrypted_result). Not required at boot: without it everything else
+  # runs, and only encrypting or decrypting one of them fails
+  # (docs/design/agent-runtimes/DESIGN.md §2).
   runners_key: <%= ENV['RUNNERS_SECRET_KEY'] %>
   # Retired keys, comma-separated, still accepted for reading while
   # `bin/rails encryption:reencrypt` moves every stored secret onto the new one.

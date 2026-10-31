@@ -17,7 +17,7 @@ class CreateRunnerOperations < ActiveRecord::Migration[8.1]
       t.string :op, null: false
       t.text :encrypted_payload
       t.string :state, null: false
-      t.jsonb :result
+      t.text :encrypted_result
       t.datetime :deadline_at, null: false
       t.datetime :delivered_at
       t.datetime :completed_at

@@ -8,7 +8,9 @@
 # `sequence` is monotonic per environment, and the runner acknowledges by it.
 # The payload carries what a hosted pod receives through `write_file` today,
 # credentials included, so it is encrypted with `runners_key` and nulled once
-# the op completes, fails or expires.
+# the op completes, fails or expires. The result carries command output and
+# file contents, which can hold the same credentials, so it is encrypted with
+# `runners_key` too.
 class RunnerOperation < ApplicationRecord
   include Encryptable
   extend Enumerize
@@ -22,7 +24,7 @@ class RunnerOperation < ApplicationRecord
   DELIVERABLE_STATES = %w[pending delivered].freeze
 
   encryption_key :runners_key
-  encrypted_column :encrypted_payload
+  encrypted_column :encrypted_payload, :encrypted_result
 
   enumerize :op, in: OPS
   enumerize :state, in: %i[pending delivered completed failed expired], predicates: true
@@ -53,5 +55,15 @@ class RunnerOperation < ApplicationRecord
 
   def payload=(value)
     self.encrypted_payload = value.nil? ? nil : encrypt_secret(value.to_json, column: "encrypted_payload")
+  end
+
+  # The decrypted result the runner reported, a Hash, or nil before it has.
+  def result
+    plaintext = decrypt_secret(encrypted_result, column: "encrypted_result")
+    plaintext && JSON.parse(plaintext)
+  end
+
+  def result=(value)
+    self.encrypted_result = value.nil? ? nil : encrypt_secret(value.to_json, column: "encrypted_result")
   end
 end

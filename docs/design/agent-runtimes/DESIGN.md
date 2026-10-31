@@ -326,7 +326,7 @@ first-seen IP) and `created_by_id` come with the Machines table and "Add machine
 | `op` | §6.4. |
 | `encrypted_payload` | `Encryptable`. Payloads carry credentials (the same data `write_file` carries to a hosted pod today), so they are encrypted at rest and **nulled on completion**. |
 | `state` | `pending`, `delivered`, `completed`, `failed` or `expired`. |
-| `result` | jsonb, without secrets. Large outputs go to Active Storage and are referenced here. |
+| `encrypted_result` | `Encryptable`, like the payload. A result carries command output and file contents, which can hold the same credentials, so it is encrypted at rest. Large outputs go to Active Storage and are referenced here. |
 | `deadline_at`, `delivered_at`, `completed_at` | |
 
 Completed rows are pruned after 7 days by a sweep in the style of
@@ -335,7 +335,7 @@ Completed rows are pruned after 7 days by a sweep in the style of
 **What v1 has so far (§15 task 5b).** `db/migrate/20261030150000_create_runner_operations.rb`
 creates `runner_operations` with the columns the queue, the long-poll and the results read
 and write: `runner_id`, `company_id`, `runner_environment_id` (not null: every op so far is
-an environment op), `sequence`, `op`, `encrypted_payload`, `state`, `result` (jsonb),
+an environment op), `sequence`, `op`, `encrypted_payload`, `state`, `encrypted_result`,
 `deadline_at`, `delivered_at` and `completed_at`. As on `runner_credentials`, the §2 key
 `(runner_id, company_id) → runners (id, company_id)` ties the company, and
 `(runner_environment_id, runner_id) → runner_environments (id, runner_id)` ties the
@@ -343,6 +343,7 @@ environment to the same runner; all keys cascade. `(runner_environment_id, seque
 unique. `RunnerOperation` keeps `op` (the environment ops of §6.4) and `state` as enumerize
 values. `payload` is a JSON object, encrypted through `Encryptable` with `runners_key`, and
 `Runners::Operations.record_result!` nulls it in the same update that stores the result.
+`result` is a JSON object too, encrypted the same way in `encrypted_result`.
 `Runners::Operations.enqueue!(environment, op:, payload:, deadline_at:)` is the only writer:
 it locks the environment's row, takes the next sequence and creates a `pending` op. Tests
 and local development call it; the producer, `ContainerRuntime::RunnerRuntime` through the
@@ -1059,8 +1060,13 @@ bodies are snake_case.
   op above it is returned again until it is acknowledged or has a result. With nothing to
   return, the request waits up to `wait` seconds (default and maximum 25, `0` answers at
   once) and answers the moment an op is enqueued (§6.1). An empty `{ops: []}` after the
-  wait is the heartbeat; recording it as one comes with task 12. A malformed `after` or
-  `wait` is `400 invalid_request`.
+  wait is the heartbeat; recording it as one comes with task 12. After a positive `wait`
+  the access checks run again before anything is serialized (the token, the runner's
+  status, a `gone` environment and the flag, read past the request's query cache), so a
+  revocation or the flag turned off during the wait answers the refusal without the
+  payload; the selected ops stay deliverable until `after` acknowledges them. A malformed
+  `after` or `wait`, or an `after` above the `bigint` range of `sequence` (`2**63 - 1`),
+  is `400 invalid_request`.
 - **`POST ops/:id/result`** (§15 task 5b) takes the access token. An op of another
   environment, or no op at all, is `404 not_found`. The body is `{status: ok|error|expired,
   exit_code?, stdout?, stderr?, data?, error?: {class, message}}`, and a field of the wrong
@@ -1068,10 +1074,12 @@ bodies are snake_case.
   `422 invalid_result`. `ok` completes the op, `error` fails it and `expired` (the
   runner got it after its `deadline_at`, §6.4) expires it. The answer is `200 {id, state}`.
   It is idempotent on the op id: the first result wins, and a repeat answers `200` with the
-  op's state and changes nothing. `result` stores the fields other than `status`, and the
-  same update nulls the payload. No `/runner/v1/*` request has its params in the request
-  log (`config/application.rb`), as for the credential endpoints: a result carries command
-  output and file contents, and no gateway body needs logging.
+  op's state and changes nothing. `result` stores the fields other than `status`,
+  encrypted with `runners_key` (§2.3), and the same update nulls the payload. No
+  `/runner/v1/*` request has its params in the request log (`config/application.rb`), as
+  for the credential endpoints, nor in Sentry's breadcrumbs (`before_breadcrumb` in
+  `config/initializers/sentry.rb` drops them for `RunnerGateway::` controllers): a result
+  carries command output and file contents, and no gateway body needs logging.
 
 The other rows of the table are later tasks: `check-in`,
 `heartbeat`, session logs and events and the proxy in task 8 and later, and the releases
@@ -2397,7 +2405,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
-| 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
+| 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
 | 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
 | 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at`, and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
