@@ -41,11 +41,12 @@ module RunnerGateway
 
       private
 
-      # The before_action's checks, read fresh: this request's query cache and
-      # its memoized flag values still hold the answers from before the wait.
+      # The before_action's checks, read fresh: this request's query cache, its
+      # memoized flag values and the request-local copy of Rails.cache still
+      # hold the answers from before the wait.
       def reauthenticate
         Current.feature_snapshot = nil
-        ActiveRecord::Base.uncached { authenticate(:access) }
+        Rails.cache.with_local_cache { ActiveRecord::Base.uncached { authenticate(:access) } }
       end
 
       def non_negative_integer(value, default:)

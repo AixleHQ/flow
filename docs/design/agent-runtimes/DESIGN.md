@@ -1062,7 +1062,8 @@ bodies are snake_case.
   once) and answers the moment an op is enqueued (§6.1). An empty `{ops: []}` after the
   wait is the heartbeat; recording it as one comes with task 12. After a positive `wait`
   the access checks run again before anything is serialized (the token, the runner's
-  status, a `gone` environment and the flag, read past the request's query cache), so a
+  status, a `gone` environment and the flag, read past the request's query cache and its
+  local copy of `Rails.cache`), so a
   revocation or the flag turned off during the wait answers the refusal without the
   payload; the selected ops stay deliverable until `after` acknowledges them. A malformed
   `after` or `wait`, or an `after` above the `bigint` range of `sequence` (`2**63 - 1`),
