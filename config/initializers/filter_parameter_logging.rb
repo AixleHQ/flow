@@ -18,3 +18,8 @@ Rails.application.config.filter_parameters += [
   # was the single largest thing in the web logs, at tens of kilobytes a line.
   :resourceMetrics, :resourceLogs
 ]
+
+# Active Record only, so it reaches the SQL log's binds and not request params:
+# a runner op's `result` (runner_operations.result) holds command output and
+# file contents. Exact, since other columns have `result` in their names.
+ActiveSupport.on_load(:active_record) { self.filter_attributes += [ /\Aresult\z/ ] }
