@@ -2,9 +2,9 @@
 
 require "test_helper"
 
-# The runner protocol's conformance fixtures, runner-protocol/fixtures/v1/,
+# The runner protocol's conformance fixtures, runner/protocol/fixtures/v1/,
 # run against the gateway's routes (docs/design/agent-runtimes/DESIGN.md §6,
-# §14.1; the format is runner-protocol/fixtures/README.md). Every fixture file
+# §14.1; the format is runner/protocol/fixtures/README.md). Every fixture file
 # is one test, so a new file is picked up without a code change, and a fixture
 # the gateway does not satisfy, or one this harness cannot read, fails the
 # suite. The setup steps call the real services.
@@ -14,7 +14,7 @@ require "test_helper"
 class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  FIXTURE_DIR = Rails.root.join("runner-protocol/fixtures/v1")
+  FIXTURE_DIR = Rails.root.join("runner/protocol/fixtures/v1")
   DEFAULT_HEADERS = { "X-Aixle-Runner-Protocol" => "1", "X-Aixle-Runner-Version" => "1.4.0" }.freeze
   RUNNER_VERSION = "1.4.0"
   PROTOCOL_VERSION = "1"
@@ -22,14 +22,15 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
 
   INTERPOLATION = /\{\{([a-z0-9_.]+)\}\}/
   VARIABLE_NAME = /\A[a-z0-9_.]+\z/
-  TIMESTAMP = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\z/
+  # PROTOCOL.md §1: UTC, a `Z` offset, whole seconds.
+  TIMESTAMP = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/
   TYPES = {
     "string" => ->(value) { value.is_a?(String) },
     "integer" => ->(value) { value.is_a?(Integer) },
     "boolean" => ->(value) { value == true || value == false },
     "object" => ->(value) { value.is_a?(Hash) },
     "array" => ->(value) { value.is_a?(Array) },
-    "timestamp" => ->(value) { value.is_a?(String) && value.match?(TIMESTAMP) }
+    "timestamp" => ->(value) { timestamp?(value) }
   }.freeze
 
   # The arguments each setup step takes, and whether it requires them.
@@ -55,6 +56,19 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     FIXTURE_DIR.glob("**/*.json").sort
   end
 
+  # The `$type: timestamp` matcher (README "Matching a body"): the canonical
+  # `YYYY-MM-DDTHH:MM:SSZ` of a real instant. The value is parsed and must
+  # serialize back to itself, so an impossible date or time (a month 13, a
+  # 30 February, a leap second), which Time either refuses or rolls over, does
+  # not match.
+  def self.timestamp?(value)
+    return false unless value.is_a?(String) && value.match?(TIMESTAMP)
+
+    Time.iso8601(value).utc.iso8601 == value
+  rescue ArgumentError
+    false
+  end
+
   setup do
     @company = create(:company)
     @runner = create(:runner, :manual, company: @company)
@@ -65,6 +79,18 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
 
   test "the fixtures of protocol 1 are there" do
     assert_not_empty self.class.protocol_fixture_paths, "no fixture under #{FIXTURE_DIR}"
+  end
+
+  test "the timestamp matcher takes only the canonical UTC form of a real instant" do
+    assert self.class.timestamp?("2026-10-31T14:00:00Z")
+    assert self.class.timestamp?("2028-02-29T23:59:59Z")
+
+    [
+      "2026-99-99T99:99:99Z", "2026-13-01T00:00:00Z", "2026-02-30T00:00:00Z", "2026-10-31T24:00:00Z",
+      "2026-10-31T23:59:60Z", "2026-10-31T14:00:00.123Z", "2026-10-31T14:00:00+00:00",
+      "2026-10-31T15:00:00+01:00", "2026-10-31T14:00:00", "2026-10-31 14:00:00Z", "2026-10-31T14:00Z",
+      "2026-10-31t14:00:00z", "", nil, 1_793_455_200
+    ].each { |value| assert_not self.class.timestamp?(value), "#{value.inspect} must not match $type: timestamp" }
   end
 
   protocol_fixture_paths.each do |path|

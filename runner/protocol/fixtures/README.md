@@ -1,7 +1,8 @@
 # Runner protocol conformance fixtures
 
-The fixtures pin the wire behaviour that [`PROTOCOL.md`](../PROTOCOL.md) describes. Each one is a
-scenario: named setup steps and HTTP exchanges, in order, with the response every exchange must
+The fixtures pin the wire behaviour that [`PROTOCOL.md`](../PROTOCOL.md) describes, apart from the
+clauses listed under [What the fixtures do not cover](#what-the-fixtures-do-not-cover). Each one is
+a scenario: named setup steps and HTTP exchanges, in order, with the response every exchange must
 get. Both sides run them:
 
 - **The gateway.** `test/integration/runner_protocol_conformance_test.rb` runs every fixture
@@ -12,9 +13,20 @@ get. Both sides run them:
 
 `v1/` holds the fixtures of protocol `1`. A protocol bump adds `v2/` next to it.
 
-Timing and concurrency are not fixtures: the long-poll waking up when an op is enqueued, a poll
-that holds its wait, and races between two requests stay in the Rails tests. Every fixture polls
-with `wait=0`.
+## What the fixtures do not cover
+
+These clauses of `PROTOCOL.md` are verified outside the portable suite. A Go fake of the gateway
+does not get them from the fixtures, so it implements them from `PROTOCOL.md` directly.
+
+| Clause | Why it is not a fixture | Verified by |
+| --- | --- | --- |
+| Timing and concurrency: the long-poll waking up when an op is enqueued, a poll that holds its wait, the check after the wait, and races between two requests | A fixture runs its steps one after another, and every fixture polls with `wait=0`. | `test/integration/runner_gateway_operations_test.rb` and `test/services/runners/operations_test.rb` |
+| A `wait` above 25 treated as 25 (§5.4) | The poll would be held for 25 seconds. | Not tested. `Runners::Operations.poll` clamps it to `MAX_WAIT`. |
+| The `413` for a body over 2 MiB (§2) | Puma answers it before the application, and the Rails tests have no Puma. | No test sends a body through Puma. The cap is `http_content_length_limit` in `config/puma_runner_gateway.rb`. |
+| The `429` of the rate limits (§2) | Rack::Attack is off in the tests, and a limit takes hundreds of requests. | The status and the three limits: `test/integration/rack_attack_test.rb` ("registering runners from one address is cut off", "the runner gateway is capped per credential, whichever address it calls from", "the runner gateway is capped per address, whatever bearer value each request sends"). Its plain-text body and the absent `Retry-After` are Rack::Attack's defaults, not tested. |
+| The `404` for a path the gateway does not serve (§1) | It comes from the gateway process's routing, not from an endpoint, and its body is the framework's not-found page, which is not part of the contract. | `test/integration/process_mode_routes_test.rb` ("inside the gateway, only /runner/v1/* and /up are routed") |
+| `401 runner_revoked` (§3) | Revoking a runner also revokes its tokens, so a scenario sees `invalid_token` first. `runner_revoked` needs only the runner's status to change, which no setup step does. | `test/integration/runner_gateway_test.rb` ("a revocation reaches the gateway within five seconds") |
+| The `400` for a body that is not valid JSON (§3) | A harness always serialises `body`, so it cannot send malformed JSON. | Not tested. It is the framework's own answer, documented as built. |
 
 ## Files
 
@@ -128,7 +140,7 @@ Every request carries `X-Aixle-Runner-Protocol: 1` and `X-Aixle-Runner-Version: 
 | `{"$type": "boolean"}` | `true` or `false` |
 | `{"$type": "object"}` | any object, whatever its keys |
 | `{"$type": "array"}` | any array |
-| `{"$type": "timestamp"}` | an ISO 8601 date-time string with a UTC offset, such as `2026-10-31T14:00:00Z` (Go: `time.RFC3339`) |
+| `{"$type": "timestamp"}` | `YYYY-MM-DDTHH:MM:SSZ`: UTC, whole seconds, such as `2026-10-31T14:00:00Z`. It must be a real date and time, so `2026-02-30T00:00:00Z` does not match, and neither does a fraction (`…:00.123Z`) or another offset (`…:00+00:00`). A harness parses the value and checks that it serializes back to the same string (Go: `time.Parse(time.RFC3339, v)`, then `t.UTC().Format("2006-01-02T15:04:05Z") == v`). |
 | `{"$prefix": "aracc_"}` | a string that starts with the prefix |
 | `{"$var": "name"}` | a value equal to the variable's |
 

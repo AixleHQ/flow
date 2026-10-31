@@ -1,0 +1,143 @@
+{
+  "description": "`name` (after its surrounding spaces are dropped), `os`, `arch` and the X-Aixle-Runner-Version a machine is recorded with may each be 255 characters; 256 is 422 invalid_registration, which does not spend the token. Only `name` is required: absent `os`, `arch`, `facts` and `ephemeral` take their defaults, and an `os` or `arch` that is not a string is ignored.",
+  "steps": [
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll",
+          "arch": "amd64",
+          "facts": {},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "facts": {},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.2.3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": {}, "ephemeral": false}
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.2.3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": {
+          "name": "  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  ",
+          "os": "lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll",
+          "arch": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "facts": {},
+          "ephemeral": false
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "environment": {
+            "id": {"$type": "integer"},
+            "key": {"$type": "string"},
+            "display_name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "state": "registered"
+          },
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    },
+    {"given": "registration_token", "as": "reg2"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg2}}",
+        "body": {"name": "build-02"}
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "environment": {
+            "id": {"$type": "integer"},
+            "key": {"$type": "string"},
+            "display_name": "build-02",
+            "state": "registered"
+          },
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    },
+    {"given": "registration_token", "as": "reg3"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg3}}",
+        "body": {"name": "build-03", "os": 7, "arch": true}
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "environment": {
+            "id": {"$type": "integer"},
+            "key": {"$type": "string"},
+            "display_name": "build-03",
+            "state": "registered"
+          },
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    }
+  ]
+}

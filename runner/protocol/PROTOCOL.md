@@ -11,9 +11,11 @@ that builds them (§8).
 - **The conformance fixtures** in [`fixtures/v1/`](fixtures/v1/) pin this behaviour, in the
   format [`fixtures/README.md`](fixtures/README.md) describes. The gateway's Rails tests run every
   one of them (`test/integration/runner_protocol_conformance_test.rb`), so a change to a status,
-  an error code or a response shape fails CI.
-- **Self-contained.** Nothing here needs the Rails code. `runner/` is written against this
-  directory only (DESIGN.md §14.1).
+  an error code or a response shape fails CI. The README lists the few clauses that are verified
+  outside the fixtures, such as the `413` and the `429`.
+- **Self-contained.** Nothing here needs the Rails code. The protocol lives with the runner,
+  under `runner/`, and the runner's code is written against this directory, never against
+  the gateway's code (DESIGN.md §14.1).
 
 ## 1. Transport
 
@@ -30,7 +32,19 @@ Every request carries these three headers:
 | --- | --- | --- |
 | `Authorization` | `Bearer <token>`, the token kind the endpoint takes (§4) | `401 invalid_token` |
 | `X-Aixle-Runner-Protocol` | `1`, exactly | `400 unsupported_protocol` |
-| `X-Aixle-Runner-Version` | The runner's own version, a [semantic version](https://semver.org) (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
+| `X-Aixle-Runner-Version` | The runner's own version, in the grammar below (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
+
+**The version grammar the gateway accepts.** `MAJOR.MINOR.PATCH`, then an optional
+`-PRERELEASE`, then an optional `+BUILD`:
+
+- `MAJOR`, `MINOR` and `PATCH` are each one or more ASCII digits. Leading zeros are accepted.
+- `PRERELEASE` and `BUILD` are each one or more characters of `0-9`, `A-Z`, `a-z`, `.` and `-`.
+  Empty identifiers and numeric identifiers with leading zeros are accepted.
+
+So the gateway accepts some values that [Semantic Versioning 2.0](https://semver.org) refuses, such
+as `01.2.3`, `1.2.3-01` and `1.2.3-..`, and refuses `1.4`, `v1.4.0`, `1.2.3-` and `1.2.3+`. A
+runner sends a strict SemVer 2.0 version, which this grammar always accepts. The gateway
+requires strict SemVer 2.0 once the version skew policy (DESIGN.md §14.4) is built.
 
 ## 2. Limits
 
@@ -60,8 +74,16 @@ A refusal is a JSON object of two strings:
 ```
 
 `error` is the machine-readable code and the contract. `message` is for people and may change.
-`413`, `429` and a `404` for a path the gateway does not serve are the only refusals without this
-shape.
+These are the only refusals without this shape:
+
+- `413`, for a body over the cap (§2);
+- `429`, for a request over a rate limit (§2);
+- a `404` for a path the gateway does not serve;
+- a `400` for a `POST /register` or `POST /ops/:id/result` body that is not valid JSON. Its body
+  is an HTML page or `{"status": 400, "error": "Bad Request"}`, depending on `Accept`. That
+  `error` is not a code of the table below. The body is parsed after steps 1 to 4 of the check
+  order, so a malformed body with a bad header, token, runner or flag gets that refusal
+  instead.
 
 | `error` | Status | Endpoints | Meaning |
 | --- | --- | --- | --- |
@@ -74,7 +96,7 @@ shape.
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
 | `not_found` | 404 | `ops/:id/result` | The op does not exist, or belongs to another machine. |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
-| `invalid_registration` | 422 | `register` | The body is invalid: a blank `name`, `facts` that is not an object, a field over 255 characters. |
+| `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
 
 **Check order.** Every request is checked in this order, and the first failure answers:
@@ -113,6 +135,7 @@ then gets the refusal, not the ops (§5.4).
 | `413` | Does not resend the same body. |
 | `400 unsupported_protocol`, `400 invalid_runner_version` | Stops and reports that `aixle-runner` must be updated. Retrying cannot succeed. |
 | `400 invalid_request`, `422 invalid_result` | A bug in the runner: it reports it and does not resend the same request. |
+| `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
 | `422 ephemeral_not_supported`, `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
 | `404 not_found` from a result | Drops that result: the op is not this machine's. |
 
@@ -176,7 +199,7 @@ machine, which the platform calls an environment.
 | `name` | string | Required. Leading and trailing spaces are dropped, and it must not be blank then. At most 255 characters. |
 | `os` | string | Optional, at most 255 characters, e.g. `linux`. A value that is not a string is ignored. |
 | `arch` | string | Optional, at most 255 characters, e.g. `amd64`. A value that is not a string is ignored. |
-| `facts` | object | Optional, default `{}`. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. |
+| `facts` | object | Optional, default `{}` when the key is absent. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. Omit it or send an object: `null` is refused with `invalid_registration`. |
 | `ephemeral` | boolean | Optional, default `false`. `true` is refused: ephemeral registration is not in protocol 1 yet. |
 
 The `X-Aixle-Runner-Version` of the request is recorded as the machine's runner version.

@@ -918,8 +918,8 @@ because it launches the agent.
 
 This section keeps the design and its rationale. The wire contract as built (headers, limits,
 refusals, token rules, endpoints and the op envelope) is specified in
-[`runner-protocol/PROTOCOL.md`](../../../runner-protocol/PROTOCOL.md), and pinned by the
-conformance fixtures in `runner-protocol/fixtures/v1/` (§14.1), which the gateway's Rails tests
+[`runner/protocol/PROTOCOL.md`](../../../runner/protocol/PROTOCOL.md), and pinned by the
+conformance fixtures in `runner/protocol/fixtures/v1/` (§14.1), which the gateway's Rails tests
 run. Where the two say the same thing, `PROTOCOL.md` is the source of truth.
 
 ### 6.1 Transport
@@ -1024,7 +1024,7 @@ All requests are `Authorization: Bearer <token>`,
 **What v1 has so far (§15 tasks 5a and 5b):** `register` for a `manual` machine,
 `DELETE registration` and `token` (5a), and `ops` and op results (5b). What each one takes
 and answers, every refusal and the order of the checks are specified in
-[`runner-protocol/PROTOCOL.md`](../../../runner-protocol/PROTOCOL.md) §3 to §5. The
+[`runner/protocol/PROTOCOL.md`](../../../runner/protocol/PROTOCOL.md) §3 to §5. The
 implementation choices behind them:
 - **The checks.** The runner's status is cached for 5 s in `Rails.cache` (§9.2), and the
   flag refusal leaves the credentials valid (§9.3).
@@ -1976,8 +1976,9 @@ one at a time, each with a reason. The flags never go `default: true` before rem
 
 Phase 2 details that stay from revision 3:
 
-- The protocol is written down as a specification, `runner-protocol/PROTOCOL.md`.
-- **The conformance fixtures are committed in this phase** (`runner-protocol/fixtures/v1/`,
+- The protocol is written down as a specification, `runner/protocol/PROTOCOL.md`. It lives
+  with the runner under `runner/`, so the extract takes it along (§14.1).
+- **The conformance fixtures are committed in this phase** (`runner/protocol/fixtures/v1/`,
   §14.1), and the gateway's Rails tests run them from the first PR. They are the contract
   the Go implementation is written against, and what makes the later extract safe.
 - Separate CI lanes for the Go code (`go test`, lint, the Go side of conformance) **may be
@@ -2208,14 +2209,16 @@ these happens:
   `cd runner && go build ./...` and needs nothing outside the directory.
 - `runner/` has no dependency on Rails code, configuration or generated files. It never
   reads `config/`, `app/` or `Settings`. Everything it needs comes over the protocol.
-- The protocol is a **specification document**, `runner-protocol/PROTOCOL.md`, and the
-  **conformance fixtures** are in `runner-protocol/fixtures/v1/` (request and response
-  pairs, op payloads and results, error cases, resume sequences). This is a neutral
-  directory, owned by neither the Rails tests nor the Go tests, and both read it from
-  there. They are committed in phase 2 (§12.2).
-- The extract is `git filter-repo --path runner/ --path runner-protocol/`, which keeps
-  history. Afterwards `flow` keeps a pinned copy of `runner-protocol/` that only changes
-  by a PR, and the Rails side keeps running the fixtures against the gateway.
+- The protocol is a **specification document**, `runner/protocol/PROTOCOL.md`, and the
+  **conformance fixtures** are in `runner/protocol/fixtures/v1/` (request and response
+  pairs, op payloads and results, error cases, resume sequences). The protocol lives with
+  the runner, under `runner/`, so everything about the runner is in one directory. It
+  belongs to neither the Rails tests nor the Go tests: the Go code reads it inside
+  `runner/`, and the Rails tests read it from there too. They are committed in phase 2
+  (§12.2).
+- The extract is `git filter-repo --path runner/`, which keeps history and takes the
+  protocol with it. Afterwards `flow` keeps a pinned copy of `runner/protocol/` that only
+  changes by a PR, and the Rails side keeps running the fixtures against the gateway.
 
 **Where the Helm chart lives.** The chart belongs with the runner. Trigger 2 is expected
 right after phase 4, the first customer-usable slice, so **the extract is expected before
@@ -2255,7 +2258,7 @@ There are **three distinct versions**, and none of them is the application versi
 | **Runner version** | `1.4.0` | The `aixle-runner` binary and `ghcr.io/aixlehq/aixle-runner:1.4.0` | The `runner-v1.4.0` tag |
 | **Chart version** | `0.3.2` | The Helm chart's packaging (templates, values, defaults) | `Chart.yaml` `version`, the `runner-chart-v0.3.2` tag |
 | **Chart `appVersion`** | `1.4.0` | The runner version the chart installs by default | `Chart.yaml` `appVersion` |
-| **Protocol version** | `1` | The wire contract (`X-Aixle-Runner-Protocol`) | `runner-protocol/PROTOCOL.md`, an integer bumped only on breaking changes |
+| **Protocol version** | `1` | The wire contract (`X-Aixle-Runner-Protocol`) | `runner/protocol/PROTOCOL.md`, an integer bumped only on breaking changes |
 
 **Release lanes:**
 
@@ -2377,8 +2380,8 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
 | 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
-| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
-| 7 | 2 | **Done.** `runner-protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner-protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included), in the JSON format of `runner-protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lanes follow with 6a (§12.2). |
+| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1), written against the protocol in `runner/protocol/` (task 7). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
+| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lanes follow with 6a (§12.2). |
 | 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
