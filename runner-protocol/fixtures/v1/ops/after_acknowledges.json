@@ -1,0 +1,73 @@
+{
+  "description": "`after` acknowledges ops: a poll returns only the ops with a sequence above it, oldest first.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "first",
+      "op": "exec",
+      "payload": {"cmd": ["true"]}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "second",
+      "op": "write_file",
+      "payload": {"path": "/tmp/x"}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "first.id"},
+              "sequence": {"$var": "first.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "first.deadline_at"},
+              "payload": {"cmd": ["true"]}
+            },
+            {
+              "id": {"$var": "second.id"},
+              "sequence": {"$var": "second.sequence"},
+              "op": "write_file",
+              "deadline_at": {"$var": "second.deadline_at"},
+              "payload": {"path": "/tmp/x"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{first.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "second.id"},
+              "sequence": {"$var": "second.sequence"},
+              "op": "write_file",
+              "deadline_at": {"$var": "second.deadline_at"},
+              "payload": {"path": "/tmp/x"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{second.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    }
+  ]
+}

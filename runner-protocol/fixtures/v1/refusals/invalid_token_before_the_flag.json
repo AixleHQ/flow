@@ -1,0 +1,10 @@
+{
+  "description": "The token is checked before the flag: with the flag off, an unknown token is still 401 invalid_token, not 403.",
+  "steps": [
+    {"given": "flag_off"},
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "aracc_not-a-token"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Unregistering one machine leaves the other machines of the runner working.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registered_machine", "as": "other", "name": "build-02"},
+    {
+      "request": {"method": "DELETE", "path": "/runner/v1/registration", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{other.access_token}}"},
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{other.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    }
+  ]
+}

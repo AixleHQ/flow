@@ -916,6 +916,12 @@ because it launches the agent.
 
 ## 6. Runner protocol (v1)
 
+This section keeps the design and its rationale. The wire contract as built (headers, limits,
+refusals, token rules, endpoints and the op envelope) is specified in
+[`runner-protocol/PROTOCOL.md`](../../../runner-protocol/PROTOCOL.md), and pinned by the
+conformance fixtures in `runner-protocol/fixtures/v1/` (§14.1), which the gateway's Rails tests
+run. Where the two say the same thing, `PROTOCOL.md` is the source of truth.
+
 ### 6.1 Transport
 
 **Decision:** HTTPS long-poll plus HTTPS POST, JSON bodies, on port 443 to the platform's
@@ -955,10 +961,10 @@ The ingress sends `/runner/v1` to the gateway workload. That workload, its Helm 
 the ingress route are a separate `aixle-infra` task, needed before the phase 3 staging
 validation (§12.4). Until then the gateway runs locally and in tests only (§12.2).
 
-The gateway's Puma caps request bodies at 2 MiB (`http_content_length_limit`), enough for
-an op result with up to 1 MiB of output (§6.4, `op_output_limit`). It answers a plain `413`
-before it reads a body over the cap, chunked bodies included, so an oversized body never
-reaches Rails.
+The gateway's Puma caps request bodies (`http_content_length_limit`, at the size `PROTOCOL.md`
+§2 states), enough for an op result with up to 1 MiB of output (§6.4, `op_output_limit`). It
+answers `413` before it reads a body over the cap, chunked bodies included, so an oversized body
+never reaches Rails.
 
 **The long-poll's wake-up (§15 task 5b).** `Runners::Operations` (`app/services/runners/operations.rb`):
 - **Publishing.** `enqueue!` publishes the op's sequence on `runner_env_<id>` through
@@ -988,15 +994,11 @@ deployment task.
 
 The controllers are `RunnerGateway::V1::*` (`app/controllers/runner_gateway/v1/`),
 `ActionController::API` with no cookie session and no CSRF. Before anything else, every
-request is checked for:
-- **the protocol header:** `X-Aixle-Runner-Protocol: 1`, otherwise
-  `400 unsupported_protocol`, with a message that names the version the gateway speaks;
-- **the version header:** a semver `X-Aixle-Runner-Version`, otherwise
-  `400 invalid_runner_version`.
+request is checked for the protocol and version headers (`PROTOCOL.md` §1 and §3).
 
-Rack::Attack throttles `/runner/v1/*` at 600 requests a minute per bearer token (keyed on
-its digest) and at 3000 a minute per IP, so a client that sends a new bearer value on every
-request is still bounded, and `register` at 30 a minute per IP (§9.5).
+Rack::Attack throttles `/runner/v1/*` per bearer token (keyed on its digest) and per IP, so a
+client that sends a new bearer value on every request is still bounded, and `register` per IP
+(§9.5). The limits are in `PROTOCOL.md` §2.
 
 ### 6.2 Endpoints
 
@@ -1020,63 +1022,27 @@ All requests are `Authorization: Bearer <token>`,
 | `GET  /runner/v1/install.sh` | bootstrap | Install script used by `inject_bootstrap` (`coder`). `manual` operators download the binary directly (§6.3). |
 
 **What v1 has so far (§15 tasks 5a and 5b):** `register` for a `manual` machine,
-`DELETE registration` and `token` (5a), and `ops` and op results (5b). Every authenticated
-request then checks, in order:
-1. the bearer token, which must be of the endpoint's kind (`registration` for `register`,
-   `refresh` for `token`, `access` otherwise), unrevoked, not of a `gone` environment and,
-   for a registration token, unused. It must also be unexpired, except that a spent refresh
-   token passes even past its own expiry, so that `token` can detect its reuse. Anything
-   else is `401 invalid_token`, before the runner or the flag is looked at;
-2. the runner's status. A revoked or deleted runner is `401 runner_revoked`. The check is
-   cached for 5 s in `Rails.cache` (§9.2);
-3. the `external_runners` flag for the runner's company. Off is `403 runners_disabled`, and
-   the credentials stay valid (§9.3).
-
-Refusals are `{error, message}`, with `error` the machine-readable code, and the protocol's
-bodies are snake_case.
-- **`register`** takes the registration token. It answers `201` with
-  `{environment: {id, key, display_name, state}, access_token, access_token_expires_at,
-  refresh_token, refresh_token_expires_at}` and `Cache-Control: no-store`.
-  - `ephemeral: true` is refused with `422 ephemeral_not_supported`, and an invalid body
-    (a blank `name`, `facts` that is not an object) with `422 invalid_registration`. Neither
-    spends the token.
-  - The token is spent under a row lock, so two machines racing on one token create one
-    environment.
-- **`token`** takes the refresh token as the bearer and answers `200` with the same token
-  fields. A second use of a spent refresh token answers `401 credential_reuse_detected`
-  (§9.2), even after that token's own 30-day expiry, because the family it was rotated
-  into may still be live.
-- **`DELETE registration`** takes the access token and answers `204`. It refuses nothing
-  else yet. The `409 busy` refusal and `--force` come with the first task that assigns a
-  session to an environment, because no session can run on one before that.
-
-- **`GET ops`** (§15 task 5b) takes the access token and returns the ops of the token's
-  environment only, as `{ops: [{id, sequence, op, deadline_at, payload}]}` with
-  `Cache-Control: no-store`: the ops with `sequence > after` that have no result yet,
-  oldest first, at most 20. Returned ops become `delivered`, in the same transaction that
-  selects them with their rows locked `FOR UPDATE`, the lock a result takes: a result that
-  holds an op's row first is committed before the poll reads it, so an op with a result is
-  never returned. `after` (default 0) is the
-  runner's acknowledgement, so ops at or below it are not returned again, and a delivered
-  op above it is returned again until it is acknowledged or has a result. With nothing to
-  return, the request waits up to `wait` seconds (default and maximum 25, `0` answers at
-  once) and answers the moment an op is enqueued (§6.1). An empty `{ops: []}` after the
-  wait is the heartbeat; recording it as one comes with task 12. After a positive `wait`
-  the access checks run again before anything is serialized (the token, the runner's
-  status, a `gone` environment and the flag, read past the request's query cache and its
-  local copy of `Rails.cache`), so a
-  revocation or the flag turned off during the wait answers the refusal without the
-  payload; the selected ops stay deliverable until `after` acknowledges them. A malformed
-  `after` or `wait`, or an `after` above the `bigint` range of `sequence` (`2**63 - 1`),
-  is `400 invalid_request`.
-- **`POST ops/:id/result`** (§15 task 5b) takes the access token. An op of another
-  environment, or no op at all, is `404 not_found`. The body is `{status: ok|error|expired,
-  exit_code?, stdout?, stderr?, data?, error?: {class, message}}`, and a field of the wrong
-  type, or an `error` that is not exactly `class` and `message`, both strings, is
-  `422 invalid_result`. `ok` completes the op, `error` fails it and `expired` (the
-  runner got it after its `deadline_at`, §6.4) expires it. The answer is `200 {id, state}`.
-  It is idempotent on the op id: the first result wins, and a repeat answers `200` with the
-  op's state and changes nothing. `result` stores the fields other than `status`,
+`DELETE registration` and `token` (5a), and `ops` and op results (5b). What each one takes
+and answers, every refusal and the order of the checks are specified in
+[`runner-protocol/PROTOCOL.md`](../../../runner-protocol/PROTOCOL.md) §3 to §5. The
+implementation choices behind them:
+- **The checks.** The runner's status is cached for 5 s in `Rails.cache` (§9.2), and the
+  flag refusal leaves the credentials valid (§9.3).
+- **`register`** spends the token under a row lock, so two machines racing on one token
+  create one environment.
+- **`token`** treats a second use of a spent refresh token as reuse (§9.2) even after that
+  token's own 30-day expiry, because the family it was rotated into may still be live.
+- **`DELETE registration`** refuses nothing of its own yet. The `409 busy` refusal and
+  `--force` come with the first task that assigns a session to an environment, because no
+  session can run on one before that.
+- **`GET ops`** (§15 task 5b) selects the ops and marks them `delivered` in one transaction,
+  with their rows locked `FOR UPDATE`, the lock a result takes: a result that holds an op's
+  row first is committed before the poll reads it, so an op with a result is never returned.
+  After a positive `wait` the access checks run again, read past the request's query cache
+  and its local copy of `Rails.cache`, so a revocation or the flag turned off during the wait
+  answers the refusal without the payload. Recording the empty answer as a heartbeat comes
+  with task 12.
+- **`POST ops/:id/result`** (§15 task 5b) stores the fields other than `status` in `result`,
   encrypted with `runners_key` (§2.3), and the same update nulls the payload. No
   `/runner/v1/*` request has its params in the request log (`config/application.rb`), as
   for the credential endpoints, nor in Sentry's breadcrumbs (`before_breadcrumb` in
@@ -1137,8 +1103,8 @@ endpoints and `install.sh` in tasks 10 and 17.
 mints a registration token for a live `manual` runner and returns it once; a revoked or
 deleted runner is refused with `runner_revoked` (§9.3). Tests and local
 development call it. There is no endpoint and no UI: "Add machine" and its endpoint are
-task 12. Tokens carry a prefix by kind (`arreg_`, `aracc_`, `arref_`), so a leaked one is
-recognisable. Only SHA-256 digests are stored. The plaintext appears only in the call or
+task 12. Tokens carry a prefix by kind, so a leaked one is recognisable (the kinds, their
+lifetimes and what a runner does on each refusal are in `PROTOCOL.md` §3 and §4). Only SHA-256 digests are stored. The plaintext appears only in the call or
 response that issues it, and the tokens travel in the `Authorization` header, which is never
 logged. `Runners::Registration` (`app/services/runners/registration.rb`) creates the
 environment on `register` and, on unregister, marks it `gone` and revokes every credential
@@ -1178,6 +1144,9 @@ these names, and nothing executes them yet. `session_id?` comes with `terminal_s
 ops with task 19. Output is not capped by the gateway beyond its 2 MiB body limit (§6.1);
 `Settings.runners.op_output_limit` and the upload of larger output come with the runner and
 `RunnerRuntime` (tasks 6 and 8).
+The op envelope and the result as built are in `PROTOCOL.md` §5.5 and §6. Each op's payload
+and result schema, with its fixtures, is added there by the task that first implements the op
+(6a, 6b, 8).
 
 ### 6.5 Logs and output
 
@@ -2409,7 +2378,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
 | 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
-| 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
+| 7 | 2 | **Done.** `runner-protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner-protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included), in the JSON format of `runner-protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lanes follow with 6a (§12.2). |
 | 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |

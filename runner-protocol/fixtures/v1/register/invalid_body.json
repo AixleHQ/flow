@@ -1,0 +1,54 @@
+{
+  "description": "A blank or missing `name`, or `facts` that is not an object, is refused with 422 invalid_registration, and none of these refusals spends the registration token.",
+  "steps": [
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": " ",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {"os": "linux", "arch": "amd64", "facts": {"docker": "27.1.0"}, "ephemeral": false}
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": "docker", "ephemeral": false}
+      },
+      "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 201}
+    }
+  ]
+}

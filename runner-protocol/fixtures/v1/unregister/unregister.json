@@ -1,0 +1,22 @@
+{
+  "description": "DELETE /registration answers 204 with no body. The machine's access and refresh tokens stop working.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "DELETE", "path": "/runner/v1/registration", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "DELETE", "path": "/runner/v1/registration", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

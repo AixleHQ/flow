@@ -1,0 +1,14 @@
+{
+  "description": "A refresh token revoked with its machine's credentials (here by unregistering) is 401 invalid_token.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "DELETE", "path": "/runner/v1/registration", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

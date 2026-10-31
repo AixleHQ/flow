@@ -1,0 +1,23 @@
+{
+  "description": "The headers are checked before the token: a request with a bad header and a bad token is refused for the header.",
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "aracc_not-a-token",
+        "headers": {"X-Aixle-Runner-Protocol": "2"}
+      },
+      "response": {"status": 400, "body": {"error": "unsupported_protocol", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "aracc_not-a-token",
+        "headers": {"X-Aixle-Runner-Version": "latest"}
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    }
+  ]
+}

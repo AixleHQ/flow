@@ -1,0 +1,38 @@
+{
+  "description": "`after` and `wait` must be non-negative integers, and `after` at most 2^63 - 1: anything else is 400 invalid_request.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=9223372036854775808&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {"status": 400, "body": {"error": "invalid_request", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=-1&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 400, "body": {"error": "invalid_request", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=1.5&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 400, "body": {"error": "invalid_request", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=-1", "token": "{{m.access_token}}"},
+      "response": {"status": 400, "body": {"error": "invalid_request", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=soon", "token": "{{m.access_token}}"},
+      "response": {"status": 400, "body": {"error": "invalid_request", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=9223372036854775807&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    }
+  ]
+}
