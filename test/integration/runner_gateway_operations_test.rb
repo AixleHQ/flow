@@ -191,7 +191,9 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
       assert_refused status, error
       assert_not_includes response.body, SECRET
       assert_nil response.parsed_body["ops"]
-      assert operation.reload.deliverable?
+      # The poll marked the op delivered before the re-check refused, so it
+      # stays `delivered` without the runner having received it (§15 task 8).
+      assert_equal "delivered", operation.reload.state
       assert_equal({ "content" => SECRET }, operation.payload)
     end
   end
