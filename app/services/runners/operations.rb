@@ -90,19 +90,26 @@ module Runners
       operation
     end
 
+    # Selects the deliverable ops and marks the pending ones `delivered` in one
+    # transaction, with the rows locked FOR UPDATE, the lock record_result!
+    # takes: a result that holds an op's row first is committed before this
+    # read sees the row, which then no longer matches, so an op with a result
+    # is never returned; a result that comes second waits for the delivery.
     def deliver!(environment_id, after:)
-      # Uncached: the request's query cache would answer a repeated read from
-      # the empty result of the one before the wait.
-      operations = RunnerOperation.uncached do
-        RunnerOperation.deliverable.where(runner_environment_id: environment_id).where("sequence > ?", after)
-                       .order(:sequence).limit(BATCH_SIZE).to_a
+      RunnerOperation.transaction do
+        # Uncached: the request's query cache would answer a repeated read from
+        # the empty result of the one before the wait.
+        operations = RunnerOperation.uncached do
+          RunnerOperation.deliverable.where(runner_environment_id: environment_id).where("sequence > ?", after)
+                         .order(:sequence).limit(BATCH_SIZE).lock.to_a
+        end
+        pending_ids = operations.select(&:pending?).map(&:id)
+        if pending_ids.any?
+          now = Time.current
+          RunnerOperation.where(id: pending_ids).update_all(state: "delivered", delivered_at: now, updated_at: now)
+        end
+        operations
       end
-      pending_ids = operations.select(&:pending?).map(&:id)
-      if pending_ids.any?
-        now = Time.current
-        RunnerOperation.where(id: pending_ids, state: "pending").update_all(state: "delivered", delivered_at: now, updated_at: now)
-      end
-      operations
     end
 
     def wake(environment_id, sequence)

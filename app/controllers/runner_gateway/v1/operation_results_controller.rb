@@ -44,8 +44,7 @@ module RunnerGateway
       end
 
       def error_object?(error)
-        error.is_a?(Hash) && error.keys.all? { |key| %w[class message].include?(key) } &&
-          error.values.all?(String)
+        error.is_a?(Hash) && error.keys.sort == %w[class message] && error.values.all?(String)
       end
     end
   end

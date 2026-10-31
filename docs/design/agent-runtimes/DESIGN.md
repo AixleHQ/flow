@@ -1051,7 +1051,10 @@ bodies are snake_case.
 - **`GET ops`** (§15 task 5b) takes the access token and returns the ops of the token's
   environment only, as `{ops: [{id, sequence, op, deadline_at, payload}]}` with
   `Cache-Control: no-store`: the ops with `sequence > after` that have no result yet,
-  oldest first, at most 20. Returned ops become `delivered`. `after` (default 0) is the
+  oldest first, at most 20. Returned ops become `delivered`, in the same transaction that
+  selects them with their rows locked `FOR UPDATE`, the lock a result takes: a result that
+  holds an op's row first is committed before the poll reads it, so an op with a result is
+  never returned. `after` (default 0) is the
   runner's acknowledgement, so ops at or below it are not returned again, and a delivered
   op above it is returned again until it is acknowledged or has a result. With nothing to
   return, the request waits up to `wait` seconds (default and maximum 25, `0` answers at
@@ -1061,11 +1064,14 @@ bodies are snake_case.
 - **`POST ops/:id/result`** (§15 task 5b) takes the access token. An op of another
   environment, or no op at all, is `404 not_found`. The body is `{status: ok|error|expired,
   exit_code?, stdout?, stderr?, data?, error?: {class, message}}`, and a field of the wrong
-  type is `422 invalid_result`. `ok` completes the op, `error` fails it and `expired` (the
+  type, or an `error` that is not exactly `class` and `message`, both strings, is
+  `422 invalid_result`. `ok` completes the op, `error` fails it and `expired` (the
   runner got it after its `deadline_at`, §6.4) expires it. The answer is `200 {id, state}`.
   It is idempotent on the op id: the first result wins, and a repeat answers `200` with the
   op's state and changes nothing. `result` stores the fields other than `status`, and the
-  same update nulls the payload.
+  same update nulls the payload. No `/runner/v1/*` request has its params in the request
+  log (`config/application.rb`), as for the credential endpoints: a result carries command
+  output and file contents, and no gateway body needs logging.
 
 The other rows of the table are later tasks: `check-in`,
 `heartbeat`, session logs and events and the proxy in task 8 and later, and the releases
@@ -2120,6 +2126,10 @@ machine used is recorded in the validation task's result.
 14. Point a run from a second project at the project runner by id through the API: 403.
 15. Selecting `hosted` or nothing on the same project behaves exactly as before. The hosted
     pods are created as before, verified on the cluster.
+16. The long-poll wake-up through the real Redis adapter (CI runs the `test` cable adapter
+    only, §6.1): with the machine idle in a `GET /runner/v1/ops` with `wait=25`, enqueue an
+    op for its environment through `Runners::Operations.enqueue!` from a Rails console on
+    staging. The poll answers with the op well before its 25 s end (within about a second).
 
 ### 12.5 Validating the first Coder runner on staging (phase 5)
 
@@ -2390,7 +2400,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
 | 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
 | 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
-| 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at`, and the 7-day prune of completed rows (§2.3). |
+| 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at`, and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
@@ -2444,6 +2454,17 @@ reviewable and lands behind the flags. The number in the second column is the ph
 
   What would settle it is the pricing decision for the first non-staging customer. It has
   to be made before trigger 2 of §14.1, and nothing earlier depends on it.
+- **Concurrent long-polls per environment.** Each waiting `GET /runner/v1/ops` holds a
+  gateway thread for up to 25 s (§6.1), and the per-token throttle bounds requests per
+  minute, not outstanding polls, so one buggy or leaked access token could occupy every
+  gateway thread with overlapping polls. It cannot happen yet: the gateway is not deployed
+  and there is no runner. Two things must be settled:
+  - before the gateway is deployed (the `aixle-infra` gateway task), bound the outstanding
+    polls per environment across gateway processes, for example with a Redis lease held
+    for the poll and released when it returns;
+  - with task 6 (`aixle-runner`), decide whether an overlapping poll is refused (`409` or
+    `429`) or replaces the older one. Replacing suits a runner that reconnects after a
+    dropped connection.
 
 ---
 

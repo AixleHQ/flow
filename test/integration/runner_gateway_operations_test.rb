@@ -197,7 +197,9 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     operation = enqueue
 
     [ { status: "done" }, { status: "ok", exit_code: "0" }, { status: "ok", stdout: [ "x" ] },
-      { status: "ok", data: "x" }, { status: "error", error: { "class" => 1 } } ].each do |body|
+      { status: "ok", data: "x" }, { status: "error", error: { "class" => 1 } }, { status: "error", error: {} },
+      { status: "error", error: { "class" => "Timeout" } }, { status: "error", error: { "message" => "late" } },
+      { status: "error", error: { "class" => "Timeout", "message" => "late", "detail" => "x" } } ].each do |body|
       post_result(@pair, operation, **body)
       assert_refused :unprocessable_entity, "invalid_result"
     end
@@ -267,7 +269,7 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
   # == secrets ==
 
-  test "the payload is encrypted at rest and reaches no log" do
+  test "the payload is encrypted at rest, and neither it nor a result reaches the log" do
     io = StringIO.new
     logger = ActiveSupport::Logger.new(io, level: :debug)
     Rails.logger.broadcast_to(logger)
@@ -275,9 +277,11 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     operation = enqueue(payload: { "path" => "/home/agent/.credentials", "content" => SECRET })
     poll(@pair, wait: 0)
     assert_equal SECRET, response.parsed_body["ops"].sole.dig("payload", "content")
-    post_result(@pair, operation, status: "ok")
+    post_result(@pair, operation, status: "ok", stdout: "token=#{SECRET}", stderr: SECRET,
+                                  data: { "content" => SECRET }, error: { "class" => "Leak", "message" => SECRET })
+    assert_response :ok
 
-    assert_match %r{/runner/v1/ops}, io.string
+    assert_match %r{/runner/v1/ops/#{operation.id}/result}, io.string
     assert_not_includes io.string, SECRET
   ensure
     Rails.logger.stop_broadcasting_to(logger)
