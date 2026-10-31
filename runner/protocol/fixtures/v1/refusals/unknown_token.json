@@ -1,0 +1,40 @@
+{
+  "description": "An unknown token, a missing Authorization header and a scheme other than Bearer are all 401 invalid_token.",
+  "steps": [
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "aracc_not-a-token"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "headers": {"Authorization": "Basic not-a-credential"}
+      },
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "arref_not-a-token"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "arreg_not-a-token",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

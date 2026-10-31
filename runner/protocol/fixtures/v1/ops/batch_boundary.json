@@ -1,0 +1,206 @@
+{
+  "description": "A poll returns at most 20 ops, oldest first. With 21 on the queue the first poll returns the oldest 20, and a poll after the 20th's sequence returns the 21st.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "op_enqueued", "machine": "m", "as": "op1", "op": "exec", "payload": {"cmd": ["echo", "1"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op2", "op": "exec", "payload": {"cmd": ["echo", "2"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op3", "op": "exec", "payload": {"cmd": ["echo", "3"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op4", "op": "exec", "payload": {"cmd": ["echo", "4"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op5", "op": "exec", "payload": {"cmd": ["echo", "5"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op6", "op": "exec", "payload": {"cmd": ["echo", "6"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op7", "op": "exec", "payload": {"cmd": ["echo", "7"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op8", "op": "exec", "payload": {"cmd": ["echo", "8"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op9", "op": "exec", "payload": {"cmd": ["echo", "9"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op10", "op": "exec", "payload": {"cmd": ["echo", "10"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op11", "op": "exec", "payload": {"cmd": ["echo", "11"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op12", "op": "exec", "payload": {"cmd": ["echo", "12"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op13", "op": "exec", "payload": {"cmd": ["echo", "13"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op14", "op": "exec", "payload": {"cmd": ["echo", "14"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op15", "op": "exec", "payload": {"cmd": ["echo", "15"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op16", "op": "exec", "payload": {"cmd": ["echo", "16"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op17", "op": "exec", "payload": {"cmd": ["echo", "17"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op18", "op": "exec", "payload": {"cmd": ["echo", "18"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op19", "op": "exec", "payload": {"cmd": ["echo", "19"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op20", "op": "exec", "payload": {"cmd": ["echo", "20"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "op21", "op": "exec", "payload": {"cmd": ["echo", "21"]}},
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "op1.id"},
+              "sequence": {"$var": "op1.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op1.deadline_at"},
+              "payload": {"cmd": ["echo", "1"]}
+            },
+            {
+              "id": {"$var": "op2.id"},
+              "sequence": {"$var": "op2.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op2.deadline_at"},
+              "payload": {"cmd": ["echo", "2"]}
+            },
+            {
+              "id": {"$var": "op3.id"},
+              "sequence": {"$var": "op3.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op3.deadline_at"},
+              "payload": {"cmd": ["echo", "3"]}
+            },
+            {
+              "id": {"$var": "op4.id"},
+              "sequence": {"$var": "op4.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op4.deadline_at"},
+              "payload": {"cmd": ["echo", "4"]}
+            },
+            {
+              "id": {"$var": "op5.id"},
+              "sequence": {"$var": "op5.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op5.deadline_at"},
+              "payload": {"cmd": ["echo", "5"]}
+            },
+            {
+              "id": {"$var": "op6.id"},
+              "sequence": {"$var": "op6.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op6.deadline_at"},
+              "payload": {"cmd": ["echo", "6"]}
+            },
+            {
+              "id": {"$var": "op7.id"},
+              "sequence": {"$var": "op7.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op7.deadline_at"},
+              "payload": {"cmd": ["echo", "7"]}
+            },
+            {
+              "id": {"$var": "op8.id"},
+              "sequence": {"$var": "op8.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op8.deadline_at"},
+              "payload": {"cmd": ["echo", "8"]}
+            },
+            {
+              "id": {"$var": "op9.id"},
+              "sequence": {"$var": "op9.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op9.deadline_at"},
+              "payload": {"cmd": ["echo", "9"]}
+            },
+            {
+              "id": {"$var": "op10.id"},
+              "sequence": {"$var": "op10.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op10.deadline_at"},
+              "payload": {"cmd": ["echo", "10"]}
+            },
+            {
+              "id": {"$var": "op11.id"},
+              "sequence": {"$var": "op11.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op11.deadline_at"},
+              "payload": {"cmd": ["echo", "11"]}
+            },
+            {
+              "id": {"$var": "op12.id"},
+              "sequence": {"$var": "op12.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op12.deadline_at"},
+              "payload": {"cmd": ["echo", "12"]}
+            },
+            {
+              "id": {"$var": "op13.id"},
+              "sequence": {"$var": "op13.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op13.deadline_at"},
+              "payload": {"cmd": ["echo", "13"]}
+            },
+            {
+              "id": {"$var": "op14.id"},
+              "sequence": {"$var": "op14.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op14.deadline_at"},
+              "payload": {"cmd": ["echo", "14"]}
+            },
+            {
+              "id": {"$var": "op15.id"},
+              "sequence": {"$var": "op15.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op15.deadline_at"},
+              "payload": {"cmd": ["echo", "15"]}
+            },
+            {
+              "id": {"$var": "op16.id"},
+              "sequence": {"$var": "op16.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op16.deadline_at"},
+              "payload": {"cmd": ["echo", "16"]}
+            },
+            {
+              "id": {"$var": "op17.id"},
+              "sequence": {"$var": "op17.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op17.deadline_at"},
+              "payload": {"cmd": ["echo", "17"]}
+            },
+            {
+              "id": {"$var": "op18.id"},
+              "sequence": {"$var": "op18.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op18.deadline_at"},
+              "payload": {"cmd": ["echo", "18"]}
+            },
+            {
+              "id": {"$var": "op19.id"},
+              "sequence": {"$var": "op19.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op19.deadline_at"},
+              "payload": {"cmd": ["echo", "19"]}
+            },
+            {
+              "id": {"$var": "op20.id"},
+              "sequence": {"$var": "op20.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op20.deadline_at"},
+              "payload": {"cmd": ["echo", "20"]}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{op20.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "op21.id"},
+              "sequence": {"$var": "op21.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op21.deadline_at"},
+              "payload": {"cmd": ["echo", "21"]}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{op21.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    }
+  ]
+}

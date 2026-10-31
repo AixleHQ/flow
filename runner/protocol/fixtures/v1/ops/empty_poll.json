@@ -1,0 +1,10 @@
+{
+  "description": "A poll with nothing to return and `wait=0` answers at once with an empty list, not cacheable.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store"}, "body": {"ops": []}}
+    }
+  ]
+}

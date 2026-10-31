@@ -1,0 +1,45 @@
+{
+  "description": "A spent refresh token presented again after its own 30-day expiry is still 401 credential_reuse_detected, and it revokes the family's newest refresh token, which had not expired yet.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"second.refresh_token": "/refresh_token"}
+    },
+    {"given": "time_passes", "seconds": 2505600},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{second.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"third.refresh_token": "/refresh_token"}
+    },
+    {"given": "time_passes", "seconds": 86401},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 401,
+        "body": {"error": "credential_reuse_detected", "message": {"$type": "string"}}
+      }
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{third.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

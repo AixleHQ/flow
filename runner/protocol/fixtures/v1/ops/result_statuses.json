@@ -1,0 +1,45 @@
+{
+  "description": "A result's `status` sets the op's state: `ok` completes it, `error` fails it and `expired` expires it. The answer is {id, state}.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "op_enqueued", "machine": "m", "as": "a", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "b", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "op_enqueued", "machine": "m", "as": "c", "op": "exec", "payload": {"cmd": ["true"]}},
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 200}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{a.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {"status": "ok", "exit_code": 0, "stdout": "done\n", "stderr": "", "data": {"bytes": 5}}
+      },
+      "response": {"status": 200, "body": {"id": {"$var": "a.id"}, "state": "completed"}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{b.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "exit_code": 1,
+          "stderr": "boom\n",
+          "error": {"class": "CommandFailed", "message": "exit 1"}
+        }
+      },
+      "response": {"status": 200, "body": {"id": {"$var": "b.id"}, "state": "failed"}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{c.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {"status": "expired"}
+      },
+      "response": {"status": 200, "body": {"id": {"$var": "c.id"}, "state": "expired"}}
+    }
+  ]
+}
