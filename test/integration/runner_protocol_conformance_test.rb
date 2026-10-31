@@ -14,7 +14,7 @@ require "test_helper"
 class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  FIXTURES = Rails.root.join("runner-protocol/fixtures/v1")
+  FIXTURE_DIR = Rails.root.join("runner-protocol/fixtures/v1")
   DEFAULT_HEADERS = { "X-Aixle-Runner-Protocol" => "1", "X-Aixle-Runner-Version" => "1.4.0" }.freeze
   RUNNER_VERSION = "1.4.0"
   PROTOCOL_VERSION = "1"
@@ -51,8 +51,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   # variable used before it is defined.
   class FixtureError < StandardError; end
 
-  def self.fixture_paths
-    FIXTURES.glob("**/*.json").sort
+  def self.protocol_fixture_paths
+    FIXTURE_DIR.glob("**/*.json").sort
   end
 
   setup do
@@ -64,11 +64,11 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   end
 
   test "the fixtures of protocol 1 are there" do
-    assert_operator self.class.fixture_paths.size, :>=, 1, "no fixture under #{FIXTURES}"
+    assert_not_empty self.class.protocol_fixture_paths, "no fixture under #{FIXTURE_DIR}"
   end
 
-  fixture_paths.each do |path|
-    name = path.relative_path_from(FIXTURES).to_s
+  protocol_fixture_paths.each do |path|
+    name = path.relative_path_from(FIXTURE_DIR).to_s
 
     test "fixture #{name}" do
       run_fixture(name, JSON.parse(path.read))
