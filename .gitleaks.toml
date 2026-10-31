@@ -50,3 +50,10 @@ condition = "AND"
 paths = ['''^app/frontend/pages/Admin/Dashboard/Dashboard\.tsx$''']
 regexTarget = "line"
 regexes = ['''^\s*\{ key: '[A-Za-z0-9]+', label: '[^']+' \},$''']
+
+[[allowlists]]
+description = "Runner protocol spec: the example environment `key` of a register response (`aixle-r<runner id>-<hex>`), an identifier, not a credential"
+condition = "AND"
+paths = ['''^runner-protocol/PROTOCOL\.md$''']
+regexTarget = "line"
+regexes = ['''"key": "aixle-r\d+-[0-9a-f]{8}"''']
