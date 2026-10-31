@@ -188,7 +188,11 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     check_keys(expected, RESPONSE_KEYS, where)
     assert_equal expected.fetch("status"), response.status, "#{where}: the status. The body was #{response.body}"
     (expected["headers"] || {}).each do |name, value|
-      assert_equal value, response.headers[name], "#{where}: the #{name} header"
+      if value.nil?
+        assert_nil response.headers[name], "#{where}: the #{name} header must be absent"
+      else
+        assert_equal value, response.headers[name], "#{where}: the #{name} header"
+      end
     end
     return unless expected.key?("body")
 
