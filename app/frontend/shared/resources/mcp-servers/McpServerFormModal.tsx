@@ -24,7 +24,7 @@ import { z } from 'zod';
 
 import type { MCPServer } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { ConfigItemValueField } from './ConfigItemValueField';
@@ -295,7 +295,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
     JSON.stringify(Object.fromEntries(Object.entries(original ?? {}).map(([k, v]) => [k, String(v)])));
   const dirty = form.isDirty() || kvChanged(headersList, editServer?.headers) || kvChanged(envList, editServer?.env);
   const unsaved = isEdit && dirty;
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   return (
     <Drawer

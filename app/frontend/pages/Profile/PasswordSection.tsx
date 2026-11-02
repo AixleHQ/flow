@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { z } from 'zod';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { passwordResetsPath, profilePasswordPath } from 'shared/routes';
 
 export interface PasswordState {
@@ -51,6 +52,7 @@ export function PasswordSection({ password }: { password: PasswordState }) {
     form.reset();
     setOpen(false);
   };
+  const requestClose = useUnsavedChanges({ opened: open, dirty: form.isDirty() && !saving, onClose: close });
 
   const save = (values: FormValues) => {
     setSaving(true);
@@ -121,7 +123,7 @@ export function PasswordSection({ password }: { password: PasswordState }) {
                 <Button type="submit" size="compact-md" loading={saving}>
                   Save password
                 </Button>
-                <Button size="compact-md" variant="subtle" onClick={close}>
+                <Button size="compact-md" variant="subtle" onClick={requestClose}>
                   Cancel
                 </Button>
               </Group>

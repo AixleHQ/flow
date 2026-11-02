@@ -1025,6 +1025,30 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('asks before Cancel or Close throw away an edited form, and closes on Discard', async () => {
+    const onClose = vi.fn();
+    renderPage(<TriggerFormPanel {...baseProps({ onClose })} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Manual' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const question = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(question).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes without asking once an edit is put back', async () => {
+    const onClose = vi.fn();
+    renderPage(<TriggerFormPanel {...baseProps({ onClose })} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Manual' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Auto' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   // -------------------------------------------------------------------------
   // Tracker kind
   // -------------------------------------------------------------------------

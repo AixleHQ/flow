@@ -6,7 +6,7 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z.object({
@@ -52,7 +52,7 @@ export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => 
     form.reset();
     onClose();
   };
-  const requestClose = useConfirmClose(form.isDirty(), handleClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose: handleClose });
 
   const handleSubmit = (values: FormData) => {
     setLoading(true);

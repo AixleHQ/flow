@@ -22,6 +22,7 @@ import { useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
@@ -113,6 +114,9 @@ const InstallPage = () => {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [projectName, setProjectName] = useState(selection.projectName ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const entered = JSON.stringify({ inputs, secrets, projectName });
+  const [initiallyEntered] = useState(entered);
+  useUnsavedChanges({ dirty: entered !== initiallyEntered && !submitting });
 
   const resolutions = toRecord(selection.resolutions);
   const intoExisting = selection.projectId !== null;

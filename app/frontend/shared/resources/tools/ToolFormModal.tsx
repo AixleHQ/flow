@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 import type { Tool, ToolFile } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
@@ -300,7 +300,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
   const dirty = form.isDirty() || JSON.stringify(files) !== initialFiles.current;
   const unsaved = isEditMode && dirty;
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   return (
     <ResourceDrawer

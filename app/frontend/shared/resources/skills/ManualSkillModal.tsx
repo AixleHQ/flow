@@ -5,7 +5,7 @@ import { useEffect, useState, type FC } from 'react';
 
 import type { Skill } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 interface ManualSkillModalProps {
@@ -78,7 +78,7 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
 
   const dirty = content !== (skill?.content ?? STARTER);
   const unsaved = editing && dirty;
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   return (
     <Modal

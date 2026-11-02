@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import type { ProjectTracker } from '@/types/generated';
 
 import { apiFetch } from 'shared/lib/apiFetch';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { COPY_ATTACHMENTS_HINT, COPY_ATTACHMENTS_LABEL } from 'shared/resources/triggers/trackerTrigger';
 import { apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
@@ -62,7 +62,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
     copyAttachments ||
     workflowId !== (workflows[0]?.id.toString() ?? null) ||
     columnId !== (boardColumns[0]?.id.toString() ?? null);
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: Boolean(tracker), dirty, onClose });
 
   const submit = async () => {
     if (!tracker || !workflowId) return;

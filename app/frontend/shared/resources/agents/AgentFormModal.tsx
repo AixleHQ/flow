@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import type { Agent } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { EmojiPicker } from 'shared/ui/EmojiPicker';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
@@ -129,7 +129,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
 
   const dirty = form.isDirty();
   const unsaved = isEditMode && dirty;
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   return (
     <ResourceDrawer

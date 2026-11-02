@@ -1,7 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 interface CreateProjectModalProps {
   opened: boolean;
@@ -19,7 +19,7 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
     onClose();
   };
   const dirty = data.name !== BLANK_PROJECT.name || data.description !== BLANK_PROJECT.description;
-  const requestClose = useConfirmClose(dirty, handleClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose: handleClose });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import {
   apiV1CloudAwsConnectionPath,
   completeApiV1CloudAwsConnectionPath,
@@ -173,7 +173,7 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
   const selectedAccount = accounts.find((a) => a.account_id === accountId);
 
   // Only the sign-in is lost on close: the typed fields are never reset and are still there on reopen.
-  const requestClose = useConfirmClose(phase !== 'form', onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: phase !== 'form', onClose });
 
   const body = (
     <Stack gap="md">

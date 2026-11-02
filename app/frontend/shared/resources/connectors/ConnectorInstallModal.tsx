@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type FC } from 'react';
 
 import type { Connector } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { ConfigItemValueField } from '../mcp-servers/ConfigItemValueField';
 
@@ -57,7 +57,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
 
   const prefilled = declaredDefaults(target);
   const dirty = Object.keys({ ...prefilled, ...values }).some((key) => (values[key] ?? '') !== (prefilled[key] ?? ''));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: !!connector, dirty, onClose });
 
   const missingRequired = (target?.inputs ?? []).filter((i) => i.required && !values[i.key]?.trim());
 

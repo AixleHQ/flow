@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { requestJson } from './requestJson';
 
@@ -52,7 +52,7 @@ export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) =
   }, [basePath, integration]);
 
   const dirty = projectIds.length !== selected.length || projectIds.some((id) => !selected.includes(id));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

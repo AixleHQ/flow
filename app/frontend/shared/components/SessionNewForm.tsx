@@ -14,6 +14,7 @@ import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
@@ -673,6 +674,7 @@ export const SessionNewForm = ({
                     return;
                   }
                   const separator = r.connectUrl.includes('?') ? '&' : '?';
+                  allowUnload();
                   window.location.href = `${r.connectUrl}${separator}return_to=${encodeURIComponent(
                     window.location.pathname,
                   )}`;

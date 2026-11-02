@@ -4,6 +4,8 @@ import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/ico
 import { useState } from 'react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
+import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { howItWorksPath, loginPath, logoutPath, marketplaceProposalPath, workspacePath } from 'shared/routes';
 import { BrandLockup, PageShell } from 'shared/ui';
 
@@ -295,7 +297,13 @@ const ClaimedScreen = ({
         )}
         {subscriptionHeld && <SubscriptionRequest claim={claim} state={requestState} email={email} />}
         {signedIn ? (
-          <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
+          <Button
+            fullWidth
+            size="md"
+            mt="lg"
+            variant="default"
+            onClick={() => confirmLeave(() => router.delete(logoutPath()))}
+          >
             {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
           </Button>
         ) : (
@@ -339,6 +347,7 @@ const NewWorkspacePage = () => {
     email: suggestedEmail ?? '',
     accept_terms: false,
   });
+  useUnsavedChanges({ dirty: form.isDirty && !form.processing });
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import type { Integration } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z
@@ -198,7 +198,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     form.reset();
     onClose();
   };
-  const requestClose = useConfirmClose(form.isDirty(), handleClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose: handleClose });
 
   const pageErrors = usePage().props.errors as Record<string, string> | undefined;
   const serverErrors = useMemo(() => {

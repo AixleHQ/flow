@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import type { Repository } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z.object({
@@ -60,7 +60,7 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
     );
   };
 
-  const requestClose = useConfirmClose(form.isDirty(), onClose);
+  const requestClose = useUnsavedChanges({ opened: !!repo, dirty: form.isDirty(), onClose });
 
   return (
     <ResourceDrawer

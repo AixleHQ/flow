@@ -20,7 +20,7 @@ import { useState } from 'react';
 import type BoardColumn from 'types/generated/BoardColumn';
 import type BoardMember from 'types/generated/BoardMember';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 export type BulkAction = 'delete' | 'archive' | 'move_to_column' | 'set_priority' | 'set_assignee' | 'add_tag';
 
@@ -126,7 +126,7 @@ function AddTagModal({
     setTag('');
     onClose();
   };
-  const requestClose = useConfirmClose(tag.trim() !== '', close);
+  const requestClose = useUnsavedChanges({ opened, dirty: tag.trim() !== '', onClose: close });
 
   const submit = () => {
     const trimmed = tag.trim();

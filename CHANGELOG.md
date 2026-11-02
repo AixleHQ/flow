@@ -34,6 +34,21 @@ governance, community health — carry none.
   them.
 
 ### Changed
+- **Workflows**: leaving the workflow builder with unsaved changes — by a link,
+  browser Back or Forward, signing out, reloading or closing the tab — asks
+  first, in the same dialog the rest of the app uses, and offers **Save** next
+  to Discard.
+- **Settings**: project settings ask before you leave with unsaved changes,
+  and can save them from the question.
+- **Company settings**: the general settings and a new SSO connection ask
+  before you leave with unsaved changes; the general settings can save them
+  from the question.
+- **Profile**: your name and language, password and MCP tools ask before you
+  leave with unsaved changes.
+- **Triggers & gates**: closing the trigger panel, or leaving the page, with an
+  edited trigger asks before throwing the edits away.
+- **Tasks**: the new-task drawer and a comment being written or edited ask
+  when you leave the page, not only when you close them.
 - **Sign-in & onboarding**: `/privacy-policy` and `/terms-of-service` redirect to
   `/legal/privacy_policy` and `/legal/terms_of_service`.
 

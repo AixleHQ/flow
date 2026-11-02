@@ -64,10 +64,10 @@ import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -505,7 +505,11 @@ const BoardPage = () => {
     setCreateOpen(true);
   };
 
-  const requestCloseCreate = useConfirmClose(form.isDirty(), closeCreate);
+  const requestCloseCreate = useUnsavedChanges({
+    opened: canExecute && createOpen,
+    dirty: form.isDirty(),
+    onClose: closeCreate,
+  });
 
   const handleToggleCollapse = useCallback(
     (colId: number) => {

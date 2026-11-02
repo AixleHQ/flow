@@ -46,8 +46,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Integration } from '@/types/generated';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 import { ChatChannelsModal } from 'shared/resources/chat-channels/ChatChannelsModal';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -273,7 +274,11 @@ export const IntegrationsContent = ({
     setGitlabPat('');
     setGitlabError(null);
   }, []);
-  const requestCloseGitlab = useConfirmClose(gitlabPat !== '', closeGitlabModal);
+  const requestCloseGitlab = useUnsavedChanges({
+    opened: gitlabOpen,
+    dirty: gitlabPat !== '',
+    onClose: closeGitlabModal,
+  });
 
   const [tokenTarget, setTokenTarget] = useState<Integration | null>(null);
   const [replacementToken, setReplacementToken] = useState('');
@@ -285,7 +290,11 @@ export const IntegrationsContent = ({
     setReplacementToken('');
     setTokenError(null);
   }, []);
-  const requestCloseToken = useConfirmClose(replacementToken !== '', closeTokenModal);
+  const requestCloseToken = useUnsavedChanges({
+    opened: !!tokenTarget,
+    dirty: replacementToken !== '',
+    onClose: closeTokenModal,
+  });
 
   const [coderOpen, setCoderOpen] = useState(false);
   const [coderUrl, setCoderUrl] = useState('');
@@ -317,23 +326,27 @@ export const IntegrationsContent = ({
     setCoderOpen(false);
     resetCoderForm();
   }, [resetCoderForm]);
-  const requestCloseCoder = useConfirmClose(
-    coderUrl !== '' ||
+  const requestCloseCoder = useUnsavedChanges({
+    opened: coderOpen,
+    dirty:
+      coderUrl !== '' ||
       coderToken !== '' ||
       coderDefaultTemplate !== '' ||
       coderMachinePrefix !== '' ||
       coderLockTtlMinutes !== DEFAULT_CODER_LOCK_TTL,
-    closeCoderModal,
-  );
+    onClose: closeCoderModal,
+  });
 
   const closeCoderSettings = useCallback(() => setCoderEditTarget(null), []);
-  const requestCloseCoderSettings = useConfirmClose(
-    !!coderEditTarget &&
+  const requestCloseCoderSettings = useUnsavedChanges({
+    opened: !!coderEditTarget,
+    dirty:
+      !!coderEditTarget &&
       (coderEditTemplate !== (coderEditTarget.coderDefaultTemplate ?? '') ||
         coderEditPrefix !== (coderEditTarget.coderMachinePrefix ?? '') ||
         coderEditTtl !== (coderEditTarget.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL)),
-    closeCoderSettings,
-  );
+    onClose: closeCoderSettings,
+  });
 
   const filtered = useMemo(() => {
     let result = integrations;
@@ -528,6 +541,7 @@ export const IntegrationsContent = ({
   // Slack connects via OAuth: redirect to the project-scoped start action, which
   // bounces to Slack's consent screen. The install binds to this project.
   const handleConnectSlack = useCallback(() => {
+    allowUnload();
     window.location.href = `${basePath}/slack_oauth_start`;
   }, [basePath]);
 

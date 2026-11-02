@@ -6,7 +6,7 @@ import { IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiMutate, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { apiV1ProjectColumnPath, apiV1ProjectColumnsPath, reorderApiV1ProjectColumnsPath } from 'shared/routes';
 
 import { SortableColumnRow } from './SortableColumnRow';
@@ -48,7 +48,11 @@ export function BoardSettingsDialog({
     }
   }, [opened, savedCols]);
 
-  const requestClose = useConfirmClose(JSON.stringify(cols) !== JSON.stringify(savedCols), onClose);
+  const requestClose = useUnsavedChanges({
+    opened,
+    dirty: JSON.stringify(cols) !== JSON.stringify(savedCols),
+    onClose,
+  });
 
   const addColumn = () =>
     setCols((prev) => [
