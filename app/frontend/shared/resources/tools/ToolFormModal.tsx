@@ -209,7 +209,6 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
     const callbacks = {
       preserveScroll: true,
-      forceFormData: true as const,
       onSuccess: () => {
         setSubmitting(false);
         onClose();
@@ -245,6 +244,9 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
         })),
       ];
 
+      // Sent as JSON on purpose. Inertia's own FormData encoding writes arrays with indices
+      // (`tool[requiredConfigItems][0]`), which Rails parses as a hash that
+      // `permit(required_config_items: [])` silently drops — the secrets never saved.
       const data = {
         tool: {
           ...values,

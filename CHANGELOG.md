@@ -53,6 +53,9 @@ governance, community health — carry none.
   `/legal/privacy_policy` and `/legal/terms_of_service`.
 
 ### Fixed
+- **Wrappers**: secrets chosen on a wrapper's **Secrets** tab are now saved.
+  Before, saving without uploading a file silently dropped them, so the
+  wrapper's container never received them.
 - **Connectors**: closing a connector's install drawer from **Browse
   connectors** — ✕, Cancel or Escape — goes back to the catalog instead of
   closing it as well. Installing a connector still closes both.
