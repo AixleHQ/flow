@@ -59,6 +59,14 @@ governance, community health — carry none.
 - **Wrappers**: secrets chosen on a wrapper's **Secrets** tab are now saved.
   Before, saving without uploading a file silently dropped them, so the
   wrapper's container never received them.
+- **Sessions & Runs**: a session secret no longer shows in a session's terminal
+  log when the agent's terminal splits it with colours or wraps it onto the next
+  line, as it does when previewing a written file. The stored log, the log replay
+  and `get_session_log` all mask it. A terminal log stored earlier is masked when
+  it is read, as long as the secret still has the same value.
+- **Sessions & Runs**: logs an agent's CLI writes itself, such as Claude Code's
+  transcript, are masked before they are stored. Before, that transcript (open
+  only to platform administrators) kept session secrets in plain text.
 - **Connectors**: closing a connector's install drawer from **Browse
   connectors** — ✕, Cancel or Escape — goes back to the catalog instead of
   closing it as well. Installing a connector still closes both.

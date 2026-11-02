@@ -356,6 +356,17 @@ sessions most worth watching — see `research/technical-agent-session-log-acces
 for what that sink is for. **Product decision 2026-08-17: keep the sink, state the limitation here.**
 This table is that statement; the UI does not repeat it (see the change log).
 
+**Update 2026-11.** Two rows above no longer hold. The pane filter
+(`docker/base/logger/redact-stream.py`) now sits in front of both pipe-pane sinks, so pod stdout is
+masked as it is written; and CLI transcripts are collected (`session_log_paths`) and masked inside
+the container before upload, as is every collected log the container's filters did not write
+(`Agents::BaseAdapter#filtered_log_paths`). Matching is no longer a substring search: a TUI splits a
+value with colour codes and wraps it onto the next row, and a model streams it a few characters per
+event, so each text is projected onto its significant characters and searched there, long secrets
+also piece by piece (`aixle_redact.py`, `Sessions::SecretRedactor`). Terminal logs are masked again
+when read (`get_session_log`, the replay endpoint), which covers logs stored before — while the
+secret keeps its value. The live ttyd stream is still unmasked.
+
 ### Renegotiated: log redaction
 
 `spec-session-observability-mcp-tools.md` froze "Return log content **unredacted**: no secret

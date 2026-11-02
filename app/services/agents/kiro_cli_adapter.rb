@@ -772,11 +772,6 @@ module Agents
       super + %w[/var/log/mitm/http.log] + agent_log_paths
     end
 
-    # Kiro writes these files itself, so the container's redaction filters never see them.
-    def unfiltered_log_paths
-      agent_log_paths
-    end
-
     # Kiro keeps the ids in directory names and gives every file the same basename, so
     # the bare basename would store every transcript as `messages.jsonl` and every server
     # log as `kiro.log` — rows that neither tell sessions apart nor match the
