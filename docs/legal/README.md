@@ -45,4 +45,8 @@ operator cannot accept on someone's behalf.
 2. Set the document's `version` in `LegalDocument::ALL` to the new date, in the same change.
    That is what asks everyone to accept again — a text change without a version bump asks
    nobody.
-3. Add a `CHANGELOG.md` entry.
+3. Record the version and the new digest of the view in `PUBLISHED` in
+   `test/models/legal_document_test.rb`. That test fails on any edit to a document's view
+   until this is done, and its message prints the digest. An edit that does not change
+   what the document says (a typo, markup) records the new digest and keeps the version.
+4. Add a `CHANGELOG.md` entry.
