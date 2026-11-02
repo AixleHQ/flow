@@ -346,10 +346,49 @@ The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`,
 `logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
 `env.scrub` and `env.reset`.
 
-**Payload and result schemas are not part of this version of the document.** The gateway
-carries the payload as an opaque object. Each op's payload and result, with its fixtures, are
-specified by the task that first implements the op: 6a for the host ops, 6b for the session ops,
-and 8 for the platform side that enqueues them.
+**Payload and result schemas.** The gateway carries the payload as an opaque object. Each op's
+payload and result, with its fixtures, are specified below by the task that first implements
+the op: 6a for `image.ensure`, 6b for the session ops, `container.start` / `container.stop`
+and `env.scrub` / `env.reset`, and 8 for the platform side that enqueues them. An op without a
+section here has no schema yet.
+
+**An op this runner does not implement.** The platform can be newer than the runner. A runner
+that receives an op name it does not implement does not run it, and answers an `error` result
+with `error.class` `unsupported_op` and a message that names the op and the runner's version.
+
+**An op interrupted by a restart.** Ops run at most once. A runner that stopped while an op ran
+does not run it again when it is redelivered: it answers an `error` result with `error.class`
+`interrupted`.
+
+### 6.1 `image.ensure`
+
+A host-runner op (`manual`, and `coder` later): the runner makes sure the machine's Docker daemon
+has an agent image, pinned by digest, pulling it when it is missing.
+
+Payload:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `image` | string | Required. The repository, without a digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code`. |
+| `digest` | string | Required. `sha256:` and 64 lowercase hex digits. |
+
+Other payload fields are ignored. The runner works on the reference `<image>@<digest>`. If the
+daemon has it, nothing is pulled. Otherwise the runner pulls it through the Docker Engine API.
+
+Results:
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| The image is there, pulled or not | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether it was pulled, and how long the op took in milliseconds | |
+| The pull failed | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
+| The daemon could not be asked whether it has the image | `error` | | `docker_error` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+```json
+{ "status": "ok", "data": { "pulled": true, "duration_ms": 41250 } }
+```
+
+Fixtures: `ops/image_ensure.json`.
 
 ## 7. Versioning
 
