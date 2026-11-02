@@ -15,6 +15,7 @@ import {
 } from '@mantine/core';
 import { useState } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
@@ -153,7 +154,9 @@ const ShowPage = () => {
         {install.setup && (
           <Card withBorder padding="lg" radius="md">
             <Typography>
-              <Markdown components={{ a: MarkdownLink }}>{install.setup}</Markdown>
+              <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                {install.setup}
+              </Markdown>
             </Typography>
           </Card>
         )}

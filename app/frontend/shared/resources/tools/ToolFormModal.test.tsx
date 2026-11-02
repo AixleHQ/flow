@@ -516,6 +516,35 @@ describe('ToolFormModal', () => {
     );
   });
 
+  it('an edit save without uploads sends the selected secrets as a JSON array, not FormData', async () => {
+    const user = setupUser();
+    renderPage(
+      <ToolFormModal
+        opened
+        onClose={vi.fn()}
+        editTool={editTool}
+        configItemNames={['PROJECT_X_API_KEY']}
+        basePath="/projects/1/tools"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /display name/i })).toHaveValue('My Custom Tool'));
+
+    await user.click(screen.getByRole('tab', { name: /secrets/i }));
+    await user.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
+    await user.click(await screen.findByRole('option', { name: 'PROJECT_X_API_KEY' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(router.patch).toHaveBeenCalled());
+    const [, data, options] = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(data).toEqual(
+      expect.objectContaining({ tool: expect.objectContaining({ requiredConfigItems: ['PROJECT_X_API_KEY'] }) }),
+    );
+    // Forced FormData encodes the array as `[0]`, which the server drops.
+    expect(options.forceFormData).toBeUndefined();
+  });
+
   it('closes the modal via the router onSuccess callback after a create submit', async () => {
     const user = setupUser();
     const onClose = vi.fn();

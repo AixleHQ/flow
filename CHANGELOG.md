@@ -19,11 +19,14 @@ governance, community health — carry none.
   sessions that joined the queue then waited, and their p95. Its days are in
   your time zone too, and opening a day shows that day's hours.
 - **Sign-in & onboarding**: the hosted product publishes its Terms of Service,
-  Terms of Use and Privacy Policy at `/legal`. Everyone accepts the Terms of Use
-  the first time they sign in, and whoever creates a workspace accepts the Terms
-  of Service for their company on the signup form; a company that has not
-  accepted them asks its next admin to. Publishing a new version of either asks
-  again. Self-hosted and AWS Marketplace installations neither publish nor ask.
+  Terms of Use and Privacy Policy at `/legal`, linked from the sign-in page and
+  the app's footer. Everyone accepts the Terms of Use the first time they sign
+  in, and whoever creates a workspace accepts the Terms of Service for their
+  company on the signup form; a company that has not accepted them asks its next
+  admin to. Publishing a new version of either asks again. A record of each
+  acceptance, naming who accepted and for which company, is kept after that
+  person or company is deleted. Self-hosted and AWS Marketplace installations
+  neither publish nor ask.
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
   model is chosen (a level needs an explicit runtime and model), offers only the
@@ -53,6 +56,9 @@ governance, community health — carry none.
   `/legal/privacy_policy` and `/legal/terms_of_service`.
 
 ### Fixed
+- **Wrappers**: secrets chosen on a wrapper's **Secrets** tab are now saved.
+  Before, saving without uploading a file silently dropped them, so the
+  wrapper's container never received them.
 - **Sessions & Runs**: a session secret no longer shows in a session's terminal
   log when the agent's terminal splits it with colours or wraps it onto the next
   line, as it does when previewing a written file. The stored log, the log replay
@@ -72,6 +78,9 @@ governance, community health — carry none.
   installed from its install page again. The page shows what the install will
   create and keeps **Install** disabled until every required setting is filled
   in. Before, it said the template could not be installed and offered no button.
+- **Templates**: tables in a template's Readme and Setup tabs and in the setup
+  notes of its install checklist render as tables. Before, they showed as raw
+  `| … |` text.
 
 ## [1.9.0] - 2026-10-30
 

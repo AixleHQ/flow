@@ -30,9 +30,10 @@ class Web::LegalAcceptancesController < Web::ApplicationController
     refusal = refusal_for(pending, accepted)
     return redirect_to(legal_acceptance_path, inertia: { errors: { base: refusal } }) if refusal
 
+    evidence = LegalAcceptance::Evidence.from(request)
     LegalAcceptance.transaction do
       pending.each do |document|
-        LegalAcceptance.record!(document, user: current_user, company: current_company, request: request)
+        LegalAcceptance.record!(document, user: current_user, company: current_company, evidence: evidence)
       end
     end
     redirect_to company_projects_path

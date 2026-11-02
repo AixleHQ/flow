@@ -41,6 +41,7 @@ class Web::ApplicationController < ApplicationController
         # Whether a stranger may sign a company up here, which is also what
         # decides that /how-it-works — the page that sells it — exists at all.
         self_serve_signup: Deployment.self_serve_signup?,
+        legal_pages: LegalDocument.published?,
         feedback_enabled: signed_in? && Feedback.enabled?
       },
       # Flags declared `client: true` only, read by useFeatureFlag. Always

@@ -208,24 +208,41 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: user)
   end
 
-  test "a stranger's acceptance travels in the link and is recorded when it is opened" do
-    require_terms
+  def emailed_token
+    mail = ActionMailer::Base.deliveries.last
+    href = (mail.html_part || mail).body.decoded[%r{href="([^"]*/workspace/confirm\?[^"]+)"}, 1]
+    Rack::Utils.parse_query(URI.parse(CGI.unescapeHTML(href)).query)["token"]
+  end
 
-    post workspace_path, params: valid_params(accept_terms: "1")
-    get confirm_workspace_path(token: ticket(accept_terms: true))
+  # The evidence is of the person ticking the box, not of whatever opens the
+  # link: a mail scanner, another device, the next morning.
+  test "a stranger's acceptance is recorded as they gave it, when the link is opened" do
+    require_terms
+    ticked_at = Time.zone.local(2026, 11, 2, 9, 30)
+
+    travel_to(ticked_at) do
+      perform_enqueued_jobs do
+        post workspace_path, params: valid_params(accept_terms: "1"),
+                             env: { "REMOTE_ADDR" => "198.51.100.4" }, headers: { "User-Agent" => "FormBrowser/1.0" }
+      end
+    end
+    travel_to(ticked_at + 3.hours) do
+      get confirm_workspace_path(token: emailed_token), env: { "REMOTE_ADDR" => "203.0.113.9" },
+                                                        headers: { "User-Agent" => "MailApp/2.0" }
+    end
 
     owner = User.find_by!(email: "dana@acme-robotics.example")
     assert LegalAcceptance.current?(LegalDocument::TERMS_OF_SERVICE, company: acme)
     assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: owner)
+    assert_equal [ [ ticked_at, "198.51.100.4", "FormBrowser/1.0" ] ] * 2,
+                 LegalAcceptance.order(:id).map { |row| [ row.accepted_at, row.ip_address, row.user_agent ] }
   end
 
   test "a link issued before the terms changed creates nothing" do
     require_terms
-    stale = Rails.application.message_verifier(WorkspaceSignupTicket::PURPOSE).generate(
-      { "name" => "Acme Robotics", "email" => "dana@acme-robotics.example",
-        "accepted_terms" => "terms_of_service@2020-01-01 terms_of_use@2020-01-01" },
-      expires_in: WorkspaceSignupTicket::TTL
-    )
+    LegalDocument.stubs(:fingerprint).returns("terms_of_service@2020-01-01 terms_of_use@2020-01-01")
+    stale = ticket(acceptance: LegalAcceptance::Evidence.new(accepted_at: Time.current, ip_address: nil, user_agent: nil))
+    LegalDocument.unstub(:fingerprint)
 
     assert_no_difference "Company.count" do
       get confirm_workspace_path(token: stale)

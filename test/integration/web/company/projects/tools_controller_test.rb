@@ -31,6 +31,21 @@ class Web::Company::Projects::ToolsControllerTest < ActionDispatch::IntegrationT
     assert_response :redirect
   end
 
+  test "update stores and clears the secrets the edit form sends" do
+    tool = create(:tool, :with_project_scope, scope: @project)
+
+    patch company_project_tool_path(@project, tool), as: :json, params: {
+      tool: { displayName: tool.display_name, requiredConfigItems: [ "PROJECT_X_API_KEY" ], toolFilesAttributes: [] }
+    }
+    assert_response :redirect
+    assert_equal [ "PROJECT_X_API_KEY" ], tool.reload.required_config_items
+
+    patch company_project_tool_path(@project, tool), as: :json, params: {
+      tool: { displayName: tool.display_name, requiredConfigItems: [], toolFilesAttributes: [] }
+    }
+    assert_equal [], tool.reload.required_config_items
+  end
+
   test "destroy soft-deletes the tool and redirects" do
     tool = create(:tool, :with_project_scope, scope: @project)
 
