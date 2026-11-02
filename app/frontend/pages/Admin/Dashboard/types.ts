@@ -96,6 +96,14 @@ export interface WaitDay {
   p95: number | null;
 }
 
+/** One hour of the viewer's day, over every day of the period, by the hour a session joined the queue. */
+export interface WaitHour {
+  hour: number;
+  sessions: number;
+  waited: number;
+  p95: number | null;
+}
+
 export interface CompanyBreakdown {
   companyId: number;
   workerLimit: number | null;
@@ -105,6 +113,9 @@ export interface CompanyBreakdown {
   runs: RunWaits;
   projects: ProjectQueue[];
   days: WaitDay[];
+  /** The zone the hours are in: the one asked for, or UTC when the server does not know it. */
+  timeZone: string;
+  hours: WaitHour[];
 }
 
 /** One company's p95 wait over a range, from Admin::DashboardCompaniesController#waits. */

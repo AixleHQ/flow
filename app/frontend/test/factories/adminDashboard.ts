@@ -74,5 +74,11 @@ export const buildCompanyBreakdown = (overrides: Partial<CompanyBreakdown> = {})
     { day: '2026-10-14', sessions: 230, waited: 51, p95: 7_260 },
     { day: '2026-10-15', sessions: 170, waited: 29, p95: 840 },
   ],
+  timeZone: 'America/New_York',
+  hours: Array.from({ length: 24 }, (_, hour) =>
+    hour === 10
+      ? { hour, sessions: 95, waited: 41, p95: 2_700 }
+      : { hour, sessions: hour > 8 && hour < 18 ? 30 : 0, waited: 0, p95: hour > 8 && hour < 18 ? 20 : null },
+  ),
   ...overrides,
 });

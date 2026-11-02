@@ -55,7 +55,8 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
                              admitted_at: Time.utc(2026, 10, 14, 9, 5))
     sign_in_as(@admin)
 
-    get admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", format: :json)
+    get admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", time_zone: "Europe/Berlin",
+                                               format: :json)
 
     assert_response :success
     body = response.parsed_body
@@ -63,6 +64,8 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
     assert_equal [ 1, 1, 300 ], body["waits"].values_at("sessions", "waited", "p95")
     assert_equal [ project.name ], body["projects"].pluck("name")
     assert_equal [ { "day" => "2026-10-14", "sessions" => 1, "waited" => 1, "p95" => 300 } ], body["days"]
+    assert_equal "Europe/Berlin", body["timeZone"]
+    assert_equal({ "hour" => 11, "sessions" => 1, "waited" => 1, "p95" => 300 }, body["hours"][11])
   end
 
   test "the table reads every company's p95 wait for the chosen days" do

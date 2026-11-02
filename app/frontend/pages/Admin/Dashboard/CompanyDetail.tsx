@@ -4,9 +4,16 @@ import type { DayRange, TenantSummary } from './aggregate';
 import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatPercent, formatWait, formatWorkers } from './format';
 import type { CompanyBreakdown, WaitStats } from './types';
-import WaitDays from './WaitDays';
+import WaitTable from './WaitTable';
 
 const tenths = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const dayLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const clock = (hour: number) => `${String(hour % 24).padStart(2, '0')}:00`;
 
 const FOCUSABLE = 'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
@@ -17,6 +24,8 @@ interface Props {
   range: DayRange;
   /** The period as the dashboard names it, e.g. "Oct 1 – Oct 30, 2026". */
   span: string;
+  /** The viewer's IANA time zone, for the hours of the day. */
+  timeZone: string;
   onClose: () => void;
 }
 
@@ -135,7 +144,41 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
         <h3 id="detail-days" className={classes.detailTitle}>
           Waits by day
         </h3>
-        <WaitDays days={days} />
+        {days.length ? (
+          <WaitTable
+            heading="Day (UTC)"
+            rows={days.map((row) => ({
+              ...row,
+              key: row.day,
+              label: dayLabel.format(new Date(`${row.day}T00:00:00Z`)),
+            }))}
+          />
+        ) : (
+          <p className={classes.sectionNote}>No session of this company started in this period.</p>
+        )}
+      </section>
+
+      <section className={classes.detailSection} aria-labelledby="detail-hours">
+        <h3 id="detail-hours" className={classes.detailTitle}>
+          Waits by hour of the day
+        </h3>
+        {waits.sessions ? (
+          <>
+            <p className={classes.sectionNote}>
+              Hours in {breakdown.timeZone}, by the hour each session joined the queue, over every day of the period.
+            </p>
+            <WaitTable
+              heading="Hour"
+              rows={breakdown.hours.map((row) => ({
+                ...row,
+                key: String(row.hour),
+                label: `${clock(row.hour)}–${clock(row.hour + 1)}`,
+              }))}
+            />
+          </>
+        ) : (
+          <p className={classes.sectionNote}>No session of this company started in this period.</p>
+        )}
       </section>
 
       <section className={classes.detailSection} aria-labelledby="detail-runs">
@@ -216,7 +259,7 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
 }
 
 /** One company over the dashboard's selected days, read from its admissions when opened. */
-export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
+export default function CompanyDetail({ tenant, range, span, timeZone, onClose }: Props) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -225,7 +268,7 @@ export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const query = new URLSearchParams({ from: range.start, to: range.end });
+    const query = new URLSearchParams({ from: range.start, to: range.end, time_zone: timeZone });
     fetch(`/admin/dashboard/companies/${tenant.tenantId}.json?${query}`, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
@@ -239,7 +282,7 @@ export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
         if (!controller.signal.aborted) setState({ status: 'failed' });
       });
     return () => controller.abort();
-  }, [tenant.tenantId, range.start, range.end]);
+  }, [tenant.tenantId, range.start, range.end, timeZone]);
 
   // Without Mantine on this page the dialog keeps focus itself: it takes it on
   // open, holds Tab inside, closes on Escape, and hands focus back on close.

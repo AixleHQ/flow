@@ -21,7 +21,7 @@ const BREAKDOWN = 'GET /admin/dashboard/companies/:id.json';
 
 async function openAcme(answer: CompanyBreakdown | Response = buildCompanyBreakdown()) {
   const fetchSpy = answerFetch({ [BREAKDOWN]: answer, 'GET /admin/dashboard/waits.json': [] });
-  render(<Dashboard data={data} now={now} />);
+  render(<Dashboard data={data} now={now} timeZone="America/New_York" />);
   await userEvent.click(screen.getByRole('button', { name: 'Acme' }));
   const dialog = within(screen.getByRole('dialog', { name: 'Acme' }));
   return { dialog, fetchSpy };
@@ -34,7 +34,7 @@ describe('CompanyDetail', () => {
     const { dialog, fetchSpy } = await openAcme();
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/admin/dashboard/companies/1.json?from=2026-10-01&to=2026-10-31',
+      '/admin/dashboard/companies/1.json?from=2026-10-01&to=2026-10-31&time_zone=America%2FNew_York',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
     expect(dialog.getByText(/Oct 1 – Oct 31, 2026 · UTC/)).toBeInTheDocument();
@@ -87,6 +87,18 @@ describe('CompanyDetail', () => {
     expect(busy.getByText('51 of 230')).toBeInTheDocument();
     expect(busy.getByText('2h 1m')).toBeInTheDocument();
     expect(within(dialog.getByRole('row', { name: /^Tue, Oct 13/ })).getByText('0 of 12')).toBeInTheDocument();
+  });
+
+  it("lists each hour of the viewer's day, so a busy hour stands out from the period's p95", async () => {
+    const { dialog } = await openAcme();
+
+    expect(
+      await dialog.findByText(/Hours in America\/New_York, by the hour each session joined the queue/),
+    ).toBeInTheDocument();
+    const ten = within(dialog.getByRole('row', { name: /^10:00–11:00/ }));
+    expect(ten.getByText('41 of 95')).toBeInTheDocument();
+    expect(ten.getByText('45 min')).toBeInTheDocument();
+    expect(within(dialog.getByRole('row', { name: /^03:00–04:00/ })).getByText('no sessions')).toBeInTheDocument();
   });
 
   it('closes on Escape and hands focus back to the company it was opened from', async () => {

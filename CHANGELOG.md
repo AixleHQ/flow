@@ -14,6 +14,9 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Admin**: a company's queue breakdown on the dashboard shows its waits by
+  hour of the day, in your own time zone: for each hour, how many of the
+  sessions that joined the queue then waited, and their p95.
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
   model is chosen (a level needs an explicit runtime and model), offers only the

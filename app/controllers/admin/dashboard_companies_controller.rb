@@ -19,7 +19,8 @@ module Admin
       from, to = days
       return head :bad_request if to < from
 
-      render json: camelized(Usage::CompanyBreakdown.new(company, from: from, to: to).to_h)
+      breakdown = Usage::CompanyBreakdown.new(company, from: from, to: to, time_zone: params[:time_zone])
+      render json: camelized(breakdown.to_h)
     end
 
     private

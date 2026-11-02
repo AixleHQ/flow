@@ -542,26 +542,26 @@
   font-weight: 500;
 }
 
-/* ── Waits by day ────────────────────────────────── */
+/* ── Waits by day and by hour ─────────────────────── */
 
 .root .table .waitedColumn {
   width: 60%;
 }
 
-.root .dayBar {
+.root .waitBar {
   display: flex;
   align-items: center;
   gap: 10px;
   font-variant-numeric: tabular-nums;
 }
 
-.root .dayTrack {
+.root .waitTrack {
   flex: 1;
   max-width: 420px;
   height: 10px;
 }
 
-.root .dayFill {
+.root .waitFill {
   display: block;
   min-width: 2px;
   height: 100%;
