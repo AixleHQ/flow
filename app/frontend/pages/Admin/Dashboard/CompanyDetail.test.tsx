@@ -19,9 +19,13 @@ const data: DashboardData = {
 
 const BREAKDOWN = 'GET /admin/dashboard/companies/:id.json';
 
-async function openAcme(answer: CompanyBreakdown | Response = buildCompanyBreakdown()) {
-  const fetchSpy = answerFetch({ [BREAKDOWN]: answer, 'GET /admin/dashboard/waits.json': [] });
-  render(<Dashboard data={data} now={now} />);
+async function openAcme(answer: CompanyBreakdown | Response = buildCompanyBreakdown(), dayHours: unknown = {}) {
+  const fetchSpy = answerFetch({
+    [BREAKDOWN]: answer,
+    'GET /admin/dashboard/companies/:id/hours.json': dayHours,
+    'GET /admin/dashboard/waits.json': [],
+  });
+  render(<Dashboard data={data} now={now} timeZone="America/New_York" />);
   await userEvent.click(screen.getByRole('button', { name: 'Acme' }));
   const dialog = within(screen.getByRole('dialog', { name: 'Acme' }));
   return { dialog, fetchSpy };
@@ -34,7 +38,7 @@ describe('CompanyDetail', () => {
     const { dialog, fetchSpy } = await openAcme();
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/admin/dashboard/companies/1.json?from=2026-10-01&to=2026-10-31',
+      '/admin/dashboard/companies/1.json?from=2026-10-01&to=2026-10-31&time_zone=America%2FNew_York',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
     expect(dialog.getByText(/Oct 1 – Oct 31, 2026 · UTC/)).toBeInTheDocument();
@@ -87,6 +91,43 @@ describe('CompanyDetail', () => {
     expect(busy.getByText('51 of 230')).toBeInTheDocument();
     expect(busy.getByText('2h 1m')).toBeInTheDocument();
     expect(within(dialog.getByRole('row', { name: /^Tue, Oct 13/ })).getByText('0 of 12')).toBeInTheDocument();
+  });
+
+  it("lists each hour of the viewer's day, so a busy hour stands out from the period's p95", async () => {
+    const { dialog } = await openAcme();
+
+    expect(
+      await dialog.findByText(/Hours in America\/New_York, by the hour each session joined the queue/),
+    ).toBeInTheDocument();
+    const ten = within(dialog.getByRole('row', { name: /^10:00–11:00/ }));
+    expect(ten.getByText('41 of 95')).toBeInTheDocument();
+    expect(ten.getByText('45 min')).toBeInTheDocument();
+    expect(within(dialog.getByRole('row', { name: /^03:00–04:00/ })).getByText('no sessions')).toBeInTheDocument();
+  });
+
+  it('opens a day into its own hours, and goes back to every day', async () => {
+    const dayHours = {
+      day: '2026-10-14',
+      hours: Array.from({ length: 24 }, (_, hour) =>
+        hour === 10 ? { hour, sessions: 20, waited: 15, p95: 3_600 } : { hour, sessions: 0, waited: 0, p95: null },
+      ),
+    };
+    const { dialog, fetchSpy } = await openAcme(buildCompanyBreakdown(), dayHours);
+
+    await userEvent.click(await dialog.findByRole('button', { name: 'Wed, Oct 14' }));
+
+    expect(await dialog.findByRole('heading', { name: 'Waits by hour of Wed, Oct 14' })).toBeInTheDocument();
+    expect(await within(dialog.getByRole('row', { name: /^10:00–11:00/ })).findByText('15 of 20')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Wed, Oct 14' })).toHaveAttribute('aria-pressed', 'true');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/admin/dashboard/companies/1/hours.json?from=2026-10-01&to=2026-10-31&day=2026-10-14&time_zone=America%2FNew_York',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+
+    await userEvent.click(dialog.getByRole('button', { name: 'All days' }));
+
+    expect(dialog.getByRole('heading', { name: 'Waits by hour of the day' })).toBeInTheDocument();
+    expect(within(dialog.getByRole('row', { name: /^10:00–11:00/ })).getByText('41 of 95')).toBeInTheDocument();
   });
 
   it('closes on Escape and hands focus back to the company it was opened from', async () => {

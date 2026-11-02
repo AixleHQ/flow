@@ -96,9 +96,14 @@ function sortValue(row: TenantSummary, key: SortKey): number | string {
 interface Props {
   data: DashboardData;
   now?: Date;
+  timeZone?: string;
 }
 
-export default function Dashboard({ data, now = new Date() }: Props) {
+export default function Dashboard({
+  data,
+  now = new Date(),
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+}: Props) {
   const today = todayOf(now);
   const [grain, setGrain] = useState<Grain>('month');
   const [chosenPeriod, setChosenPeriod] = useState<string | null>(null);
@@ -468,6 +473,7 @@ export default function Dashboard({ data, now = new Date() }: Props) {
           tenant={opened}
           range={view.range}
           span={spanOf(view.range)}
+          timeZone={timeZone}
           onClose={closeDetail}
         />
       )}

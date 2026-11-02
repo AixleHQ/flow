@@ -3,10 +3,18 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { DayRange, TenantSummary } from './aggregate';
 import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatPercent, formatWait, formatWorkers } from './format';
-import type { CompanyBreakdown, WaitStats } from './types';
-import WaitDays from './WaitDays';
+import type { CompanyBreakdown, WaitHour, WaitStats } from './types';
+import { useDayHours } from './useDayHours';
+import WaitTable, { type WaitRow } from './WaitTable';
 
 const tenths = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const dayLabel = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+const clock = (hour: number) => `${String(hour % 24).padStart(2, '0')}:00`;
 
 const FOCUSABLE = 'a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
@@ -17,6 +25,8 @@ interface Props {
   range: DayRange;
   /** The period as the dashboard names it, e.g. "Oct 1 – Oct 30, 2026". */
   span: string;
+  /** The viewer's IANA time zone, for the hours of the day. */
+  timeZone: string;
   onClose: () => void;
 }
 
@@ -94,8 +104,21 @@ function Capacity({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Com
   );
 }
 
-function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: CompanyBreakdown }) {
-  const { waits, runs, projects, days } = breakdown;
+const labelOfDay = (day: string) => dayLabel.format(new Date(`${day}T00:00:00Z`));
+
+const hourRows = (hours: WaitHour[]): WaitRow[] =>
+  hours.map((row) => ({ ...row, key: String(row.hour), label: `${clock(row.hour)}–${clock(row.hour + 1)}` }));
+
+interface BreakdownProps {
+  tenant: TenantSummary;
+  range: DayRange;
+  breakdown: CompanyBreakdown;
+}
+
+function Breakdown({ tenant, range, breakdown }: BreakdownProps) {
+  const { waits, runs, projects, days, timeZone } = breakdown;
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const dayHours = useDayHours({ companyId: tenant.tenantId, range, timeZone }, openDay);
 
   return (
     <>
@@ -135,7 +158,52 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
         <h3 id="detail-days" className={classes.detailTitle}>
           Waits by day
         </h3>
-        <WaitDays days={days} />
+        {days.length ? (
+          <>
+            <p className={classes.sectionNote}>
+              Days in {timeZone}, by the day each session joined the queue. Open a day to see its hours below.
+            </p>
+            <WaitTable
+              heading="Day"
+              rows={days.map((row) => ({ ...row, key: row.day, label: labelOfDay(row.day) }))}
+              selected={openDay}
+              onSelect={(day) => setOpenDay((was) => (was === day ? null : day))}
+            />
+          </>
+        ) : (
+          <p className={classes.sectionNote}>No session of this company started in this period.</p>
+        )}
+      </section>
+
+      <section className={classes.detailSection} aria-labelledby="detail-hours">
+        <h3 id="detail-hours" className={classes.detailTitle}>
+          {openDay ? `Waits by hour of ${labelOfDay(openDay)}` : 'Waits by hour of the day'}
+        </h3>
+        {waits.sessions ? (
+          <>
+            <p className={classes.sectionNote}>
+              {openDay
+                ? `Hours of ${labelOfDay(openDay)} in ${timeZone}, by the hour each session joined the queue. `
+                : `Hours in ${timeZone}, by the hour each session joined the queue, over every day of the period.`}
+              {openDay && (
+                <button type="button" className={classes.linkButton} onClick={() => setOpenDay(null)}>
+                  All days
+                </button>
+              )}
+            </p>
+            {dayHours?.status === 'loading' && <p className={classes.sectionNote}>Reading the day&apos;s hours…</p>}
+            {dayHours?.status === 'failed' && (
+              <p className={classes.sectionNote} role="alert">
+                The day&apos;s hours could not be loaded; reload the page to try again.
+              </p>
+            )}
+            {(!dayHours || dayHours.status === 'ready') && (
+              <WaitTable heading="Hour" rows={hourRows(dayHours?.hours ?? breakdown.hours)} />
+            )}
+          </>
+        ) : (
+          <p className={classes.sectionNote}>No session of this company started in this period.</p>
+        )}
       </section>
 
       <section className={classes.detailSection} aria-labelledby="detail-runs">
@@ -216,7 +284,7 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
 }
 
 /** One company over the dashboard's selected days, read from its admissions when opened. */
-export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
+export default function CompanyDetail({ tenant, range, span, timeZone, onClose }: Props) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -225,7 +293,7 @@ export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const query = new URLSearchParams({ from: range.start, to: range.end });
+    const query = new URLSearchParams({ from: range.start, to: range.end, time_zone: timeZone });
     fetch(`/admin/dashboard/companies/${tenant.tenantId}.json?${query}`, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
@@ -239,7 +307,7 @@ export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
         if (!controller.signal.aborted) setState({ status: 'failed' });
       });
     return () => controller.abort();
-  }, [tenant.tenantId, range.start, range.end]);
+  }, [tenant.tenantId, range.start, range.end, timeZone]);
 
   // Without Mantine on this page the dialog keeps focus itself: it takes it on
   // open, holds Tab inside, closes on Escape, and hands focus back on close.
@@ -304,7 +372,7 @@ export default function CompanyDetail({ tenant, range, span, onClose }: Props) {
               The breakdown could not be loaded. Close this and open the company again.
             </p>
           )}
-          {state.status === 'ready' && <Breakdown tenant={tenant} breakdown={state.breakdown} />}
+          {state.status === 'ready' && <Breakdown tenant={tenant} range={range} breakdown={state.breakdown} />}
         </div>
       </div>
     </div>

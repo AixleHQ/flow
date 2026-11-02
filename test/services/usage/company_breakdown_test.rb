@@ -20,7 +20,9 @@ class Usage::CompanyBreakdownTest < ActiveSupport::TestCase
                              created_at: created, admitted_at: admitted, released_at: released)
   end
 
-  def breakdown(from: @day, to: @day) = Usage::CompanyBreakdown.new(@company, from: from, to: to).to_h
+  def breakdown(from: @day, to: @day, time_zone: "UTC")
+    Usage::CompanyBreakdown.new(@company, from: from, to: to, time_zone: time_zone).to_h
+  end
 
   def hour_row(hour, **attributes)
     CompanyUsageHour.create!(company: @company, period_start: hour, billing_class: "paying",
@@ -125,6 +127,44 @@ class Usage::CompanyBreakdownTest < ActiveSupport::TestCase
     assert_equal [ "2026-10-14", "2026-10-15" ], days.pluck(:day)
     assert_equal [ 2, 1, 570 ], days.first.values_at(:sessions, :waited, :p95)
     assert_equal [ 1, 0 ], days.last.values_at(:sessions, :waited)
+  end
+
+  test "each hour of the viewer's day shows the waits of the sessions that joined the queue in it" do
+    admission(@alpha, created: @hour + 4.hours + 10.minutes, admitted: @hour + 4.hours + 55.minutes)
+    # Joins at 10:50 New York time and starts at 11:35: it counts for ten o'clock.
+    admission(@alpha, created: @hour + 4.hours + 50.minutes, admitted: @hour + 5.hours + 35.minutes)
+    admission(@alpha, created: @hour + 8.hours, admitted: @hour + 8.hours)
+
+    result = breakdown(time_zone: "America/New_York")
+    hours = result[:hours].index_by { |row| row[:hour] }
+
+    assert_equal "America/New_York", result[:time_zone]
+    assert_equal 24, result[:hours].size
+    assert_equal [ 2, 2 ], hours[10].values_at(:sessions, :waited)
+    assert_equal [ 0, nil ], hours[11].values_at(:sessions, :p95)
+    assert_equal [ 1, 0 ], hours[14].values_at(:sessions, :waited)
+  end
+
+  test "a day is the viewer's, the one a session joined the queue on, and opens into its own hours" do
+    # 02:30 UTC on the 15th is 22:30 on the 14th in New York.
+    admission(@alpha, created: Time.utc(2026, 10, 15, 2, 30), admitted: Time.utc(2026, 10, 15, 3))
+    admission(@alpha, created: Time.utc(2026, 10, 15, 14), admitted: Time.utc(2026, 10, 15, 14))
+    breakdown = Usage::CompanyBreakdown.new(@company, from: @day + 1, to: @day + 1, time_zone: "America/New_York")
+
+    assert_equal [ "2026-10-14", "2026-10-15" ], breakdown.to_h[:days].pluck(:day)
+    hours = breakdown.hours_of(Date.new(2026, 10, 14)).index_by { |row| row[:hour] }
+    assert_equal 24, hours.size
+    assert_equal [ 1, 1 ], hours[22].values_at(:sessions, :waited)
+    assert_equal 0, hours[10][:sessions], "the session of the 15th is not in the 14th's hours"
+  end
+
+  test "a time zone Postgres does not know reads as UTC" do
+    admission(@alpha, created: @hour, admitted: @hour)
+
+    result = breakdown(time_zone: "Mars/Olympus_Mons")
+
+    assert_equal "UTC", result[:time_zone]
+    assert_equal 1, result[:hours].find { |row| row[:hour] == 10 }[:sessions]
   end
 
   test "a range with nothing in it reads as empty rather than failing" do
