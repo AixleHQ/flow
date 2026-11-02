@@ -3,8 +3,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { DayRange, TenantSummary } from './aggregate';
 import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatPercent, formatWait, formatWorkers } from './format';
-import type { CompanyBreakdown, WaitStats } from './types';
-import WaitTable from './WaitTable';
+import type { CompanyBreakdown, WaitHour, WaitStats } from './types';
+import { useDayHours } from './useDayHours';
+import WaitTable, { type WaitRow } from './WaitTable';
 
 const tenths = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const dayLabel = new Intl.DateTimeFormat('en-US', {
@@ -103,8 +104,21 @@ function Capacity({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Com
   );
 }
 
-function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: CompanyBreakdown }) {
-  const { waits, runs, projects, days } = breakdown;
+const labelOfDay = (day: string) => dayLabel.format(new Date(`${day}T00:00:00Z`));
+
+const hourRows = (hours: WaitHour[]): WaitRow[] =>
+  hours.map((row) => ({ ...row, key: String(row.hour), label: `${clock(row.hour)}–${clock(row.hour + 1)}` }));
+
+interface BreakdownProps {
+  tenant: TenantSummary;
+  range: DayRange;
+  breakdown: CompanyBreakdown;
+}
+
+function Breakdown({ tenant, range, breakdown }: BreakdownProps) {
+  const { waits, runs, projects, days, timeZone } = breakdown;
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const dayHours = useDayHours({ companyId: tenant.tenantId, range, timeZone }, openDay);
 
   return (
     <>
@@ -145,14 +159,17 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
           Waits by day
         </h3>
         {days.length ? (
-          <WaitTable
-            heading="Day (UTC)"
-            rows={days.map((row) => ({
-              ...row,
-              key: row.day,
-              label: dayLabel.format(new Date(`${row.day}T00:00:00Z`)),
-            }))}
-          />
+          <>
+            <p className={classes.sectionNote}>
+              Days in {timeZone}, by the day each session joined the queue. Open a day to see its hours below.
+            </p>
+            <WaitTable
+              heading="Day"
+              rows={days.map((row) => ({ ...row, key: row.day, label: labelOfDay(row.day) }))}
+              selected={openDay}
+              onSelect={(day) => setOpenDay((was) => (was === day ? null : day))}
+            />
+          </>
         ) : (
           <p className={classes.sectionNote}>No session of this company started in this period.</p>
         )}
@@ -160,21 +177,29 @@ function Breakdown({ tenant, breakdown }: { tenant: TenantSummary; breakdown: Co
 
       <section className={classes.detailSection} aria-labelledby="detail-hours">
         <h3 id="detail-hours" className={classes.detailTitle}>
-          Waits by hour of the day
+          {openDay ? `Waits by hour of ${labelOfDay(openDay)}` : 'Waits by hour of the day'}
         </h3>
         {waits.sessions ? (
           <>
             <p className={classes.sectionNote}>
-              Hours in {breakdown.timeZone}, by the hour each session joined the queue, over every day of the period.
+              {openDay
+                ? `Hours of ${labelOfDay(openDay)} in ${timeZone}, by the hour each session joined the queue. `
+                : `Hours in ${timeZone}, by the hour each session joined the queue, over every day of the period.`}
+              {openDay && (
+                <button type="button" className={classes.linkButton} onClick={() => setOpenDay(null)}>
+                  All days
+                </button>
+              )}
             </p>
-            <WaitTable
-              heading="Hour"
-              rows={breakdown.hours.map((row) => ({
-                ...row,
-                key: String(row.hour),
-                label: `${clock(row.hour)}–${clock(row.hour + 1)}`,
-              }))}
-            />
+            {dayHours?.status === 'loading' && <p className={classes.sectionNote}>Reading the day&apos;s hours…</p>}
+            {dayHours?.status === 'failed' && (
+              <p className={classes.sectionNote} role="alert">
+                The day&apos;s hours could not be loaded; reload the page to try again.
+              </p>
+            )}
+            {(!dayHours || dayHours.status === 'ready') && (
+              <WaitTable heading="Hour" rows={hourRows(dayHours?.hours ?? breakdown.hours)} />
+            )}
           </>
         ) : (
           <p className={classes.sectionNote}>No session of this company started in this period.</p>
@@ -347,7 +372,7 @@ export default function CompanyDetail({ tenant, range, span, timeZone, onClose }
               The breakdown could not be loaded. Close this and open the company again.
             </p>
           )}
-          {state.status === 'ready' && <Breakdown tenant={tenant} breakdown={state.breakdown} />}
+          {state.status === 'ready' && <Breakdown tenant={tenant} range={range} breakdown={state.breakdown} />}
         </div>
       </div>
     </div>

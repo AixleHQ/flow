@@ -15,8 +15,10 @@ module Usage
 
     NO_WAITS = { sessions: 0, waited: 0, p95: nil }.freeze
 
-    # `time_zone` is the viewer's, for the hours of the day; days stay UTC like
-    # the rest of the dashboard. A name Postgres does not know reads as UTC.
+    # `time_zone` is the viewer's, for the days and hours a session joined the
+    # queue in; the range itself is UTC days, like the rest of the dashboard, so
+    # a day at either end can hold only part of itself. A name Postgres does not
+    # know reads as UTC.
     def initialize(company, from:, to:, time_zone: "UTC")
       @company = company
       @from = from.to_time(:utc)
@@ -37,8 +39,17 @@ module Usage
         projects: projects(sessions.fetch(:projects, {})),
         days: sessions.fetch(:days, {}).sort.map { |day, waits| { day: day, **waits.slice(:sessions, :waited, :p95) } },
         time_zone: @time_zone,
-        hours: (0..23).map { |hour| { hour: hour, **by_hour.fetch(hour, NO_WAITS).slice(:sessions, :waited, :p95) } }
+        hours: hours_from(by_hour)
       }
+    end
+
+    # The hours of one of the viewer's days, for when that day is opened.
+    def hours_of(day)
+      rows = select_all(<<~SQL, day: day)
+        #{measured_sql}
+        SELECT hour, #{wait_aggregates} FROM measured WHERE day = :day GROUP BY hour
+      SQL
+      hours_from(rows.to_h { |row| [ row["hour"].to_i, waits_of(row) ] })
     end
 
     private
@@ -52,7 +63,13 @@ module Usage
       ActiveRecord::Base.connection.select_value(sql) ? name : "UTC"
     end
 
-    def select_all(sql) = ActiveRecord::Base.connection.select_all(ActiveRecord::Base.sanitize_sql_array([ sql, binds ]))
+    def select_all(sql, **extra)
+      ActiveRecord::Base.connection.select_all(ActiveRecord::Base.sanitize_sql_array([ sql, binds.merge(extra) ]))
+    end
+
+    def hours_from(by_hour)
+      (0..23).map { |hour| { hour: hour, **by_hour.fetch(hour, NO_WAITS).slice(:sessions, :waited, :p95) } }
+    end
 
     # Every session admitted in the range, with how long it waited and how many
     # of the company's sessions — and of its project's — were already waiting
@@ -91,7 +108,8 @@ module Usage
           FROM events
         ),
         measured AS (
-          SELECT a.session_id, a.project_id, a.admitted_at::date AS day,
+          SELECT a.session_id, a.project_id,
+                 ((a.created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone)::date AS day,
                  EXTRACT(HOUR FROM (a.created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone)::int AS hour,
                  EXTRACT(EPOCH FROM a.admitted_at - a.created_at) AS wait_seconds,
                  q.in_company, q.in_project
@@ -113,10 +131,10 @@ module Usage
       SQL
     end
 
-    # Overall, per project, per day and per hour of the day, in one pass. A day
-    # is the one the session was admitted on, like the table's; an hour is the
-    # one it joined the queue in, because that is what a person asks of it: how
-    # long does a session started at ten wait.
+    # Overall, per project, per day and per hour of the day, in one pass. Days
+    # and hours are the ones a session joined the queue in, because that is what
+    # a person asks of them — how long does a session started at ten wait — and
+    # because a day opened into its hours must hold exactly those hours.
     def session_groups
       rows = select_all(<<~SQL)
         #{measured_sql}

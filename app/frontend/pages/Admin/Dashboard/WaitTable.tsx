@@ -9,8 +9,16 @@ export interface WaitRow {
   p95: number | null;
 }
 
+interface Props {
+  heading: string;
+  rows: WaitRow[];
+  /** Makes each row's label a toggle; `selected` is the key of the row pressed. */
+  onSelect?: (key: string) => void;
+  selected?: string | null;
+}
+
 /** One row per day or hour: how many of its sessions waited, as a bar, and its p95 wait. */
-export default function WaitTable({ heading, rows }: { heading: string; rows: WaitRow[] }) {
+export default function WaitTable({ heading, rows, onSelect, selected = null }: Props) {
   const most = Math.max(1, ...rows.map((row) => row.waited));
 
   return (
@@ -29,8 +37,21 @@ export default function WaitTable({ heading, rows }: { heading: string; rows: Wa
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.key}>
-              <th scope="row">{row.label}</th>
+            <tr key={row.key} className={row.key === selected ? classes.selectedRow : undefined}>
+              <th scope="row">
+                {onSelect ? (
+                  <button
+                    type="button"
+                    className={classes.rowButton}
+                    aria-pressed={row.key === selected}
+                    onClick={() => onSelect(row.key)}
+                  >
+                    {row.label}
+                  </button>
+                ) : (
+                  row.label
+                )}
+              </th>
               <td>
                 <span className={classes.waitBar}>
                   <span className={classes.waitTrack} aria-hidden="true">

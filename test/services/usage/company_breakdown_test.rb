@@ -145,6 +145,19 @@ class Usage::CompanyBreakdownTest < ActiveSupport::TestCase
     assert_equal [ 1, 0 ], hours[14].values_at(:sessions, :waited)
   end
 
+  test "a day is the viewer's, the one a session joined the queue on, and opens into its own hours" do
+    # 02:30 UTC on the 15th is 22:30 on the 14th in New York.
+    admission(@alpha, created: Time.utc(2026, 10, 15, 2, 30), admitted: Time.utc(2026, 10, 15, 3))
+    admission(@alpha, created: Time.utc(2026, 10, 15, 14), admitted: Time.utc(2026, 10, 15, 14))
+    breakdown = Usage::CompanyBreakdown.new(@company, from: @day + 1, to: @day + 1, time_zone: "America/New_York")
+
+    assert_equal [ "2026-10-14", "2026-10-15" ], breakdown.to_h[:days].pluck(:day)
+    hours = breakdown.hours_of(Date.new(2026, 10, 14)).index_by { |row| row[:hour] }
+    assert_equal 24, hours.size
+    assert_equal [ 1, 1 ], hours[22].values_at(:sessions, :waited)
+    assert_equal 0, hours[10][:sessions], "the session of the 15th is not in the 14th's hours"
+  end
+
   test "a time zone Postgres does not know reads as UTC" do
     admission(@alpha, created: @hour, admitted: @hour)
 

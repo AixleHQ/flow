@@ -9,6 +9,16 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
                                                                 password: AuthHelper::TEST_PASSWORD)
   end
 
+  def admit_one_session_that_waited_five_minutes
+    owner = create(:user, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    pool = SessionAdmissionPool.create!(key: "project:#{project.id}", limit: 4, policy_revision: 1)
+    SessionAdmission.create!(terminal_session: create(:terminal_session, :agent_session, project: project, user: owner),
+                             session_admission_pool: pool, created_at: Time.utc(2026, 10, 14, 9),
+                             admitted_at: Time.utc(2026, 10, 14, 9, 5))
+    project
+  end
+
   def report_in(body)
     JSON.parse(Nokogiri::HTML(body).at_css("#admin-dashboard")["data-report"])
   end
@@ -47,12 +57,7 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
   end
 
   test "a company opened from the dashboard carries its queue over the chosen days" do
-    owner = create(:user, company: @company)
-    project = create(:project, company: @company, owner: owner)
-    pool = SessionAdmissionPool.create!(key: "project:#{project.id}", limit: 4, policy_revision: 1)
-    SessionAdmission.create!(terminal_session: create(:terminal_session, :agent_session, project: project, user: owner),
-                             session_admission_pool: pool, created_at: Time.utc(2026, 10, 14, 9),
-                             admitted_at: Time.utc(2026, 10, 14, 9, 5))
+    project = admit_one_session_that_waited_five_minutes
     sign_in_as(@admin)
 
     get admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", time_zone: "Europe/Berlin",
@@ -69,12 +74,7 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
   end
 
   test "the table reads every company's p95 wait for the chosen days" do
-    owner = create(:user, company: @company)
-    project = create(:project, company: @company, owner: owner)
-    pool = SessionAdmissionPool.create!(key: "project:#{project.id}", limit: 4, policy_revision: 1)
-    SessionAdmission.create!(terminal_session: create(:terminal_session, :agent_session, project: project, user: owner),
-                             session_admission_pool: pool, created_at: Time.utc(2026, 10, 14, 9),
-                             admitted_at: Time.utc(2026, 10, 14, 9, 5))
+    admit_one_session_that_waited_five_minutes
     sign_in_as(@admin)
 
     get waits_admin_dashboard_path(from: "2026-10-01", to: "2026-10-31", format: :json)
@@ -83,6 +83,21 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
     assert_equal [ { "companyId" => @company.id, "p95" => 300 } ], response.parsed_body
 
     get waits_admin_dashboard_path(from: "2026-10-31", to: "2026-10-01", format: :json)
+    assert_response :bad_request
+  end
+
+  test "a day of a company's breakdown opens into its hours" do
+    admit_one_session_that_waited_five_minutes
+    sign_in_as(@admin)
+
+    get hours_admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", day: "2026-10-14",
+                                                     time_zone: "Europe/Berlin", format: :json)
+
+    assert_response :success
+    assert_equal "2026-10-14", response.parsed_body["day"]
+    assert_equal({ "hour" => 11, "sessions" => 1, "waited" => 1, "p95" => 300 }, response.parsed_body["hours"][11])
+
+    get hours_admin_dashboard_company_path(@company, from: "2026-10-01", to: "2026-10-31", day: "soon", format: :json)
     assert_response :bad_request
   end
 

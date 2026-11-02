@@ -395,7 +395,9 @@ namespace :admin do
   resource :session_admission, only: %i[show]
   resource :dashboard, only: %i[show] do
     get :waits, to: "dashboard_companies#waits"
-    resources :companies, only: %i[show], controller: "dashboard_companies"
+    resources :companies, only: %i[show], controller: "dashboard_companies" do
+      get :hours, on: :member
+    end
   end
 end
 
