@@ -19,6 +19,14 @@ its text last changed. Each acceptance is a `LegalAcceptance` row naming the doc
 version, the user, the company (Terms of Service only), the time, the IP address and the
 browser user agent. Rows are never updated.
 
+A row is evidence that outlives what it names. It carries the user's email and the
+company's name and email domain in its own columns, and deleting the user or the company
+nullifies the reference but keeps the row.
+
+The time, IP address and user agent are those of the request that ticked the box. For a
+stranger's signup that is the form they sent, not the link they open later: the evidence
+travels in the emailed link (`WorkspaceSignupTicket`), which is encrypted for that reason.
+
 `Web::ApplicationController#enforce_legal_acceptance` runs after the company's auth policy
 and before onboarding. While the signed-in user has not accepted the current Terms of Use,
 or is an admin of a company that has not accepted the current Terms of Service, every web

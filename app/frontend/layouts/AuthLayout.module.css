@@ -47,14 +47,21 @@
 
 .footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 16px 0;
+  gap: 8px 24px;
+  padding: 16px;
   /* Was opacity: 0.5 over an already-dimmed token, which landed at 2.16:1 in
      light and 2.60:1 in dark on every page. The mark itself keeps the opacity;
      the text uses a real token. */
   color: var(--app-text-tertiary);
+}
+
+.poweredBy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .footer svg {

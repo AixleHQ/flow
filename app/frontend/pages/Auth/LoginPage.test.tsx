@@ -18,6 +18,12 @@ const stepTwo = (methods = ['password'], over = {}) => ({
 });
 
 describe('LoginPage', () => {
+  it('links the legal documents where they are published', () => {
+    renderPage(<LoginPage />, { props: { settings: { legalPages: true } } });
+
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/legal/terms_of_service');
+  });
+
   describe('step one — the address', () => {
     it('asks for an address and nothing else', () => {
       renderPage(<LoginPage />);

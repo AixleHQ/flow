@@ -28,6 +28,8 @@ export interface SharedSettings {
   sentryTracesSampleRate?: number;
   /** Optional: a page served by an older pod does not send it. */
   selfServeSignup?: boolean;
+  /** Whether /legal publishes anything here: where we host only. Optional: a page served by an older pod does not send it. */
+  legalPages?: boolean;
   feedbackEnabled?: boolean;
 }
 

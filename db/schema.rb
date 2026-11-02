@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -936,6 +936,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
     t.string "user_agent"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "user_email"
+    t.string "company_name"
+    t.string "company_email_domain"
     t.index ["company_id", "document", "version"], name: "index_legal_acceptances_on_company_id_and_document_and_version"
     t.index ["user_id", "document", "version"], name: "index_legal_acceptances_on_user_id_and_document_and_version"
   end
@@ -2347,7 +2350,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
-  add_foreign_key "legal_acceptances", "companies", on_delete: :cascade
+  add_foreign_key "legal_acceptances", "companies", on_delete: :nullify
   add_foreign_key "legal_acceptances", "users", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
