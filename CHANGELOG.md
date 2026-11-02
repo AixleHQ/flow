@@ -18,6 +18,12 @@ governance, community health — carry none.
   hour of the day, in your own time zone: for each hour, how many of the
   sessions that joined the queue then waited, and their p95. Its days are in
   your time zone too, and opening a day shows that day's hours.
+- **Sign-in & onboarding**: the hosted product publishes its Terms of Service,
+  Terms of Use and Privacy Policy at `/legal`. Everyone accepts the Terms of Use
+  the first time they sign in, and whoever creates a workspace accepts the Terms
+  of Service for their company on the signup form; a company that has not
+  accepted them asks its next admin to. Publishing a new version of either asks
+  again. Self-hosted and AWS Marketplace installations neither publish nor ask.
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
   model is chosen (a level needs an explicit runtime and model), offers only the
@@ -26,6 +32,10 @@ governance, community health — carry none.
   `create_workflow_step` and `update_workflow_step` tools accept
   `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
   them.
+
+### Changed
+- **Sign-in & onboarding**: `/privacy-policy` and `/terms-of-service` redirect to
+  `/legal/privacy_policy` and `/legal/terms_of_service`.
 
 ### Fixed
 - **Templates**: exporting a project whose hand-added connector launches an

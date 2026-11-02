@@ -19,8 +19,11 @@ class WorkspaceSignupTicket
   TTL = 24.hours
 
   class << self
-    def issue(name:, email:, marketplace_license_id: nil)
+    def issue(name:, email:, marketplace_license_id: nil, accept_terms: false)
       answers = { "name" => name, "email" => email }
+      # The versions the box was ticked for: a link opened after they changed
+      # carries no acceptance, and the form asks again.
+      answers["accepted_terms"] = LegalDocument.fingerprint if accept_terms
       # Only when there is one, so an ordinary signup's ticket keeps the shape it
       # had. The link may be opened in another browser, where the session that
       # held the licence does not exist.
@@ -35,7 +38,9 @@ class WorkspaceSignupTicket
       payload = verifier.verified(token.to_s)
       return nil unless payload.is_a?(Hash)
 
-      payload.symbolize_keys.slice(:name, :email, :marketplace_license_id)
+      answers = payload.symbolize_keys
+      answers.slice(:name, :email, :marketplace_license_id)
+             .merge(accept_terms: answers[:accepted_terms].present? && answers[:accepted_terms] == LegalDocument.fingerprint)
     end
 
     private

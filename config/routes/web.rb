@@ -454,8 +454,16 @@ scope module: :web, defaults: { format: :html } do
     post "invitations/:token/signup", to: "invitations#signup", as: :signup_invitation
   end
 
-  get "privacy-policy", to: "pages#privacy_policy", as: :privacy_policy
-  get "terms-of-service", to: "pages#terms_of_service", as: :terms_of_service
+  scope "legal", controller: "legal", as: "legal" do
+    get "/", action: :index
+    get "privacy_policy", action: :privacy_policy
+    get "terms_of_service", action: :terms_of_service
+    get "terms_of_use", action: :terms_of_use
+  end
+  resource :legal_acceptance, only: %i[show create], path: "legal/accept"
+  # Where the documents lived before /legal, still linked from outside.
+  get "privacy-policy", to: redirect("/legal/privacy_policy")
+  get "terms-of-service", to: redirect("/legal/terms_of_service")
 
   resource :profile, only: %i[show update], controller: "profile" do
     get :usage, on: :member

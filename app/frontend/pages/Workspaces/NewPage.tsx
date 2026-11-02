@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Alert, Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Anchor, Button, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 import { useState } from 'react';
 
@@ -31,6 +31,8 @@ interface PageProps {
   marketplaceSubscription: boolean;
   /** How far the buyer's request to have it applied has got, if they made one. */
   subscriptionRequest: RequestState;
+  /** Where the terms the creator accepts live. Null where nothing has to be accepted. */
+  terms?: LegalTerms | null;
   /**
    * Server-side refusals. The keys arrive camelCased — the Inertia
    * prop_transformer runs over every prop, errors included — while the form's
@@ -41,6 +43,18 @@ interface PageProps {
   errors?: Record<string, Refusal>;
   [key: string]: unknown;
 }
+
+interface LegalTerms {
+  termsOfServiceUrl: string;
+  termsOfUseUrl: string;
+  privacyPolicyUrl: string;
+}
+
+const NewTab = ({ href, children }: { href: string; children: React.ReactNode }) => (
+  <Anchor href={href} target="_blank" rel="noopener noreferrer" inherit>
+    {children}
+  </Anchor>
+);
 
 const POINTS = [
   {
@@ -307,6 +321,7 @@ const NewWorkspacePage = () => {
     claimedDomain,
     marketplaceSubscription,
     subscriptionRequest,
+    terms,
     errors = {},
   } = usePage<PageProps>().props;
 
@@ -322,6 +337,7 @@ const NewWorkspacePage = () => {
   const form = useForm({
     name: suggestedName ?? nameFromEmail(suggestedEmail),
     email: suggestedEmail ?? '',
+    accept_terms: false,
   });
 
   const submit = (event: React.FormEvent) => {
@@ -339,7 +355,10 @@ const NewWorkspacePage = () => {
 
   // A refusal for a field this page does not draw — the address of someone
   // signed in — would otherwise vanish, and the form would just sit there.
-  const drawnFields = needsEmail ? ['name', 'email', 'emailDomain'] : ['name'];
+  const drawnFields = [
+    ...(needsEmail ? ['name', 'email', 'emailDomain'] : ['name']),
+    ...(terms ? ['acceptTerms'] : []),
+  ];
   const undrawn = Object.entries(errors)
     .filter(([key]) => !drawnFields.includes(key))
     .flatMap(([, refusal]) => refusal);
@@ -444,6 +463,27 @@ const NewWorkspacePage = () => {
                     value={form.data.email}
                     onChange={(event) => form.setData('email', event.currentTarget.value)}
                     error={joined(errors.email, errors.emailDomain)}
+                  />
+                )}
+                {terms && (
+                  <Checkbox
+                    required
+                    checked={form.data.accept_terms}
+                    onChange={(event) => form.setData('accept_terms', event.currentTarget.checked)}
+                    error={joined(errors.acceptTerms)}
+                    label={
+                      <>
+                        I am authorized to bind this organization and accept the{' '}
+                        <NewTab href={terms.termsOfServiceUrl}>Terms of Service</NewTab> on its behalf, and I accept the{' '}
+                        <NewTab href={terms.termsOfUseUrl}>Terms of Use</NewTab>.
+                      </>
+                    }
+                    description={
+                      <>
+                        Our <NewTab href={terms.privacyPolicyUrl}>Privacy Policy</NewTab> describes how we handle your
+                        information.
+                      </>
+                    }
                   />
                 )}
                 <Button

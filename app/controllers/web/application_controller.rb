@@ -16,6 +16,9 @@ class Web::ApplicationController < ApplicationController
   # effective auth set. Runs before onboarding — entering the company at all is
   # the more fundamental question.
   before_action :enforce_company_auth_policy
+  # After the auth policy, so /legal/accept is only ever shown to a session the
+  # company accepts; before onboarding, which is already work inside it.
+  before_action :enforce_legal_acceptance
   before_action :enforce_onboarding
 
   inertia_share do
@@ -204,6 +207,20 @@ class Web::ApplicationController < ApplicationController
     return if request.path == new_workspace_path
 
     redirect_to new_workspace_path
+  end
+
+  # An operator impersonating someone must not accept on their behalf, and is
+  # not stopped either.
+  def enforce_legal_acceptance
+    return unless signed_in?
+    return if current_user.super_admin? || impersonated?
+    return if pending_legal_documents.empty?
+
+    redirect_to legal_acceptance_path
+  end
+
+  def pending_legal_documents
+    @pending_legal_documents ||= LegalDocument.pending_for(user: current_user, membership: current_membership)
   end
 
   def enforce_onboarding

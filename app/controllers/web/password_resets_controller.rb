@@ -7,6 +7,7 @@ class Web::PasswordResetsController < Web::ApplicationController
   layout "inertia"
 
   skip_before_action :enforce_company_auth_policy
+  skip_before_action :enforce_legal_acceptance
   skip_before_action :enforce_onboarding
 
   # Anyone may make us mail an address of their choosing here. Inert in test,

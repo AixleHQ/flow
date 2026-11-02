@@ -169,6 +169,69 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # -- Terms -------------------------------------------------------------------
+
+  def require_terms = Settings.stubs(:legal).returns(Hashie::Mash.new(acceptance_required: true))
+
+  test "the form links the terms its creator has to accept" do
+    require_terms
+
+    get new_workspace_path
+
+    assert_inertia_props do |props|
+      assert_equal legal_terms_of_service_path, props.dig(:terms, :termsOfServiceUrl)
+      assert_equal legal_terms_of_use_path, props.dig(:terms, :termsOfUseUrl)
+    end
+  end
+
+  test "no workspace is created for somebody who did not accept the terms" do
+    require_terms
+    sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
+
+    assert_no_difference [ "Company.count", "LegalAcceptance.count" ] do
+      post workspace_path, params: { workspace: { name: "Acme Robotics" } }
+    end
+
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/must be accepted/, Array(props.dig(:errors, :acceptTerms)).join) }
+  end
+
+  test "its creator accepts the Terms of Service for the company and the Terms of Use for themselves" do
+    require_terms
+    user = create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(user)
+
+    post workspace_path, params: { workspace: { name: "Acme Robotics", accept_terms: "1" } }
+
+    assert_redirected_to onboarding_path
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_SERVICE, company: acme)
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: user)
+  end
+
+  test "a stranger's acceptance travels in the link and is recorded when it is opened" do
+    require_terms
+
+    post workspace_path, params: valid_params(accept_terms: "1")
+    get confirm_workspace_path(token: ticket(accept_terms: true))
+
+    owner = User.find_by!(email: "dana@acme-robotics.example")
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_SERVICE, company: acme)
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: owner)
+  end
+
+  test "a link issued before the terms changed creates nothing" do
+    require_terms
+    stale = Rails.application.message_verifier(WorkspaceSignupTicket::PURPOSE).generate(
+      { "name" => "Acme Robotics", "email" => "dana@acme-robotics.example",
+        "accepted_terms" => "terms_of_service@2020-01-01 terms_of_use@2020-01-01" },
+      expires_in: WorkspaceSignupTicket::TTL
+    )
+
+    assert_no_difference "Company.count" do
+      get confirm_workspace_path(token: stale)
+    end
+  end
+
   # -- Someone already signed in ---------------------------------------------
 
   test "a signed-in person's workspace is created without an email round trip" do

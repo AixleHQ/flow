@@ -1282,6 +1282,16 @@ export function adminSessionAdmissionPath(options?: object): string {
   return "/" + "admin" + "/" + "session_admission" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/dashboard/waits(.:format) */
+export function waitsAdminDashboardPath(options?: object): string {
+  return "/" + "admin" + "/" + "dashboard" + "/" + "waits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/dashboard/companies/:id(.:format) */
+export function adminDashboardCompanyPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "dashboard" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /admin/dashboard(.:format) */
 export function adminDashboardPath(options?: object): string {
   return "/" + "admin" + "/" + "dashboard" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1385,6 +1395,31 @@ export function declineInvitationPath(token: ScalarType, options?: object): stri
 /** /invitations/:token/signup(.:format) */
 export function signupInvitationPath(token: ScalarType, options?: object): string {
   return "/" + "invitations" + "/" + token + "/" + "signup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /legal(.:format) */
+export function legalPath(options?: object): string {
+  return "/" + "legal" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /legal/privacy_policy(.:format) */
+export function legalPrivacyPolicyPath(options?: object): string {
+  return "/" + "legal" + "/" + "privacy_policy" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /legal/terms_of_service(.:format) */
+export function legalTermsOfServicePath(options?: object): string {
+  return "/" + "legal" + "/" + "terms_of_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /legal/terms_of_use(.:format) */
+export function legalTermsOfUsePath(options?: object): string {
+  return "/" + "legal" + "/" + "terms_of_use" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /legal/accept(.:format) */
+export function legalAcceptancePath(options?: object): string {
+  return "/" + "legal" + "/" + "accept" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /privacy-policy(.:format) */
@@ -1620,6 +1655,11 @@ export function oauthMCPConnectPath(mcp_server_id: ScalarType, options?: object)
 /** /company/switch(.:format) */
 export function companySwitchPath(options?: object): string {
   return "/" + "company" + "/" + "switch" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/feedback(.:format) */
+export function companyFeedbackPath(options?: object): string {
+  return "/" + "company" + "/" + "feedback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/memberships/:id(.:format) */

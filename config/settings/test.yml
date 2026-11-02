@@ -26,6 +26,11 @@ encryption:
 deployment:
   mode: <%= ENV['DEPLOYMENT_MODE'] || 'self_hosted' %>
 
+# Most suites that sign in under the hosted mode are about something else, and
+# would otherwise land on /legal/accept. Tests of the gate turn it on.
+legal:
+  acceptance_required: false
+
 agents:
   antigravity:
     oauth_client_id: test-antigravity-client.apps.googleusercontent.com
