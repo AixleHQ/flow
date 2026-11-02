@@ -95,6 +95,17 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_match(/MCP server Sentry: Authorization holds a literal value/, error.message)
   end
 
+  test "a stdio server written before packages had to be pinned aborts the export and names the fix" do
+    files = create(:mcp_server, :stdio_transport, name: "Files", scope: @source, command: "npx", args: [ "@acme/files-mcp@1.4.0" ])
+    files.update_columns(args: [ "@acme/files-mcp" ])
+    step = @source.workflows.sole.steps.order(:position).first
+    step.update!(mcp_server_ids: step.mcp_server_ids | [ files.id ])
+
+    error = assert_raises(Templates::Exporter::ExportError) { export }
+
+    assert_match(%r{mcp server Files command: must pin @acme/files-mcp to an exact version}, error.message)
+  end
+
   test "an image that is not pinned by digest aborts the export" do
     @source.tools.find_by!(name: "run_tests").update!(docker_image: "ghcr.io/acme/runner:latest")
 

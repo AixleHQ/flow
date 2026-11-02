@@ -23,6 +23,12 @@ governance, community health — carry none.
   `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
   them.
 
+### Fixed
+- **Templates**: exporting a project whose hand-added connector launches an
+  unpinned package (`npx some-mcp` with no version) now stops and names the
+  connector to pin. Before, the export went through and every install of it
+  failed at the last step.
+
 ## [1.9.0] - 2026-10-30
 
 ### Added

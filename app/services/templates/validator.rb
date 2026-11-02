@@ -53,6 +53,7 @@ module Templates
       check_triggers
       check_config_item_references
       check_mcp_values
+      check_launch_lines
       check_inputs
       check_files
       check_asset_names
@@ -198,6 +199,21 @@ module Templates
                        "{{inputs.*}} placeholder, not a literal value"
           end
         end
+      end
+    end
+
+    # The launch-line rules MCPServer applies when a row is written. A project row
+    # older than those rules still runs and exports as it is, so without this check
+    # its template validates and then fails on the last step of every install.
+    # A line that takes an install input is only complete at install, which checks it.
+    def check_launch_lines
+      custom_servers.each do |server|
+        next unless server["transport"] == "stdio"
+        next if ([ server["command"] ] + Array(server["args"])).any? { |token| Substitution.keys_in(token.to_s).any? }
+
+        row = MCPServer.new(kind: :custom, transport: :stdio, command: server["command"], args: Array(server["args"]))
+        row.validate
+        row.errors[:command].each { |message| @errors << "mcp server #{server['name']} command: #{message}" }
       end
     end
 
