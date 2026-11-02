@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-03
+
 ### Added
 - **Admin**: a company's queue breakdown on the dashboard shows its waits by
   hour of the day, in your own time zone: for each hour, how many of the
@@ -1086,7 +1088,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.9.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.10.0...develop
+[1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
