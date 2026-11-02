@@ -53,6 +53,19 @@ nav{padding:16px 0;background:rgba(9,9,11,.9);border-bottom:1px solid rgba(63,63
 .legal-content table{width:100%;min-width:520px;border-collapse:collapse;font-size:14px;color:var(--text-secondary)}
 .legal-content th,.legal-content td{border:1px solid var(--border-default);padding:10px 12px;text-align:left;vertical-align:top;line-height:1.7}
 .legal-content th{background:var(--bg-surface);color:var(--text-primary);font-weight:600}
+.legal-content .clause{scroll-margin-top:24px}
+.legal-content .clause-sub{margin-left:28px}
+.legal-content .clause-sub2{margin-left:56px}
+.legal-content h2,.legal-content h3{scroll-margin-top:24px}
+.legal-note{font-size:14px;font-style:italic}
+.legal-toc{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px 24px;margin-bottom:40px}
+.legal-toc h2{font-size:15px;margin:0 0 10px}
+.legal-toc ol{list-style:none;margin:0;columns:2;column-gap:32px;font-size:14px}
+.legal-toc li{margin-bottom:4px;break-inside:avoid}
+.legal-documents{list-style:none;margin:0 0 24px!important;display:grid;gap:16px}
+.legal-documents li{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:20px 24px;margin:0}
+.legal-documents h2{margin:0 0 6px;font-size:19px}
+.legal-documents p{margin:0 0 6px}
 
 footer{border-top:1px solid rgba(63,63,70,.3);padding:40px 0;text-align:center}
 .footer-inner{max-width:900px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--text-muted)}
@@ -63,6 +76,9 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:40px 0;text-align:center}
 @media(max-width:640px){
   .legal-content{padding:40px 16px 80px}
   .legal-content h1{font-size:28px}
+  .legal-content .clause-sub{margin-left:16px}
+  .legal-content .clause-sub2{margin-left:32px}
+  .legal-toc ol{columns:1}
   .footer-inner{flex-direction:column;gap:12px}
 }
 </style>
@@ -95,8 +111,10 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:40px 0;text-align:center}
   <div class="footer-inner">
     <span>&copy; <%= Date.current.year %> Dualboot Partners, LLC. All rights reserved.</span>
     <div class="footer-links">
-      <a href="/privacy-policy">Privacy</a>
-      <a href="/terms-of-service">Terms</a>
+      <%= link_to "Legal", legal_path %>
+      <%= link_to "Privacy", legal_privacy_policy_path %>
+      <%= link_to "Terms of Service", legal_terms_of_service_path %>
+      <%= link_to "Terms of Use", legal_terms_of_use_path %>
     </div>
   </div>
 </footer>

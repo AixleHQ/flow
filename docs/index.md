@@ -152,8 +152,7 @@ running Flow — the product-level guide outlined above is a separate document s
 
 ## Legal
 
-- **[legal/TERMS_OF_SERVICE.md](./legal/TERMS_OF_SERVICE.md)** — Aixle Flow Terms of Service; published verbatim at `/terms-of-service` (`app/views/web/pages/terms_of_service.html.erb`)
-- **[legal/PRIVACY_POLICY.md](./legal/PRIVACY_POLICY.md)** — Aixle Flow Privacy Policy; published verbatim at `/privacy-policy` (`app/views/web/pages/privacy_policy.html.erb`)
+- **[legal/README.md](./legal/README.md)** — the Terms of Service, Terms of Use and Privacy Policy the hosted product publishes under `/legal`: where each text lives, who accepts it and when, and how to publish a new version
 
 ## Related documentation elsewhere
 

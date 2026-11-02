@@ -381,6 +381,46 @@ describe('New workspace page', () => {
     expect(screen.getByText(/already has a workspace/)).toBeInTheDocument();
   });
 
+  describe('where the terms have to be accepted', () => {
+    const terms = {
+      termsOfServiceUrl: '/legal/terms_of_service',
+      termsOfUseUrl: '/legal/terms_of_use',
+      privacyPolicyUrl: '/legal/privacy_policy',
+    };
+
+    it('asks the creator to accept the Terms of Service for the organization and the Terms of Use for themselves', async () => {
+      const form = makeFormStub({ name: 'Northwind', email: '', accept_terms: false });
+      renderPage(<NewWorkspacePage />, { props: { ...signedIn, terms }, form });
+
+      expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/legal/terms_of_service');
+      expect(screen.getByRole('link', { name: 'Terms of Use' })).toHaveAttribute('href', '/legal/terms_of_use');
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /I am authorized to bind this organization/ }));
+
+      expect(form.setData).toHaveBeenCalledWith('accept_terms', true);
+    });
+
+    it('shows the refusal when the box was left empty', () => {
+      renderPage(<NewWorkspacePage />, {
+        props: {
+          ...signedIn,
+          terms,
+          errors: { acceptTerms: ['The Terms of Service and Terms of Use must be accepted to create a workspace'] },
+        },
+      });
+
+      expect(
+        screen.getByText('The Terms of Service and Terms of Use must be accepted to create a workspace'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('asks nothing about terms where there are none to accept', () => {
+    renderPage(<NewWorkspacePage />, { props: signedIn });
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
   it('shows a refusal that belongs to no single field', () => {
     renderPage(<NewWorkspacePage />, {
       props: { ...stranger, errors: { base: 'That link has expired.' } },

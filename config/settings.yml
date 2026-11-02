@@ -721,6 +721,12 @@ pricing:
 registration:
   enabled: <%= ENV.fetch('REGISTRATION_ENABLED', 'false') == 'true' %>
 
+# Whether people meet /legal/accept until they have accepted the current Terms
+# of Use (everyone) and Terms of Service (a company's admins). Hosted
+# deployments only: elsewhere the documents are not published at all.
+legal:
+  acceptance_required: true
+
 # How long the free trial of a company that signs itself up lasts, in days, on
 # one worker. Hosted deployments only. A company keeps the length of the trial it
 # started; an operator moves its last day from the company's admin page.

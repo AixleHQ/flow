@@ -39,8 +39,8 @@ module Teams
         "manifestVersion" => SCHEMA,
         "version" => VERSION,
         "id" => manifest_id,
-        "developer" => { "name" => "Aixle", "websiteUrl" => base, "privacyUrl" => "#{base}/privacy-policy",
-                         "termsOfUseUrl" => "#{base}/terms-of-service" },
+        "developer" => { "name" => "Aixle", "websiteUrl" => base, "privacyUrl" => "#{base}/legal/privacy_policy",
+                         "termsOfUseUrl" => "#{base}/legal/terms_of_use" },
         "name" => { "short" => NAME, "full" => NAME },
         "description" => {
           "short" => "Start Aixle Flow workflows from Teams",

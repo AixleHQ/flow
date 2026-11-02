@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_02_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -924,6 +924,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_150000) do
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
     t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
+  end
+
+  create_table "legal_acceptances", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "company_id"
+    t.string "document", null: false
+    t.string "version", null: false
+    t.datetime "accepted_at", null: false
+    t.string "ip_address"
+    t.string "user_agent"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "document", "version"], name: "index_legal_acceptances_on_company_id_and_document_and_version"
+    t.index ["user_id", "document", "version"], name: "index_legal_acceptances_on_user_id_and_document_and_version"
   end
 
   create_table "magic_link_tokens", force: :cascade do |t|
@@ -2333,6 +2347,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_150000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "legal_acceptances", "companies", on_delete: :cascade
+  add_foreign_key "legal_acceptances", "users", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
   add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify

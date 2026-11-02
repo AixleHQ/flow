@@ -62,7 +62,7 @@ class Web::WorkspacesController < Web::ApplicationController
     return refuse(base: "You already belong to a workspace.") if existing&.company_memberships&.exists?
 
     owner = form.owner_for(existing)
-    return refuse(**form.errors.to_hash(true)) unless form.save(owner)
+    return refuse(**form.errors.to_hash(true)) unless form.save(owner, request: request)
 
     # Opening a link sent to that address is the magic-link proof, and recording
     # it is what makes the session one the new company's policy accepts. Without
@@ -81,7 +81,7 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def create_now(form)
-    return refuse(**form.errors.to_hash(true)) unless form.save(current_user)
+    return refuse(**form.errors.to_hash(true)) unless form.save(current_user, request: request)
 
     forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
@@ -100,7 +100,8 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def ticket_for(form)
-    WorkspaceSignupTicket.issue(name: form.name, email: form.email, marketplace_license_id: marketplace_license&.id)
+    WorkspaceSignupTicket.issue(name: form.name, email: form.email, marketplace_license_id: marketplace_license&.id,
+                                accept_terms: form.accept_terms)
   end
 
   # The emailed link first, the session second: the ticket says which
@@ -162,7 +163,17 @@ class Web::WorkspacesController < Web::ApplicationController
       # What they get before anyone asks them for a card, which is the part of
       # the bargain the form was silent about. Nil for a Marketplace buyer: AWS
       # bills them from the first minute, so there is no trial to promise.
-      trial_days: (Billing::Trial.days if marketplace_license.nil?)
+      trial_days: (Billing::Trial.days if marketplace_license.nil?),
+      # Links for the box the creator ticks; nil where nothing has to be accepted.
+      terms: (legal_terms_props if LegalDocument.acceptance_required?)
+    }
+  end
+
+  def legal_terms_props
+    {
+      terms_of_service_url: legal_terms_of_service_path,
+      terms_of_use_url: legal_terms_of_use_path,
+      privacy_policy_url: legal_privacy_policy_path
     }
   end
 
@@ -195,7 +206,7 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def workspace_params
-    params.fetch(:workspace, {}).permit(:name, :email, :email_domain)
+    params.fetch(:workspace, {}).permit(:name, :email, :email_domain, :accept_terms)
   end
 
   # A Marketplace buyer is not a stranger signing up: a LIVE subscription is

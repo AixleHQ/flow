@@ -11,9 +11,22 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
 
   test "it carries the answers there and back" do
     assert_equal(
-      { name: "Acme Robotics", email: "dana@acme-robotics.example" },
+      { name: "Acme Robotics", email: "dana@acme-robotics.example", accept_terms: false },
       WorkspaceSignupTicket.decode(token)
     )
+  end
+
+  test "it carries an acceptance of the terms in force" do
+    assert WorkspaceSignupTicket.decode(token(accept_terms: true))[:accept_terms]
+  end
+
+  # The box was ticked for text that has since changed, which accepts nothing.
+  test "an acceptance of terms that have changed since is dropped" do
+    stale = Rails.application.message_verifier(WorkspaceSignupTicket::PURPOSE).generate(
+      { "name" => "Acme", "email" => "dana@acme.example", "accepted_terms" => "terms_of_use@2020-01-01" }
+    )
+
+    assert_equal false, WorkspaceSignupTicket.decode(stale)[:accept_terms] # rubocop:disable Minitest/RefuteFalse
   end
 
   # The whole point of signing it: the answers travel through somebody's inbox,
@@ -57,6 +70,6 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
       { "name" => "Acme", "email" => "dana@acme.example", "max_sessions" => 5, "role" => "super_admin" }
     )
 
-    assert_equal %i[name email], WorkspaceSignupTicket.decode(smuggled).keys
+    assert_equal %i[name email accept_terms], WorkspaceSignupTicket.decode(smuggled).keys
   end
 end
