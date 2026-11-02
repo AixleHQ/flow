@@ -280,6 +280,28 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
       expect(within(modal).getByRole('radio', { name: /Hosted endpoint/ })).toBeInTheDocument();
     });
 
+    it('goes back to the catalog when the install drawer is closed', async () => {
+      const modal = await openInstall([connector()]);
+
+      await userEvent.click(within(modal).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /^Install/ })).not.toBeInTheDocument());
+      expect(screen.getByRole('dialog', { name: 'Browse connectors' })).toBeInTheDocument();
+    });
+
+    it('closes the catalog too once the connector is installed', async () => {
+      vi.spyOn(router, 'post').mockImplementation((_url, _data, options) => {
+        options?.onSuccess?.({} as never);
+        options?.onFinish?.({} as never);
+      });
+      const modal = await openInstall([connector()]);
+
+      await userEvent.type(within(modal).getByLabelText(/API_TOKEN/), 'tok_123');
+      await userEvent.click(within(modal).getByRole('button', { name: 'Install' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Browse connectors' })).not.toBeInTheDocument());
+    });
+
     it('leaves Escape to the install drawer, so an unsaved install keeps the catalog behind it', async () => {
       const modal = await openInstall([connector()]);
       await userEvent.type(within(modal).getByLabelText(/API_TOKEN/), 'tok_123');

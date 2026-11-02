@@ -53,6 +53,9 @@ governance, community health — carry none.
   `/legal/privacy_policy` and `/legal/terms_of_service`.
 
 ### Fixed
+- **Connectors**: closing a connector's install drawer from **Browse
+  connectors** — ✕, Cancel or Escape — goes back to the catalog instead of
+  closing it as well. Installing a connector still closes both.
 - **Templates**: exporting a project whose hand-added connector launches an
   unpinned package (`npx some-mcp` with no version) now stops and names the
   connector to pin. Before, the export went through and every install of it
