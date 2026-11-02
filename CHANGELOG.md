@@ -32,6 +32,10 @@ governance, community health — carry none.
   unpinned package (`npx some-mcp` with no version) now stops and names the
   connector to pin. Before, the export went through and every install of it
   failed at the last step.
+- **Templates**: a template with a required setting that has no default can be
+  installed from its install page again. The page shows what the install will
+  create and keeps **Install** disabled until every required setting is filled
+  in. Before, it said the template could not be installed and offered no button.
 
 ## [1.9.0] - 2026-10-30
 
