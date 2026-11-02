@@ -17,6 +17,7 @@ import {
 import { IconAlertTriangle } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -195,14 +196,18 @@ const ShowPage = () => {
             {template.readme && (
               <Tabs.Panel value="readme">
                 <Typography>
-                  <Markdown components={{ a: MarkdownLink }}>{template.readme}</Markdown>
+                  <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                    {template.readme}
+                  </Markdown>
                 </Typography>
               </Tabs.Panel>
             )}
             {template.setup && (
               <Tabs.Panel value="setup">
                 <Typography>
-                  <Markdown components={{ a: MarkdownLink }}>{template.setup}</Markdown>
+                  <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                    {template.setup}
+                  </Markdown>
                 </Typography>
               </Tabs.Panel>
             )}

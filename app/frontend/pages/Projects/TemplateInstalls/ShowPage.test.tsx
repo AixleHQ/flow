@@ -78,4 +78,17 @@ describe('Projects/TemplateInstalls/ShowPage', () => {
 
     expect(screen.getByRole('link', { name: 'Sentry token' })).toHaveAttribute('target', '_blank');
   });
+
+  it('renders a table in the setup notes', () => {
+    const base = props([]);
+    renderAuthedPage(<ShowPage />, {
+      props: {
+        ...base,
+        install: { ...base.install, setup: '| Item | Set it when |\n|---|---|\n| `SPEC_PATH` | you keep a spec |' },
+      },
+    });
+
+    expect(screen.getByRole('columnheader', { name: 'Set it when' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'SPEC_PATH' })).toBeInTheDocument();
+  });
 });

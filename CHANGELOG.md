@@ -64,6 +64,9 @@ governance, community health — carry none.
   installed from its install page again. The page shows what the install will
   create and keeps **Install** disabled until every required setting is filled
   in. Before, it said the template could not be installed and offered no button.
+- **Templates**: tables in a template's Readme and Setup tabs and in the setup
+  notes of its install checklist render as tables. Before, they showed as raw
+  `| … |` text.
 
 ## [1.9.0] - 2026-10-30
 
