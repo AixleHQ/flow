@@ -121,6 +121,24 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_empty(errors_for { |d| d["mcp_servers"].last["custom"]["headers"]["Authorization"] = "Bearer config_item:SENTRY_ORG" })
   end
 
+  test "a stdio launch line must meet the rules a server row is written with" do
+    errors = lambda do |command, args = nil|
+      errors_for do |d|
+        d["mcp_servers"] << { "key" => "files",
+                              "custom" => { "name" => "Files", "transport" => "stdio", "command" => command, "args" => args }.compact }
+      end
+    end
+
+    assert_equal [ "mcp server Files command: must pin @acme/files-mcp to an exact version (name@1.2.3) — " \
+                   "unpinned, every session installs whatever was released last" ],
+                 errors.call("npx", [ "@acme/files-mcp" ])
+    assert_equal [ "mcp server Files command: cannot use shell operators — the process is launched directly, without a shell" ],
+                 errors.call("npx @acme/files-mcp@1.4.0 | tee files.log")
+    assert_empty errors.call("npx", [ "@acme/files-mcp@1.4.0" ])
+    assert_empty errors.call("npx", [ "@acme/files-mcp", "--branch", "{{inputs.default_branch}}" ]),
+                 "a line that takes an install input is checked at install"
+  end
+
   test "inputs must be declared and may only appear in substituted fields" do
     errors = errors_for do |d|
       d["agents"].first["persona"] = "Speaks {{inputs.tone}}."
