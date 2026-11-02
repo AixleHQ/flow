@@ -40,9 +40,10 @@ module Templates
 
     attr_reader :idempotency_key
 
-    def plan
+    def plan(require_inputs: true)
       Planner.new(catalog_template: @catalog_template, user: @user, target: @target, inputs: @inputs,
-                  resolutions: @resolutions, expected: @expected, provided_secrets: @secrets.keys).call
+                  resolutions: @resolutions, expected: @expected, provided_secrets: @secrets.keys,
+                  require_inputs: require_inputs).call
     end
 
     def apply

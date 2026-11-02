@@ -49,6 +49,31 @@ class Web::Company::TemplateInstallsControllerTest < ActionDispatch::Integration
     assert_equal "tok-1", project.config_items.find_by!(name: "SENTRY_TOKEN").decrypted_value
   end
 
+  test "a required setting with no default still gets the plan, and installing without it sends the user back" do
+    definition = @template.definition.deep_dup
+    definition["inputs"] << { "key" => "staging_url", "label" => "Staging URL", "type" => "string", "required" => true }
+    @template.update!(definition: definition)
+    sign_in_as(@user)
+
+    get new_company_template_install_path(namespace: "acme", slug: "dev-team-sdlc", version: 3)
+
+    assert_response :success
+    assert_inertia_props { |props| props[:plan].present? && props[:error].nil? }
+
+    digest = Templates::Installer.new(catalog_template: @template, user: @user, target: { company: @company },
+                                      idempotency_key: "x").plan(require_inputs: false).digest
+    assert_no_difference -> { Project.count } do
+      post company_template_installs_path, params: {
+        namespace: "acme", slug: "dev-team-sdlc", version: 3, idempotency_key: "p", digest: digest,
+        inputs: { review_language: "German" }
+      }
+    end
+
+    assert_redirected_to new_company_template_install_path(namespace: "acme", slug: "dev-team-sdlc",
+                                                           inputs: { review_language: "German" })
+    assert_equal "Staging URL is required", flash[:alert]
+  end
+
   test "a plan that moved since the page was rendered sends the user back to review it" do
     sign_in_as(@user)
 

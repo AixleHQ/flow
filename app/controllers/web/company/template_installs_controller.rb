@@ -76,7 +76,7 @@ class Web::Company::TemplateInstallsController < Web::Company::ApplicationContro
   end
 
   def page_props(template, installer)
-    plan = installer.plan
+    plan = installer.plan(require_inputs: false)
     base_props(template, installer).merge(plan: Templates::Presenter.plan(plan), error: nil)
   rescue Templates::Planner::Error => e
     base_props(template, installer).merge(plan: nil, error: e.message)

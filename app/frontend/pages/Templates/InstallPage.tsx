@@ -159,6 +159,12 @@ const InstallPage = () => {
   };
 
   const shown = plan?.items.filter((item) => item.section !== 'config_items') ?? [];
+  const missingRequired = template.inputs.some((input) => input.required && !(inputs[input.key] ?? '').trim());
+  const installLabel = () => {
+    if (!plan?.resolved) return 'Resolve the conflicts first';
+    if (missingRequired) return 'Fill in the required settings first';
+    return 'Install';
+  };
 
   return (
     <AuthLayout>
@@ -326,8 +332,8 @@ const InstallPage = () => {
                 </Text>
               )}
               <Group justify="flex-end">
-                <Button onClick={install} loading={submitting} disabled={!plan.resolved}>
-                  {plan.resolved ? 'Install' : 'Resolve the conflicts first'}
+                <Button onClick={install} loading={submitting} disabled={!plan.resolved || missingRequired}>
+                  {installLabel()}
                 </Button>
               </Group>
             </Stack>
