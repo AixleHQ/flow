@@ -33,10 +33,17 @@ module Sessions
     FRAGMENT_FLOOR = 16
     MASK = "*"
 
-    ESCAPE = /\e(?:\[[\x20-\x3f]*[\x40-\x7e]?|[\]PX^_].*?(?:\a|\e\\|\z)|[()*+\-.\/#%].?|.?)/m
-    IGNORABLE = /[[:space:]\p{Cc}─-▟&&[^\e]]+/
-    SIGNIFICANT = /[^[:space:]\p{Cc}─-▟]+/
-    WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/
+    # One escape sequence. An OSC/DCS/APC counts only with its terminator and within
+    # MAX_ESCAPE characters: matched lazily up to the end of the text instead, one stray
+    # `\e]` hid everything after it from the masking.
+    MAX_ESCAPE = 4096
+    ESCAPE = /\e(?:\[[\x20-\x3f]*[\x40-\x7e]?|[\]PX^_](?:[^\a\e]|\e(?!\\)){0,#{MAX_ESCAPE}}(?:\a|\e\\)|[()*+\-.\/#%].?|.?)/
+    IGNORABLE = /[[:space:]\p{Cc}\u2500-\u259f&&[^\e]]+/
+    NOISE = Regexp.union(ESCAPE, IGNORABLE)
+    SIGNIFICANT = /[^[:space:]\p{Cc}\u2500-\u259f]+/
+    WIDE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/
+    # How many of a secret's pieces #candidate? checks; see there.
+    PROBES_PER_SECRET = 64
 
     # No length floor. ContextLog::MIN_REDACT_LEN exists because that path
     # registers every MCP header/env value, including non-secrets like "json"
@@ -70,7 +77,7 @@ module Sessions
 
     def initialize(values)
       @secrets = Array(values).map { |v| utf8(v.to_s) }.reject(&:blank?).uniq
-      @needles = build_needles
+      @needles, @probes = build_needles
     end
 
     def any?
@@ -78,14 +85,15 @@ module Sessions
     end
 
     # `text` with each run of secret characters replaced by a fingerprint. Returned
-    # unchanged when there is nothing to redact, so the common case (a session with
-    # no secrets) costs one predicate.
+    # unchanged — byte for byte, invalid UTF-8 included — when there is nothing to redact.
     def call(text)
       return text if text.blank? || @needles.empty?
 
       str = utf8(text.to_s)
+      return text unless candidate?(str)
+
       _sig, at, owners = scan(str)
-      return str if owners.compact.empty?
+      return text if owners.compact.empty?
 
       rebuild(str) do |out, emit|
         runs(owners).each do |first, last|
@@ -102,8 +110,10 @@ module Sessions
       return text if text.blank? || @needles.empty?
 
       str = utf8(text.to_s)
+      return text unless candidate?(str)
+
       _sig, at, owners = scan(str)
-      return str if owners.compact.empty?
+      return text if owners.compact.empty?
 
       rebuild(str) do |out, emit|
         owners.each_with_index do |owner, k|
@@ -118,18 +128,35 @@ module Sessions
 
     private
 
-    # [needle, index of the secret it belongs to], longest first. A JSON-escaped
-    # form is looked for too: a CLI's transcript stores a value carrying a quote or a
-    # backslash only in that form.
+    # [needles, probes]. Needles are [needle, index of the secret it belongs to], longest
+    # first: each secret whole and every piece of it. A JSON-escaped form is looked for too:
+    # a CLI's transcript stores a value carrying a quote or a backslash only in that form.
     def build_needles
-      @secrets.each_with_index.flat_map { |secret, owner|
-        [ secret, secret.to_json[1..-2] ].uniq.flat_map do |form|
+      needles = []
+      probes = []
+      @secrets.each_with_index do |secret, owner|
+        [ secret, secret.to_json[1..-2] ].uniq.each do |form|
           sig = form.scan(SIGNIFICANT).join
-          next [] if sig.empty?
+          next if sig.empty?
 
-          [ [ sig, owner ] ] + fragments(sig).map { |piece| [ piece, owner ] }
+          pieces = fragments(sig)
+          needles << [ sig, owner ]
+          needles.concat(pieces.map { |piece| [ piece, owner ] })
+          probes << sig
+          probes.concat(pieces.each_slice((pieces.size / PROBES_PER_SECRET.to_f).ceil.clamp(1..)).map(&:first))
         end
-      }.uniq.sort_by { |needle, _| -needle.length }
+      end
+      [ needles.uniq.sort_by { |needle, _| -needle.length }, probes.uniq ]
+    end
+
+    # Whether `str` can hold anything to mask, decided without building the projection's
+    # index: the common case — nothing to mask — then costs one gsub. A long secret (a PEM
+    # key, a service-account JSON) has hundreds of pieces, so only an evenly spread sample
+    # of them is checked here; a piece that falls between two samples is found only when it
+    # is longer than the gap.
+    def candidate?(str)
+      sig = str.gsub(NOISE, "")
+      @probes.any? { |probe| sig.include?(probe) }
     end
 
     # A short secret is only masked whole — and without the punctuation at its ends, when

@@ -91,7 +91,7 @@ module Sessions
       found.each do |path, size|
         name = log_name(path)
 
-        if direct_upload?(path) && (uploaded = upload_from_container(path, size, name))
+        if direct_upload? && (uploaded = upload_from_container(path, size, name))
           log = persist(name, uploaded, uploaded.size)
           contents["logs/#{name}"] = LogSource.new(log.file, size: uploaded.size)
           count += 1
@@ -165,7 +165,7 @@ module Sessions
     # A log #collect_usage parses is no longer an exception: it is handed back as a
     # Sessions::LogSource, which reads the stored object a line at a time, and every
     # parser was already written against `each_line`.
-    def direct_upload?(_path)
+    def direct_upload?
       @container_redacts && cache_storage.respond_to?(:presign)
     end
 

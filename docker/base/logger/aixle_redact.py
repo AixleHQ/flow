@@ -45,8 +45,11 @@ FRAGMENT_FLOOR = 16
 # Leaves whose strings a streamed response spreads across events: Anthropic's text,
 # partial_json and thinking deltas, OpenAI's delta / content / arguments, Gemini's text.
 STREAMED_KEYS = frozenset({"text", "partial_json", "thinking", "delta", "content", "arguments"})
-# An unterminated OSC would otherwise hold a stream back forever.
+# An unterminated OSC would otherwise hold a stream back forever, or hide the rest of
+# a text from the masking.
 MAX_ESCAPE = 4096
+# How many of a secret's pieces Needles.any_in checks; see there.
+PROBES_PER_SECRET = 64
 
 _cache = {"key": None, "values": []}
 
@@ -123,7 +126,8 @@ def escape_end(text, i):
 # and box-drawing characters. One expression for both the quick check and the indexed
 # projection, so the two cannot disagree about what is significant.
 NOISE = re.compile(
-    r"\x1b(?:\[[\x20-\x3f]*[\x40-\x7e]|[\]PX^_](?:[^\x07\x1b]|\x1b(?!\\))*(?:\x07|\x1b\\)"
+    r"\x1b(?:\[[\x20-\x3f]*[\x40-\x7e]"
+    r"|[\]PX^_](?:[^\x07\x1b]|\x1b(?!\\)){0," + str(MAX_ESCAPE) + r"}(?:\x07|\x1b\\)"
     r"|[()*+\-./#%].|[^\[\]PX^_()*+\-./#%])"
     r"|[\s\x00-\x1f\x7f-\x9f\u2500-\u259f]+",
     re.S,
@@ -164,21 +168,22 @@ def core(value):
     A password like `Summer2024!` reaches a log with its `!` shell-escaped or JSON-encoded
     as often as not, and eleven of its twelve characters are the secret all the same."""
     stripped = re.sub(r"^[\W_]+|[\W_]+$", "", value)
-    return {stripped} if stripped != value and len(stripped) >= FRAGMENT else set()
+    return [stripped] if stripped != value and len(stripped) >= FRAGMENT else []
 
 
 def fragments(value):
+    """The pieces of a secret masked on their own, in the order they occur in it."""
     if len(value) < FRAGMENT_FLOOR:
         return core(value)
-    return {value[i:i + FRAGMENT] for i in range(len(value) - FRAGMENT + 1)
-            if distinctive(value[i:i + FRAGMENT])}
+    pieces = (value[i:i + FRAGMENT] for i in range(len(value) - FRAGMENT + 1))
+    return list(dict.fromkeys(piece for piece in pieces if distinctive(piece)))
 
 
 class Needles:
     """What to look for in a projection: every secret whole, and the distinctive pieces of a long one."""
 
     def __init__(self, secrets):
-        found = set()
+        found, probes = set(), set()
         for secret in secrets:
             text = secret.decode("utf-8", "replace") if isinstance(secret, bytes) else str(secret)
             # A JSON body or transcript holds a value carrying a quote or a backslash only
@@ -186,9 +191,13 @@ class Needles:
             for form in {text, json.dumps(text, ensure_ascii=False)[1:-1]}:
                 sig = NOISE.sub("", form)
                 if sig:
+                    pieces = fragments(sig)
                     found.add(sig)
-                    found.update(fragments(sig))
+                    found.update(pieces)
+                    probes.add(sig)
+                    probes.update(pieces[::max(1, -(-len(pieces) // PROBES_PER_SECRET))])
         self.needles = sorted(found, key=len, reverse=True)
+        self.probes = sorted(probes, key=len, reverse=True)
         # Significant characters a stream must hold back: the longest needle less one.
         self.hold = max((len(n) for n in self.needles), default=1) - 1
 
@@ -196,9 +205,12 @@ class Needles:
         return bool(self.needles)
 
     def any_in(self, text):
-        """Whether text holds anything to mask — checked without building the projection's index."""
+        """Whether text can hold anything to mask, decided without building the projection's
+        index. A long secret (a PEM key, a service-account JSON) has hundreds of pieces, and
+        this runs on every request body, so only an evenly spread sample of them is checked;
+        a piece that falls between two samples is found only when it is longer than the gap."""
         sig = NOISE.sub("", text)
-        return any(needle in sig for needle in self.needles)
+        return any(probe in sig for probe in self.probes)
 
     def cover(self, sig):
         """One flag per character of sig, set where a secret or a piece of one sits."""
@@ -409,9 +421,10 @@ class TerminalStream:
         cut = len(text)
         if found:
             sig, where, cutoff = project(text)
-            for k, flag in enumerate(found.cover(sig)):
-                if flag:
-                    flags[where[k]] = 1
+            if found.any_in(text):
+                for k, flag in enumerate(found.cover(sig)):
+                    if flag:
+                        flags[where[k]] = 1
             if not final:
                 if cutoff is not None:
                     cut = cutoff
@@ -434,8 +447,6 @@ def redact_file(kind, src, dst):
     text = raw.decode("utf-8", "surrogateescape")
     if not found:
         out = text
-    elif kind == "terminal":
-        out = mask_terminal(text, found)
     elif kind == "jsonl":
         lines = text.split("\n")
         for i, line in enumerate(lines):
@@ -451,8 +462,8 @@ def redact_file(kind, src, dst):
 
 
 if __name__ == "__main__":
-    # python3 aixle_redact.py file <terminal|jsonl|text> <src> <dst>
+    # python3 aixle_redact.py file <jsonl|text> <src> <dst>
     if len(sys.argv) == 5 and sys.argv[1] == "file":
         print(redact_file(sys.argv[2], sys.argv[3], sys.argv[4]))
     else:
-        sys.exit("usage: aixle_redact.py file <terminal|jsonl|text> <src> <dst>")
+        sys.exit("usage: aixle_redact.py file <jsonl|text> <src> <dst>")
