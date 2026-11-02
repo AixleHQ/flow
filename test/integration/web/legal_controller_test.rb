@@ -25,6 +25,16 @@ class Web::LegalControllerTest < ActionDispatch::IntegrationTest
     assert_select ".legal-meta", /Last updated #{LegalDocument::PRIVACY_POLICY.updated_on.strftime("%B %-d, %Y")}/
   end
 
+  test "pages say whether there are documents to link" do
+    with_mode(Deployment::SAAS)
+    get login_path, headers: { "X-Inertia" => "true" }
+    assert_equal true, response.parsed_body.dig("props", "settings", "legalPages") # rubocop:disable Minitest/AssertTruthy
+
+    with_mode(Deployment::SELF_HOSTED)
+    get login_path, headers: { "X-Inertia" => "true" }
+    assert_equal false, response.parsed_body.dig("props", "settings", "legalPages") # rubocop:disable Minitest/RefuteFalse
+  end
+
   test "the index lists the documents" do
     with_mode(Deployment::SAAS)
 

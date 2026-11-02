@@ -56,13 +56,14 @@ class Web::WorkspacesController < Web::ApplicationController
     answers = ticket_answers
     return refuse(base: "That link has expired. Fill the form in again and we will send a new one.") if answers.nil?
 
-    form = WorkspaceOnboardingForm.new(marketplace_license: marketplace_license, **answers.except(:marketplace_license_id))
+    form = WorkspaceOnboardingForm.new(marketplace_license: marketplace_license,
+                                       **answers.except(:marketplace_license_id, :acceptance))
     existing = User.find_by(email: form.email)
     return refuse(base: "That account cannot create a workspace.") if existing&.deleted?
     return refuse(base: "You already belong to a workspace.") if existing&.company_memberships&.exists?
 
     owner = form.owner_for(existing)
-    return refuse(**form.errors.to_hash(true)) unless form.save(owner, request: request)
+    return refuse(**form.errors.to_hash(true)) unless form.save(owner, acceptance: answers[:acceptance])
 
     # Opening a link sent to that address is the magic-link proof, and recording
     # it is what makes the session one the new company's policy accepts. Without
@@ -81,7 +82,7 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def create_now(form)
-    return refuse(**form.errors.to_hash(true)) unless form.save(current_user, request: request)
+    return refuse(**form.errors.to_hash(true)) unless form.save(current_user, acceptance: acceptance_given(form))
 
     forget_marketplace_license
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
@@ -101,7 +102,11 @@ class Web::WorkspacesController < Web::ApplicationController
 
   def ticket_for(form)
     WorkspaceSignupTicket.issue(name: form.name, email: form.email, marketplace_license_id: marketplace_license&.id,
-                                accept_terms: form.accept_terms)
+                                acceptance: acceptance_given(form))
+  end
+
+  def acceptance_given(form)
+    LegalAcceptance::Evidence.from(request) if form.accept_terms
   end
 
   # The emailed link first, the session second: the ticket says which

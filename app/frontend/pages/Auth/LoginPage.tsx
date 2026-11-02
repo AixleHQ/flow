@@ -21,7 +21,7 @@ import { z } from 'zod';
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { loginIdentifyPath, loginPath, newPasswordResetPath } from 'shared/routes';
-import { BrandLockup, PageShell } from 'shared/ui';
+import { BrandLockup, LegalLinks, PageShell } from 'shared/ui';
 
 import classes from './LoginPage.module.css';
 import { MicrosoftLoginButton } from './MicrosoftLoginButton';
@@ -205,13 +205,16 @@ const LoginPage = () => {
   );
 
   const card = (children: React.ReactNode) => (
-    <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
-      {brand}
-      {children}
-      <Text ta="center" size="xs" c="dimmed" mt="lg" className={classes.subtitle}>
-        AI Agent Orchestration Platform
-      </Text>
-    </Paper>
+    <>
+      <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
+        {brand}
+        {children}
+        <Text ta="center" size="xs" c="dimmed" mt="lg" className={classes.subtitle}>
+          AI Agent Orchestration Platform
+        </Text>
+      </Paper>
+      <LegalLinks mt="md" />
+    </>
   );
 
   if (error === 'no_workspace') {
