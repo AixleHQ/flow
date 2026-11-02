@@ -139,13 +139,6 @@ module Agents
                      "/home/kiro/.kiro/logs/*/*.log" ], @adapter.session_log_paths
     end
 
-    # Kiro writes them itself, so the container's write-time filters never scrub them.
-    test "unfiltered_log_paths are the logs Kiro writes itself" do
-      assert_equal [ "/home/kiro/.kiro/sessions/*/sess_*/messages.jsonl",
-                     "/home/kiro/.kiro/sessions/*/sess_*/sub-executions/*.jsonl",
-                     "/home/kiro/.kiro/logs/*/*.log" ], @adapter.unfiltered_log_paths
-    end
-
     # Every Kiro file has the same basename; the session id and start time sit in the
     # directory, so they go into the stored name.
     test "session_log_name folds Kiro's session id and log timestamp into the name" do

@@ -27,13 +27,17 @@ module Sessions
   # will still have.
   #
   # The cap itself is gone wherever it can be. It only ever existed because redaction ran
-  # here, which forced every byte through this process; now that the container scrubs its
-  # own logs as it writes them (docker/base/logger/aixle_redact.py), it can hand them
-  # straight to object storage over a presigned PUT and this process only records the key.
-  # One thing still takes the bounded path, and on purpose: a container built before those
-  # filters shipped, detected rather than assumed. A log #collect_usage parses is not an
-  # exception — it is handed back as a Sessions::LogSource that streams the stored object,
-  # because the transfer out of the container is what used to fail, not the parsing.
+  # here, which forced every byte through this process; now the container masks its logs
+  # itself (docker/base/logger/aixle_redact.py) and hands them straight to object storage
+  # over a presigned PUT, and this process only records the key. A log the container's
+  # filters write (Agents::BaseAdapter#filtered_log_paths) is already masked and goes as it
+  # is; every other one — an agent CLI's own transcript, most of all — is masked into a
+  # copy first and the copy goes. Masking is the default, not something a log has to be
+  # declared into: the Claude transcript once reached storage unmasked because nobody had
+  # declared it. One thing still takes the bounded path, and on purpose: a container whose
+  # image predates the masker, detected rather than assumed. A log #collect_usage parses is
+  # not an exception — it is handed back as a Sessions::LogSource that streams the stored
+  # object, because the transfer out of the container is what used to fail, not the parsing.
   class LogCollector
     # Chosen against the cleanup phase's 120-second budget, not against storage: the read
     # is one exec per file and the upload one S3 PUT, and several megabytes of either is
@@ -88,8 +92,8 @@ module Sessions
         name = log_name(path)
 
         if direct_upload?(path) && (uploaded = upload_from_container(path, size, name))
-          log = persist(name, uploaded, size)
-          contents["logs/#{name}"] = LogSource.new(log.file, size: size)
+          log = persist(name, uploaded, uploaded.size)
+          contents["logs/#{name}"] = LogSource.new(log.file, size: uploaded.size)
           count += 1
           next
         end
@@ -152,34 +156,27 @@ module Sessions
       ]
     end
 
-    # Whether this file can go straight from the container to storage. Three conditions,
-    # each one a way the direct path would otherwise be wrong:
-    #
-    #   * the container scrubs its own logs. Without that the bytes would reach storage
-    #     carrying whatever the agent read through get_config_item — so an image built
-    #     before those filters shipped keeps the path where this process scrubs;
-    #   * the file is one those filters actually write. A log the agent CLI writes for
-    #     itself (Agents::BaseAdapter#unfiltered_log_paths) never passes through them,
-    #     so it takes the scrubbing path whatever the image;
-    #   * the storage can sign a PUT at all. In development and test it is a filesystem
-    #     or a memory store, and there is nothing to upload to.
+    # Whether this file can go straight from the container to storage: the container has
+    # to carry the masker — without it the bytes would reach storage carrying whatever the
+    # agent read through get_config_item — and the storage has to sign a PUT at all (in
+    # development and test it is a filesystem or a memory store, and there is nothing to
+    # upload to).
     #
     # A log #collect_usage parses is no longer an exception: it is handed back as a
     # Sessions::LogSource, which reads the stored object a line at a time, and every
     # parser was already written against `each_line`.
-    def direct_upload?(path)
-      @container_redacts && !unfiltered?(path) && cache_storage.respond_to?(:presign)
+    def direct_upload?(_path)
+      @container_redacts && cache_storage.respond_to?(:presign)
     end
 
     # FNM_PATHNAME so a `*` stays inside one directory, as it does in the container's
     # shell that expanded the same pattern.
-    def unfiltered?(path)
-      unfiltered_patterns.any? { |pattern| File.fnmatch?(pattern, path, File::FNM_PATHNAME) }
+    def filtered?(path)
+      filtered_patterns.any? { |pattern| File.fnmatch?(pattern, path, File::FNM_PATHNAME) }
     end
 
-    def unfiltered_patterns
-      @unfiltered_patterns ||=
-        adapter.respond_to?(:unfiltered_log_paths) ? Array(adapter.unfiltered_log_paths).compact_blank : []
+    def filtered_patterns
+      @filtered_patterns ||= Array(adapter.filtered_log_paths).compact_blank
     end
 
     # Agents::BaseAdapter#session_log_name, so an adapter whose CLI keeps the session id
@@ -201,13 +198,17 @@ module Sessions
       id = "#{SecureRandom.hex(30)}#{File.extname(name)}"
       url = cache_storage.presign(id, method: :put)[:url]
 
-      _stdout, stderr, exit_code = runtime.exec(container, upload_command(path, url), stdout: true, stderr: true)
+      command = filtered?(path) ? upload_command(path, url) : masked_upload_command(path, url, name)
+      stdout, stderr, exit_code = runtime.exec(container, command, stdout: true, stderr: true)
       unless exit_code.to_i.zero?
         # Not fatal: the caller falls back to reading the file through this process, which
         # is the slower path but still produces a log.
         failures << "#{path} — direct upload failed (exit #{exit_code}#{": #{Array(stderr).join.strip}" if stderr.present?}), fell back to a bounded read"
         return nil
       end
+
+      # The masked copy is the object that was uploaded, and markers change its length.
+      size = Array(stdout).join[/\A\s*(\d+)/, 1]&.to_i || size unless filtered?(path)
 
       SessionLogUploader.uploaded_file(
         id: id, storage: cache_storage_key,
@@ -228,11 +229,25 @@ module Sessions
     end
 
     def upload_command(path, url)
+      [ "/bin/sh", "-c", curl_put(Shellwords.escape(path), url) ]
+    end
+
+    # Masks the log into a copy, uploads the copy, removes it. An image whose masker
+    # predates the `file` command exits 0 without writing the copy, so the upload fails
+    # on the missing file and the caller falls back to the bounded read — never to
+    # uploading the original.
+    def masked_upload_command(path, url, name)
+      kind = File.extname(name).in?(%w[.jsonl .json]) ? "jsonl" : "text"
+      copy = "/tmp/.aixle-masked-#{SecureRandom.hex(8)}#{File.extname(name)}"
       [
         "/bin/sh", "-c",
-        "curl -sS --noproxy '*' --fail --max-time #{UPLOAD_TIMEOUT_SECONDS} " \
-        "-X PUT -T #{Shellwords.escape(path)} #{Shellwords.escape(url)}"
+        "python3 #{FILTER_MARKER_PATH} file #{kind} #{Shellwords.escape(path)} #{copy} && " \
+        "#{curl_put(copy, url)}; status=$?; rm -f #{copy}; exit $status"
       ]
+    end
+
+    def curl_put(source, url)
+      "curl -sS --noproxy '*' --fail --max-time #{UPLOAD_TIMEOUT_SECONDS} -X PUT -T #{source} #{Shellwords.escape(url)}"
     end
 
 
