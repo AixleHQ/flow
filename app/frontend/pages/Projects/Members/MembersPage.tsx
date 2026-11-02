@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import type { Project, User } from '@/types/generated';
 
 import { getInitials } from 'shared/lib/getInitials';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { userPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -61,7 +61,7 @@ const MembersPage = () => {
     setAddOpen(false);
     setSelectedUserId(null);
   };
-  const requestClose = useConfirmClose(selectedUserId !== null, handleClose);
+  const requestClose = useUnsavedChanges({ opened: addOpen, dirty: selectedUserId !== null, onClose: handleClose });
 
   const handleAdd = () => {
     if (!selectedUserId) return;

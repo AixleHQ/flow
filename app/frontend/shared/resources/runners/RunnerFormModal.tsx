@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Runner } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import {
   ACKNOWLEDGED_MOUNTS_PATH,
@@ -99,7 +99,7 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
   const schema = useMemo(() => option?.configSchema ?? {}, [option]);
   const provisionable = option?.capabilities.provisionable ?? false;
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftFor(runner));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   const update = (changes: Partial<Draft>) => setDraft((current) => ({ ...current, ...changes }));
   const step = steps[active];

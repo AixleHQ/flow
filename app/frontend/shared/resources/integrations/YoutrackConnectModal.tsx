@@ -2,7 +2,8 @@ import { Alert, Anchor, Button, Group, Modal, Stack, Text, TextInput } from '@ma
 import { IconAlertCircle } from '@tabler/icons-react';
 import { useCallback, useState } from 'react';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { requestJson } from './requestJson';
 
@@ -30,7 +31,7 @@ export const YoutrackConnectModal = ({ opened, onClose, basePath, youtrack }: Co
     setInstanceUrl('');
     setError(null);
   }, [onClose]);
-  const requestClose = useConfirmClose(instanceUrl !== '', close);
+  const requestClose = useUnsavedChanges({ opened, dirty: instanceUrl !== '', onClose: close });
 
   const proceed = async () => {
     setError(null);
@@ -41,6 +42,7 @@ export const YoutrackConnectModal = ({ opened, onClose, basePath, youtrack }: Co
         { method: 'POST', body: JSON.stringify({ instance_url: instanceUrl.trim() }) },
         'Could not start connecting YouTrack',
       )) as { redirect_url: string };
+      allowUnload();
       window.location.assign(redirectUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not start connecting YouTrack');

@@ -1,5 +1,7 @@
 import { notifications } from '@mantine/notifications';
 
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
+
 // The XSRF-TOKEN cookie is rewritten on every page response (inertia_rails), so it
 // follows the session through a sign-in that happened without a page load — which
 // resets the session and its token. The meta tag is only as fresh as the last full load.
@@ -32,6 +34,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
 
   const stepUpUrl = await stepUpUrlOf(res);
   if (stepUpUrl) {
+    allowUnload();
     window.location.assign(stepUpUrl);
     // The page is leaving: settling would let the caller toast a refusal the step-up page explains.
     return new Promise<Response>(() => {});

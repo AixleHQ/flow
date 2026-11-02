@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
 import { describe, expect, it, vi } from 'vitest';
 
+import { visitHeld } from 'test/inertiaVisit';
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import SettingsPage from './SettingsPage';
@@ -69,6 +70,45 @@ describe('Projects/Settings/SettingsPage', () => {
     expect(screen.getByLabelText('Project Name')).toHaveValue('Gateway Service');
     expect(screen.getByLabelText('Description')).toHaveValue('Edge routing layer');
     expect(screen.getByDisplayValue('English')).toBeInTheDocument();
+  });
+
+  it('asks before leaving with unsaved edits, and stays on Keep editing', async () => {
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+    expect(visitHeld('/company/projects')).toBe(false);
+
+    await userEvent.type(screen.getByLabelText('Project Name'), ' 2');
+    expect(visitHeld('/company/projects')).toBe(true);
+
+    const question = await screen.findByRole('dialog', { name: 'Save your changes?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Keep editing' }));
+
+    expect(router.visit).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Project Name')).toHaveValue('Gateway Service 2');
+  });
+
+  it('saves from the leave question, then goes', async () => {
+    vi.mocked(router.patch).mockImplementationOnce((_url, _data, options) => {
+      options?.onSuccess?.({} as never);
+      options?.onFinish?.({} as never);
+    });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+    await userEvent.type(screen.getByLabelText('Project Name'), ' 2');
+    visitHeld('/company/projects');
+    const question = await screen.findByRole('dialog', { name: 'Save your changes?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Save' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/settings',
+      expect.objectContaining({ project: expect.objectContaining({ name: 'Gateway Service 2' }) }),
+      expect.anything(),
+    );
+    await waitFor(() =>
+      expect(router.visit).toHaveBeenCalledWith(
+        new URL('/company/projects', window.location.origin).href,
+        expect.anything(),
+      ),
+    );
   });
 
   it('disables Save until the form is edited, then submits a patch with the trimmed values', async () => {

@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import type { ConfigItem } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -83,7 +83,7 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
     }
   };
 
-  const requestClose = useConfirmClose(form.isDirty(), onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose });
 
   return (
     <Modal opened={opened} onClose={requestClose} title={isEditing ? 'Edit secret' : 'Add secret'} centered>

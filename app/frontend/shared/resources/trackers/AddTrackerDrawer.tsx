@@ -5,7 +5,7 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 export interface AvailableScopeGroup {
@@ -93,7 +93,7 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
   };
 
   const serverError = errors && Object.values(errors)[0];
-  const requestClose = useConfirmClose(form.isDirty(), onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose });
 
   return (
     <ResourceDrawer
