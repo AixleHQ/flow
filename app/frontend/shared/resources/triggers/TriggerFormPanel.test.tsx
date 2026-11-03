@@ -170,6 +170,57 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByText(/cannot start a run/)).toBeInTheDocument();
   });
 
+  describe('changing who an existing trigger runs as', () => {
+    const editing: Trigger = {
+      id: 9,
+      kind: 'schedule',
+      event_type: 'schedule.fired',
+      schedule_config: { cron: '0 9 * * 1-5', timezone: 'UTC' },
+      created_by: { id: 4, name: 'Ada Ruiz' },
+    };
+    const runAs: PanelProps['runAs'] = {
+      editable: true,
+      members: [
+        { id: 4, name: 'Ada Ruiz', agent_connected: true },
+        { id: 5, name: 'Bo Lind', agent_connected: true },
+        { id: 6, name: 'Cy Moss', agent_connected: false },
+      ],
+    };
+
+    it('lets an admin pick another member and sends only the new one', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs })} />);
+
+      await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+      expect(await screen.findByRole('option', { name: 'Cy Moss (no agent connected)' })).toHaveAttribute(
+        'data-combobox-disabled',
+        'true',
+      );
+      await userEvent.click(screen.getByRole('option', { name: 'Bo Lind' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'PATCH').trigger.run_as_user_id).toBe(5);
+    });
+
+    it('leaves Run as out of the request when it is unchanged', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs })} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'PATCH').trigger).not.toHaveProperty('run_as_user_id');
+    });
+
+    it('shows Run as read-only to someone who may not change it', () => {
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs: { editable: false, members: [] } })} />);
+
+      expect(screen.getByText('Ada Ruiz')).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Runs as' })).not.toBeInTheDocument();
+    });
+  });
+
   it('switches the rendered fields when the kind Select changes to chat', async () => {
     renderPage(<TriggerFormPanel {...baseProps({ chatProviders: [slack] })} />);
 

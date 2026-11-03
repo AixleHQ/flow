@@ -74,15 +74,31 @@ card). The Triggers tab shows that name on the card and in the add/edit panel.
 Off-board runs (schedule / Slack / webhook) belong to the creator and use *their*
 agent credentials, because nobody is at the keyboard when they fire. A trigger
 with no creator therefore cannot start one — it is skipped, and the card says so.
-Triggers created before the creator was recorded show **Unknown**; re-create them
-to give them an owner.
+Triggers created before the creator was recorded show **Unknown**; an admin can
+pick who they run as (below), or re-create them.
 
 A column trigger's run still belongs to the person the card puts on it (the
 assignee, else whoever moved it), so its creator is provenance only.
 
-The creator is fixed at creation: editing a trigger's name, filter, cron or
-enabled flag never reassigns it, and deleting the creator's account leaves the
-trigger in place without one.
+Editing a trigger's name, filter, cron or enabled flag never reassigns who it
+runs as, and deleting that person's account leaves the trigger in place without
+one.
+
+### Changing who an off-board trigger runs as
+
+A company admin or the project's owner can point an existing schedule, chat,
+webhook or task tracker trigger at another project member: open it, pick the
+member under **Runs as**, and save. From the next run on, the trigger's runs
+belong to that member and use their agent and its limits — so when one person's
+agent hits its usage limit, switching the trigger to someone else keeps it
+running, with no duplicate triggers to keep in step. The trigger keeps its id,
+settings and history.
+
+Only members who can carry a run are offered: viewers are left out, and members
+without an agent connected in the company are listed but cannot be picked.
+Everyone else sees **Runs as** read-only. Each change is recorded in the audit
+trail with who made it and the old and new member. Over MCP, the same change is
+`update_workflow_trigger` with `run_as_user_id`.
 
 ## subject_policy
 

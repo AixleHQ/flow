@@ -333,6 +333,17 @@ class TriggerBindingTest < ActiveSupport::TestCase
     schedule_binding(enabled: false).update!(name: "renamed")
   end
 
+  test "pointing a schedule at another member leaves its Temporal schedule alone" do
+    binding = schedule_binding(enabled: false)
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    create(:agent_credential, user: member, company: @company)
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).never
+
+    binding.update!(created_by: member)
+  end
+
   test "a chat message reaches only the triggers bound to its channel, and only where the channel is connected" do
     here = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, chat_channel: "C0HERE0001")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, chat_channel: "C0ELSEWHR1")
