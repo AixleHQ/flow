@@ -4,14 +4,12 @@ module Billing
   # What the billing tab shows a company's administrators: where the
   # subscription stands, and what the period under way has come to so far.
   class Overview
-    PRICE_CACHE_TTL = 1.hour
-
-    def initialize(company, client: StripeClient.new)
+    def initialize(company, price: CardPrice.new)
       @company = company
-      @client = client
+      @price = price
     end
 
-    attr_reader :company, :client
+    attr_reader :company, :price
 
     def to_h
       {
@@ -21,7 +19,8 @@ module Billing
         cancels_at: company.billing_cancels_at,
         usage: usage,
         trial: trial,
-        can_pay: client.configured?,
+        price: price_terms,
+        can_pay: price.client.configured?,
         has_subscription: company.stripe_subscription_id.present?,
         has_unpaid_invoice: company.billing_unpaid_invoice_url.present?,
         final_invoice: final_invoice,
@@ -43,44 +42,17 @@ module Billing
       {
         worker_minutes: minutes.round(1).to_f,
         measured_until: last_hour && (last_hour + 1.hour),
-        estimate: estimate(minutes)
+        estimate: price.estimate(minutes)
       }
     end
 
-    # Priced the way Stripe prices it, so the number does not promise less than
-    # the invoice: the price can sell minutes in packs (`transform_quantity`),
-    # rounded the way it says.
-    def estimate(minutes)
-      price = cached_price
-      return nil if price.nil?
+    # The rate the page quotes, whatever state the subscription is in.
+    def price_terms
+      terms = price.terms
+      return nil if terms.nil?
 
-      unit_amount = BigDecimal((price[:unit_amount] || price[:unit_amount_decimal]).to_s)
-      pack = price.dig(:transform_quantity, :divide_by).to_i
-      units = pack.positive? ? packs(minutes / pack, price.dig(:transform_quantity, :round)) : minutes
-
-      {
-        amount_cents: (units * unit_amount).round.to_i,
-        currency: price[:currency],
-        unit_amount_cents: unit_amount.to_f,
-        minutes_per_unit: pack.positive? ? pack : 1
-      }
-    rescue ArgumentError, TypeError
-      nil
-    end
-
-    def packs(quantity, rounding) = rounding == "up" ? quantity.ceil : quantity.floor
-
-    # One request per hour per installation rather than one per page view, and
-    # an estimate that is simply absent while Stripe cannot be reached.
-    def cached_price
-      return nil unless client.configured?
-
-      Rails.cache.fetch([ "billing/price", Settings.stripe&.price_id ], expires_in: PRICE_CACHE_TTL) do
-        client.retrieve_price.to_hash.deep_symbolize_keys
-      end
-    rescue StripeClient::Error => e
-      Rails.logger.warn("[Billing::Overview] price unavailable: #{e.message}")
-      nil
+      { unit_amount_cents: terms[:unit_amount_cents].to_f, currency: terms[:currency],
+        minutes_per_unit: terms[:minutes_per_unit] }
     end
 
     # The invoice the last cancellation settles. `settling` while its usage is

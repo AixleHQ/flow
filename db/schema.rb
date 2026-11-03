@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -225,6 +225,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
     t.datetime "settled_at"
     t.text "settlement_error"
     t.string "stripe_subscription_id"
+    t.datetime "started_at"
+    t.datetime "period_started_at"
     t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
     t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
   end
@@ -979,6 +981,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
     t.datetime "proposal_decided_at"
     t.string "proposal_state"
     t.string "previous_agreement_id"
+    t.decimal "price_per_minute", precision: 12, scale: 8
+    t.string "price_currency"
     t.index ["agreement_id"], name: "index_marketplace_licenses_on_agreement_id"
     t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "((company_id IS NOT NULL) AND ((subscription_state)::text <> 'ended'::text))"
     t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"

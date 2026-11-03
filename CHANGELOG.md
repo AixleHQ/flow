@@ -21,6 +21,22 @@ governance, community health — carry none.
   and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
   setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
 
+### Changed
+- **Company settings**: the Billing tab lists every subscription the workspace has
+  had. The one paying now — the card, or the AWS Marketplace subscription — shows its
+  billing method, current period, next invoice and the usage so far; the ones that
+  ended are listed beneath it with their active period, the day they were cancelled,
+  the usage their last bill covered, and a way to the invoices (Stripe's for a card,
+  the AWS Billing console for AWS Marketplace). A workspace not paying through AWS is
+  offered "Pay via AWS Marketplace" beside "Add a card", and everything that ended
+  reads "Cancelled". AWS Marketplace usage is priced at the rate the agreement was
+  accepted at, read from AWS when the subscription is registered, created or amended, so
+  a private offer shows its own price; a subscription whose price was never read shows
+  minutes and no sum. Operators: the offer points at `AWS_MARKETPLACE_SAAS_LISTING_URL`
+  and is not made where that is empty; the seller role needs
+  `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
+  a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
+
 ## [1.10.0] - 2026-11-03
 
 ### Added

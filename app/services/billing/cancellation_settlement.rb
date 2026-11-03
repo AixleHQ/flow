@@ -69,7 +69,7 @@ module Billing
       state = SubscriptionState.from(subscription)
 
       cancellation.update!(settlement_state: "settling", cancels_at: state.ended_at || Time.current,
-                           final_invoice_id: state.latest_invoice_id)
+                           started_at: state.started_at, final_invoice_id: state.latest_invoice_id)
     end
 
     def send_usage
