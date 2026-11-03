@@ -149,8 +149,12 @@ module AzureDevops
       # `ensure_all!` is idempotent, and so is the tracker provisioning after it.
       hooks = provision_subscriptions(integration, check: true)
       Trackers::Provisioning.ensure_for!(integration)
-      { status: :active, project: project_info, service_hooks: hooks,
-        message: verified_message(integration, hooks), warning: hooks.present? && hooks[:undelivered] != [] }
+      permissions = check_permissions(integration)
+      message = verified_message(integration, hooks)
+      message = "#{message}. Missing permissions: #{permissions.summary}" if permissions && !permissions.ok?
+      { status: :active, project: project_info, service_hooks: hooks, permissions: permissions&.to_h,
+        message: message,
+        warning: (hooks.present? && hooks[:undelivered] != []) || (permissions.present? && !permissions.ok?) }
     rescue Error => e
       record_error(integration, e.code)
       # The message goes to the caller, which puts it in a flash — not into
@@ -250,6 +254,25 @@ module AzureDevops
       { event_types: event_types, undelivered: nil }
     end
 
+    # What a customer-owned app can actually do in each selected project, so that
+    # permissions an administrator later removed show up as a warning on the
+    # connection instead of as a failed tool call. Only for such an app: the
+    # shared one is entitled by Aixle itself. Never fails the test; a check that
+    # could not run says nothing.
+    def check_permissions(integration)
+      return nil unless integration.azure_devops_installation&.federated?
+
+      client, = CredentialProvider.client_for(integration, allow_inactive: true,
+                                                          project_id: integration.azure_project_ids.first)
+      names = integration.azure_project_names
+      projects = integration.azure_project_ids.map { |id| { id: id, name: names[id] } }
+      PermissionCheck.new(client: client).call(projects)
+    rescue Error => e
+      Rails.logger.warn("[AzureDevops::IntegrationService] permission check skipped for " \
+                        "integration #{integration.id}: #{e.code}")
+      nil
+    end
+
     def tracker_events_awaited?(integration)
       TriggerBinding.active.where(project_id: integration.project_id, event_type: Trackers::EventPipeline::EVENT_TYPES)
                     .where(project_tracker_id: [ nil, *integration.project_trackers.ids ]).exists?
@@ -307,6 +330,7 @@ module AzureDevops
     # here is cosmetic and must not fail the connection.
     def identity_name(resolved)
       return nil unless resolved.service_principal?
+      return "Your Entra app (#{resolved.installation.client_id.to_s.first(8)}…)" if resolved.installation&.federated?
 
       "Aixle (#{resolved.installation.client_id.to_s.first(8)}…)"
     rescue StandardError

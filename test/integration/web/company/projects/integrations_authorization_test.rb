@@ -71,6 +71,20 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     end
   end
 
+  # An organization name that is not one makes the allowed roles stop in the body with a
+  # 422 before any request leaves, which is what proves they passed authorization.
+  %i[inspect connect script].each do |action|
+    test "azure_devops_federated_#{action} is a project write" do
+      with_azure_devops_enabled(federation: federation_settings)
+      path = public_send(:"azure_devops_federated_#{action}_company_project_integrations_path", @project)
+
+      assert_project_write(allowed: :unprocessable_content) do
+        post path, params: { organization: "not a valid name!", client_id: SecureRandom.uuid, project_ids: [ SecureRandom.uuid ] },
+                   as: :json
+      end
+    end
+  end
+
   test "jira_oauth_start is a project write (redirects to Atlassian)" do
     with_jira_oauth_app
     assert_project_write do

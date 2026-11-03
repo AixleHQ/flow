@@ -308,6 +308,37 @@ module AzureDevops
       assert_raises(ValidationFailed) { @onboarding.inspect!(organization: "contoso") }
     end
 
+    # == an organization connected through the customer's own app ==
+
+    # Binding the shared app onto that row used to succeed, because a federated
+    # row may change its client id, and left it federated with the shared app's
+    # client id: every token exchange afterwards failed.
+    test "the shared app cannot be bound onto an organization connected through the customer's own app" do
+      federated = create(:azure_devops_installation, :federated, :active, :approved, company: @company,
+                         tenant_id: @tenant, organization_slug: "contoso", allowed_project_ids: [ @project_id ])
+      stub_tenant
+      probe = stub_admin_probe
+
+      [ -> { @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("admin-pat")) },
+        -> { @onboarding.complete!(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
+                                   project_ids: [ SecureRandom.uuid ]) } ].each do |attempt|
+        error = assert_raises(ValidationFailed, &attempt)
+        assert_match(/already connected through your own Entra app/, error.message)
+      end
+
+      assert_not_requested probe
+      assert_equal [ federated.client_id, nil, "federated" ],
+                   federated.reload.then { |row| [ row.client_id, row.app_config_key, row.credential_kind.to_s ] }
+    end
+
+    test "a federated organization with every chosen project approved is still returned without a token" do
+      federated = create(:azure_devops_installation, :federated, :active, :approved, company: @company,
+                         tenant_id: @tenant, organization_slug: "contoso", allowed_project_ids: [ @project_id ])
+      stub_tenant
+
+      assert_equal federated.id, @onboarding.complete!(organization: "contoso", project_ids: [ @project_id ]).id
+    end
+
     # == signing in with Microsoft ==
 
     def signed_in(tid: @tenant, upn: "grace@contoso.com")

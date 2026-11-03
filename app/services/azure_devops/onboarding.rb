@@ -51,6 +51,7 @@ module AzureDevops
       tenant = TenantDiscovery.call(organization)
       bound = existing_installation(tenant)
       same_directory!(admin, tenant)
+      refuse_federated!(bound, tenant) if admin
 
       if bound&.active?
         # A token widens the approved set. Without one this branch could only
@@ -112,6 +113,8 @@ module AzureDevops
         return bound
       end
 
+      refuse_federated!(bound, tenant)
+
       if admin.nil?
         raise ValidationFailed,
               "Approving new projects for this organization needs an administrator to sign in with Microsoft, " \
@@ -164,6 +167,16 @@ module AzureDevops
             "Sign in with an account in that organization's directory."
     end
 
+    # Binding the shared app onto a federated row would keep its credential kind
+    # and point it at an app that has no federated credential for this issuer.
+    def refuse_federated!(bound, tenant)
+      return unless bound&.federated?
+
+      raise ValidationFailed,
+            "'#{tenant.organization}' is already connected through your own Entra app. " \
+            "Disconnect it first to connect with Aixle's Microsoft app."
+    end
+
     # What the application itself can see, for an organization already bound.
     # Intersected with the approved list, same as everywhere else: Azure's answer
     # alone would offer projects nobody signed off on.
@@ -196,20 +209,8 @@ module AzureDevops
       installation
     end
 
-    # The `oid` claim of an app-only token is the service principal's object id
-    # in the tenant that issued it. Reading it is not token validation — we are
-    # the audience and we just obtained it over TLS from Entra — so the
-    # signature is not re-checked here.
     def service_principal_object_id(installation)
-      token = AppTokenService.new(installation).access_token(force: true).value
-      payload = token.split(".")[1].to_s
-      claims = JSON.parse(Base64.urlsafe_decode64(payload + ("=" * ((4 - (payload.length % 4)) % 4))))
-      oid = claims["oid"].presence
-      raise Error.new("Entra issued a token without an oid claim", code: "unexpected_token") if oid.blank?
-
-      oid
-    rescue JSON::ParserError, ArgumentError
-      raise Error.new("Could not read the application's identity from its token", code: "unexpected_token")
+      TokenClaims.object_id!(AppTokenService.new(installation).access_token(force: true).value)
     end
 
     # Adds the application to the organization with a Basic license and
