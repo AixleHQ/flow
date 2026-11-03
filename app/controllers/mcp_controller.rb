@@ -60,14 +60,27 @@ class MCPController < ActionController::API
 
       user.note_mcp_token_use!
       @logged_user_id = user.id
+      Current.analytics_actor = user
+      Current.analytics_via = "mcp"
       Tools::PersonalMCPRequestHandler.new(user)
     else
       session = MCP::SessionKey.session_for(key) || TerminalSession.find_by(mcp_key: key)
       return nil unless session&.active? && session.owner_entitled?
 
       @logged_session_id = session.id
+      note_builder_session(session)
       Tools::MCPRequestHandler.new(session)
     end
+  end
+
+  # What the Aixle Builder makes is the person's own work, done through it. An
+  # agent working a run is not someone using the product, so it reports nothing.
+  def note_builder_session(session)
+    return unless session.aixle_builder?
+
+    Current.analytics_actor = session.user
+    Current.analytics_via = "ui"
+    Current.analytics_origin = "builder"
   end
 
   def bearer_token

@@ -1,6 +1,7 @@
 import type { Company, CurrentUser, Membership } from '@/types/generated';
 
 import type { SharedPermissions, SharedProps, SharedSettings, SharedTrial } from 'shared/ui';
+import type { SharedAnalytics } from 'shared/ui/types';
 
 // Every authenticated page renders inside AuthLayout, which reads currentUser/flash/projects/
 // permissions/settings off usePage().props. Without currentUser the layout short-circuits to a
@@ -73,6 +74,17 @@ export const buildSharedTrial = (overrides: Partial<SharedTrial> = {}): SharedTr
   daysLeft: 21,
   lastDay: '2026-11-20',
   canPay: true,
+  ...overrides,
+});
+
+export const buildSharedAnalytics = (overrides: Partial<SharedAnalytics> = {}): SharedAnalytics => ({
+  key: 'phc_test',
+  host: 'https://us.i.posthog.com',
+  capture: true,
+  consent: null,
+  distinctId: null,
+  signupDate: null,
+  context: {},
   ...overrides,
 });
 

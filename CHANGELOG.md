@@ -13,6 +13,20 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Profile**: the hosted product asks once whether it may collect product
+  analytics — pages visited, clicks and masked session recordings — and
+  Profile → Privacy changes the answer on every device. Do Not Track and Global
+  Privacy Control count as a refusal. Self-hosted installations send nothing.
+- **Sign-in & onboarding**: the Privacy Policy describes product analytics and
+  session replay, who receives them and how long they are kept.
+
+### Changed
+- Operators: product analytics is configured with `POSTHOG_KEY`,
+  `POSTHOG_HOST`, `POSTHOG_INTERNAL_DOMAINS` and `POSTHOG_ENABLE_IN_DEV`; with
+  no key, nothing is sent. Sentry no longer records a sample of ordinary
+  sessions, only those that end in an error.
+
 ## [1.10.0] - 2026-11-03
 
 ### Added

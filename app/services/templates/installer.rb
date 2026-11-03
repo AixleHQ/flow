@@ -52,7 +52,8 @@ module Templates
       previous = TemplateInstall.find_by(installed_by: @user, idempotency_key: @idempotency_key)
       return Result.new(install: previous, project: previous.project, created: false) if previous
 
-      result = ActiveRecord::Base.transaction { install!(plan) }
+      # Held past the commit, which is when the records report their creation.
+      result = Current.set(analytics_origin: "template") { ActiveRecord::Base.transaction { install!(plan) } }
       ProbeServersJob.perform_later(result.install.id, result.server_ids) if result.server_ids.any?
       result
     rescue ActiveRecord::RecordNotUnique

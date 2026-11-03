@@ -88,6 +88,7 @@ class FullyWiredUserScenario
   end
 
   def build_company_records
+    @company.update!(created_by: @user)
     create(:integration, company: @company, connected_by: @user)
     create(:runner, :manual, company: @company, created_by: @user)
     create(:azure_devops_installation, company: @company, approved_by: @user, approved_at: Time.current)

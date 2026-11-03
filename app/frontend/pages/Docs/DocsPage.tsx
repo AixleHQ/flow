@@ -1,4 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
+import { useEffect } from 'react';
+
+import { analytics } from 'shared/lib/analytics';
 
 import { DocsLayout } from './components/DocsLayout';
 import { DocsMdxContent } from './components/DocsMdxContent';
@@ -8,6 +11,9 @@ const DocsPage = () => {
   const props = usePage().props as { slug?: string };
   const slug = props.slug ?? 'user-guide';
   const page = getDocPage(slug);
+  useEffect(() => {
+    analytics.track('docs_opened', { doc_slug: slug });
+  }, [slug]);
 
   if (!page) {
     return (

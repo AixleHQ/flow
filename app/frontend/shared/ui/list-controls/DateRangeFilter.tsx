@@ -2,6 +2,8 @@ import { DatePickerInput, type DatePickerPreset, type DatesRangeValue } from '@m
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 
+import { analytics } from 'shared/lib/analytics';
+
 interface DateRangeFilterProps {
   /** Inclusive ISO dates (YYYY-MM-DD); both unset means any date. */
   from?: string;
@@ -42,8 +44,10 @@ export function DateRangeFilter({ from, until, onChange }: DateRangeFilterProps)
       onChange={(next) => {
         setRange(next);
         const [start, end] = next;
-        if (start && end) onChange(start, end);
-        else if (!start && !end) onChange(undefined, undefined);
+        if (start && end) {
+          analytics.track('filter_applied', { filter: 'date_range' });
+          onChange(start, end);
+        } else if (!start && !end) onChange(undefined, undefined);
       }}
       presets={PRESETS}
       allowSingleDateInRange

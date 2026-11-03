@@ -85,7 +85,7 @@ const ProjectSessionArtifactsPage = () => {
   return (
     <>
       <Head title={`Session Artifacts — ${project.name}`} />
-      <Box maw={900} mx="auto">
+      <Box maw={900} mx="auto" data-ph-block>
         <Group mb="lg">
           <Button
             variant="subtle"

@@ -5,6 +5,10 @@
 # TriggerEvent by (project, event_type, enabled) plus JSONB containment of
 # filter_predicate within the event data.
 class TriggerBinding < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit { report_analytics("workflow_edited", change: "trigger") }
+
   extend Enumerize
 
   belongs_to :project

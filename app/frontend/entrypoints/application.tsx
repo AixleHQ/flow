@@ -1,14 +1,15 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { MantineProvider, localStorageColorSchemeManager } from '@mantine/core';
 import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
 
 import 'shared/lib/zodConfig';
+import { installAnalytics, syncAnalytics } from 'shared/lib/analytics';
 import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
-import { InertiaRouteIndicator } from 'shared/ui';
+import { AnalyticsConsentBanner, InertiaRouteIndicator } from 'shared/ui';
 import { AppCrashFallback, ProviderCrashFallback } from 'shared/ui/AppCrashFallback';
 
 // Persist the chosen color scheme. Key matches the inline anti-flash script in
@@ -34,6 +35,9 @@ try {
     if (page.props?.settings) {
       initSentry(page.props.settings);
     }
+    // Before the first render, so what the first page sends as it mounts
+    // already knows whether it may.
+    if (page.component && page.props) syncAnalytics(page);
   }
 } catch {
   // Sentry init will be skipped if page data is missing or malformed
@@ -42,6 +46,10 @@ try {
 // Recover from stale Vite chunk 404s after a deploy: prompt the user to reload
 // into the new version instead of landing on a broken page.
 registerPreloadErrorReload();
+
+// Product analytics follows Inertia's navigation; registered before the app
+// mounts, so the initial page's navigate event is heard as well.
+installAnalytics(router);
 
 createInertiaApp({
   strictMode: true,
@@ -64,6 +72,7 @@ createInertiaApp({
           <ModalsProvider>
             <Notifications position="top-right" />
             <InertiaRouteIndicator />
+            <AnalyticsConsentBanner />
             <Sentry.ErrorBoundary fallback={({ resetError }) => <AppCrashFallback resetError={resetError} />}>
               {app}
             </Sentry.ErrorBoundary>

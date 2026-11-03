@@ -40,6 +40,7 @@ import type { Membership } from '@/types/generated';
 
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { FeedbackModal } from 'shared/components/FeedbackModal';
+import { phName, phSlug } from 'shared/lib/analytics';
 import { getInitials } from 'shared/lib/getInitials';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
@@ -358,6 +359,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
             {group.label && (
               <button
                 type="button"
+                data-ph-unmask
                 onClick={() => toggleGroup(group.label as string)}
                 aria-expanded={!groupCollapsed}
                 className={`${classes.navGroupLabel} ${collapsed ? classes.navGroupLabelCollapsed : ''}`}
@@ -381,6 +383,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                       <Link
                         href={item.path}
                         onClick={onNavigate}
+                        {...phName(`nav_${phSlug(item.label)}`)}
                         aria-label={item.label}
                         aria-current={isActive ? 'page' : undefined}
                         className={[
@@ -400,6 +403,8 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                     key={item.path}
                     href={item.path}
                     onClick={onNavigate}
+                    data-ph-unmask
+                    {...phName(`nav_${phSlug(item.label)}`)}
                     aria-current={isActive ? 'page' : undefined}
                     className={[
                       isOverview ? classes.navOverview : classes.navItem,

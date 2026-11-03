@@ -20,6 +20,14 @@ class Web::ApplicationController < ApplicationController
   # company accepts; before onboarding, which is already work inside it.
   before_action :enforce_legal_acceptance
   before_action :enforce_onboarding
+  before_action :set_analytics_context
+  before_action :adopt_analytics_consent_cookie
+
+  # For pages whose URL is a credential (a sign-in or reset link, an invitation)
+  # or names a person: the browser asks for consent there but sends nothing.
+  def self.skip_analytics_capture(**)
+    before_action(**) { @analytics_capture_off = true }
+  end
 
   inertia_share do
     shared = {
@@ -48,7 +56,8 @@ class Web::ApplicationController < ApplicationController
       # re-evaluated, so a partial reload picks up a flip. Anonymous pages get
       # them too, resolved with no company: the payload never carries more than
       # flags already meant for any browser.
-      features: InertiaRails.always { FeaturesResource.new(current_company).to_h }
+      features: InertiaRails.always { FeaturesResource.new(current_company).to_h },
+      analytics: InertiaRails.always { analytics_share }
     }
 
     if signed_in?
@@ -87,6 +96,31 @@ class Web::ApplicationController < ApplicationController
   end
 
   private
+
+  def analytics_share
+    return nil if impersonated? || current_user&.super_admin?
+
+    Analytics.browser_config(user: current_user, company: current_company, capture: !@analytics_capture_off)
+  end
+
+  def set_analytics_context
+    Current.analytics_via = "ui"
+    Current.analytics_actor = current_user if signed_in? && !impersonated?
+  end
+
+  # A choice made on a page nobody was signed in on (the login screen, the
+  # signup form) belongs to whoever signs in from that browser, unless they
+  # had already answered.
+  def adopt_analytics_consent_cookie
+    adopt_analytics_consent_for(current_user) if signed_in? && !impersonated?
+  end
+
+  def adopt_analytics_consent_for(user)
+    return unless user.analytics_consent.nil?
+
+    choice = cookies[Analytics::CONSENT_COOKIE]
+    user.record_analytics_consent!(choice) if User::ANALYTICS_CONSENTS.include?(choice)
+  end
 
   # Nil everywhere but the hosted product, and nil there for a company somebody
   # is paying for.

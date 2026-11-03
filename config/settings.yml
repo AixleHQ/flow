@@ -70,6 +70,19 @@ sentry:
   # the long-standing behaviour; lower it to cut volume.
   traces_sample_rate: <%= ENV['SENTRY_TRACES_SAMPLE_RATE'] || 1.0 %>
 
+# Product analytics (PostHog), sent from the hosted product only and only for
+# people who consented (Analytics). The project key is public by design, like
+# the browser Sentry DSN.
+posthog:
+  api_key: <%= ENV['POSTHOG_KEY'] %>
+  host: <%= ENV['POSTHOG_HOST'].presence || 'https://us.i.posthog.com' %>
+  # Development never sends unless asked to, so a key copied into a local env
+  # for one test does not report every developer's clicks.
+  enable_in_dev: <%= ENV['POSTHOG_ENABLE_IN_DEV'] == '1' %>
+  # Email domains of our own test tenants. Their events carry
+  # internal_company=true, which every insight filters out.
+  internal_domains: <%= (ENV['POSTHOG_INTERNAL_DOMAINS'].presence || 'acmeorbit.com').split(',').map(&:strip).reject(&:empty?).to_json %>
+
 # Which authentication methods this INSTALLATION offers at all (AD-4). This is
 # the ceiling every company's own policy sits under: a company can only disable
 # what is listed here, never enable something the deployment cannot complete.

@@ -78,6 +78,22 @@ export interface SharedMarketplace {
   listingUrl?: string;
 }
 
+export type AnalyticsConsent = 'granted' | 'denied';
+
+/** Present only where product analytics may run at all (the hosted product, a key set, nobody impersonating). */
+export interface SharedAnalytics {
+  key: string;
+  host: string;
+  /** False on pages whose URL is a credential: consent is asked there, but nothing is sent. */
+  capture: boolean;
+  /** The signed-in person's answer; null when never asked or nobody is signed in. */
+  consent: AnalyticsConsent | null;
+  distinctId: string | null;
+  signupDate: string | null;
+  /** Company-level properties every event carries (company_id, billing_status, …). */
+  context: Record<string, string | number | boolean>;
+}
+
 export interface SharedProps {
   currentUser: CurrentUser | null;
   // Most flash entries are strings (notice/alert). `needs_setup` is a list of
@@ -93,5 +109,6 @@ export interface SharedProps {
    */
   features?: Partial<Features>;
   marketplace?: SharedMarketplace | null;
+  analytics?: SharedAnalytics | null;
   [key: string]: unknown;
 }

@@ -119,7 +119,7 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
       </Group>
 
       {mcp.token && (
-        <Box mb="md">
+        <Box mb="md" data-ph-block>
           <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
             <Text fz={14} fw={600} c="var(--app-text-primary)">
               Your token — copy it now, it will not be shown again:

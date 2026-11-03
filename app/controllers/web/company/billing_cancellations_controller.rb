@@ -22,6 +22,7 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
     if cancellation
       Billing::SettleCancellationJob.perform_later(cancellation.id)
       notify_admins(cancellation)
+      Analytics.track("subscription_cancel_requested", company: current_company, props: { reason: reason })
     end
 
     redirect_to company_settings_billing_path,
@@ -42,6 +43,7 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
       current_company.billing_cancellations.pending.update_all(resumed_at: Time.current)
     end
 
+    Analytics.track("subscription_cancel_reverted", company: current_company)
     redirect_to company_settings_billing_path, notice: "Your subscription continues."
   rescue Billing::StripeClient::Error => e
     Rails.logger.error("[BillingCancellations] company #{current_company.id}: #{e.message}")

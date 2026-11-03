@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class Asset < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "asset"
+
   # `folder` holds the same path shape as `Folder#path` — see `Folder::PATH_FORMAT` for what a
   # segment may contain, and `Folder` for why paths (not a `parent_id`) are the source of truth
   # for nesting.

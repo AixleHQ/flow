@@ -63,6 +63,7 @@ import type TaskDetail from 'types/generated/TaskDetail';
 import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
+import { phName } from 'shared/lib/analytics';
 import { apiMutate, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
@@ -1304,7 +1305,7 @@ const BoardPage = () => {
             <Button variant="default" size="sm" onClick={requestCloseCreate}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" loading={loading}>
+            <Button {...phName('create_task_submit')} data-ph-unmask type="submit" size="sm" loading={loading}>
               Create task
             </Button>
           </Group>

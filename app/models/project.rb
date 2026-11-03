@@ -1,6 +1,15 @@
 # frozen_string_literal: true
 
 class Project < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit do
+    report_analytics("project_created") do
+      { is_first: Analytics.first_for_company?(Project.where(company_id: company_id), self),
+        from_template: Current.analytics_origin == "template" }
+    end
+  end
+
   extend Enumerize
 
   # Constants

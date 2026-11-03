@@ -103,6 +103,7 @@ class ActiveSupport::TestCase
   include YoutrackTestHelper
   include GithubProjectsTestHelper
   include FeatureFlagsHelper
+  include AnalyticsTestHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper
   # Add more helper methods to be used by all tests here...

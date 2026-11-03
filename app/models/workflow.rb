@@ -1,6 +1,15 @@
 # frozen_string_literal: true
 
 class Workflow < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit do
+    report_analytics("workflow_created") do
+      { is_first: Analytics.first_for_company?(Workflow.where(company_id: company_id), self),
+        steps_count: steps.count, created_via: analytics_created_via }
+    end
+  end
+
   include ProjectOwnedReferences
   belongs_to :scope, polymorphic: true, optional: true
   include TenantColumns

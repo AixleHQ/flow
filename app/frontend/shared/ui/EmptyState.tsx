@@ -1,5 +1,7 @@
 import { Box, Center, Stack, Text } from '@mantine/core';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
+
+import { analytics } from 'shared/lib/analytics';
 
 interface EmptyStateProps {
   /** A Tabler icon element, e.g. `<IconRobot size={22} />`. Not an emoji. */
@@ -21,6 +23,7 @@ interface EmptyStateProps {
  * emoji font.
  */
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+  useEffect(() => analytics.track('empty_state_viewed'), []);
   return (
     <Center py={48} px="md">
       <Stack align="center" gap="xs" maw={420}>

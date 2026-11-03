@@ -70,6 +70,7 @@ import type TaskComment from 'types/generated/TaskComment';
 import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
+import { phName } from 'shared/lib/analytics';
 import { apiMutate } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
@@ -566,6 +567,8 @@ export function TaskDetailSidebar({
         <Box style={{ flex: 1 }} />
         {canExecute && canTriggerWorkflow && (
           <Button
+            {...phName('task_run_workflow')}
+            data-ph-unmask
             size="compact-sm"
             leftSection={<IconPlayerPlay size={13} />}
             onClick={handleTriggerWorkflow}

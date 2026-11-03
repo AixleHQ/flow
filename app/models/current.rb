@@ -7,7 +7,13 @@
 #
 # `feature_snapshot` is the flag values read by the first `Feature.enabled?` of
 # this request or job (FeatureFlags.snapshot).
+#
+# `analytics_actor` and `analytics_via` are who is acting and through what
+# (Analytics::VIAS), set by the web and MCP entry points so a model change made
+# from either reports the same event. `analytics_origin` narrows a creation
+# down further (a template install, the builder).
 class Current < ActiveSupport::CurrentAttributes
   attribute :user_session
   attribute :feature_snapshot
+  attribute :analytics_actor, :analytics_via, :analytics_origin
 end

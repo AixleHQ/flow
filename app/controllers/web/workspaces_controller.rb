@@ -57,7 +57,7 @@ class Web::WorkspacesController < Web::ApplicationController
     return refuse(base: "That link has expired. Fill the form in again and we will send a new one.") if answers.nil?
 
     form = WorkspaceOnboardingForm.new(marketplace_license: marketplace_license,
-                                       **answers.except(:marketplace_license_id, :acceptance))
+                                       **answers.except(:marketplace_license_id, :acceptance, :analytics, :issued_at))
     existing = User.find_by(email: form.email)
     return refuse(base: "That account cannot create a workspace.") if existing&.deleted?
     return refuse(base: "You already belong to a workspace.") if existing&.company_memberships&.exists?
@@ -70,6 +70,7 @@ class Web::WorkspacesController < Web::ApplicationController
     # it the person lands on step-up holding no credential to step up with.
     sign_in(owner, provider: IdentityProvider.deployment!("magic_link"))
     forget_marketplace_license
+    report_confirmed_signup(owner, form.company, answers)
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
   end
 
@@ -85,7 +86,40 @@ class Web::WorkspacesController < Web::ApplicationController
     return refuse(**form.errors.to_hash(true)) unless form.save(current_user, acceptance: acceptance_given(form))
 
     forget_marketplace_license
+    adopt_analytics_choice(current_user, analytics_answers)
+    Analytics.capture("workspace_created", user: current_user, company: form.company,
+                                           props: { auth_method: signed_in_with })
     redirect_to onboarding_path, notice: "#{form.company.name} is ready"
+  end
+
+  # The first way this session proved who it is: what a signed-in person
+  # signed up with.
+  def signed_in_with
+    IdentityProvider.where(id: current_user_session&.proved_provider_ids).pick(:kind)
+  end
+
+  # The choice the signup page asked for, made before there was an account.
+  def adopt_analytics_choice(user, analytics)
+    choice = analytics["consent"]
+    return unless user.analytics_consent.nil? && User::ANALYTICS_CONSENTS.include?(choice)
+
+    user.record_analytics_consent!(choice)
+  end
+
+  def report_confirmed_signup(owner, company, answers)
+    analytics = answers[:analytics].to_h.stringify_keys
+    adopt_analytics_choice(owner, analytics)
+    Analytics.alias_anonymous(user: owner, anonymous_id: analytics["anonymous_id"])
+    minutes = ((Time.current - answers[:issued_at]) / 60).round if answers[:issued_at]
+    Analytics.capture("workspace_created", user: owner, company: company,
+                                           props: { auth_method: "magic_link", minutes_since_email: minutes })
+  end
+
+  # The anonymous id rides along only when the page was allowed to report.
+  def analytics_answers
+    given = params.fetch(:workspace, {}).permit(:analytics_consent, :analytics_id)
+    consent = given[:analytics_consent].presence_in(User::ANALYTICS_CONSENTS)
+    { "consent" => consent, "anonymous_id" => (given[:analytics_id].presence if consent == "granted") }.compact
   end
 
   # sign_in resets the session, so this runs after it rather than before.
@@ -97,12 +131,15 @@ class Web::WorkspacesController < Web::ApplicationController
     WorkspaceSignupMailer.confirm(
       email: form.email, workspace_name: form.name, token: ticket_for(form)
     ).deliver_later
+    if analytics_answers["consent"] == "granted"
+      Analytics.capture_anonymous("signup_email_sent", distinct_id: analytics_answers["anonymous_id"])
+    end
     redirect_to new_workspace_path(sent: form.email)
   end
 
   def ticket_for(form)
     WorkspaceSignupTicket.issue(name: form.name, email: form.email, marketplace_license_id: marketplace_license&.id,
-                                acceptance: acceptance_given(form))
+                                acceptance: acceptance_given(form), analytics: analytics_answers)
   end
 
   def acceptance_given(form)

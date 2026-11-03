@@ -12,6 +12,10 @@
 #
 # scope: Project only (polymorphic, null for internal)
 class MCPServer < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "mcp_server"
+
   extend Enumerize
   include Encryptable
 

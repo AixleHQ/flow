@@ -21,8 +21,8 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
 
   test "it carries the answers there and back" do
     assert_equal(
-      { name: "Acme Robotics", email: "dana@acme-robotics.example", accept_terms: false, acceptance: nil },
-      WorkspaceSignupTicket.decode(token)
+      { name: "Acme Robotics", email: "dana@acme-robotics.example", accept_terms: false, acceptance: nil, analytics: {} },
+      WorkspaceSignupTicket.decode(token).except(:issued_at)
     )
   end
 
@@ -100,6 +100,6 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
   test "it hands back only the answers the form asked for" do
     smuggled = signed_only({ "name" => "Acme", "email" => "dana@acme.example", "max_sessions" => 5, "role" => "super_admin" })
 
-    assert_equal %i[name email accept_terms acceptance], WorkspaceSignupTicket.decode(smuggled).keys
+    assert_equal %i[name email accept_terms acceptance analytics issued_at], WorkspaceSignupTicket.decode(smuggled).keys
   end
 end

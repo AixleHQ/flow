@@ -1287,6 +1287,11 @@ export function waitsAdminDashboardPath(options?: object): string {
   return "/" + "admin" + "/" + "dashboard" + "/" + "waits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/dashboard/companies/:id/hours(.:format) */
+export function hoursAdminDashboardCompanyPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "dashboard" + "/" + "companies" + "/" + id + "/" + "hours" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /admin/dashboard/companies/:id(.:format) */
 export function adminDashboardCompanyPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "dashboard" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
@@ -1305,6 +1310,31 @@ export function rootPath(options?: object): string {
 /** /api-docs */
 export function oasRailsPath(options?: object): string {
   return "/" + "api-docs" + $buildOptions(options, []);
+}
+
+/** /letter_opener */
+export function letterOpenerWebPath(options?: object): string {
+  return "/" + "letter_opener" + $buildOptions(options, []);
+}
+
+/** /letter_opener/ */
+export function letterOpenerWebLettersPath(options?: object): string {
+  return "/" + "letter_opener" + "/" + $buildOptions(options, []);
+}
+
+/** /letter_opener/clear(.:format) */
+export function letterOpenerWebClearLettersPath(options?: object): string {
+  return "/" + "letter_opener" + "/" + "clear" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /letter_opener/:id(/:style)(.:format) */
+export function letterOpenerWebLetterPath(id: ScalarType, options?: object): string {
+  return "/" + "letter_opener" + "/" + id + ($hasPresentOwnProperty(options, "style") ? "/" + (options as any).style : "") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","style","format"]);
+}
+
+/** /letter_opener/:id/delete(.:format) */
+export function letterOpenerWebDeleteLetterPath(id: ScalarType, options?: object): string {
+  return "/" + "letter_opener" + "/" + id + "/" + "delete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /docs(.:format) */
@@ -1477,9 +1507,19 @@ export function securityProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "security" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/privacy(.:format) */
+export function privacyProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "privacy" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile(.:format) */
 export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /analytics_consent(.:format) */
+export function analyticsConsentPath(options?: object): string {
+  return "/" + "analytics_consent" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /profile/sign_in_methods(.:format) */

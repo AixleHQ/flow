@@ -255,7 +255,23 @@ class AgentCredential < ApplicationRecord
     # actually signed in, which is what the profile has to show after a re-login.
     credential.metadata = credential.metadata.merge("signed_in_at" => Time.current) if new_authorization
     credential.save!
+    credential.report_onboarding_connection if new_authorization
     credential
+  end
+
+  ANALYTICS_PROVIDERS = {
+    "claude_code" => "anthropic", "codex" => "openai", "cursor_cli" => "cursor", "gemini_cli" => "google",
+    "antigravity_cli" => "google", "grok" => "xai", "kiro_cli" => "aws"
+  }.freeze
+
+  # An agent connected while its owner is still onboarding into this company.
+  def report_onboarding_connection
+    membership = CompanyMembership.find_by(user_id: user_id, company_id: company_id)
+    return if membership.nil? || membership.onboarding_completed?
+
+    Analytics.capture("onboarding_agent_connected", user: user, company: membership.company,
+                                                    props: { provider: ANALYTICS_PROVIDERS.fetch(agent_type, agent_type),
+                                                             entry: membership.invited_at.present? ? "invite" : "signup" })
   end
 
   # The model this credential's sessions default to, with a vendor-retired id

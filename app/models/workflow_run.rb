@@ -72,6 +72,10 @@ class WorkflowRun < ApplicationRecord
 
   broadcasts_to ->(run) { run }, on: :update
   after_commit :broadcast_run_list_update, on: :update
+  after_create_commit { Analytics::RunReport.new(self).started }
+  after_update_commit if: -> { saved_change_to_state? && Analytics::RunReport::FINAL_STATES.include?(state.to_s) } do
+    Analytics::RunReport.new(self).finished
+  end
 
   # Transactional outbox for run dispatch, mirroring TriggerEvent's. `state` is
   # the run's own lifecycle; `relay_state` answers a different question — was the

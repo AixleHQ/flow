@@ -5,6 +5,15 @@
 # can hold several installs. There is no upgrade link — the installed resources
 # are ordinary project resources from then on (design D4).
 class TemplateInstall < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit do
+    report_analytics("template_installed") do
+      installs = TemplateInstall.joins(:project).where(projects: { company_id: project.company_id })
+      { template_slug: slug, is_first: Analytics.first_for_company?(installs, self) }
+    end
+  end
+
   belongs_to :project
   belongs_to :installed_by, class_name: "User", optional: true
   has_many :setup_items, -> { order(:position, :id) }, class_name: "TemplateSetupItem", dependent: :delete_all,

@@ -3,6 +3,7 @@
 require "test_helper"
 
 class Billing::TrialTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
   # A company that signs up at 10:00 on Oct 30 gets thirty days, Oct 30 to the
   # end of Nov 28: 29 days and 13 whole hours.
   SIGNUP = Time.utc(2026, 10, 30, 10)
@@ -148,6 +149,19 @@ class Billing::TrialTest < ActiveSupport::TestCase
 
     assert @company.reload.billing_blocked?
     assert_equal "allowance", @company.billing_status
+  end
+
+  test "a spent trial is reported to whoever signed the company up" do
+    enable_analytics!
+    owner = create(:user, company: @company, membership_role: "admin", analytics_consent: "granted")
+    @company.update!(created_by: owner)
+    used!(LENGTH)
+
+    Billing::Trial.enforce!
+
+    event = analytics_events.find { |queued| queued["event"] == "trial_allowance_exhausted" }
+    assert_equal owner.id.to_s, event["distinct_id"]
+    assert_equal({ "via" => "system", "allowance_unit" => "days" }, event["properties"].slice("via", "allowance_unit"))
   end
 
   test "enforce leaves a company that has not" do

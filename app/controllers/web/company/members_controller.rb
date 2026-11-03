@@ -26,6 +26,7 @@ class Web::Company::MembersController < Web::Company::ApplicationController
     )
 
     if result.sent?
+      Analytics.track("invite_sent", company: current_company, props: { role: allowed_role.to_s })
       redirect_to company_members_path, notice: result.message
     elsif result.status == :invalid
       redirect_to company_members_path, inertia: { errors: result.errors }

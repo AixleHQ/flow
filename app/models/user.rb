@@ -14,6 +14,12 @@ class User < ApplicationRecord
 
   PASSWORD_MIN_LENGTH = 8
 
+  # Product analytics (Analytics). Nil means the person was never asked, which
+  # is not a refusal: they are asked, and nothing is sent until they answer.
+  ANALYTICS_CONSENTS = %w[granted denied].freeze
+
+  validates :analytics_consent, inclusion: { in: ANALYTICS_CONSENTS }, allow_nil: true
+
   # The emailed reset link is signed over the password's salt, so setting any
   # new password spends every link issued before it.
   has_secure_password validations: false, reset_token: { expires_in: 1.hour }
@@ -28,6 +34,12 @@ class User < ApplicationRecord
   # same Pundit policies the UI uses. Digest-only storage; plaintext is
   # returned once from regenerate_mcp_token! and never persisted.
   MCP_TOKEN_PREFIX = "amcp_"
+
+  def analytics_consent_granted? = analytics_consent == "granted"
+
+  def record_analytics_consent!(choice)
+    update!(analytics_consent: choice, analytics_consent_at: Time.current)
+  end
 
   # A stable, opaque handle for WebAuthn's user id. Not the email (it changes,
   # and a credential bound to it would outlive the address) and not the raw id

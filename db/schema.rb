@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -562,6 +562,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
     t.boolean "auto_accept_users", default: false, null: false
     t.string "billing_state", default: "active", null: false
     t.datetime "created_at", null: false
+    t.bigint "created_by_id"
     t.string "display_name"
     t.string "domain_verification_token"
     t.datetime "domain_verified_at"
@@ -590,6 +591,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
     t.integer "trial_hours"
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.index ["billing_state"], name: "index_companies_on_billing_state"
+    t.index ["created_by_id"], name: "index_companies_on_created_by_id"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
@@ -2077,6 +2079,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
   end
 
   create_table "users", force: :cascade do |t|
+    t.string "analytics_consent"
+    t.datetime "analytics_consent_at"
     t.string "avatar_url"
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -2310,6 +2314,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
   add_foreign_key "column_workflow_bindings", "board_columns", on_delete: :cascade
   add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
+  add_foreign_key "companies", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
   add_foreign_key "company_billing_state_changes", "companies", on_delete: :cascade

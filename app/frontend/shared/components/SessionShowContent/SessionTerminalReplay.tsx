@@ -172,7 +172,7 @@ export function SessionTerminalReplay({ logUrl, fill = false }: Props) {
   }, [colorScheme]);
 
   return (
-    <Box w="100%" className={fill ? classes.fill : undefined}>
+    <Box w="100%" className={fill ? classes.fill : undefined} data-ph-block>
       <UnstyledButton onClick={() => setOpen((o) => !o)} w="100%" aria-expanded={open}>
         <Group gap={6}>
           <IconChevronRight

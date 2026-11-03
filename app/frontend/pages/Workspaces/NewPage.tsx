@@ -1,9 +1,10 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Button, Checkbox, Group, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
+import { analytics, effectiveConsent } from 'shared/lib/analytics';
 import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { howItWorksPath, loginPath, logoutPath, marketplaceProposalPath, workspacePath } from 'shared/routes';
@@ -354,9 +355,27 @@ const NewWorkspacePage = () => {
     // Nested under `workspace`, as every other form here posts and as the
     // controller's strong parameters expect. `wrap_parameters` is off, so a flat
     // body arrives flat and the controller reads an empty hash.
-    form.transform((data) => ({ workspace: data }));
+    // The analytics choice made on this page travels with the signup, and so
+    // does this browser's anonymous id when it was allowed to report: the
+    // emailed link may be opened elsewhere, and the visit is joined to the
+    // account it ends in.
+    const consent = effectiveConsent();
+    const analyticsId = consent === 'granted' ? analytics.anonymousId() : null;
+    form.transform((data) => ({
+      workspace: {
+        ...data,
+        ...(consent ? { analytics_consent: consent } : {}),
+        ...(analyticsId ? { analytics_id: analyticsId } : {}),
+      },
+    }));
     form.post(workspacePath());
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const referrer = document.referrer ? new URL(document.referrer).hostname : null;
+    analytics.track('signup_page_viewed', { source: params.get('utm_source') ?? referrer ?? 'direct' });
+  }, []);
 
   // The domain is never typed. It is whatever the address says it is, because a
   // workspace may only claim the domain of the person claiming it.

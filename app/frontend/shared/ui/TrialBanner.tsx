@@ -1,8 +1,9 @@
 import { router, usePage } from '@inertiajs/react';
 import { Button } from '@mantine/core';
 import { IconAlertTriangle, IconCreditCard, IconHourglassHigh } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { analytics, phName } from 'shared/lib/analytics';
 import { formatCalendarDay } from 'shared/lib/formatDate';
 import { companyBillingCheckoutPath, companyBillingInvoicePaymentPath } from 'shared/routes';
 
@@ -22,6 +23,16 @@ const days = (count: number) => `${count} day${count === 1 ? '' : 's'}`;
 export const TrialBanner = () => {
   const { trial, permissions } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
   const [starting, setStarting] = useState(false);
+  const trialState = trial?.state;
+  const daysLeft = trial?.daysLeft;
+  useEffect(() => {
+    if (!trialState) return;
+    analytics.track('trial_banner_viewed', {
+      allowance_remaining: daysLeft,
+      allowance_unit: 'days',
+      state: trialState,
+    });
+  }, [trialState, daysLeft]);
   if (!trial) return null;
 
   const blocked = trial.state === 'blocked';
@@ -84,6 +95,8 @@ export const TrialBanner = () => {
       )}
       {mayPay && (
         <Button
+          {...phName('trial_add_card')}
+          data-ph-unmask
           className={classes.cta}
           leftSection={<IconCreditCard size={16} />}
           loading={starting}

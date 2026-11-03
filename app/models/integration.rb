@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class Integration < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit { report_analytics("integration_connected", provider: provider.to_s) }
+
   include Encryptable
 
   encryption_key :integrations_key

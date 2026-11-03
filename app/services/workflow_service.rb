@@ -210,6 +210,7 @@ class WorkflowService
 
     def approve_step(step_run:)
       step_run.mark_completed!
+      report_step_action("step_run_approved", step_run)
       send_signal(step_run.workflow_run, "step_completed", step_run.id)
     end
 
@@ -224,6 +225,7 @@ class WorkflowService
     # step fresh.
     def retry_step(step_run:)
       run = step_run.workflow_run
+      report_step_action("step_run_retried", step_run)
 
       if TemporalService.workflow_open?(workflow_execution_id(run))
         retry_step_in_place(run, step_run)
@@ -234,6 +236,7 @@ class WorkflowService
 
     def skip_step(step_run:, reason: nil)
       step_run.mark_skipped!(reason || "Skipped by user")
+      report_step_action("step_run_skipped", step_run)
       send_signal(step_run.workflow_run, "step_skipped", step_run.id)
     end
 
@@ -256,6 +259,11 @@ class WorkflowService
     end
 
     private
+
+    def report_step_action(event, step_run)
+      project = step_run.workflow_run.project
+      Analytics.track(event, company: project.company, project: project)
+    end
 
     def retry_step_in_place(run, step_run)
       new_step_run = StepRun.next_attempt!(workflow_run: run, step: step_run.step)

@@ -10,7 +10,7 @@ class LegalDocumentTest < ActiveSupport::TestCase
   PUBLISHED = {
     "terms_of_service" => [ "2026-10-31", "76f9ff59850acf13533c89412f30b9df2244b3fc9c8cd669d08094bf2305b0db" ],
     "terms_of_use" => [ "2026-10-30", "7635db8e9ae15d316a82b0b42d2fe618cdf464906c789f8f8c5eea1d715b26e8" ],
-    "privacy_policy" => [ "2026-11-02", "322fee29ea72e8066ee3f79696ed90ca1fb8b60295a5c9dd7290e853a3b3ac5f" ]
+    "privacy_policy" => [ "2026-11-03", "98b9af7dd217b81cded86a2f7ff98a1c05d03616722ecbcf80a9c02373b0f797" ]
   }.freeze
 
   test "every document's text is published under the version recorded for it" do
