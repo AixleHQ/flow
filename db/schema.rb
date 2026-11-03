@@ -592,6 +592,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120100) do
     t.datetime "billing_provider_since"
     t.integer "trial_hours"
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
+    t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true

@@ -112,8 +112,8 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     projectIds.length > 0 ||
     patProjectId !== '' ||
     pat !== '' ||
-    capabilities.length !== DEFAULT_CAPABILITIES.length ||
-    capabilities.some((c) => !DEFAULT_CAPABILITIES.includes(c));
+    federatedDirty ||
+    capabilitiesChanged(capabilities);
   const requestClose = useUnsavedChanges({ opened, dirty, onClose: close });
 
   // Step one: prove this company may bind the organization at all, and see what
