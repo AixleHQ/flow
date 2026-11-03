@@ -135,7 +135,8 @@ module Billing
       final_usage.record!
       company.billing_cancellations.create!(
         user: by, cancels_at: Time.current, settlement_state: "cancelling",
-        stripe_subscription_id: subscription_id, final_usage: billed.transform_keys(&:iso8601)
+        stripe_subscription_id: subscription_id, period_started_at: company.billing_period_starts_at,
+        final_usage: billed.transform_keys(&:iso8601)
       )
     end
 
