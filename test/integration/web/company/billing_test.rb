@@ -134,7 +134,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_inertia_props do |props|
-      assert props[:marketplaceBilling], "the page says AWS bills this workspace"
+      assert_equal "aws_marketplace", props.dig(:subscriptions, :active, :kind), "the page says AWS bills this workspace"
       assert props[:permissions][:canViewBilling], "so the tab is offered"
       assert_not props[:permissions][:canManageBilling], "and nothing on it is ours to change"
     end
@@ -165,7 +165,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     get company_settings_billing_path
 
     assert_inertia_props do |props|
-      assert_in_delta 90.0, props.dig(:marketplaceBilling, :reportedMinutes)
+      assert_in_delta 90.0, props.dig(:subscriptions, :active, :usage, :workerMinutes)
     end
   end
 
@@ -190,42 +190,41 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     get company_settings_billing_path
 
     assert_inertia_props do |props|
-      assert_in_delta 60.0, props.dig(:marketplaceBilling, :reportedMinutes), 0.001,
+      assert_in_delta 60.0, props.dig(:subscriptions, :active, :usage, :workerMinutes), 0.001,
                       "the honoured hour alone; two disputed hours count for nothing, not for one"
     end
   end
 
-  # The subscription library lists an ended subscription and offers nothing to
-  # do about it; the listing's own page is where a buyer subscribes again, and
-  # it cannot be derived from anything the catalogue API answers.
-  test "the AWS panel names the listing page when one is configured, and the library otherwise" do
-    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
-    create(:marketplace_license, :ended, company: @company)
-
+  # The listing's own page is where a subscription is taken out, and it cannot
+  # be derived from anything the catalogue API answers. The subscription
+  # library is no stand-in on a button that offers to pay through AWS, so where
+  # no page is configured the offer is simply not made.
+  test "the page names the listing page when one is configured, and nothing otherwise" do
     get company_settings_billing_path
-    assert_inertia_props do |props|
-      assert_equal "https://aws.amazon.com/marketplace/library", props.dig(:marketplaceBilling, :listingUrl)
-    end
+    assert_inertia_props { |props| assert_nil props[:listingUrl] }
 
     Settings.stubs(:aws_marketplace).returns(
       Hashie::Mash.new(saas: { listing_url: "https://aws.amazon.com/marketplace/pp/prodview-x" })
     )
     get company_settings_billing_path
     assert_inertia_props do |props|
-      assert_equal "https://aws.amazon.com/marketplace/pp/prodview-x", props.dig(:marketplaceBilling, :listingUrl)
+      assert_equal "https://aws.amazon.com/marketplace/pp/prodview-x", props[:listingUrl]
     end
   end
 
   # AWS ends the agreement and deprovisions the licence seconds apart, and the
   # workspace is stopped at the first. Between the two the banner already said
   # the subscription had ended while this panel still said Active.
-  test "the AWS panel calls a closing subscription ended, as the banner does" do
-    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+  test "the page lists a closing subscription among the ended ones, as the banner does" do
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE, stripe_subscription_id: nil)
     create(:marketplace_license, :ending, company: @company)
 
     get company_settings_billing_path
 
-    assert_inertia_props { |props| assert props.dig(:marketplaceBilling, :ended) }
+    assert_inertia_props do |props|
+      assert_nil props.dig(:subscriptions, :active)
+      assert_equal "cancelled", props.dig(:subscriptions, :previous, 0, :status)
+    end
   end
 
   # The figure an administrator decides on. The final invoice replays the last
@@ -278,16 +277,17 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     get company_settings_billing_path
 
     assert_inertia_props do |props|
-      assert_in_delta 69.0, props.dig(:marketplaceBilling, :reportedMinutes), 0.001,
+      assert_in_delta 69.0, props.dig(:subscriptions, :previous, 0, :usage, :workerMinutes), 0.001,
                       "60 from the hourly ledger and 9 from the final meter, the repeat counted once"
     end
   end
 
   # A workspace that has gone back to a card still gets an AWS bill at the end
-  # of the month for what it ran there. Keyed on the payer alone, the panel
-  # vanished the moment the card arrived -- leaving the page saying "0
-  # worker-minutes this period" beside a charge it never mentioned.
-  test "the AWS panel outlives the payer, for as long as the month AWS billed" do
+  # of the month for what it ran there. The page used to drop the AWS panel the
+  # moment the card arrived -- leaving it saying "0 worker-minutes this period"
+  # beside a charge it never mentioned. Now the ended subscription stays
+  # listed, with the minutes that bill is counted from.
+  test "an ended AWS subscription stays listed beneath the card that took over" do
     license = create(:marketplace_license, :ended, company: @company)
     CapacityMeterReport.create!(provider: Billing::Meter::AwsMarketplaceSaas.provider,
                                 period_start: Time.current.utc.beginning_of_month + 3.hours,
@@ -299,22 +299,27 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     get company_settings_billing_path
 
     assert_inertia_props do |props|
-      assert props[:marketplaceBilling], "the month AWS billed is still this month"
-      assert_not props.dig(:marketplaceBilling, :billsNow), "but AWS is not the payer any more"
-      assert_in_delta 97.0, props.dig(:marketplaceBilling, :reportedMinutes)
+      assert_equal "card", props.dig(:subscriptions, :active, :kind), "the card is what runs the workspace now"
+      aws = props.dig(:subscriptions, :previous, 0)
+      assert_equal "aws_marketplace", aws[:kind]
+      assert_equal "cancelled", aws[:status]
+      assert_in_delta 97.0, aws.dig(:usage, :workerMinutes)
       assert props[:permissions][:canManageBilling], "and the card is what it manages now"
     end
   end
 
-  # Nothing to say where nothing was sent: a workspace that never had a
-  # subscription this month gets no panel at all.
-  test "a workspace AWS has not billed this month has no panel" do
+  # Listed all the same: the subscription was there, and what it sent was nothing.
+  test "an ended AWS subscription that sent nothing is listed with nothing on its bill" do
     create(:marketplace_license, :ended, company: @company)
     @company.update!(billing_provider: Company::BILLING_PROVIDER_STRIPE)
 
     get company_settings_billing_path
 
-    assert_inertia_props { |props| assert_nil props[:marketplaceBilling] }
+    assert_inertia_props do |props|
+      aws = props.dig(:subscriptions, :previous, 0)
+      assert_equal "aws_marketplace", aws[:kind]
+      assert_in_delta 0.0, aws.dig(:usage, :workerMinutes)
+    end
   end
 
   # The other half of the same rule, and the one that was a dead end: a customer
@@ -330,8 +335,58 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_inertia_props do |props|
       assert props[:permissions][:canManageBilling], "the card is how it pays now"
-      assert props.dig(:marketplaceBilling, :ended), "and the panel still says what became of the AWS one"
+      assert_equal "cancelled", props.dig(:subscriptions, :previous, 0, :status),
+                   "and the AWS one is listed among those that ended"
     end
+  end
+
+  test "the page quotes the price the card is billed at" do
+    price = billing_props[:billing][:price]
+
+    assert_in_delta 500.0, price[:unitAmountCents]
+    assert_equal "usd", price[:currency]
+    assert_equal 60, price[:minutesPerUnit]
+  end
+
+  test "the card paying now is the active subscription, with its period and usage" do
+    used!(Time.utc(2026, 10, 2, 9), 130)
+
+    active = billing_props[:subscriptions][:active]
+
+    assert_equal "card", active[:kind]
+    assert_equal "active", active[:status]
+    assert_equal Time.utc(2026, 11, 1), Time.zone.parse(active[:nextInvoiceAt])
+    assert_in_delta 130.0, active.dig(:usage, :workerMinutes)
+    assert_equal 1000, active.dig(:usage, :estimate, :amountCents)
+    assert_empty billing_props[:subscriptions][:previous]
+  end
+
+  # What the tab lists a stopped card under: the period the card paid for, and
+  # the usage its final invoice covered -- the last period's, not the tail the
+  # cancellation still owed Stripe.
+  test "a stopped card is listed with its active period and what its final invoice covered" do
+    @company.update!(billing_state: "blocked", billing_block_reason: "canceled",
+                     billing_cancels_at: Time.utc(2026, 10, 20, 9))
+    create(:billing_cancellation, company: @company, cancels_at: Time.utc(2026, 10, 20, 9),
+                                  started_at: Time.utc(2026, 7, 1, 9), period_started_at: Time.utc(2026, 10, 1),
+                                  settlement_state: "settled", final_invoice_url: "https://invoice.stripe.test/in_1")
+    used!(Time.utc(2026, 9, 30, 23), 600) # the period before: already invoiced
+    used!(Time.utc(2026, 10, 2, 9), 100)
+    used!(Time.utc(2026, 10, 19, 10), 30)
+
+    subscriptions = billing_props[:subscriptions]
+
+    assert_nil subscriptions[:active]
+    card = subscriptions[:previous].first
+    assert_equal "card", card[:kind]
+    assert_equal "cancelled", card[:status]
+    assert_equal Time.utc(2026, 7, 1, 9), Time.zone.parse(card[:periodStartsAt])
+    assert_equal Time.utc(2026, 10, 20, 9), Time.zone.parse(card[:cancelledAt])
+    assert_equal Time.utc(2026, 10, 1), Time.zone.parse(card.dig(:usage, :since))
+    assert_in_delta 130.0, card.dig(:usage, :workerMinutes)
+    assert_equal 1000, card.dig(:usage, :estimate, :amountCents)
+    assert_equal "https://invoice.stripe.test/in_1", card[:invoicesUrl]
+    assert_equal "settled", card.dig(:finalInvoice, :state)
   end
 
   # The window AWS still meters into. A card started here would bill the same
