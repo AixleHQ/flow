@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type FC } from 'react';
 
 import type { Connector } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { ConfigItemValueField } from '../mcp-servers/ConfigItemValueField';
 
@@ -14,7 +14,9 @@ import type { ConnectorTarget } from './types';
 interface ConnectorInstallModalProps {
   connector: Connector | null;
   basePath: string;
+  /** Cancel, ✕, Escape or the overlay: back to wherever the drawer was opened from. */
   onClose: () => void;
+  onInstalled: () => void;
   /** Project secrets and variables, offered instead of typing a value inline. */
   configItemNames: string[];
 }
@@ -31,6 +33,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
   connector,
   basePath,
   onClose,
+  onInstalled,
   configItemNames,
 }) => {
   const installable = useMemo(() => connector?.targets.filter((t) => t.supported) ?? [], [connector]);
@@ -57,7 +60,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
 
   const prefilled = declaredDefaults(target);
   const dirty = Object.keys({ ...prefilled, ...values }).some((key) => (values[key] ?? '') !== (prefilled[key] ?? ''));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: !!connector, dirty, onClose });
 
   const missingRequired = (target?.inputs ?? []).filter((i) => i.required && !values[i.key]?.trim());
 
@@ -67,7 +70,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
     router.post(
       basePath,
       { connector_name: connector.name, target_id: target.id, values },
-      { onFinish: () => setSubmitting(false), onSuccess: onClose },
+      { onFinish: () => setSubmitting(false), onSuccess: onInstalled },
     );
   };
 

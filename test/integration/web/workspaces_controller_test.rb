@@ -169,6 +169,86 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # -- Terms -------------------------------------------------------------------
+
+  def require_terms = Settings.stubs(:legal).returns(Hashie::Mash.new(acceptance_required: true))
+
+  test "the form links the terms its creator has to accept" do
+    require_terms
+
+    get new_workspace_path
+
+    assert_inertia_props do |props|
+      assert_equal legal_terms_of_service_path, props.dig(:terms, :termsOfServiceUrl)
+      assert_equal legal_terms_of_use_path, props.dig(:terms, :termsOfUseUrl)
+    end
+  end
+
+  test "no workspace is created for somebody who did not accept the terms" do
+    require_terms
+    sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
+
+    assert_no_difference [ "Company.count", "LegalAcceptance.count" ] do
+      post workspace_path, params: { workspace: { name: "Acme Robotics" } }
+    end
+
+    follow_redirect!
+    assert_inertia_props { |props| assert_match(/must be accepted/, Array(props.dig(:errors, :acceptTerms)).join) }
+  end
+
+  test "its creator accepts the Terms of Service for the company and the Terms of Use for themselves" do
+    require_terms
+    user = create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(user)
+
+    post workspace_path, params: { workspace: { name: "Acme Robotics", accept_terms: "1" } }
+
+    assert_redirected_to onboarding_path
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_SERVICE, company: acme)
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: user)
+  end
+
+  def emailed_token
+    mail = ActionMailer::Base.deliveries.last
+    href = (mail.html_part || mail).body.decoded[%r{href="([^"]*/workspace/confirm\?[^"]+)"}, 1]
+    Rack::Utils.parse_query(URI.parse(CGI.unescapeHTML(href)).query)["token"]
+  end
+
+  # The evidence is of the person ticking the box, not of whatever opens the
+  # link: a mail scanner, another device, the next morning.
+  test "a stranger's acceptance is recorded as they gave it, when the link is opened" do
+    require_terms
+    ticked_at = Time.zone.local(2026, 11, 2, 9, 30)
+
+    travel_to(ticked_at) do
+      perform_enqueued_jobs do
+        post workspace_path, params: valid_params(accept_terms: "1"),
+                             env: { "REMOTE_ADDR" => "198.51.100.4" }, headers: { "User-Agent" => "FormBrowser/1.0" }
+      end
+    end
+    travel_to(ticked_at + 3.hours) do
+      get confirm_workspace_path(token: emailed_token), env: { "REMOTE_ADDR" => "203.0.113.9" },
+                                                        headers: { "User-Agent" => "MailApp/2.0" }
+    end
+
+    owner = User.find_by!(email: "dana@acme-robotics.example")
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_SERVICE, company: acme)
+    assert LegalAcceptance.current?(LegalDocument::TERMS_OF_USE, user: owner)
+    assert_equal [ [ ticked_at, "198.51.100.4", "FormBrowser/1.0" ] ] * 2,
+                 LegalAcceptance.order(:id).map { |row| [ row.accepted_at, row.ip_address, row.user_agent ] }
+  end
+
+  test "a link issued before the terms changed creates nothing" do
+    require_terms
+    LegalDocument.stubs(:fingerprint).returns("terms_of_service@2020-01-01 terms_of_use@2020-01-01")
+    stale = ticket(acceptance: LegalAcceptance::Evidence.new(accepted_at: Time.current, ip_address: nil, user_agent: nil))
+    LegalDocument.unstub(:fingerprint)
+
+    assert_no_difference "Company.count" do
+      get confirm_workspace_path(token: stale)
+    end
+  end
+
   # -- Someone already signed in ---------------------------------------------
 
   test "a signed-in person's workspace is created without an email round trip" do

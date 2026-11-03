@@ -19,17 +19,27 @@ class WorkspaceOnboardingForm
   attribute :name, :string
   attribute :email, :string
   attribute :email_domain, :string
+  # The creator binds the company to the Terms of Service and themselves to the
+  # Terms of Use, in one tick, before the company exists.
+  attribute :accept_terms, :boolean, default: false
 
   attr_reader :user, :company, :marketplace_license
 
   validates :name, presence: true, length: { maximum: 100 }
   validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP, message: "is not an email address" }
   validates :email_domain, presence: true
+  validates :accept_terms, acceptance: { accept: true, message: "must be accepted to create a workspace" },
+                           if: -> { LegalDocument.acceptance_required? }
   validate :domain_is_free, if: -> { email_domain.present? }
   validate :domain_is_not_a_public_mailbox, if: -> { email_domain.present? }
   validate :domain_belongs_to_the_address, if: -> { email_domain.present? && email.present? }
   validate :marketplace_license_is_free, if: -> { marketplace_license.present? }
   validate :marketplace_license_is_live, if: -> { marketplace_license.present? }
+
+  # The refusal reads as a sentence about the documents, not about a field.
+  def self.human_attribute_name(attribute, options = {})
+    attribute.to_s == "accept_terms" ? "The Terms of Service and Terms of Use" : super
+  end
 
   # `user:` is the person already signed in, whose address is not theirs to
   # choose. A stranger supplies one instead, and proves it by opening the link.
@@ -42,7 +52,9 @@ class WorkspaceOnboardingForm
     self.email_domain = email_domain.to_s.strip.downcase.presence || email.to_s.split("@").last
   end
 
-  def save(owner)
+  # `acceptance` is the LegalAcceptance::Evidence of the ticked box, which for a
+  # stranger was taken when they sent the form, not when the link came back.
+  def save(owner, acceptance: nil)
     return false unless valid?
 
     ActiveRecord::Base.transaction do
@@ -57,6 +69,7 @@ class WorkspaceOnboardingForm
       # a Marketplace workspace, which AWS bills from the first minute.
       SessionConcurrencyLimit.set!(scope: @company, max_sessions: Billing::Trial::WORKERS)
       marketplace_license&.update!(company: @company)
+      record_acceptances(owner, acceptance) if accept_terms && acceptance
     end
     true
   rescue ActiveRecord::RecordInvalid => e
@@ -84,6 +97,12 @@ class WorkspaceOnboardingForm
   end
 
   private
+
+  def record_acceptances(owner, acceptance)
+    LegalDocument.accepted.each do |document|
+      LegalAcceptance.record!(document, user: owner, company: @company, evidence: acceptance)
+    end
+  end
 
   # AWS bills a Marketplace workspace, so it has no allowance to spend; and it
   # waits rather than runs until AWS confirms the agreement, because metering

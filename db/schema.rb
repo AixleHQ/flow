@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_02_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -590,7 +590,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.datetime "billing_provider_since"
     t.integer "trial_hours"
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
-    t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
@@ -929,6 +928,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
     t.index ["status"], name: "index_integrations_on_status"
   end
 
+  create_table "legal_acceptances", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "company_id"
+    t.string "document", null: false
+    t.string "version", null: false
+    t.datetime "accepted_at", null: false
+    t.string "ip_address"
+    t.string "user_agent"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "user_email"
+    t.string "company_name"
+    t.string "company_email_domain"
+    t.index ["company_id", "document", "version"], name: "index_legal_acceptances_on_company_id_and_document_and_version"
+    t.index ["user_id", "document", "version"], name: "index_legal_acceptances_on_user_id_and_document_and_version"
+  end
+
   create_table "magic_link_tokens", force: :cascade do |t|
     t.datetime "consumed_at"
     t.datetime "created_at", null: false
@@ -1199,6 +1215,66 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   end
 
   add_check_constraint "repositories", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "repositories_tenant_columns", validate: false
+
+  create_table "runner_credentials", force: :cascade do |t|
+    t.bigint "runner_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "runner_environment_id"
+    t.string "kind", null: false
+    t.string "token_digest", null: false
+    t.uuid "family_id"
+    t.datetime "expires_at", null: false
+    t.datetime "used_at"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_runner_credentials_on_company_id"
+    t.index ["family_id"], name: "index_runner_credentials_on_family_id"
+    t.index ["runner_environment_id"], name: "index_runner_credentials_on_runner_environment_id"
+    t.index ["runner_id"], name: "index_runner_credentials_on_runner_id"
+    t.index ["token_digest"], name: "index_runner_credentials_on_token_digest", unique: true
+  end
+
+  create_table "runner_environments", force: :cascade do |t|
+    t.bigint "runner_id", null: false
+    t.bigint "company_id", null: false
+    t.string "key", null: false
+    t.string "origin", null: false
+    t.string "display_name"
+    t.boolean "ephemeral", default: false, null: false
+    t.string "state", null: false
+    t.string "state_reason"
+    t.string "os"
+    t.string "arch"
+    t.jsonb "facts", default: {}, null: false
+    t.string "runner_version"
+    t.string "protocol_version"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_runner_environments_on_company_id"
+    t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
+    t.index ["runner_id", "key"], name: "index_runner_environments_on_runner_id_and_key", unique: true
+    t.index ["runner_id"], name: "index_runner_environments_on_runner_id"
+  end
+
+  create_table "runner_operations", force: :cascade do |t|
+    t.bigint "runner_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "runner_environment_id", null: false
+    t.bigint "sequence", null: false
+    t.string "op", null: false
+    t.text "encrypted_payload"
+    t.string "state", null: false
+    t.text "encrypted_result"
+    t.datetime "deadline_at", null: false
+    t.datetime "delivered_at"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_runner_operations_on_company_id"
+    t.index ["runner_environment_id", "sequence"], name: "index_runner_operations_on_runner_environment_id_and_sequence", unique: true
+    t.index ["runner_id"], name: "index_runner_operations_on_runner_id"
+  end
 
   create_table "runners", force: :cascade do |t|
     t.bigint "company_id", null: false
@@ -2276,6 +2352,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "legal_acceptances", "companies", on_delete: :nullify
+  add_foreign_key "legal_acceptances", "users", on_delete: :nullify
   add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "marketplace_licenses", "companies"
   add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify
@@ -2303,6 +2381,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_130000) do
   add_foreign_key "repositories", "integrations", on_delete: :cascade
   add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "runner_credentials", "companies", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_credentials_environment_runner", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_environments", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_credentials_runner_company", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runners", on_delete: :cascade
+  add_foreign_key "runner_environments", "companies", on_delete: :cascade
+  add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
+  add_foreign_key "runner_environments", "runners", on_delete: :cascade
+  add_foreign_key "runner_operations", "companies", on_delete: :cascade
+  add_foreign_key "runner_operations", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_operations_environment_runner", on_delete: :cascade
+  add_foreign_key "runner_operations", "runner_environments", on_delete: :cascade
+  add_foreign_key "runner_operations", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_operations_runner_company", on_delete: :cascade
+  add_foreign_key "runner_operations", "runners", on_delete: :cascade
   add_foreign_key "runners", "companies", on_delete: :cascade
   add_foreign_key "runners", "integrations"
   add_foreign_key "runners", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runners_integration_company"

@@ -165,6 +165,20 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     assert_match(/Broken image/, error.message)
   end
 
+  test "a required input left blank stops the install, not the plan the install page shows" do
+    definition = @template.definition.deep_dup
+    definition["inputs"] << { "key" => "staging_url", "label" => "Staging URL", "type" => "string", "required" => true }
+    @template.update!(definition: definition)
+
+    assert_equal "", installer.plan(require_inputs: false).inputs["staging_url"]
+    error = assert_raises(Templates::Planner::InvalidInputs) { installer.apply }
+    assert_match(/Staging URL is required/, error.message)
+
+    assert_difference -> { Project.count }, 1 do
+      installer(key: "k2", inputs: { "staging_url" => "https://staging.example.com" }).apply
+    end
+  end
+
   test "a viewer cannot install" do
     @user.company_memberships.update_all(role: "viewer")
 

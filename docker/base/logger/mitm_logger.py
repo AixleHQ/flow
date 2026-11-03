@@ -19,7 +19,10 @@ lifecycle observable in the first place.
 A third rule covers the session's own secrets — the values an agent reads through
 get_config_item and then sends to the model. Those are not protocol credentials and
 no header rule catches them, so every entry is passed through aixle_redact, which
-reads the list get_config_item registers before it answers.
+reads the list get_config_item registers before it answers. A body is masked before
+it is truncated, after its content-encoding is undone, and — for a streamed response —
+with the stream's deltas reassembled: a model streams a value back a few characters
+per event, and no single event holds enough of it to match.
 """
 import base64
 import datetime
@@ -30,6 +33,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from mitmproxy import http  # type: ignore
+from mitmproxy.net import encoding  # type: ignore
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -114,16 +118,27 @@ def _looks_like_text(raw: bytes) -> bool:
         return False
 
 
-def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
+def _decoded(raw: bytes, content_encoding: str) -> bytes:
+    if not content_encoding or content_encoding.strip().lower() == "identity":
+        return raw
+    try:
+        return encoding.decode(raw, content_encoding.strip().lower())
+    except Exception:
+        return raw
+
+
+def _encode_body(raw: Optional[bytes], content_type: str, content_encoding: str = "") -> Dict[str, Any]:
     """Encode body for JSON storage. Returns dict with body + metadata."""
     if not raw:
         return {"body": "", "body_encoding": "text", "body_truncated": False}
 
+    raw = _decoded(raw, content_encoding)
     if _is_text_content(content_type) or (not content_type and _looks_like_text(raw)):
         try:
             text = raw.decode("utf-8", errors="replace")
         except Exception:
             text = "<decode-error>"
+        text = aixle_redact.mask_body(text)
         truncated = False
         if MAX_BODY > 0 and len(text) > MAX_BODY:
             text = text[:MAX_BODY] + f"...[truncated {len(text) - MAX_BODY} chars]"
@@ -132,7 +147,7 @@ def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
 
     # Binary content — base64 encode
     truncated = False
-    data = raw
+    data = aixle_redact.mask_binary(raw)
     if MAX_BODY > 0 and len(data) > MAX_BODY:
         data = data[:MAX_BODY]
         truncated = True
@@ -149,7 +164,7 @@ def _serialize_request(flow: http.HTTPFlow) -> Dict[str, Any]:
     body_info = (
         _blank_body("auth endpoint")
         if _is_auth_endpoint(req.host, req.path)
-        else _encode_body(req.raw_content, ct)
+        else _encode_body(req.raw_content, ct, req.headers.get("content-encoding", ""))
     )
 
     return {
@@ -177,7 +192,7 @@ def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
     body_info = (
         _blank_body("auth endpoint")
         if _is_auth_endpoint(req.host, req.path)
-        else _encode_body(resp.raw_content, ct)
+        else _encode_body(resp.raw_content, ct, resp.headers.get("content-encoding", ""))
     )
 
     return {
@@ -224,7 +239,9 @@ def _write_entry(entry: Dict[str, Any]) -> None:
     # a request body, so it is in this log verbatim unless it is removed here. The
     # entry is cleaned before serialization so a value carrying a quote is matched in
     # its own form rather than in JSON's escaping of it.
-    entry = aixle_redact.redact_obj(entry)
+    # The body went through mask_body already; scanning it again would double the cost
+    # on the request path for nothing.
+    entry = {k: v if k == "body" else aixle_redact.redact_obj(v) for k, v in entry.items()}
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=True) + "\n")
@@ -270,7 +287,7 @@ def response(flow: http.HTTPFlow) -> None:
     buf: Optional[bytearray] = flow.metadata.get("_body_buf")
     if buf is not None:
         ct = flow.response.headers.get("content-type", "")
-        body_info = _encode_body(bytes(buf), ct)
+        body_info = _encode_body(bytes(buf), ct, flow.response.headers.get("content-encoding", ""))
         entry = _serialize_response_with_body(flow, body_info)
     else:
         entry = _serialize_response(flow)

@@ -3,6 +3,8 @@
 require "test_helper"
 
 class Sessions::SecretRedactorTest < ActiveSupport::TestCase
+  include SecretLeakAssertions
+
   setup do
     @company = create(:company)
     @user    = create(:user, :admin, company: @company)
@@ -53,6 +55,67 @@ class Sessions::SecretRedactorTest < ActiveSupport::TestCase
 
     assert_equal "", redactor.call("")
     assert_nil redactor.call(nil)
+  end
+
+  # --- Values a terminal or a stream broke apart ---
+
+  test "terminal masks every copy of the secret in a recorded session, wrapped and recoloured ones included" do
+    raw = recording("claude_code_2.1.310_terminal.log")
+    assert_operator recovered(raw), :>=, RECORDED_SECRET.length, "the recording no longer holds the secret"
+
+    assert_no_secret Sessions::SecretRedactor.new([ RECORDED_SECRET ]).terminal(raw)
+  end
+
+  test "terminal changes only the secret's own characters, so the replayed screen keeps its layout" do
+    raw = recording("claude_code_2.1.310_terminal.log").force_encoding(Encoding::UTF_8)
+
+    masked = Sessions::SecretRedactor.new([ RECORDED_SECRET ]).terminal(raw)
+
+    assert_equal raw.bytesize, masked.bytesize
+    changed = raw.bytes.zip(masked.bytes).reject { |before, after| before == after }
+    assert_not_empty changed
+    assert(changed.all? { |before, after| after == "*".ord && RECORDED_SECRET.include?(before.chr) })
+  end
+
+  test "replaces a value split by colour codes and a line wrap with one fingerprint" do
+    text = "-H \"X-Api-Key:pxk_l\e[39m\e[K\r\n  \e[6Give_7Hq2ZtR9mWb4Nc8VxL1aPe6Ks3Dy5Fg0Ju\" \"$1\""
+
+    result = Sessions::SecretRedactor.new([ RECORDED_SECRET ]).call(text)
+
+    assert_equal "-H \"X-Api-Key:#{fingerprint(RECORDED_SECRET)}\" \"$1\"", result
+  end
+
+  test "masks a long piece of a secret on its own, as a size limit would leave it" do
+    result = Sessions::SecretRedactor.new([ RECORDED_SECRET ]).call("body…[truncated] key=#{RECORDED_SECRET[0, 20]}")
+
+    assert_no_secret result
+    assert_includes result, "body…[truncated] key="
+  end
+
+  test "masks only the whole of a short secret, never a piece of it" do
+    redactor = Sessions::SecretRedactor.new([ "hunter22" ])
+
+    assert_equal "hunter is here", redactor.call("hunter is here")
+    assert_equal "pw=#{fingerprint('hunter22')}", redactor.call("pw=hunter22")
+  end
+
+  # Seen on real sessions: a twelve-character password whose `!` reached the log escaped,
+  # leaving the other eleven characters in plain sight.
+  test "masks a short secret whose closing punctuation reached the log escaped" do
+    redactor = Sessions::SecretRedactor.new([ "Summer2024!" ])
+
+    assert_equal "-p \"#{fingerprint('Summer2024!')}\\!\"", redactor.call("-p \"Summer2024\\!\"")
+    assert_equal "Summer was hot in 2024", redactor.call("Summer was hot in 2024")
+  end
+
+  test "finds a secret carrying a quote in a transcript's JSON-escaped form" do
+    secret = %(pa"ss\\word-with-a-quote-0042)
+    line = { "content" => "key=#{secret}" }.to_json
+
+    result = Sessions::SecretRedactor.new([ secret ]).call(line)
+
+    assert_not_includes result, secret.to_json[1..-2]
+    assert_includes result, "redacted:sha256"
   end
 
   # --- Session resolution ---

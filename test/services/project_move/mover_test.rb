@@ -217,6 +217,38 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal before, on_runner.reload.snapshot
   end
 
+  # Versions.save! locks the workflow row, not the project. The move locks every
+  # workflow of the project, archived ones included, right after the project and
+  # before it reads the second preflight or strips the versions, so a save cannot
+  # commit a snapshot naming a source runner in between.
+  test "locks the project's workflows right after the project, before the second preflight and the version strip" do
+    runner = create(:runner, company: @s.source, name: "Prod VPC")
+    @s.workflow.update_column(:current_version_number, @s.entity_version.number)
+    Versions.save!(@s.workflow, actor: Versions::Actor.system) { |workflow| workflow.update!(runner: runner) }
+    statements = []
+    record = lambda do |*, payload|
+      sql = payload[:sql]
+      if sql.include?("FOR UPDATE")
+        statements << [ :lock, sql[/FROM "(\w+)"/, 1], sql ]
+      elsif sql.start_with?('UPDATE "entity_versions"')
+        statements << [ :strip_versions ]
+      elsif sql.match?(/\ASELECT .*FROM "workflows"/)
+        statements << [ :read_workflows ]
+      end
+    end
+
+    ActiveSupport::Notifications.subscribed(record, "sql.active_record") { move(member_policy: "add") }
+
+    project_lock = statements.rindex { |kind, table| kind == :lock && table == "projects" }
+    assert project_lock, "the move locks the project"
+    kind, table, sql = statements[project_lock + 1]
+    assert_equal [ :lock, "workflows" ], [ kind, table ], "the next thing the move does is lock the project's workflows"
+    assert_no_match(/deleted_at/, sql, "archived workflows are locked too")
+    strip = statements.index([ :strip_versions ])
+    assert strip, "the move strips the runner from the versions"
+    assert_operator project_lock + 1, :<, strip
+  end
+
   private
 
   def move(member_policy:, owner: @s.owner, confirm_cancellations: true)

@@ -49,8 +49,12 @@ module Templates
     # @param resolutions [Hash{String => String}] "agents.architect" => "use_existing" | "copy",
     #   and "columns.<key>" => a board column id of the target project
     # @param provided_secrets [Array<String>] names of the secrets the user is supplying now
-    def initialize(catalog_template:, user:, target:, inputs: {}, resolutions: {}, expected: nil, provided_secrets: [])
+    # @param require_inputs [Boolean] false lets a required input stay blank: the install page
+    #   shows the plan before the user has typed the inputs, which only the install itself needs
+    def initialize(catalog_template:, user:, target:, inputs: {}, resolutions: {}, expected: nil, provided_secrets: [],
+                   require_inputs: true)
       @catalog_template = catalog_template
+      @require_inputs = require_inputs
       @user = user
       @target = target.to_h.symbolize_keys
       @raw_inputs = inputs.to_h.stringify_keys
@@ -137,7 +141,7 @@ module Templates
         value = @raw_inputs.key?(key) ? @raw_inputs[key] : input["default"]
         value = ActiveModel::Type::Boolean.new.cast(value).to_s if input["type"] == "boolean"
         value = value.to_s
-        raise InvalidInputs, "#{input['label']} is required" if value.blank? && input["required"]
+        raise InvalidInputs, "#{input['label']} is required" if @require_inputs && value.blank? && input["required"]
         if input["type"] == "select" && value.present? && Array(input["options"]).exclude?(value)
           raise InvalidInputs, "#{input['label']} must be one of: #{input['options'].join(', ')}"
         end

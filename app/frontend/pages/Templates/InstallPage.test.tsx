@@ -81,6 +81,28 @@ describe('Templates/InstallPage', () => {
     );
   });
 
+  it('holds the install until every required setting is filled in', async () => {
+    renderAuthedPage(<InstallPage />, {
+      props: props({
+        template: buildTemplateDetail({
+          inputs: [{ key: 'staging_url', label: 'Staging URL', type: 'string', required: true }],
+          requires: { integrations: [], repositories: [], secrets: [] },
+        }),
+      }),
+    });
+
+    expect(screen.getByRole('button', { name: 'Fill in the required settings first' })).toBeDisabled();
+
+    await userEvent.type(screen.getByRole('textbox', { name: /Staging URL/ }), 'https://staging.example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Install' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/template_installs',
+      expect.objectContaining({ inputs: { staging_url: 'https://staging.example.com' } }),
+      expect.anything(),
+    );
+  });
+
   it('explains why a template cannot be installed and offers no install button', () => {
     renderAuthedPage(<InstallPage />, { props: props({ plan: null, error: 'This template has been withdrawn' }) });
 

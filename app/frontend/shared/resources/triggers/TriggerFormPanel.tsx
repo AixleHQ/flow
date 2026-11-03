@@ -17,6 +17,7 @@ import { useCallback, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ConnectChannelModal } from 'shared/resources/chat-channels/ConnectChannelModal';
 import type { ChatChannel } from 'shared/resources/chat-channels/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
@@ -356,6 +357,37 @@ export function TriggerFormPanel({
   // explicitly dismissing the panel via ✕ or Done must still refresh the list.
   const dismiss = created ? onSaved : onClose;
 
+  const values = JSON.stringify({
+    kind,
+    pickedWorkflowId,
+    columnId,
+    mode,
+    cooldown,
+    enabled,
+    chatProvider,
+    chatChannelId,
+    statusReporting,
+    textContains,
+    textOp,
+    chatCooldown,
+    verification,
+    secret,
+    condField,
+    condOp,
+    condValue,
+    cron,
+    timezone,
+    subjectPolicy,
+    subjectColumnId,
+    subjectTitleTemplate,
+    trackerValue,
+  });
+  const [initialValues] = useState(values);
+  const requestClose = useUnsavedChanges({
+    dirty: values !== initialValues && !created && !saving,
+    onClose: dismiss,
+  });
+
   const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
   // On create the trigger is recorded as the signed-in user; on edit it keeps
   // the creator it was given (the creator is not reassignable in v1).
@@ -424,7 +456,7 @@ export function TriggerFormPanel({
             {isEdit ? 'Edit trigger' : 'Add trigger'}
           </div>
           <button
-            onClick={dismiss}
+            onClick={requestClose}
             title="Close"
             style={{
               background: 'none',
@@ -1269,7 +1301,7 @@ export function TriggerFormPanel({
               }}
             >
               <button
-                onClick={onClose}
+                onClick={requestClose}
                 style={{
                   background: 'none',
                   border: '1px solid var(--app-border-default)',

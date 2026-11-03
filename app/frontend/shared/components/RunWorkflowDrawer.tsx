@@ -7,8 +7,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
@@ -188,7 +188,7 @@ export function RunWorkflowDrawer({
     selectedAssetIds.length > 0 ||
     requestedModel !== null ||
     runnerId !== workflowRunnerId;
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   const handleSubmit = () => {
     if (!canSubmit || !workflow) return;

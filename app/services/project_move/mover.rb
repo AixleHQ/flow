@@ -6,7 +6,8 @@ module ProjectMove
   # number, Temporal schedule id and webhook slug stays what it was.
   #
   # Before the transaction it cancels the work that has not started and copies the
-  # company assets the project points at. Inside it, under the project's row lock,
+  # company assets the project points at. Inside it, under the project's row lock
+  # and the row locks of the project's workflows (lock_workflows!),
   # it reads the preflight again and refuses if anything changed: a run or session
   # created in the meantime waits on that lock (their foreign key to the project
   # takes a share lock on its row), so whatever the second reading finds is all
@@ -79,6 +80,7 @@ module ProjectMove
 
     def move!(first_reading, copier)
       @project.lock!
+      lock_workflows!
       preflight = Preflight.new(project: @project, target: @target)
       refuse!(preflight.blockers.join(" ")) unless preflight.movable?
       refuse!("A run or session started in #{@project.name} while it was being moved. Try again.") if preflight.cancellations?
@@ -96,6 +98,16 @@ module ProjectMove
       verify_tenant_columns!
       audit!(report)
       report
+    end
+
+    # Versions.save! locks the workflow row, not the project, so the project lock
+    # alone lets a save commit a snapshot naming a source runner after
+    # clear_runner_references! has stripped the versions. Every workflow of the
+    # project, archived ones included, is locked in id order before the second
+    # preflight reads them and is held until the move commits: a save already
+    # under way finishes first, and a later one waits and then sees the moved row.
+    def lock_workflows!
+      Workflow.for_project(@project).order(:id).lock.pluck(:id)
     end
 
     def detach_links!(preflight)

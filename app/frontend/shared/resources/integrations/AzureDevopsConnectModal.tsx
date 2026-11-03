@@ -17,7 +17,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { AzureDevopsFederatedForm, type AzureDevopsFederation } from './AzureDevopsFederatedForm';
 import { type AzureDevopsProject, capabilitiesChanged, DEFAULT_CAPABILITIES, postJson } from './azureDevopsShared';
@@ -112,9 +112,9 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     projectIds.length > 0 ||
     patProjectId !== '' ||
     pat !== '' ||
-    federatedDirty ||
-    capabilitiesChanged(capabilities);
-  const requestClose = useConfirmClose(dirty, close);
+    capabilities.length !== DEFAULT_CAPABILITIES.length ||
+    capabilities.some((c) => !DEFAULT_CAPABILITIES.includes(c));
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose: close });
 
   // Step one: prove this company may bind the organization at all, and see what
   // it holds. An organization already bound needs no token — the binding is the

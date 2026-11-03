@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
 import { buildTemplateDetail } from 'test/factories/template';
-import { renderAuthedPage, renderPage, screen } from 'test/renderPage';
+import { renderAuthedPage, renderPage, screen, userEvent } from 'test/renderPage';
 
 import ShowPage from './ShowPage';
 
@@ -30,6 +30,27 @@ describe('Templates/ShowPage', () => {
     expect(screen.getByText('Default branch')).toBeInTheDocument();
     expect(screen.getByText(/third-party container image/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Install' })).toBeInTheDocument();
+  });
+
+  it('renders the tables in the readme and the setup notes', async () => {
+    renderAuthedPage(<ShowPage />, {
+      props: {
+        template: buildTemplateDetail({
+          readme: '| Setting | Default |\n|---|---|\n| Integration branch | `develop` |',
+          setup: '| Item | Set it when |\n|---|---|\n| `SPEC_PATH` | you keep a spec |',
+        }),
+        installPath,
+        signedIn: true,
+      },
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Readme' }));
+    expect(screen.getByRole('columnheader', { name: 'Setting' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Integration branch' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Setup' }));
+    expect(screen.getByRole('columnheader', { name: 'Set it when' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'SPEC_PATH' })).toBeInTheDocument();
   });
 
   it('shows why a withdrawn template cannot be installed', () => {

@@ -1,0 +1,69 @@
+{
+  "description": "Each endpoint takes one kind of token: registration for /register, refresh for /token, access for the rest. Any other kind is 401 invalid_token.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{reg}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{reg}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "DELETE", "path": "/runner/v1/registration", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{m.access_token}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{m.refresh_token}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    }
+  ]
+}

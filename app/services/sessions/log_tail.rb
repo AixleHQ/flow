@@ -77,7 +77,10 @@ module Sessions
       log = session.session_logs.find_by(name: "terminal_output.log")
       return no_log_payload if log.nil? || log.file.blank?
 
-      content = read_tail(log)
+      # Masked again on read, before the escape codes go: a log stored before the
+      # masking learned to see through them still holds what it missed, and stripping
+      # them is exactly what joins a split value back together.
+      content = SecretRedactor.for_session(session).terminal(read_tail(log))
       content = content.gsub(ANSI_SEQUENCE, "") unless raw
 
       { source: "stored", log: last_lines(content, lines),

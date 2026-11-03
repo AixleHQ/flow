@@ -1,0 +1,38 @@
+{
+  "description": "A refresh token presented a second time answers 401 credential_reuse_detected and revokes the whole family: the newest pair stops working too.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"second.access_token": "/access_token", "second.refresh_token": "/refresh_token"}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 401,
+        "body": {"error": "credential_reuse_detected", "message": {"$type": "string"}}
+      }
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{second.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{second.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

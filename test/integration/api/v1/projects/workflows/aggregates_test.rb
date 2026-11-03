@@ -52,7 +52,8 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
   end
 
   test "a step's reasoning effort is saved and read back" do
-    save([ { id: @build.id, name: "Build", required_agent_runtime: "kiro_cli", reasoning_effort: "high" },
+    save([ { id: @build.id, name: "Build", required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+             reasoning_effort: "high" },
            { id: @test.id, name: "Test", depends_on_step_ids: [ @build.id ] } ])
 
     assert_response :success

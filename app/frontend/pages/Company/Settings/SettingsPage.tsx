@@ -23,6 +23,8 @@ import { z } from 'zod';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+
 import { SettingsTabs } from './SettingsTabs';
 
 const schema = z.object({
@@ -92,52 +94,60 @@ const SettingsPage = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (values: typeof form.values) => {
-    setIsSubmitting(true);
+  const handleSubmit = (values: typeof form.values) =>
+    new Promise<boolean>((resolve) => {
+      setIsSubmitting(true);
 
-    const callbacks = {
-      preserveScroll: true,
-      onSuccess: () => {
-        setIsSubmitting(false);
-        form.setFieldValue('logo', null);
-        form.setFieldValue('removeLogo', false);
-        form.resetDirty();
-        notifications.show({ message: 'Company settings saved', color: 'green' });
-      },
-      onError: () => {
-        setIsSubmitting(false);
-        notifications.show({ message: 'Failed to save settings', color: 'red' });
-      },
-    };
+      const callbacks = {
+        preserveScroll: true,
+        onSuccess: () => {
+          setIsSubmitting(false);
+          form.setFieldValue('logo', null);
+          form.setFieldValue('removeLogo', false);
+          form.resetDirty();
+          notifications.show({ message: 'Company settings saved', color: 'green' });
+          resolve(true);
+        },
+        onError: () => {
+          setIsSubmitting(false);
+          notifications.show({ message: 'Failed to save settings', color: 'red' });
+        },
+        onFinish: () => resolve(false),
+      };
 
-    const payload: Record<string, FormDataConvertible> = {
-      company: {
-        displayName: values.displayName.trim(),
-        primaryColor: values.primaryColor,
-        secondaryColor: values.secondaryColor,
-        removeLogo: values.removeLogo,
-      },
-      // Sent only when this person may set it: the key's presence is what tells
-      // the server a limit was submitted at all, and an empty one clears it.
-      ...(capacity.canManage ? { capacity: values.capacity.trim() } : {}),
-    } as Record<string, FormDataConvertible>;
+      const payload: Record<string, FormDataConvertible> = {
+        company: {
+          displayName: values.displayName.trim(),
+          primaryColor: values.primaryColor,
+          secondaryColor: values.secondaryColor,
+          removeLogo: values.removeLogo,
+        },
+        // Sent only when this person may set it: the key's presence is what tells
+        // the server a limit was submitted at all, and an empty one clears it.
+        ...(capacity.canManage ? { capacity: values.capacity.trim() } : {}),
+      } as Record<string, FormDataConvertible>;
 
-    // A File cannot travel as JSON, so a chosen logo turns the whole save into a
-    // multipart POST that Rails reads as the PATCH it is.
-    if (values.logo) {
-      const fd = new FormData();
-      fd.append('_method', 'PATCH');
-      fd.append('company[logo]', values.logo);
-      Object.entries(payload.company as Record<string, FormDataConvertible>).forEach(([key, value]) => {
-        fd.append(`company[${key}]`, String(value));
-      });
-      if (capacity.canManage) fd.append('capacity', values.capacity.trim());
-      router.post('/company/settings', fd, { ...callbacks, forceFormData: true });
-      return;
-    }
+      // A File cannot travel as JSON, so a chosen logo turns the whole save into a
+      // multipart POST that Rails reads as the PATCH it is.
+      if (values.logo) {
+        const fd = new FormData();
+        fd.append('_method', 'PATCH');
+        fd.append('company[logo]', values.logo);
+        Object.entries(payload.company as Record<string, FormDataConvertible>).forEach(([key, value]) => {
+          fd.append(`company[${key}]`, String(value));
+        });
+        if (capacity.canManage) fd.append('capacity', values.capacity.trim());
+        router.post('/company/settings', fd, { ...callbacks, forceFormData: true });
+        return;
+      }
 
-    router.patch('/company/settings', payload, callbacks);
-  };
+      router.patch('/company/settings', payload, callbacks);
+    });
+
+  useUnsavedChanges({
+    dirty: form.isDirty() && !isSubmitting,
+    onSave: form.isValid() ? () => handleSubmit(form.getValues()) : undefined,
+  });
 
   return (
     <AuthLayout>

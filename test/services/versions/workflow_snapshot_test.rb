@@ -50,7 +50,7 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
 
   test "a step's reasoning effort is part of its snapshot and comes back on revert" do
     Versions.save!(@workflow, actor: @actor) do
-      @build.update!(required_agent_runtime: "kiro_cli", reasoning_effort: "high")
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "high")
     end
     v1 = @workflow.latest_version
     assert_equal "high", v1.snapshot["steps"].first["reasoning_effort"]
@@ -63,25 +63,37 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal "high", @build.reload.reasoning_effort
   end
 
-  # A version saved before steps had a reasoning effort has no such key: it means the
-  # CLI's default, not "keep whatever the step has now".
-  test "reverting to a snapshot without a reasoning effort clears the step's level" do
+  # A key a snapshot lacks is a column added after that version was saved, so the
+  # revert gives it the column's default rather than keeping the row's current value.
+  test "reverting to a snapshot without a column restores that column's default" do
     Versions.save!(@workflow, actor: @actor) { @build.update!(required_agent_runtime: "gemini_cli") }
     v1 = @workflow.latest_version
-    legacy = v1.snapshot.merge("steps" => v1.snapshot["steps"].map { |step| step.except("reasoning_effort") })
+    legacy = v1.snapshot.except("description").merge(
+      "steps" => v1.snapshot["steps"].map do |step|
+        step.except("reasoning_effort", "on_failure", "max_retries")
+            .merge("sub_steps" => step["sub_steps"].map { |sub| sub.except("required") })
+      end
+    )
     EntityVersion.where(id: v1.id).update_all(snapshot: legacy)
     v1.reload
 
     Versions.save!(@workflow, actor: @actor) do
-      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "xhigh")
+      @workflow.update!(description: "later")
+      @build.update!(required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5", reasoning_effort: "xhigh",
+                     on_failure: "skip", max_retries: 3)
+      @check.update!(required: false)
     end
 
     Versions.revert!(@workflow, to: v1, actor: @actor)
 
     @build.reload
+    assert_nil @workflow.reload.description
     assert_equal "gemini_cli", @build.required_agent_runtime
     assert_nil @build.preferred_model
-    assert_nil @build.reasoning_effort
+    assert_nil @build.reasoning_effort, "a nullable column with no default comes back nil"
+    assert_equal "fail", @build.on_failure, "a NOT NULL column comes back as its default"
+    assert_equal 0, @build.max_retries
+    assert @check.reload.required, "a sub-step column comes back as its default"
   end
 
   test "revert restores a dependency chain whatever order the steps were saved in" do

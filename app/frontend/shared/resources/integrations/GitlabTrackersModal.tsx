@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { requestJson } from './requestJson';
 
@@ -88,7 +88,11 @@ export const GitlabTrackersModal = ({ integration, onClose, basePath }: Props) =
   }, [boards, boardFor, chosen]);
 
   const current = JSON.stringify(Object.fromEntries(chosen.map((id) => [id, boardFor[id] ?? NO_BOARD])));
-  const requestClose = useConfirmClose(projects !== null && current !== initial, onClose);
+  const requestClose = useUnsavedChanges({
+    opened: !!integration,
+    dirty: projects !== null && current !== initial,
+    onClose,
+  });
 
   const save = useCallback(() => {
     if (!integration) return;

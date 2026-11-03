@@ -16,10 +16,6 @@ module Versions
                        output_asset_specs tool_ids skill_ids mcp_server_ids asset_ids repository_ids
                        config_item_ids depends_on_step_ids].freeze
       STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at].freeze
-      # Step columns added after older snapshots were saved, with the value such a
-      # snapshot means by leaving them out. Without it a revert would keep the step's
-      # current value instead of restoring what that version had.
-      STEP_DEFAULTS = { "reasoning_effort" => nil }.freeze
       SUB_STEP_FIELDS = %w[id name instructions position required].freeze
       SUB_STEP_EXCLUDED = %w[step_id deleted_at created_at updated_at].freeze
 
@@ -52,17 +48,31 @@ module Versions
         end
 
         def restore!(record, snapshot)
+          attrs = with_column_defaults(::Workflow, FIELDS, snapshot.slice(*FIELDS))
           record.assign_attributes(
-            "name" => snapshot["name"], "description" => snapshot["description"],
-            "config" => existing_config(snapshot["config"] || {}),
-            "runner_id" => restorable_runner_id(record, snapshot["runner_id"])
+            "name" => attrs["name"], "description" => attrs["description"],
+            "config" => existing_config(attrs["config"] || {}),
+            "runner_id" => restorable_runner_id(record, attrs["runner_id"])
           )
           record.save!
-          WorkflowStepSync.new(record, Array(snapshot["steps"]).map { |step| STEP_DEFAULTS.merge(step) }).sync!
+          WorkflowStepSync.new(record, Array(snapshot["steps"]).map { |step| restorable_step(step) }).sync!
           record.steps.reset
         end
 
         private
+
+        def restorable_step(step)
+          sub_steps = Array(step["sub_steps"]).map { |sub| with_column_defaults(::SubStep, SUB_STEP_FIELDS, sub) }
+          with_column_defaults(::Step, STEP_FIELDS, step).merge("sub_steps" => sub_steps)
+        end
+
+        # A snapshot holds the columns its version had. A column added since then
+        # did not exist for that version, so it restores as the column's default:
+        # nil for a nullable column with none, the default of a NOT NULL one.
+        # Leaving the key out instead would keep the row's current value.
+        def with_column_defaults(model, fields, attrs)
+          model.column_defaults.slice(*fields).deep_dup.merge(attrs)
+        end
 
         # A runner the project still owns (TenantScope's Runner rule) is restored
         # as it was, a deleted, disabled or revoked one included, and the builder

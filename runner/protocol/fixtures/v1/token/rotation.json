@@ -1,0 +1,37 @@
+{
+  "description": "POST /token exchanges the refresh token for a new pair of the same family, not cacheable. The new access token works, and the new refresh token rotates in turn.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"second.access_token": "/access_token", "second.refresh_token": "/refresh_token"}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{second.access_token}}"},
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{second.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      }
+    }
+  ]
+}

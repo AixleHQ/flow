@@ -78,6 +78,20 @@ class SentryConfigurationTest < ActiveSupport::TestCase
     assert_equal({ "Accept" => "json" }, request.headers)
   end
 
+  test "breadcrumbs drop the params of the ingest route and the runner gateway, and keep the others" do
+    before_breadcrumb = configured.before_breadcrumb
+    crumb = ->(controller) { Sentry::Breadcrumb.new(data: { controller: controller, action: "create", params: { "stdout" => "s3cr3t" } }) }
+
+    [ "RunnerGateway::V1::OperationResultsController", "RunnerGateway::V1::OperationsController",
+      SentryConfiguration::USAGE_INGEST_CONTROLLER ].each do |controller|
+      data = before_breadcrumb.call(crumb.call(controller), {}).data
+      assert_equal({ controller: controller, action: "create", params: "[FILTERED]" }, data)
+    end
+
+    kept = before_breadcrumb.call(crumb.call("Company::ProjectsController"), {}).data
+    assert_equal({ "stdout" => "s3cr3t" }, kept[:params])
+  end
+
   test "the app tokens Forge sends with every Bitbucket invocation are dropped" do
     request = Struct.new(:data, :cookies, :headers).new(
       {}, {}, { "X-Forge-Oauth-System" => "app-token", "x-forge-oauth-user" => "user-token", "X-B3-Traceid" => "t" }

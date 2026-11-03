@@ -218,7 +218,8 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
   test "workflow step reasoning effort creates, updates, clears and reads back" do
     created = payload(call_tool("create_workflow_step",
                                 { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
-                                  required_agent_runtime: "kiro_cli", reasoning_effort: "high" }))
+                                  required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                                  reasoning_effort: "high" }))
     assert_equal "high", created["reasoning_effort"]
     step = Step.find(created["id"])
 
@@ -249,6 +250,32 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
                           reasoning_effort: "max" })
     assert error?(invalid)
     assert_match(/Reasoning effort max is not available for gemini_cli/, text(invalid))
+  end
+
+  # A level and its model are kept consistent: neither the default model nor a step that
+  # leaves its runtime to resolution has anything to check it against.
+  test "workflow step reasoning effort without an explicit model or runtime is refused" do
+    no_model = call_tool("create_workflow_step",
+                         { project_id: @project.id, workflow_id: @workflow.id, name: "Default",
+                           required_agent_runtime: "kiro_cli", reasoning_effort: "high" })
+    assert error?(no_model)
+    assert_match(/Reasoning effort needs an explicitly chosen model/, text(no_model))
+
+    no_runtime = call_tool("create_workflow_step",
+                           { project_id: @project.id, workflow_id: @workflow.id, name: "Resolved",
+                             preferred_model: "claude-opus-5.5", reasoning_effort: "high" })
+    assert error?(no_runtime)
+    assert_match(/Reasoning effort needs an explicitly chosen runtime/, text(no_runtime))
+
+    step = Step.find(payload(call_tool("create_workflow_step",
+                                       { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
+                                         required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
+                                         reasoning_effort: "high" }))["id"])
+    clear_model = call_tool("update_workflow_step",
+                            { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                              preferred_model: nil })
+    assert error?(clear_model)
+    assert_equal [ "claude-opus-5.5", "high" ], [ step.reload.preferred_model, step.reasoning_effort ]
   end
 
   # Cursor CLI takes a level only on a model the step names, so the model and the

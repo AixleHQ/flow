@@ -13,14 +13,22 @@ module Usage
 
     PERCENTILES = { p50: 0.5, p90: 0.9, p95: 0.95, p99: 0.99 }.freeze
 
-    def initialize(company, from:, to:)
+    NO_WAITS = { sessions: 0, waited: 0, p95: nil }.freeze
+
+    # `time_zone` is the viewer's, for the days and hours a session joined the
+    # queue in; the range itself is UTC days, like the rest of the dashboard, so
+    # a day at either end can hold only part of itself. A name Postgres does not
+    # know reads as UTC.
+    def initialize(company, from:, to:, time_zone: "UTC")
       @company = company
       @from = from.to_time(:utc)
       @to = (to + 1).to_time(:utc)
+      @time_zone = known_zone(time_zone)
     end
 
     def to_h
       sessions = session_groups
+      by_hour = sessions.fetch(:hours, {})
       {
         company_id: @company.id,
         worker_limit: Billing::EffectiveCapacity.for_companies[@company.id],
@@ -29,15 +37,39 @@ module Usage
         waits: sessions.fetch(:all, empty_waits),
         runs: runs,
         projects: projects(sessions.fetch(:projects, {})),
-        days: sessions.fetch(:days, {}).sort.map { |day, waits| { day: day, **waits.slice(:sessions, :waited, :p95) } }
+        days: sessions.fetch(:days, {}).sort.map { |day, waits| { day: day, **waits.slice(:sessions, :waited, :p95) } },
+        time_zone: @time_zone,
+        hours: hours_from(by_hour)
       }
+    end
+
+    # The hours of one of the viewer's days, for when that day is opened.
+    def hours_of(day)
+      rows = select_all(<<~SQL, day: day)
+        #{measured_sql}
+        SELECT hour, #{wait_aggregates} FROM measured WHERE day = :day GROUP BY hour
+      SQL
+      hours_from(rows.to_h { |row| [ row["hour"].to_i, waits_of(row) ] })
     end
 
     private
 
-    def binds = { company_id: @company.id, from: @from, to: @to, waited: WAITED }
+    def binds = { company_id: @company.id, from: @from, to: @to, waited: WAITED, zone: @time_zone }
 
-    def select_all(sql) = ActiveRecord::Base.connection.select_all(ActiveRecord::Base.sanitize_sql_array([ sql, binds ]))
+    def known_zone(name)
+      return "UTC" if name.blank?
+
+      sql = ActiveRecord::Base.sanitize_sql_array([ "SELECT 1 FROM pg_timezone_names WHERE name = ?", name ])
+      ActiveRecord::Base.connection.select_value(sql) ? name : "UTC"
+    end
+
+    def select_all(sql, **extra)
+      ActiveRecord::Base.connection.select_all(ActiveRecord::Base.sanitize_sql_array([ sql, binds.merge(extra) ]))
+    end
+
+    def hours_from(by_hour)
+      (0..23).map { |hour| { hour: hour, **by_hour.fetch(hour, NO_WAITS).slice(:sessions, :waited, :p95) } }
+    end
 
     # Every session admitted in the range, with how long it waited and how many
     # of the company's sessions — and of its project's — were already waiting
@@ -76,7 +108,9 @@ module Usage
           FROM events
         ),
         measured AS (
-          SELECT a.session_id, a.project_id, a.admitted_at::date AS day,
+          SELECT a.session_id, a.project_id,
+                 ((a.created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone)::date AS day,
+                 EXTRACT(HOUR FROM (a.created_at AT TIME ZONE 'UTC') AT TIME ZONE :zone)::int AS hour,
                  EXTRACT(EPOCH FROM a.admitted_at - a.created_at) AS wait_seconds,
                  q.in_company, q.in_project
           FROM window_admissions a
@@ -97,26 +131,30 @@ module Usage
       SQL
     end
 
-    # Overall, per project and per day, in one pass.
+    # Overall, per project, per day and per hour of the day, in one pass. Days
+    # and hours are the ones a session joined the queue in, because that is what
+    # a person asks of them — how long does a session started at ten wait — and
+    # because a day opened into its hours must hold exactly those hours.
     def session_groups
       rows = select_all(<<~SQL)
         #{measured_sql}
-        SELECT GROUPING(project_id, day) AS grouping, project_id, day,
+        SELECT GROUPING(project_id, day, hour) AS grouping, project_id, day, hour,
                #{wait_aggregates},
                AVG(in_company) AS ahead_average,
                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY in_company) AS ahead_p95,
                MAX(in_company) AS ahead_max,
                MAX(in_project) AS ahead_in_project_max
         FROM measured
-        GROUP BY GROUPING SETS ((), (project_id), (day))
+        GROUP BY GROUPING SETS ((), (project_id), (day), (hour))
       SQL
 
       rows.each_with_object({}) do |row, groups|
         waits = waits_of(row)
         case row["grouping"].to_i
-        when 3 then groups[:all] = waits.merge(ahead_of(row))
-        when 1 then (groups[:projects] ||= {})[row["project_id"].to_i] = waits.merge(ahead_max: row["ahead_in_project_max"].to_i)
-        when 2 then (groups[:days] ||= {})[row["day"].to_s] = waits
+        when 7 then groups[:all] = waits.merge(ahead_of(row))
+        when 3 then (groups[:projects] ||= {})[row["project_id"].to_i] = waits.merge(ahead_max: row["ahead_in_project_max"].to_i)
+        when 5 then (groups[:days] ||= {})[row["day"].to_s] = waits
+        when 6 then (groups[:hours] ||= {})[row["hour"].to_i] = waits
         end
       end
     end

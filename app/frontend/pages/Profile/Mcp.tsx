@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { disableMCPTokenProfilePath, regenerateMCPTokenProfilePath, updateMCPToolsProfilePath } from 'shared/routes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
@@ -236,20 +237,29 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
       return next;
     });
 
-  const save = () => {
-    setSaving(true);
-    // Sending every name is how "all" is expressed: the server stores that as
-    // NULL, which keeps tools added in a later release switched on.
-    router.patch(
-      updateMCPToolsProfilePath(),
-      { toolNames: [...selected] },
-      {
-        preserveScroll: true,
-        onSuccess: () => setBaseline(sorted(selected)),
-        onFinish: () => setSaving(false),
-      },
-    );
-  };
+  const save = () =>
+    new Promise<boolean>((resolve) => {
+      setSaving(true);
+      // Sending every name is how "all" is expressed: the server stores that as
+      // NULL, which keeps tools added in a later release switched on.
+      router.patch(
+        updateMCPToolsProfilePath(),
+        { toolNames: [...selected] },
+        {
+          preserveScroll: true,
+          onSuccess: () => {
+            setBaseline(sorted(selected));
+            resolve(true);
+          },
+          onFinish: () => {
+            setSaving(false);
+            resolve(false);
+          },
+        },
+      );
+    });
+
+  useUnsavedChanges({ dirty: dirty && !saving, onSave: save });
 
   return (
     <Card p={24} mt={16}>
@@ -345,7 +355,7 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
       </Stack>
 
       <Group mt="md" gap="sm">
-        <Button onClick={save} disabled={!dirty || saving} loading={saving}>
+        <Button onClick={() => void save()} disabled={!dirty || saving} loading={saving}>
           Save tools
         </Button>
         {dirty && (

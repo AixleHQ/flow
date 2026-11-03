@@ -4,6 +4,8 @@ require "test_helper"
 
 module Sessions
   class LogTailTest < ActiveSupport::TestCase
+    include SecretLeakAssertions
+
     setup do
       @user = create(:user, :with_company)
       @project = create(:project, company: @user.companies.first, owner: @user)
@@ -42,6 +44,18 @@ module Sessions
       create(:session_log, terminal_session: session, name: "terminal_output.log",
                            file_size: content.bytesize,
                            file: SessionLogUploader.upload(StringIO.new(content), :store))
+    end
+
+    # A log stored before the masking saw through the TUI's colour codes and wraps still
+    # holds what it missed — and stripping the codes is exactly what joins it back up.
+    test "a stored log is masked again on read, before its escape codes are stripped" do
+      session = create(:terminal_session, :agent_session, :failed, user: @user, project: @project)
+      session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
+                                                            value: RECORDED_SECRET)
+      stored_log(session, recording("claude_code_2.1.310_terminal.log"))
+
+      assert_no_secret LogTail.new(session).call(lines: 2_000)[:log]
+      assert_no_secret LogTail.new(session).call(lines: 2_000, raw: true)[:log]
     end
 
     test "another provider's identifier in a session's own tool output is not reported as a quota error" do

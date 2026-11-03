@@ -103,6 +103,18 @@ class Rack::Attack
     Digest::SHA256.hexdigest(token)[0, 32] if token
   end
 
+  RUNNER_GATEWAY_PREFIX = "/runner/v1/"
+
+  def self.runner_gateway?(req)
+    req.path.start_with?(RUNNER_GATEWAY_PREFIX)
+  end
+
+  # A digest, so the throttle's cache keys never hold a live credential.
+  def self.runner_credential(req)
+    token = req.get_header("HTTP_AUTHORIZATION").to_s.delete_prefix("Bearer ").presence
+    Digest::SHA256.hexdigest(token)[0, 32] if token
+  end
+
   def self.scim?(req)
     req.path == "/scim" || req.path.start_with?("/scim/")
   end
@@ -191,6 +203,20 @@ class Rack::Attack
   # one per IP that caps guessing at an unusable rate.
   throttle("scim/credential", limit: 600, period: 60) { |req| scim_credential(req) if scim?(req) }
   throttle("scim/ip", limit: 60, period: 60) { |req| req.ip if scim?(req) }
+
+  # A runner long-polls (one request per 25 s at rest) and posts logs and
+  # results while a session runs, a few a second at most. The per-IP cap bounds
+  # a client that sends a new bearer value on every request, and so a fresh
+  # per-token bucket each time; it allows a fleet of machines behind one NAT.
+  # Registering is once per machine, so its per-IP cap only has to allow a fleet
+  # set up from one egress address.
+  throttle("runner-gateway/credential", limit: 600, period: 60) do |req|
+    runner_credential(req) if runner_gateway?(req)
+  end
+  throttle("runner-gateway/ip", limit: 3000, period: 60) { |req| req.ip if runner_gateway?(req) }
+  throttle("runner-gateway/register/ip", limit: 30, period: 60) do |req|
+    req.ip if req.post? && req.path == "#{RUNNER_GATEWAY_PREFIX}register"
+  end
 
   throttle("csp-reports/ip", limit: 60, period: 60) do |req|
     req.ip if req.post? && req.path == "/csp-violation-report-endpoint"

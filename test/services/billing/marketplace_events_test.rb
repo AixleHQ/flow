@@ -7,6 +7,9 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
   OUR_PRODUCT_CODE = "codeofours0000000000000"
 
   setup do
+    # Every envelope is dated 10:00 that day, and the sweep only looks
+    # MarketplaceSubscriptionEvent::SWEPT_FOR back from now.
+    travel_to Time.utc(2026, 10, 23, 10, 5)
     Settings.stubs(:aws_marketplace).returns(
       Hashie::Mash.new(saas: { product_id: OUR_PRODUCT_ID, product_code: OUR_PRODUCT_CODE })
     )

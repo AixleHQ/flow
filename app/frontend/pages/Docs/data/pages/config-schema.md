@@ -42,6 +42,11 @@ Read straight from the environment, before or outside the settings files.
 | `MCP_MAX_THREADS`               | no       | `RAILS_MAX_THREADS` | MCP Puma thread budget.                                      |
 | `MCP_MIN_THREADS`               | no       | `MCP_MAX_THREADS`   | MCP Puma minimum thread count.                               |
 | `MCP_PIDFILE`                   | no       | `tmp/pids/mcp.pid`  | MCP Puma pidfile.                                            |
+| `RUNNER_GATEWAY_PORT`           | no       | `4003`              | Port the runner gateway Puma listens on (`config/puma_runner_gateway.rb`), which serves `/runner/v1/*`. |
+| `RUNNER_GATEWAY_MAX_THREADS`    | no       | `RAILS_MAX_THREADS` | Runner gateway Puma thread budget.                           |
+| `RUNNER_GATEWAY_MIN_THREADS`    | no       | `RUNNER_GATEWAY_MAX_THREADS` | Runner gateway Puma minimum thread count.           |
+| `RUNNER_GATEWAY_PIDFILE`        | no       | `tmp/pids/runner_gateway.pid` | Runner gateway Puma pidfile.                       |
+| `AIXLE_PROCESS_MODE`            | no       | unset               | Which routes the process draws (`config/routes.rb`). `config/puma_runner_gateway.rb` sets it to `runner_gateway`, which routes `/runner/v1/*` and `/up` only; unset routes everything else. Do not set it yourself. |
 | `RAILS_ENV`                     | no       | `development`       | Rails environment; also selects the per-environment settings file. |
 | `RAILS_LOG_TO_STDOUT`           | no       | unset               | Log to stdout — set it in containers.                        |
 | `RAILS_LOG_LEVEL`               | no       | `info`              | Log level in production and QA (`error` in test).            |
@@ -79,6 +84,8 @@ and test fall back to fixed non-secret values.
 | `INTEGRATIONS_SECRET_KEY_PREVIOUS` | Optional. Retired `INTEGRATIONS_SECRET_KEY` value(s), as above. |
 | `OAUTH_SECRET_KEY_PREVIOUS`        | Optional. Retired `OAUTH_SECRET_KEY` value(s), as above.        |
 | `ENCRYPTION_BIND_PURPOSE`          | Optional, default `false`. `true` binds every new ciphertext to its model and column. Turn it on once no pod of the previous release can run (that release reads a bound value as empty), then run `bin/rails encryption:reencrypt`. |
+| `RUNNERS_SECRET_KEY`               | Optional at boot. Encrypts the op payloads queued for external runners (`runner_operations`), which carry the credentials a session receives, and the results the runners report. Not checked by `required_env.rb`: without it the app boots and serves everything else, and only queueing, delivering or recording the result of a runner op fails. Development and test fall back to a fixed value. |
+| `RUNNERS_SECRET_KEY_PREVIOUS`      | Optional. Retired `RUNNERS_SECRET_KEY` value(s), as above. |
 
 ## Session queue
 

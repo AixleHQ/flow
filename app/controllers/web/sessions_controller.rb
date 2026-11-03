@@ -7,6 +7,7 @@ class Web::SessionsController < Web::ApplicationController
 
   skip_before_action :enforce_onboarding
   skip_before_action :enforce_company_auth_policy
+  skip_before_action :enforce_legal_acceptance
   skip_before_action :redirect_super_admin_to_admin_panel, only: %i[omniauth failure destroy]
 
   # NO membership at all, which is a signup — not "no ACTIVE membership", which

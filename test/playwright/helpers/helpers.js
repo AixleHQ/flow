@@ -54,11 +54,16 @@ function aixleSecret(email, password) {
   return { email, password, toJSON: () => '[redacted]', toString: () => '[redacted]' };
 }
 
-async function aixleOpen(page, env, path) {
+// HTTP Basic Auth for the browser context, when env carries it.
+async function aixleApplyHttpCredentials(page, env) {
   const http = env && env.httpCredentials;
   if (http && http.username) {
     await page.context().setHTTPCredentials({ username: http.username, password: http.password || '' });
   }
+}
+
+async function aixleOpen(page, env, path) {
+  await aixleApplyHttpCredentials(page, env);
   const response = await page.goto(aixleBaseUrl(env) + path, { waitUntil: 'domcontentloaded' });
   if (response && response.status() >= 400) throw new Error(`${path} answered HTTP ${response.status()}`);
   return response;
@@ -178,6 +183,75 @@ async function loginAsCompanyAdmin(page, env, credentials = env && env.companyAd
 /** Sign in as CompanyEmployee. Credentials default to env.companyEmployee. */
 async function loginAsCompanyEmployee(page, env, credentials = env && env.companyEmployee) {
   await login(page, env, credentials);
+}
+
+// The roles ensureSignedInAs knows: the keys loadCredentialsAsset returns.
+const AIXLE_SIGN_IN_ROLES = ['companyAdmin', 'companyEmployee'];
+// The page ensureSignedInAs reads the signed-in user from. /profile is a small
+// signed-in page; a signed-out session is redirected from it to /login.
+const AIXLE_WHOAMI_PATH = '/profile';
+
+// Who the browser context is signed in as, compared with `email`: 'same',
+// 'other' (another account) or 'signedOut'. One GET of /profile without
+// following redirects: a 302 to /login means signed out, and a 200 carries the
+// shared currentUser prop in its Inertia payload. Anything else (no response,
+// another status or redirect, a page without a valid Inertia payload or without
+// currentUser.email) throws with the path and the status, so the caller never
+// clears a session it could not read. The email is compared here and never
+// leaves this function.
+async function aixleSignedInAs(page, env, email) {
+  await aixleApplyHttpCredentials(page, env);
+  const result = await appRequest(page, {
+    path: AIXLE_WHOAMI_PATH,
+    headers: { Accept: 'text/html' },
+    textLimit: Infinity,
+    baseUrl: aixleBaseUrl(env),
+  });
+  const where = `ensureSignedInAs: GET ${AIXLE_WHOAMI_PATH}`;
+  if (result.status === 302 || result.status === 303) {
+    const target = aixlePathname(result.location || '');
+    if (target.startsWith('/login')) return 'signedOut';
+    throw new Error(`${where} redirected to ${target}`);
+  }
+  if (result.status !== 200) throw new Error(`${where} answered HTTP ${result.status}`);
+  const data = aixleInertiaData(result.text || '', AIXLE_WHOAMI_PATH, result.status);
+  const current = aixlePick(data.props || {}, ['currentUser.email'])['currentUser.email'];
+  if (typeof current !== 'string' || !current) {
+    throw new Error(`${where} answered HTTP 200 without currentUser.email`);
+  }
+  return current.toLowerCase() === String(email).toLowerCase() ? 'same' : 'other';
+}
+
+/**
+ * Make sure the browser is signed in as `role` ('companyAdmin' or
+ * 'companyEmployee', the keys of loadCredentialsAsset), signing in only when it
+ * is not. One GET of /profile (redirects not followed) tells who is signed in;
+ * when it is already that role's account, no sign-in form is submitted and the
+ * page is not navigated. When /profile redirects to /login, or shows another
+ * account, it signs in with login() and checks the session again. Any other
+ * answer (no response, an HTTP error, a page it cannot read) throws without
+ * signing in or clearing cookies. Returns { role, reused }: `reused` is true
+ * when no sign-in was needed. Staging allows 10 sign-ins per hour for one
+ * account from one IP, so use this at the start of each call instead of
+ * loginAs…. Neither the return value nor an error carries a credential.
+ */
+async function ensureSignedInAs(page, env, role) {
+  if (!AIXLE_SIGN_IN_ROLES.includes(role)) {
+    throw new Error(`ensureSignedInAs: role must be one of ${AIXLE_SIGN_IN_ROLES.join(', ')}`);
+  }
+  const credentials = env && env[role];
+  if (!credentials) throw new Error(`ensureSignedInAs: env has no ${role} credentials (see loadCredentialsAsset)`);
+  const { email } = aixleCredentials(credentials);
+
+  if ((await aixleSignedInAs(page, env, email)) === 'same') return { role, reused: true };
+
+  await login(page, env, credentials);
+  const after = await aixleSignedInAs(page, env, email);
+  if (after !== 'same') {
+    const seen = after === 'signedOut' ? 'redirects to /login' : 'shows another account';
+    throw new Error(`ensureSignedInAs: signed in, but ${AIXLE_WHOAMI_PATH} ${seen}, not the ${role} account`);
+  }
+  return { role, reused: false };
 }
 
 /**
@@ -501,6 +575,25 @@ function aixlePick(source, paths) {
   return picked;
 }
 
+// The Inertia payload in <script data-page="app" type="application/json"> of a
+// page's HTML. `where` (a URL or path) and `status` only go into the errors.
+function aixleInertiaData(html, where, status) {
+  const script = String(html).match(
+    /<script\b(?=[^>]*\bdata-page="app")(?=[^>]*\btype="application\/json")[^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (!script) throw new Error(`No Inertia page payload at ${aixlePathname(where)} (HTTP ${status})`);
+  let data;
+  try {
+    data = JSON.parse(script[1]);
+  } catch {
+    throw new Error(`The Inertia page payload at ${aixlePathname(where)} is not valid JSON`);
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`The Inertia page payload at ${aixlePathname(where)} is not a JSON object`);
+  }
+  return data;
+}
+
 /**
  * Fetch a page's HTML with the session cookies (following redirects) and parse
  * the Inertia payload in <script data-page="app" type="application/json">.
@@ -527,18 +620,7 @@ async function readInertiaPage(page, { path, pick = [], baseUrl } = {}) {
   }
   const html = await response.text();
   const landed = aixleRelative(aixleOrigin(response.url()) || base, response.url());
-  const script = html.match(
-    /<script\b(?=[^>]*\bdata-page="app")(?=[^>]*\btype="application\/json")[^>]*>([\s\S]*?)<\/script>/i,
-  );
-  if (!script) {
-    throw new Error(`No Inertia page payload at ${aixlePathname(landed)} (HTTP ${response.status()})`);
-  }
-  let data;
-  try {
-    data = JSON.parse(script[1]);
-  } catch {
-    throw new Error(`The Inertia page payload at ${aixlePathname(landed)} is not valid JSON`);
-  }
+  const data = aixleInertiaData(html, landed, response.status());
   const props = data.props || {};
   const settings = props.settings || {};
   return {

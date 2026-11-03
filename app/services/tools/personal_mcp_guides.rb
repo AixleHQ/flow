@@ -436,7 +436,8 @@ module Tools
             returns that agent's full persona when the title isn't enough.
           - `required_agent_runtime` pins the step to one of
             #{Step::SUPPORTED_AGENT_RUNTIMES.map { |r| "`#{r}`" }.join(', ')}. Pass null
-            in `update_workflow_step` to return to normal runtime resolution.
+            in `update_workflow_step` to return to normal runtime resolution; a step
+            with a `reasoning_effort` refuses that, so pass `reasoning_effort: null` with it.
           - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
             only what the step needs (list them with list_project_tools / list_skills /
             list_mcp_servers, and read a skill's content with `get_skill` before

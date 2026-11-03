@@ -51,14 +51,15 @@ x-web-environment: &web-environment
   # Record pool from — matches the Puma default so dev doesn't run 10 request
   # threads against a 5-connection pool. The worker overrides it.
   RAILS_MAX_THREADS: '10'
-  # The three ports the stack listens on, overridable so a second stack can run
+  # The ports the stack listens on, overridable so a second stack can run
   # beside the first on one machine (a worktree under review, say) instead of
-  # colliding on 4000/4001/4002. Everything derived from them follows:
+  # colliding on 4000/4001/4002/4003. Everything derived from them follows:
   # config/puma.rb and config/puma_mcp.rb bind them, and config/settings.yml
   # builds domain, asset_host, container_asset_host and the internal base URL
   # from the same two values.
   PORT: ${PORT:-4000}
   MCP_PORT: ${MCP_PORT:-4002}
+  RUNNER_GATEWAY_PORT: ${RUNNER_GATEWAY_PORT:-4003}
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
   REDIS_URL: redis://redis:6379/1
   DOCKER_NETWORK: ${DOCKER_NETWORK:-app_default}
@@ -114,6 +115,7 @@ services:
       - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-4000}:${PORT:-4000}'
       - '${BIND_ADDRESS:-127.0.0.1}:${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
       - '${BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
+      - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_GATEWAY_PORT:-4003}:${RUNNER_GATEWAY_PORT:-4003}'  # runner gateway (separate Puma via Procfile.dev)
     depends_on:
       db:
         condition: service_healthy

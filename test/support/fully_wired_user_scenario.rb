@@ -94,6 +94,7 @@ class FullyWiredUserScenario
     create(:bitbucket_installation, :bound, company: @company, bound_by: @user)
     create(:billing_cancellation, company: @company, user: @user)
     create(:feedback_submission, company: @company, user: @user)
+    create(:legal_acceptance, :terms_of_service, company: @company, user: @user)
     conversation = ChatChannelTestHelper.connect_chat_channel(company: @company)
     ChatChannelConnection.find_by!(chat_conversation: conversation, company: @company).update!(requested_by: @user)
     ChatConnectCode.issue!(project: @project, provider: "slack", user: @user, channel: "#deploys")

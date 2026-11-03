@@ -121,6 +121,24 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_empty(errors_for { |d| d["mcp_servers"].last["custom"]["headers"]["Authorization"] = "Bearer config_item:SENTRY_ORG" })
   end
 
+  test "a stdio launch line must meet the rules a server row is written with" do
+    errors = lambda do |command, args = nil|
+      errors_for do |d|
+        d["mcp_servers"] << { "key" => "files",
+                              "custom" => { "name" => "Files", "transport" => "stdio", "command" => command, "args" => args }.compact }
+      end
+    end
+
+    assert_equal [ "mcp server Files command: must pin @acme/files-mcp to an exact version (name@1.2.3) — " \
+                   "unpinned, every session installs whatever was released last" ],
+                 errors.call("npx", [ "@acme/files-mcp" ])
+    assert_equal [ "mcp server Files command: cannot use shell operators — the process is launched directly, without a shell" ],
+                 errors.call("npx @acme/files-mcp@1.4.0 | tee files.log")
+    assert_empty errors.call("npx", [ "@acme/files-mcp@1.4.0" ])
+    assert_empty errors.call("npx", [ "@acme/files-mcp", "--branch", "{{inputs.default_branch}}" ]),
+                 "a line that takes an install input is checked at install"
+  end
+
   test "inputs must be declared and may only appear in substituted fields" do
     errors = errors_for do |d|
       d["agents"].first["persona"] = "Speaks {{inputs.tone}}."
@@ -180,14 +198,71 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"
   end
 
-  # Steps and the MCP tools take their levels from config/agent_runtimes.json; the
-  # template schema lists them by hand, so a level added to the registry must be added
-  # here too, or a template carrying it fails validation on install.
-  test "the template schema's reasoning-effort levels are the registry's" do
+  # Steps take their runtimes from config/agent_runtimes.json; a runtime missing here
+  # makes a workflow exported with it fail validation.
+  test "the template schema's runtimes are the registry's" do
     schema = JSON.parse(Templates::Package::SCHEMA_PATH.read)
-    levels = schema.dig("properties", "workflows", "items", "properties", "steps", "items", "properties",
-                        "reasoning_effort", "enum")
+    runtimes = schema.dig("properties", "workflows", "items", "properties", "steps", "items", "properties",
+                          "required_agent_runtime", "enum")
 
-    assert_equal AgentRuntime.reasoning_effort_levels.sort, levels.sort
+    assert_equal AgentRuntime.ids.sort, runtimes.sort
+  end
+
+  test "a step's reasoning effort needs its preferred model and runtime" do
+    without_model = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_not_empty Templates::Validator.new(without_model).errors
+
+    complete = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "claude-opus-5.5",
+                                                          "reasoning_effort" => "high")
+    end
+    assert_empty Templates::Validator.new(complete).errors
+  end
+
+  test "a step's reasoning effort must be one its runtime takes for its model" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = lambda do |runtime, model, level|
+      errors_for do |definition|
+        definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => runtime,
+                                                            "preferred_model" => model,
+                                                            "reasoning_effort" => level)
+      end
+    end
+
+    assert_equal [ "#{label}: gemini_cli with model gemini-2.5-pro takes no reasoning effort" ],
+                 errors.call("gemini_cli", "gemini-2.5-pro", "low")
+    assert_equal [ "#{label}: xhigh is not available for kiro_cli with model claude-sonnet-4.6 " \
+                   "(choose one of: low, medium, high, max)" ],
+                 errors.call("kiro_cli", "claude-sonnet-4.6", "xhigh")
+    assert_empty errors.call("gemini_cli", "gemini-3-pro", "low")
+  end
+
+  # Step refuses a level on a blank model at install, so the package is refused here first.
+  test "a step's reasoning effort on a blank preferred model is refused" do
+    workflow = package.definition["workflows"].first
+    label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
+    errors = errors_for do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "kiro_cli",
+                                                          "preferred_model" => "",
+                                                          "reasoning_effort" => "high")
+    end
+
+    assert_equal [ "#{label}: needs an explicitly chosen model" ], errors
+  end
+
+  test "the installer refuses a step whose runtime and model take no such reasoning effort" do
+    invalid = package do |definition|
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "gemini_cli",
+                                                          "preferred_model" => "gemini-2.5-pro",
+                                                          "reasoning_effort" => "low")
+    end
+
+    error = assert_raises(Templates::Validator::InvalidPackage) { Templates::Validator.validate!(invalid) }
+    assert_match(/reasoning_effort: gemini_cli with model gemini-2\.5-pro takes no reasoning effort/, error.message)
   end
 end

@@ -14,6 +14,7 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 interface AgentModel {
   modelId: string;
   displayName: string;
+  reasoningEffortLevels: string[];
 }
 
 interface AgentModelsEntry {

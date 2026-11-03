@@ -35,7 +35,7 @@ export interface CreateOptions {
   repositories: NamedItem[];
   agentModels: {
     agentType: string;
-    models: { modelId: string; displayName: string }[];
+    models: { modelId: string; displayName: string; reasoningEffortLevels: string[] }[];
     defaultModel?: string | null;
   }[];
   configuredAgents: string[];

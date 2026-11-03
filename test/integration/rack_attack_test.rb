@@ -4,6 +4,8 @@ require "test_helper"
 
 # Rack::Attack is off in the test env; these turn it on against a private store.
 class RackAttackTest < ActionDispatch::IntegrationTest
+  include ProcessModeHelper
+
   setup do
     # Throttles count in fixed windows of Time.now / period; a burst that
     # straddles a boundary on a slow runner is split across two counters.
@@ -130,6 +132,57 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_not_equal Rack::Attack.mcp_credential(one), Rack::Attack.mcp_credential(other)
     assert_not_includes Rack::Attack.mcp_credential(one), "123.abc"
     assert_nil Rack::Attack.mcp_credential(rack_request({}))
+  end
+
+  # The gateway's own routes, as its Puma draws them (config/routes.rb).
+  test "registering runners from one address is cut off" do
+    with_process_mode("runner_gateway") do
+      30.times { post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" } }
+      assert_not_equal 429, response.status
+
+      post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }
+      assert_response :too_many_requests
+
+      post "/runner/v1/register", headers: { "Authorization" => "Bearer arreg_guess" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
+      assert_not_equal 429, response.status
+    end
+  end
+
+  test "the runner gateway is capped per credential, whichever address it calls from" do
+    with_process_mode("runner_gateway") do
+      600.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
+      assert_not_equal 429, response.status
+
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
+      assert_response :too_many_requests
+
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
+      assert_not_equal 429, response.status
+    end
+  end
+
+  # A new bearer value per request earns a new per-token bucket, so the address
+  # is what bounds it. No protocol header: the gateway answers 400 before any
+  # lookup, which keeps the burst cheap, and the throttle runs ahead of it.
+  test "the runner gateway is capped per address, whatever bearer value each request sends" do
+    with_process_mode("runner_gateway") do
+      3000.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_guess#{i}" } }
+      assert_not_equal 429, response.status
+
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }
+      assert_response :too_many_requests
+
+      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
+      assert_not_equal 429, response.status
+    end
+  end
+
+  test "the runner gateway count never keys on the raw token" do
+    key = Rack::Attack.runner_credential(rack_request({ "HTTP_AUTHORIZATION" => "Bearer aracc_secret-value" }, path: "/runner/v1/registration"))
+
+    assert_equal 32, key.length
+    assert_not_includes key, "aracc_secret-value"
+    assert_nil Rack::Attack.runner_credential(rack_request({}, path: "/runner/v1/register"))
   end
 
   test "member invites and re-sends are what the invite limit counts" do

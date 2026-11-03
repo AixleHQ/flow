@@ -9,6 +9,7 @@ class Web::StepUpsController < Web::ApplicationController
   layout "inertia"
 
   skip_before_action :enforce_company_auth_policy
+  skip_before_action :enforce_legal_acceptance
   skip_before_action :enforce_onboarding
   before_action :require_signed_in
   before_action :follow_requested_company, only: :new

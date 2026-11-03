@@ -527,53 +527,48 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_includes session.errors[:reasoning_effort].first, "ultra is not available for codex with model gpt-5.5"
   end
 
-  test "a word that is no reasoning-effort level is rejected" do
-    session = build(:terminal_session, :agent_session, user: @user, project: @project, reasoning_effort: "turbo")
+  test "a word that is no reasoning-effort level is rejected with one message" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
+                                       requested_model: "claude-opus-5.5", reasoning_effort: "turbo")
 
     assert_not session.valid?
-    assert session.errors.added?(:reasoning_effort, :inclusion, value: "turbo")
+    assert_equal [ "turbo is not available for kiro_cli with model claude-opus-5.5 (choose one of: low, medium, high, xhigh, max)" ],
+                 session.errors[:reasoning_effort]
   end
 
-  # Its step already checked the level; the runtime can still change at resolution.
-  test "a workflow step's session keeps its step's level whatever its runtime" do
+  # session_type is caller-controlled on the public create API, so it grants no exemption.
+  test "a workflow step's session is held to the same rule" do
     session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
-                                       agent_type: "gemini_cli", reasoning_effort: "xhigh")
+                                       agent_type: "gemini_cli", requested_model: "gemini-2.5-pro", reasoning_effort: "low")
+    assert_not session.valid?
+    assert_includes session.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
 
+    session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
+                                       agent_type: "gemini_cli", reasoning_effort: "low")
+    assert_not session.valid?
+    assert_includes session.errors[:reasoning_effort], "needs an explicitly chosen model"
+
+    session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
+                                       agent_type: "gemini_cli", requested_model: "gemini-3-pro", reasoning_effort: "low")
     assert session.valid?, session.errors.full_messages.to_sentence
   end
 
-  # The credential's default model can change at any time, so a level set while the
-  # model is left on Default is neither checked against it nor launched with.
-  test "a standalone session on the default model takes any known level and launches without it" do
-    cursor = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
-                                      reasoning_effort: "high")
-    assert cursor.valid?, cursor.errors.full_messages.to_sentence
-    assert_nil cursor.launch_reasoning_effort("claude-opus-4-8")
+  # The credential's default model can change at any time, so a level needs a model
+  # chosen explicitly: one set on Default is refused.
+  test "a standalone session on the default model refuses a level" do
+    %w[cursor_cli kiro_cli].each do |agent_type|
+      session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: agent_type,
+                                         reasoning_effort: "high")
 
-    kiro = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
-                                    reasoning_effort: "high")
-    assert kiro.valid?, kiro.errors.full_messages.to_sentence
-    assert_nil kiro.launch_reasoning_effort("auto")
+      assert_not session.valid?, agent_type
+      assert_includes session.errors[:reasoning_effort], "needs an explicitly chosen model"
+    end
   end
 
-  test "a Cursor session with a chosen model takes a level and launches with it" do
+  test "a Cursor session with a chosen model takes a level" do
     session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
                                        requested_model: "claude-opus-4-8", reasoning_effort: "high")
 
     assert session.valid?, session.errors.full_messages.to_sentence
-    assert_equal "high", session.launch_reasoning_effort("claude-opus-4-8")
-  end
-
-  test "launch_reasoning_effort is the level when the launching runtime and model take it" do
-    session = build(:terminal_session, agent_type: "kiro_cli", requested_model: "claude-opus-5.5",
-                                       reasoning_effort: "xhigh")
-
-    assert_equal "xhigh", session.launch_reasoning_effort("claude-opus-5.5")
-    assert_nil session.launch_reasoning_effort("claude-sonnet-4.6")
-    assert_nil session.launch_reasoning_effort("auto")
-  end
-
-  test "launch_reasoning_effort is nil when no level is set" do
-    assert_nil build(:terminal_session, agent_type: "claude_code").launch_reasoning_effort(nil)
   end
 end

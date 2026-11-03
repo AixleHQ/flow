@@ -22,6 +22,7 @@ import { useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
@@ -113,6 +114,9 @@ const InstallPage = () => {
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [projectName, setProjectName] = useState(selection.projectName ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const entered = JSON.stringify({ inputs, secrets, projectName });
+  const [initiallyEntered] = useState(entered);
+  useUnsavedChanges({ dirty: entered !== initiallyEntered && !submitting });
 
   const resolutions = toRecord(selection.resolutions);
   const intoExisting = selection.projectId !== null;
@@ -159,6 +163,12 @@ const InstallPage = () => {
   };
 
   const shown = plan?.items.filter((item) => item.section !== 'config_items') ?? [];
+  const missingRequired = template.inputs.some((input) => input.required && !(inputs[input.key] ?? '').trim());
+  const installLabel = () => {
+    if (!plan?.resolved) return 'Resolve the conflicts first';
+    if (missingRequired) return 'Fill in the required settings first';
+    return 'Install';
+  };
 
   return (
     <AuthLayout>
@@ -326,8 +336,8 @@ const InstallPage = () => {
                 </Text>
               )}
               <Group justify="flex-end">
-                <Button onClick={install} loading={submitting} disabled={!plan.resolved}>
-                  {plan.resolved ? 'Install' : 'Resolve the conflicts first'}
+                <Button onClick={install} loading={submitting} disabled={!plan.resolved || missingRequired}>
+                  {installLabel()}
                 </Button>
               </Group>
             </Stack>

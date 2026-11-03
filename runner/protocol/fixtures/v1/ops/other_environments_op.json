@@ -1,0 +1,52 @@
+{
+  "description": "A result for another machine's op, or for an op that does not exist, is 404 not_found and changes nothing.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registered_machine", "as": "other", "name": "build-02"},
+    {"given": "op_enqueued", "machine": "m", "as": "op", "op": "exec", "payload": {"cmd": ["true"]}},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{op.id}}/result",
+        "token": "{{other.access_token}}",
+        "body": {"status": "ok"}
+      },
+      "response": {"status": 404, "body": {"error": "not_found", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/0/result",
+        "token": "{{m.access_token}}",
+        "body": {"status": "ok"}
+      },
+      "response": {"status": 404, "body": {"error": "not_found", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "op.id"},
+              "sequence": {"$var": "op.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op.deadline_at"},
+              "payload": {"cmd": ["true"]}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{op.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {"status": "ok"}
+      },
+      "response": {"status": 200, "body": {"id": {"$var": "op.id"}, "state": "completed"}}
+    }
+  ]
+}

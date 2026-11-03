@@ -1,0 +1,35 @@
+{
+  "description": "A poll returns the ops of its own machine only.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registered_machine", "as": "other", "name": "build-02"},
+    {
+      "given": "op_enqueued",
+      "machine": "other",
+      "as": "theirs",
+      "op": "exec",
+      "payload": {"cmd": ["true"]}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{other.access_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "theirs.id"},
+              "sequence": {"$var": "theirs.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "theirs.deadline_at"},
+              "payload": {"cmd": ["true"]}
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

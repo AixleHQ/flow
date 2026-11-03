@@ -13,13 +13,80 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-11-03
+
 ### Added
-- **Integrations**: Azure DevOps can be connected through your own Microsoft Entra app.
-  Register an app in your directory, add a federated credential that trusts Flow, and
-  an Azure DevOps administrator runs a generated script once. No secret, certificate or
-  personal access token is stored, Aixle never receives an administrator credential,
-  and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
-  setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
+- **Admin**: a company's queue breakdown on the dashboard shows its waits by
+  hour of the day, in your own time zone: for each hour, how many of the
+  sessions that joined the queue then waited, and their p95. Its days are in
+  your time zone too, and opening a day shows that day's hours.
+- **Sign-in & onboarding**: the hosted product publishes its Terms of Service,
+  Terms of Use and Privacy Policy at `/legal`, linked from the sign-in page and
+  the app's footer. Everyone accepts the Terms of Use the first time they sign
+  in, and whoever creates a workspace accepts the Terms of Service for their
+  company on the signup form; a company that has not accepted them asks its next
+  admin to. Publishing a new version of either asks again. A record of each
+  acceptance, naming who accepted and for which company, is kept after that
+  person or company is deleted. Self-hosted and AWS Marketplace installations
+  neither publish nor ask.
+- **Workflows**: a session in the workflow builder has a **Reasoning Effort**
+  next to its model, and the new-session form has one too. It appears once a
+  model is chosen (a level needs an explicit runtime and model), offers only the
+  levels the chosen runtime and model take, and is disabled, with the reason,
+  where they take none. Unset keeps the CLI's own default. The
+  `create_workflow_step` and `update_workflow_step` tools accept
+  `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
+  them.
+
+### Changed
+- **Workflows**: leaving the workflow builder with unsaved changes — by a link,
+  browser Back or Forward, signing out, reloading or closing the tab — asks
+  first, in the same dialog the rest of the app uses, and offers **Save** next
+  to Discard.
+- **Settings**: project settings ask before you leave with unsaved changes,
+  and can save them from the question.
+- **Company settings**: the general settings and a new SSO connection ask
+  before you leave with unsaved changes; the general settings can save them
+  from the question.
+- **Profile**: your name and language, password and MCP tools ask before you
+  leave with unsaved changes.
+- **Triggers & gates**: closing the trigger panel, or leaving the page, with an
+  edited trigger asks before throwing the edits away.
+- **Tasks**: the new-task drawer and a comment being written or edited ask
+  when you leave the page, not only when you close them.
+- **Sign-in & onboarding**: `/privacy-policy` and `/terms-of-service` redirect to
+  `/legal/privacy_policy` and `/legal/terms_of_service`.
+
+### Fixed
+- **Wrappers**: secrets chosen on a wrapper's **Secrets** tab are now saved.
+  Before, saving without uploading a file silently dropped them, so the
+  wrapper's container never received them.
+- **Sessions & Runs**: a session secret no longer shows in a session's terminal
+  log when the agent's terminal splits it with colours or wraps it onto the next
+  line, as it does when previewing a written file. The stored log, the log replay
+  and `get_session_log` all mask it. A terminal log stored earlier is masked when
+  it is read, as long as the secret still has the same value.
+- **Sessions & Runs**: logs an agent's CLI writes itself, such as Claude Code's
+  transcript, are masked before they are stored. Before, that transcript (open
+  only to platform administrators) kept session secrets in plain text.
+- **Connectors**: closing a connector's install drawer from **Browse
+  connectors** — ✕, Cancel or Escape — goes back to the catalog instead of
+  closing it as well. Installing a connector still closes both.
+- **Templates**: exporting a project whose hand-added connector launches an
+  unpinned package (`npx some-mcp` with no version) now stops and names the
+  connector to pin. Before, the export went through and every install of it
+  failed at the last step.
+- **Templates**: a template with a required setting that has no default can be
+  installed from its install page again. The page shows what the install will
+  create and keeps **Install** disabled until every required setting is filled
+  in. Before, it said the template could not be installed and offered no button.
+- **Templates**: tables in a template's Readme and Setup tabs and in the setup
+  notes of its install checklist render as tables. Before, they showed as raw
+  `| … |` text.
+
+## [1.9.0] - 2026-10-30
+
+### Added
 - **Sign-in & onboarding**: Aixle Flow can be bought on AWS Marketplace. A buyer
   who subscribes is sent to a page of ours that sets their workspace up: they
   are signed out first and create a new workspace, confirming the address by
@@ -55,14 +122,6 @@ governance, community health — carry none.
   It is read-only: the value follows from a subscription existing. Existing
   companies are filled in by a migration, with one that Aixle carries counted as
   billed by nobody even if Stripe still holds a customer for it.
-- **Workflows**: a session in the workflow builder has a **Reasoning Effort**
-  next to its model, and the new-session form has one too. It appears once a
-  model is chosen (on the Default model a level is ignored), offers only the
-  levels the chosen runtime and model take, and is disabled, with the reason,
-  where they take none. Unset keeps the CLI's own default. The
-  `create_workflow_step` and `update_workflow_step` tools accept
-  `reasoning_effort` and `preferred_model`, and `get_workflow_step` returns
-  them.
 - **Admin**: a company on the dashboard opens a breakdown of its queue for the
   selected period: wait percentiles (p95 among them) and the share of sessions
   that waited, how many sessions were already waiting when one joined, the wait
@@ -142,6 +201,10 @@ governance, community health — carry none.
   the run has finished. Sessions skipped before they started fold into one row
   on the run page, and the Sessions count says how many were skipped. Runs that
   already finished are corrected by a migration.
+- **Profile**: connecting Claude Code through Amazon Bedrock no longer fails
+  verification with "Timed out after 60s waiting for AWS" when the Identity
+  Center sign-in takes longer than a minute. The login terminal now waits up to
+  120 seconds, the same as agent sessions.
 
 ## [1.8.0] - 2026-10-28
 
@@ -1025,7 +1088,9 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.8.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.10.0...develop
+[1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/AixleHQ/flow/compare/v1.5.0...v1.6.0

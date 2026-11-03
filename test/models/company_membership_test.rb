@@ -200,6 +200,37 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_equal "claude-opus-4-8", props.first[:default_model]
   end
 
+  # The model pickers offer these levels as they are, so the per-model rule is
+  # applied once, here on the server.
+  test "agent_models_for_props gives each model the reasoning-effort levels its runtime takes for it" do
+    membership = create(:company_membership, user: @user, company: @company)
+    create(:agent_credential, :kiro_cli, user: @user, company: @company,
+           metadata: { "kiro_models" => [ { "model_id" => "claude-opus-5.5" }, { "model_id" => "claude-sonnet-4.6" },
+                                          { "model_id" => "auto" } ] })
+
+    models = membership.agent_models_for_props.first[:models]
+
+    assert_equal({ "claude-opus-5.5" => %w[low medium high xhigh max], "claude-sonnet-4.6" => %w[low medium high max],
+                   "auto" => [] },
+                 models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+  end
+
+  # AgentCredential validates agent_type against the registry, so a credential
+  # for an unknown runtime only exists after that runtime is removed from it.
+  test "agent_models_for_props gives no levels to the models of a runtime the registry no longer lists" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    membership = create(:company_membership, user: @user, company: @company)
+    cred = create(:agent_credential, :kiro_cli, user: @user, company: @company)
+    cred.update_column(:agent_type, "retired_cli")
+    Rails.cache.write(cred.reload.models_cache_key, [ { model_id: "old-model", display_name: "Old model" } ])
+
+    props = membership.agent_models_for_props
+
+    assert_equal "retired_cli", props.first[:agent_type]
+    assert_equal [ { model_id: "old-model", display_name: "Old model", description: nil, reasoning_effort_levels: [] } ],
+                 props.first[:models]
+  end
+
   test "agent_models_for_props reports a nil default model when none is pinned" do
     membership = create(:company_membership, user: @user, company: @company)
     create(:agent_credential, :claude_code, user: @user, company: @company)

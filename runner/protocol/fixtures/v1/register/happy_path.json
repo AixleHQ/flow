@@ -1,0 +1,41 @@
+{
+  "description": "A registration token registers one manual machine: 201 with the environment and its access/refresh pair, not cacheable, and the access token works at once.",
+  "steps": [
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {"Cache-Control": "no-store", "Set-Cookie": null},
+        "body": {
+          "environment": {
+            "id": {"$type": "integer"},
+            "key": {"$type": "string"},
+            "display_name": "build-01",
+            "state": "registered"
+          },
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"pair.access_token": "/access_token"}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{pair.access_token}}"},
+      "response": {"status": 200, "body": {"ops": []}}
+    }
+  ]
+}

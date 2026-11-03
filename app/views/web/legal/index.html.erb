@@ -1,0 +1,15 @@
+<% content_for :title, "Legal" %>
+<h1>Legal</h1>
+<p class="legal-meta">Aixle Flow is provided by Dualboot Partners, LLC.</p>
+
+<ul class="legal-documents">
+  <% @documents.each do |document| %>
+    <li>
+      <h2><%= link_to document.title, public_send(:"legal_#{document.key}_path") %></h2>
+      <p><%= document.summary %></p>
+      <p class="legal-meta">Last updated <%= document.updated_on.strftime("%B %-d, %Y") %></p>
+    </li>
+  <% end %>
+</ul>
+
+<p>Questions about these documents can be sent to <a href="mailto:support@aixle.com">support@aixle.com</a>.</p>

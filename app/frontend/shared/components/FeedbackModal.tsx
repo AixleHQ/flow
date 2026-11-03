@@ -15,8 +15,8 @@ import { IconPaperclip } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
 import { formatFileSize } from 'shared/lib/formatFileSize';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { pastedImages } from 'shared/lib/imagePaste';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 type FeedbackKind = 'bug' | 'feature_request' | 'support';
 
@@ -79,7 +79,11 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
     setFileNotice(null);
     onClose();
   };
-  const requestClose = useConfirmClose(data.message.trim() !== '' || data.attachments.length > 0, handleClose);
+  const requestClose = useUnsavedChanges({
+    opened,
+    dirty: data.message.trim() !== '' || data.attachments.length > 0,
+    onClose: handleClose,
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

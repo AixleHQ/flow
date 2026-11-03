@@ -1,0 +1,31 @@
+{
+  "description": "An op on the machine's queue is returned in the {ops: [...]} envelope as {id, sequence, op, deadline_at, payload}.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "op",
+      "op": "exec",
+      "payload": {"cmd": ["echo", "hello"]}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {
+          "ops": [
+            {
+              "id": {"$var": "op.id"},
+              "sequence": {"$var": "op.sequence"},
+              "op": "exec",
+              "deadline_at": {"$var": "op.deadline_at"},
+              "payload": {"cmd": ["echo", "hello"]}
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

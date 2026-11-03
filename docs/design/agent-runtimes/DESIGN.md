@@ -1,9 +1,21 @@
 # External runners for agent sessions — design
 
 **Status:** proposed, revision 5 (design only, no implementation in this change)
-**Created:** 2026-10-20 · **Revised:** 2026-10-26
+**Created:** 2026-10-20 · **Revised:** 2026-10-30
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
 **Baseline:** `origin/develop` @ `a837d6fd` (the feature flag chain #166–#172 is in)
+
+**Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
+and are not a new numbered revision:
+
+- **Interactive work on runners waits for the tunnel, with no interim checks.** Named
+  companies get the `external_runners` override only after phase 4 (§12.2, §15 task 16);
+  until then the flag stays on for the test company only. The run-override and publish
+  `interactive_terminal` checks and the Base Resources interactive-step warning are not
+  built (§4, §11).
+- **Project-move edge cases are accepted, not fixed:** a queued manual launch naming a
+  runner, the lock order against a concurrent workflow save, and a project that owns a
+  runner (§3.4, "Known limitations of the move").
 
 **Revision 5** applies the six edits of the revision 4 review. Revision 4 (`2d5532f3`)
 stands where this list does not touch it; the delivery order, the flag design and the
@@ -46,9 +58,9 @@ this list does not touch it:
   own per-session preparation and cleanup stays. On `manual`, scrub uses a throwaway OS
   user per session in host-side execution and the session container in container mode, and
   `reuse_policy` is defined per type (§7).
-- **Delivery order.** `manual` is the first customer-usable type (phase 3), the
-  interactive tunnel follows (phase 4), then Coder, Kubernetes and the host execution
-  mode (§12.2, §15). The breakdown is a map: tasks are cut one at a time (§15).
+- **Delivery order.** `manual` is the first type (phase 3), the interactive tunnel
+  follows (phase 4), then Coder, Kubernetes and the host execution mode (§12.2, §15).
+  The breakdown is a map: tasks are cut one at a time (§15).
 
 **Revision 3** applies the correction to the revision 2 review. The design no longer
 depends on `aixle-infra`, the infrastructure of our own production and staging
@@ -213,10 +225,15 @@ they do not use `TenantColumns`. Tenant integrity comes from the composite forei
 `AddTenantColumnsToScopedResources`: `(project_id, company_id) → projects (id, company_id)`
 ties a row's company to its project's, and `(integration_id, company_id) → integrations
 (id, company_id)` ties a Coder runner's integration to the same company. Secrets use
-`Encryptable` with a new `encryption_key :runners_key` (`Settings.encryption.runners_key`,
-with rotation through `runners_key_previous` and `bin/rails encryption:reencrypt`), added
-with the first encrypted column (`runner_operations.encrypted_payload`, §15 task 5). No
-secret is ever stored on a workflow, a workflow version, a run or a step.
+`Encryptable` with `encryption_key :runners_key` (`Settings.encryption.runners_key` from
+`RUNNERS_SECRET_KEY`, with rotation through `runners_key_previous` from
+`RUNNERS_SECRET_KEY_PREVIOUS` and `bin/rails encryption:reencrypt`). Its first encrypted
+columns are `runner_operations.encrypted_payload` and `runner_operations.encrypted_result`
+(§15 task 5b). The key is **not required at boot**: `config/initializers/required_env.rb`
+does not check it, so an app without it boots and serves everything else, and only
+encrypting or decrypting a payload or result fails, with
+Encryptable's `encryption key is not set` error. No secret is ever stored on a workflow, a
+workflow version, a run or a step.
 
 ### 2.1 `runners`
 
@@ -264,6 +281,22 @@ with the first runner type that needs one.
 | `last_heartbeat_at`, `checked_in_at`, `sessions_count`, `consecutive_failures` | |
 | `reset_requested` | `none`, `reset` or `rebuild` (§7.2). |
 
+**What v1 has so far (§15 task 5a).** `db/migrate/20261030140000_create_runner_environments_and_credentials.rb`
+creates `runner_environments` with the columns registration writes: `runner_id`,
+`company_id`, `key` (unique per runner, `aixle-r<runner id>-<8 hex>` for a registered
+machine), `origin`, `display_name`, `ephemeral` (default false, and `RunnerEnvironment`
+refuses true), `state`, `state_reason`, `os`, `arch`, `facts` (jsonb, an object),
+`runner_version` and `protocol_version`. Both company and runner keys cascade, and the §2
+composite key `(runner_id, company_id) → runners (id, company_id)` ties the environment's
+company to its runner's. `origin` has one value so far, `registered`, and `state` has the
+two this task sets, `registered` and `gone`; `RunnerEnvironment` keeps them as enumerize
+values, and the §5.2 state machine replaces that with task 11. `state_reason` holds
+"credential reuse detected" (§9.2). The machine is not marked `failed` yet, because `failed`
+arrives with that state machine. The revoked credentials keep it out until then.
+`project_id`, `external_id`, `reusable`, `auto_update`, `current_session_id`,
+`last_workflow_id`, the heartbeat and check-in columns and `reset_requested` land with their
+first reader.
+
 ### 2.3 `runner_credentials` and `runner_operations`
 
 `runner_credentials`: `runner_id`, `runner_environment_id` (null for controller-level
@@ -272,6 +305,17 @@ credentials and for unused `manual` registration tokens), `kind` (`registration`
 `token_digest` (SHA-256, never the token), `family_id` (rotation lineage),
 `expires_at`, `used_at`, `revoked_at`, `last_used_at`, `last_used_ip`, `created_by_id`.
 Token semantics are in §9.2.
+
+**What v1 has so far (§15 task 5a).** `runner_credentials` has `runner_id`, `company_id`,
+`runner_environment_id`, `kind`, `token_digest` (unique), `family_id` (uuid),
+`expires_at`, `used_at` and `revoked_at`. `kind` is `registration`, `access` or `refresh`:
+an access/refresh pair is told apart by kind, and an environment pair from a controller
+pair (task 19) by `runner_environment_id`. `bootstrap` joins the list with tasks 17 and 19.
+A registration token has no family. Once used, it names the environment it created. The
+§2 key `(runner_id, company_id) → runners` ties the company, and
+`(runner_environment_id, runner_id) → runner_environments (id, runner_id)` ties a
+credential's environment to its runner. `last_used_at`, `last_used_ip` (the runner page's
+first-seen IP) and `created_by_id` come with the Machines table and "Add machine" (task 12).
 
 `runner_operations`: the durable queue between Temporal activities and `aixle-runner`.
 
@@ -283,11 +327,30 @@ Token semantics are in §9.2.
 | `op` | §6.4. |
 | `encrypted_payload` | `Encryptable`. Payloads carry credentials (the same data `write_file` carries to a hosted pod today), so they are encrypted at rest and **nulled on completion**. |
 | `state` | `pending`, `delivered`, `completed`, `failed` or `expired`. |
-| `result` | jsonb, without secrets. Large outputs go to Active Storage and are referenced here. |
+| `encrypted_result` | `Encryptable`, like the payload. A result carries command output and file contents, which can hold the same credentials, so it is encrypted at rest. Large outputs go to Active Storage and are referenced here. |
 | `deadline_at`, `delivered_at`, `completed_at` | |
 
 Completed rows are pruned after 7 days by a sweep in the style of
 `ContainerSweepOrphanedResourcesWorkflow`.
+
+**What v1 has so far (§15 task 5b).** `db/migrate/20261030150000_create_runner_operations.rb`
+creates `runner_operations` with the columns the queue, the long-poll and the results read
+and write: `runner_id`, `company_id`, `runner_environment_id` (not null: every op so far is
+an environment op), `sequence`, `op`, `encrypted_payload`, `state`, `encrypted_result`,
+`deadline_at`, `delivered_at` and `completed_at`. As on `runner_credentials`, the §2 key
+`(runner_id, company_id) → runners (id, company_id)` ties the company, and
+`(runner_environment_id, runner_id) → runner_environments (id, runner_id)` ties the
+environment to the same runner; all keys cascade. `(runner_environment_id, sequence)` is
+unique. `RunnerOperation` keeps `op` (the environment ops of §6.4) and `state` as enumerize
+values. `payload` is a JSON object, encrypted through `Encryptable` with `runners_key`, and
+`Runners::Operations.record_result!` nulls it in the same update that stores the result.
+`result` is a JSON object too, encrypted the same way in `encrypted_result`.
+`Runners::Operations.enqueue!(environment, op:, payload:, deadline_at:)` is the only writer:
+it locks the environment's row, takes the next sequence and creates a `pending` op. Tests
+and local development call it; the producer, `ContainerRuntime::RunnerRuntime` through the
+Temporal activities, is task 8. `terminal_session_id` comes with that first writer (task 8),
+controller ops (a `runner_id` with no environment) with task 19, and the platform-side
+expiry of undelivered ops past their deadline and the 7-day prune with task 8.
 
 `session_live_log_chunks`: `terminal_session_id`, `offset`, `bytes` (redacted with
 `Sessions::SecretRedactor` on ingest). These are what `Sessions::LogTail` reads for live
@@ -327,10 +390,11 @@ no project, refuses any runner. What a person may *pick* (the flag, a runner tha
 `Runner.visible_for_project`) is `Runners::Selection`, checked at the endpoints that take a pick
 (§3.3). A runner leaves the database only with its project or company, and
 `has_many … dependent: :nullify` clears the references first so that delete is not blocked.
-`terminal_sessions.runner_environment_id` waits for task 5:
+`terminal_sessions.runner_environment_id` waits for its first reader, `RunnerRuntime` (task 8)
+or `Runners::Allocator` (task 11), whichever lands first:
 
 ```ruby
-add_reference :terminal_sessions, :runner_environment, foreign_key: true   # task 5
+add_reference :terminal_sessions, :runner_environment, foreign_key: true   # task 8 or 11
 ```
 
 The migrations only add nullable columns and new tables. Every existing row reads as
@@ -551,9 +615,9 @@ from the workflow's runner), `POST …/board/tasks/:id/trigger_workflow`, and th
 and `trigger_task_workflow` tools; a manual task trigger records the pick on its
 `TriggerEvent`. Column bindings, tracker and chat triggers pass none
 (`TriggerEngine.fire_workflow`). A standalone session takes `runner_id` from
-`POST /api/v1/terminal_sessions`, refused the same way and, while no runner has
-`interactive_terminal` (§4), for an interactive session; a workflow-step session copies its
-run's runner.
+`POST /api/v1/terminal_sessions`, refused the same way and, for an interactive session,
+refused for every external runner until the tunnel (§4, §15 task 16); a workflow-step
+session copies its run's runner.
 
 ### 3.4 When the referenced runner is gone, disabled or revoked
 
@@ -622,6 +686,20 @@ blocks the move, and work that has not started is cancelled), so the move clears
 deliberate exception to "history is never rewritten" (`docs/design/entity-versioning.md`, D3).
 Otherwise the move writes no workflow version, as with the other references it rewrites.
 
+**Known limitations of the move, accepted (decided 2026-10-30).** A project move is a rare
+super-admin operation, so these cases stay as they are and are not fixed:
+
+- **A queued manual launch.** A manual task trigger that is still queued in the trigger
+  outbox when the project moves, and that names a runner (the pick recorded on its
+  `TriggerEvent`), is dropped by the relay: after the move the runner is not in the
+  project's tenant any more, so the pick is refused. The `TriggerDispatch` is left
+  `skipped` with the refusal as its reason, and no run or comment is created.
+- **Lock order.** The move and a concurrent workflow save take their locks in opposite
+  order, so they can deadlock. The admin then gets an error and retries the move. This
+  existed before task 4.
+- **A project that owns a runner**, a deleted one included, cannot be moved (the preflight
+  blocker above). A way out is to be decided later.
+
 ---
 
 ## 4. Capability flags
@@ -644,11 +722,11 @@ container mode, so they are the same across the three external types; the `host`
 | `reusable` | false | true | true | false (v1) | Lifecycle (§7), affinity, scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
-| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Blocks interactive sessions and steps on the runner |
+| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Not declared or read in v1. Its first reader comes with the tunnel (§15 task 16); until then interactive standalone sessions refuse every external runner unconditionally (below) |
 | `max_concurrency` | admission pools | `runners.max_concurrency` | `runners.max_concurrency` | `runners.max_concurrency` | Admission (§10) |
 | `max_environments` | n/a | number of registered machines (a fact) | `runners.max_environments` (a setting) | `runners.max_concurrency` | Allocation (§7.3) |
 | `concurrency_per_environment` | 1 | 1 | 1 | 1 | Allocation (§7.3) |
-| `agent_runtimes` | all | all | all | all | Validation at selection and launch |
+| `agent_runtimes` | all | all | all | all | Not read in v1. Validation at selection and launch once a type narrows it (below) |
 | `provisioning_seconds_p50` | n/a | n/a | from history | from history | UI hint, bootstrap timeout |
 
 The agent runs in the same image hosted uses on every type, so `agent_runtimes: all`
@@ -658,11 +736,20 @@ relays ports the image already serves, so it lifts on all types at once.
 
 Validation that uses these flags:
 
-- An interactive standalone session cannot pick a runner without `interactive_terminal`.
-  The select shows it disabled with the reason.
-- A workflow with an interactive step cannot be **published** with such a runner.
-- A run cannot be launched with an override to one.
-- An agent runtime outside `agent_runtimes` is refused in the same three places.
+- **Built (§15 task 4), and not a capability check:** an interactive standalone session
+  cannot pick any external runner before the tunnel. `Runners::Selection.error` refuses
+  every runner when `interactive: true`, so `POST /api/v1/terminal_sessions` refuses the
+  pick (§3.3), and the runner select disables every runner with the reason. No
+  `interactive_terminal` capability is declared or read today. It gets its first reader
+  with the tunnel (§15 task 16), which replaces this unconditional refusal.
+- **Not built, by decision (2026-10-30):** refusing a run launched with an override to a
+  runner without `interactive_terminal`, and refusing to publish a workflow that has an
+  interactive step on such a runner. No real user has `external_runners` before the
+  tunnel (§12.2, phase 4), and the tunnel gives every type `interactive_terminal`, so
+  these checks would guard a state no customer reaches. No interim stub is built for them.
+- `agent_runtimes` is `all` on every type in v1 (container mode, above), so no check reads
+  it yet. A type or execution mode that narrows it adds the refusal at selection and
+  launch with it.
 
 ---
 
@@ -829,6 +916,12 @@ because it launches the agent.
 
 ## 6. Runner protocol (v1)
 
+This section keeps the design and its rationale. The wire contract as built (headers, limits,
+refusals, token rules, endpoints and the op envelope) is specified in
+[`runner/protocol/PROTOCOL.md`](../../../runner/protocol/PROTOCOL.md), and pinned by the
+conformance fixtures in `runner/protocol/fixtures/v1/` (§14.1), which the gateway's Rails tests
+run. Where the two say the same thing, `PROTOCOL.md` is the source of truth.
+
 ### 6.1 Transport
 
 **Decision:** HTTPS long-poll plus HTTPS POST, JSON bodies, on port 443 to the platform's
@@ -839,13 +932,73 @@ corporate HTTP proxies (`HTTPS_PROXY` is honoured) and TLS-inspecting middleboxe
 gateway stays stateless: any gateway process can serve any runner because the queue is
 `runner_operations` in PostgreSQL. A WebSocket would pin an environment to one process and
 need a fan-out layer to deliver an op from a Temporal worker to whichever process holds the
-socket. Latency is still adequate: a poll returns the moment an op is enqueued, woken by
-PostgreSQL `LISTEN/NOTIFY` on `runner_env_<id>`. WebSockets come in only for the
-interactive tunnel (§12.2, phase 4), where they are unavoidable.
+socket. Latency is still adequate: a poll returns the moment an op is enqueued, woken by a Redis
+pub/sub message on `runner_env_<id>`, through `ActionCable.server.pubsub`, which already
+runs on Redis (`config/cable.yml`). WebSockets come in only for the interactive tunnel
+(§12.2, phase 4), where they are unavoidable.
 
 The gateway is the same Rails codebase served by a **separate process type**
 (`runner_gateway` in the Procfile and Helm). Held long-polls then never take Puma threads
 from the UI, and the gateway can be scaled and rate-limited on its own.
+
+**What v1 has so far (§15 task 5a).** `config/puma_runner_gateway.rb` serves the app the
+way `config/puma_mcp.rb` serves MCP: `RUNNER_GATEWAY_PORT` (default 4003),
+`RUNNER_GATEWAY_MAX_THREADS` and `RUNNER_GATEWAY_MIN_THREADS` falling back to
+`RAILS_MAX_THREADS`, and `RUNNER_GATEWAY_PIDFILE`. `Procfile.dev` runs it as
+`runner_gateway`, and Compose publishes the port.
+
+Each process draws only the routes it serves. `config/routes.rb` draws `/up` in every
+process, and the rest by `AIXLE_PROCESS_MODE`, which `config/puma_runner_gateway.rb` sets
+to `runner_gateway` before the app loads, so the deployment sets nothing of its own:
+- the gateway draws `config/routes/runner_gateway.rb`, the `/runner/v1` scope, and nothing
+  else. `config/application.rb` also leaves Action Cable's own `/cable` mount out of it;
+- every other process draws `config/routes/mcp.rb` (`/mcp` and `/action_mcp`) and
+  `config/routes/web.rb` (everything else), and answers `404` on `/runner/v1/*`. MCP is
+  still served by the web and MCP processes alike; a mode of its own for the MCP process
+  is later work.
+
+The ingress sends `/runner/v1` to the gateway workload. That workload, its Helm values and
+the ingress route are a separate `aixle-infra` task, needed before the phase 3 staging
+validation (§12.4). Until then the gateway runs locally and in tests only (§12.2).
+
+The gateway's Puma caps request bodies (`http_content_length_limit`, at the size `PROTOCOL.md`
+§2 states), enough for an op result with up to 1 MiB of output (§6.4, `op_output_limit`). It
+answers `413` before it reads a body over the cap, chunked bodies included, so an oversized body
+never reaches Rails.
+
+**The long-poll's wake-up (§15 task 5b).** `Runners::Operations` (`app/services/runners/operations.rb`):
+- **Publishing.** `enqueue!` publishes the op's sequence on `runner_env_<id>` through
+  `ActionCable.server.pubsub` once its transaction commits
+  (`ActiveRecord.after_all_transactions_commit`). A rolled-back enqueue wakes nothing. A
+  failed publish is logged and does not undo the op, which the next read delivers.
+- **No missed wake-up.** `poll` subscribes to the channel and waits up to 2 s for Redis to
+  confirm the subscription before it reads the queue. An op enqueued while the poll starts
+  is then either seen by the read or announced on the subscription, and is returned at
+  once. A wake-up that arrives between an empty read and the wait stays queued and ends the
+  wait at once. After the wait, or a wake-up, the poll reads again, uncached, so the
+  request's query cache cannot answer from the empty read before it.
+- **No database connection while waiting.** `poll` returns the thread's Active Record
+  connection to the pool before it subscribes and before every wait, and takes one again
+  to read. A waiting poll holds a Puma thread but no connection.
+
+What this means for `RUNNER_GATEWAY_MAX_THREADS`: each thread of the gateway holds at most
+one waiting poll, so the thread count is the number of machines one gateway process can
+hold waiting at once (a machine waits up to 25 s per poll). The pool (`DB_POOL`, by default
+`RAILS_MAX_THREADS + 3`) only has to cover the requests that read or write at the same
+moment: the token and flag checks, the queue reads and the results, each a few queries.
+So a deployment can raise `RUNNER_GATEWAY_MAX_THREADS` well above the pool to hold more
+machines per process; a burst of results beyond the pool then waits for a connection, up to
+Active Record's 5 s checkout timeout. The default still falls back to `RAILS_MAX_THREADS`.
+Sizing it, and providing `RUNNERS_SECRET_KEY`, belong to the `aixle-infra` gateway
+deployment task.
+
+The controllers are `RunnerGateway::V1::*` (`app/controllers/runner_gateway/v1/`),
+`ActionController::API` with no cookie session and no CSRF. Before anything else, every
+request is checked for the protocol and version headers (`PROTOCOL.md` §1 and §3).
+
+Rack::Attack throttles `/runner/v1/*` per bearer token (keyed on its digest) and per IP, so a
+client that sends a new bearer value on every request is still bounded, and `register` per IP
+(§9.5). The limits are in `PROTOCOL.md` §2.
 
 ### 6.2 Endpoints
 
@@ -867,6 +1020,38 @@ All requests are `Authorization: Bearer <token>`,
 | `GET  /runner/v1/releases/:version/:os-:arch` | both | The binary's documented, stable URL. It answers `302` to the GitHub Release asset and sends the expected SHA-256 in `X-Aixle-Runner-Sha256` (§14.3). |
 | `GET  /runner/v1/releases/:version/checksums` | both | The `sha256  file` list for that version, from `config/runner_release.yml`. |
 | `GET  /runner/v1/install.sh` | bootstrap | Install script used by `inject_bootstrap` (`coder`). `manual` operators download the binary directly (§6.3). |
+
+**What v1 has so far (§15 tasks 5a and 5b):** `register` for a `manual` machine,
+`DELETE registration` and `token` (5a), and `ops` and op results (5b). What each one takes
+and answers, every refusal and the order of the checks are specified in
+[`runner/protocol/PROTOCOL.md`](../../../runner/protocol/PROTOCOL.md) §3 to §5. The
+implementation choices behind them:
+- **The checks.** The runner's status is cached for 5 s in `Rails.cache` (§9.2), and the
+  flag refusal leaves the credentials valid (§9.3).
+- **`register`** spends the token under a row lock, so two machines racing on one token
+  create one environment.
+- **`token`** treats a second use of a spent refresh token as reuse (§9.2) even after that
+  token's own 30-day expiry, because the family it was rotated into may still be live.
+- **`DELETE registration`** refuses nothing of its own yet. The `409 busy` refusal and
+  `--force` come with the first task that assigns a session to an environment, because no
+  session can run on one before that.
+- **`GET ops`** (§15 task 5b) selects the ops and marks them `delivered` in one transaction,
+  with their rows locked `FOR UPDATE`, the lock a result takes: a result that holds an op's
+  row first is committed before the poll reads it, so an op with a result is never returned.
+  After a positive `wait` the access checks run again, read past the request's query cache
+  and its local copy of `Rails.cache`, so a revocation or the flag turned off during the wait
+  answers the refusal without the payload. Recording the empty answer as a heartbeat comes
+  with task 12.
+- **`POST ops/:id/result`** (§15 task 5b) stores the fields other than `status` in `result`,
+  encrypted with `runners_key` (§2.3), and the same update nulls the payload. No
+  `/runner/v1/*` request has its params in the request log (`config/application.rb`), as
+  for the credential endpoints, nor in Sentry's breadcrumbs (`before_breadcrumb` in
+  `config/initializers/sentry.rb` drops them for `RunnerGateway::` controllers): a result
+  carries command output and file contents, and no gateway body needs logging.
+
+The other rows of the table are later tasks: `check-in`,
+`heartbeat`, session logs and events and the proxy in task 8 and later, and the releases
+endpoints and `install.sh` in tasks 10 and 17.
 
 ### 6.3 Registration and tokens (summary; full model in §9.2)
 
@@ -913,10 +1098,23 @@ All requests are `Authorization: Bearer <token>`,
   The runner calls `check-in`, the token is consumed, and the runner gets an environment
   access/refresh pair that is valid for that environment only.
 
+**What v1 has so far (§15 task 5a).** `manual` registration only.
+`Runners::Credentials.mint_registration!(runner)` (`app/services/runners/credentials.rb`)
+mints a registration token for a live `manual` runner and returns it once; a revoked or
+deleted runner is refused with `runner_revoked` (§9.3). Tests and local
+development call it. There is no endpoint and no UI: "Add machine" and its endpoint are
+task 12. Tokens carry a prefix by kind, so a leaked one is recognisable (the kinds, their
+lifetimes and what a runner does on each refusal are in `PROTOCOL.md` §3 and §4). Only SHA-256 digests are stored. The plaintext appears only in the call or
+response that issues it, and the tokens travel in the `Authorization` header, which is never
+logged. `Runners::Registration` (`app/services/runners/registration.rb`) creates the
+environment on `register` and, on unregister, marks it `gone` and revokes every credential
+of that environment.
+
 ### 6.4 Operations
 
 Each op is `{id, sequence, op, session_id?, deadline_at, payload}`. Results are
-`{status: ok|error, exit_code?, stdout?, stderr?, data?, error?: {class, message}}`.
+`{status: ok|error|expired, exit_code?, stdout?, stderr?, data?, error?: {class, message}}`,
+`expired` for an op received after its deadline (below).
 
 | Op | Maps to | Notes |
 | --- | --- | --- |
@@ -938,6 +1136,17 @@ it comes back in phase 7 under a protocol minor addition, which `[N-1, N]` suppo
 
 The `deadline_at` of an op is the activity's start-to-close timeout. A runner that receives
 an op after its deadline reports `expired` and does not execute it.
+
+**What v1 has so far (§15 task 5b).** The queue, the long-poll and the results carry every
+environment op of the table above (`exec` to `env.scrub`/`env.reset`) as an opaque payload:
+`enqueue!` checks that the payload is an object and `RunnerOperation` that the op is one of
+these names, and nothing executes them yet. `session_id?` comes with `terminal_session_id` (task 8), and the controller
+ops with task 19. Output is not capped by the gateway beyond its 2 MiB body limit (§6.1);
+`Settings.runners.op_output_limit` and the upload of larger output come with the runner and
+`RunnerRuntime` (tasks 6 and 8).
+The op envelope and the result as built are in `PROTOCOL.md` §5.5 and §6. Each op's payload
+and result schema, with its fixtures, is added there by the task that first implements the op
+(6a, 6b, 8).
 
 ### 6.5 Logs and output
 
@@ -1296,7 +1505,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | Runner deleted, disabled or revoked | Launch (`Runners::Resolver`) | Fails before admission, `runner_unavailable` | "Runner "X" is disabled. Re-enable it or pick another runner on the workflow." |
 | Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner 12 is not available to project P." (by id: the runner is looked up through `TenantScope.owned`, so a foreign runner's name is never read) |
 | Runner `unreachable` (health or controller silent) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." |
-| Agent runtime or session mode not supported by the runner | Selection, publish, launch | Refused or fails | "Runner "X" can't run interactive sessions yet." |
+| Session mode not supported by the runner (an interactive standalone session, §4) | Selection | Refused | "Runner "X" can't run interactive sessions yet." |
 | At `max_concurrency` | Admission | Queued, wait reason `runner_limit` | Shown as queued with the runner named |
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
 | `provision` fails (template error, image pull, RBAC) | `create_container` | Diagnosed failure, environment `failed` | Provider message, e.g. "Coder: template parameter `instance_type` invalid" |
@@ -1387,6 +1596,20 @@ Revoke also works **per machine** (the machines table on the runner page), which
 that environment's credential family only. `aixle-runner unregister` is the same thing
 initiated from the machine.
 
+**What v1 has so far (§15 task 5a).** Revoke and Delete (a soft delete that revokes, §2.5)
+set the status and revoke every `runner_credentials` row of the runner in one transaction
+(`Runner#revoke_credentials`, after the status `UPDATE` has locked the runner's row). Every
+issuer locks that row first, `FOR SHARE`, and re-checks the runner under it
+(`Runners::Credentials.lock_live_runner!`, called by `Credentials.mint_registration!`,
+`Registration.register!` and `Credentials.rotate!`). So a token or pair issued while a
+revocation runs is either revoked with the rest or refused with `runner_revoked`; no
+unrevoked credential survives. The lock order is
+runner, then environment, then credential: `rotate!` also locks the environment that
+`unregister!` locks to mark it `gone`, and `unregister!` takes the runner's lock first too,
+so it cannot deadlock with a Revoke over the credential rows both revoke. Failing and
+dequeuing sessions, and the teardown, come with the tasks that first run sessions on a
+runner. Per-machine Revoke is task 12.
+
 Removing the `external_runners` override for a company (§12.1) is not a revocation.
 Credentials stay valid, the gateway refuses every request of that company's runners with
 `403 runners_disabled`, running sessions fail at their next poll, and runners back off and
@@ -1446,8 +1669,9 @@ platform holds no credential that reaches into it.
   - the git hosts of attached repositories;
   - the model provider, or the customer's Bedrock through their cloud connection;
   - whatever the agent's own work needs.
-- **Inbound to the platform:** `/runner/v1/*` on the public ingress, rate-limited per token,
-  with request bodies capped. The internal endpoints the proxy reaches stay internal.
+- **Inbound to the platform:** `/runner/v1/*` on the public ingress, rate-limited per token
+  and per IP, with request bodies capped. The internal endpoints the proxy reaches stay
+  internal.
 
 ### 9.6 The Kubernetes controller's footprint
 
@@ -1572,9 +1796,9 @@ changes is the pool an external session belongs to:
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
 | **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
-| **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4) or incompatible with an interactive step (§4). |
+| **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
-| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out runners without `interactive_terminal`. |
+| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out every external runner until the tunnel (§4, §15 task 16). |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
 | **Admin (Administrate)** | Runners and environments dashboards for support. |
 
@@ -1584,7 +1808,7 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
 `Projects/Runners/RunnersPage` and `Projects/Runners/RunnerPage`:
 
 - **Lists.** Company → Settings → Runners: name, type, status pill with `status_reason`, last
-  seen; "environments busy/total" waits for environments (task 5). Project → Runners: "From
+  seen; "environments busy/total" waits for the allocator's states (task 11). Project → Runners: "From
   your company" (read-only, with "Manage in company settings" for a company admin) and "This
   project", told apart by `scope`. "New runner" only with `canManage`.
 - **New runner form**, a modal on the list: the type cards come from `runnerTypes` (only
@@ -1616,7 +1840,8 @@ type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `Runne
 - **Base Resources** has a "Runner" select, `Hosted (default)` plus the visible runners with their
   status. The builder's list also holds the workflow's own runner once deleted, so the select can
   keep it, and an inline warning names a disabled, revoked or deleted runner. Saving is allowed
-  with it. The interactive-step warning waits for `interactive_terminal` (§4).
+  with it. There is no interactive-step warning, and none is planned: it is not built, for the
+  same reason as the §4 publish check.
 - **The run drawer** (`shared/components/RunWorkflowDrawer.tsx`, used by the builder, the workflows
   page and Sessions & Runs) has "Runs on", starting from the workflow's runner, with the §11 note
   naming who operates it. **The new-session form** has the same select and note; in interactive
@@ -1741,8 +1966,8 @@ one at a time, each with a reason. The flags never go `default: true` before rem
 | --- | --- | --- | --- | --- |
 | 1 | Model and CRUD, no execution. A run with an external runner fails with "runner execution not enabled". This validates scopes, permissions and failure messages before any code runs remotely | Declared. `default: false`. Override **on for the test company only** | Not declared | Members of the test company: the Runners pages (Manual type card only), the builder, drawer and session-form selects, the badge |
 | 2 | Protocol, gateway, `aixle-runner` (`host` and `session` modes), the conformance fixtures, the dev `local` adapter | Unchanged: test company only | Not declared | Test company. Developers locally, through the `local` adapter and the test helpers |
-| 3 | **`manual` type, container mode, end to end**, non-interactive. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner | Not declared | Members of those companies. Type cards: Manual |
-| 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false` | Unchanged (same overrides) | Not declared | Same companies. Interactive sessions and steps become selectable on runners |
+| 3 | **`manual` type, container mode, end to end**, non-interactive. Validated on staging (§12.4); not yet given to customers | Unchanged: test company only | Not declared | Test company. Type cards: Manual |
+| 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false`. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner, only once this phase is done | Not declared | Members of those companies. Type cards: Manual. Interactive sessions and steps are selectable on runners from the start |
 | 5 | **Coder adapter**: provisioning, pooling, warm disk. Staging validation (§12.5) | Unchanged. Coder becomes available to every company that already has the override; no new flag | Not declared | Same companies. Type cards: Manual, Coder |
 | 6 | **Kubernetes controller, Helm chart**, the second flag | Unchanged | **Declared.** `default: false`. Override on for the test company, then named companies | Kubernetes card only for companies with both overrides |
 | 7 | **`host` execution mode** (services in containers, CLI on the host), toolcache kits, P2 (§6.8) | Unchanged | Unchanged | The `execution_mode` option appears on `manual` and `coder` runner forms of companies with the override |
@@ -1751,8 +1976,9 @@ one at a time, each with a reason. The flags never go `default: true` before rem
 
 Phase 2 details that stay from revision 3:
 
-- The protocol is written down as a specification, `runner-protocol/PROTOCOL.md`.
-- **The conformance fixtures are committed in this phase** (`runner-protocol/fixtures/v1/`,
+- The protocol is written down as a specification, `runner/protocol/PROTOCOL.md`. It lives
+  with the runner under `runner/`, so the extract takes it along (§14.1).
+- **The conformance fixtures are committed in this phase** (`runner/protocol/fixtures/v1/`,
   §14.1), and the gateway's Rails tests run them from the first PR. They are the contract
   the Go implementation is written against, and what makes the later extract safe.
 - Separate CI lanes for the Go code (`go test`, lint, the Go side of conformance) **may be
@@ -1774,17 +2000,19 @@ it is a relay of ports the image already serves (§6.8), so it does not depend o
 type and is built once for all of them. It is developed against the `local` adapter from
 phase 2, so it does not wait on a provider.
 
-- **Why phase 3 can ship without it.** The reasons for a runner are about the work an agent
-  does, and that work mostly arrives through non-interactive workflow steps (board-column
-  automation, tracker and chat triggers). `human_accessible: true` on `manual` means the
-  operator can debug on their own machine (`docker exec` into the session container)
-  without anything from us.
-- **What it costs to wait without it.** Every interactive step in a workflow blocks that
-  workflow from being published on a runner (§4), which is the first support question for
-  mixed workflows. That is why it comes before any second type.
+- **Why real users wait for it (decided 2026-10-30).** Named companies get the override
+  only after phase 4, and until then `external_runners` stays on for the test company only.
+  Phase 3 is complete as a non-interactive path and is validated on staging (§12.4), but
+  without the tunnel a runner cannot run the interactive sessions and steps hosted runs.
+  So no interim checks are built for the gap: the publish check, the run-override check
+  and the builder's interactive-step warning are dropped (§4, §11), because no real user
+  has the flag before the tunnel and the tunnel lifts the restriction. The standalone
+  session check stays as task 4 built it.
+- **Why it still comes right after phase 3.** It is what lets the first named company in,
+  so it comes before any second type.
 - **What would change this order.** If the first named company needs Coder before it needs
   interactive sessions, swap phases 4 and 5. They are independent, so the swap costs
-  nothing.
+  nothing. Either way, named companies get the override only once the tunnel is done.
 
 ### 12.3 The hosted runtime is not touched
 
@@ -1878,6 +2106,10 @@ machine used is recorded in the validation task's result.
 14. Point a run from a second project at the project runner by id through the API: 403.
 15. Selecting `hosted` or nothing on the same project behaves exactly as before. The hosted
     pods are created as before, verified on the cluster.
+16. The long-poll wake-up through the real Redis adapter (CI runs the `test` cable adapter
+    only, §6.1): with the machine idle in a `GET /runner/v1/ops` with `wait=25`, enqueue an
+    op for its environment through `Runners::Operations.enqueue!` from a Rails console on
+    staging. The poll answers with the op well before its 25 s end (within about a second).
 
 ### 12.5 Validating the first Coder runner on staging (phase 5)
 
@@ -1977,17 +2209,19 @@ these happens:
   `cd runner && go build ./...` and needs nothing outside the directory.
 - `runner/` has no dependency on Rails code, configuration or generated files. It never
   reads `config/`, `app/` or `Settings`. Everything it needs comes over the protocol.
-- The protocol is a **specification document**, `runner-protocol/PROTOCOL.md`, and the
-  **conformance fixtures** are in `runner-protocol/fixtures/v1/` (request and response
-  pairs, op payloads and results, error cases, resume sequences). This is a neutral
-  directory, owned by neither the Rails tests nor the Go tests, and both read it from
-  there. They are committed in phase 2 (§12.2).
-- The extract is `git filter-repo --path runner/ --path runner-protocol/`, which keeps
-  history. Afterwards `flow` keeps a pinned copy of `runner-protocol/` that only changes
-  by a PR, and the Rails side keeps running the fixtures against the gateway.
+- The protocol is a **specification document**, `runner/protocol/PROTOCOL.md`, and the
+  **conformance fixtures** are in `runner/protocol/fixtures/v1/` (request and response
+  pairs, op payloads and results, error cases, resume sequences). The protocol lives with
+  the runner, under `runner/`, so everything about the runner is in one directory. It
+  belongs to neither the Rails tests nor the Go tests: the Go code reads it inside
+  `runner/`, and the Rails tests read it from there too. They are committed in phase 2
+  (§12.2).
+- The extract is `git filter-repo --path runner/`, which keeps history and takes the
+  protocol with it. Afterwards `flow` keeps a pinned copy of `runner/protocol/` that only
+  changes by a PR, and the Rails side keeps running the fixtures against the gateway.
 
 **Where the Helm chart lives.** The chart belongs with the runner. Trigger 2 is expected
-right after phase 3, the first customer-usable slice, so **the extract is expected before
+right after phase 4, the first customer-usable slice, so **the extract is expected before
 the Kubernetes adapter ships in phase 6**. So the chart lane is built in
 `AixleHQ/aixle-runner` from the start, and **`charts/` is never created in `flow`**. If the
 extract slips past the start of phase 6 after all, the chart goes under `runner/chart/`.
@@ -2024,7 +2258,7 @@ There are **three distinct versions**, and none of them is the application versi
 | **Runner version** | `1.4.0` | The `aixle-runner` binary and `ghcr.io/aixlehq/aixle-runner:1.4.0` | The `runner-v1.4.0` tag |
 | **Chart version** | `0.3.2` | The Helm chart's packaging (templates, values, defaults) | `Chart.yaml` `version`, the `runner-chart-v0.3.2` tag |
 | **Chart `appVersion`** | `1.4.0` | The runner version the chart installs by default | `Chart.yaml` `appVersion` |
-| **Protocol version** | `1` | The wire contract (`X-Aixle-Runner-Protocol`) | `runner-protocol/PROTOCOL.md`, an integer bumped only on breaking changes |
+| **Protocol version** | `1` | The wire contract (`X-Aixle-Runner-Protocol`) | `runner/protocol/PROTOCOL.md`, an integer bumped only on breaking changes |
 
 **Release lanes:**
 
@@ -2144,10 +2378,11 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refuses writes on a company runner, from the record), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config`. The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
-| 5 | 2 | Gateway process type, the `runner_environments` (`origin`, `display_name`, `ephemeral`) and `runner_credentials` tables and `terminal_sessions.runner_environment_id` (§2.2–§2.4), `runner_operations` queue with LISTEN/NOTIFY long-poll and `Encryptable :runners_key` for its `encrypted_payload`, token issuance and rotation (`runner_credentials`), `register` (single-use registration tokens, environment creation for `manual`, `ephemeral` refused) and `DELETE registration`, the flag and status check on every request, rate limits. |
-| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
-| 7 | 2 | `runner-protocol/PROTOCOL.md` and the conformance fixtures in `runner-protocol/fixtures/v1/`, **committed in this phase** and run by the gateway's Rails tests, including registration, unregistration and the refused `ephemeral` case. The Go side of conformance and the Go CI lanes may follow later (§12.2). |
-| 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. |
+| 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
+| 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
+| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1), written against the protocol in `runner/protocol/` (task 7). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
+| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lanes follow with 6a (§12.2). |
+| 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
@@ -2155,7 +2390,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
-| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. |
+| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. Once it is done, named companies can get the `external_runners` override (§12.2). |
 | 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; the `coder` keys of §2.7 (template, `config.container`) and their validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. |
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
@@ -2190,9 +2425,10 @@ reviewable and lands behind the flags. The number in the second column is the ph
   same adapter contract). Settled by the first customer who asks for it.
 - **Step-level runner.** Deliberately out of scope (§3.3). Revisit if users split
   workflows only to change network.
-- **Interactive sessions in the first slice.** Decided in §12.2: the first slice
-  (`manual`, phase 3) is non-interactive only, and the tunnel is phase 4, ahead of every
-  second type.
+- **Interactive sessions in the first slice.** Decided in §12.2: the `manual` type
+  (phase 3) is non-interactive only, and the tunnel is phase 4, ahead of every second type.
+  Named companies get the override only after phase 4, so the first customer-usable slice
+  includes interactive sessions (decided 2026-10-30).
 - **Billing for external sessions.** Still an open product decision, not a design one.
   The design keeps every answer possible:
   - `runner_id` is recorded on sessions and usage rows;
@@ -2200,6 +2436,17 @@ reviewable and lands behind the flags. The number in the second column is the ph
 
   What would settle it is the pricing decision for the first non-staging customer. It has
   to be made before trigger 2 of §14.1, and nothing earlier depends on it.
+- **Concurrent long-polls per environment.** Each waiting `GET /runner/v1/ops` holds a
+  gateway thread for up to 25 s (§6.1), and the per-token throttle bounds requests per
+  minute, not outstanding polls, so one buggy or leaked access token could occupy every
+  gateway thread with overlapping polls. It cannot happen yet: the gateway is not deployed
+  and there is no runner. Two things must be settled:
+  - before the gateway is deployed (the `aixle-infra` gateway task), bound the outstanding
+    polls per environment across gateway processes, for example with a Redis lease held
+    for the poll and released when it returns;
+  - with task 6 (`aixle-runner`), decide whether an overlapping poll is refused (`409` or
+    `429`) or replaces the older one. Replacing suits a runner that reconnects after a
+    dropped connection.
 
 ---
 

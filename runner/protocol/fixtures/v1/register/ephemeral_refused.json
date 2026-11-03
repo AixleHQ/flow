@@ -1,0 +1,36 @@
+{
+  "description": "`ephemeral: true` is refused with 422 ephemeral_not_supported, and the refusal does not spend the registration token.",
+  "steps": [
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": true
+        }
+      },
+      "response": {"status": 422, "body": {"error": "ephemeral_not_supported", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 201}
+    }
+  ]
+}

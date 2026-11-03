@@ -542,29 +542,74 @@
   font-weight: 500;
 }
 
-/* ── Waits by day ────────────────────────────────── */
+/* ── Waits by day and by hour ─────────────────────── */
 
 .root .table .waitedColumn {
   width: 60%;
 }
 
-.root .dayBar {
+.root .waitBar {
   display: flex;
   align-items: center;
   gap: 10px;
   font-variant-numeric: tabular-nums;
 }
 
-.root .dayTrack {
+.root .waitTrack {
   flex: 1;
   max-width: 420px;
   height: 10px;
 }
 
-.root .dayFill {
+.root .waitFill {
   display: block;
   min-width: 2px;
   height: 100%;
   border-radius: 0 4px 4px 0;
   background: var(--app-primary);
+}
+
+.root .table .rowButton,
+.root .sectionNote .linkButton {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.root .table .rowButton {
+  color: var(--app-text-primary);
+  font-weight: inherit;
+  text-align: left;
+}
+
+.root .table .rowButton:hover,
+.root .table .rowButton:focus {
+  background: none;
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
+.root .table tr.selectedRow th,
+.root .table tr.selectedRow td {
+  background: var(--app-action-selected);
+}
+
+.root .sectionNote .linkButton {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
+.root .sectionNote .linkButton:hover,
+.root .sectionNote .linkButton:focus {
+  background: none;
+  color: var(--app-primary);
+}
+
+.root .table .rowButton:focus-visible,
+.root .sectionNote .linkButton:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
 }

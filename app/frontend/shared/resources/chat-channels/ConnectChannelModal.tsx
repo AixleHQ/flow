@@ -17,6 +17,7 @@ import { IconAlertCircle, IconCheck, IconCopy } from '@tabler/icons-react';
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ApiError, apiRequest } from 'shared/lib/apiFetch';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { CHAT_PROVIDER_LABELS } from 'shared/resources/triggers/describeTrigger';
 import { apiV1ProjectChatConnectCodePath, apiV1ProjectChatConnectCodesPath } from 'shared/routes';
 
@@ -83,6 +84,7 @@ export const ConnectChannelModal = ({
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
   const hint = CHANNEL_HINTS[provider];
   const blank = channel.trim() === '';
+  const requestClose = useUnsavedChanges({ opened, dirty: !blank && code === null && !issuing, onClose });
 
   const issue = async (event: FormEvent) => {
     event.preventDefault();
@@ -154,7 +156,7 @@ export const ConnectChannelModal = ({
   }, [code, onConnected]);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={`Connect a ${label} channel`} centered size="md">
+    <Modal opened={opened} onClose={requestClose} title={`Connect a ${label} channel`} centered size="md">
       {!code ? (
         <form onSubmit={issue}>
           <Stack gap="md">
@@ -172,7 +174,7 @@ export const ConnectChannelModal = ({
               </Alert>
             )}
             <Group justify="flex-end">
-              <Button variant="default" onClick={onClose}>
+              <Button variant="default" onClick={requestClose}>
                 Close
               </Button>
               <Button type="submit" loading={issuing} disabled={blank}>

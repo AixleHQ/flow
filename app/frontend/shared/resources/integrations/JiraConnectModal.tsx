@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { CopyValue } from './CopyValue';
 import { requestJson as requestTrackerJson } from './requestJson';
@@ -87,7 +87,7 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
   }, [onClose]);
 
   const dirty = siteUrl !== '' || clientId !== '' || clientSecret !== '' || projectIds.length > 0;
-  const requestClose = useConfirmClose(dirty, close);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose: close });
 
   const check = useCallback(async () => {
     setError(null);
@@ -268,7 +268,7 @@ export const JiraProjectsModal = ({ integration, onClose, basePath }: ProjectsPr
       dedicated !== integration.jiraDedicatedIdentity ||
       projectIds.length !== covered.length ||
       projectIds.some((id) => !covered.includes(id)));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

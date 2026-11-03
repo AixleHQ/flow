@@ -2,7 +2,7 @@ import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 export interface FolderFormModalProps {
   opened: boolean;
@@ -69,7 +69,7 @@ export function FolderFormModal({
               : null;
 
   const errorText = clientError ?? serverError ?? null;
-  const requestClose = useConfirmClose(trimmed !== seededName, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty: trimmed !== seededName, onClose });
 
   const submit = () => {
     setTouched(true);

@@ -19,10 +19,21 @@ module Admin
       from, to = days
       return head :bad_request if to < from
 
-      render json: camelized(Usage::CompanyBreakdown.new(company, from: from, to: to).to_h)
+      render json: camelized(breakdown(company, from, to).to_h)
+    end
+
+    def hours
+      company = Company.find(params[:id])
+      from, to = days
+      return head :bad_request if to < from
+
+      day = Date.iso8601(params.require(:day))
+      render json: camelized({ day: day.iso8601, hours: breakdown(company, from, to).hours_of(day) })
     end
 
     private
+
+    def breakdown(company, from, to) = Usage::CompanyBreakdown.new(company, from: from, to: to, time_zone: params[:time_zone])
 
     def days = [ Date.iso8601(params.require(:from)), Date.iso8601(params.require(:to)) ]
 

@@ -1,0 +1,132 @@
+{
+  "description": "X-Aixle-Runner-Version must match the gateway's version grammar (PROTOCOL.md §1): a missing value, `latest`, `v1.4.0`, `1.4`, `1.2.3-` and `1.2.3+` are 400 invalid_runner_version. A pre-release with build metadata is accepted, and so are values the grammar allows that strict SemVer 2.0 does not: `01.2.3`, `1.2.3-01` and `1.2.3-..`.",
+  "steps": [
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {"X-Aixle-Runner-Version": null},
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {"X-Aixle-Runner-Version": "latest"},
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {"X-Aixle-Runner-Version": "v1.4.0"},
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {"X-Aixle-Runner-Version": "1.4"},
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {"X-Aixle-Runner-Version": "1.2.3-"}
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {"X-Aixle-Runner-Version": "1.2.3+"}
+      },
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {"X-Aixle-Runner-Version": "01.2.3"}
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {"X-Aixle-Runner-Version": "1.2.3-01"}
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {"X-Aixle-Runner-Version": "1.2.3-.."}
+      },
+      "response": {"status": 200, "body": {"ops": []}}
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {"X-Aixle-Runner-Version": "1.5.0-rc.1+build.7"},
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {"docker": "27.1.0"},
+          "ephemeral": false
+        }
+      },
+      "response": {"status": 201}
+    }
+  ]
+}

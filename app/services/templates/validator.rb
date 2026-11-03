@@ -49,9 +49,11 @@ module Templates
       check_unique_keys
       check_step_references
       check_depends_on
+      check_reasoning_efforts
       check_triggers
       check_config_item_references
       check_mcp_values
+      check_launch_lines
       check_inputs
       check_files
       check_asset_names
@@ -117,6 +119,37 @@ module Templates
       end
     end
 
+    # The rule Step applies (ReasoningEffortValidator), checked here so that a package
+    # whose level its runtime and model do not take is refused before catalog sync and
+    # planning instead of failing at install. The schema's dependentRequired guarantees
+    # the runtime and model keys are set next to a level, and its enum that the runtime
+    # is a known one; a blank model has no levels, so it is refused here.
+    def check_reasoning_efforts
+      @package.section("workflows").each do |workflow|
+        workflow["steps"].each do |step|
+          level = step["reasoning_effort"]
+          next if level.blank?
+
+          runtime = AgentRuntime.fetch(step["required_agent_runtime"])
+          model = step["preferred_model"]
+          next if runtime.reasoning_effort?(level, model)
+
+          label = "workflow #{workflow['key']} step #{step['key']} reasoning_effort"
+          @errors << "#{label}: #{unsupported_effort(runtime, level, model)}"
+        end
+      end
+    end
+
+    def unsupported_effort(runtime, level, model)
+      return "needs an explicitly chosen model" if model.blank?
+
+      levels = runtime.reasoning_effort_levels(model)
+      target = "#{runtime.id} with model #{model}"
+      return "#{target} takes no reasoning effort" if levels.empty?
+
+      "#{level} is not available for #{target} (choose one of: #{levels.join(', ')})"
+    end
+
     def cyclic?(steps)
       state = {}
       visit = lambda do |key|
@@ -166,6 +199,21 @@ module Templates
                        "{{inputs.*}} placeholder, not a literal value"
           end
         end
+      end
+    end
+
+    # The launch-line rules MCPServer applies when a row is written. A project row
+    # older than those rules still runs and exports as it is, so without this check
+    # its template validates and then fails on the last step of every install.
+    # A line that takes an install input is only complete at install, which checks it.
+    def check_launch_lines
+      custom_servers.each do |server|
+        next unless server["transport"] == "stdio"
+        next if ([ server["command"] ] + Array(server["args"])).any? { |token| Substitution.keys_in(token.to_s).any? }
+
+        row = MCPServer.new(kind: :custom, transport: :stdio, command: server["command"], args: Array(server["args"]))
+        row.validate
+        row.errors[:command].each { |message| @errors << "mcp server #{server['name']} command: #{message}" }
       end
     end
 

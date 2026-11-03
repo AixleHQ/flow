@@ -51,7 +51,7 @@ export const buildSharedUser = (overrides: Partial<CurrentUser> = {}): CurrentUs
   ...overrides,
 });
 
-const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): SharedSettings => ({
+export const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): SharedSettings => ({
   env: 'test',
   domain: 'localhost',
   githubAppSlug: null,

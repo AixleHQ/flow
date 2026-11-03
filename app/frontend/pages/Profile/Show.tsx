@@ -37,6 +37,7 @@ import { formatDateMedium, formatDateTimeShort, formatExpiry } from 'shared/lib/
 import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
 import type { ProjectHandover } from 'shared/resources/members/projectHandover';
 import { ProjectHandoverModal } from 'shared/resources/members/ProjectHandoverModal';
@@ -1164,7 +1165,7 @@ function ProfilePage({
   const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agent_models'] });
 
-  const { data, setData, patch, processing, errors, isDirty } = useForm({
+  const { data, setData, patch, processing, errors, isDirty, setDefaults } = useForm({
     profile: {
       name: profile.name,
       preferredAgentLanguage: profile.preferredAgentLanguage || 'en',
@@ -1180,21 +1181,36 @@ function ProfilePage({
     [data.profile.name, data.profile.preferredAgentLanguage],
   );
 
+  const save = () =>
+    new Promise<boolean>((resolve) => {
+      const result = profileSchema.safeParse(data.profile);
+      if (!result.success) {
+        const fieldErrors: ProfileFormErrors = {};
+        for (const issue of result.error.issues) {
+          const field = issue.path[0] as keyof ProfileFormErrors;
+          if (!fieldErrors[field]) fieldErrors[field] = issue.message;
+        }
+        setClientErrors(fieldErrors);
+        resolve(false);
+        return;
+      }
+      setClientErrors({});
+      patch('/profile', {
+        preserveScroll: true,
+        onSuccess: () => {
+          setDefaults();
+          resolve(true);
+        },
+        onFinish: () => resolve(false),
+      });
+    });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = profileSchema.safeParse(data.profile);
-    if (!result.success) {
-      const fieldErrors: ProfileFormErrors = {};
-      for (const issue of result.error.issues) {
-        const field = issue.path[0] as keyof ProfileFormErrors;
-        if (!fieldErrors[field]) fieldErrors[field] = issue.message;
-      }
-      setClientErrors(fieldErrors);
-      return;
-    }
-    setClientErrors({});
-    patch('/profile', { preserveScroll: true });
+    void save();
   };
+
+  useUnsavedChanges({ dirty: isDirty && !processing, onSave: isFormValid ? save : undefined });
 
   if (!profile) {
     return (

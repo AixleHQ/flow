@@ -42,6 +42,7 @@ import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { FeedbackModal } from 'shared/components/FeedbackModal';
 import { getInitials } from 'shared/lib/getInitials';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
 import {
   companyAssetsPath,
   companyMembersPath,
@@ -106,7 +107,7 @@ const writeCollapsedGroups = (groups: Set<string>) => {
 const isModifiedClick = (event: React.MouseEvent): boolean =>
   event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
 
-const handleLogout = () => router.delete('/logout');
+const handleLogout = () => confirmLeave(() => router.delete('/logout'));
 
 // ─── Nav item definition ──────────────────────────────────────────────────────
 

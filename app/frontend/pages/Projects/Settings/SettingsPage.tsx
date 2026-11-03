@@ -34,6 +34,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+
 import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 import { TransferOwnershipModal } from '../TransferOwnershipModal';
@@ -142,35 +144,43 @@ const SettingsPage = () => {
   const [saved, setSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (values: typeof form.values) => {
-    setIsSubmitting(true);
-    router.patch(
-      `${basePath}/settings`,
-      {
-        project: {
-          name: values.name.trim(),
-          description: values.description.trim(),
-          preferredArtifactsLanguage: values.preferredArtifactsLanguage,
+  const handleSubmit = (values: typeof form.values) =>
+    new Promise<boolean>((resolve) => {
+      setIsSubmitting(true);
+      router.patch(
+        `${basePath}/settings`,
+        {
+          project: {
+            name: values.name.trim(),
+            description: values.description.trim(),
+            preferredArtifactsLanguage: values.preferredArtifactsLanguage,
+          },
+          // Sent only when this person may set it: the key's presence is what tells
+          // the server a limit was submitted at all, and an empty one clears it.
+          ...(concurrency.canManage ? { concurrency: values.concurrency.trim() } : {}),
+        } as Record<string, FormDataConvertible>,
+        {
+          preserveScroll: true,
+          onSuccess: () => {
+            setIsSubmitting(false);
+            form.resetDirty();
+            setSaved(true);
+            notifications.show({ message: 'Project settings saved', color: 'green' });
+            resolve(true);
+          },
+          onError: () => {
+            setIsSubmitting(false);
+            notifications.show({ message: 'Failed to save settings', color: 'red' });
+          },
+          onFinish: () => resolve(false),
         },
-        // Sent only when this person may set it: the key's presence is what tells
-        // the server a limit was submitted at all, and an empty one clears it.
-        ...(concurrency.canManage ? { concurrency: values.concurrency.trim() } : {}),
-      } as Record<string, FormDataConvertible>,
-      {
-        preserveScroll: true,
-        onSuccess: () => {
-          setIsSubmitting(false);
-          form.resetDirty();
-          setSaved(true);
-          notifications.show({ message: 'Project settings saved', color: 'green' });
-        },
-        onError: () => {
-          setIsSubmitting(false);
-          notifications.show({ message: 'Failed to save settings', color: 'red' });
-        },
-      },
-    );
-  };
+      );
+    });
+
+  useUnsavedChanges({
+    dirty: form.isDirty() && !isSubmitting,
+    onSave: form.isValid() ? () => handleSubmit(form.getValues()) : undefined,
+  });
 
   const handleArchive = () => {
     modals.openConfirmModal({

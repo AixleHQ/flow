@@ -25,8 +25,16 @@ class Runner < ApplicationRecord
   has_many :workflows, dependent: :nullify
   has_many :workflow_runs, dependent: :nullify
   has_many :terminal_sessions, dependent: :nullify
+  # Removed with the runner by their foreign keys' ON DELETE CASCADE.
+  has_many :environments, class_name: "RunnerEnvironment", inverse_of: :runner
+  has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner
 
   before_validation :default_reuse_policy
+  # §9.3: a revoke (and so a soft delete) revokes every credential of the
+  # runner in its own transaction, after the status UPDATE has locked the
+  # runner's row. Issuers lock that row first (Runners::Credentials.lock_live_runner!),
+  # so no pair issued concurrently survives the revocation.
+  after_save :revoke_credentials, if: -> { saved_change_to_status?(to: "revoked") }
 
   validates :created_by, presence: true, on: :create
   validates :name, presence: true
@@ -57,6 +65,11 @@ class Runner < ApplicationRecord
   end
 
   private
+
+  def revoke_credentials
+    now = Time.current
+    credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
+  end
 
   def default_reuse_policy
     self.reuse_policy ||= DEFAULT_REUSE_POLICY[runner_type.to_s]

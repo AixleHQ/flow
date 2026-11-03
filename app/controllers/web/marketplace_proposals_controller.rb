@@ -12,6 +12,7 @@ class Web::MarketplaceProposalsController < Web::ApplicationController
 
   skip_before_action :enforce_workspace
   skip_before_action :enforce_company_auth_policy
+  skip_before_action :enforce_legal_acceptance
   skip_before_action :enforce_onboarding
   skip_before_action :redirect_super_admin_to_admin_panel
 

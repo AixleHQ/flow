@@ -14,6 +14,7 @@ import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
@@ -78,6 +79,8 @@ const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 interface AgentModel {
   modelId: string;
   displayName: string;
+  /** The reasoning-effort levels the runtime takes for this model, from the server. */
+  reasoningEffortLevels: string[];
 }
 
 interface AgentModelsEntry {
@@ -159,6 +162,9 @@ export const SessionNewForm = ({
   }, [agentModels]);
 
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
+
+  const effortLevelsFor = (model: string | null) =>
+    model ? models.find((m) => m.modelId === model)?.reasoningEffortLevels : undefined;
 
   const defaultModelId = agentType ? (agentModels.find((e) => e.agentType === agentType)?.defaultModel ?? null) : null;
   const defaultModelLabel = defaultModelId
@@ -437,8 +443,11 @@ export const SessionNewForm = ({
         onChange={(value) => {
           const model = value === DEFAULT_MODEL_OPTION ? null : value;
           setSelectedModel(model);
-          // On the default model a level is ignored, so it is not kept hidden.
-          if (!model) setSelectedEffort(null);
+          // A level needs an explicitly chosen model that takes it, so one the new
+          // model doesn't take (or Default, which takes none) clears it.
+          if (selectedEffort && !(effortLevelsFor(model) ?? []).includes(selectedEffort)) {
+            setSelectedEffort(null);
+          }
         }}
         data={modelOptions}
         classNames={{ input: classes.modelInput, option: classes.modelOption }}
@@ -447,12 +456,13 @@ export const SessionNewForm = ({
         disabled={!agentType}
       />
 
-      {/* A level applies only to a model chosen explicitly: on the default model it is ignored. */}
+      {/* A level needs an explicitly chosen model; the server refuses one without it. */}
       {selectedModel && (
         <ReasoningEffortSelect
           label="Reasoning effort"
           runtime={agentType || null}
           model={selectedModel}
+          levels={effortLevelsFor(selectedModel)}
           value={selectedEffort}
           onChange={setSelectedEffort}
         />
@@ -664,6 +674,7 @@ export const SessionNewForm = ({
                     return;
                   }
                   const separator = r.connectUrl.includes('?') ? '&' : '?';
+                  allowUnload();
                   window.location.href = `${r.connectUrl}${separator}return_to=${encodeURIComponent(
                     window.location.pathname,
                   )}`;
