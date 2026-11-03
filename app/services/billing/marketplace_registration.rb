@@ -73,6 +73,7 @@ module Billing
       license.offer_identifier = agreement.offer_id if agreement.offer_id.present?
       license.confirm if agreement.live? && license.may_confirm?
       license.save!
+      MarketplaceLicensePricing.record!(license, client: client)
       # Anything AWS sent before this row existed, in the order it happened.
       # A cancellation that beat the buyer here closes the licence now rather
       # than a minute later, which matters when the minute is billable.

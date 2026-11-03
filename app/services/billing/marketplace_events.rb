@@ -180,6 +180,7 @@ module Billing
     def confirm(license, event)
       store(license, event)
       license.confirm! if license.may_confirm?
+      MarketplaceLicensePricing.record!(license, client: client)
       start(license.company)
     end
 
@@ -211,6 +212,9 @@ module Billing
       changes[:license_arn] = arn if arn.present? && arn != license.license_arn
 
       license.update!(**changes) if changes.any?
+      # A new agreement or a new offer may carry a new price; a licence event
+      # names neither and changes nothing about what is charged.
+      MarketplaceLicensePricing.record!(license, client: client) if changes.key?(:agreement_id) || changes.key?(:offer_identifier)
     end
 
     # Not the metering deadline: AWS opens the final window on the

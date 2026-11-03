@@ -43,6 +43,11 @@ class Web::Company::BillingCancellationsTest < ActionDispatch::IntegrationTest
     assert_equal @admin, cancellation.user
     assert_equal "too_expensive", cancellation.reason
     assert_equal "Budget cut", cancellation.comment
+    # What the Billing tab lists it under later: the subscription's active
+    # period, and the period its final invoice covers.
+    assert_equal Time.zone.at(@client.subscriptions.fetch(@company.stripe_subscription_id)[:start_date]),
+                 cancellation.started_at
+    assert_equal @company.billing_period_starts_at, cancellation.period_started_at
   end
 
   # Stopped, the company is offered nothing, so the hour under way has to be

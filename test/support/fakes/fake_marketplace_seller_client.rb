@@ -15,8 +15,11 @@
 class FakeMarketplaceSellerClient
   PRODUCT_CODE = "saastestproductcode00000"
 
-  attr_reader :tokens, :recorded, :metered, :refusals, :described
-  attr_accessor :configured, :failure, :customer, :agreement, :agreement_status
+  attr_reader :tokens, :recorded, :metered, :refusals, :described, :priced
+  attr_accessor :configured, :failure, :customer, :agreement, :agreement_status, :rates, :currency
+
+  # The public listing's rate, as the dimension is priced there.
+  PUBLIC_RATE = BigDecimal("0.08333333")
 
   def initialize(configured: true)
     @configured = configured
@@ -26,10 +29,15 @@ class FakeMarketplaceSellerClient
     @metered = []
     @refusals = {}
     @described = []
+    @priced = []
     @agreement = nil
     # Live by default, because that is what an agreement is when a buyer has
     # just arrived from Marketplace. A test wanting the other case says so.
     @agreement_status = "ACTIVE"
+    # The public price for every agreement; a test about a private offer sets
+    # its own, and `rates = nil` is the unreadable case.
+    @rates = { Billing::Meter::AwsMarketplaceSaas::DIMENSION => PUBLIC_RATE }
+    @currency = "USD"
   end
 
   def configured?
@@ -70,6 +78,15 @@ class FakeMarketplaceSellerClient
       offer_id: "offer-#{agreement_id}",
       acceptor_account_id: "111122223333"
     )
+  end
+
+  def agreement_pricing(agreement_id:)
+    return nil if agreement_id.blank?
+
+    priced << agreement_id
+    return nil if @rates.nil?
+
+    Billing::MarketplaceSellerClient::Pricing.new(agreement_id: agreement_id, currency: @currency, rates: @rates)
   end
 
   # One Outcome per record, as AWS answers. A licence already metered for an
