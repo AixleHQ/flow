@@ -20,6 +20,7 @@ module Billing
         usage: usage,
         trial: trial,
         price: price_terms,
+        provider: company.billing_provider,
         can_pay: price.client.configured?,
         has_subscription: company.stripe_subscription_id.present?,
         has_unpaid_invoice: company.billing_unpaid_invoice_url.present?,
@@ -40,7 +41,7 @@ module Billing
       last_hour = rows.maximum(:period_start)
 
       {
-        worker_minutes: minutes.round(1).to_f,
+        worker_minutes: minutes.round.to_f,
         measured_until: last_hour && (last_hour + 1.hour),
         estimate: price.estimate(minutes)
       }

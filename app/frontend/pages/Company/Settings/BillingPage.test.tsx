@@ -28,6 +28,7 @@ const billing = {
   cancelsAt: null as string | null,
   trial: null as { days: number; daysLeft: number; lastDay: string } | null,
   price: { unitAmountCents: 500, currency: 'usd', minutesPerUnit: 60 } as Record<string, unknown> | null,
+  provider: 'stripe' as string,
   canPay: true,
   hasSubscription: true,
   hasUnpaidInvoice: false,
@@ -290,6 +291,22 @@ describe('Company billing page', () => {
       vi.useRealTimers();
     });
 
+    // The card bills in whole packs; minutes that filled none are a real $0.00,
+    // said so rather than left looking like a missing figure.
+    it('says why the final cost is nothing when the minutes did not fill a pack', () => {
+      render({
+        billing: canceled,
+        active: null,
+        previous: [
+          stoppedCard({ usage: { ...usage, workerMinutes: 52.8, estimate: { ...usage.estimate, amountCents: 0 } } }),
+        ],
+      });
+
+      expect(screen.getByText('53')).toBeInTheDocument();
+      expect(screen.getByText('$0.00')).toBeInTheDocument();
+      expect(screen.getByText('Under one pack of 60 worker-minutes')).toBeInTheDocument();
+    });
+
     it('is listed with its period, the day it was cancelled and what its final invoice covered', () => {
       render({ billing: canceled, active: null, previous: [stoppedCard()] });
 
@@ -536,7 +553,7 @@ describe('Company billing page', () => {
     it('shows what has been reported towards that bill, and where the bill is', () => {
       render({ active: aws() });
 
-      expect(screen.getByText('132.5')).toBeInTheDocument();
+      expect(screen.getByText('133')).toBeInTheDocument();
       expect(screen.getByText(/reported to AWS this calendar month/)).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Invoices' })).toHaveAttribute('href', AWS_BILLING_URL);
     });
@@ -552,6 +569,26 @@ describe('Company billing page', () => {
 
       expect(screen.getByText('Billed at $0.06 per worker-minute through AWS Marketplace.')).toBeInTheDocument();
       expect(screen.queryByText(/per 60 worker-minutes/)).not.toBeInTheDocument();
+    });
+
+    it('quotes no card price to a workspace AWS billed while nothing bills it', () => {
+      render({
+        billing: { status: 'canceled', hasSubscription: false, cancelsAt: null, provider: 'aws_marketplace' },
+        active: null,
+        previous: [stoppedAws()],
+      });
+
+      expect(screen.queryByText(/^Billed at/)).not.toBeInTheDocument();
+    });
+
+    it('still quotes the card price to a workspace a card billed and stopped', () => {
+      render({
+        billing: { status: 'canceled', hasSubscription: false, cancelsAt: null, provider: 'stripe' },
+        active: null,
+        previous: [stoppedCard()],
+      });
+
+      expect(screen.getByText(/^Billed at \$5\.00 per 60 worker-minutes/)).toBeInTheDocument();
     });
 
     it('quotes no price for an AWS subscription whose rate was never read', () => {
