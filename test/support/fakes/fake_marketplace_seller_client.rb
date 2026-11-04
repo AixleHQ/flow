@@ -52,13 +52,17 @@ class FakeMarketplaceSellerClient
     raise_failure!
     tokens << registration_token
 
-    @customer || Billing::MarketplaceSellerClient::Customer.new(
+    customer = @customer || Billing::MarketplaceSellerClient::Customer.new(
       license_arn: license_arn_for(registration_token),
       aws_account_id: "111122223333",
       product_code: PRODUCT_CODE,
       agreement_id: "agmt-#{Digest::SHA256.hexdigest(registration_token.to_s)[0, 12]}",
       customer_identifier: nil
     )
+    # As the adapter does: a customer with no licence is refused, not answered.
+    raise Billing::MarketplaceSellerClient::Unlicensed, "no licence" if customer.license_arn.blank?
+
+    customer
   end
 
   def last_token = tokens.last

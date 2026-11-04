@@ -35,6 +35,16 @@ class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
     assert_nil customer.customer_identifier
   end
 
+  test "the fake refuses a customer with no licence, as the adapter does" do
+    client = FakeMarketplaceSellerClient.new
+    client.customer = Billing::MarketplaceSellerClient::Customer.new(
+      license_arn: nil, aws_account_id: "111122223333", product_code: FakeMarketplaceSellerClient::PRODUCT_CODE,
+      agreement_id: nil, customer_identifier: nil
+    )
+
+    assert_raises(Billing::MarketplaceSellerClient::Unlicensed) { client.resolve_customer(registration_token: "tok") }
+  end
+
   test "one token resolves to one licence however often it is presented" do
     client = FakeMarketplaceSellerClient.new
     first = client.resolve_customer(registration_token: "tok")
