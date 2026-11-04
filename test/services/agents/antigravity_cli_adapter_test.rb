@@ -164,6 +164,14 @@ module Agents
       assert_empty observed_model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
     end
 
+    test "prices the Gemini 4 Argon and Claude 5.5 models the CLI offers since 1.4.7" do
+      model_ids = %w[gemini-4-argon-high gemini-4-argon-medium gemini-4-argon-low] +
+                  %w[opus sonnet].product(%w[max high medium low]).map { |family, effort| "claude-#{family}-5-5-#{effort}" }
+
+      assert_empty model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
+      assert_in_delta 300.0, @adapter.send(:usage_cost_cents, "claude-sonnet-5-5-high", 1_000_000, 100_000, 0)
+    end
+
     test "warns when a catalogue model has no configured pricing" do
       Rails.logger.expects(:warn)
                   .with('[AntigravityCliAdapter] no configured pricing for model "new-unpriced-model"')

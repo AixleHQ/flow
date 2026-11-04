@@ -15,11 +15,10 @@ FROM ${BASE_IMAGE}
 RUN useradd -m -d /home/kiro -s /bin/bash -G ${AGENT_BROWSERS_GROUP} kiro
 
 # What https://cli.kiro.dev/install does, for the release the registry pins: that
-# script installs only the channel's latest release. The archive's own install.sh just
-# copies bin/kiro-cli, kiro-cli-chat and kiro-cli-term into ~/.local/bin; kiro-cli-term
-# is the shell/autocomplete integration (`kiro-cli integrations`, `kiro-cli inline`),
-# which no session uses, so only the other two are installed. The glibc archive needs
-# glibc 2.34 (x86_64) or 2.39 (aarch64); the base image's Debian has 2.41.
+# script installs only the channel's latest release. Since 3.0 the archive carries a single
+# standalone bin/kiro-cli (no kiro-cli-chat / kiro-cli-term), which its own install.sh copies
+# into ~/.local/bin. The glibc archive needs glibc 2.34 (x86_64) or 2.39 (aarch64); the base
+# image's Debian has 2.41.
 #
 # The checksums are per release: Kiro publishes them only in the channel's latest
 # manifest (versioned manifests return 403), so a pinned release keeps its pair here. A
@@ -37,17 +36,17 @@ RUN set -eux; \
     package="kirocli-${arch}-linux.zip"; \
     channel=https://prod.download.cli.kiro.dev/stable; \
     case "${CLI_VERSION}/$arch" in \
-      2.34.0/x86_64) sha256="877b6fc99182c1a789719141306ff19019c047eaf500d19f2b812f925dd0f913" ;; \
-      2.34.0/aarch64) sha256="de9674e9c029a50fae6be2334a35034a71f56a77b133183f19e37094a79e2bb2" ;; \
+      3.0.0/x86_64) sha256="83dd96e00a75937958096da0436703562bc8c841bef66bde00a4caa5494d8be8" ;; \
+      3.0.0/aarch64) sha256="e7965abd104a432ebdf2acdb24659c96d70397695699156186915eb333142df6" ;; \
       *) sha256="$(curl -fsSL "$channel/latest/manifest.json" | jq -r --arg v "$CLI_VERSION" --arg f "${CLI_VERSION}/$package" \
            'select(.version == $v) | .packages[] | select(.download == $f) | .sha256')"; \
          [ -n "$sha256" ] || { echo "No checksum for kiro-cli ${CLI_VERSION} on $arch: add it to docker/kiro-cli/Dockerfile" >&2; exit 1; } ;; \
     esac; \
     curl -fsSL "$channel/${CLI_VERSION}/$package" -o /tmp/kiro.zip; \
     echo "$sha256  /tmp/kiro.zip" | sha256sum -c -; \
-    unzip -q /tmp/kiro.zip 'kirocli/bin/kiro-cli' 'kirocli/bin/kiro-cli-chat' -d /tmp/kiro; \
+    unzip -q /tmp/kiro.zip 'kirocli/bin/kiro-cli' -d /tmp/kiro; \
     install -d -o kiro -g kiro /home/kiro/.local /home/kiro/.local/bin; \
-    install -o kiro -g kiro -m 755 /tmp/kiro/kirocli/bin/kiro-cli /tmp/kiro/kirocli/bin/kiro-cli-chat /home/kiro/.local/bin/; \
+    install -o kiro -g kiro -m 755 /tmp/kiro/kirocli/bin/kiro-cli /home/kiro/.local/bin/; \
     rm -rf /tmp/kiro /tmp/kiro.zip; \
     su kiro -c 'set -eux; \
         export HOME=/home/kiro PATH=/home/kiro/.local/bin:$PATH; \

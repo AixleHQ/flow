@@ -74,6 +74,11 @@ module Agents
     #     the failure Codex's trust dialog already caused once (task #605).
     #   * auto-update would pull a different CLI than the image pins, and the change is
     #     thrown away with the container anyway.
+    #   * since 2.37 the CLI upgrades a V2-format agent config it finds in the repo's own
+    #     `.kiro/agents/` in place and leaves a `.json.bak` beside it — changes to the
+    #     user's working tree an agent could commit. Off, it prints a one-line notice.
+    #   * since 2.35 every session pane opens with a three-line "running as root" warning;
+    #     every process here runs as root on purpose (see STATE_PATH).
     #
     # `telemetry.enabled` is deliberately NOT set here, and neither is
     # `KIRO_DISABLE_TELEMETRY`. Both were, until measuring what they do: the CLI's
@@ -86,12 +91,13 @@ module Agents
     # redirected rather than duplicated.
     CLI_SETTINGS = {
       "chat.disableTrustAllConfirmation" => true,
-      "app.disableAutoupdates" => true
+      "app.disableAutoupdates" => true,
+      "chat.enableAutoAgentUpgrade" => false,
+      "app.warnOnElevatedPrivileges" => false
     }.freeze
 
-    # Kiro's current engine. Still opt-in behind this flag as of CLI 2.21.3 (verified
-    # against the shipping binary) — the changelog has carried "Available in V3 mode
-    # (kiro-cli --v3)" since 2.8.
+    # Kiro's current engine, the default since CLI 3.0. The flag still outranks a saved
+    # `chat.agentEngine` and skips 3.0's first-launch "Continue with V3 / Stay on V2" choice.
     V3_FLAG = "--v3"
 
     # V3 replaced the trust flags with a permissions policy whose default is to ask

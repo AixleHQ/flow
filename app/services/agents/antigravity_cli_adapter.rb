@@ -58,7 +58,19 @@ module Agents
       "gemini-3.1-pro-low" => { input: 2.50, output: 15.00, cache_read: 0.25 },
       "claude-sonnet-4-6" => { input: 3.00, output: 15.00, cache_read: 0.30 },
       "claude-opus-4-6-thinking" => { input: 5.00, output: 25.00, cache_read: 0.50 },
-      "gpt-oss-120b-medium" => { input: 0.15, output: 0.60, cache_read: 0.015 }
+      "gpt-oss-120b-medium" => { input: 0.15, output: 0.60, cache_read: 0.015 },
+      # Google's standard rate from 2026-12-01; through 2026-11-30 it bills half of this.
+      "gemini-4-argon-high" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "gemini-4-argon-medium" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "gemini-4-argon-low" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "claude-opus-5-5-max" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "claude-opus-5-5-high" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "claude-opus-5-5-medium" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "claude-opus-5-5-low" => { input: 4.00, output: 20.00, cache_read: 0.20 },
+      "claude-sonnet-5-5-max" => { input: 2.00, output: 10.00, cache_read: 0.20 },
+      "claude-sonnet-5-5-high" => { input: 2.00, output: 10.00, cache_read: 0.20 },
+      "claude-sonnet-5-5-medium" => { input: 2.00, output: 10.00, cache_read: 0.20 },
+      "claude-sonnet-5-5-low" => { input: 2.00, output: 10.00, cache_read: 0.20 }
     }.freeze
 
     # Used only when the live catalogue is unavailable or no access token was
