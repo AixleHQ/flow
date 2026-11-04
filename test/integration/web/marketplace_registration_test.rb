@@ -71,6 +71,24 @@ class Web::MarketplaceRegistrationTest < ActionDispatch::IntegrationTest
     assert_match(/AWS Marketplace/, flash[:alert])
   end
 
+  test "a token that resolves to no licence is refused like an expired one, and we hear of it" do
+    @client.customer = Billing::MarketplaceSellerClient::Customer.new(
+      license_arn: nil,
+      aws_account_id: "111122223333",
+      product_code: FakeMarketplaceSellerClient::PRODUCT_CODE,
+      agreement_id: nil,
+      customer_identifier: "probe"
+    )
+    Sentry.expects(:capture_exception).with(instance_of(Billing::MarketplaceSellerClient::Unlicensed))
+
+    assert_no_difference -> { MarketplaceLicense.count } do
+      register
+    end
+
+    assert_redirected_to login_path
+    assert_match(/expired/i, flash[:alert])
+  end
+
   test "a role we cannot assume is reported to us and not explained to the buyer" do
     @client.failure = Billing::MarketplaceSellerClient::CredentialsError
     register

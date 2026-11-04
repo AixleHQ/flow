@@ -113,6 +113,17 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
     assert_match(/someoneelsesproduct/, error.message)
   end
 
+  # What AWS posted while the listing was going Public: our product, an
+  # account, and neither licence nor agreement. Nothing can be keyed on it.
+  test "a token with no licence behind it is refused before anything is bound" do
+    stub_resolve(body: resolved_body("LicenseArn" => nil, "Metadata" => nil))
+
+    error = assert_raises(Billing::MarketplaceSellerClient::Unlicensed) do
+      Billing::MarketplaceSellerClient.new.resolve_customer(registration_token: "tok")
+    end
+    assert_match(/444455556666/, error.message)
+  end
+
   test "an expired link is its own error, because the buyer has to start again" do
     stub_resolve(
       status: 400,

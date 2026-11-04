@@ -52,6 +52,13 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
     redirect_to marketplace_registration_path(ticket: license.generate_token_for(:registration))
   rescue Billing::MarketplaceSellerClient::InvalidToken, Billing::MarketplaceSellerClient::ForeignProduct
     refuse(EXPIRED)
+  rescue Billing::MarketplaceSellerClient::Unlicensed => e
+    # Binds nothing, and whoever posted it gets the answer an expired link
+    # gets rather than an error page. Reported all the same: the one seen so
+    # far was AWS probing the fulfilment URL as the listing went Public, and
+    # a buyer in the same state would be a question for AWS.
+    Sentry.capture_exception(e)
+    refuse(EXPIRED)
   rescue Billing::MarketplaceSellerClient::Error => e
     # Ours to fix, and nothing a buyer can act on.
     Sentry.capture_exception(e)

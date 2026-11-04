@@ -70,6 +70,10 @@ governance, community health — carry none.
   there connects a channel in that workspace only. The trigger form groups the
   channels by workspace, and an agent names a channel two workspaces share as
   `Workspace/#channel`.
+- **Company settings**: a registration token that AWS Marketplace resolves to our product
+  but to no licence is refused the way an expired link is, and reported to us,
+  rather than answered with an error page. AWS posted one such token to the
+  fulfilment URL while the listing was being made public.
 
 ## [1.10.0] - 2026-11-03
 
