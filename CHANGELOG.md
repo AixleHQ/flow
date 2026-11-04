@@ -20,6 +20,10 @@ governance, community health — carry none.
   that person's agent and limits; the trigger keeps its id, settings and
   history, and the change is recorded in the audit trail. Over MCP it is
   `run_as_user_id` on `update_workflow_trigger`.
+- **Feedback**: the feedback Slack channel (`FEEDBACK_SLACK_CHANNEL_ID`) hears
+  of every new company — its name, id, domain, who created it and when, and
+  whether it came from a self-serve signup, an AWS Marketplace signup or the
+  admin. Nothing to switch on: it posts wherever the feedback bot is configured.
 
 ### Fixed
 - **Companies & projects**: a project whose name has no Latin letters or digits,
