@@ -186,6 +186,13 @@ class Billing::SubscriptionHistoryTest < ActiveSupport::TestCase
                  history[:previous].map { |entry| [ entry[:kind], entry[:cancelled_at] ] }
   end
 
+  # The ledger keeps seconds; the page shows minutes as a count, not a reading.
+  test "a card's minutes are listed whole" do
+    CompanyCapacityUsage.record!(company_id: @company.id, period_start: Time.utc(2026, 10, 29, 14), quantity_seconds: 3168)
+
+    assert_in_delta 53.0, history[:active].dig(:usage, :worker_minutes)
+  end
+
   test "without the price the minutes are still listed" do
     @client.failure = "APIConnectionError: could not reach Stripe"
     used!(Time.utc(2026, 10, 29, 14), 130)

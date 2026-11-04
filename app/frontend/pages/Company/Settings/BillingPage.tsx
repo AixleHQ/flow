@@ -61,6 +61,8 @@ interface Billing {
   trial: { days: number; daysLeft: number; lastDay: string } | null;
   /** The rate the card is billed at. Null while the price cannot be read from Stripe. */
   price: Price | null;
+  /** What bills the workspace: `stripe`, `aws_marketplace` or `none`. */
+  provider: string;
   canPay: boolean;
   hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
@@ -183,13 +185,17 @@ const priceSentence = (price: Price) =>
     ? `Billed at ${formatMoney(price.unitAmountCents, price.currency)} per ${price.minutesPerUnit} worker-minutes, in whole packs rounded down.`
     : `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute through AWS Marketplace.`;
 
-// What the page quotes: the agreement's rate while AWS bills, the card's otherwise.
+// What the page quotes: the agreement's rate while AWS bills, the card's
+// otherwise. A workspace AWS billed and nothing bills now is quoted nothing:
+// the card's price is not what it paid, and may never be.
 const quotedPrice = (active: Subscription | null, billing: Billing): Price | null => {
   const estimate = active?.kind === 'aws_marketplace' ? active.usage?.estimate : null;
   if (estimate) {
     return { unitAmountCents: estimate.unitAmountCents, currency: estimate.currency, minutesPerUnit: 1 };
   }
-  return active?.kind === 'aws_marketplace' ? null : billing.price;
+  if (active?.kind === 'aws_marketplace') return null;
+  if (!active && billing.provider === 'aws_marketplace') return null;
+  return billing.price;
 };
 
 function SectionHeader({ title, count }: { title: string; count?: number }) {
@@ -235,16 +241,26 @@ function Field({ label, hint, children }: { label: string; hint?: string | null;
   );
 }
 
-function Figure({ label, children }: { label: string; children: React.ReactNode }) {
+function Figure({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <Stack gap={4}>
       <Label>{label}</Label>
       <Text fz="lg" ff="monospace">
         {children}
       </Text>
+      {hint && (
+        <Text fz="xs" c="dimmed">
+          {hint}
+        </Text>
+      )}
     </Stack>
   );
 }
+
+// A sum of nothing for minutes that were used: the card bills in whole packs,
+// and these did not fill one.
+const underOnePack = (usage: Usage) =>
+  !!usage.estimate && usage.estimate.amountCents === 0 && usage.workerMinutes > 0 && usage.estimate.minutesPerUnit > 1;
 
 function StatusBadge({ status }: { status: keyof typeof STATUS_BADGE }) {
   const badge = STATUS_BADGE[status];
@@ -344,9 +360,14 @@ function UsageBlock({
         </Text>
       </Group>
       <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="lg">
-        <Figure label="Worker-minutes">{formatMinutes(usage.workerMinutes)}</Figure>
+        <Figure label="Worker-minutes">{formatMinutes(Math.round(usage.workerMinutes))}</Figure>
         {usage.estimate && (
-          <Figure label={costLabel}>{formatMoney(usage.estimate.amountCents, usage.estimate.currency)}</Figure>
+          <Figure
+            label={costLabel}
+            hint={underOnePack(usage) ? `Under one pack of ${usage.estimate.minutesPerUnit} worker-minutes` : undefined}
+          >
+            {formatMoney(usage.estimate.amountCents, usage.estimate.currency)}
+          </Figure>
         )}
       </SimpleGrid>
       <Note>{note}</Note>
