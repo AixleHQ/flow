@@ -152,6 +152,7 @@ module Agents
     # turn with what that turn cost.
     MITM_LOG_KEY = "logs/http.log"
     USAGE_SUMMARY_ACTIVITY = "usageSummary"
+    RESPONSE_CREDITS_KEY = "kiro:credits"
 
     # Kiro's V3 agent only accepts a plain-HTTP MCP server on a loopback host, so the
     # container forwards one to the platform's internal MCP service. The port is
@@ -659,17 +660,22 @@ module Agents
       { status: "ok", windows: [ credit_window(usage, body) ], extra_usage: overage_usage(body) }
     end
 
-    # Cost comes from the credit counter moving, not from token counts — Kiro emits
-    # none outside headless stream-json.
+    # Cost comes from credits, not from token counts — Kiro emits none outside headless
+    # stream-json. #ingest_usage prices a session from the CLI's telemetry, but only
+    # `--no-interactive` exports `kiro_cli_credits_consumed`: the TUI, which every
+    # session runs, sends it nowhere we can read (measured on 2.34.0 and 3.0.0). The
+    # rest are read here, at cleanup, in this order.
     #
-    # Two sources, in this order.
+    # Every model call is a `runtime.<region>.kiro.dev/v1/responses` stream whose final
+    # event carries `usage["kiro:credits"]`, and the MITM proxy keeps those bodies whole.
+    # That is what the account was charged, call by call, for this session alone —
+    # sub-agents included — and its sum matched the TUI's own "Credits: … session"
+    # line on 2.34.0 and 3.0.0.
     #
-    # The CLI reports its own spend. Every turn it posts a `usageSummary` activity to
-    # `runtime.<region>.kiro.dev/agents/activity` carrying `promptTurnSummaries[].usage`
-    # in credits, and the MITM proxy already captures it. That is exact and it is this
-    # session's alone.
+    # Older CLIs also post a `usageSummary` activity per turn to `/agents/activity`,
+    # carrying `promptTurnSummaries[].usage`; 3.0 no longer does.
     #
-    # Without that log — MITM off, or a session that produced no turns — the fallback is
+    # Without either — MITM off, or a session that made no model call — the fallback is
     # the movement of the account's credit counter since the previous reading. It agreed
     # with the CLI's own figure to four decimal places on a measured session (0.5174
     # credits), but it is per ACCOUNT: a concurrent session, or the user working in the
@@ -712,6 +718,15 @@ module Agents
         return
       end
 
+      responses = response_credits(artifacts[MITM_LOG_KEY])
+      if responses.any?
+        record_credit_usage(terminal_session, credential, usage,
+                            credits: responses.sum { |r| r[:credits] },
+                            events: responses,
+                            source: "mitm_response_credits")
+        return
+      end
+
       turns = turn_summaries(artifacts[MITM_LOG_KEY])
       if turns.any?
         record_credit_usage(terminal_session, credential, usage,
@@ -737,9 +752,8 @@ module Agents
                           source: "get_usage_limits_delta")
     end
 
-    # The MITM proxy records the CLI's own calls to the Kiro service. Nothing parses
-    # them yet — they are collected so the per-request `creditsUsed` in
-    # SendTelemetryEvent can be read from real traffic before any parser is written.
+    # The MITM proxy records the CLI's own calls to the Kiro service; #collect_usage
+    # reads each model response's credits from them.
     # Kiro's CLI exports OpenTelemetry, and where it exports to is configurable — so the
     # platform points it at its own collector, the same one Claude Code reports into.
     # `OTEL_RESOURCE_ATTRIBUTES` is honoured by its SDK (verified against 2.21.3), which
@@ -1194,6 +1208,42 @@ module Agents
       0.0
     end
 
+    # Credits each model call of this session was charged, read from the `/v1/responses`
+    # streams the MITM proxy logged. A stream's events repeat the response object, and
+    # only the last one carries the final usage, so the last value per response id wins.
+    # A line that does not parse is skipped: a damaged log should cost a cost figure,
+    # not the session.
+    def response_credits(mitm_log)
+      return [] if mitm_log.blank?
+
+      calls = {}
+      mitm_log.each_line do |line|
+        next unless line.include?(RESPONSE_CREDITS_KEY)
+
+        entry = parse_json(line)
+        next unless entry.is_a?(Hash) && entry["direction"] == "response" && entry["path"].to_s.end_with?("/v1/responses")
+
+        sse_responses(entry["body"].to_s).each do |response|
+          credits = response.dig("usage", RESPONSE_CREDITS_KEY, "value")
+          next unless credits.is_a?(Numeric) && response["id"].present?
+
+          calls[response["id"]] = { credits: credits.to_f, status: response["status"], model: response["model"].presence,
+                                    response_id: response["id"] }
+        end
+      end
+      calls.values.reject { |call| call[:credits].zero? }
+    end
+
+    def sse_responses(body)
+      body.each_line.filter_map do |line|
+        next unless line.start_with?("data: ")
+
+        event = parse_json(line.delete_prefix("data: "))
+        response = event["response"] if event.is_a?(Hash)
+        response if response.is_a?(Hash)
+      end
+    end
+
     # Credits the CLI itself reported for this session, one entry per prompt turn.
     #
     # The turns are posted to `/agents/activity` as they happen and the MITM proxy logs
@@ -1259,7 +1309,8 @@ module Agents
 
       events.map do |event|
         credit_event(event[:credits], rate, usage, source).merge(
-          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "usedTools" => event[:tools]
+          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "usedTools" => event[:tools],
+          "model" => event[:model], "responseId" => event[:response_id]
         ).compact
       end
     end
