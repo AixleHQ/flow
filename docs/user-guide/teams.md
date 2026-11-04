@@ -1,7 +1,8 @@
 # Connecting Microsoft Teams
 
-Microsoft Teams connects per **company**. One connection serves every project in
-the company. From then on:
+Microsoft Teams connects for the whole **company** or for **one project**. A
+company-wide connection serves every project in the company; a project
+connection serves that project alone. From then on:
 
 - people start workflows by mentioning the app in a connected channel or group
   chat (a **Chat message** trigger), or start one themselves with **Run
@@ -20,12 +21,14 @@ yet.
 A Teams connection is approved by an administrator of your Microsoft 365
 organization, who does not need a Flow account.
 
-1. On a project's **Integrations** page choose **Connect → Microsoft Teams**.
-   Any member who can change the project can do this.
+1. On a project's **Integrations** page choose **Connect → Microsoft Teams**,
+   then who can use it: **Every project in the company** (company admins only,
+   and their default) or **Only this project**, and **Continue**. Any other
+   member who can change the project connects it for that project.
 2. Flow shows an **approval link**. Copy it and send it to your Microsoft 365
    administrator. The link works for 7 days and is shown only once. If it is
-   lost, or later, choose **New approval link** on the row; the old link stops
-   working.
+   lost, or later, choose **New approval link** on the row (a company admin's,
+   for a company-wide connection); the old link stops working.
 3. The administrator opens the link, leaves **Also give access to files shared
    in Teams** checked or clears it, and selects **Sign in with Microsoft to
    approve**. Microsoft shows one consent screen for everything Flow asks for. They must hold one of these directory roles: Global
@@ -38,6 +41,17 @@ organization, who does not need a Flow account.
 Several companies can connect the same organization, each with its own
 administrator approval and each once. Each reaches only the channels connected
 to it, and its agents edit and delete only the app's messages posted for it.
+
+### One project or the whole company
+
+A company connects each organization once, either for the whole company or for
+one project. A project connection is invisible to the company's other projects:
+their triggers, channel lists, agents, help and **Run workflow** list never see
+it. A company admin can share it with every project with the **Share with the
+whole company** button on its row; channels and triggers stay as they are. A
+company-wide connection is never narrowed: remove it and connect again for one
+project. Moving a project to another company switches its project connection
+off.
 
 ### File access
 
@@ -263,8 +277,9 @@ id. The tools refuse one that is not connected, and list the ones that are.
 
 ## Disconnecting
 
-**Remove** on the Integrations row (company admins only) disconnects the
-organization. The app stays installed in Teams until an administrator removes
+**Remove** on the Integrations row (company admins for a company-wide
+connection; anyone who can change the project for a project connection)
+disconnects the organization. The app stays installed in Teams until an administrator removes
 it there, but Flow no longer acts on its messages. Its channels are disconnected,
 and the chat triggers that listened there switch off and need a new channel.
 Other companies that connected the organization keep working.

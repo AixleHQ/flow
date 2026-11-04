@@ -97,7 +97,7 @@ export const ChatChannelsModal = ({ projectId, integration, opened, onClose, can
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Channels in <b>{integration?.name}</b>. Chat triggers listen in, and workflows post to, connected channels
-            only. They belong to your company, so every project sees the same list.
+            only. Every project this connection serves sees the same list.
           </Text>
           {channels === null ? (
             failed ? (

@@ -24,6 +24,17 @@ governance, community health — carry none.
   of every new company — its name, id, domain, who created it and when, and
   whether it came from a self-serve signup, an AWS Marketplace signup or the
   admin. Nothing to switch on: it posts wherever the feedback bot is configured.
+- **Integrations**: Slack and Microsoft Teams can be connected for one project
+  only. Its triggers, channels, agent tools, help and Run workflow menu then
+  reach that project alone, and a company admin can share it with every project
+  later.
+
+### Changed
+- **Integrations**: only a company admin can connect Slack or Microsoft Teams
+  for the whole company, renew a company-wide Teams approval link, or share a
+  project's connection with the company. Other members who can change a project
+  connect it for that project. Moving a project to another company switches off
+  the Slack or Teams connection that was made for it.
 
 ### Fixed
 - **Companies & projects**: a project whose name has no Latin letters or digits,

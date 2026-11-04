@@ -1,6 +1,6 @@
 # Shared chat workspaces and channel-bound chat triggers — technical design
 
-**Status:** Direction agreed 2026-10-22: decisions 1–23 (§2), no open questions. Phases 1 and 2 built
+**Status:** Direction agreed 2026-10-22: decisions 1–23 (§2), no open questions. Decisions 24 and 25 added 2026-11-04. Phases 1 and 2 built
 (§20, §21). Spikes S3 and S4 (§15.3) still want a live check on staging.
 **Board task:** #199, "Make channel selection required when launching a trigger via Slack".
 **Code baseline:** `715fc7c0`
@@ -103,6 +103,14 @@ Decided 2026-11-04 after a production report (board task #245):
     in another workspace; a code from the trigger form or MCP without one still works in any workspace
     the company connected. The trigger form groups channels by workspace, and agents qualify a Slack
     channel by its workspace (`Workspace/#channel`) when the name alone matches more than one.
+
+Decided 2026-11-04 ([research](../research/technical-chat-integration-scope-research-2026-11-04.md) §9):
+
+25. **An install serves the whole company or one project.** Company-wide is the default and a company
+    admin's. Anyone else who can change the project connects it for that project only. A company holds
+    one install per workspace. A company admin can widen a project install, and nothing narrows a
+    company-wide one. Channel connections stay company-level (decision 15). Through a project install,
+    though, only that project's triggers, agents, help and `/run` reach them.
 
 Not taken from the same review: a separate "read any thread" level on a connection, and announcing or
 re-confirming the channels the migration connected. Within one company both are valid as they are, and

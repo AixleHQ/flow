@@ -22,6 +22,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBuildingCommunity,
   IconCheck,
   IconChevronDown,
   IconChevronRight,
@@ -60,6 +61,7 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 import { AtlassianConnectModal, type AtlassianConnectionState } from './AtlassianConnectModal';
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
+import { ChatConnectModal, type ChatProvider, type ChatScope } from './ChatConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { GitlabGroupModal } from './GitlabGroupModal';
@@ -529,19 +531,45 @@ export const IntegrationsContent = ({
     [basePath],
   );
 
-  // Slack connects via OAuth: redirect to the project-scoped start action, which
-  // bounces to Slack's consent screen. The install binds to this project.
-  const handleConnectSlack = useCallback(() => {
-    allowUnload();
-    window.location.href = `${basePath}/slack_oauth_start`;
-  }, [basePath]);
+  // Slack and Teams serve the whole company or this project only; the dialog
+  // asks which before the connection starts.
+  const [chatConnect, setChatConnect] = useState<ChatProvider | null>(null);
+  const handleConnectSlack = useCallback(() => setChatConnect('slack'), []);
+  const handleConnectTeams = useCallback(() => setChatConnect('teams'), []);
 
+  // Slack connects via OAuth: the start action bounces to Slack's consent screen.
   // Teams is approved by a Microsoft 365 administrator, who may not have an
   // Aixle account: the server creates a pending connection and hands back, once,
   // the link that person opens.
-  const handleConnectTeams = useCallback(() => {
-    router.post(`${basePath}/teams_connect`, {}, { preserveScroll: true });
-  }, [basePath]);
+  const startChatConnection = useCallback(
+    (provider: ChatProvider, scope: ChatScope) => {
+      setChatConnect(null);
+      if (provider === 'slack') {
+        allowUnload();
+        window.location.href = `${basePath}/slack_oauth_start?scope=${scope}`;
+      } else {
+        router.post(`${basePath}/teams_connect`, { scope }, { preserveScroll: true });
+      }
+    },
+    [basePath],
+  );
+
+  const handleShareWithCompany = useCallback(
+    (integration: Integration) => {
+      modals.openConfirmModal({
+        title: 'Share with the whole company',
+        children: (
+          <Text size="sm">
+            Every project in the company will see <b>{integration.name}</b> and can connect its channels. Only removing
+            it undoes this.
+          </Text>
+        ),
+        labels: { confirm: 'Share', cancel: 'Cancel' },
+        onConfirm: () => router.patch(`${basePath}/${integration.id}`, { scope: 'company' }, { preserveScroll: true }),
+      });
+    },
+    [basePath],
+  );
   const { flash } = usePage<{ flash?: Record<string, unknown> }>().props;
   const teamsApprovalUrl = typeof flash?.teamsApprovalUrl === 'string' ? flash.teamsApprovalUrl : null;
   const [dismissedApprovalUrl, setDismissedApprovalUrl] = useState<string | null>(null);
@@ -1115,7 +1143,22 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {integration.provider === 'teams' && canExecute && (
+                        {CHAT_PROVIDERS.includes(integration.provider) &&
+                          integration.scopeIndicator === 'project' &&
+                          canExecute &&
+                          canManageCompany && (
+                            <Tooltip label="Share with the whole company">
+                              <ActionIcon
+                                aria-label={`Share ${integration.name} with the whole company`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => handleShareWithCompany(integration)}
+                              >
+                                <IconBuildingCommunity size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                        {integration.provider === 'teams' && canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="New approval link">
                             <ActionIcon
                               aria-label={`New approval link for ${integration.name}`}
@@ -1684,6 +1727,13 @@ export const IntegrationsContent = ({
           </Group>
         </Stack>
       </Modal>
+
+      <ChatConnectModal
+        provider={chatConnect}
+        canManageCompany={!!canManageCompany}
+        onClose={() => setChatConnect(null)}
+        onConnect={startChatConnection}
+      />
 
       <TeamsApprovalModal
         url={teamsApprovalUrl !== dismissedApprovalUrl ? teamsApprovalUrl : null}

@@ -400,7 +400,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       <TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [buildChatProviderOption()] })} />,
     );
 
-    expect(screen.getByText('No Slack channel is connected to your company yet.')).toBeInTheDocument();
+    expect(screen.getByText('No Slack channel is connected for this project yet.')).toBeInTheDocument();
     await userEvent.click(channelSelect());
     expect(await screen.findByText('Connect a new channel with the button below')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));

@@ -309,6 +309,13 @@ class Integration < ApplicationRecord
   end
 
 
+  # The projects `installs` serve: every project of a company-wide install's
+  # company, and a project install's own project.
+  def self.served_projects(installs)
+    Project.where(company_id: installs.where(project_id: nil).select(:company_id))
+           .or(Project.where(id: installs.where.not(project_id: nil).select(:project_id)))
+  end
+
   # The installs of every company that connected the same workspace, this one
   # included; just this one when it serves no workspace yet.
   def chat_peers
@@ -318,6 +325,16 @@ class Integration < ApplicationRecord
   end
 
   def chat_workspace_name = chat_workspace&.name.presence || name
+
+  # A Slack or Teams install switched off without being removed (its project
+  # moved to another company) lets go of what removing it would: the company's
+  # triggers and channels in the workspace, and the endpoint it shares.
+  def release_chat_workspace!
+    return unless slack? || teams?
+
+    release_chat_triggers
+    slack? ? release_slack_workspace : release_teams_tenant
+  end
 
   private
 
