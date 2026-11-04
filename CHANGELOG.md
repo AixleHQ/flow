@@ -36,6 +36,15 @@ governance, community health — carry none.
   connect it for that project. Moving a project to another company switches off
   the Slack or Teams connection that was made for it.
 
+### Changed
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.318, Codex 0.166.0,
+  Antigravity CLI 1.5.0 and Kiro CLI 3.0.0. Claude Code's new check that asks
+  before a command sends the account email is turned off, so an automatic run
+  no longer waits on it. Kiro no longer rewrites V2 agent configs in the
+  repository's `.kiro/agents/` (and leaves no `.json.bak` beside them). Gemini
+  CLI stays at 0.60.0: 0.66.0 still stops `--yolo` at a prompt when the agent
+  edits a build file or runs a command on a path an earlier command printed.
+
 ### Fixed
 - **Sessions & Runs**: a Kiro session's cost is now the credits its own model calls
   were charged, as shown in Kiro's own terminal. Since automatic sessions moved to
@@ -49,6 +58,13 @@ governance, community health — carry none.
 - **Templates**: `bin/rails templates:validate` runs without a database again. The
   template repository's pull-request check failed on every pull request while the
   catalog held a template with a stdio MCP server.
+- **Sessions & Runs**: a run whose agent hits its plan's usage limit — Claude
+  Code's 5-hour or weekly limit, Codex's usage limit, Antigravity's exhausted
+  model quota — now fails as a quota stop instead of waiting 30 minutes for the
+  no-output timeout. A Codex or Antigravity session whose login the provider
+  refuses at startup now ends as a refused login, not as "no output".
+- **Analytics**: Antigravity sessions on Gemini 4 Argon, Claude Opus 5.5 and
+  Claude Sonnet 5.5 show their cost; they were counted as free.
 - **Sessions & Runs**: when an agent asked for several secrets at the same moment,
   one of them could stay unmasked in the session's proxy log and in the agent's own
   transcript. Every secret a session receives is now masked there, however the

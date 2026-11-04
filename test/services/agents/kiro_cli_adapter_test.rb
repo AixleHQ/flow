@@ -234,6 +234,15 @@ module Agents
       assert settings["app.disableAutoupdates"]
     end
 
+    # Since 2.37 the CLI rewrites a V2 agent config in the repo's `.kiro/agents/` and leaves a
+    # `.json.bak` next to it — edits to the user's working tree nobody asked for.
+    test "config_files turns off the in-repo agent-config upgrade and the running-as-root warning" do
+      settings = JSON.parse(@adapter.config_files({})["/home/kiro/.kiro/settings/cli.json"])
+
+      assert_equal false, settings["chat.enableAutoAgentUpgrade"] # rubocop:disable Minitest/RefuteFalse
+      assert_equal false, settings["app.warnOnElevatedPrivileges"] # rubocop:disable Minitest/RefuteFalse
+    end
+
     # Turning the CLI's telemetry off would take the cost figures with it: measured, a
     # container with the setting false exported nothing but a daily heartbeat, losing
     # `kiro_cli_credits_consumed`. The export is redirected, not silenced.
