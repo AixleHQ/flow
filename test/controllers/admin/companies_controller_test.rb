@@ -30,6 +30,30 @@ module Admin
       assert_redirected_to admin_company_path(Company.last)
     end
 
+    test "the feedback channel hears of the company, as made in the admin by this operator" do
+      Settings.stubs(:feedback).returns(
+        Hashie::Mash.new(slack_bot_token: "xoxb-feedback-bot", slack_channel_id: "C0FEEDBACK")
+      )
+
+      post :create, params: { company: attributes_for(:company, name: "Northwind") }
+
+      announcement = enqueued_jobs.select { |job| job[:job] == Feedback::SlackPostJob }.sole
+      text = announcement.fetch(:args).first
+      assert_includes text, "*🆕 New tenant: Northwind*"
+      assert_includes text, "*Source:* Admin\n"
+      assert_includes text, "(#{@super_admin.email})"
+    end
+
+    test "a company the admin refuses is not announced" do
+      Settings.stubs(:feedback).returns(
+        Hashie::Mash.new(slack_bot_token: "xoxb-feedback-bot", slack_channel_id: "C0FEEDBACK")
+      )
+
+      post :create, params: { company: attributes_for(:company, email_domain: @company.email_domain) }
+
+      assert_no_enqueued_jobs only: Feedback::SlackPostJob
+    end
+
     test "should show company" do
       get :show, params: { id: @company.id }
       assert_response :success
