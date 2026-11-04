@@ -58,22 +58,13 @@ class AnalyticsTest < ActiveSupport::TestCase
     event = analytics_event("project_created")
     assert_equal @user.id.to_s, event["distinct_id"]
     assert_equal({ "company_id" => @company.id, "billing_status" => "trialing", "managed" => false,
-                   "internal_company" => false, "user_role" => "admin", "onboarding_state" => "completed",
+                   "user_role" => "admin", "onboarding_state" => "completed",
                    "project_id" => project.id, "via" => "mcp", "is_first" => true },
-                 event["properties"].slice("company_id", "billing_status", "managed", "internal_company", "user_role",
+                 event["properties"].slice("company_id", "billing_status", "managed", "user_role",
                                            "onboarding_state", "project_id", "via", "is_first"))
     assert_equal({ "signup_date" => @user.created_at.to_date.iso8601 }, event["properties"]["$set_once"])
     assert_not_includes event.to_json, @user.email
     assert_not_includes event.to_json, @user.name
-  end
-
-  test "our own test tenant is marked internal" do
-    enable_analytics!
-    @company.update!(email_domain: "acmeorbit.com")
-
-    Analytics.capture("project_created", user: @user, company: @company)
-
-    assert analytics_event("project_created")["properties"]["internal_company"]
   end
 
   test "track charges the event to whoever is acting, and to nobody when no one is" do

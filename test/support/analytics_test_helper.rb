@@ -8,8 +8,7 @@
 #   analytics_events                        # what Analytics enqueued, in order
 #   analytics_event_names                   # just the names
 module AnalyticsTestHelper
-  POSTHOG_SETTINGS = { api_key: "phc_test", host: "https://us.i.posthog.com", enable_in_dev: false,
-                       internal_domains: [ "acmeorbit.com" ] }.freeze
+  POSTHOG_SETTINGS = { api_key: "phc_test", host: "https://us.i.posthog.com", enable_in_dev: false }.freeze
 
   def enable_analytics!(mode: Deployment::SAAS, **overrides)
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))

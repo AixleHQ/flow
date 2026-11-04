@@ -77,9 +77,9 @@ every name and text masked.
 
 ## Event catalog
 
-Every event carries `company_id`, `billing_status`, `managed`, `internal_company`,
-`user_role`, `onboarding_state`, `app_version`, `via`, and `project_id` inside a
-project; client events add `page_component` and `feature_area` (the spec's areas, plus
+Every event carries `company_id`, `billing_status`, `managed`, `user_role`,
+`onboarding_state`, `app_version`, `via`, and `project_id` inside a project; client
+events add `page_component` and `feature_area` (the spec's areas, plus
 `projects` for the project list and a project's overview). A `$pageview` also carries `prev_page_component`: PostHog reports the time
 spent on, and the scroll depth of, the page just left on that event (`$prev_pageview_duration`,
 `$prev_pageview_max_scroll_percentage`), so page ranking groups by it.

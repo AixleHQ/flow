@@ -23,9 +23,9 @@ governance, community health — carry none.
 
 ### Changed
 - Operators: product analytics is configured with `POSTHOG_KEY`,
-  `POSTHOG_HOST`, `POSTHOG_INTERNAL_DOMAINS` and `POSTHOG_ENABLE_IN_DEV`; with
-  no key, nothing is sent. Sentry no longer records a sample of ordinary
-  sessions, only those that end in an error.
+  `POSTHOG_HOST` and `POSTHOG_ENABLE_IN_DEV`; with no key, nothing is sent.
+  Sentry no longer records a sample of ordinary sessions, only those that end
+  in an error.
 
 ## [1.10.0] - 2026-11-03
 

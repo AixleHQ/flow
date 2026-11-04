@@ -14,7 +14,6 @@ module Analytics
         "company_id" => company&.id,
         "billing_status" => company&.billing_status,
         "managed" => company&.managed_by_aixle?,
-        "internal_company" => company && internal?(company),
         "user_role" => membership&.role&.to_s,
         "onboarding_state" => membership && ONBOARDING_STATES[membership.onboarding_state],
         "app_version" => Settings.app.version,
@@ -27,9 +26,5 @@ module Analytics
     end
 
     def signup_date(user) = user.created_at.to_date.iso8601
-
-    def internal?(company)
-      Array(Settings.posthog.internal_domains).include?(company.email_domain.to_s.downcase)
-    end
   end
 end
