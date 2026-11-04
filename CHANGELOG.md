@@ -22,6 +22,11 @@ governance, community health — carry none.
   `run_as_user_id` on `update_workflow_trigger`.
 
 ### Fixed
+- **Companies & projects**: a project whose name has no Latin letters or digits,
+  such as "Проект", can be created; it used to be refused with nothing shown.
+- **Companies & projects**: the Create New Project dialog now shows why a project
+  could not be created, including errors on fields other than the name, and keeps
+  them visible when it was opened from the sidebar.
 - **Sessions & Runs**: when an agent asked for several secrets at the same moment,
   one of them could stay unmasked in the session's proxy log and in the agent's own
   transcript. Every secret a session receives is now masked there, however the
