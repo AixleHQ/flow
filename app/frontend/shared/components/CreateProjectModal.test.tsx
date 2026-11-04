@@ -108,7 +108,7 @@ describe('shared/components/CreateProjectModal', () => {
   });
 
   it('shows errors on attributes the form has no field for, labelled by attribute', () => {
-    const form = makeFormStub({ name: 'Проект', description: '' });
+    const form = makeFormStub({ name: 'Roadmap', description: '' });
     form.errors = {
       slug: ["can't be blank", 'only allows lowercase letters, numbers, and hyphens'],
       base: ['Board could not be created'],
