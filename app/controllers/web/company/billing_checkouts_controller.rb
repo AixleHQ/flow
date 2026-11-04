@@ -20,6 +20,7 @@ class Web::Company::BillingCheckoutsController < Web::Company::ApplicationContro
       cancel_url: return_url("cancelled")
     )
 
+    Analytics.track("checkout_started", company: current_company)
     # 409 + X-Inertia-Location: an Inertia visit is an XHR and cannot follow a
     # cross-origin redirect, so the client is told to leave the application.
     inertia_location(session.url)

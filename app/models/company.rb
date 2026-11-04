@@ -8,6 +8,7 @@ class Company < ApplicationRecord
   include LogoUploader::Attachment(:logo)
 
   # Associations
+  belongs_to :created_by, class_name: "User", optional: true
   has_many :company_memberships, dependent: :destroy
   # Only ACTIVE members: revoked/invited/suspended users must not leak into
   # consumers (member pickers, session scopes). Screens that need non-active
@@ -263,6 +264,15 @@ class Company < ApplicationRecord
   # admins qualify.
   def ownership_candidates
     users.where(company_memberships: { role: %w[employee admin] })
+  end
+
+  # Who product analytics charges an event to when no person caused it (a Stripe
+  # webhook, a spent trial): its funnels are per person, and company-level
+  # grouping is a paid add-on we do not have.
+  def analytics_owner
+    return created_by if created_by && users.exists?(created_by.id)
+
+    users.where(company_memberships: { role: "admin" }).order("company_memberships.created_at").first
   end
 
   private

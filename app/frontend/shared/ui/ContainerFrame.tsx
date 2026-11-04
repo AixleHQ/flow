@@ -18,5 +18,5 @@ export function ContainerFrame({ src, title, ...props }: ContainerFrameProps) {
   const current = stripContainerTicket(frameSrc) === stripContainerTicket(src) ? frameSrc : src;
   if (current !== frameSrc) setFrameSrc(current);
 
-  return <iframe src={current} title={title} {...props} />;
+  return <iframe src={current} title={title} data-ph-block {...props} />;
 }

@@ -6,6 +6,10 @@
 # Stores only data for the system prompt (persona fields).
 # Does NOT store activation/menu — that is BMAD-specific runtime logic.
 class Agent < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "agent"
+
   extend Enumerize
 
   # Polymorphic scope (Project only)

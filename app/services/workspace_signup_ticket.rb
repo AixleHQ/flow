@@ -24,8 +24,11 @@ class WorkspaceSignupTicket
 
   class << self
     # `acceptance` is the LegalAcceptance::Evidence of a ticked box, nil for none.
-    def issue(name:, email:, marketplace_license_id: nil, acceptance: nil)
-      answers = { "name" => name, "email" => email }
+    # `analytics` is the browser's analytics consent and anonymous id, so a link
+    # opened in another browser still joins the visit that sent it.
+    def issue(name:, email:, marketplace_license_id: nil, acceptance: nil, analytics: nil)
+      answers = { "name" => name, "email" => email, "issued_at" => Time.current.iso8601 }
+      answers["analytics"] = analytics.slice("consent", "anonymous_id") if analytics.present?
       if acceptance
         # The versions the box was ticked for: a link opened after they changed
         # carries no acceptance, and the form asks again.
@@ -50,7 +53,10 @@ class WorkspaceSignupTicket
 
       answers = payload.symbolize_keys
       acceptance = (evidence(answers[:acceptance]) if answers[:accepted_terms] == LegalDocument.fingerprint)
-      answers.slice(:name, :email, :marketplace_license_id).merge(accept_terms: acceptance.present?, acceptance: acceptance)
+      answers.slice(:name, :email, :marketplace_license_id)
+             .merge(accept_terms: acceptance.present?, acceptance: acceptance,
+                    analytics: answers[:analytics].is_a?(Hash) ? answers[:analytics] : {},
+                    issued_at: issued_at(answers[:issued_at]))
     end
 
     private
@@ -62,6 +68,12 @@ class WorkspaceSignupTicket
       encryptor.decrypt_and_verify(token, purpose: PURPOSE)
     rescue ActiveSupport::MessageEncryptor::InvalidMessage
       Rails.application.message_verifier(PURPOSE).verified(token)
+    end
+
+    def issued_at(value)
+      Time.iso8601(value) if value.is_a?(String)
+    rescue ArgumentError
+      nil
     end
 
     def evidence(given)

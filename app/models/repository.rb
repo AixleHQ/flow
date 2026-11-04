@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class Repository < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "repository"
+
   # Hosts a public (integration-less) repository may be cloned from. The clone
   # runs with no credentials, so this list is not a permission boundary — it is
   # an SSRF/exfiltration boundary: `clone_url` reaches a shell inside the

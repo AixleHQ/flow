@@ -20,6 +20,10 @@
 #        rather than whatever upstream holds today. Empty on rows installed before it
 #        existed; those still go through `npx skills add` until `skills:snapshot`.
 class Skill < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "skill"
+
   extend Enumerize
 
   belongs_to :scope, polymorphic: true

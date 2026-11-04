@@ -41,6 +41,14 @@ class Web::ProfileController < Web::ApplicationController
   # The person's own security surface: their sign-in methods, passkeys,
   # one-time codes and every live session they hold. All of it is theirs — no
   # company-admin surface reaches these (AD-18).
+  def privacy
+    render inertia: "Profile/Privacy", props: {
+      analytics_consent: current_user.analytics_consent,
+      # The toggle only means something where analytics is collected at all.
+      analytics_available: Analytics.enabled?
+    }
+  end
+
   def security
     render inertia: "Profile/Security", props: {
       sign_in_methods: sign_in_methods,

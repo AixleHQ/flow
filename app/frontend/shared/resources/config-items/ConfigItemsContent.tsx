@@ -139,7 +139,7 @@ export const ConfigItemsContent = ({ configItems, basePath, title }: ConfigItems
                 </Badge>
               </Table.Td>
               <Table.Td>
-                <Group gap={4} wrap="nowrap">
+                <Group gap={4} wrap="nowrap" data-ph-block>
                   <Text size="sm" ff="monospace" c={item.itemType === 'secret' ? 'dimmed' : undefined}>
                     {item.itemType === 'secret' ? '••••••••' : item.value}
                   </Text>

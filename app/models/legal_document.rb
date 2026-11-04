@@ -43,7 +43,7 @@ class LegalDocument
     new(
       key: "privacy_policy",
       title: "Privacy Policy",
-      version: "2026-11-02",
+      version: "2026-11-03",
       accepted_by: :nobody,
       summary: "What personal information Aixle Flow collects, why, who receives it, and the choices you have."
     )

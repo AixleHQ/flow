@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class ConfigItem < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "config_item"
+
   include Encryptable
   extend Enumerize
 

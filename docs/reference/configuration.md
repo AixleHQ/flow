@@ -406,6 +406,9 @@ and as attachments on the board card.
 | `SENTRY_FRONTEND_DSN`         | no       | unset                        | Sentry DSN for the React frontend (public by design).      |
 | `SENTRY_TEMPORAL_DSN`         | no       | unset                        | Sentry DSN for the Temporal worker.                        |
 | `SENTRY_TRACES_SAMPLE_RATE`   | no       | `1.0`                        | Share of requests (web) and activities (worker) traced; the OTLP ingest route is never traced. |
+| `POSTHOG_KEY`                 | no       | unset                        | PostHog project API key for product analytics (public by design). Read only where `DEPLOYMENT_MODE` is the hosted product; unset sends nothing, from the browser or the server. |
+| `POSTHOG_HOST`                | no       | `https://us.i.posthog.com`   | PostHog ingest host. |
+| `POSTHOG_ENABLE_IN_DEV`       | no       | unset                        | `1` lets a development server send to `POSTHOG_KEY`; otherwise development never sends. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no       | `http://otlp-ingest:4318`    | Base OTLP endpoint handed to agent containers, which append their own signal paths. No OpenTelemetry SDK runs in this app. |
 
 ## Catalogs & limits

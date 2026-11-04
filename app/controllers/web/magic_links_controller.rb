@@ -4,6 +4,8 @@
 class Web::MagicLinksController < Web::ApplicationController
   layout "inertia"
 
+  skip_analytics_capture
+
   skip_before_action :enforce_company_auth_policy
   skip_before_action :enforce_legal_acceptance
   skip_before_action :enforce_onboarding

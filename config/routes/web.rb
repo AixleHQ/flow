@@ -477,7 +477,10 @@ scope module: :web, defaults: { format: :html } do
     # Passkeys, one-time codes and live sessions — the person's own security
     # surface (CAP-4, AD-18).
     get :security, on: :member
+    # Product analytics consent (Analytics), changeable at any time.
+    get :privacy, on: :member
   end
+  resource :analytics_consent, only: :update, controller: "analytics_consents"
   resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
   patch "profile/password", to: "passwords#update", as: :profile_password
   # The confirmation link a stranger is emailed: opening it is the proof of

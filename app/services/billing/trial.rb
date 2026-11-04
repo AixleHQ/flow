@@ -121,6 +121,9 @@ module Billing
         next unless exhausted?(company)
 
         company.update!(billing_state: "blocked", billing_block_reason: "allowance")
+        Analytics.capture("trial_allowance_exhausted", user: company.analytics_owner, company: company, via: "system",
+                                                       props: { allowance_used: length_in_days(company),
+                                                                allowance_unit: "days" })
         Rails.logger.info(
           "[Billing::Trial] company #{company.id} spent its #{allowance_seconds(company) / 3600} " \
           "free worker-hours at #{now.utc.iso8601}"

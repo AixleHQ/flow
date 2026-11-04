@@ -118,6 +118,8 @@ class SkillsRegistryService
       install_count: (installs || 0).to_i
     )
     Versions.save!(skill, actor: actor) { skill.save! }
+    project = scope if scope.is_a?(Project)
+    Analytics.track("skill_installed", company: project&.company || scope, project: project, props: { slug: slug })
     skill
   end
 

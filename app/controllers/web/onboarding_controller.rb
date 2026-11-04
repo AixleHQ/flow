@@ -42,7 +42,9 @@ class Web::OnboardingController < Web::ApplicationController
   def update
     # with_lock prevents concurrent requests from double-advancing the onboarding state
     current_membership.with_lock do
+      before = current_membership.onboarding_state
       if current_membership.update(onboarding_params)
+        report_onboarding_step(before, params.dig(:onboarding, :onboarding_state_event))
         redirect_to onboarding_path
       else
         redirect_to onboarding_path, alert: current_membership.errors.full_messages.join(", ")
@@ -51,6 +53,25 @@ class Web::OnboardingController < Web::ApplicationController
   end
 
   private
+
+  # The company onboarding funnel counts the person who signed the company up,
+  # not those invited into it later, who arrive with a workspace already made.
+  def report_onboarding_step(before, event)
+    membership = current_membership
+    return if membership.onboarding_state == before
+
+    entry = membership.invited_at.present? ? "invite" : "signup"
+    track = ->(name, props = {}) { Analytics.track(name, company: membership.company, props: { entry: entry }.merge(props)) }
+
+    if before == "step1" && membership.step2?
+      track.call("onboarding_step_completed", step: "profile", position: membership.position&.to_s,
+                                              language: membership.preferred_agent_language)
+    elsif membership.onboarding_completed?
+      track.call("onboarding_agent_skipped") if event == "skip_agent_setup"
+      track.call("onboarding_step_completed", step: "agents")
+      track.call("onboarding_completed", duration_sec: (Time.current - membership.created_at).round)
+    end
+  end
 
   def require_auth
     redirect_to login_path unless signed_in?

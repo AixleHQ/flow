@@ -16,6 +16,10 @@
 # - app:       executes in Rails process (InternalToolExecutor), synchronous
 # - container: runs in Docker via Temporal workflow, async
 class Tool < ApplicationRecord
+  include AnalyticsResource
+
+  analytics_resource_type "tool"
+
   extend Enumerize
 
   enumerize :execution_mode, in: %i[app container], default: :container, predicates: true

@@ -7,6 +7,8 @@
 class Web::InvitationsController < Web::ApplicationController
   layout "inertia"
 
+  skip_analytics_capture
+
   skip_before_action :enforce_onboarding
   skip_before_action :enforce_company_auth_policy
   skip_before_action :enforce_legal_acceptance
@@ -82,6 +84,7 @@ class Web::InvitationsController < Web::ApplicationController
     invitee.password = signup_params[:password]
 
     if invitee.save
+      adopt_analytics_consent_for(invitee)
       return redirect_to invitation_path(params[:token]) unless safely_accept(membership)
 
       sign_in(invitee, provider: Auth::LocalCredential.link!(invitee))
@@ -104,7 +107,12 @@ class Web::InvitationsController < Web::ApplicationController
   # Lock + re-check so a concurrent accept is a graceful no-op, not an
   # AASM::InvalidTransition 500.
   def safely_accept(membership)
-    membership.with_lock { membership.may_accept? && membership.accept! }
+    accepted = membership.with_lock { membership.may_accept? && membership.accept! }
+    if accepted
+      Analytics.capture("invite_accepted", user: membership.user, company: membership.company,
+                                           props: { role: membership.role.to_s })
+    end
+    accepted
   end
 
   def invitee_signed_in?

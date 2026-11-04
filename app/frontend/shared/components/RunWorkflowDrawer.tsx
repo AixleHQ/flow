@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { phName } from 'shared/lib/analytics';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
@@ -230,6 +231,8 @@ export function RunWorkflowDrawer({
       title={workflow ? `Run: ${workflow.name}` : 'Run workflow'}
       footer={
         <Button
+          {...phName('run_workflow_submit')}
+          data-ph-unmask
           fullWidth
           size="md"
           leftSection={<IconPlayerPlay size={18} />}

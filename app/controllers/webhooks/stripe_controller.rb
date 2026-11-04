@@ -86,6 +86,14 @@ class Webhooks::StripeController < ActionController::API
       **applied
     )
     Rails.logger.info("[Webhooks::Stripe] company #{company.id} is paying")
+    report_to_owner(company, "subscription_activated",
+                    plan: "card", days_since_signup: (Date.current - company.created_at.to_date).to_i)
+  end
+
+  # Nobody is signed in to a webhook, so the company's events go to the person
+  # who signed it up (Company#analytics_owner).
+  def report_to_owner(company, event, **props)
+    Analytics.capture(event, user: company.analytics_owner, company: company, props: props, via: "integration")
   end
 
   # A running subscription is adopted whichever one it is: a canceled one never
@@ -131,6 +139,7 @@ class Webhooks::StripeController < ActionController::API
 
     block(company, "payment_failed", "invoice #{invoice.id} unpaid",
           billing_unpaid_invoice_url: invoice.try(:hosted_invoice_url))
+    report_to_owner(company, "payment_failed")
   end
 
   # The final invoice of a subscription that has ended. The company stays

@@ -55,6 +55,7 @@ export function TextDiff({ lines }: { lines: DiffLine[] | null }) {
   return (
     <Box
       component="pre"
+      data-ph-block
       m={0}
       style={{
         fontFamily: 'var(--app-font-mono)',

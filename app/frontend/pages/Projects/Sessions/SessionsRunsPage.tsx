@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type RunListEntry from 'types/generated/RunListEntry';
 import type SessionListEntry from 'types/generated/SessionListEntry';
 
+import { phName } from 'shared/lib/analytics';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { type RowChanges, useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -314,6 +315,8 @@ const SessionsRunsPage = ({
           <div className={classes.actions}>
             {showRunWorkflow && (
               <Button
+                {...phName('run_workflow')}
+                data-ph-unmask
                 variant="light"
                 leftSection={<IconPlayerPlay size={14} />}
                 onClick={() => setRunWorkflowOpen(true)}

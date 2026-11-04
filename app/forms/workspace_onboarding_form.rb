@@ -60,8 +60,9 @@ class WorkspaceOnboardingForm
     ActiveRecord::Base.transaction do
       # Said out loud rather than left to the column default, which is `active`
       # for the seeds and every other path that does not choose.
-      @company = Company.create!(name: name.strip, email_domain: email_domain, state: "active", **billing_terms)
       owner.save! if owner.new_record?
+      @company = Company.create!(name: name.strip, email_domain: email_domain, state: "active", created_by: owner,
+                                 **billing_terms)
       owner.company_memberships.create!(company: @company, role: "admin", state: "active", accepted_at: Time.current)
       # The trial's one worker, and a number to bill once it pays: no limit is
       # unbounded and unbilled, which is ours to grant from the admin. The

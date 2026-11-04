@@ -1,6 +1,21 @@
 # frozen_string_literal: true
 
 class Step < ApplicationRecord
+  include AnalyticsTracked
+
+  # Steps a template or a new workflow arrives with are part of creating it,
+  # not an edit to it.
+  after_create_commit { report_workflow_edit("step_added") unless workflow_just_created? }
+  after_update_commit do
+    if saved_change_to_deleted_at? && deleted_at.present?
+      report_workflow_edit("step_removed")
+    elsif saved_change_to_position?
+      report_workflow_edit("reordered")
+    elsif saved_change_to_instructions?
+      report_workflow_edit("instructions")
+    end
+  end
+
   extend Enumerize
   include ProjectOwnedReferences
   include DecodesHtmlEntities
@@ -97,6 +112,18 @@ class Step < ApplicationRecord
   end
 
   private
+
+  def analytics_project = workflow && Project.find_by(id: workflow.project_id)
+
+  def report_workflow_edit(change)
+    report_analytics("workflow_edited", change: change)
+  end
+
+  # A template install and the builder write a workflow and its steps in one go;
+  # a step written within seconds of its workflow came with it.
+  def workflow_just_created?
+    Current.analytics_origin == "template" || workflow.nil? || (created_at - workflow.created_at) < 5.seconds
+  end
 
   # Appending is the server's job. A soft-deleted step keeps its position and
   # the unique (workflow_id, position) index still covers it, so the next free

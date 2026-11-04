@@ -8,6 +8,7 @@ require "test_helper"
 # not be faked.
 class Webhooks::StripeTest < ActionDispatch::IntegrationTest
   include ActionMailer::TestHelper
+  include ActiveJob::TestHelper
 
   SECRET = "whsec_test_secret"
 
@@ -70,6 +71,18 @@ class Webhooks::StripeTest < ActionDispatch::IntegrationTest
   end
 
   # ── What the events do ────────────────────────────────────────────────────
+
+  test "a completed checkout is reported to whoever signed the company up" do
+    enable_analytics!
+    owner = create(:user, company: @company, membership_role: "admin", analytics_consent: "granted")
+    @company.update!(created_by: owner)
+
+    deliver("checkout.session.completed", checkout_object)
+
+    event = analytics_events.find { |queued| queued["event"] == "subscription_activated" }
+    assert_equal owner.id.to_s, event["distinct_id"]
+    assert_equal "integration", event["properties"]["via"]
+  end
 
   test "a completed checkout is what makes a company paying" do
     deliver("checkout.session.completed", checkout_object)

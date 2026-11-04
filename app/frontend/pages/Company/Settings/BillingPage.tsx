@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { analytics, phName } from 'shared/lib/analytics';
 import { formatCalendarDay, formatDateMedium, formatDateTimeShort } from 'shared/lib/formatDate';
 import {
   companyBillingCancellationPath,
@@ -257,7 +258,12 @@ function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billin
     router.post(path, {}, { onFinish: () => setBusy(false) });
   };
   const addCard = billing.canPay && (
-    <Button loading={busy} onClick={() => post(companyBillingCheckoutPath())}>
+    <Button
+      {...phName('billing_add_card')}
+      data-ph-unmask
+      loading={busy}
+      onClick={() => post(companyBillingCheckoutPath())}
+    >
       Add a card
     </Button>
   );
@@ -582,6 +588,15 @@ function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplac
 const BillingPage = () => {
   const { company, billing, checkoutResult, marketplaceProposal, marketplaceBilling } = usePage<Props>().props;
   useRefreshWhileSettling(billing.finalInvoice?.state === 'cancelling' || billing.finalInvoice?.state === 'settling');
+  useEffect(() => {
+    const from = new URLSearchParams(window.location.search).get('from');
+    analytics.track('billing_page_viewed', {
+      entry: from === 'banner' || from === 'blocked_screen' ? from : 'settings',
+    });
+    if (checkoutResult) analytics.track('checkout_returned', { result: checkoutResult });
+    // Once per visit to the page, not per refresh while a payment settles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <AuthLayout>

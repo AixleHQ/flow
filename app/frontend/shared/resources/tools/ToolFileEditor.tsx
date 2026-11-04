@@ -63,7 +63,7 @@ export const ToolFileEditor: FC<ToolFileEditorProps> = ({ value, onChange, path 
   }, [ext]);
 
   return (
-    <Box>
+    <Box data-ph-block>
       <Text fz={12} c="dimmed" mb={4}>
         Content
       </Text>

@@ -56,6 +56,8 @@ module MCP
       needs_auth = outcome.status == :unauthorized && server.auth_type_none? && !server.transport_stdio?
       Versions.save!(server, actor: @actor) { server.update!(auth_type: :oauth) } if needs_auth
 
+      Analytics.track("connector_installed", company: @project.company, project: @project,
+                                             props: { slug: @connector.name })
       Result.new(server: server, stale: stale, needs_auth: needs_auth)
     end
 

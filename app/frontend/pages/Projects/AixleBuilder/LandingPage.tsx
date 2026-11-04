@@ -21,6 +21,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { Project, TerminalSession } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { analytics } from 'shared/lib/analytics';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { AGENT_RUNTIMES, AGENT_SELECT_OPTIONS, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -84,6 +85,7 @@ const LandingPage = () => {
   const handleStart = useCallback(() => {
     if (!runtime) return;
     setStarting(true);
+    analytics.track('builder_session_started', { agent_runtime: runtime });
     router.post(
       `/company/projects/${project.id}/aixle_builder/start`,
       {

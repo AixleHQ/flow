@@ -1,6 +1,17 @@
 # frozen_string_literal: true
 
 class BoardTask < ApplicationRecord
+  include AnalyticsTracked
+
+  after_create_commit { report_analytics("board_task_created", bulk_count: 1) }
+  after_update_commit do
+    if saved_change_to_archived_at? && archived_at.present?
+      report_analytics("board_task_archived", bulk_count: 1)
+    elsif saved_change_to_board_column_id?
+      report_analytics("board_task_moved", bulk_count: 1)
+    end
+  end
+
   extend Enumerize
   include DecodesHtmlEntities
 
@@ -104,6 +115,8 @@ class BoardTask < ApplicationRecord
   end
 
   private
+
+  def analytics_project = board&.project
 
   def touch_board
     BoardRefresh.request(board)
