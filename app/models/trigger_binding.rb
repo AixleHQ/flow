@@ -60,6 +60,9 @@ class TriggerBinding < ApplicationRecord
   validate :chat_channel_usable, if: -> { chat? && (enabled? || chat_conversation_id.present?) }
   before_save :mirror_chat_channel, if: :chat?
   validate :project_tracker_in_project, if: :project_tracker_id?
+  # Only a reassignment is checked: a creator who later left the project must
+  # not make every other save of the trigger fail.
+  validate :run_as_can_own_runs, if: -> { persisted? && will_save_change_to_created_by_id? }
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
     tracker_event? && (new_record? || will_save_change_to_filter_predicate? || will_save_change_to_project_tracker_id?)
@@ -213,6 +216,11 @@ class TriggerBinding < ApplicationRecord
   end
 
   private
+
+  def run_as_can_own_runs
+    problem = WorkflowTriggers::RunAs.ineligibility(project, created_by)
+    errors.add(:base, "Run as #{problem}") if problem
+  end
 
   def chat_conditions_name_no_place
     routing = filter_predicate.to_h.keys.map(&:to_s).select { |key| self.class.chat_routing_key?(key) }
@@ -395,8 +403,14 @@ class TriggerBinding < ApplicationRecord
     schedule? && TemporalService.enabled?
   end
 
+  # The schedule fires as whoever the binding names at fire time, so a new Run as
+  # alone leaves the Temporal schedule as it is.
   def schedule_needs_reconcile?
-    reconcile_schedule? && !(previously_new_record? && !enabled?)
+    reconcile_schedule? && !(previously_new_record? && !enabled?) && !only_run_as_changed?
+  end
+
+  def only_run_as_changed?
+    !previously_new_record? && saved_change_to_created_by_id? && (saved_changes.keys - %w[created_by_id updated_at]).empty?
   end
 
   def reconcile_schedule

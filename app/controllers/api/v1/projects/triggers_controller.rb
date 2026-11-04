@@ -17,7 +17,8 @@ module Api
                                          .order(:created_at)
           serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(bindings))
 
-          render json: { triggers: columns.map { |b| serializer.column(b) } + bindings.map { |b| serializer.binding(b) } }
+          render json: { triggers: columns.map { |b| serializer.column(b) } + bindings.map { |b| serializer.binding(b) },
+                         run_as: WorkflowTriggers::RunAs.options(current_project, policy(%i[api v1 projects workflows triggers])) }
         end
       end
     end

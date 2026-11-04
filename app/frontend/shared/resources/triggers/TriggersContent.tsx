@@ -18,7 +18,7 @@ import { CHAT_PROVIDER_LABELS, SOURCE_LABELS, triggerSource, triggerTitle } from
 import type { TrackerOption } from './trackerTrigger';
 import { TriggerCards } from './TriggerCards';
 import { TriggerFormPanel } from './TriggerFormPanel';
-import type { ChatProviderOption, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
+import type { ChatProviderOption, RunAsOptions, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
 
 interface Props {
   projectId: number;
@@ -51,6 +51,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
   const { canExecute } = useProjectPermissions();
   const readOnly = !canExecute;
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [runAs, setRunAs] = useState<RunAsOptions | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [source, setSource] = useState<string>(ALL);
@@ -64,6 +65,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setTriggers(data.triggers ?? []);
+      setRunAs(data.run_as ?? null);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -218,6 +220,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
           columns={columns}
           trackers={trackers}
           chatProviders={chatProviders}
+          runAs={runAs}
           editing={panel.editing}
           defaultKind="column"
           onClose={() => setPanel(null)}
