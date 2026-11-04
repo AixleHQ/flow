@@ -139,6 +139,18 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
                  "a line that takes an install input is checked at install"
   end
 
+  test "validates without the database, which the catalog repository's CI does not have" do
+    errors = assert_no_queries do
+      errors_for do |d|
+        d["mcp_servers"] << { "key" => "files",
+                              "custom" => { "name" => "Files", "transport" => "stdio", "command" => "npx @acme/files-mcp" } }
+      end
+    end
+
+    assert_equal [ "mcp server Files command: must pin @acme/files-mcp to an exact version (name@1.2.3) — " \
+                   "unpinned, every session installs whatever was released last" ], errors
+  end
+
   test "inputs must be declared and may only appear in substituted fields" do
     errors = errors_for do |d|
       d["agents"].first["persona"] = "Speaks {{inputs.tone}}."

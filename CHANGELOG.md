@@ -27,6 +27,9 @@ governance, community health — carry none.
 - **Companies & projects**: the Create New Project dialog now shows why a project
   could not be created, including errors on fields other than the name, and keeps
   them visible when it was opened from the sidebar.
+- **Templates**: `bin/rails templates:validate` runs without a database again. The
+  template repository's pull-request check failed on every pull request while the
+  catalog held a template with a stdio MCP server.
 
 ## [1.10.0] - 2026-11-03
 
