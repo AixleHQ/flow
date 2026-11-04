@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Triggers & gates**: a company admin or the project owner can change who an
+  existing schedule, chat, webhook or task tracker trigger runs as, picking any
+  project member or company admin with an agent connected. The next run uses
+  that person's agent and limits; the trigger keeps its id, settings and
+  history, and the change is recorded in the audit trail. Over MCP it is
+  `run_as_user_id` on `update_workflow_trigger`.
+
 ## [1.10.0] - 2026-11-03
 
 ### Added

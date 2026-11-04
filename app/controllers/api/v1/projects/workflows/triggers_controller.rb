@@ -14,7 +14,8 @@ module Api
           # An archived workflow opens read-only in the builder and still shows its
           # triggers; every write below goes through `current_workflow`, active ones only.
           def index
-            render json: { triggers: serialized_triggers(current_project.workflows.find(params[:workflow_id])) }
+            render json: { triggers: serialized_triggers(current_project.workflows.find(params[:workflow_id])),
+                           run_as: WorkflowTriggers::RunAs.options(current_project, policy(policy_method_params)) }
           end
 
           def create
@@ -41,16 +42,26 @@ module Api
           end
 
           def update
+            run_as_user_id = params.dig(:trigger, :run_as_user_id).presence
+
             case params[:kind].to_s
             when "column"
+              if run_as_user_id
+                return render json: { errors: [ "A column trigger runs as the person the card is on — it has no Run as to change" ] },
+                              status: :unprocessable_entity
+              end
+
               binding = column_bindings(current_workflow).find(params[:id])
               binding.update!(column_binding_params)
               render json: serializer.column(binding)
             else
+              authorize(policy_method_params, :change_run_as?) if run_as_user_id
               binding = current_workflow.trigger_bindings.find(params[:id])
               binding.assign_attributes(trigger_binding_params)
               binding.assign_chat_provider(params.dig(:trigger, :chat_provider))
-              binding.save_checking_chat!
+              WorkflowTriggers::RunAs.save!(binding, actor: current_user, user_id: run_as_user_id, request: request) do
+                binding.save_checking_chat!
+              end
               render json: serialize_binding(binding)
             end
           rescue ActiveRecord::RecordInvalid => e
