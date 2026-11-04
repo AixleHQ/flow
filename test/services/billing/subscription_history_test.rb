@@ -75,8 +75,8 @@ class Billing::SubscriptionHistoryTest < ActiveSupport::TestCase
   end
 
   # Rows from before the period was recorded know only the hours they still
-  # owed Stripe; that window is what they can show.
-  test "a cancellation recorded before the period was kept shows the hours it owed" do
+  # owed Stripe, which is not what their invoice covered.
+  test "a cancellation recorded before the period was kept lists no usage" do
     @company.update!(billing_state: "blocked", billing_block_reason: "canceled")
     create(:billing_cancellation, company: @company, cancels_at: Time.utc(2026, 10, 20, 9, 30),
                                   settlement_state: "settled",
@@ -89,8 +89,8 @@ class Billing::SubscriptionHistoryTest < ActiveSupport::TestCase
     card = history[:previous].sole
 
     assert_nil card[:period_starts_at]
-    assert_equal Time.utc(2026, 10, 20, 8), card.dig(:usage, :since)
-    assert_in_delta 90.0, card.dig(:usage, :worker_minutes)
+    assert_nil card[:usage]
+    assert_equal "cancelled", card[:status]
   end
 
   test "a live AWS subscription is active for the calendar month, billed by the minute" do

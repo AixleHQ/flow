@@ -180,8 +180,12 @@ module Billing
     def confirm(license, event)
       store(license, event)
       license.confirm! if license.may_confirm?
-      MarketplaceLicensePricing.record!(license, client: client)
       start(license.company)
+      # After the workspace is running, so a price that cannot be written
+      # cannot leave it waiting; and only when nothing has read it yet -- the
+      # registration, or a store that moved the agreement, asked already.
+      MarketplaceLicensePricing.record!(license, client: client) if license.price_per_minute.nil?
+      nil
     end
 
     # The workspace is created blocked when the licence is still pending, which

@@ -32,7 +32,6 @@ const billing = {
   canPay: true,
   hasSubscription: true,
   hasUnpaidInvoice: false,
-  finalInvoice: null as { state: string; url: string | null } | null,
   cancellationReasons: REASONS,
 };
 
@@ -326,12 +325,12 @@ describe('Company billing page', () => {
       vi.useFakeTimers();
       const reload = vi.spyOn(router, 'reload').mockImplementation(() => undefined);
       render({
-        billing: { ...canceled, finalInvoice: { state: 'settling', url: null } },
+        billing: canceled,
         active: null,
         previous: [stoppedCard({ invoicesUrl: null, finalInvoice: { state: 'settling', url: null } })],
       });
 
-      expect(screen.getAllByText(/Preparing the final invoice/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Preparing the final invoice/)).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Invoices' })).not.toBeInTheDocument();
       vi.advanceTimersByTime(5000);
 
@@ -342,7 +341,7 @@ describe('Company billing page', () => {
       vi.useFakeTimers();
       const reload = vi.spyOn(router, 'reload').mockImplementation(() => undefined);
       render({
-        billing: { ...canceled, finalInvoice: { state: 'settled', url: 'https://invoice.stripe.test/in_1' } },
+        billing: canceled,
         active: null,
         previous: [stoppedCard()],
       });
@@ -355,7 +354,7 @@ describe('Company billing page', () => {
     it('offers the unpaid invoice instead of a new card', async () => {
       const post = vi.spyOn(router, 'post').mockImplementation(() => undefined);
       render({
-        billing: { ...canceled, hasUnpaidInvoice: true, finalInvoice: { state: 'settled', url: null } },
+        billing: { ...canceled, hasUnpaidInvoice: true },
         active: null,
         previous: [stoppedCard({ invoicesUrl: null, finalInvoice: { state: 'settled', url: null } })],
       });
@@ -595,6 +594,12 @@ describe('Company billing page', () => {
       render({ active: aws({ usage: { ...usage, estimate: null } }) });
 
       expect(screen.queryByText(/^Billed at/)).not.toBeInTheDocument();
+    });
+
+    it("calls a card price sold by the minute the card's, not AWS's", () => {
+      render({ billing: { price: { unitAmountCents: 6, currency: 'usd', minutesPerUnit: 1 } }, active: card() });
+
+      expect(screen.getByText('Billed at $0.06 per worker-minute by card.')).toBeInTheDocument();
     });
 
     it('offers no card and no cancellation, because neither is ours to do', () => {

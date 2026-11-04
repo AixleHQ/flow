@@ -438,6 +438,17 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert_equal %w[agmt-1 agmt-1], client.priced
   end
 
+  test "a creation reads no price for a licence that already carries one" do
+    client = FakeMarketplaceSellerClient.new
+    events = Billing::MarketplaceEvents.new(final_meter: @meter, client: client)
+    create(:marketplace_license, agreement_id: "agmt-1", price_per_minute: BigDecimal("0.05"), price_currency: "USD")
+
+    events.record(envelope(detail_type: Billing::MarketplaceEvents::CREATED))
+    events.apply_pending
+
+    assert_empty client.priced
+  end
+
   test "a licence event changes nothing about the price" do
     client = FakeMarketplaceSellerClient.new
     events = Billing::MarketplaceEvents.new(final_meter: @meter, client: client)

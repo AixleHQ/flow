@@ -66,7 +66,6 @@ interface Billing {
   canPay: boolean;
   hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
-  finalInvoice: FinalInvoice | null;
   cancellationReasons: string[];
 }
 
@@ -180,22 +179,33 @@ const formatRate = (cents: number, currency: string) =>
     maximumFractionDigits: 4,
   }).format(cents / 100);
 
-const priceSentence = (price: Price) =>
-  price.minutesPerUnit > 1
+type QuotedPrice = Price & { via: Subscription['kind'] };
+
+const priceSentence = (price: QuotedPrice) => {
+  if (price.via === 'aws_marketplace') {
+    return `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute through AWS Marketplace.`;
+  }
+  return price.minutesPerUnit > 1
     ? `Billed at ${formatMoney(price.unitAmountCents, price.currency)} per ${price.minutesPerUnit} worker-minutes, in whole packs rounded down.`
-    : `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute through AWS Marketplace.`;
+    : `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute by card.`;
+};
 
 // What the page quotes: the agreement's rate while AWS bills, the card's
 // otherwise. A workspace AWS billed and nothing bills now is quoted nothing:
 // the card's price is not what it paid, and may never be.
-const quotedPrice = (active: Subscription | null, billing: Billing): Price | null => {
+const quotedPrice = (active: Subscription | null, billing: Billing): QuotedPrice | null => {
   const estimate = active?.kind === 'aws_marketplace' ? active.usage?.estimate : null;
   if (estimate) {
-    return { unitAmountCents: estimate.unitAmountCents, currency: estimate.currency, minutesPerUnit: 1 };
+    return {
+      unitAmountCents: estimate.unitAmountCents,
+      currency: estimate.currency,
+      minutesPerUnit: 1,
+      via: 'aws_marketplace',
+    };
   }
   if (active?.kind === 'aws_marketplace') return null;
   if (!active && billing.provider === 'aws_marketplace') return null;
-  return billing.price;
+  return billing.price && { ...billing.price, via: 'card' };
 };
 
 function SectionHeader({ title, count }: { title: string; count?: number }) {
@@ -807,7 +817,6 @@ function NoSubscription({ billing, listingUrl }: { billing: Billing; listingUrl:
         <Text size="sm" c="dimmed">
           {body}
         </Text>
-        {billing.finalInvoice && <FinalInvoiceStatus invoice={billing.finalInvoice} />}
         <Group>
           {primary}
           {offerPayment && billing.canPay && (
@@ -944,9 +953,7 @@ const BillingPage = () => {
   const { company, billing, subscriptions, listingUrl, checkoutResult, marketplaceProposal } = usePage<Props>().props;
   const active = subscriptions.active;
   const price = quotedPrice(active, billing);
-  useRefreshWhileSettling(
-    settlingState(billing.finalInvoice) || subscriptions.previous.some((entry) => settlingState(entry.finalInvoice)),
-  );
+  useRefreshWhileSettling(subscriptions.previous.some((entry) => settlingState(entry.finalInvoice)));
 
   return (
     <AuthLayout>

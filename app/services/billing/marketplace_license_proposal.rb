@@ -65,10 +65,12 @@ module Billing
         billed = final_usage&.billed
 
         note_the_debt_it_leaves_behind
+        card_since = company.billing_provider_since
         company.update!(**billing_terms)
         license.update!(company: company, proposal_state: "accepted", proposal_decided_at: Time.current)
         if subscription_id.present?
-          hand_over_from_stripe(by: by, subscription_id: subscription_id, final_usage: final_usage, billed: billed)
+          hand_over_from_stripe(by: by, subscription_id: subscription_id, final_usage: final_usage, billed: billed,
+                                started_at: card_since)
         end
       end
       if cancellation
@@ -130,11 +132,13 @@ module Billing
     # for every hour it is offered, so letting the card run out would bill the
     # same hours twice. `stripe_customer_id` stays on the company, because the
     # settlement reaches Stripe through it; the subscription id goes onto the
-    # cancellation, which is what stops it.
-    def hand_over_from_stripe(by:, subscription_id:, final_usage:, billed:)
+    # cancellation, which is what stops it. `started_at` is when the card took
+    # over, which is all the row can say until CancellationSettlement reads the
+    # subscription's own start from Stripe.
+    def hand_over_from_stripe(by:, subscription_id:, final_usage:, billed:, started_at:)
       final_usage.record!
       company.billing_cancellations.create!(
-        user: by, cancels_at: Time.current, settlement_state: "cancelling",
+        user: by, cancels_at: Time.current, settlement_state: "cancelling", started_at: started_at,
         stripe_subscription_id: subscription_id, period_started_at: company.billing_period_starts_at,
         final_usage: billed.transform_keys(&:iso8601)
       )
