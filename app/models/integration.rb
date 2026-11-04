@@ -317,6 +317,8 @@ class Integration < ApplicationRecord
     Integration.active.where(chat_workspace_id: chat_workspace_id, provider: provider).or(Integration.where(id: id))
   end
 
+  def chat_workspace_name = chat_workspace&.name.presence || name
+
   private
 
   # One installation belongs to one company unless the deployment proves who

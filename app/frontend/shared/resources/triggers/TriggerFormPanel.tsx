@@ -107,6 +107,7 @@ const conversationOption = (channel: ChatChannel): ChatConversationOption => ({
   label: channel.label,
   kind: channel.kind,
   teamName: channel.team_name,
+  workspace: channel.workspace,
   provider: channel.provider,
 });
 
@@ -1557,12 +1558,20 @@ interface ChatChannelFieldsProps {
   isEdit: boolean;
 }
 
+// Channel names repeat across the workspaces a company connected, so with more than one each channel shows its own.
+function channelGroup(c: ChatConversationOption, severalWorkspaces: boolean): string | null {
+  const own = c.kind === 'group' ? 'Group chats' : c.teamName;
+  if (!severalWorkspaces || !c.workspace) return own;
+  return own ? `${c.workspace} / ${own}` : c.workspace;
+}
+
 function channelOptions(channels: ChatConversationOption[]): ComboboxData {
   const ungrouped: ComboboxItem[] = [];
   const groups = new Map<string, ComboboxItem[]>();
+  const severalWorkspaces = new Set(channels.map((c) => c.workspace)).size > 1;
   for (const c of channels) {
     const item = { value: String(c.id), label: c.label };
-    const group = c.kind === 'group' ? 'Group chats' : c.teamName;
+    const group = channelGroup(c, severalWorkspaces);
     if (group) groups.set(group, [...(groups.get(group) ?? []), item]);
     else ungrouped.push(item);
   }

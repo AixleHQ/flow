@@ -19,6 +19,10 @@ module PersonalTools
                       description: "The channel to connect, as people see it: Slack \"#deploys\" or \"deploys\"; Teams " \
                                    "\"Team / Channel\", or a group chat's name."
       param :trigger_id, type: :integer, description: "A chat trigger of this project to point at the channel."
+      param :integration_id, type: :integer,
+                             description: "When the company connected several workspaces of this messenger: the " \
+                                          "integration (list_integrations) whose workspace the channel is in. Posted in " \
+                                          "another workspace, the code connects nothing."
     end
 
     def execute
@@ -28,7 +32,7 @@ module PersonalTools
       return error("Trigger #{params[:trigger_id]} not found in project #{project.id}") if params[:trigger_id].present? && trigger.nil?
 
       _record, payload = Chat::ConnectCodes.issue!(project: project, provider: params[:provider], channel: params[:channel],
-                                                   user: user, trigger_binding: trigger)
+                                                   user: user, trigger_binding: trigger, integration_id: params[:integration_id])
       success(payload)
     rescue Chat::ConnectCodes::Refused => e
       error(e.message)

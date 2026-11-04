@@ -34,6 +34,13 @@ governance, community health — carry none.
   one of them could stay unmasked in the session's proxy log and in the agent's own
   transcript. Every secret a session receives is now masked there, however the
   requests overlap.
+- **Integrations**: a company with several Slack workspaces, or several
+  Microsoft 365 organizations, gets a **Channels** list on each connection,
+  holding only that workspace's channels. Before, only the first connection had
+  one, and it listed the channels of every workspace together. A code asked for
+  there connects a channel in that workspace only. The trigger form groups the
+  channels by workspace, and an agent names a channel two workspaces share as
+  `Workspace/#channel`.
 
 ## [1.10.0] - 2026-11-03
 

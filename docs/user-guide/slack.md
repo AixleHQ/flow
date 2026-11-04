@@ -55,7 +55,10 @@ The app asks for no direct-message history, so threads in DMs cannot be read.
 
 ### More than one workspace
 
-A company can connect several workspaces: each one gets its own row.
+A company can connect several workspaces: each one gets its own row, and its
+**Channels** list holds only the channels in that workspace. In a chat trigger
+the channels are grouped by workspace, and an agent names a channel that more
+than one workspace has as `Workspace/#channel`.
 
 Several companies can also connect the same workspace. Each one reaches only the
 channels connected to it: another company's channels never show up for you, and
@@ -78,8 +81,9 @@ the channel, by someone who is in it.
 
 1. Ask for a code in Flow, in one of two places:
    - in a chat trigger, next to **Channel**: **Connect a new channel…**;
-   - on the Slack row of the **Integrations** page: **Connect a channel**, for a
-     channel that workflows only post to, such as one for reports.
+   - on the Slack row of the **Integrations** page: **Channels → Connect a
+     channel**, for a channel that workflows only post to, such as one for
+     reports. A code asked for there works only in that row's workspace.
 
    Say which channel the code is for: its name, with or without `#`.
 2. Invite the app to the channel if it is not there yet: `/invite @<app>`. The

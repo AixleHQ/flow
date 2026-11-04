@@ -7,6 +7,7 @@ export const buildChatChannel = (overrides: Partial<ChatChannel> = {}): ChatChan
   label: '#deploys',
   kind: 'channel',
   team_name: null,
+  workspace: 'Acme',
   provider: 'slack',
   ...overrides,
 });
@@ -43,6 +44,7 @@ export const buildChatConversationOption = (
   label: '#deploys',
   kind: 'channel',
   teamName: null,
+  workspace: 'Acme',
   provider: 'slack',
   ...overrides,
 });

@@ -91,7 +91,8 @@ someone who is in it.
 
 1. Ask for a code in Flow: in a chat trigger, next to **Channel**, choose
    **Connect a new channel…**; or on the Teams row of the **Integrations** page
-   choose **Connect a channel**, for one that workflows only post to. Say which
+   choose **Channels → Connect a channel**, for one that workflows only post to
+   (a code asked for there works only in that row's organization). Say which
    conversation the code is for: **Team / Channel** for a channel (every team
    has a General, so the team is required), or a group chat's name. A group chat
    without a name gets one in Teams first.

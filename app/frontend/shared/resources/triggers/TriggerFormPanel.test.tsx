@@ -375,6 +375,24 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(trigger.filter_predicate).toEqual({ provider: 'teams' });
   });
 
+  it('groups the channels by workspace when the company connected more than one, so a repeated name is told apart', async () => {
+    const fetchSpy = installFetch();
+    const twoWorkspaces = buildChatProviderOption({
+      conversations: [buildChatConversationOption(), buildChatConversationOption({ id: 12, workspace: 'Ops' })],
+    });
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [twoWorkspaces] })} />);
+
+    await userEvent.click(channelSelect());
+    const ops = await screen.findByRole('group', { name: 'Ops' });
+    expect(within(screen.getByRole('group', { name: 'Acme' })).getByRole('option')).toHaveTextContent('#deploys');
+    await userEvent.click(within(ops).getByRole('option', { name: '#deploys' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger.chat_channel_id).toBe(12);
+  });
+
   it('will not add a chat trigger without a channel, and points at connecting one', async () => {
     const fetchSpy = installFetch();
 
