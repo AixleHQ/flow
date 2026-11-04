@@ -79,7 +79,7 @@ module Billing
       minutes = BigDecimal(rows.sum(:quantity_seconds)) / 60
       last_hour = rows.maximum(:period_start)
 
-      { since: from, until: to, worker_minutes: minutes.round(1).to_f,
+      { since: from, until: to, worker_minutes: minutes.round.to_f,
         measured_until: last_hour && (last_hour + 1.hour), estimate: price.estimate(minutes) }
     end
 

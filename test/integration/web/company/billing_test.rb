@@ -84,6 +84,14 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     assert_nil billing[:usage]
   end
 
+  test "the page says what bills the workspace, so it knows whose price to quote" do
+    assert_equal "stripe", billing_props[:billing][:provider]
+
+    @company.update!(billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE)
+
+    assert_equal "aws_marketplace", billing_props[:billing][:provider]
+  end
+
   test "the page says whether there is a subscription to cancel" do
     assert billing_props[:billing][:hasSubscription]
 
