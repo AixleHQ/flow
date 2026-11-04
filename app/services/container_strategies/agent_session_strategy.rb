@@ -315,9 +315,10 @@ module ContainerStrategies
       return 0 if content.blank?
 
       # Anything the agent echoed — a value it read through get_config_item, most
-      # of all — is in this stream verbatim. Scrub before it is persisted and
-      # replayed in the UI.
-      content = secret_redactor(session).call(content)
+      # of all — is in this stream, often split by the TUI's colour codes and line
+      # wraps. The container's pane filter masked it as it was written; this pass
+      # sees the whole file at once, which no streaming filter can.
+      content = secret_redactor(session).terminal(content)
 
       io = StringIO.new(content)
       io.define_singleton_method(:original_filename) { "terminal_output.log" }

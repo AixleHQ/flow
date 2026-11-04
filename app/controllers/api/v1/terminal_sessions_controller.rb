@@ -102,7 +102,10 @@ module Api
         return head :not_found unless log&.file
 
         response.set_header("X-Log-Truncated", "true") if log.file_size.to_i > MAX_LOG_BYTES
-        send_data read_log_tail(log), type: "text/plain; charset=utf-8", disposition: "inline"
+        # Masked again on the way out: a log stored before the masking learned to see
+        # through the TUI's colour codes and line wraps still holds what it missed.
+        content = Sessions::SecretRedactor.for_session(session).terminal(read_log_tail(log))
+        send_data content, type: "text/plain; charset=utf-8", disposition: "inline"
       end
 
       private

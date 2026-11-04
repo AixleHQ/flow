@@ -4,6 +4,10 @@ require "test_helper"
 
 module Sessions
   class LogCollectorTest < ActiveSupport::TestCase
+    include SecretLeakAssertions
+
+    CLAUDE_TRANSCRIPT = "/home/claude/.claude/projects/-workspace/9d000c89.jsonl"
+
     setup do
       @runtime = stub_container_runtime
       @company = create(:company)
@@ -14,7 +18,7 @@ module Sessions
       @container = @runtime.resolve_container(@session.container_id.presence || "abc123")
       @runtime.fs["/var/log/context.log"] = "injected context\n"
       @runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
-      @runtime.fs["/home/claude/.claude/projects/-workspace/9d000c89.jsonl"] = %({"type":"assistant"}\n)
+      @runtime.fs[CLAUDE_TRANSCRIPT] = %({"type":"assistant"}\n)
     end
 
     teardown do
@@ -147,13 +151,42 @@ module Sessions
       yield
     end
 
-    test "has the container PUT the log straight to storage when it scrubs its own logs" do
-        with_filters { collect(max_bytes: 8, cache_storage_key: presigned_cache) }
+    # What get_config_item does before it answers: record the access, then publish the
+    # value into the container's redaction list.
+    def hand_out(value)
+      item = create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY", value: value)
+      @session.config_items << item
+      ConfigItemAccess.record!(config_item: item, session: @session, user: @user)
+      assert SecretRegistry.publish!(@session, runtime: @runtime, container: @container)
+    end
 
-      uploaded = @runtime.uploads.map { |u| u[:path] }
-      assert_includes uploaded, "/home/claude/.claude/projects/-workspace/9d000c89.jsonl"
+    def uploaded_paths = @runtime.uploads.map { |u| u[:path] }
+
+    test "has the container upload every log itself, masking the ones its filters did not write" do
+      with_filters { collect(max_bytes: 8, cache_storage_key: presigned_cache) }
+
+      assert_includes uploaded_paths, "/var/log/mitm/http.log"
+      assert_not_includes uploaded_paths, CLAUDE_TRANSCRIPT, "a log no filter wrote left the container unmasked"
+      assert(uploaded_paths.any? { |path| path.start_with?("/tmp/.aixle-masked-") && path.end_with?(".jsonl") })
       assert_empty @runtime.execs.select { |c| c.join(" ").include?("tail -c") },
                    "a log the container uploaded was also read through this process"
+      assert_equal %({"type":"assistant"}\n), @session.session_logs.find_by(name: "9d000c89.jsonl").file.read
+      assert_not(@runtime.fs.keys.any? { |path| path.start_with?("/tmp/.aixle-masked-") }, "a masked copy was left behind")
+    end
+
+    # Claude Code writes its transcript itself, so no write-time filter ever saw it, and
+    # it reached storage verbatim because nothing had declared it.
+    test "masks the Claude transcript inside the container before it is uploaded" do
+      @runtime.fs[CLAUDE_TRANSCRIPT] = recording("claude_code_2.1.310_transcript.jsonl")
+      hand_out(RECORDED_SECRET)
+
+      with_filters { collect(cache_storage_key: presigned_cache) }
+
+      log = @session.session_logs.find_by(name: "9d000c89.jsonl")
+      stored = log.file.read
+      assert_no_secret stored
+      assert_equal stored.bytesize, log.file_size
+      stored.each_line { |line| JSON.parse(line) }
     end
 
     test "keeps the whole log — an uploaded one is never truncated" do
@@ -245,24 +278,35 @@ module Sessions
       assert_includes result.contents.keys, "logs/sess_77aa0011.messages.jsonl"
     end
 
-    test "reads a log the agent writes itself through the redactor even when the container scrubs" do
+    test "masks the logs Kiro writes itself inside the container before uploading them" do
       use_kiro_adapter
-      item = create(:config_item, :secret, scope: @project, name: "API_TOKEN", value: "s3cr3t-value")
-      @session.config_items << item
+      hand_out("s3cr3t-value")
       @runtime.fs[KIRO_TRANSCRIPT] = %({"payload":{"type":"tool_result","content":"s3cr3t-value"}}\n)
       @runtime.fs[KIRO_SUB_TRANSCRIPT] = %({"payload":{"type":"tool_result","content":"s3cr3t-value"}}\n)
 
       with_filters { collect(cache_storage_key: presigned_cache) }
 
-      uploaded = @runtime.uploads.map { |u| u[:path] }
-      assert_not_includes uploaded, KIRO_TRANSCRIPT
-      assert_not_includes uploaded, KIRO_SUB_TRANSCRIPT
-      assert_not_includes uploaded, KIRO_SERVER_LOG
-      assert_includes uploaded, "/var/log/mitm/http.log", "a filtered log lost its direct upload"
+      assert_not_includes uploaded_paths, KIRO_TRANSCRIPT
+      assert_not_includes uploaded_paths, KIRO_SUB_TRANSCRIPT
+      assert_not_includes uploaded_paths, KIRO_SERVER_LOG
+      assert_includes uploaded_paths, "/var/log/mitm/http.log", "a filtered log lost its direct upload"
       assert_not_includes @session.session_logs.find_by(name: "sess_3fdd2276.messages.jsonl").file.read,
                           "s3cr3t-value"
       assert_not_includes @session.session_logs.find_by(name: "sess_3fdd2276.sub-0b7e5c1a.jsonl").file.read,
                           "s3cr3t-value"
+    end
+
+    # A container whose image predates the masker's `file` command: the masked copy never
+    # appears, so the upload fails and the log is read and masked here instead.
+    test "falls back to masking here when the container's masker cannot write the copy" do
+      hand_out(RECORDED_SECRET)
+      @runtime.fs[CLAUDE_TRANSCRIPT] = recording("claude_code_2.1.310_transcript.jsonl")
+      @runtime.fail_exec("aixle_redact.py file", stderr: "", exit_code: 1)
+
+      result = with_filters { collect(cache_storage_key: presigned_cache) }
+
+      assert_includes result.failures.join, "fell back to a bounded read"
+      assert_no_secret @session.session_logs.find_by(name: "9d000c89.jsonl").file.read
     end
 
     test "falls back to the bounded read when the upload fails, and says so" do

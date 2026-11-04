@@ -10,6 +10,8 @@ module Api
     # caller can reach, and only while the owner shares them — every mutating
     # action here stays scoped to `current_user.terminal_sessions`.
     class TerminalSessionsLogVisibilityTest < ActionDispatch::IntegrationTest
+      include SecretLeakAssertions
+
       setup do
         @company = create(:company)
         @owner = create(:user, :employee, :onboarding_completed, company: @company,
@@ -31,6 +33,20 @@ module Api
 
         assert_response :success
         assert_includes response.body, "red"
+      end
+
+      test "the replay masks a secret a log stored before the masking still holds, keeping its layout" do
+        @session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
+                                                               value: RECORDED_SECRET)
+        @session.session_logs.destroy_all
+        stored = recording("claude_code_2.1.310_terminal.log")
+        attach_terminal_log(@session, stored)
+
+        get terminal_log_api_v1_terminal_session_path(@session)
+
+        assert_response :success
+        assert_no_secret response.body
+        assert_equal stored.bytesize, response.body.bytesize
       end
 
       test "the log disappears with the owner's preference" do
