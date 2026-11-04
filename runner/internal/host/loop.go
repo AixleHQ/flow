@@ -188,6 +188,14 @@ func (l *Loop) resultFor(ctx context.Context, op protocol.Op, log *slog.Logger) 
 	log.Info("running op")
 	started := l.Now()
 	result := handler(ctx, op.Payload)
+	if ctx.Err() != nil {
+		// The runner is stopping, so the handler's result says why it was cut short,
+		// not how the op went. The entry stays begun: the next start answers
+		// `interrupted` (PROTOCOL.md §6).
+		log.Warn("the runner stopped while the op ran; its result is not journalled",
+			"elapsed", l.Now().Sub(started).Round(time.Millisecond))
+		return nil, ctx.Err()
+	}
 	log.Info("op finished", "status", result.Status, "elapsed", l.Now().Sub(started).Round(time.Millisecond))
 	if err := l.Journal.Finish(op.ID, result); err != nil {
 		return nil, err

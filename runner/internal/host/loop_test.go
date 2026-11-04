@@ -287,6 +287,39 @@ func TestAnOpInterruptedByARestartIsNotRunAgain(t *testing.T) {
 	}
 }
 
+func TestAGracefulStopDuringAnOpIsAnsweredAsInterrupted(t *testing.T) {
+	dir := t.TempDir()
+	gw := newGateway(ensureOp(5, 3))
+	first := newHarness(t, dir, gw)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The handler runs until the runner is stopped, as a pull does on SIGTERM, and
+	// then fails because of the cancellation.
+	first.loop.Handlers["image.ensure"] = func(ctx context.Context, _ json.RawMessage) protocol.Result {
+		cancel()
+		<-ctx.Done()
+		return protocol.ErrorResult("image_pull_failed", "pulling failed: "+ctx.Err().Error())
+	}
+	if err := first.loop.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(gw.results) != 0 {
+		t.Fatalf("posted %#v while stopping", gw.results)
+	}
+	if e, ok := first.journal.Lookup(5); !ok || e.Result != nil {
+		t.Fatalf("journalled %#v", e)
+	}
+
+	second := newHarness(t, dir, gw)
+	if err := second.run(); err != nil {
+		t.Fatal(err)
+	}
+	r := gw.results[5]
+	if second.ran[5] != 0 || gw.posts[5] != 1 || r.Status != protocol.StatusError || r.Error.Class != ClassInterrupted {
+		t.Fatalf("ran %d, posts %d, posted %#v", second.ran[5], gw.posts[5], r)
+	}
+}
+
 func TestAnOpPastItsDeadlineIsExpiredNotRun(t *testing.T) {
 	op := ensureOp(9, 1)
 	op.DeadlineAt = now.Add(-time.Second)

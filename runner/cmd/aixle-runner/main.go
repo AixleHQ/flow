@@ -18,13 +18,12 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/docker"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/service"
-	"github.com/aixlehq/aixle-runner/internal/tokens"
 )
 
 const usage = `Usage:
   aixle-runner configure --url <platform> --token <registration token> --name <name> [--state-dir <dir>]
   aixle-runner unregister [--state-dir <dir>]
-  aixle-runner service install | uninstall | start | stop [--state-dir <dir>]
+  aixle-runner service install | uninstall | start | stop
   aixle-runner --mode host [--state-dir <dir>]
 `
 
@@ -64,7 +63,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	fmt.Fprintln(stderr, "aixle-runner:", err)
-	if _, ok := tokens.AsStop(err); ok {
+	if cli.NeedsOperator(err) {
 		return service.ExitStop
 	}
 	return 1
@@ -121,7 +120,10 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 	if len(args) == 0 {
 		return errUsage
 	}
-	fs, stateDir := newFlags("service "+args[0], stderr)
+	// The service always uses cli.DefaultStateDir: `install` hands that directory to
+	// the service user, so it takes no other path.
+	fs := flag.NewFlagSet("service "+args[0], flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	if err := parse(fs, args[1:]); err != nil {
 		return err
 	}
@@ -132,7 +134,7 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 	if binary, err = filepath.EvalSymlinks(binary); err != nil {
 		return fmt.Errorf("finding this binary's path: %w", err)
 	}
-	m := service.NewManager(binary, *stateDir)
+	m := service.NewManager(binary, cli.DefaultStateDir)
 	switch args[0] {
 	case "install":
 		return m.Install(ctx)

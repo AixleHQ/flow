@@ -23,6 +23,10 @@ const FileName = "credentials"
 // registered with `aixle-runner configure`, or it was unregistered.
 var ErrNotConfigured = errors.New("this machine is not registered: run `aixle-runner configure` first")
 
+// ErrInvalid means the credentials file cannot be used: it is not valid JSON, or a
+// field is missing.
+var ErrInvalid = errors.New("not a valid credentials file")
+
 // Credentials is the content of the file.
 type Credentials struct {
 	// URL is the platform the machine registered with.
@@ -56,18 +60,26 @@ func (s *Store) Load() (Credentials, error) {
 	var c Credentials
 	if err := json.Unmarshal(raw, &c); err != nil {
 		// The error names the path, never the content, which holds the tokens.
-		return Credentials{}, fmt.Errorf("%s is not a valid credentials file", s.path)
+		return Credentials{}, fmt.Errorf("%s is %w", s.path, ErrInvalid)
 	}
 	if c.URL == "" || c.AccessToken == "" || c.RefreshToken == "" {
-		return Credentials{}, fmt.Errorf("%s is not a valid credentials file", s.path)
+		return Credentials{}, fmt.Errorf("%s is %w", s.path, ErrInvalid)
 	}
 	return c, nil
 }
 
-// Exists says whether a credentials file is present.
-func (s *Store) Exists() bool {
+// Exists says whether a credentials file is present. Only a path that does not
+// exist means no credentials: any other failure, such as a directory the caller
+// cannot read, is returned, because it does not tell either way.
+func (s *Store) Exists() (bool, error) {
 	_, err := os.Lstat(s.path)
-	return err == nil
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	}
+	return false, fmt.Errorf("checking for %s: %w", s.path, err)
 }
 
 // Save writes the credentials atomically with mode 0600.

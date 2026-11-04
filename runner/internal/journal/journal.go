@@ -23,7 +23,8 @@ import (
 // FileName is the journal inside the state directory.
 const FileName = "journal.json"
 
-// Retention is how long an op is remembered after the runner received it.
+// Retention is how long an accepted op is remembered after the runner received it.
+// An op whose result was never accepted is remembered until it is.
 const Retention = 24 * time.Hour
 
 // Entry is what the journal knows about one op.
@@ -158,10 +159,13 @@ func (j *Journal) saveLocked() error {
 	return nil
 }
 
+// prune forgets accepted entries received more than Retention ago. An entry whose
+// result was never accepted is kept however old it is: the gateway can still
+// deliver its op, and only the entry stops a second run.
 func (j *Journal) prune() {
 	cutoff := j.now().Add(-Retention)
 	for k, e := range j.data.Ops {
-		if e.ReceivedAt.Before(cutoff) {
+		if e.Accepted && e.ReceivedAt.Before(cutoff) {
 			delete(j.data.Ops, k)
 		}
 	}

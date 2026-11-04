@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -23,11 +24,23 @@ type HostOptions struct {
 	Logger     *slog.Logger
 }
 
-// RunHost runs the host runner until ctx is done. A refusal that needs an operator
-// is returned as a *tokens.StopError.
+// RunHost runs the host runner until ctx is done. It holds the state directory's
+// lock while it runs, and refuses at once if another process holds it. A failure
+// that needs an operator, such as a refusal or missing credentials, satisfies
+// NeedsOperator.
 func RunHost(ctx context.Context, opts HostOptions) error {
+	lock, err := lockForHost(opts.StateDir)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+
 	store := credentials.NewStore(opts.StateDir)
 	creds, err := store.Load()
+	if errors.Is(err, credentials.ErrNotConfigured) || errors.Is(err, credentials.ErrInvalid) {
+		// Restarting cannot fix it: only `configure` can.
+		return operatorError{err}
+	}
 	if err != nil {
 		return err
 	}

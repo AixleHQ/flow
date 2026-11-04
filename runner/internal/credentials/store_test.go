@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,7 @@ func TestNotConfigured(t *testing.T) {
 	if _, err := s.Load(); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("got %v", err)
 	}
-	if s.Exists() {
+	if ok, err := s.Exists(); ok || err != nil {
 		t.Fatal("exists")
 	}
 }
@@ -76,10 +77,29 @@ func TestDelete(t *testing.T) {
 	if err := s.Delete(); err != nil {
 		t.Fatal(err)
 	}
-	if s.Exists() {
+	if ok, err := s.Exists(); ok || err != nil {
 		t.Fatal("still there")
 	}
 	if err := s.Delete(); err != nil {
 		t.Fatal("deleting twice failed")
+	}
+}
+
+func TestExistsReportsAPathItCannotCheck(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads any directory")
+	}
+	dir := t.TempDir()
+	locked := filepath.Join(dir, "state")
+	if err := os.Mkdir(locked, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) })
+	ok, err := NewStore(locked).Exists()
+	if ok || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("got %v, %v", ok, err)
 	}
 }

@@ -88,6 +88,9 @@ func TestEntriesAreKeptFor24Hours(t *testing.T) {
 	j, _ := Open(dir, clock)
 	_ = j.Record(op(1, 1), protocol.Result{Status: protocol.StatusOK})
 	_ = j.Acknowledge(1)
+	// Op 2 was begun and op 3 has a result, but neither result was accepted.
+	_ = j.Begin(op(2, 2))
+	_ = j.Record(op(3, 3), protocol.Result{Status: protocol.StatusOK})
 
 	now = t0.Add(Retention - time.Minute)
 	j, _ = Open(dir, clock)
@@ -99,6 +102,11 @@ func TestEntriesAreKeptFor24Hours(t *testing.T) {
 	j, _ = Open(dir, clock)
 	if _, ok := j.Lookup(1); ok {
 		t.Fatal("kept after 24 h")
+	}
+	for _, id := range []int64{2, 3} {
+		if _, ok := j.Lookup(id); !ok {
+			t.Fatalf("pruned op %d, whose result was never accepted", id)
+		}
 	}
 	if j.After() != 1 {
 		t.Fatal("pruning lost `after`")

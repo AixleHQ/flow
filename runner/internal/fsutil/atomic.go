@@ -48,9 +48,17 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	}
 	committed = true
 
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
+	// The rename is durable only once the directory is synced.
+	d, err := os.Open(dir)
+	if err != nil {
+		return fmt.Errorf("syncing %s: %w", dir, err)
+	}
+	if err := d.Sync(); err != nil {
 		d.Close()
+		return fmt.Errorf("syncing %s: %w", dir, err)
+	}
+	if err := d.Close(); err != nil {
+		return fmt.Errorf("syncing %s: %w", dir, err)
 	}
 	return nil
 }

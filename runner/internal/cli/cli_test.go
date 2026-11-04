@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -18,9 +20,11 @@ import (
 	"github.com/moby/moby/client"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
+	"github.com/aixlehq/aixle-runner/internal/docker"
 	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
+	"github.com/aixlehq/aixle-runner/internal/statedir"
 )
 
 type fakeDocker struct{ api string }
@@ -39,8 +43,8 @@ func goodMachine() preflight.Env {
 }
 
 type request struct {
-	method, path, auth string
-	body               map[string]any
+	method, path, query, auth string
+	body                      map[string]any
 }
 
 // platform is a fake gateway answering each endpoint with a scripted response.
@@ -48,6 +52,8 @@ type platform struct {
 	mu       sync.Mutex
 	requests []request
 	answers  map[string][]answer
+	// seen, when set, is called with each request.
+	seen func(request)
 }
 
 type answer struct {
@@ -61,7 +67,11 @@ func (p *platform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	raw, _ := io.ReadAll(r.Body)
 	var body map[string]any
 	_ = json.Unmarshal(raw, &body)
-	p.requests = append(p.requests, request{r.Method, r.URL.Path, r.Header.Get("Authorization"), body})
+	req := request{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization"), body}
+	p.requests = append(p.requests, req)
+	if p.seen != nil {
+		p.seen(req)
+	}
 	key := r.Method + " " + r.URL.Path
 	queue := p.answers[key]
 	if len(queue) == 0 {
@@ -98,6 +108,15 @@ func registered() answer {
 
 func refused(status int, code string) answer {
 	return answer{status, map[string]any{"error": code, "message": "refused"}}
+}
+
+func credsExist(t *testing.T, dir string) bool {
+	t.Helper()
+	ok, err := credentials.NewStore(dir).Exists()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ok
 }
 
 func configureOpts(url, dir string) ConfigureOptions {
@@ -145,7 +164,7 @@ func TestAFailedPreflightRegistersNothing(t *testing.T) {
 	if len(p.requests) != 0 {
 		t.Fatalf("register was called: %v", p.requests)
 	}
-	if credentials.NewStore(dir).Exists() {
+	if credsExist(t, dir) {
 		t.Fatal("credentials were stored")
 	}
 }
@@ -172,7 +191,7 @@ func TestConfigureRefusals(t *testing.T) {
 		if err != nil && strings.Contains(err.Error(), "arreg_token") {
 			t.Errorf("%s: the error carries the token", name)
 		}
-		if credentials.NewStore(dir).Exists() {
+		if credsExist(t, dir) {
 			t.Errorf("%s: credentials were stored", name)
 		}
 	}
@@ -226,7 +245,7 @@ func TestUnregisterDeletesTheRegistrationThenTheLocalState(t *testing.T) {
 	if len(p.requests) != 1 || p.requests[0].auth != "Bearer aracc_one" {
 		t.Fatalf("requests %v", p.requests)
 	}
-	if credentials.NewStore(dir).Exists() {
+	if credsExist(t, dir) {
 		t.Fatal("the credentials are still there")
 	}
 	if _, err := os.Stat(dir + "/" + journal.FileName); !errors.Is(err, os.ErrNotExist) {
@@ -244,7 +263,7 @@ func TestUnregisterOfAMachineThePlatformDroppedCleansUp(t *testing.T) {
 	if err := Unregister(context.Background(), UnregisterOptions{StateDir: dir, Out: io.Discard}); err != nil {
 		t.Fatal(err)
 	}
-	if len(p.requests) != 2 || credentials.NewStore(dir).Exists() {
+	if len(p.requests) != 2 || credsExist(t, dir) {
 		t.Fatalf("requests %v", p.requests)
 	}
 }
@@ -258,7 +277,7 @@ func TestUnregisterKeepsTheCredentialsWhenItCannotReachThePlatform(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "kept") {
 		t.Fatalf("got %v", err)
 	}
-	if !credentials.NewStore(dir).Exists() {
+	if !credsExist(t, dir) {
 		t.Fatal("the credentials were deleted")
 	}
 }
@@ -267,5 +286,158 @@ func TestUnregisterOfAnUnconfiguredMachine(t *testing.T) {
 	err := Unregister(context.Background(), UnregisterOptions{StateDir: t.TempDir(), Out: io.Discard})
 	if !errors.Is(err, credentials.ErrNotConfigured) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// hostDocker is the Docker of a host runner that is given no op to run.
+type hostDocker struct{ docker.API }
+
+func TestConfigureDeletesTheJournalOfAPreviousRegistration(t *testing.T) {
+	dir := t.TempDir()
+	// The credentials are gone, as after credential_reuse_detected, but the
+	// previous environment's journal is still there with after > 0.
+	j, err := journal.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = j.Record(protocol.Op{ID: 900, Sequence: 7, Op: "image.ensure"}, protocol.Result{Status: protocol.StatusOK})
+	if err := j.Acknowledge(900); err != nil || j.After() != 7 {
+		t.Fatalf("after %d, %v", j.After(), err)
+	}
+
+	p, url := newPlatform(t, map[string][]answer{
+		"POST /runner/v1/register": {registered()},
+		"GET /runner/v1/ops":       {{200, map[string]any{"ops": []any{}}}},
+	})
+	if err := Configure(context.Background(), configureOpts(url, dir)); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p.mu.Lock()
+	p.seen = func(r request) {
+		if r.method == http.MethodGet {
+			cancel()
+		}
+	}
+	p.mu.Unlock()
+	err = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var polls []string
+	for _, r := range p.requests {
+		if r.method == http.MethodGet {
+			polls = append(polls, r.query)
+		}
+	}
+	if len(polls) == 0 || !strings.HasPrefix(polls[0], "after=0&") {
+		t.Fatalf("polled with %v", polls)
+	}
+}
+
+func TestConfigureRegistersNothingWhenItCannotCheckTheCredentials(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads any directory")
+	}
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := filepath.Join(t.TempDir(), "state")
+	if err := os.Mkdir(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	err := Configure(context.Background(), configureOpts(url, dir))
+	if err == nil || !strings.Contains(err.Error(), "registered nothing") || !strings.Contains(err.Error(), "root") {
+		t.Fatalf("got %v", err)
+	}
+	if len(p.requests) != 0 {
+		t.Fatalf("register was called: %v", p.requests)
+	}
+}
+
+func TestConfigureRegistersNothingWhenItCannotWriteTheStateDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes any directory")
+	}
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+	for _, dir := range []string{parent, filepath.Join(parent, "missing")} {
+		err := Configure(context.Background(), configureOpts(url, dir))
+		if err == nil || !strings.Contains(err.Error(), "not spent") || !strings.Contains(err.Error(), "root") {
+			t.Fatalf("%s: got %v", dir, err)
+		}
+	}
+	if len(p.requests) != 0 {
+		t.Fatalf("register was called: %v", p.requests)
+	}
+}
+
+func TestConfigureAndUnregisterRefuseWhileAHostRunnerRuns(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{
+		"POST /runner/v1/register":       {registered()},
+		"DELETE /runner/v1/registration": {{204, nil}},
+	})
+	empty, registeredDir := t.TempDir(), t.TempDir()
+	storeCreds(t, registeredDir, url)
+	for _, dir := range []string{empty, registeredDir} {
+		lock, err := statedir.Acquire(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = lock.Release() })
+	}
+
+	err := Configure(context.Background(), configureOpts(url, empty))
+	if err == nil || !strings.Contains(err.Error(), "aixle-runner service stop") {
+		t.Fatalf("configure: got %v", err)
+	}
+	err = Unregister(context.Background(), UnregisterOptions{StateDir: registeredDir, Out: io.Discard})
+	if err == nil || !strings.Contains(err.Error(), "aixle-runner service stop") {
+		t.Fatalf("unregister: got %v", err)
+	}
+	if len(p.requests) != 0 || !credsExist(t, registeredDir) {
+		t.Fatalf("requests %v", p.requests)
+	}
+}
+
+func TestASecondHostRunnerRefusesAtOnce(t *testing.T) {
+	dir := t.TempDir()
+	storeCreds(t, dir, "https://flow.aixle.com")
+	lock, err := statedir.Acquire(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Release()
+	err = RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil || !strings.Contains(err.Error(), "only one host runner") {
+		t.Fatalf("got %v", err)
+	}
+	// systemd may restart the unit: the other process can be gone by then.
+	if NeedsOperator(err) {
+		t.Fatal("a held lock stops the unit for good")
+	}
+}
+
+func TestAHostRunnerWithoutUsableCredentialsNeedsAnOperator(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "never-configured")
+	empty := t.TempDir()
+	corrupt := t.TempDir()
+	if err := os.WriteFile(filepath.Join(corrupt, credentials.FileName), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	incomplete := t.TempDir()
+	if err := os.WriteFile(filepath.Join(incomplete, credentials.FileName), []byte(`{"url":"https://flow.aixle.com"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{missing, empty, corrupt, incomplete} {
+		err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		if err == nil || !NeedsOperator(err) {
+			t.Errorf("%s: got %v", dir, err)
+		}
 	}
 }

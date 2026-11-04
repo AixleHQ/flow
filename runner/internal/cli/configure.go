@@ -14,9 +14,11 @@ import (
 	"strings"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
+	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/service"
+	"github.com/aixlehq/aixle-runner/internal/statedir"
 	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
@@ -36,7 +38,8 @@ type ConfigureOptions struct {
 }
 
 // Configure runs the preflight, registers the machine and stores its credentials.
-// A failed preflight registers nothing.
+// A failed preflight registers nothing, and neither does a state directory that
+// cannot be written or is held by a running host runner.
 func Configure(ctx context.Context, opts ConfigureOptions) error {
 	name := strings.TrimSpace(opts.Name)
 	switch {
@@ -52,7 +55,25 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 		return err
 	}
 	store := credentials.NewStore(opts.StateDir)
-	if store.Exists() {
+	// Everything that could keep the credentials from being stored is checked before
+	// the token is spent: the token registers one machine only.
+	if _, err := store.Exists(); err != nil {
+		return fmt.Errorf("configure cannot tell whether this machine is registered already, so it registered nothing: run configure as root (sudo): %w", err)
+	}
+	if err := statedir.CheckWritable(opts.StateDir); err != nil {
+		return fmt.Errorf("configure cannot write the state directory %s (%v), so it registered nothing and the registration token is not spent: run configure as root (sudo)", opts.StateDir, err)
+	}
+	lock, err := lockForCommand(opts.StateDir, "configure")
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+	// Asked again under the lock, which a running host runner would have held.
+	exists, err := store.Exists()
+	if err != nil {
+		return fmt.Errorf("configure cannot tell whether this machine is registered already, so it registered nothing: %w", err)
+	}
+	if exists {
 		return fmt.Errorf("this machine is registered already (%s exists): run `aixle-runner unregister` first to register it again", store.Path())
 	}
 
@@ -61,6 +82,13 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 	if err != nil {
 		return fmt.Errorf("the machine did not pass the preflight, so it was not registered:\n  - %s",
 			strings.ReplaceAll(err.Error(), "\n", "\n  - "))
+	}
+
+	// A journal without credentials belongs to an environment that is gone, for
+	// example after `credential_reuse_detected`. Its `after` would hide the new
+	// environment's first ops.
+	if err := journal.Delete(opts.StateDir); err != nil {
+		return fmt.Errorf("deleting the journal of the previous registration: %w", err)
 	}
 
 	reg, err := client.Register(ctx, opts.Token, protocol.RegisterRequest{
