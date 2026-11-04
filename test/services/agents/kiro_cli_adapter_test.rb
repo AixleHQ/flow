@@ -549,6 +549,73 @@ module Agents
       create(:terminal_session, user: user, agent_type: "kiro_cli", route_token: token)
     end
 
+    # One MITM log line per logged body, in the shape docker/base/logger/mitm_logger.py
+    # writes it. A model response is a server-sent-event stream that repeats the response
+    # object in every event; only the last one carries the final usage.
+    def mitm_response_line(id:, credits:, model: "auto")
+      events = [
+        { "type" => "response.created", "response" => { "id" => id, "model" => model, "status" => "in_progress", "usage" => nil } },
+        { "type" => "response.output_text.delta", "delta" => "done" },
+        { "type" => "response.completed",
+          "response" => { "id" => id, "model" => model, "status" => "completed",
+                          "usage" => { "kiro:credits" => { "value" => credits, "unit" => "credit", "unit_plural" => "credits" },
+                                       "kiro:context_usage_percentage" => 2.7 } } }
+      ]
+      body = events.map { |event| "event: #{event['type']}\ndata: #{event.to_json}\n\n" }.join + "data: [DONE]\n\n"
+      { "ts" => "2026-11-04T13:58:14Z", "direction" => "response", "status_code" => 200,
+        "host" => "runtime.us-east-1.kiro.dev", "path" => "/v1/responses",
+        "body" => body, "body_encoding" => "text", "body_truncated" => false }.to_json
+    end
+
+    def mitm_request_line(path: "/v1/responses")
+      { "ts" => "2026-11-04T13:58:10Z", "direction" => "request", "method" => "POST",
+        "host" => "runtime.us-east-1.kiro.dev", "path" => path, "body" => "{\"model\":\"auto\"}" }.to_json
+    end
+
+    def kiro_session_with_stored_login(baseline:)
+      company = create(:company)
+      user = create(:user, company: company)
+      create(:agent_credential, user: user, company: company, agent_type: "kiro_cli",
+                                config_data: real_state_credentials,
+                                metadata: { Agents::KiroCliAdapter::LAST_CREDITS_KEY => baseline })
+      create(:terminal_session, user: user, agent_type: "kiro_cli", route_token: "tok-mitm")
+    end
+
+    # The TUI, which every session runs, exports no credit telemetry, and the account
+    # counter mixes in whatever else the account spent. The model responses carry what
+    # this session alone was charged — the same figure as the TUI's "Credits" line.
+    test "collect_usage prices a session from the credits on its own model responses" do
+      stub_usage_limits(current_usage: 140.0)
+      session = kiro_session_with_stored_login(baseline: 100.0)
+      log = [ mitm_request_line, mitm_response_line(id: "resp_1", credits: 0.14),
+              mitm_request_line, mitm_response_line(id: "resp_2", credits: 0.1, model: "claude-sonnet-5.5"),
+              mitm_response_line(id: "resp_2", credits: 0.1, model: "claude-sonnet-5.5") ].join("\n")
+
+      @adapter.collect_usage(session, { "logs/http.log" => log })
+
+      stat = session.reload.usage_statistic
+      assert_equal [ "mitm_response_credits" ], stat.events_data.pluck("source").uniq
+      assert_equal %w[resp_1 resp_2], stat.events_data.pluck("responseId")
+      assert_equal [ "auto", "claude-sonnet-5.5" ], stat.events_data.pluck("model")
+      assert_in_delta 0.24, stat.events_data.sum { |e| e["creditsUsed"] }
+      assert_in_delta 0.96, stat.total_cents_precise.to_f, 0.0001
+    end
+
+    # A stream cut off before its final event says nothing about what the call cost, so
+    # the session falls back to the account counter rather than reading it as free.
+    test "collect_usage falls back to the account counter when no response reached its usage" do
+      stub_usage_limits(current_usage: 100.5)
+      session = kiro_session_with_stored_login(baseline: 100.0)
+      cut_off = JSON.parse(mitm_response_line(id: "resp_1", credits: 0.14))
+      cut_off["body"] = cut_off["body"].split("event: response.completed").first
+
+      @adapter.collect_usage(session, { "logs/http.log" => cut_off.to_json })
+
+      stat = session.reload.usage_statistic
+      assert_equal "get_usage_limits_delta", stat.events_data.sole["source"]
+      assert_in_delta 0.5, stat.events_data.sole["creditsUsed"]
+    end
+
     test "ingest_usage prices a telemetry batch and attributes it to the session" do
       session = kiro_session_with_credential
 
