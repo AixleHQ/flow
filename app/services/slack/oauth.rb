@@ -2,9 +2,10 @@
 
 module Slack
   # Helpers for the Slack OAuth v2 install flow. The redirect URI is a single,
-  # deployment-wide callback registered on the Slack app; the project + initiating
-  # user are carried in a signed, short-lived, SINGLE-USE `state` so the callback
-  # can (a) bind the install to the right project, (b) confirm the same user is
+  # deployment-wide callback registered on the Slack app; the project, whether
+  # the install is for the whole company, and the initiating user are carried in
+  # a signed, short-lived, SINGLE-USE `state` so the callback can (a) bind the
+  # install to the right project or company, (b) confirm the same user is
   # completing the flow (anti-CSRF), and (c) reject replays.
   module Oauth
     AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
@@ -15,12 +16,12 @@ module Slack
         Settings.slack&.client_id.present? && Settings.slack&.client_secret.present?
       end
 
-      def authorize_url(project:, user:)
+      def authorize_url(project:, user:, company_wide: true)
         query = URI.encode_www_form(
           client_id: Settings.slack.client_id,
           scope: bot_scopes,
           redirect_uri: redirect_uri,
-          state: sign_state(project, user)
+          state: sign_state(project, user, company_wide: company_wide)
         )
         "#{AUTHORIZE_URL}?#{query}"
       end
@@ -29,13 +30,13 @@ module Slack
         "#{Settings.protocol}://#{Settings.domain}/integrations/slack/oauth/callback"
       end
 
-      # Signs {project_id, user_id, nonce}. The nonce is recorded in the cache so
-      # the callback can enforce single use (consume_state_nonce).
-      def sign_state(project, user)
+      # Signs {project_id, company_wide, user_id, nonce}. The nonce is recorded in
+      # the cache so the callback can enforce single use (consume_state_nonce).
+      def sign_state(project, user, company_wide: true)
         nonce = SecureRandom.uuid
         Rails.cache.write(nonce_key(nonce), true, expires_in: STATE_TTL)
         verifier.generate(
-          { "project_id" => project.id, "user_id" => user.id, "nonce" => nonce },
+          { "project_id" => project.id, "company_wide" => company_wide, "user_id" => user.id, "nonce" => nonce },
           expires_in: STATE_TTL, purpose: :slack_oauth
         )
       end

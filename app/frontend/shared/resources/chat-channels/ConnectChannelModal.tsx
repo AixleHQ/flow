@@ -202,8 +202,8 @@ export const ConnectChannelModal = ({
             Connected to {code.channel ? channelName(code.channel) : 'the channel'}
           </Alert>
           <Text size="sm">
-            The bot confirmed it in the channel. Every project of your company can now choose it for a chat trigger, and
-            workflows can post there.
+            The bot confirmed it in the channel. Every project this connection serves can now choose it for a chat
+            trigger, and workflows can post there.
           </Text>
           <Group justify="flex-end">
             <Button onClick={onClose}>Done</Button>

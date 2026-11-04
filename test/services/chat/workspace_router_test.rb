@@ -133,6 +133,57 @@ class Chat::WorkspaceRouterTest < ActiveJob::TestCase
     assert_equal [ own ], fake_slack.updated_messages.pluck(:ts)
   end
 
+  # A third company on the workspace, which connected it for its alpha project only.
+  def tenant_with_project_slack(name)
+    owner = create(:user, :with_company)
+    company = owner.companies.first
+    company.update!(name: name)
+    alpha, beta = %w[alpha beta].map { |suffix| create(:project, owner: owner, company: company, name: "#{name} #{suffix}") }
+    workflows = [ alpha, beta ].map do |project|
+      create(:workflow, scope: project, name: "#{project.name} deploy").tap do |workflow|
+        create(:step, workflow: workflow, allow_non_interactive: true)
+      end
+    end
+    fake_slack.team_id = "T1"
+    install = Slack::IntegrationService.new(company: company, connected_by: owner, project: alpha, company_wide: false)
+                                       .create_from_oauth(code: SecureRandom.hex)
+    { company: company, owner: owner, project: alpha, workflow: workflows.first, other: beta,
+      other_workflow: workflows.last, install: install }
+  end
+
+  test "a workspace connected for one project reaches that project's triggers and no other project's" do
+    initech = tenant_with_project_slack("Initech")
+    trigger_for(initech, "C0INITECH1")
+    beta = build(:trigger_binding, project: initech[:other], workflow: initech[:other_workflow], created_by: initech[:owner],
+                                   chat_channel: nil, enabled: false)
+    beta.chat_conversation = ChatConversation.find_by!(external_id: "C0INITECH1")
+    assert_not beta.valid?
+    assert_includes beta.errors[:chat_channel], "is in a workspace connected for another project"
+    WorkflowService.expects(:enqueue).once.with(has_entries(project: initech[:project])).returns(build(:workflow_run))
+
+    mention("deploy", channel: "C0INITECH1")
+
+    assert_equal [ [ initech[:company].id, initech[:project].id ] ], TriggerEvent.pluck(:company_id, :project_id)
+  end
+
+  test "a code asked for in another project connects nothing in a workspace connected for one project" do
+    initech = tenant_with_project_slack("Initech")
+    record, code = ChatConnectCode.issue!(project: initech[:other], provider: "slack", user: initech[:owner], channel: "newchan")
+
+    mention("connect #{code}", channel: "C0NEWCHAN1")
+
+    assert_not ChatChannelConnection.exists?
+    assert_equal "Posted in a workspace connected for another project", record.reload.failure_reason
+  end
+
+  test "a workspace connected for one project offers only that project's workflows" do
+    initech = tenant_with_project_slack("Initech")
+
+    titles = Chat::RunCatalog.entries(initech[:owner], initech[:install]).map(&:title)
+
+    assert_equal [ "Initech alpha deploy — Initech alpha" ], titles
+  end
+
   test "a person in both companies picks among both companies' workflows from Slack" do
     person = @acme[:owner]
     person.company_memberships.create!(company: @globex[:company], role: "employee", state: "active", accepted_at: Time.current)

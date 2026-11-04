@@ -113,7 +113,7 @@ class TriggerBinding < ApplicationRecord
   end
 
   def self.chat_not_connected(label)
-    "#{label} is not connected for this company. Connect it on the Integrations page first — " \
+    "#{label} is not connected for this project. Connect it on the Integrations page first — " \
       "until then no message can reach this trigger."
   end
 
@@ -242,7 +242,11 @@ class TriggerBinding < ApplicationRecord
     return "can't be a direct chat" if chat_conversation.direct?
 
     connected = ChatChannelConnection.exists?(chat_conversation_id: chat_conversation_id, company_id: project&.company_id)
-    connected ? nil : "is not connected to this company"
+    return "is not connected to this company" unless connected
+
+    reachable = project && ChatConversation.in_workspace_of(Integration.visible_for_project(project).select(:id))
+                                           .exists?(id: chat_conversation_id)
+    reachable ? nil : "is in a workspace connected for another project"
   end
 
   # Kept beside the channel until every running release matches on the
@@ -271,7 +275,8 @@ class TriggerBinding < ApplicationRecord
   end
 
   def chat_connected?
-    chat_provider.present? && Integration.active.exists?(provider: chat_provider, company_id: project&.company_id)
+    chat_provider.present? && project.present? &&
+      Integration.active.visible_for_project(project).exists?(provider: chat_provider)
   end
 
   def tracker_scope_matches?(data)

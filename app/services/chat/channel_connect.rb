@@ -62,6 +62,10 @@ module Chat
           record.update!(failure_reason: mismatch)
           next nil
         end
+        if integration&.project_id && integration.project_id != record.project_id
+          record.update!(failure_reason: "Posted in a workspace connected for another project")
+          next nil
+        end
 
         conversation = integration && provider.conversation_for(event, integration)
         if conversation.nil?

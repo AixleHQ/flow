@@ -1628,8 +1628,8 @@ function ChatChannelFields({
           label="Channel"
           description={
             channels.length > 0
-              ? 'The one channel this trigger listens to. Only channels connected to your company are listed.'
-              : `No ${providerLabel} channel is connected to your company yet.`
+              ? 'The one channel this trigger listens to. Only channels this project can use are listed.'
+              : `No ${providerLabel} channel is connected for this project yet.`
           }
           placeholder={channels.length > 0 ? 'Choose a channel' : 'No channel connected yet'}
           data={channelOptions(channels)}

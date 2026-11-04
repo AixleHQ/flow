@@ -166,6 +166,18 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal [ ado.id ], report["deactivated_integrations"].pluck("id")
   end
 
+  test "disconnects a project's Slack install, which its workspace approved for the source" do
+    stub_slack_client!.team_id = "T0PROJECT1"
+    slack = Slack::IntegrationService.new(company: @s.source, connected_by: @s.owner, project: @s.project, company_wide: false)
+                                     .create_from_oauth(code: "code")
+
+    report = move(member_policy: "add")
+
+    assert_equal [ "inactive", @s.target.id ], [ slack.reload.status, slack.company_id ]
+    assert_equal [ slack.id ], report["deactivated_integrations"].pluck("id")
+    assert_equal false, WebhookEndpoint.find_by!(slug: "slack-team-T0PROJECT1").enabled # rubocop:disable Minitest/RefuteFalse
+  end
+
   test "switches the workflows on a runner of the source to Hosted, archived ones included, and lists them" do
     runner = create(:runner, company: @s.source, name: "Prod VPC")
     @s.workflow.update!(runner: runner)
