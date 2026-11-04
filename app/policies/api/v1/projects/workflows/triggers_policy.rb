@@ -9,6 +9,7 @@ module Api
           def create? = project_writable?
           def update? = project_writable?
           def destroy? = project_writable?
+          def change_run_as? = project_writable? && (membership&.admin? || project.owner_id == current_user.id)
         end
       end
     end
