@@ -287,8 +287,17 @@ module ContainerRuntime
     # Ownership is recorded, not just the bytes: a file written as root is one
     # the container's own user can neither read nor delete, and `exec` here does
     # not run as root.
+    # Runs once, the next time `path` is written, before the bytes land: what else
+    # happens while a write is still in flight.
+    def on_next_write(path, &block)
+      (@write_hooks ||= {})[path.to_s] = block
+      self
+    end
+
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
       return false if @unwritable_paths.any? { |unwritable| unwritable === path.to_s }
+
+      @write_hooks&.delete(path.to_s)&.call
 
       @fs[path] = content
       @written_files[path] = { mode: mode, uid: uid, gid: gid }

@@ -13,7 +13,8 @@ module Sessions
   # The list is derived from `config_item_accesses`, so it holds exactly the values this
   # session has already been handed and nothing else. That is what makes writing it into
   # the container safe: it tells the container nothing the container did not ask for.
-  # The file is root-owned so the agent cannot quietly empty it, and world-readable
+  # The file is written as root where the runtime can do that (Docker) — a Kubernetes
+  # exec runs as the agent's own user, so there the agent owns it — and world-readable
   # because the pane filter runs as the agent's own user while the proxy runs as root.
   #
   # One base64-encoded value per line: a secret may contain newlines, and base64 keeps
@@ -41,10 +42,19 @@ module Sessions
       target = @container.presence || session&.container_id
       return true if session.nil? || target.blank?
 
-      container_runtime.write_file(
-        target, LIST_PATH, payload,
-        mode: FILE_MODE, uid: 0, gid: 0
-      )
+      # Agents call get_config_item in parallel, milliseconds apart, and every publish
+      # rewrites the whole list from the accesses it can see, through an exec that takes
+      # seconds. Unserialized, a publish that saw fewer accesses could finish last and
+      # drop a value the agent already had, which then reached the proxy log and the
+      # transcript unmasked. Under the lock the last writer reads the accesses after
+      # every earlier one was recorded, so the list it leaves covers them all.
+      ConfigItemAccess.transaction do
+        ConfigItemAccess.connection.execute(
+          ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                                                  "secret_registry:#{session.id}" ])
+        )
+        container_runtime.write_file(target, LIST_PATH, payload, mode: FILE_MODE, uid: 0, gid: 0)
+      end
     rescue StandardError => e
       Rails.logger.warn("[SecretRegistry] session=#{session&.id} could not publish the redaction list: #{e.class}: #{e.message}")
       false
