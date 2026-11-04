@@ -42,9 +42,11 @@ module Agents
   #     discarded real logins, leaving a runtime that looked configured while every
   #     session started signed out.
   #
-  # Billing note: Kiro meters in credits, not tokens, so a session's cost is credits
-  # priced at the account's own overage rate, and token counts stay zero. Three sources,
-  # best first, because each covers a case the next one down does not:
+  # Billing note: Kiro meters in credits, not tokens, so a session's cost is its credits
+  # at Settings.agents.kiro.credit_usd — what a credit's worth of work costs at the
+  # models' public API prices, which is how every other runtime reports cost — and token
+  # counts stay zero. Three sources, best first, because each covers a case the next one
+  # down does not:
   #
   #   1. The CLI's OpenTelemetry export (#ingest_usage). Its endpoint is configurable,
   #      so the platform points it at the same collector Claude Code reports into, and
@@ -74,6 +76,11 @@ module Agents
     #     the failure Codex's trust dialog already caused once (task #605).
     #   * auto-update would pull a different CLI than the image pins, and the change is
     #     thrown away with the container anyway.
+    #   * since 2.37 the CLI upgrades a V2-format agent config it finds in the repo's own
+    #     `.kiro/agents/` in place and leaves a `.json.bak` beside it — changes to the
+    #     user's working tree an agent could commit. Off, it prints a one-line notice.
+    #   * since 2.35 every session pane opens with a three-line "running as root" warning;
+    #     every process here runs as root on purpose (see STATE_PATH).
     #
     # `telemetry.enabled` is deliberately NOT set here, and neither is
     # `KIRO_DISABLE_TELEMETRY`. Both were, until measuring what they do: the CLI's
@@ -86,12 +93,13 @@ module Agents
     # redirected rather than duplicated.
     CLI_SETTINGS = {
       "chat.disableTrustAllConfirmation" => true,
-      "app.disableAutoupdates" => true
+      "app.disableAutoupdates" => true,
+      "chat.enableAutoAgentUpgrade" => false,
+      "app.warnOnElevatedPrivileges" => false
     }.freeze
 
-    # Kiro's current engine. Still opt-in behind this flag as of CLI 2.21.3 (verified
-    # against the shipping binary) — the changelog has carried "Available in V3 mode
-    # (kiro-cli --v3)" since 2.8.
+    # Kiro's current engine, the default since CLI 3.0. The flag still outranks a saved
+    # `chat.agentEngine` and skips 3.0's first-launch "Continue with V3 / Stay on V2" choice.
     V3_FLAG = "--v3"
 
     # V3 replaced the trust flags with a permissions policy whose default is to ask
@@ -136,8 +144,7 @@ module Agents
     DEFAULT_REGION = "us-east-1"
 
     # Kiro meters in credits. GetUsageLimits reports the account's credit balance in
-    # `usageBreakdownList`, and prices overage credits in real money — which is what
-    # turns a credit delta into `cost_cents`.
+    # `usageBreakdownList`, which is what the account-counter fallback takes its delta of.
     CREDIT_RESOURCE_TYPE = "CREDIT"
 
     # The account's credit counter as of the last session that finished, kept on the
@@ -152,6 +159,7 @@ module Agents
     # turn with what that turn cost.
     MITM_LOG_KEY = "logs/http.log"
     USAGE_SUMMARY_ACTIVITY = "usageSummary"
+    RESPONSE_CREDITS_KEY = "kiro:credits"
 
     # Kiro's V3 agent only accepts a plain-HTTP MCP server on a loopback host, so the
     # container forwards one to the platform's internal MCP service. The port is
@@ -170,10 +178,6 @@ module Agents
     # Marks a usage row as already priced from the telemetry stream, so cleanup's
     # coarser fallbacks know to leave it alone.
     OTEL_EVENT_SOURCE = "otlp_credits_consumed"
-
-    # USD per credit, from the account's own overage rate. Kept beside the counter so
-    # pricing a telemetry batch costs no vendor call.
-    CREDIT_RATE_KEY = "kiro_credit_rate_usd"
 
     # The `state` row holding the CodeWhisperer profile the CLI selected at the end of
     # the login. Its ARN is required on every API call and carries the region they go
@@ -541,7 +545,7 @@ module Agents
       usage = credit_usage(credential.config_data)
       return {} if usage.blank?
 
-      { LAST_CREDITS_KEY => usage[:used], CREDIT_RATE_KEY => usage[:rate_usd] }
+      { LAST_CREDITS_KEY => usage[:used] }
     end
 
     # =================================================================
@@ -659,17 +663,22 @@ module Agents
       { status: "ok", windows: [ credit_window(usage, body) ], extra_usage: overage_usage(body) }
     end
 
-    # Cost comes from the credit counter moving, not from token counts — Kiro emits
-    # none outside headless stream-json.
+    # Cost comes from credits, not from token counts — Kiro emits none outside headless
+    # stream-json. #ingest_usage prices a session from the CLI's telemetry, but only
+    # `--no-interactive` exports `kiro_cli_credits_consumed`: the TUI, which every
+    # session runs, sends it nowhere we can read (measured on 2.34.0 and 3.0.0). The
+    # rest are read here, at cleanup, in this order.
     #
-    # Two sources, in this order.
+    # Every model call is a `runtime.<region>.kiro.dev/v1/responses` stream whose final
+    # event carries `usage["kiro:credits"]`, and the MITM proxy keeps those bodies whole.
+    # That is what the account was charged, call by call, for this session alone —
+    # sub-agents included — and its sum matched the TUI's own "Credits: … session"
+    # line on 2.34.0 and 3.0.0.
     #
-    # The CLI reports its own spend. Every turn it posts a `usageSummary` activity to
-    # `runtime.<region>.kiro.dev/agents/activity` carrying `promptTurnSummaries[].usage`
-    # in credits, and the MITM proxy already captures it. That is exact and it is this
-    # session's alone.
+    # Older CLIs also post a `usageSummary` activity per turn to `/agents/activity`,
+    # carrying `promptTurnSummaries[].usage`; 3.0 no longer does.
     #
-    # Without that log — MITM off, or a session that produced no turns — the fallback is
+    # Without either — MITM off, or a session that made no model call — the fallback is
     # the movement of the account's credit counter since the previous reading. It agreed
     # with the CLI's own figure to four decimal places on a measured session (0.5174
     # credits), but it is per ACCOUNT: a concurrent session, or the user working in the
@@ -697,18 +706,24 @@ module Agents
       previous = credential&.metadata&.dig(LAST_CREDITS_KEY)
 
       # Advance the counter even when something else carries the cost, so the next
-      # session's fallback still has a fresh baseline to subtract from — and keep the
-      # rate the telemetry path prices with current.
+      # session's fallback still has a fresh baseline to subtract from.
       if usage.present? && credential.present?
-        credential.update_column(:metadata, (credential.metadata || {}).merge(
-          LAST_CREDITS_KEY => usage[:used], CREDIT_RATE_KEY => usage[:rate_usd]
-        ))
+        credential.update_column(:metadata, (credential.metadata || {}).merge(LAST_CREDITS_KEY => usage[:used]))
       end
 
       # The CLI's telemetry is the accurate source and it has been streaming in all
       # session. If it priced this session, nothing coarser may touch the row.
       if priced_by_telemetry?(terminal_session)
         Rails.logger.info("[KiroCliAdapter] session #{terminal_session.id}: already priced from telemetry")
+        return
+      end
+
+      responses = response_credits(artifacts[MITM_LOG_KEY])
+      if responses.any?
+        record_credit_usage(terminal_session, credential, usage,
+                            credits: responses.sum { |r| r[:credits] },
+                            events: responses,
+                            source: "mitm_response_credits")
         return
       end
 
@@ -737,9 +752,8 @@ module Agents
                           source: "get_usage_limits_delta")
     end
 
-    # The MITM proxy records the CLI's own calls to the Kiro service. Nothing parses
-    # them yet — they are collected so the per-request `creditsUsed` in
-    # SendTelemetryEvent can be read from real traffic before any parser is written.
+    # The MITM proxy records the CLI's own calls to the Kiro service; #collect_usage
+    # reads each model response's credits from them.
     # Kiro's CLI exports OpenTelemetry, and where it exports to is configurable — so the
     # platform points it at its own collector, the same one Claude Code reports into.
     # `OTEL_RESOURCE_ATTRIBUTES` is honoured by its SDK (verified against 2.21.3), which
@@ -1131,7 +1145,7 @@ module Agents
       token = terminal_session.route_token
       return [] if token.blank?
 
-      rate = credit_rate_for(terminal_session)
+      rate = credit_rate
 
       Array(payload["resourceMetrics"]).flat_map do |resource_metric|
         resource_attrs = resource_metric.dig("resource", "attributes") || []
@@ -1184,14 +1198,42 @@ module Agents
       entry&.dig("value", "stringValue")
     end
 
-    # The rate is written onto the credential whenever the account's limits are read
-    # (at login, and at every cleanup). A batch that arrives before the first reading
-    # still records its credits — it just prices them at zero rather than guessing.
-    def credit_rate_for(terminal_session)
-      credential = SessionCompany.agent_credentials_for(terminal_session).find_by(agent_type: "kiro_cli")
-      credential&.metadata&.dig(CREDIT_RATE_KEY).to_f
-    rescue StandardError
-      0.0
+    def credit_rate = Settings.agents.kiro.credit_usd.to_f
+
+    # Credits each model call of this session was charged, read from the `/v1/responses`
+    # streams the MITM proxy logged. A stream's events repeat the response object, and
+    # only the last one carries the final usage, so the last value per response id wins.
+    # A line that does not parse is skipped: a damaged log should cost a cost figure,
+    # not the session.
+    def response_credits(mitm_log)
+      return [] if mitm_log.blank?
+
+      calls = {}
+      mitm_log.each_line do |line|
+        next unless line.include?(RESPONSE_CREDITS_KEY)
+
+        entry = parse_json(line)
+        next unless entry.is_a?(Hash) && entry["direction"] == "response" && entry["path"].to_s.end_with?("/v1/responses")
+
+        sse_responses(entry["body"].to_s).each do |response|
+          credits = response.dig("usage", RESPONSE_CREDITS_KEY, "value")
+          next unless credits.is_a?(Numeric) && response["id"].present?
+
+          calls[response["id"]] = { credits: credits.to_f, status: response["status"], model: response["model"].presence,
+                                    response_id: response["id"] }
+        end
+      end
+      calls.values.reject { |call| call[:credits].zero? }
+    end
+
+    def sse_responses(body)
+      body.each_line.filter_map do |line|
+        next unless line.start_with?("data: ")
+
+        event = parse_json(line.delete_prefix("data: "))
+        response = event["response"] if event.is_a?(Hash)
+        response if response.is_a?(Hash)
+      end
     end
 
     # Credits the CLI itself reported for this session, one entry per prompt turn.
@@ -1229,7 +1271,7 @@ module Agents
 
     # One shape for both sources, so a session priced either way reads the same.
     def record_credit_usage(terminal_session, credential, usage, credits:, events:, source:)
-      rate = usage&.dig(:rate_usd).to_f
+      rate = credit_rate
       cents = credits * rate * 100
 
       stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic
@@ -1259,7 +1301,8 @@ module Agents
 
       events.map do |event|
         credit_event(event[:credits], rate, usage, source).merge(
-          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "usedTools" => event[:tools]
+          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "usedTools" => event[:tools],
+          "model" => event[:model], "responseId" => event[:response_id]
         ).compact
       end
     end

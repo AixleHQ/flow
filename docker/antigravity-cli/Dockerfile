@@ -12,8 +12,8 @@ RUN set -eux; \
     : "${CLI_VERSION:?pinned in config/agent_runtimes.json; build with make build-agents}"; \
     arch="${TARGETARCH:-amd64}"; [ "$arch" = "amd64" ] && arch=x64; \
     case "${CLI_VERSION}/$arch" in \
-      1.4.7/x64) sha256="67fd4e70be739b1f8b18f90b511da8cd2a7aef24e888e5837402e025bf7fdbfc" ;; \
-      1.4.7/arm64) sha256="b273c791b7647f680598fa1dbdf9c8086bdc42374b2276fa70e900bf8120e1d5" ;; \
+      1.5.0/x64) sha256="f65e365a67be49abdaf92f5669c3157bd4b9c569f6b9f448340b00ca261b0f01" ;; \
+      1.5.0/arm64) sha256="87e73a5ab4ecb3a9668660d259dafd13f5443149da0113664d59129a21a62ba4" ;; \
       *) echo "No checksum for agy ${CLI_VERSION} on $arch: add it to docker/antigravity-cli/Dockerfile" >&2; exit 1 ;; \
     esac; \
     archive=/tmp/agy.tar.gz; \

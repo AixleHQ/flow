@@ -56,7 +56,8 @@ module Agents
 
     test "recognises the banners Claude Code prints once its login is refused" do
       [ "Login expired · Please run /login", "OAuth token revoked · Please run /login",
-        "Not logged in · Please run /login", "Please run /login · API Error: 401 {\"type\":\"error\"}" ].each do |banner|
+        "Not logged in · Please run /login", "Login reached its time limit · Please run /login",
+        "Please run /login · API Error: 401 {\"type\":\"error\"}" ].each do |banner|
         assert_match @adapter.auth_banner_pattern, "  ⎿  #{banner}", banner
       end
     end
@@ -432,6 +433,13 @@ module Agents
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
 
       assert_equal true, settings["switchModelsOnFlag"] # rubocop:disable Minitest/AssertTruthy
+    end
+
+    test "settings turn off the built-in email check that would stop an automatic step" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+
+      assert_equal({ "cc-plugin-privacy@builtin" => false }, settings["enabledPlugins"])
     end
 
     test "settings let Claude Code follow the terminal's light or dark theme" do

@@ -321,8 +321,10 @@ module Agents
 
     # The banners Claude Code 2.1.281 prints once its own 401 recovery has failed, read from
     # the binary: "Login expired · Please run /login", "OAuth token revoked · Please run /login",
-    # "Not logged in · Please run /login" and "Please run /login · API Error: 401 …".
-    AUTH_BANNER = %r{(?:Login expired|OAuth token revoked|Not logged in) · Please run /login|Please run /login · API Error}
+    # "Not logged in · Please run /login" and "Please run /login · API Error: 401 …". 2.1.318
+    # adds "Login reached its time limit · Please run /login" for a grant the server refuses
+    # with "Refresh token expired".
+    AUTH_BANNER = %r{(?:Login expired|OAuth token revoked|Not logged in|Login reached its time limit) · Please run /login|Please run /login · API Error}
 
     def auth_banner_pattern = AUTH_BANNER
 
@@ -1451,6 +1453,10 @@ module Agents
         # Nobody answers in a container, so the session idled until the watchdog
         # killed it. true switches and continues; false would pause the same way.
         "switchModelsOnFlag" => true,
+        # Claude Code 2.1.317 ships a built-in plugin whose hook asks before a shell or web
+        # tool call carries the account email — even under bypassPermissions — and waits for
+        # an answer nobody gives in an automatic step.
+        "enabledPlugins" => { "cc-plugin-privacy@builtin" => false },
         **THEME_SETTINGS,
         "enableAllProjectMcpServers" => true,
         "env" => {

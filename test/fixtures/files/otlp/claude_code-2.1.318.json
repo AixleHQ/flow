@@ -37,7 +37,7 @@
             {
               "key": "service.version",
               "value": {
-                "stringValue": "2.1.310"
+                "stringValue": "2.1.318"
               }
             }
           ]
@@ -46,7 +46,7 @@
           {
             "scope": {
               "name": "com.anthropic.claude_code",
-              "version": "2.1.310"
+              "version": "2.1.318"
             },
             "metrics": [
               {
@@ -65,13 +65,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -87,8 +99,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019352520000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796971831000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 1
                     }
                   ],
@@ -113,13 +125,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -141,8 +165,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353162000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796972469000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 0.00049275
                     }
                   ],
@@ -167,13 +191,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -201,8 +237,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353162000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796972469000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 120
                     },
                     {
@@ -216,13 +252,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -250,8 +298,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353162000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796972469000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 7
                     },
                     {
@@ -265,13 +313,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -299,8 +359,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353162000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796972469000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 30
                     },
                     {
@@ -314,13 +374,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -348,8 +420,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353162000000",
-                      "timeUnixNano": "1793019353192000000",
+                      "startTimeUnixNano": "1793796972470000000",
+                      "timeUnixNano": "1793796972495000000",
                       "asDouble": 5
                     }
                   ],
@@ -374,13 +446,25 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "23f90e6a8d3040511e8d4da4e392860b7a91f556e1e399b1e329eee67d80ae5f"
+                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "92cb697c-b195-462c-801b-af131b0a2dc5"
+                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                          }
+                        },
+                        {
+                          "key": "anthropic.provider",
+                          "value": {
+                            "stringValue": "firstParty"
+                          }
+                        },
+                        {
+                          "key": "anthropic.custom_base_url",
+                          "value": {
+                            "boolValue": true
                           }
                         },
                         {
@@ -396,9 +480,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793019353186000000",
-                      "timeUnixNano": "1793019353192000000",
-                      "asDouble": 0.623
+                      "startTimeUnixNano": "1793796972489000000",
+                      "timeUnixNano": "1793796972495000000",
+                      "asDouble": 0.619
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_DELTA",

@@ -40,7 +40,11 @@ class QuotaErrorDetector
       /Add funds:.*platform\.claude\.com/i,
       /individual spend limit/i,
       /workspace API usage limits/i,
-      /You will regain access on/i
+      /You will regain access on/i,
+      # Claude Code 2.1.318's subscription stops, built as "You've hit your <window>"; the
+      # model-scoped windows (Opus, Sonnet, Fable) are left out because the CLI can carry
+      # on with another model after them.
+      /You['’]ve hit your (?:5-hour|session|weekly|usage credit) limit/i
     ],
     gemini: [
       /Usage limit reached/i,
@@ -52,13 +56,16 @@ class QuotaErrorDetector
       /request a quota increase through AI Studio/i,
       # Antigravity CLI (Google AI credits), read from the 1.3.1 binary. Not caught by
       # anthropic's "credit balance" pattern: Google writes "credits balance".
-      /AI credits balance is too low/i
+      /AI credits balance is too low/i,
+      /You have exhausted your quota on this model/i
     ],
     openai: [
       /You exceeded your current quota/i,
       /insufficient_credits/i,
       /quota_exceeded/i,
-      /Quota exceeded. Check your plan and billing details/i
+      /Quota exceeded. Check your plan and billing details/i,
+      # Codex's ChatGPT-plan stop; the CLI prints a typographic apostrophe.
+      /You['’]ve hit your usage limit/i
     ],
     cursor: [
       /reached your normal usage limit/i,
