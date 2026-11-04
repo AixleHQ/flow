@@ -61,12 +61,24 @@ class WorkflowTriggers::RunAsTest < ActiveSupport::TestCase
     assert @binding.reload.update(name: "Still editable"), @binding.errors.full_messages.to_sentence
   end
 
-  test "candidates are the project's non-viewer members, flagged by whether they have an agent" do
+  test "candidates are everyone who can open the project except viewers, flagged by whether they have an agent" do
     viewer = create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
     @project.add_collaborator(viewer)
+    admin = create(:user, :admin, company: @company)
+    create(:user, company: @company)
 
     members = WorkflowTriggers::RunAs.candidates(@project)
 
-    assert_equal [ [ @owner.id, false ], [ @member.id, true ] ], members.map { |m| m.values_at(:id, :agent_connected) }
+    assert_equal [ [ @owner.id, false ], [ @member.id, true ], [ admin.id, false ] ],
+                 members.map { |m| m.values_at(:id, :agent_connected) }.sort_by(&:first)
+  end
+
+  test "a company admin outside the project can take the trigger over" do
+    admin = create(:user, :admin, company: @company)
+    create(:agent_credential, user: admin, company: @company)
+
+    change_to(admin)
+
+    assert_equal admin, @binding.reload.created_by
   end
 end

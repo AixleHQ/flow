@@ -13,15 +13,17 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
-## [1.10.0] - 2026-11-03
-
 ### Added
 - **Triggers & gates**: a company admin or the project owner can change who an
   existing schedule, chat, webhook or task tracker trigger runs as, picking any
-  project member with an agent connected. The next run uses that member's agent
-  and limits; the trigger keeps its id, settings and history, and the change is
-  recorded in the audit trail. Over MCP it is `run_as_user_id` on
-  `update_workflow_trigger`.
+  project member or company admin with an agent connected. The next run uses
+  that person's agent and limits; the trigger keeps its id, settings and
+  history, and the change is recorded in the audit trail. Over MCP it is
+  `run_as_user_id` on `update_workflow_trigger`.
+
+## [1.10.0] - 2026-11-03
+
+### Added
 - **Admin**: a company's queue breakdown on the dashboard shows its waits by
   hour of the day, in your own time zone: for each hour, how many of the
   sessions that joined the queue then waited, and their p95. Its days are in

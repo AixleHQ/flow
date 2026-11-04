@@ -94,8 +94,10 @@ agent hits its usage limit, switching the trigger to someone else keeps it
 running, with no duplicate triggers to keep in step. The trigger keeps its id,
 settings and history.
 
-Only members who can carry a run are offered: viewers are left out, and members
-without an agent connected in the company are listed but cannot be picked.
+The project's members and the company's admins — everyone who can open the
+project — are offered, as long as they can carry a run: viewers are left out,
+and anyone without an agent connected in the company is listed but cannot be
+picked.
 Everyone else sees **Runs as** read-only. Each change is recorded in the audit
 trail with who made it and the old and new member. Over MCP, the same change is
 `update_workflow_trigger` with `run_as_user_id`.

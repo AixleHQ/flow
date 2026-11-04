@@ -409,7 +409,9 @@ export function TriggerFormPanel({
   // just an unknown, so it is not flagged red.
   const creatorTone = creatorName ? null : runsAsCreator ? 'var(--app-danger-fg)' : 'var(--app-text-tertiary)';
   const creatorHint = canPickRunAs
-    ? 'Unattended runs from this trigger belong to this user and use their agent and its limits. A change applies from the next run.'
+    ? runAsId
+      ? 'Unattended runs from this trigger belong to this user and use their agent and its limits. A change applies from the next run.'
+      : 'Without someone to run as this trigger cannot start a run. Pick who its runs belong to.'
     : creatorName
       ? runsAsCreator
         ? 'Unattended runs from this trigger belong to this user and use their credentials.'

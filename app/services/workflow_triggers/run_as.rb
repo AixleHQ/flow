@@ -15,9 +15,10 @@ module WorkflowTriggers
       { editable: editable, members: editable ? candidates(project) : [] }
     end
 
-    # The project members a trigger may run as: those whose company role lets
-    # them start runs. Members without an agent are listed, so the picker can
-    # say why they can't be chosen.
+    # Everyone who may open the project (Project#accessible_by?: its members and
+    # the company's admins) and whose company role lets them start runs.
+    # Members without an agent are listed, so the picker can say why they can't
+    # be chosen.
     def candidates(project)
       users = eligible_users(project).order(:name).to_a
       with_agent = AgentCredential.where(company_id: project.company_id, user_id: users.map(&:id)).distinct.pluck(:user_id)
@@ -25,13 +26,16 @@ module WorkflowTriggers
     end
 
     def eligible_users(project)
-      project.assignable_users.where.not(id: viewers(project).select(:user_id))
+      starters = CompanyMembership.active.where(company_id: project.company_id).where.not(role: :viewer)
+      in_project = starters.where(user_id: project.owner_id)
+                           .or(starters.where(user_id: project.project_collaborators.select(:user_id)))
+      User.where(id: in_project.or(starters.where(role: :admin)).select(:user_id))
     end
 
     # Why `user` can't own this project's trigger runs, or nil when they can.
     # The rule itself is TaskService.can_own_runs_in?; this only names what failed.
     def ineligibility(project, user)
-      return "must be a member of this project" unless user && project.assignable_users.exists?(id: user.id)
+      return "must be a member of this project" unless project.accessible_by?(user)
       return nil if TaskService.can_own_runs_in?(user, project.company_id)
       return "is a viewer, and viewers can't start runs" if viewers(project).exists?(user_id: user.id)
 
