@@ -3,7 +3,7 @@ import { Alert, Code, Group, Modal, PasswordInput, Radio, Stack, Text, TextInput
 import { IconAlertCircle } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { BitbucketAppConnect } from './BitbucketAppConnect';
 
@@ -57,7 +57,7 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
     setErrors({});
   }, [onClose]);
 
-  const requestClose = useConfirmClose(workspace !== '' || token !== '', close);
+  const requestClose = useUnsavedChanges({ opened, dirty: workspace !== '' || token !== '', onClose: close });
 
   // Only this branch posts a token, so switching modes can never submit one
   // the other path collected.

@@ -3,9 +3,9 @@
 module Chat
   # The workflows a linked person may start from a messenger (docs/design/teams-integration.md
   # §20): in every company of theirs that connected the workspace or organization
-  # (docs/design/shared-chat-workspaces.md §12), in projects where the web would
-  # let them start a run, and only workflows that can run unattended, as every
-  # run started from chat does.
+  # (docs/design/shared-chat-workspaces.md §12), in the projects its connection
+  # serves and where the web would let them start a run, and only workflows that
+  # can run unattended, as every run started from chat does.
   module RunCatalog
     # What a picker shows; a key from an older card is still looked up on its own.
     LIMIT = 50
@@ -49,7 +49,8 @@ module Chat
     end
 
     def active_projects(integration, user)
-      Project.where(company_id: companies(integration, user)).with_state(:active).order(:name)
+      Integration.served_projects(integration.chat_peers).where(company_id: companies(integration, user))
+                 .with_state(:active).order(:name)
     end
 
     # The install of the workspace that belongs to `project`'s company.

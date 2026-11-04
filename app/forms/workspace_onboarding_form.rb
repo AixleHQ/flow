@@ -52,8 +52,9 @@ class WorkspaceOnboardingForm
     self.email_domain = email_domain.to_s.strip.downcase.presence || email.to_s.split("@").last
   end
 
-  # `request` is the evidence an acceptance is recorded with.
-  def save(owner, request: nil)
+  # `acceptance` is the LegalAcceptance::Evidence of the ticked box, which for a
+  # stranger was taken when they sent the form, not when the link came back.
+  def save(owner, acceptance: nil)
     return false unless valid?
 
     ActiveRecord::Base.transaction do
@@ -68,8 +69,9 @@ class WorkspaceOnboardingForm
       # a Marketplace workspace, which AWS bills from the first minute.
       SessionConcurrencyLimit.set!(scope: @company, max_sessions: Billing::Trial::WORKERS)
       marketplace_license&.update!(company: @company)
-      record_acceptances(owner, request) if accept_terms
+      record_acceptances(owner, acceptance) if accept_terms && acceptance
     end
+    Feedback::NewCompanyAnnouncement.later(@company, source: marketplace_license ? "marketplace" : "signup", by: owner)
     true
   rescue ActiveRecord::RecordInvalid => e
     # Company's own validations — a reserved domain, a name already taken — and a
@@ -97,9 +99,9 @@ class WorkspaceOnboardingForm
 
   private
 
-  def record_acceptances(owner, request)
+  def record_acceptances(owner, acceptance)
     LegalDocument.accepted.each do |document|
-      LegalAcceptance.record!(document, user: owner, company: @company, request: request)
+      LegalAcceptance.record!(document, user: owner, company: @company, evidence: acceptance)
     end
   end
 

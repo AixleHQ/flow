@@ -2,7 +2,7 @@ import { Center, Loader } from '@mantine/core';
 import { useState } from 'react';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { useCreateOptions } from './useCreateOptions';
@@ -21,7 +21,7 @@ interface Props {
 export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
   const options = useCreateOptions(opened);
   const [dirty, setDirty] = useState(false);
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
 
   return (
     <ResourceDrawer opened={opened} onClose={requestClose} title="New session" bare>

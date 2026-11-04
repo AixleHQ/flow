@@ -9,6 +9,13 @@ class ProjectTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @project_owner)
   end
 
+  test "a name with no Latin letters or digits still gets a slug, unique within the company" do
+    first = create(:project, company: @company, owner: @project_owner, name: "Проект")
+    second = create(:project, company: @company, owner: @project_owner, name: "Задачи")
+
+    assert_equal %w[project project-1], [ first.slug, second.slug ]
+  end
+
   test "accessible_by? is true for owner" do
     assert @project.accessible_by?(@project_owner)
   end

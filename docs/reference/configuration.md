@@ -382,6 +382,11 @@ email, company, the page they were on and the release go with the message, and
 so do the files sent with it (up to five, 20 MB each): in the same Slack post,
 and as attachments on the board card.
 
+The Slack channel also hears of every new company: its name, id, domain, who
+created it and when, and how — a self-serve signup, an AWS Marketplace signup or
+the admin. A post that fails is retried and then logged; the company is created
+regardless.
+
 | Variable                      | Required | Default | Purpose |
 | ----------------------------- | -------- | ------- | ------- |
 | `FEEDBACK_SLACK_BOT_TOKEN`    | no       | unset   | Bot token (`xoxb-…`) of a Slack app with the `chat:write` and `files:write` scopes. An incoming webhook will not do: it cannot carry files. Set together with `FEEDBACK_SLACK_CHANNEL_ID`. |

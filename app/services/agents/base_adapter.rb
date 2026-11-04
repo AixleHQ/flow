@@ -792,15 +792,15 @@ module Agents
       %w[/var/log/context.log]
     end
 
-    # The subset of #session_log_paths the agent CLI writes itself, outside the
-    # container's write-time redaction filters (docker/base/logger/aixle_redact.py
-    # scrubs the pane capture and the MITM log, nothing else). Sessions::LogCollector
-    # never lets the container upload one of these directly: it reads them through
-    # Sessions::SecretRedactor, like every log from an image without the filters.
-    # Same pattern syntax as #session_log_paths.
+    # The subset of #session_log_paths written through the container's own redaction
+    # filters (docker/base/logger/aixle_redact.py), and so masked already: the proxy's
+    # log. Sessions::LogCollector masks every other collected log inside the container
+    # before uploading it, so a log missing from this list costs a masking pass, while
+    # a log wrongly on it would reach storage unmasked. Same pattern syntax as
+    # #session_log_paths.
     # @return [Array<String>]
-    def unfiltered_log_paths
-      []
+    def filtered_log_paths
+      %w[/var/log/mitm/http.log]
     end
 
     # The name Sessions::LogCollector stores a collected log under (and its

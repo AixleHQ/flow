@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAssetPicker } from 'test/factories/assetPicker';
 import { buildRunnerSummary } from 'test/factories/runner';
 import { answerFetch } from 'test/fetchStub';
+import { visitHeld } from 'test/inertiaVisit';
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { aggregatePayload } from './builderDraft';
@@ -229,6 +230,27 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(screen.getByText('Implement'));
 
     expect(screen.getByDisplayValue('Implement')).toBeInTheDocument();
+  });
+
+  it('asks before leaving over unsaved edits, and saves on Save before going', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
+    expect(visitHeld('/company/projects/7/workflows')).toBe(false);
+
+    await userEvent.click(screen.getByText('Add a session…'));
+    await userEvent.type(screen.getByPlaceholderText('Session name…'), 'My session{Enter}');
+    expect(visitHeld('/company/projects/7/workflows')).toBe(true);
+
+    const question = await screen.findByRole('dialog', { name: 'Save your changes?' });
+    await userEvent.click(within(question).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    await waitFor(() =>
+      expect(router.visit).toHaveBeenCalledWith(
+        new URL('/company/projects/7/workflows', window.location.origin).href,
+        expect.anything(),
+      ),
+    );
   });
 
   it('a session added from the ghost row is sent on Save as a new step and shows under its saved name', async () => {

@@ -39,9 +39,9 @@ module Web
         private
 
         # Any member who can write to the project connects its integrations.
-        # A company-wide install (Slack) is removed by a company admin only;
-        # IntegrationsController#destroy enforces that, since this policy cannot
-        # see which record is being removed.
+        # A company-wide install (Slack, Teams) is connected, shared and removed
+        # by a company admin only; IntegrationsController enforces that, since
+        # this policy sees neither the record nor the scope asked for.
         def manage_integrations?
           project_writable?
         end

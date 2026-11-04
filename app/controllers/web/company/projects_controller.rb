@@ -41,7 +41,7 @@ class Web::Company::ProjectsController < Web::Company::ApplicationController
     if project.save
       redirect_to company_project_overview_index_path(project)
     else
-      redirect_to company_projects_path, inertia: { errors: project.errors }
+      redirect_back fallback_location: company_projects_path, inertia: { errors: project.errors }
     end
   end
 

@@ -72,7 +72,7 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import {
   apiV1ProjectTaskPath,
   apiV1ProjectTaskCommentsPath,
@@ -258,9 +258,16 @@ export function TaskDetailSidebar({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Only the comment draft is at stake: the title and description save on blur, which a click on
+  // Only comment drafts are at stake: the title and description save on blur, which a click on
   // the X or the overlay triggers before the close, and Escape in them means "cancel this edit".
-  const requestClose = useConfirmClose(commentBody.trim() !== '', onClose);
+  const editedComment = comments.find((c) => c.id === editingCommentId);
+  const requestClose = useUnsavedChanges({
+    opened: !!task,
+    dirty:
+      (commentBody.trim() !== '' && !submittingComment) ||
+      (editedComment !== undefined && editingCommentBody.trim() !== editedComment.body && !savingCommentEdit),
+    onClose,
+  });
 
   // Clear optimistic overrides when cable brings fresh task data
   useEffect(() => {

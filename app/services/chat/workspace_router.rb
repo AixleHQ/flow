@@ -28,7 +28,7 @@ module Chat
     def event_for(install, normalized, source)
       TriggerEvent.new(event_type: normalized[:event_type], source: source, subject: normalized[:subject]&.to_s,
                        data: normalized[:data].deep_stringify_keys.merge("integration_id" => install.id),
-                       company_id: install.company_id, occurred_at: Time.current)
+                       company_id: install.company_id, project_id: install.project_id, occurred_at: Time.current)
     end
 
     def answered_once?(event)
@@ -47,13 +47,15 @@ module Chat
     end
 
     # The company's own copy of the event, published only when one of its
-    # triggers matches it.
+    # triggers matches it. An install connected for one project reaches only
+    # that project's triggers.
     def publish_for(install, event, source, dedup_key)
       own = event_for(install, { event_type: event.event_type, subject: event.subject, data: event.data }, source)
       return nil unless TriggerBinding.for_event(own).any? { |binding| binding.matches?(own.data) }
 
       TriggerEngine.publish(event_type: own.event_type, source: source, subject: own.subject, data: own.data,
-                            company: install.company, dedup_key: "#{dedup_key}:c#{install.company_id}")
+                            company: install.company, project: install.project,
+                            dedup_key: "#{dedup_key}:c#{install.company_id}")
     end
   end
 end

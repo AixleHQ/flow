@@ -211,9 +211,9 @@ module Templates
         next unless server["transport"] == "stdio"
         next if ([ server["command"] ] + Array(server["args"])).any? { |token| Substitution.keys_in(token.to_s).any? }
 
-        row = MCPServer.new(kind: :custom, transport: :stdio, command: server["command"], args: Array(server["args"]))
-        row.validate
-        row.errors[:command].each { |message| @errors << "mcp server #{server['name']} command: #{message}" }
+        MCP::LaunchLine.new(server["command"], server["args"]).errors.each do |message|
+          @errors << "mcp server #{server['name']} command: #{message}"
+        end
       end
     end
 

@@ -1,7 +1,8 @@
 # Connecting Slack
 
-Slack connects per **company**. When you connect a Slack workspace, the install
-belongs to the company and serves every project in it. From then on:
+Slack connects for the whole **company** or for **one project**. A company-wide
+install serves every project in the company; a project install serves that
+project alone. From then on:
 
 - an @mention of the app in a connected channel can start a workflow (a **Chat
   message** trigger for Slack);
@@ -14,10 +15,12 @@ belongs to the company and serves every project in it. From then on:
 
 Approvals and gates are answered in Flow, not in Slack.
 
-Any member who can change a project connects Slack from that project's
-**Integrations** page; viewers cannot. Because the install is company-wide, it
-shows on every project's Integrations page with the scope **company**, and only
-a company admin can remove it.
+A company admin connects Slack for the whole company, which is the default.
+Any other member who can change a project connects it for that project only;
+viewers cannot connect it. A company-wide install shows on every project's
+Integrations page with the scope **company**, and only a company admin can
+remove it. A project install shows only on its own project's page, with the
+scope **project**, and anyone who can change that project can remove it.
 
 ---
 
@@ -25,10 +28,13 @@ a company admin can remove it.
 
 1. On a project's **Integrations** page choose **Connect → Slack**. On an empty
    page, the **Slack** button does the same.
-2. Slack shows its consent screen. Pick the workspace and approve the
+2. Choose who can use it: **Every project in the company** (company admins
+   only, and their default) or **Only this project**. Select **Continue**.
+3. Slack shows its consent screen. Pick the workspace and approve the
    permissions listed below.
-3. You return to Flow with *"Slack connected to &lt;workspace&gt;"*. The new row
-   is named after the workspace, with provider **Slack** and scope **company**.
+4. You return to Flow with *"Slack connected to &lt;workspace&gt;"*. The new row
+   is named after the workspace, with provider **Slack** and scope **company**
+   or **project**.
 
 **Slack** is offered only on a deployment that has a Slack app (see
 [Self-hosted: the Slack app](#self-hosted-the-slack-app)).
@@ -55,7 +61,10 @@ The app asks for no direct-message history, so threads in DMs cannot be read.
 
 ### More than one workspace
 
-A company can connect several workspaces: each one gets its own row.
+A company can connect several workspaces: each one gets its own row, and its
+**Channels** list holds only the channels in that workspace. In a chat trigger
+the channels are grouped by workspace, and an agent names a channel that more
+than one workspace has as `Workspace/#channel`.
 
 Several companies can also connect the same workspace. Each one reaches only the
 channels connected to it: another company's channels never show up for you, and
@@ -64,8 +73,26 @@ company starts the matching triggers of each, and the app answers `/help` once,
 naming every company that listens there. The app is the same bot for everyone,
 so a company's agents edit and delete only the messages posted for that company.
 
-Connecting the same workspace again, from any project, refreshes its token on the
-existing row. Your triggers stay as they are.
+Connecting the same workspace again refreshes its token on the existing row.
+Your triggers stay as they are.
+
+### One project or the whole company
+
+A company connects each workspace once, either for the whole company or for one
+project:
+
+- A project install is invisible to the company's other projects: their
+  triggers, channel lists, agents, `/help` and **Run workflow** list never see
+  it. Connecting the same workspace from another project is refused with
+  *"… is already connected to another project of &lt;company&gt;"*.
+- A company admin can share a project install with every project: the
+  **Share with the whole company** button on its row, or **Connect → Slack**
+  for the whole company. Channels and triggers stay as they are.
+- A company-wide install is never narrowed to one project, because other
+  projects' triggers may depend on it. To narrow it, remove it and connect the
+  workspace again for one project.
+- Moving a project to another company switches its project install off. Connect
+  the workspace again in the new company.
 
 ---
 
@@ -78,8 +105,9 @@ the channel, by someone who is in it.
 
 1. Ask for a code in Flow, in one of two places:
    - in a chat trigger, next to **Channel**: **Connect a new channel…**;
-   - on the Slack row of the **Integrations** page: **Connect a channel**, for a
-     channel that workflows only post to, such as one for reports.
+   - on the Slack row of the **Integrations** page: **Channels → Connect a
+     channel**, for a channel that workflows only post to, such as one for
+     reports. A code asked for there works only in that row's workspace.
 
    Say which channel the code is for: its name, with or without `#`.
 2. Invite the app to the channel if it is not there yet: `/invite @<app>`. The
@@ -139,10 +167,10 @@ choose **Chat message**, set **Messenger** to **Slack**, and fill in:
 Select **Add trigger**. Then, in the trigger's channel, mention the app:
 `@<app> ship it`. To listen in several channels, add a trigger for each.
 
-A Slack trigger needs a connected workspace. Until the company has an active
-Slack install, Flow refuses to add a Slack trigger, or to switch one on, with
-*"Slack is not connected for this company…"*. You can still add one switched
-off and turn it on after connecting.
+A Slack trigger needs a connected workspace. Until the project has an active
+Slack install, its own or the company's, Flow refuses to add a Slack trigger, or
+to switch one on, with *"Slack is not connected for this project…"*. You can
+still add one switched off and turn it on after connecting.
 
 ### What the pattern is matched against
 
@@ -199,10 +227,11 @@ Flow.
 
 ### One mention, every project
 
-One workspace serves every project in the company, by design. So a mention is
+A company-wide install serves every project in the company. So a mention is
 matched against the Slack triggers of all those projects that listen in that
 channel, and it can start one run in each project that matches. To keep projects
-apart, give their triggers different channels.
+apart, give their triggers different channels, or connect the workspace for one
+project only (see [One project or the whole company](#one-project-or-the-whole-company)).
 
 Slack's own retries of one message never start a second run. To limit how
 often people can start one, set the trigger's **Cooldown (s)**.
@@ -305,8 +334,9 @@ Some details:
 
 ## Removing or uninstalling
 
-- **Remove** on the Integrations row (company admins only) stops Flow from
-  listening to that workspace for your company. Other companies that connected
+- **Remove** on the Integrations row (company admins for a company-wide
+  install; anyone who can change the project for a project install) stops Flow
+  from listening to that workspace for your company. Other companies that connected
   it keep working. Removing the row does not uninstall the app from the
   workspace; you do that in Slack. Your channels there are disconnected, and
   your chat triggers that listened there switch off and need a new channel.
@@ -416,7 +446,10 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 | Saving a trigger fails with *"can't name where a message comes from…"* | Its conditions name `channel` or another place (from the API or MCP) | Set the trigger's channel (`chat_channel_id`) instead |
 | The app replies with *"Available commands"* instead of starting a run | The mention matched no pattern | Compare the pattern with what follows the mention. A message that starts with someone else's mention keeps it, so use **contains** for those |
 | A matching mention starts nothing and gets no reply | The trigger's **Cooldown (s)** has not passed since its last run | Wait, or lower the cooldown |
-| Saving a trigger fails with *"Slack is not connected for this company…"* | The company has no active Slack install | Connect Slack, or reconnect an inactive row, then save again. Or save the trigger switched off |
+| Saving a trigger fails with *"Slack is not connected for this project…"* | Neither the company nor the project has an active Slack install, or the install serves another project | Connect Slack, or reconnect an inactive row, then save again. Or save the trigger switched off |
+| Connecting Slack says *"Only a company admin can connect Slack for the whole company"* | You are not a company admin | Choose **Only this project**, or ask a company admin |
+| Connecting Slack says *"… is already connected to another project of …"* | The company connected that workspace for another project | Ask a company admin to share it with the whole company |
+| Connecting Slack says *"… is already connected for every project of …"* | The workspace is already company-wide, so this project has it | Nothing to do. Only a company admin can reconnect it |
 | Saving a trigger fails with *"can't use help — Aixle answers that word before any trigger"* | `help` and `connect` are reserved | Choose another pattern |
 | Saving a trigger fails with *"can't run unattended — enable auto-run on these steps first: …"* | A step needs a person to start it | Turn on auto-run for the steps named |
 | The trigger shows *"No creator — this trigger cannot start a run"* | It was added before creators were recorded | Re-create the trigger |

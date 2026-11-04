@@ -277,6 +277,10 @@ class User < ApplicationRecord
     @active_memberships ||= company_memberships.active.to_a
   end
 
+  def admin_of?(company)
+    active_memberships.any? { |membership| membership.company_id == company.id && membership.admin? }
+  end
+
   # The same memoized list with :company preloaded, done on FIRST DEREFERENCE
   # rather than up front. Bullet gates this from both sides: eager-loading
   # unconditionally trips "AVOID eager loading" on the many requests that only

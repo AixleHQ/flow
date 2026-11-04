@@ -3,7 +3,8 @@ import { Alert, Anchor, Button, Code, Group, Modal, PasswordInput, Radio, Stack,
 import { IconAlertCircle, IconExternalLink } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 export interface GithubProps {
   /** False on a deployment missing GITHUB_APP_ID, GITHUB_APP_SLUG or the private key — typically a local one. */
@@ -45,11 +46,12 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
     setError(null);
   }, [onClose]);
 
-  const requestClose = useConfirmClose(pat !== '', close);
+  const requestClose = useUnsavedChanges({ opened, dirty: pat !== '', onClose: close });
 
   const installApp = useCallback(() => {
     // Server-side endpoint mints a SIGNED state (Oauth::State) and redirects to GitHub's
     // app-install URL — the state is never built or forgeable client-side (§7).
+    allowUnload();
     window.location.href = `${basePath}/github_app_install`;
   }, [basePath]);
 

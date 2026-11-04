@@ -50,7 +50,7 @@ module MCP
       end
 
       def exact(version)
-        version.to_s.match?(MCPServer::EXACT_VERSION) ? version.to_s : nil
+        version.to_s.match?(MCP::LaunchLine::EXACT_VERSION) ? version.to_s : nil
       end
 
       def fetch_json(url)

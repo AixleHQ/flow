@@ -7,6 +7,13 @@ export interface ChatChannel {
   label: string;
   kind: string;
   team_name: string | null;
+  workspace: string | null;
+  provider: string;
+}
+
+export interface ChatInstall {
+  id: number;
+  name: string;
   provider: string;
 }
 
@@ -28,6 +35,8 @@ export interface ChatConnectCode {
   expires_at: string;
   // The channel the code is for, as the server understood what was typed: Slack `#deploys`, Teams `Sales / General`.
   channel_name: string;
+  // Only for a code asked for from one connection: the workspace it works in.
+  workspace?: string;
   trigger_id?: number;
   failure_reason?: string;
   bot_name?: string;

@@ -3,6 +3,7 @@ import { Alert, Badge, Box, Button, Group, Paper, Stack, Switch, Text, TextInput
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import {
   companyAuthPolicyPath,
   companyIdentityProviderPath,
@@ -73,6 +74,7 @@ const VerifyConnectionButton = ({ providerId }: { providerId: number }) => (
 
 function ConnectionForm({ onDone }: { onDone: () => void }) {
   const form = useForm({ name: '', issuer: '', clientId: '', client_secret: '', tenantId: '' });
+  useUnsavedChanges({ dirty: form.isDirty && !form.processing });
 
   return (
     <form

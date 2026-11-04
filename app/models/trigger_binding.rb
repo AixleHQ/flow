@@ -60,6 +60,9 @@ class TriggerBinding < ApplicationRecord
   validate :chat_channel_usable, if: -> { chat? && (enabled? || chat_conversation_id.present?) }
   before_save :mirror_chat_channel, if: :chat?
   validate :project_tracker_in_project, if: :project_tracker_id?
+  # Only a reassignment is checked: a creator who later left the project must
+  # not make every other save of the trigger fail.
+  validate :run_as_can_own_runs, if: -> { persisted? && will_save_change_to_created_by_id? }
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
     tracker_event? && (new_record? || will_save_change_to_filter_predicate? || will_save_change_to_project_tracker_id?)
@@ -110,7 +113,7 @@ class TriggerBinding < ApplicationRecord
   end
 
   def self.chat_not_connected(label)
-    "#{label} is not connected for this company. Connect it on the Integrations page first — " \
+    "#{label} is not connected for this project. Connect it on the Integrations page first — " \
       "until then no message can reach this trigger."
   end
 
@@ -214,6 +217,11 @@ class TriggerBinding < ApplicationRecord
 
   private
 
+  def run_as_can_own_runs
+    problem = WorkflowTriggers::RunAs.ineligibility(project, created_by)
+    errors.add(:base, "Run as #{problem}") if problem
+  end
+
   def chat_conditions_name_no_place
     routing = filter_predicate.to_h.keys.map(&:to_s).select { |key| self.class.chat_routing_key?(key) }
     # The stored copy of the trigger's own channel, sent back unchanged.
@@ -234,7 +242,11 @@ class TriggerBinding < ApplicationRecord
     return "can't be a direct chat" if chat_conversation.direct?
 
     connected = ChatChannelConnection.exists?(chat_conversation_id: chat_conversation_id, company_id: project&.company_id)
-    connected ? nil : "is not connected to this company"
+    return "is not connected to this company" unless connected
+
+    reachable = project && ChatConversation.in_workspace_of(Integration.visible_for_project(project).select(:id))
+                                           .exists?(id: chat_conversation_id)
+    reachable ? nil : "is in a workspace connected for another project"
   end
 
   # Kept beside the channel until every running release matches on the
@@ -263,7 +275,8 @@ class TriggerBinding < ApplicationRecord
   end
 
   def chat_connected?
-    chat_provider.present? && Integration.active.exists?(provider: chat_provider, company_id: project&.company_id)
+    chat_provider.present? && project.present? &&
+      Integration.active.visible_for_project(project).exists?(provider: chat_provider)
   end
 
   def tracker_scope_matches?(data)
@@ -395,8 +408,14 @@ class TriggerBinding < ApplicationRecord
     schedule? && TemporalService.enabled?
   end
 
+  # The schedule fires as whoever the binding names at fire time, so a new Run as
+  # alone leaves the Temporal schedule as it is.
   def schedule_needs_reconcile?
-    reconcile_schedule? && !(previously_new_record? && !enabled?)
+    reconcile_schedule? && !(previously_new_record? && !enabled?) && !only_run_as_changed?
+  end
+
+  def only_run_as_changed?
+    !previously_new_record? && saved_change_to_created_by_id? && (saved_changes.keys - %w[created_by_id updated_at]).empty?
   end
 
   def reconcile_schedule

@@ -26,8 +26,8 @@ import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { ArchivedList } from 'shared/components/versions/ArchivedList';
 import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
 import { HistoryButton } from 'shared/components/versions/HistoryButton';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -185,7 +185,11 @@ const WorkflowsPage = () => {
     setEditWorkflow(wf);
   };
 
-  const requestCloseEdit = useConfirmClose(editForm.isDirty(), () => setEditWorkflow(null));
+  const requestCloseEdit = useUnsavedChanges({
+    opened: !!editWorkflow,
+    dirty: editForm.isDirty(),
+    onClose: () => setEditWorkflow(null),
+  });
 
   return (
     <>

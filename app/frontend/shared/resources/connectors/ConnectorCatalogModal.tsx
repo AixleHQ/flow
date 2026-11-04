@@ -246,7 +246,8 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
         connector={installing}
         basePath={installPath}
         configItemNames={configItemNames}
-        onClose={() => {
+        onClose={() => setInstalling(null)}
+        onInstalled={() => {
           setInstalling(null);
           onClose();
         }}

@@ -57,6 +57,30 @@ class Api::V1::Projects::ChatConnectCodesTest < ActionDispatch::IntegrationTest
     assert_equal "@aixle-flow", response.parsed_body["mention"]
   end
 
+  test "a code asked for from one install works in its workspace and says so, with that install's bot" do
+    ops = create(:integration, provider: :slack, status: :active, company: @company, project: nil, name: "Ops",
+                               settings: { "team_id" => "T2", "team_name" => "Ops", "bot_name" => "ops-flow" })
+
+    post api_v1_project_chat_connect_codes_path(@project),
+         params: { provider: "slack", channel: "#deploys", integration_id: ops.id }, as: :json
+
+    assert_response :created
+    assert_equal [ "Ops", "@ops-flow" ], response.parsed_body.values_at("workspace", "mention")
+    assert_equal ops, ChatConnectCode.find(response.parsed_body["id"]).integration
+
+    foreign = create(:integration, provider: :slack, status: :active, company: create(:company), project: nil)
+    removed = create(:integration, provider: :slack, status: :inactive, company: @company, project: nil)
+    errors = [ foreign, removed ].map do |integration|
+      post api_v1_project_chat_connect_codes_path(@project),
+           params: { provider: "slack", channel: "#deploys", integration_id: integration.id }, as: :json
+      assert_response :unprocessable_entity
+      response.parsed_body["errors"].sole
+    end
+    assert_equal [ "No active Slack integration #{foreign.id} in this project",
+                   "No active Slack integration #{removed.id} in this project" ], errors
+    assert_equal 1, ChatConnectCode.count
+  end
+
   test "a code is always for a channel named up front" do
     post api_v1_project_chat_connect_codes_path(@project), params: { provider: "slack", channel: " # " }, as: :json
 

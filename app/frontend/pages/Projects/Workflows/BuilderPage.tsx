@@ -23,9 +23,9 @@ import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { ApiError, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { useUnsavedChangesGuard } from 'shared/lib/hooks/useUnsavedChangesGuard';
 import { renameOutputReferences } from 'shared/lib/references';
 import type { ToolGroup } from 'shared/lib/toolPicker';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import type { ChatProviderOption } from 'shared/resources/triggers/types';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
@@ -150,7 +150,6 @@ const BuilderPage = () => {
 
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
   const dirty = !readOnly && snapshotOf(workflow, steps) !== savedSnapshot;
-  useUnsavedChangesGuard(dirty);
   const { issues, replaceIssues } = useWorkflowIssues({ projectId, workflow, sortedSteps, initialIssues });
 
   // Run button guard (AC10)
@@ -336,7 +335,7 @@ const BuilderPage = () => {
 
   // --- Save: the whole workflow, one request, one version ---
   const save = useCallback(async () => {
-    if (projectId == null) return;
+    if (projectId == null) return false;
     setSaving(true);
     try {
       const result = await apiRequest<AggregateResponse>(
@@ -362,6 +361,7 @@ const BuilderPage = () => {
         color: 'green',
         message: result.versionCreated ? `Saved as version ${result.currentVersionNumber}` : 'Nothing to save',
       });
+      return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         notifications.show({
@@ -372,10 +372,12 @@ const BuilderPage = () => {
       } else {
         notifyApiFailure(error, 'The workflow was not saved');
       }
+      return false;
     } finally {
       setSaving(false);
     }
   }, [projectId, workflow, sortedSteps, replaceIssues]);
+  useUnsavedChanges({ dirty: dirty && !saving, onSave: save });
 
   // Derive selected session and step from selection state
   const selectedSession = useMemo(

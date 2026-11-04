@@ -7,7 +7,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { isAttached, type TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import { TriggerCards } from 'shared/resources/triggers/TriggerCards';
 import { TriggerFormPanel } from 'shared/resources/triggers/TriggerFormPanel';
-import type { ChatProviderOption, Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
+import type { ChatProviderOption, RunAsOptions, Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
 export type { Trigger } from 'shared/resources/triggers/types';
@@ -30,6 +30,7 @@ export function TriggersTab({
   readOnly,
 }: TriggersTabProps) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [runAs, setRunAs] = useState<RunAsOptions | null>(null);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<Trigger | null>(null);
@@ -42,6 +43,7 @@ export function TriggersTab({
       if (res.ok) {
         const data = await res.json();
         setTriggers(data.triggers ?? []);
+        setRunAs(data.run_as ?? null);
       }
     } finally {
       setLoading(false);
@@ -279,6 +281,7 @@ export function TriggersTab({
           columns={columns}
           trackers={trackers}
           chatProviders={chatProviders}
+          runAs={runAs}
           editing={editingTrigger}
           defaultKind={defaultKind}
           onClose={closePanel}

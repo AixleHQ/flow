@@ -17,11 +17,12 @@ import { IconAlertCircle, IconCheck, IconCopy } from '@tabler/icons-react';
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { ApiError, apiRequest } from 'shared/lib/apiFetch';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { CHAT_PROVIDER_LABELS } from 'shared/resources/triggers/describeTrigger';
 import { apiV1ProjectChatConnectCodePath, apiV1ProjectChatConnectCodesPath } from 'shared/routes';
 
 import { channelName } from './channelName';
-import type { ChatChannel, ChatConnectCode } from './types';
+import type { ChatChannel, ChatConnectCode, ChatInstall } from './types';
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -38,6 +39,8 @@ interface ConnectChannelModalProps {
   provider: string;
   // The chat trigger the channel is for: redeeming the code points that trigger at it.
   triggerId?: number;
+  // The connection whose workspace the channel is in; without one, the code works in any workspace of the company.
+  integration?: ChatInstall;
   opened: boolean;
   onClose: () => void;
   onConnected: (channel: ChatChannel) => void;
@@ -68,6 +71,7 @@ export const ConnectChannelModal = ({
   projectId,
   provider,
   triggerId,
+  integration,
   opened,
   onClose,
   onConnected,
@@ -83,6 +87,7 @@ export const ConnectChannelModal = ({
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
   const hint = CHANNEL_HINTS[provider];
   const blank = channel.trim() === '';
+  const requestClose = useUnsavedChanges({ opened, dirty: !blank && code === null && !issuing, onClose });
 
   const issue = async (event: FormEvent) => {
     event.preventDefault();
@@ -94,7 +99,12 @@ export const ConnectChannelModal = ({
       const created = await apiRequest<ChatConnectCode>(apiV1ProjectChatConnectCodesPath(projectId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, channel, ...(triggerId ? { trigger_id: triggerId } : {}) }),
+        body: JSON.stringify({
+          provider,
+          channel,
+          ...(triggerId ? { trigger_id: triggerId } : {}),
+          ...(integration ? { integration_id: integration.id } : {}),
+        }),
       });
       if (current === attempt.current) setCode(created);
     } catch (e) {
@@ -154,10 +164,15 @@ export const ConnectChannelModal = ({
   }, [code, onConnected]);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={`Connect a ${label} channel`} centered size="md">
+    <Modal opened={opened} onClose={requestClose} title={`Connect a ${label} channel`} centered size="md">
       {!code ? (
         <form onSubmit={issue}>
           <Stack gap="md">
+            {integration && (
+              <Text size="sm">
+                A channel in <b>{integration.name}</b>. Posted in another workspace, the code connects nothing.
+              </Text>
+            )}
             <TextInput
               label="Channel"
               placeholder={hint?.placeholder}
@@ -172,7 +187,7 @@ export const ConnectChannelModal = ({
               </Alert>
             )}
             <Group justify="flex-end">
-              <Button variant="default" onClick={onClose}>
+              <Button variant="default" onClick={requestClose}>
                 Close
               </Button>
               <Button type="submit" loading={issuing} disabled={blank}>
@@ -187,8 +202,8 @@ export const ConnectChannelModal = ({
             Connected to {code.channel ? channelName(code.channel) : 'the channel'}
           </Alert>
           <Text size="sm">
-            The bot confirmed it in the channel. Every project of your company can now choose it for a chat trigger, and
-            workflows can post there.
+            The bot confirmed it in the channel. Every project this connection serves can now choose it for a chat
+            trigger, and workflows can post there.
           </Text>
           <Group justify="flex-end">
             <Button onClick={onClose}>Done</Button>
@@ -196,7 +211,10 @@ export const ConnectChannelModal = ({
         </Stack>
       ) : (
         <Stack gap="md">
-          <Step number={1} title={`Invite the bot to ${code.channel_name} first`}>
+          <Step
+            number={1}
+            title={`Invite the bot to ${code.channel_name}${code.workspace ? ` in ${code.workspace}` : ''} first`}
+          >
             <Text size="sm" c="dimmed">
               The bot only sees the channels it is in.
             </Text>

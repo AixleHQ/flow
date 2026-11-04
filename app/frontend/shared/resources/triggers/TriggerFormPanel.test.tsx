@@ -170,6 +170,57 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByText(/cannot start a run/)).toBeInTheDocument();
   });
 
+  describe('changing who an existing trigger runs as', () => {
+    const editing: Trigger = {
+      id: 9,
+      kind: 'schedule',
+      event_type: 'schedule.fired',
+      schedule_config: { cron: '0 9 * * 1-5', timezone: 'UTC' },
+      created_by: { id: 4, name: 'Ada Ruiz' },
+    };
+    const runAs: PanelProps['runAs'] = {
+      editable: true,
+      members: [
+        { id: 4, name: 'Ada Ruiz', agent_connected: true },
+        { id: 5, name: 'Bo Lind', agent_connected: true },
+        { id: 6, name: 'Cy Moss', agent_connected: false },
+      ],
+    };
+
+    it('lets an admin pick another member and sends only the new one', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs })} />);
+
+      await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+      expect(await screen.findByRole('option', { name: 'Cy Moss (no agent connected)' })).toHaveAttribute(
+        'data-combobox-disabled',
+        'true',
+      );
+      await userEvent.click(screen.getByRole('option', { name: 'Bo Lind' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'PATCH').trigger.run_as_user_id).toBe(5);
+    });
+
+    it('leaves Run as out of the request when it is unchanged', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs })} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      expect(bodyOf(fetchSpy, 'PATCH').trigger).not.toHaveProperty('run_as_user_id');
+    });
+
+    it('shows Run as read-only to someone who may not change it', () => {
+      renderPage(<TriggerFormPanel {...baseProps({ editing, runAs: { editable: false, members: [] } })} />);
+
+      expect(screen.getByText('Ada Ruiz')).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Runs as' })).not.toBeInTheDocument();
+    });
+  });
+
   it('switches the rendered fields when the kind Select changes to chat', async () => {
     renderPage(<TriggerFormPanel {...baseProps({ chatProviders: [slack] })} />);
 
@@ -324,6 +375,24 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(trigger.filter_predicate).toEqual({ provider: 'teams' });
   });
 
+  it('groups the channels by workspace when the company connected more than one, so a repeated name is told apart', async () => {
+    const fetchSpy = installFetch();
+    const twoWorkspaces = buildChatProviderOption({
+      conversations: [buildChatConversationOption(), buildChatConversationOption({ id: 12, workspace: 'Ops' })],
+    });
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [twoWorkspaces] })} />);
+
+    await userEvent.click(channelSelect());
+    const ops = await screen.findByRole('group', { name: 'Ops' });
+    expect(within(screen.getByRole('group', { name: 'Acme' })).getByRole('option')).toHaveTextContent('#deploys');
+    await userEvent.click(within(ops).getByRole('option', { name: '#deploys' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger.chat_channel_id).toBe(12);
+  });
+
   it('will not add a chat trigger without a channel, and points at connecting one', async () => {
     const fetchSpy = installFetch();
 
@@ -331,7 +400,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       <TriggerFormPanel {...baseProps({ defaultKind: 'chat', chatProviders: [buildChatProviderOption()] })} />,
     );
 
-    expect(screen.getByText('No Slack channel is connected to your company yet.')).toBeInTheDocument();
+    expect(screen.getByText('No Slack channel is connected for this project yet.')).toBeInTheDocument();
     await userEvent.click(channelSelect());
     expect(await screen.findByText('Connect a new channel with the button below')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
@@ -1022,6 +1091,30 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     renderPage(<TriggerFormPanel {...baseProps({ onClose })} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before Cancel or Close throw away an edited form, and closes on Discard', async () => {
+    const onClose = vi.fn();
+    renderPage(<TriggerFormPanel {...baseProps({ onClose })} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Manual' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const question = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(question).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes without asking once an edit is put back', async () => {
+    const onClose = vi.fn();
+    renderPage(<TriggerFormPanel {...baseProps({ onClose })} />);
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Manual' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Auto' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

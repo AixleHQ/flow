@@ -46,8 +46,8 @@ import type { Asset, AssetVersion, Folder } from '@/types/generated';
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -408,7 +408,11 @@ export function AssetsContent({
     setIsUploading(false);
     uppyRef.current?.cancelAll();
   }, []);
-  const requestCloseUpload = useConfirmClose(isUploading || uploadedFiles.length > 0, handleCloseUpload);
+  const requestCloseUpload = useUnsavedChanges({
+    opened: uploadOpen,
+    dirty: isUploading || uploadedFiles.length > 0,
+    onClose: handleCloseUpload,
+  });
 
   const openUpload = useCallback(
     (folder: string) => {

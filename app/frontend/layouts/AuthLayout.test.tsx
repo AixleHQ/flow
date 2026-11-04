@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { notifications } from '@mantine/notifications';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { buildSharedSettings } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, waitFor } from 'test/renderPage';
 
 import { AuthLayout } from './AuthLayout';
@@ -32,5 +33,21 @@ describe('AuthLayout flash notifications', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText('Some resources need setup')).not.toBeInTheDocument();
+  });
+});
+
+describe('AuthLayout footer', () => {
+  it('links the legal documents where they are published', () => {
+    renderAuthedPage(<AuthLayout>{<div>content</div>}</AuthLayout>, {
+      props: { settings: buildSharedSettings({ legalPages: true }) },
+    });
+
+    expect(screen.getByRole('contentinfo')).toContainElement(screen.getByRole('link', { name: 'Terms of Use' }));
+  });
+
+  it('has no legal links where none are published', () => {
+    renderAuthedPage(<AuthLayout>{<div>content</div>}</AuthLayout>);
+
+    expect(screen.queryByRole('link', { name: 'Terms of Use' })).not.toBeInTheDocument();
   });
 });

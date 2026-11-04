@@ -177,7 +177,8 @@ class Project < ApplicationRecord
   def generate_slug
     return if slug.present?
 
-    base_slug = name.to_s.parameterize
+    # parameterize drops what it cannot transliterate, so a name like "Проект" gives "".
+    base_slug = name.to_s.parameterize.presence || "project"
     self.slug = base_slug
 
     # Ensure uniqueness within company

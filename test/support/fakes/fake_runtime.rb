@@ -204,6 +204,21 @@ module ContainerRuntime
         return [ [ log_listing(command_string(cmd)) ], [ "" ], 0 ]
       end
 
+      # Sessions::LogCollector has the container mask a log into a copy, PUT the copy and
+      # remove it. The masker is the container's own script, run for real against the
+      # virtual FS with the redaction list Sessions::SecretRegistry published into it.
+      if (m = command_string(cmd).match(%r{python3 /opt/mitm/aixle_redact\.py file (\S+) (\S+) (\S+) && curl .*-T \S+ (\S+);}))
+        copy = m[3]
+        written = run_masker(m[1], Shellwords.split(m[2]).first.to_s, copy)
+        return [ [ "" ], [ "masker failed" ], 1 ] if written.nil?
+
+        target = Shellwords.split(m[4]).first.to_s
+        @uploads << { path: copy, url: target }
+        @upload_handler&.call(copy, target, @fs[copy].to_s)
+        @fs.delete(copy)
+        return [ [ "#{written}\n" ], [ "" ], 0 ]
+      end
+
       # Sessions::LogCollector has the container PUT a log straight to storage. Record the
       # transfer and let the test say what "arrived at the other end" means — the fake
       # models the container, not the object store.
@@ -272,8 +287,17 @@ module ContainerRuntime
     # Ownership is recorded, not just the bytes: a file written as root is one
     # the container's own user can neither read nor delete, and `exec` here does
     # not run as root.
+    # Runs once, the next time `path` is written, before the bytes land: what else
+    # happens while a write is still in flight.
+    def on_next_write(path, &block)
+      (@write_hooks ||= {})[path.to_s] = block
+      self
+    end
+
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
       return false if @unwritable_paths.any? { |unwritable| unwritable === path.to_s }
+
+      @write_hooks&.delete(path.to_s)&.call
 
       @fs[path] = content
       @written_files[path] = { mode: mode, uid: uid, gid: gid }
@@ -462,6 +486,25 @@ module ContainerRuntime
           File.exist?(file) ? @fs[path] = File.binread(file) : @fs.delete(path)
         end
         [ [ stdout ], [ stderr ], status.exitstatus ]
+      end
+    end
+
+    # The bytes written, or nil when the masker failed or the log is not there.
+    def run_masker(kind, source, copy)
+      return nil unless @fs.key?(source)
+
+      Dir.mktmpdir("fake-masker") do |dir|
+        src, dst, list = %w[src dst redact.list].map { |name| File.join(dir, name) }
+        File.binwrite(src, @fs[source])
+        File.binwrite(list, @fs["/var/log/mitm/redact.list"].to_s)
+        stdout, _stderr, status = Open3.capture3(
+          { "AIXLE_REDACT_LIST" => list },
+          "python3", Rails.root.join("docker/base/logger/aixle_redact.py").to_s, "file", kind, src, dst
+        )
+        return nil unless status.success? && File.exist?(dst)
+
+        @fs[copy] = File.binread(dst)
+        stdout.to_i
       end
     end
 

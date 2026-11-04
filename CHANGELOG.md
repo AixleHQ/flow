@@ -14,16 +14,65 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Triggers & gates**: a company admin or the project owner can change who an
+  existing schedule, chat, webhook or task tracker trigger runs as, picking any
+  project member or company admin with an agent connected. The next run uses
+  that person's agent and limits; the trigger keeps its id, settings and
+  history, and the change is recorded in the audit trail. Over MCP it is
+  `run_as_user_id` on `update_workflow_trigger`.
+- **Feedback**: the feedback Slack channel (`FEEDBACK_SLACK_CHANNEL_ID`) hears
+  of every new company — its name, id, domain, who created it and when, and
+  whether it came from a self-serve signup, an AWS Marketplace signup or the
+  admin. Nothing to switch on: it posts wherever the feedback bot is configured.
+- **Integrations**: Slack and Microsoft Teams can be connected for one project
+  only. Its triggers, channels, agent tools, help and Run workflow menu then
+  reach that project alone, and a company admin can share it with every project
+  later.
+
+### Changed
+- **Integrations**: only a company admin can connect Slack or Microsoft Teams
+  for the whole company, renew a company-wide Teams approval link, or share a
+  project's connection with the company. Other members who can change a project
+  connect it for that project. Moving a project to another company switches off
+  the Slack or Teams connection that was made for it.
+
+### Fixed
+- **Companies & projects**: a project whose name has no Latin letters or digits,
+  such as "Проект", can be created; it used to be refused with nothing shown.
+- **Companies & projects**: the Create New Project dialog now shows why a project
+  could not be created, including errors on fields other than the name, and keeps
+  them visible when it was opened from the sidebar.
+- **Templates**: `bin/rails templates:validate` runs without a database again. The
+  template repository's pull-request check failed on every pull request while the
+  catalog held a template with a stdio MCP server.
+- **Sessions & Runs**: when an agent asked for several secrets at the same moment,
+  one of them could stay unmasked in the session's proxy log and in the agent's own
+  transcript. Every secret a session receives is now masked there, however the
+  requests overlap.
+- **Integrations**: a company with several Slack workspaces, or several
+  Microsoft 365 organizations, gets a **Channels** list on each connection,
+  holding only that workspace's channels. Before, only the first connection had
+  one, and it listed the channels of every workspace together. A code asked for
+  there connects a channel in that workspace only. The trigger form groups the
+  channels by workspace, and an agent names a channel two workspaces share as
+  `Workspace/#channel`.
+
+## [1.10.0] - 2026-11-03
+
+### Added
 - **Admin**: a company's queue breakdown on the dashboard shows its waits by
   hour of the day, in your own time zone: for each hour, how many of the
   sessions that joined the queue then waited, and their p95. Its days are in
   your time zone too, and opening a day shows that day's hours.
 - **Sign-in & onboarding**: the hosted product publishes its Terms of Service,
-  Terms of Use and Privacy Policy at `/legal`. Everyone accepts the Terms of Use
-  the first time they sign in, and whoever creates a workspace accepts the Terms
-  of Service for their company on the signup form; a company that has not
-  accepted them asks its next admin to. Publishing a new version of either asks
-  again. Self-hosted and AWS Marketplace installations neither publish nor ask.
+  Terms of Use and Privacy Policy at `/legal`, linked from the sign-in page and
+  the app's footer. Everyone accepts the Terms of Use the first time they sign
+  in, and whoever creates a workspace accepts the Terms of Service for their
+  company on the signup form; a company that has not accepted them asks its next
+  admin to. Publishing a new version of either asks again. A record of each
+  acceptance, naming who accepted and for which company, is kept after that
+  person or company is deleted. Self-hosted and AWS Marketplace installations
+  neither publish nor ask.
 - **Workflows**: a session in the workflow builder has a **Reasoning Effort**
   next to its model, and the new-session form has one too. It appears once a
   model is chosen (a level needs an explicit runtime and model), offers only the
@@ -34,10 +83,39 @@ governance, community health — carry none.
   them.
 
 ### Changed
+- **Workflows**: leaving the workflow builder with unsaved changes — by a link,
+  browser Back or Forward, signing out, reloading or closing the tab — asks
+  first, in the same dialog the rest of the app uses, and offers **Save** next
+  to Discard.
+- **Settings**: project settings ask before you leave with unsaved changes,
+  and can save them from the question.
+- **Company settings**: the general settings and a new SSO connection ask
+  before you leave with unsaved changes; the general settings can save them
+  from the question.
+- **Profile**: your name and language, password and MCP tools ask before you
+  leave with unsaved changes.
+- **Triggers & gates**: closing the trigger panel, or leaving the page, with an
+  edited trigger asks before throwing the edits away.
+- **Tasks**: the new-task drawer and a comment being written or edited ask
+  when you leave the page, not only when you close them.
 - **Sign-in & onboarding**: `/privacy-policy` and `/terms-of-service` redirect to
   `/legal/privacy_policy` and `/legal/terms_of_service`.
 
 ### Fixed
+- **Wrappers**: secrets chosen on a wrapper's **Secrets** tab are now saved.
+  Before, saving without uploading a file silently dropped them, so the
+  wrapper's container never received them.
+- **Sessions & Runs**: a session secret no longer shows in a session's terminal
+  log when the agent's terminal splits it with colours or wraps it onto the next
+  line, as it does when previewing a written file. The stored log, the log replay
+  and `get_session_log` all mask it. A terminal log stored earlier is masked when
+  it is read, as long as the secret still has the same value.
+- **Sessions & Runs**: logs an agent's CLI writes itself, such as Claude Code's
+  transcript, are masked before they are stored. Before, that transcript (open
+  only to platform administrators) kept session secrets in plain text.
+- **Connectors**: closing a connector's install drawer from **Browse
+  connectors** — ✕, Cancel or Escape — goes back to the catalog instead of
+  closing it as well. Installing a connector still closes both.
 - **Templates**: exporting a project whose hand-added connector launches an
   unpinned package (`npx some-mcp` with no version) now stops and names the
   connector to pin. Before, the export went through and every install of it
@@ -46,6 +124,9 @@ governance, community health — carry none.
   installed from its install page again. The page shows what the install will
   create and keeps **Install** disabled until every required setting is filled
   in. Before, it said the template could not be installed and offered no button.
+- **Templates**: tables in a template's Readme and Setup tabs and in the setup
+  notes of its install checklist render as tables. Before, they showed as raw
+  `| … |` text.
 
 ## [1.9.0] - 2026-10-30
 
@@ -1051,7 +1132,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.9.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.10.0...develop
+[1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/AixleHQ/flow/compare/v1.6.0...v1.7.0

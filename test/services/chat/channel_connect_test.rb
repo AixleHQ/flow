@@ -21,9 +21,9 @@ class Chat::ChannelConnectTest < ActiveJob::TestCase
     fake_slack.user_names = { "U0POSTER" => "olo" }
   end
 
-  def slack_mention(text, channel: "C0NEW00001", key: SecureRandom.hex)
-    received = ReceivedWebhook.create!(webhook_endpoint: @endpoint, idempotency_key: key, event_type: "slack", raw_payload: {
-      "type" => "event_callback", "event_id" => key, "team_id" => "T1",
+  def slack_mention(text, channel: "C0NEW00001", key: SecureRandom.hex, endpoint: @endpoint, team: "T1")
+    received = ReceivedWebhook.create!(webhook_endpoint: endpoint, idempotency_key: key, event_type: "slack", raw_payload: {
+      "type" => "event_callback", "event_id" => key, "team_id" => team,
       "event" => { "type" => "app_mention", "channel" => channel, "user" => "U0POSTER", "text" => "<@U0BOT> #{text}",
                    "ts" => "100.1" }
     })
@@ -89,6 +89,25 @@ class Chat::ChannelConnectTest < ActiveJob::TestCase
 
     slack_mention("connect #{code}")
     assert_equal "C0NEW00001", ChatChannelConnection.sole.chat_conversation.external_id
+  end
+
+  test "a code asked for from one workspace's install connects nothing in another workspace of the company" do
+    ops = Integration.create!(provider: :slack, company: @company, project: nil, connected_by: @user, name: "Ops",
+                              status: :active, settings: { "team_id" => "T2", "team_name" => "Ops" })
+    ops.update!(credentials_data: { "bot_token" => "xoxb-2", "bot_user_id" => "U0BOT" })
+    ops_endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @company,
+                                             config: { "integration_id" => ops.id })
+    record, code = code_for("#deploys", integration: @slack)
+
+    slack_mention("connect #{code}", endpoint: ops_endpoint, team: "T2")
+
+    assert_equal 0, ChatChannelConnection.count
+    assert_not ChatConversation.exists?(chat_workspace: ops.chat_workspace), "nothing is recorded in the other workspace"
+    assert_equal "Posted in Ops, but the code is for Acme", record.reload.failure_reason
+    assert_equal [ Chat::ChannelConnect::UNUSABLE ], fake_slack.ephemeral_messages.pluck(:text)
+
+    slack_mention("connect #{code}")
+    assert_equal @slack.chat_workspace, ChatChannelConnection.sole.chat_conversation.chat_workspace
   end
 
   test "every refusal is shown only to whoever posted it, and its requester sees why on the code" do

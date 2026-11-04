@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 import { requestJson as requestTrackerJson } from './requestJson';
 
@@ -71,7 +71,7 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
     setDedicated(false);
     setError(null);
   }, [onClose]);
-  const requestClose = useConfirmClose(apiKey !== '' || teamIds.length > 0, close);
+  const requestClose = useUnsavedChanges({ opened, dirty: apiKey !== '' || teamIds.length > 0, onClose: close });
 
   const check = useCallback(async () => {
     setError(null);
@@ -227,7 +227,7 @@ export const LinearTeamsModal = ({ integration, onClose, basePath }: TeamsProps)
     ((apiKeyMode && dedicated !== integration.linearDedicatedIdentity) ||
       teamIds.length !== covered.length ||
       teamIds.some((id) => !covered.includes(id)));
-  const requestClose = useConfirmClose(dirty, onClose);
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

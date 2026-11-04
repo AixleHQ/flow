@@ -22,6 +22,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBuildingCommunity,
   IconCheck,
   IconChevronDown,
   IconChevronRight,
@@ -46,8 +47,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Integration } from '@/types/generated';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { allowUnload } from 'shared/lib/unsaved-changes/guards';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 import { ChatChannelsModal } from 'shared/resources/chat-channels/ChatChannelsModal';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -59,6 +61,7 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 import { AtlassianConnectModal, type AtlassianConnectionState } from './AtlassianConnectModal';
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
+import { ChatConnectModal, type ChatProvider, type ChatScope } from './ChatConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { GitlabGroupModal } from './GitlabGroupModal';
@@ -239,7 +242,9 @@ export const IntegrationsContent = ({
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
-  const [channelsProvider, setChannelsProvider] = useState<string | null>(null);
+  // Kept after closing, so the dialog keeps its content while it animates out.
+  const [channelsTarget, setChannelsTarget] = useState<Integration | null>(null);
+  const [channelsOpen, setChannelsOpen] = useState(false);
   const linearAvailable = isProjectContext && !!linear;
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
@@ -273,7 +278,11 @@ export const IntegrationsContent = ({
     setGitlabPat('');
     setGitlabError(null);
   }, []);
-  const requestCloseGitlab = useConfirmClose(gitlabPat !== '', closeGitlabModal);
+  const requestCloseGitlab = useUnsavedChanges({
+    opened: gitlabOpen,
+    dirty: gitlabPat !== '',
+    onClose: closeGitlabModal,
+  });
 
   const [tokenTarget, setTokenTarget] = useState<Integration | null>(null);
   const [replacementToken, setReplacementToken] = useState('');
@@ -285,7 +294,11 @@ export const IntegrationsContent = ({
     setReplacementToken('');
     setTokenError(null);
   }, []);
-  const requestCloseToken = useConfirmClose(replacementToken !== '', closeTokenModal);
+  const requestCloseToken = useUnsavedChanges({
+    opened: !!tokenTarget,
+    dirty: replacementToken !== '',
+    onClose: closeTokenModal,
+  });
 
   const [coderOpen, setCoderOpen] = useState(false);
   const [coderUrl, setCoderUrl] = useState('');
@@ -317,23 +330,27 @@ export const IntegrationsContent = ({
     setCoderOpen(false);
     resetCoderForm();
   }, [resetCoderForm]);
-  const requestCloseCoder = useConfirmClose(
-    coderUrl !== '' ||
+  const requestCloseCoder = useUnsavedChanges({
+    opened: coderOpen,
+    dirty:
+      coderUrl !== '' ||
       coderToken !== '' ||
       coderDefaultTemplate !== '' ||
       coderMachinePrefix !== '' ||
       coderLockTtlMinutes !== DEFAULT_CODER_LOCK_TTL,
-    closeCoderModal,
-  );
+    onClose: closeCoderModal,
+  });
 
   const closeCoderSettings = useCallback(() => setCoderEditTarget(null), []);
-  const requestCloseCoderSettings = useConfirmClose(
-    !!coderEditTarget &&
+  const requestCloseCoderSettings = useUnsavedChanges({
+    opened: !!coderEditTarget,
+    dirty:
+      !!coderEditTarget &&
       (coderEditTemplate !== (coderEditTarget.coderDefaultTemplate ?? '') ||
         coderEditPrefix !== (coderEditTarget.coderMachinePrefix ?? '') ||
         coderEditTtl !== (coderEditTarget.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL)),
-    closeCoderSettings,
-  );
+    onClose: closeCoderSettings,
+  });
 
   const filtered = useMemo(() => {
     let result = integrations;
@@ -351,17 +368,6 @@ export const IntegrationsContent = ({
   }, [integrations, search, scopeFilter]);
 
   const hasFilters = !!search || scopeFilter !== 'all';
-
-  // Channels belong to the company, not to one install, so each messenger offers them once.
-  const channelOwners = useMemo(() => {
-    const ids = new Set<number>();
-    if (!isProjectContext) return ids;
-    for (const provider of CHAT_PROVIDERS) {
-      const first = filtered.find((i) => i.provider === provider && i.status === 'active');
-      if (first) ids.add(first.id);
-    }
-    return ids;
-  }, [filtered, isProjectContext]);
 
   const handleDelete = useCallback(
     (integration: Integration) => {
@@ -525,18 +531,45 @@ export const IntegrationsContent = ({
     [basePath],
   );
 
-  // Slack connects via OAuth: redirect to the project-scoped start action, which
-  // bounces to Slack's consent screen. The install binds to this project.
-  const handleConnectSlack = useCallback(() => {
-    window.location.href = `${basePath}/slack_oauth_start`;
-  }, [basePath]);
+  // Slack and Teams serve the whole company or this project only; the dialog
+  // asks which before the connection starts.
+  const [chatConnect, setChatConnect] = useState<ChatProvider | null>(null);
+  const handleConnectSlack = useCallback(() => setChatConnect('slack'), []);
+  const handleConnectTeams = useCallback(() => setChatConnect('teams'), []);
 
+  // Slack connects via OAuth: the start action bounces to Slack's consent screen.
   // Teams is approved by a Microsoft 365 administrator, who may not have an
   // Aixle account: the server creates a pending connection and hands back, once,
   // the link that person opens.
-  const handleConnectTeams = useCallback(() => {
-    router.post(`${basePath}/teams_connect`, {}, { preserveScroll: true });
-  }, [basePath]);
+  const startChatConnection = useCallback(
+    (provider: ChatProvider, scope: ChatScope) => {
+      setChatConnect(null);
+      if (provider === 'slack') {
+        allowUnload();
+        window.location.href = `${basePath}/slack_oauth_start?scope=${scope}`;
+      } else {
+        router.post(`${basePath}/teams_connect`, { scope }, { preserveScroll: true });
+      }
+    },
+    [basePath],
+  );
+
+  const handleShareWithCompany = useCallback(
+    (integration: Integration) => {
+      modals.openConfirmModal({
+        title: 'Share with the whole company',
+        children: (
+          <Text size="sm">
+            Every project in the company will see <b>{integration.name}</b> and can connect its channels. Only removing
+            it undoes this.
+          </Text>
+        ),
+        labels: { confirm: 'Share', cancel: 'Cancel' },
+        onConfirm: () => router.patch(`${basePath}/${integration.id}`, { scope: 'company' }, { preserveScroll: true }),
+      });
+    },
+    [basePath],
+  );
   const { flash } = usePage<{ flash?: Record<string, unknown> }>().props;
   const teamsApprovalUrl = typeof flash?.teamsApprovalUrl === 'string' ? flash.teamsApprovalUrl : null;
   const [dismissedApprovalUrl, setDismissedApprovalUrl] = useState<string | null>(null);
@@ -1013,17 +1046,22 @@ export const IntegrationsContent = ({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
-                        {channelOwners.has(integration.id) && (
-                          <Button
-                            aria-label={`Channels for ${integration.name}`}
-                            size="compact-xs"
-                            variant="light"
-                            leftSection={<IconHash size={12} />}
-                            onClick={() => setChannelsProvider(integration.provider)}
-                          >
-                            Channels
-                          </Button>
-                        )}
+                        {isProjectContext &&
+                          CHAT_PROVIDERS.includes(integration.provider) &&
+                          integration.status === 'active' && (
+                            <Button
+                              aria-label={`Channels for ${integration.name}`}
+                              size="compact-xs"
+                              variant="light"
+                              leftSection={<IconHash size={12} />}
+                              onClick={() => {
+                                setChannelsTarget(integration);
+                                setChannelsOpen(true);
+                              }}
+                            >
+                              Channels
+                            </Button>
+                          )}
                         {integration.provider === 'github' && canExecute && !readOnly && (
                           <Tooltip label="Test connection">
                             <ActionIcon
@@ -1105,7 +1143,22 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {integration.provider === 'teams' && canExecute && (
+                        {CHAT_PROVIDERS.includes(integration.provider) &&
+                          integration.scopeIndicator === 'project' &&
+                          canExecute &&
+                          canManageCompany && (
+                            <Tooltip label="Share with the whole company">
+                              <ActionIcon
+                                aria-label={`Share ${integration.name} with the whole company`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => handleShareWithCompany(integration)}
+                              >
+                                <IconBuildingCommunity size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                        {integration.provider === 'teams' && canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="New approval link">
                             <ActionIcon
                               aria-label={`New approval link for ${integration.name}`}
@@ -1440,9 +1493,9 @@ export const IntegrationsContent = ({
       {projectId !== undefined && (
         <ChatChannelsModal
           projectId={projectId}
-          provider={channelsProvider ?? 'slack'}
-          opened={channelsProvider !== null}
-          onClose={() => setChannelsProvider(null)}
+          integration={channelsTarget}
+          opened={channelsOpen}
+          onClose={() => setChannelsOpen(false)}
           canEdit={canExecute}
         />
       )}
@@ -1674,6 +1727,13 @@ export const IntegrationsContent = ({
           </Group>
         </Stack>
       </Modal>
+
+      <ChatConnectModal
+        provider={chatConnect}
+        canManageCompany={!!canManageCompany}
+        onClose={() => setChatConnect(null)}
+        onConnect={startChatConnection}
+      />
 
       <TeamsApprovalModal
         url={teamsApprovalUrl !== dismissedApprovalUrl ? teamsApprovalUrl : null}

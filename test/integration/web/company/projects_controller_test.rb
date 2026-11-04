@@ -67,6 +67,19 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  test "a failed create returns its errors to the page the modal was opened on" do
+    project = create(:project, name: "Taken", company: @company, owner: @user)
+
+    assert_no_difference -> { Project.count } do
+      post company_projects_path, params: { project: { name: "Taken" } },
+                                  headers: { "HTTP_REFERER" => company_project_overview_index_url(project) }
+    end
+
+    assert_redirected_to company_project_overview_index_url(project)
+    follow_redirect!
+    assert_equal [ "has already been taken" ], inertia.props.dig(:errors, :name)
+  end
+
   test "a viewer cannot create a project" do
     viewer = create(:user, :viewer, :onboarding_completed, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com",
                                                              password: AuthHelper::TEST_PASSWORD)

@@ -35,10 +35,25 @@ export interface Trigger {
   webhook_url?: string | null;
   workflow_id?: number | null;
   workflow_name?: string | null;
-  // Who added the trigger. Off-board kinds run as this user and use their
-  // credentials; null on rows created before the creator was recorded (or whose
-  // account was deleted), and those are skipped instead of firing unattended.
+  // Who added the trigger, or whom an admin has since pointed it at. Off-board
+  // kinds run as this user and use their credentials; null on rows created
+  // before the creator was recorded (or whose account was deleted), and those
+  // are skipped instead of firing unattended.
   created_by?: { id: number; name: string } | null;
+}
+
+export interface RunAsMember {
+  id: number;
+  name: string;
+  // A member without an agent can't carry a run, so the picker shows them disabled.
+  agent_connected: boolean;
+}
+
+// Whether the viewer may change who an off-board trigger runs as; members are
+// sent only to those who may.
+export interface RunAsOptions {
+  editable: boolean;
+  members: RunAsMember[];
 }
 
 export interface TriggerColumnOption {
@@ -60,6 +75,7 @@ export interface ChatConversationOption {
   label: string;
   kind: string;
   teamName: string | null;
+  workspace: string | null;
   provider: string;
 }
 

@@ -17,6 +17,8 @@ class ChatConnectCode < ApplicationRecord
   belongs_to :trigger_binding, optional: true
   belongs_to :requested_by, class_name: "User", optional: true
   belongs_to :chat_channel_connection, optional: true
+  # Asked for from one install's channel list: only that install's workspace will do.
+  belongs_to :integration, optional: true
 
   validates :provider, inclusion: { in: Chat::PROVIDERS.keys }
   validates :code_digest, :expires_at, :channel_name, presence: true
@@ -27,11 +29,11 @@ class ChatConnectCode < ApplicationRecord
   # [record, code]. The code is not recoverable from the record. `channel` is
   # the channel as people call it: "#deploys" or "deploys" in Slack; in Teams
   # "Team / Channel", or a group chat's name.
-  def self.issue!(project:, provider:, user:, channel:, trigger_binding: nil)
+  def self.issue!(project:, provider:, user:, channel:, trigger_binding: nil, integration: nil)
     team, name = provider.to_s == Chat::TeamsProvider::KEY && channel.to_s.include?("/") ? channel.split("/", 2) : [ nil, channel ]
     code = "#{PREFIX}#{Array.new(LENGTH) { ALPHABET[SecureRandom.random_number(ALPHABET.size)] }.join}"
     record = create!(company_id: project.company_id, project: project, provider: provider.to_s,
-                     requested_by: user, trigger_binding: trigger_binding,
+                     requested_by: user, trigger_binding: trigger_binding, integration: integration,
                      channel_name: name.to_s.squish.delete_prefix("#").presence, team_name: team.to_s.squish.presence,
                      code_digest: digest(code), expires_at: TTL.from_now)
     [ record, code ]
@@ -73,6 +75,15 @@ class ChatConnectCode < ApplicationRecord
     matches = self.class.comparable(conversation.name) == self.class.comparable(channel_name) &&
               (team_name.blank? || self.class.comparable(conversation.team_name) == self.class.comparable(team_name))
     matches ? nil : "Posted in #{conversation.label}, but the code is for #{channel_label}"
+  end
+
+  # Why `install`, the company's install of the workspace the code was posted
+  # in, is not the one the code was asked for, or nil when it is.
+  def workspace_mismatch(install)
+    return nil if integration.nil? || install.id == integration_id ||
+                  (install.chat_workspace_id.present? && install.chat_workspace_id == integration.chat_workspace_id)
+
+    "Posted in #{install.chat_workspace_name}, but the code is for #{integration.chat_workspace_name}"
   end
 
   def state

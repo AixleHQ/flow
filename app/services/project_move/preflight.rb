@@ -211,7 +211,9 @@ module ProjectMove
     end
 
     def deactivation_reason(integration)
-      if integration.azure_devops_installation_id.present?
+      if integration.slack? || integration.teams?
+        "Its workspace was connected for #{source.name}; connect it again in #{target.name}."
+      elsif integration.azure_devops_installation_id.present?
         "Its Azure DevOps installation, and the tenant consent behind it, belong to #{source.name}."
       elsif github_installation_held_elsewhere?(integration)
         "Its GitHub installation is also connected to #{source.name}, and one installation serves one company."

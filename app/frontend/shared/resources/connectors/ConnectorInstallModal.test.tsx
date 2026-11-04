@@ -69,6 +69,7 @@ const renderInstall = (subject: Connector, onClose: () => void) =>
       connector={subject}
       basePath="/company/projects/7/connectors"
       onClose={onClose}
+      onInstalled={vi.fn()}
       configItemNames={[]}
     />,
   );

@@ -192,6 +192,27 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_equal "standup", event.name
   end
 
+  test "update_workflow_trigger changes who an event trigger runs as, for the project owner only" do
+    event = event_trigger!
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    create(:agent_credential, user: member, company: @company)
+
+    body = call_tool("update_workflow_trigger", { project_id: @project.id, workflow_id: @workflow.id, kind: "chat",
+                                                  trigger_id: event.id, run_as_user_id: member.id })
+
+    assert_not error?(body), text(body)
+    assert_equal member, event.reload.created_by
+    assert_equal 1, Audit.where(auditable: event, action: WorkflowTriggers::RunAs::AUDIT_ACTION).count
+
+    denied = call_tool("update_workflow_trigger", { project_id: @project.id, workflow_id: @workflow.id, kind: "chat",
+                                                    trigger_id: event.id, run_as_user_id: @user.id },
+                       token: member.regenerate_mcp_token!)
+    assert error?(denied)
+    assert_match(/Not allowed to change_run_as/, text(denied))
+    assert_equal member, event.reload.created_by
+  end
+
   test "update_workflow_trigger will not switch a slack trigger on before Slack is connected" do
     event = event_trigger!(enabled: false)
 

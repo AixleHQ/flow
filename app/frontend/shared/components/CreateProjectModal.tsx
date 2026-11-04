@@ -1,7 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
 
-import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 
 interface CreateProjectModalProps {
   opened: boolean;
@@ -9,6 +9,16 @@ interface CreateProjectModalProps {
 }
 
 const BLANK_PROJECT = { name: '', description: '' };
+
+// Rails sends `model.errors.to_hash`: bare messages, often an array, keyed by attribute.
+// Keys other than `name` have no field in this form, so they need the attribute to make sense.
+const errorMessages = (errors: Record<string, string | string[] | undefined>) =>
+  Object.entries(errors).flatMap(([key, value]) => {
+    const messages = ([] as string[]).concat(value ?? []);
+    if (key === 'base') return messages;
+    const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+    return messages.map((message) => `${label} ${message}`);
+  });
 
 export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps) => {
   const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(BLANK_PROJECT);
@@ -19,7 +29,8 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
     onClose();
   };
   const dirty = data.name !== BLANK_PROJECT.name || data.description !== BLANK_PROJECT.description;
-  const requestClose = useConfirmClose(dirty, handleClose);
+  const requestClose = useUnsavedChanges({ opened, dirty, onClose: handleClose });
+  const messages = errorMessages(errors);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,9 +44,13 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
     <Modal opened={opened} onClose={requestClose} title="Create New Project" size="md">
       <form onSubmit={handleSubmit}>
         <Stack gap="md">
-          {errors.name && (
-            <Alert color="red" onClose={() => clearErrors('name')}>
-              {errors.name}
+          {messages.length > 0 && (
+            <Alert color="red">
+              <Stack gap={4}>
+                {messages.map((message) => (
+                  <div key={message}>{message}</div>
+                ))}
+              </Stack>
             </Alert>
           )}
           <TextInput
