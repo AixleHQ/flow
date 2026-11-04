@@ -107,6 +107,24 @@ describe('ConnectChannelModal', () => {
     expect(within(dialog).getByRole('status')).toHaveTextContent('expires in 9:00');
   });
 
+  it("asks from one connection for a code that works in that connection's workspace, and names it", async () => {
+    const issued = buildChatConnectCode({ expires_at: inTenMinutes(), workspace: 'Ops' });
+    const fetchSpy = answerFetch({
+      [`POST ${CODES}`]: jsonResponse(issued, 201),
+      [`GET ${CODES}/31`]: polled(issued),
+    });
+    render({ integration: { id: 9, name: 'Ops', provider: 'slack' } });
+    const dialog = await openDialog();
+
+    expect(within(dialog).getByText(/^A channel in/)).toHaveTextContent(
+      'A channel in Ops. Posted in another workspace, the code connects nothing.',
+    );
+    await requestCode(dialog);
+
+    expect(bodiesPosted(fetchSpy)).toEqual([{ provider: 'slack', channel: 'deploys', integration_id: 9 }]);
+    expect(within(dialog).getByText('Invite the bot to #deploys in Ops first', { exact: false })).toBeInTheDocument();
+  });
+
   it('asks on behalf of a trigger for a Teams channel named with its team, and says how to add the app', async () => {
     const issued = buildChatConnectCode({
       provider: 'teams',

@@ -240,7 +240,9 @@ export const IntegrationsContent = ({
 
   const [linearOpen, setLinearOpen] = useState(false);
   const [linearTeamsTarget, setLinearTeamsTarget] = useState<Integration | null>(null);
-  const [channelsProvider, setChannelsProvider] = useState<string | null>(null);
+  // Kept after closing, so the dialog keeps its content while it animates out.
+  const [channelsTarget, setChannelsTarget] = useState<Integration | null>(null);
+  const [channelsOpen, setChannelsOpen] = useState(false);
   const linearAvailable = isProjectContext && !!linear;
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
@@ -364,17 +366,6 @@ export const IntegrationsContent = ({
   }, [integrations, search, scopeFilter]);
 
   const hasFilters = !!search || scopeFilter !== 'all';
-
-  // Channels belong to the company, not to one install, so each messenger offers them once.
-  const channelOwners = useMemo(() => {
-    const ids = new Set<number>();
-    if (!isProjectContext) return ids;
-    for (const provider of CHAT_PROVIDERS) {
-      const first = filtered.find((i) => i.provider === provider && i.status === 'active');
-      if (first) ids.add(first.id);
-    }
-    return ids;
-  }, [filtered, isProjectContext]);
 
   const handleDelete = useCallback(
     (integration: Integration) => {
@@ -1027,17 +1018,22 @@ export const IntegrationsContent = ({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
-                        {channelOwners.has(integration.id) && (
-                          <Button
-                            aria-label={`Channels for ${integration.name}`}
-                            size="compact-xs"
-                            variant="light"
-                            leftSection={<IconHash size={12} />}
-                            onClick={() => setChannelsProvider(integration.provider)}
-                          >
-                            Channels
-                          </Button>
-                        )}
+                        {isProjectContext &&
+                          CHAT_PROVIDERS.includes(integration.provider) &&
+                          integration.status === 'active' && (
+                            <Button
+                              aria-label={`Channels for ${integration.name}`}
+                              size="compact-xs"
+                              variant="light"
+                              leftSection={<IconHash size={12} />}
+                              onClick={() => {
+                                setChannelsTarget(integration);
+                                setChannelsOpen(true);
+                              }}
+                            >
+                              Channels
+                            </Button>
+                          )}
                         {integration.provider === 'github' && canExecute && !readOnly && (
                           <Tooltip label="Test connection">
                             <ActionIcon
@@ -1454,9 +1450,9 @@ export const IntegrationsContent = ({
       {projectId !== undefined && (
         <ChatChannelsModal
           projectId={projectId}
-          provider={channelsProvider ?? 'slack'}
-          opened={channelsProvider !== null}
-          onClose={() => setChannelsProvider(null)}
+          integration={channelsTarget}
+          opened={channelsOpen}
+          onClose={() => setChannelsOpen(false)}
           canEdit={canExecute}
         />
       )}

@@ -75,6 +75,7 @@ export interface ChatConversationOption {
   label: string;
   kind: string;
   teamName: string | null;
+  workspace: string | null;
   provider: string;
 }
 

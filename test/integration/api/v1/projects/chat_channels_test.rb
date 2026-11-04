@@ -34,6 +34,35 @@ class Api::V1::Projects::ChatChannelsTest < ActionDispatch::IntegrationTest
     assert_equal %w[slack teams], response.parsed_body["channels"].pluck("provider").sort
   end
 
+  test "narrowed to one Slack install, the list holds only the channels in its workspace" do
+    @slack.update!(name: "Acme", settings: { "team_id" => "T0ACME", "team_name" => "Acme" })
+    ops = create(:integration, provider: :slack, status: :active, company: @company, project: nil, name: "Ops",
+                               settings: { "team_id" => "T0OPS", "team_name" => "Ops" })
+    @deploys.update!(chat_workspace: @slack.chat_workspace)
+    ops_deploys = connect_chat_channel(company: @company, integration: ops, external_id: "C0OPSDEP1", name: "deploys")
+
+    get api_v1_project_chat_channels_path(@project), params: { provider: "slack" }, as: :json
+    assert_equal [ [ @deploys.id, "Acme" ], [ ops_deploys.id, "Ops" ] ],
+                 response.parsed_body["channels"].map { |c| c.values_at("id", "workspace") }
+
+    get api_v1_project_chat_channels_path(@project), params: { provider: "slack", integration_id: ops.id }, as: :json
+    assert_equal [ [ ops_deploys.id, "#deploys", "Ops" ] ],
+                 response.parsed_body["channels"].map { |c| c.values_at("id", "label", "workspace") }
+
+    get api_v1_project_chat_channels_path(@project), params: { provider: "slack", integration_id: @slack.id }, as: :json
+    assert_equal [ @deploys.id ], response.parsed_body["channels"].pluck("id")
+  end
+
+  test "an install the project cannot use names no channel list" do
+    foreign = create(:integration, provider: :slack, status: :active, company: create(:company), project: nil)
+    removed = create(:integration, provider: :slack, status: :inactive, company: @company, project: nil)
+
+    [ foreign, removed ].each do |integration|
+      get api_v1_project_chat_channels_path(@project), params: { integration_id: integration.id }, as: :json
+      assert_response :not_found
+    end
+  end
+
   test "disconnecting a channel switches off the triggers listening there and tells the channel" do
     stub_slack_client!
     workflow = create(:workflow, scope: @project)

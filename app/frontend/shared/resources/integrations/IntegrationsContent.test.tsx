@@ -1534,7 +1534,7 @@ describe('IntegrationsContent', () => {
       vi.restoreAllMocks();
     });
 
-    it("opens the company's channels in that messenger from one connection, with who connected them", async () => {
+    it("opens the channels in one connection's workspace, with who connected them", async () => {
       const fetchSpy = answerFetch({
         [`GET ${CHANNELS}`]: {
           channels: [
@@ -1543,22 +1543,33 @@ describe('IntegrationsContent', () => {
           ],
         },
       });
-      renderProject([
-        acmeSlack,
-        makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
-      ]);
+      renderProject([acmeSlack]);
 
       expect(screen.queryByRole('list', { name: 'Slack channels' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Channels for Ops Slack' })).not.toBeInTheDocument();
       const dialog = await openChannels();
       expect(dialog).toHaveAccessibleName('Slack channels');
+      expect(within(dialog).getByText(/^Channels in/)).toHaveTextContent(/^Channels in Acme Slack\./);
 
       const list = await within(dialog).findByRole('list', { name: 'Slack channels' });
       expect(within(list).getAllByRole('listitem')).toHaveLength(2);
       expect(within(list).getByText('#deploys')).toBeInTheDocument();
       expect(within(list).getByText(/^connected by Jane Doe · posted by ivan · /)).toBeInTheDocument();
       expect(within(list).getByText(/^posted by Olo · /)).toBeInTheDocument();
-      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack`, expect.anything());
+      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack&integration_id=8`, expect.anything());
+    });
+
+    it('gives every Slack workspace the company connected its own list', async () => {
+      const fetchSpy = answerFetch({ [`GET ${CHANNELS}`]: { channels: [] } });
+      renderProject([
+        acmeSlack,
+        makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
+      ]);
+
+      expect(screen.getByRole('button', { name: 'Channels for Acme Slack' })).toBeInTheDocument();
+      const ops = await openChannels('Ops Slack');
+      expect(within(ops).getByText(/^Channels in/)).toHaveTextContent(/^Channels in Ops Slack\./);
+      expect(await within(ops).findByText(/No channel is connected yet/)).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack&integration_id=9`, expect.anything());
     });
 
     it("links to the bot's confirmation in the channel, where the server has one", async () => {
@@ -1640,13 +1651,20 @@ describe('IntegrationsContent', () => {
       expect(await within(channelsDialog).findByText(/No channel is connected yet/)).toBeInTheDocument();
       await userEvent.click(within(channelsDialog).getByRole('button', { name: 'Connect a channel' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      expect(within(dialog).getByText(/^A channel in/)).toHaveTextContent(
+        'A channel in Acme Slack. Posted in another workspace, the code connects nothing.',
+      );
       await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), 'deploys');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
       expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toHaveValue(
         'connect aixle-7F3K9QXM',
       );
       const request = fetchSpy.mock.calls.find(([url, init]) => url === CODES && init?.method === 'POST');
-      expect(JSON.parse(request?.[1]?.body as string)).toEqual({ provider: 'slack', channel: 'deploys' });
+      expect(JSON.parse(request?.[1]?.body as string)).toEqual({
+        provider: 'slack',
+        channel: 'deploys',
+        integration_id: 8,
+      });
 
       channels = [buildConnectedChatChannel()];
       state = 'redeemed';
