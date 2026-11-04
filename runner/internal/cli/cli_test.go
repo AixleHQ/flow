@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -439,5 +440,95 @@ func TestAHostRunnerWithoutUsableCredentialsNeedsAnOperator(t *testing.T) {
 		if err == nil || !NeedsOperator(err) {
 			t.Errorf("%s: got %v", dir, err)
 		}
+	}
+}
+
+func corruptJournal(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, journal.FileName), []byte(`{"after":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAHostRunnerWithACorruptJournalNeedsAnOperator(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	corruptJournal(t, dir)
+	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil || !NeedsOperator(err) || !errors.Is(err, journal.ErrInvalid) {
+		t.Fatalf("got %v", err)
+	}
+	for _, want := range []string{filepath.Join(dir, journal.FileName), "aixle-runner unregister", "configure` with a new registration token"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the message lacks %q: %v", want, err)
+		}
+	}
+	if len(p.requests) != 0 {
+		t.Fatalf("requests %v", p.requests)
+	}
+}
+
+func TestUnregisterAndConfigureWorkWithACorruptJournal(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{
+		"DELETE /runner/v1/registration": {{204, nil}},
+		"POST /runner/v1/register":       {registered()},
+	})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	corruptJournal(t, dir)
+	if err := Unregister(context.Background(), UnregisterOptions{StateDir: dir, Out: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	if credsExist(t, dir) {
+		t.Fatal("the credentials are still there")
+	}
+	// Configure also copes with the corrupt file, should it come back.
+	corruptJournal(t, dir)
+	if err := Configure(context.Background(), configureOpts(url, dir)); err != nil {
+		t.Fatal(err)
+	}
+	if !credsExist(t, dir) || len(p.requests) != 2 {
+		t.Fatalf("requests %v", p.requests)
+	}
+	j, err := journal.Open(dir, nil)
+	if err != nil || j.After() != 0 {
+		t.Fatalf("journal after configure: %v", err)
+	}
+}
+
+func TestConfigureAsRootRegistersNothingWhenTheServiceUserLookupFails(t *testing.T) {
+	cases := map[string]func(string) (*user.User, error){
+		"lookup": func(string) (*user.User, error) { return nil, errors.New("nss: connection refused") },
+		"uid":    func(string) (*user.User, error) { return &user.User{Uid: "x", Gid: "997"}, nil },
+		"gid":    func(string) (*user.User, error) { return &user.User{Uid: "998", Gid: "-"}, nil },
+	}
+	for name, lookup := range cases {
+		p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+		dir := t.TempDir()
+		opts := configureOpts(url, dir)
+		opts.Geteuid = func() int { return 0 }
+		opts.LookupUser = lookup
+		err := Configure(context.Background(), opts)
+		if err == nil || !strings.Contains(err.Error(), "not spent") {
+			t.Errorf("%s: got %v", name, err)
+		}
+		if len(p.requests) != 0 || credsExist(t, dir) {
+			t.Errorf("%s: registered: %v", name, p.requests)
+		}
+	}
+}
+
+func TestConfigureAsRootBeforeServiceInstallKeepsTheCredentials(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	opts := configureOpts(url, dir)
+	opts.Geteuid = func() int { return 0 }
+	opts.LookupUser = func(name string) (*user.User, error) { return nil, user.UnknownUserError(name) }
+	if err := Configure(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.requests) != 1 || !credsExist(t, dir) {
+		t.Fatalf("requests %v", p.requests)
 	}
 }

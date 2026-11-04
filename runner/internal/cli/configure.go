@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/user"
-	"strconv"
 	"strings"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
@@ -35,6 +34,10 @@ type ConfigureOptions struct {
 	Preflight  preflight.Env
 	HTTPClient *http.Client
 	Out        io.Writer
+	// LookupUser and Geteuid are replaced in tests. nil means user.Lookup and
+	// os.Geteuid.
+	LookupUser func(name string) (*user.User, error)
+	Geteuid    func() int
 }
 
 // Configure runs the preflight, registers the machine and stores its credentials.
@@ -62,6 +65,10 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 	}
 	if err := statedir.CheckWritable(opts.StateDir); err != nil {
 		return fmt.Errorf("configure cannot write the state directory %s (%v), so it registered nothing and the registration token is not spent: run configure as root (sudo)", opts.StateDir, err)
+	}
+	owner, err := serviceOwner(opts)
+	if err != nil {
+		return fmt.Errorf("configure cannot tell who must own the credentials, so it registered nothing and the registration token is not spent: %w", err)
 	}
 	lock, err := lockForCommand(opts.StateDir, "configure")
 	if err != nil {
@@ -105,7 +112,7 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 	if err := store.Save(creds); err != nil {
 		return fmt.Errorf("the machine was registered, but its credentials could not be stored, so this machine cannot use them: unregister it on the runner page and run configure again with a new token: %w", err)
 	}
-	if err := handToServiceUser(opts.StateDir); err != nil {
+	if err := handTo(owner, opts.StateDir); err != nil {
 		return err
 	}
 	fmt.Fprintf(opts.Out, "Registered this machine as %q. Its credentials are in %s.\n", reg.Environment.DisplayName, store.Path())
@@ -129,21 +136,35 @@ func registerError(err error) error {
 	return fmt.Errorf("registering failed, which is a bug in aixle-runner: %w", err)
 }
 
-// handToServiceUser gives the state directory to the `aixle-runner` user when
-// configure runs as root after `service install` created it, so the service can
-// read and rotate the credentials. Before that, `service install` does it.
-func handToServiceUser(stateDir string) error {
-	if os.Geteuid() != 0 {
+// serviceOwner is the `aixle-runner` user when configure runs as root after
+// `service install` created it: the service must read and rotate the credentials.
+// It is nil otherwise; before `service install`, install hands them over. Only a
+// user that does not exist is not an error.
+func serviceOwner(opts ConfigureOptions) (*service.Account, error) {
+	geteuid, lookup := opts.Geteuid, opts.LookupUser
+	if geteuid == nil {
+		geteuid = os.Geteuid
+	}
+	if lookup == nil {
+		lookup = user.Lookup
+	}
+	if geteuid() != 0 {
+		return nil, nil
+	}
+	acct, ok, err := service.LookupAccount(lookup)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &acct, nil
+}
+
+// handTo gives the state directory and the credentials to owner, if any.
+func handTo(owner *service.Account, stateDir string) error {
+	if owner == nil {
 		return nil
 	}
-	u, err := user.Lookup(service.User)
-	if err != nil {
-		return nil
-	}
-	uid, _ := strconv.Atoi(u.Uid)
-	gid, _ := strconv.Atoi(u.Gid)
 	for _, p := range []string{stateDir, credentials.NewStore(stateDir).Path()} {
-		if err := os.Lchown(p, uid, gid); err != nil {
+		if err := os.Lchown(p, owner.UID, owner.GID); err != nil {
 			return fmt.Errorf("handing %s to %s: %w", p, service.User, err)
 		}
 	}

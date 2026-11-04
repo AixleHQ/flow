@@ -27,6 +27,11 @@ const FileName = "journal.json"
 // An op whose result was never accepted is remembered until it is.
 const Retention = 24 * time.Hour
 
+// ErrInvalid is a journal file that is not valid JSON. The runner writes the file
+// atomically, so only a hand edit or a damaged disk leads here, and a restart
+// cannot repair it.
+var ErrInvalid = errors.New("not a valid journal")
+
 // Entry is what the journal knows about one op.
 type Entry struct {
 	Sequence   int64     `json:"sequence"`
@@ -53,7 +58,8 @@ type Journal struct {
 	now  func() time.Time
 }
 
-// Open reads the journal in stateDir, or starts an empty one.
+// Open reads the journal in stateDir, or starts an empty one. A file that is not
+// valid JSON is an ErrInvalid.
 func Open(stateDir string, now func() time.Time) (*Journal, error) {
 	if now == nil {
 		now = time.Now
@@ -67,7 +73,7 @@ func Open(stateDir string, now func() time.Time) (*Journal, error) {
 		return nil, fmt.Errorf("reading the journal: %w", err)
 	}
 	if err := json.Unmarshal(raw, &j.data); err != nil {
-		return nil, fmt.Errorf("%s is not a valid journal: %w", j.path, err)
+		return nil, fmt.Errorf("%s is %w: %v", j.path, ErrInvalid, err)
 	}
 	if j.data.Ops == nil {
 		j.data.Ops = map[string]Entry{}

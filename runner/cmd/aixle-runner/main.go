@@ -25,6 +25,9 @@ const usage = `Usage:
   aixle-runner unregister [--state-dir <dir>]
   aixle-runner service install | uninstall | start | stop
   aixle-runner --mode host [--state-dir <dir>]
+
+service install copies this binary to /usr/local/bin/aixle-runner, owned by
+root, and the service runs that copy.
 `
 
 func main() {
@@ -134,6 +137,7 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 	if binary, err = filepath.EvalSymlinks(binary); err != nil {
 		return fmt.Errorf("finding this binary's path: %w", err)
 	}
+	// install copies binary to service.BinaryPath, which the unit runs.
 	m := service.NewManager(binary, cli.DefaultStateDir)
 	switch args[0] {
 	case "install":

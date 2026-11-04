@@ -1,18 +1,43 @@
-// Package fsutil holds the file helpers the state directory needs.
+// Package fsutil holds the file helpers the state directory and the service need.
 package fsutil
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
 
 // WriteFileAtomic replaces path with data: it writes a temporary file in the same
 // directory with mode perm, syncs it, renames it over path and syncs the directory.
-// A reader sees either the old content or the new one.
+// A reader sees either the old content or the new one. A missing directory is
+// created with mode 0700.
 func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return writeAtomic(path, perm, 0o700, func(f *os.File) error {
+		_, err := f.Write(data)
+		return err
+	}, nil)
+}
+
+// CopyFileAtomic replaces dst with a copy of src, as WriteFileAtomic does. Before
+// the rename it calls own, when given, with the temporary file's name, so the
+// copy has its final owner the moment it appears at dst. A missing directory is
+// created with mode 0755.
+func CopyFileAtomic(src, dst string, perm os.FileMode, own func(name string) error) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", src, err)
+	}
+	defer in.Close()
+	return writeAtomic(dst, perm, 0o755, func(f *os.File) error {
+		_, err := io.Copy(f, in)
+		return err
+	}, own)
+}
+
+func writeAtomic(path string, perm, dirPerm os.FileMode, fill func(*os.File) error, own func(string) error) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(dir, dirPerm); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
@@ -32,7 +57,7 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 		tmp.Close()
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
-	if _, err := tmp.Write(data); err != nil {
+	if err := fill(tmp); err != nil {
 		tmp.Close()
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
@@ -42,6 +67,11 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if own != nil {
+		if err := own(tmpName); err != nil {
+			return fmt.Errorf("writing %s: %w", path, err)
+		}
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)

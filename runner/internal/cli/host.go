@@ -49,6 +49,11 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		return err
 	}
 	j, err := journal.Open(opts.StateDir, nil)
+	if errors.Is(err, journal.ErrInvalid) {
+		// Without the journal the runner cannot tell which ops it ran, so it must
+		// not poll this environment again.
+		return operatorError{fmt.Errorf("%w. The runner cannot tell which ops it ran: run `aixle-runner unregister`, then `aixle-runner configure` with a new registration token", err)}
+	}
 	if err != nil {
 		return err
 	}
