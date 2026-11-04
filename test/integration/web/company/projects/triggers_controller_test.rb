@@ -44,7 +44,7 @@ class Web::Company::Projects::TriggersControllerTest < ActionDispatch::Integrati
       props[:chatProviders].map { |p| p.values_at(:key, :botName) } == [ %w[slack aixle-flow], [ "teams", "Aixle Flow" ] ] &&
         props[:chatProviders].last[:conversations] ==
           [ { "id" => onboarding.id, "name" => "Onboarding", "label" => "Onboarding", "kind" => "channel",
-              "teamName" => "Sales", "provider" => "teams" } ]
+              "teamName" => "Sales", "workspace" => nil, "provider" => "teams" } ]
     end
   end
 end

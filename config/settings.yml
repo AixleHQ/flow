@@ -413,7 +413,8 @@ slack:
 # none set the dialog is not offered.
 feedback:
   # A Slack bot token (xoxb-, with chat:write and files:write) and the channel
-  # id it posts to. The bot has to be a member of the channel.
+  # id it posts to. The bot has to be a member of the channel. Every new company,
+  # signed up or made in the admin, is posted there too.
   slack_bot_token: "<%= ENV['FEEDBACK_SLACK_BOT_TOKEN'] %>"
   slack_channel_id: "<%= ENV['FEEDBACK_SLACK_CHANNEL_ID'] %>"
   # A card per submission in this column of this project's board.

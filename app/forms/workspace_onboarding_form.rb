@@ -71,6 +71,7 @@ class WorkspaceOnboardingForm
       marketplace_license&.update!(company: @company)
       record_acceptances(owner, acceptance) if accept_terms && acceptance
     end
+    Feedback::NewCompanyAnnouncement.later(@company, source: marketplace_license ? "marketplace" : "signup", by: owner)
     true
   rescue ActiveRecord::RecordInvalid => e
     # Company's own validations — a reserved domain, a name already taken — and a

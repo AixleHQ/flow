@@ -13,7 +13,28 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Triggers & gates**: a company admin or the project owner can change who an
+  existing schedule, chat, webhook or task tracker trigger runs as, picking any
+  project member or company admin with an agent connected. The next run uses
+  that person's agent and limits; the trigger keeps its id, settings and
+  history, and the change is recorded in the audit trail. Over MCP it is
+  `run_as_user_id` on `update_workflow_trigger`.
+- **Feedback**: the feedback Slack channel (`FEEDBACK_SLACK_CHANNEL_ID`) hears
+  of every new company — its name, id, domain, who created it and when, and
+  whether it came from a self-serve signup, an AWS Marketplace signup or the
+  admin. Nothing to switch on: it posts wherever the feedback bot is configured.
+- **Integrations**: Slack and Microsoft Teams can be connected for one project
+  only. Its triggers, channels, agent tools, help and Run workflow menu then
+  reach that project alone, and a company admin can share it with every project
+  later.
+
 ### Changed
+- **Integrations**: only a company admin can connect Slack or Microsoft Teams
+  for the whole company, renew a company-wide Teams approval link, or share a
+  project's connection with the company. Other members who can change a project
+  connect it for that project. Moving a project to another company switches off
+  the Slack or Teams connection that was made for it.
 - **Company settings**: the Billing tab lists every subscription the workspace has
   had. The one paying now — the card, or the AWS Marketplace subscription — shows its
   billing method, current period, next invoice and the usage so far; the ones that
@@ -28,6 +49,27 @@ governance, community health — carry none.
   and is not made where that is empty; the seller role needs
   `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
   a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
+
+### Fixed
+- **Companies & projects**: a project whose name has no Latin letters or digits,
+  such as "Проект", can be created; it used to be refused with nothing shown.
+- **Companies & projects**: the Create New Project dialog now shows why a project
+  could not be created, including errors on fields other than the name, and keeps
+  them visible when it was opened from the sidebar.
+- **Templates**: `bin/rails templates:validate` runs without a database again. The
+  template repository's pull-request check failed on every pull request while the
+  catalog held a template with a stdio MCP server.
+- **Sessions & Runs**: when an agent asked for several secrets at the same moment,
+  one of them could stay unmasked in the session's proxy log and in the agent's own
+  transcript. Every secret a session receives is now masked there, however the
+  requests overlap.
+- **Integrations**: a company with several Slack workspaces, or several
+  Microsoft 365 organizations, gets a **Channels** list on each connection,
+  holding only that workspace's channels. Before, only the first connection had
+  one, and it listed the channels of every workspace together. A code asked for
+  there connects a channel in that workspace only. The trigger form groups the
+  channels by workspace, and an agent names a channel two workspaces share as
+  `Workspace/#channel`.
 
 ## [1.10.0] - 2026-11-03
 

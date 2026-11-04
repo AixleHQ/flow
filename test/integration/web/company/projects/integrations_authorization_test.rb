@@ -38,10 +38,12 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     assert_project_read { get company_project_integrations_path(@project) }
   end
 
+  # For this project only: connecting for the whole company is a company admin's
+  # (IntegrationsControllerTest), which this project-role matrix does not vary.
   test "slack_oauth_start is a project write (redirects to Slack)" do
     with_slack_app
     assert_project_write do
-      get slack_oauth_start_company_project_integrations_path(@project)
+      get slack_oauth_start_company_project_integrations_path(@project), params: { scope: "project" }
     end
   end
 
@@ -142,7 +144,7 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
   test "teams_connect is a project write (redirects back with the approval link)" do
     with_teams_enabled
     assert_project_write do
-      post teams_connect_company_project_integrations_path(@project)
+      post teams_connect_company_project_integrations_path(@project), params: { scope: "project" }
     end
   end
 
@@ -156,7 +158,7 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
 
   test "teams_link is a project write" do
     with_teams_enabled
-    teams = create(:integration, provider: :teams, company: @company, project: nil, connected_by: @owner)
+    teams = create(:integration, provider: :teams, company: @company, project: @project, connected_by: @owner)
     assert_project_write do
       post teams_link_company_project_integration_path(@project, teams)
     end

@@ -998,7 +998,51 @@ describe('IntegrationsContent', () => {
       });
     });
 
-    it('connecting Slack from the empty state in a project navigates to the OAuth start URL', async () => {
+    const adminProps = {
+      ...settingsProps,
+      projectPermissions: { canExecute: true, canManage: true, canManageCompany: true },
+    };
+
+    it('connects Slack from the empty state for the whole company by default when a company admin asks', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[]}
+          slack={{ enabled: true }}
+        />,
+        { props: adminProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Slack' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+      expect(within(dialog).getByRole('radio', { name: 'Every project in the company' })).toBeChecked();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+
+      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start?scope=company');
+    });
+
+    it('lets a company admin connect Slack for this project only', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[makeIntegration({ id: 1, name: 'Existing GitHub', scopeIndicator: 'project' })]}
+          slack={{ enabled: true }}
+        />,
+        { props: adminProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: /Slack/i }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+      await userEvent.click(within(dialog).getByRole('radio', { name: 'Only this project' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
+
+      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start?scope=project');
+    });
+
+    it('connects Slack for this project only when the member is not a company admin', async () => {
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
@@ -1010,25 +1054,34 @@ describe('IntegrationsContent', () => {
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Slack' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+      expect(within(dialog).getByRole('radio', { name: 'Every project in the company' })).toBeDisabled();
+      expect(
+        within(dialog).getByText('Only a company admin can connect it for the whole company.'),
+      ).toBeInTheDocument();
+      expect(within(dialog).getByRole('radio', { name: 'Only this project' })).toBeChecked();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
 
-      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start');
+      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start?scope=project');
     });
 
-    it('opens the Slack OAuth start from the Connect menu in a project context', async () => {
+    it('leaves the page alone when the dialog is cancelled', async () => {
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
           basePath="/projects/42/integrations"
-          integrations={[makeIntegration({ id: 1, name: 'Existing GitHub', scopeIndicator: 'project' })]}
+          integrations={[]}
           slack={{ enabled: true }}
         />,
-        { props: settingsProps },
+        { props: adminProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-      await userEvent.click(await screen.findByRole('menuitem', { name: /Slack/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'Slack' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Connect Slack' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
-      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(window.location.href).toBe('');
     });
 
     it('does not offer Slack on a deployment with no Slack app', async () => {
@@ -1433,11 +1486,17 @@ describe('IntegrationsContent', () => {
       />,
     );
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Microsoft Teams' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Microsoft Teams' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
 
-    expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/teams_connect', {}, expect.anything());
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/1/integrations/teams_connect',
+      { scope: 'project' },
+      expect.anything(),
+    );
   });
 
-  it('offers Microsoft Teams on an empty page too', async () => {
+  it('offers Microsoft Teams on an empty page too, for the whole company when a company admin asks', async () => {
     renderPage(
       <IntegrationsContent
         title="Integrations"
@@ -1445,12 +1504,20 @@ describe('IntegrationsContent', () => {
         integrations={[]}
         teams={{ enabled: true }}
       />,
-      { props: settingsProps },
+      {
+        props: { ...settingsProps, projectPermissions: { canExecute: true, canManage: true, canManageCompany: true } },
+      },
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Microsoft Teams' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Microsoft Teams' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
 
-    expect(router.post).toHaveBeenCalledWith('/company/projects/1/integrations/teams_connect', {}, expect.anything());
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/1/integrations/teams_connect',
+      { scope: 'company' },
+      expect.anything(),
+    );
   });
 
   it('shows the approval link once, right after it was made', async () => {
@@ -1473,6 +1540,7 @@ describe('IntegrationsContent', () => {
   });
 
   it('says which organization a Teams connection serves, or that it waits for approval', async () => {
+    const companyAdmin = { canExecute: true, canManage: true, canManageCompany: true };
     renderPage(
       <IntegrationsContent
         title="Integrations"
@@ -1490,7 +1558,7 @@ describe('IntegrationsContent', () => {
           makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' }),
         ]}
       />,
-      { props: settingsProps },
+      { props: { ...settingsProps, projectPermissions: companyAdmin } },
     );
 
     expect(screen.getByText('contoso.com · approved by Megan Bowen · files on')).toBeInTheDocument();
@@ -1504,6 +1572,72 @@ describe('IntegrationsContent', () => {
     expect(
       screen.getByRole('button', { name: 'New approval link for Microsoft Teams (contoso.com)' }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a company-wide Teams connection's approval link to company admins", () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        teams={{ enabled: true }}
+        integrations={[
+          makeIntegration({ id: 6, name: 'Microsoft Teams', provider: 'teams', status: 'inactive' }),
+          makeIntegration({
+            id: 7,
+            name: 'Project Teams',
+            provider: 'teams',
+            status: 'inactive',
+            scopeIndicator: 'project',
+          }),
+        ]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.queryByRole('button', { name: 'New approval link for Microsoft Teams' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New approval link for Project Teams' })).toBeInTheDocument();
+  });
+
+  it("offers sharing a project's Slack connection with every project to company admins only", () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[makeIntegration({ id: 8, name: 'Acme Slack', provider: 'slack', scopeIndicator: 'project' })]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.queryByRole('button', { name: 'Share Acme Slack with the whole company' })).not.toBeInTheDocument();
+  });
+
+  it("lets a company admin share a project's Slack connection with every project", async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[
+          makeIntegration({ id: 8, name: 'Acme Slack', provider: 'slack', scopeIndicator: 'project' }),
+          makeIntegration({ id: 9, name: 'Globex Slack', provider: 'slack', scopeIndicator: 'company' }),
+        ]}
+      />,
+      {
+        props: { ...settingsProps, projectPermissions: { canExecute: true, canManage: true, canManageCompany: true } },
+      },
+    );
+
+    expect(screen.queryByRole('button', { name: 'Share Globex Slack with the whole company' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Share Acme Slack with the whole company' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share with the whole company' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Share' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/projects/1/integrations/8',
+        { scope: 'company' },
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
   });
 
   describe('the channels of a Slack or Teams connection', () => {
@@ -1534,7 +1668,7 @@ describe('IntegrationsContent', () => {
       vi.restoreAllMocks();
     });
 
-    it("opens the company's channels in that messenger from one connection, with who connected them", async () => {
+    it("opens the channels in one connection's workspace, with who connected them", async () => {
       const fetchSpy = answerFetch({
         [`GET ${CHANNELS}`]: {
           channels: [
@@ -1543,22 +1677,33 @@ describe('IntegrationsContent', () => {
           ],
         },
       });
-      renderProject([
-        acmeSlack,
-        makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
-      ]);
+      renderProject([acmeSlack]);
 
       expect(screen.queryByRole('list', { name: 'Slack channels' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Channels for Ops Slack' })).not.toBeInTheDocument();
       const dialog = await openChannels();
       expect(dialog).toHaveAccessibleName('Slack channels');
+      expect(within(dialog).getByText(/^Channels in/)).toHaveTextContent(/^Channels in Acme Slack\./);
 
       const list = await within(dialog).findByRole('list', { name: 'Slack channels' });
       expect(within(list).getAllByRole('listitem')).toHaveLength(2);
       expect(within(list).getByText('#deploys')).toBeInTheDocument();
       expect(within(list).getByText(/^connected by Jane Doe · posted by ivan · /)).toBeInTheDocument();
       expect(within(list).getByText(/^posted by Olo · /)).toBeInTheDocument();
-      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack`, expect.anything());
+      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack&integration_id=8`, expect.anything());
+    });
+
+    it('gives every Slack workspace the company connected its own list', async () => {
+      const fetchSpy = answerFetch({ [`GET ${CHANNELS}`]: { channels: [] } });
+      renderProject([
+        acmeSlack,
+        makeIntegration({ id: 9, name: 'Ops Slack', provider: 'slack', scopeIndicator: 'project' }),
+      ]);
+
+      expect(screen.getByRole('button', { name: 'Channels for Acme Slack' })).toBeInTheDocument();
+      const ops = await openChannels('Ops Slack');
+      expect(within(ops).getByText(/^Channels in/)).toHaveTextContent(/^Channels in Ops Slack\./);
+      expect(await within(ops).findByText(/No channel is connected yet/)).toBeInTheDocument();
+      expect(fetchSpy).toHaveBeenCalledWith(`${CHANNELS}?provider=slack&integration_id=9`, expect.anything());
     });
 
     it("links to the bot's confirmation in the channel, where the server has one", async () => {
@@ -1640,13 +1785,20 @@ describe('IntegrationsContent', () => {
       expect(await within(channelsDialog).findByText(/No channel is connected yet/)).toBeInTheDocument();
       await userEvent.click(within(channelsDialog).getByRole('button', { name: 'Connect a channel' }));
       const dialog = await screen.findByRole('dialog', { name: 'Connect a Slack channel' });
+      expect(within(dialog).getByText(/^A channel in/)).toHaveTextContent(
+        'A channel in Acme Slack. Posted in another workspace, the code connects nothing.',
+      );
       await userEvent.type(within(dialog).getByRole('textbox', { name: 'Channel' }), 'deploys');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Get code' }));
       expect(await within(dialog).findByRole('textbox', { name: 'Message to post' })).toHaveValue(
         'connect aixle-7F3K9QXM',
       );
       const request = fetchSpy.mock.calls.find(([url, init]) => url === CODES && init?.method === 'POST');
-      expect(JSON.parse(request?.[1]?.body as string)).toEqual({ provider: 'slack', channel: 'deploys' });
+      expect(JSON.parse(request?.[1]?.body as string)).toEqual({
+        provider: 'slack',
+        channel: 'deploys',
+        integration_id: 8,
+      });
 
       channels = [buildConnectedChatChannel()];
       state = 'redeemed';

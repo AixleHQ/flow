@@ -49,6 +49,37 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal @company.integrations.find_by!(provider: :teams), Teams::Connection.find_by_token(token)
   end
 
+  test "teams_connect keeps a project owner who is not a company admin to their project" do
+    with_teams_enabled
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    sign_in_as(owner)
+
+    assert_no_difference -> { Integration.count } do
+      post teams_connect_company_project_integrations_path(project)
+    end
+    assert_match(/Only a company admin can connect Microsoft Teams for the whole company/, flash[:alert])
+
+    post teams_connect_company_project_integrations_path(project), params: { scope: "project" }
+
+    teams = @company.integrations.find_by!(provider: :teams)
+    assert_equal project.id, teams.project_id
+    assert_equal teams, Teams::Connection.find_by_token(flash[:teams_approval_url].split("/").last)
+  end
+
+  test "teams_link renews a company-wide connection's link for a company admin only" do
+    with_teams_enabled
+    teams, = Teams::Connection.start!(company: @company, user: @user)
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    sign_in_as(owner)
+
+    post teams_link_company_project_integration_path(project, teams)
+
+    assert_match(/Only a company admin/, flash[:alert])
+    assert_nil flash[:teams_approval_url]
+  end
+
   test "teams_link hands out a fresh approval link for an existing connection" do
     with_teams_enabled
     teams, old = Teams::Connection.start!(company: @company, user: @user)
@@ -102,15 +133,30 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert Integration.exists?(slack.id)
   end
 
-  test "slack_oauth_start authorizes an admin and redirects to Slack consent" do
+  # The scope rides in the signed state, so the callback binds what was asked for.
+  def slack_state_from(location)
+    Slack::Oauth.verify_state(Rack::Utils.parse_query(URI(location).query)["state"])
+  end
+
+  test "slack_oauth_start sends a company admin to Slack's consent for the whole company by default" do
     with_slack_app
     get slack_oauth_start_company_project_integrations_path(@project)
 
     assert_response :redirect
     assert_includes response.location, Slack::Oauth::AUTHORIZE_URL
+    assert_equal true, slack_state_from(response.location)["company_wide"] # rubocop:disable Minitest/AssertTruthy
   end
 
-  test "slack_oauth_start is allowed for a non-admin project owner" do
+  test "slack_oauth_start sends a company admin to Slack's consent for this project only when asked" do
+    with_slack_app
+    get slack_oauth_start_company_project_integrations_path(@project), params: { scope: "project" }
+
+    state = slack_state_from(response.location)
+    assert_equal false, state["company_wide"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal @project.id, state["project_id"]
+  end
+
+  test "slack_oauth_start keeps a project owner who is not a company admin to their project" do
     with_slack_app
     owner = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     project = create(:project, company: @company, owner: owner)
@@ -118,8 +164,13 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
 
     get slack_oauth_start_company_project_integrations_path(project)
 
-    assert_response :redirect
+    assert_redirected_to company_project_integrations_path(project)
+    assert_match(/Only a company admin can connect Slack for the whole company/, flash[:alert])
+
+    get slack_oauth_start_company_project_integrations_path(project), params: { scope: "project" }
+
     assert_includes response.location, Slack::Oauth::AUTHORIZE_URL
+    assert_equal false, slack_state_from(response.location)["company_wide"] # rubocop:disable Minitest/RefuteFalse
   end
 
   test "slack_oauth_start is denied for a non-admin, non-owner member" do
@@ -593,6 +644,27 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
 
     assert_response :redirect
     assert_match(/Only Coder integrations have editable settings/, flash[:alert])
+  end
+
+  test "a company admin shares a project's Slack connection with every project" do
+    slack = create(:integration, provider: :slack, company: @company, project: @project, connected_by: @user)
+
+    patch company_project_integration_path(@project, slack), params: { scope: "company" }
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_nil slack.reload.project_id
+  end
+
+  test "a project owner who is not a company admin cannot share a project's Teams connection" do
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    teams = create(:integration, provider: :teams, company: @company, project: project, connected_by: owner)
+    sign_in_as(owner)
+
+    patch company_project_integration_path(project, teams), params: { scope: "company" }
+
+    assert_match(/Only a company admin can share/, flash[:alert])
+    assert_equal project.id, teams.reload.project_id
   end
 
   test "update does not reach a company-wide integration from a project page" do

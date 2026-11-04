@@ -33,12 +33,13 @@ module Teams
 
     module_function
 
-    # A pending connection for the company and the link that approves it. The
-    # link is shown once; only its digest is kept.
-    def start!(company:, user:)
-      integration = Integration.where(provider: PROVIDER, company: company, status: "inactive")
+    # A pending connection for the company, or for one of its projects, and the
+    # link that approves it. The link is shown once; only its digest is kept.
+    # Whether the caller may connect for the whole company is the caller's check.
+    def start!(company:, user:, project: nil)
+      integration = Integration.where(provider: PROVIDER, company: company, project: project, status: "inactive")
                                .find { |candidate| candidate.settings.to_h["tenant_id"].blank? } ||
-                    Integration.new(provider: PROVIDER, company: company, project: nil, name: "Microsoft Teams")
+                    Integration.new(provider: PROVIDER, company: company, project: project, name: "Microsoft Teams")
       integration.assign_attributes(connected_by: user, status: "inactive")
       [ integration, renew_link!(integration) ]
     end
@@ -145,7 +146,9 @@ module Teams
       raise Refused, "That Microsoft 365 organization was being connected at the same moment — approve again"
     end
 
-    # Several companies may connect one organization, each once.
+    # Several companies may connect one organization, each once, whether for
+    # the whole company or for one of its projects: two connections in one
+    # company would hear every message twice.
     def already_connected?(integration, tenant_id)
       integration.company.integrations.active.where(provider: "teams").where.not(id: integration.id)
                  .where("settings->>'tenant_id' = ?", tenant_id).exists?

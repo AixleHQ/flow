@@ -11,11 +11,11 @@ import { apiV1ProjectChatChannelPath, apiV1ProjectChatChannelsPath } from 'share
 
 import { channelName } from './channelName';
 import { ConnectChannelModal } from './ConnectChannelModal';
-import type { ConnectedChatChannel } from './types';
+import type { ChatInstall, ConnectedChatChannel } from './types';
 
 interface ChatChannelsModalProps {
   projectId: number;
-  provider: string;
+  integration: ChatInstall | null;
   opened: boolean;
   onClose: () => void;
   // Connecting and disconnecting; the list itself is for everyone on the project.
@@ -34,25 +34,31 @@ function provenance(channel: ConnectedChatChannel): string {
     .join(' · ');
 }
 
-/** The company's channels in one messenger: what its chat triggers can listen to and its workflows post in. */
-export const ChatChannelsModal = ({ projectId, provider, opened, onClose, canEdit }: ChatChannelsModalProps) => {
+/**
+ * The company's channels in one Slack or Teams connection's workspace: what its chat triggers can listen to and its
+ * workflows post in.
+ */
+export const ChatChannelsModal = ({ projectId, integration, opened, onClose, canEdit }: ChatChannelsModalProps) => {
   const [channels, setChannels] = useState<ConnectedChatChannel[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const provider = integration?.provider ?? 'slack';
+  const integrationId = integration?.id;
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
   const shortName = MESSENGER_SHORT_NAMES[provider] ?? label;
 
   const load = useCallback(async () => {
+    if (integrationId === undefined) return;
     try {
       const data = await apiRequest<{ channels: ConnectedChatChannel[] }>(
-        apiV1ProjectChatChannelsPath(projectId, { provider }),
+        apiV1ProjectChatChannelsPath(projectId, { provider, integration_id: integrationId }),
       );
       setChannels(data.channels);
       setFailed(false);
     } catch {
       setFailed(true);
     }
-  }, [projectId, provider]);
+  }, [projectId, provider, integrationId]);
 
   useEffect(() => {
     if (!opened) return;
@@ -90,8 +96,8 @@ export const ChatChannelsModal = ({ projectId, provider, opened, onClose, canEdi
       <Modal opened={opened && !connecting} onClose={onClose} title={`${label} channels`} size="lg">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Chat triggers listen in, and workflows post to, these channels only. They belong to your company, so every
-            project sees the same list.
+            Channels in <b>{integration?.name}</b>. Chat triggers listen in, and workflows post to, connected channels
+            only. Every project this connection serves sees the same list.
           </Text>
           {channels === null ? (
             failed ? (
@@ -182,6 +188,7 @@ export const ChatChannelsModal = ({ projectId, provider, opened, onClose, canEdi
         <ConnectChannelModal
           projectId={projectId}
           provider={provider}
+          integration={integration ?? undefined}
           opened={opened && connecting}
           onClose={() => setConnecting(false)}
           onConnected={() => load()}

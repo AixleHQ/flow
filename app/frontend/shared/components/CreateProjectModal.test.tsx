@@ -99,11 +99,35 @@ describe('shared/components/CreateProjectModal', () => {
 
   it('shows a validation error alert when the name field has an error', () => {
     const form = makeFormStub({ name: '', description: '' });
-    form.errors = { name: 'Name has already been taken' } as Record<string, string>;
+    form.errors = { name: ['has already been taken'] } as unknown as Record<string, string>;
     renderPage(<CreateProjectModal opened onClose={vi.fn()} />, { form });
 
-    // The message renders both in the dismissible Alert (role=alert) and on the TextInput's error,
+    // The message renders both in the Alert (role=alert) and on the TextInput's error,
     // so scope the assertion to the alert to avoid a multiple-match throw.
     expect(within(screen.getByRole('alert')).getByText('Name has already been taken')).toBeInTheDocument();
+  });
+
+  it('shows errors on attributes the form has no field for, labelled by attribute', () => {
+    const form = makeFormStub({ name: 'Roadmap', description: '' });
+    form.errors = {
+      slug: ["can't be blank", 'only allows lowercase letters, numbers, and hyphens'],
+      base: ['Board could not be created'],
+    } as unknown as Record<string, string>;
+    renderPage(<CreateProjectModal opened onClose={vi.fn()} />, { form });
+
+    const alert = screen.getByRole('alert');
+    expect(within(alert).getByText("Slug can't be blank")).toBeInTheDocument();
+    expect(within(alert).getByText('Slug only allows lowercase letters, numbers, and hyphens')).toBeInTheDocument();
+    expect(within(alert).getByText('Board could not be created')).toBeInTheDocument();
+  });
+
+  it('labels a multi-word attribute in plain words', () => {
+    const form = makeFormStub({ name: 'Docs', description: '' });
+    form.errors = { preferred_artifacts_language: 'is not included in the list' } as Record<string, string>;
+    renderPage(<CreateProjectModal opened onClose={vi.fn()} />, { form });
+
+    expect(
+      within(screen.getByRole('alert')).getByText('Preferred artifacts language is not included in the list'),
+    ).toBeInTheDocument();
   });
 });

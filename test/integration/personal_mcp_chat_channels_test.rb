@@ -36,6 +36,27 @@ class PersonalMCPChatChannelsTest < ActionDispatch::IntegrationTest
     assert_equal [ [ channel.id, "#deploys", "slack" ] ], payload(body)["channels"].map { |c| c.values_at("id", "label", "provider") }
   end
 
+  test "with integration_id, channels and codes are narrowed to that install's workspace" do
+    ops = create(:integration, provider: :slack, status: :active, company: @company, project: nil, name: "Ops",
+                               settings: { "team_id" => "T0OPS", "team_name" => "Ops", "bot_name" => "aixle-flow" })
+    connect_chat_channel(company: @company, integration: @slack, external_id: "C0DEPLOYS1", name: "deploys")
+    ops_channel = connect_chat_channel(company: @company, integration: ops, external_id: "C0OPSDEP1", name: "deploys")
+
+    listed = call_tool("list_chat_channels", { project_id: @project.id, integration_id: ops.id })
+    assert_not tool_error?(listed), text(listed)
+    assert_equal [ [ ops_channel.id, "Ops" ] ], payload(listed)["channels"].map { |c| c.values_at("id", "workspace") }
+
+    code = call_tool("create_chat_connect_code", { project_id: @project.id, provider: "slack", channel: "deploys",
+                                                   integration_id: ops.id })
+    assert_not tool_error?(code), text(code)
+    assert_equal "Ops", payload(code)["workspace"]
+
+    foreign = create(:integration, provider: :slack, status: :active, company: create(:company), project: nil)
+    refused = call_tool("list_chat_channels", { project_id: @project.id, integration_id: foreign.id })
+    assert tool_error?(refused)
+    assert_includes text(refused), "No active Slack or Teams integration #{foreign.id} in project #{@project.id}"
+  end
+
   test "create_chat_connect_code hands out a code for a trigger, and get_chat_connect_code follows it" do
     trigger = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, enabled: false, chat_channel: nil)
 

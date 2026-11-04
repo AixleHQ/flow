@@ -174,6 +174,61 @@ module Slack
       assert_equal @company.id, endpoint.company_id
     end
 
+    def project_service(project, company_wide: false)
+      Slack::IntegrationService.new(company: @company, connected_by: @user, project: project, company_wide: company_wide)
+    end
+
+    test "an install for one project serves that project, through the workspace's shared endpoint" do
+      stub_slack_oauth
+
+      integration = project_service(@project).create_from_oauth(code: "c")
+
+      assert integration.active?
+      assert_equal @project.id, integration.project_id
+      endpoint = WebhookEndpoint.find_by!(slug: "slack-team-T123")
+      assert_nil endpoint.project_id
+      assert_equal integration.id, endpoint.config["integration_id"]
+    end
+
+    test "a workspace connected for one project is refused to another project of the company" do
+      stub_slack_oauth
+      first = project_service(@project).create_from_oauth(code: "c1")
+      other = create(:project, owner: @user, company: @company)
+
+      refused = nil
+      assert_no_difference -> { Integration.count } do
+        refused = project_service(other).create_from_oauth(code: "c2")
+      end
+
+      assert refused.error?
+      assert_match(/already connected to another project of/, refused.settings["error"])
+      assert_equal @project.id, first.reload.project_id
+    end
+
+    test "connecting the workspace for the whole company widens a project's install" do
+      fake = stub_slack_oauth
+      first = project_service(@project).create_from_oauth(code: "c1")
+      fake.bot_token = "xoxb-fresh"
+
+      widened = project_service(create(:project, owner: @user, company: @company), company_wide: true)
+                .create_from_oauth(code: "c2")
+
+      assert_equal first.id, widened.id
+      assert_nil widened.reload.project_id
+      assert_equal "xoxb-fresh", widened.credentials_data["bot_token"]
+    end
+
+    test "a company-wide install is never narrowed to one project" do
+      stub_slack_oauth
+      company_wide = service.create_from_oauth(code: "c1")
+
+      refused = project_service(@project).create_from_oauth(code: "c2")
+
+      assert refused.error?
+      assert_match(/already connected for every project of/, refused.settings["error"])
+      assert_nil company_wide.reload.project_id
+    end
+
     test "a company can connect several different workspaces" do
       fake = stub_slack_oauth(team_id: "T1", team_name: "WS One")
 

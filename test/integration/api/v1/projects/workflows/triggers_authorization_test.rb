@@ -63,4 +63,20 @@ class Api::V1::Projects::Workflows::TriggersAuthorizationTest < ActionDispatch::
       )
     end
   end
+
+  # Only a company admin or the project owner may change who a trigger runs as;
+  # a collaborator who may otherwise edit the trigger is refused.
+  test "changing Run as is for company admins and the project owner" do
+    create(:agent_credential, user: @collaborator, company: @company)
+    expectations = {
+      owner: :allowed_write, admin: :allowed_write, collaborator: :denied,
+      viewer: :denied, stranger: :not_found, foreign_admin: :not_found
+    }
+
+    assert_role_matrix(expectations, transport: :api) do
+      patch api_v1_project_workflow_trigger_path(@project, @workflow, @trigger),
+            params: { trigger: { run_as_user_id: @collaborator.id } }, as: :json
+    end
+    assert_equal @collaborator, @trigger.reload.created_by
+  end
 end
