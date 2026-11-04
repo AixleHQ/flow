@@ -550,11 +550,10 @@ module Agents
       }
     end
 
-    def kiro_session_with_credential(rate: 0.04, token: "tok-otel")
+    def kiro_session_with_credential(token: "tok-otel")
       company = create(:company)
       user = create(:user, company: company)
-      create(:agent_credential, user: user, company: company, agent_type: "kiro_cli",
-                                metadata: { Agents::KiroCliAdapter::CREDIT_RATE_KEY => rate })
+      create(:agent_credential, user: user, company: company, agent_type: "kiro_cli", metadata: {})
       create(:terminal_session, user: user, agent_type: "kiro_cli", route_token: token)
     end
 
@@ -607,7 +606,8 @@ module Agents
       assert_equal %w[resp_1 resp_2], stat.events_data.pluck("responseId")
       assert_equal [ "auto", "claude-sonnet-5.5" ], stat.events_data.pluck("model")
       assert_in_delta 0.24, stat.events_data.sum { |e| e["creditsUsed"] }
-      assert_in_delta 0.96, stat.total_cents_precise.to_f, 0.0001
+      # At the API-equivalent rate, not the account's $0.04 overage rate GetUsageLimits reports.
+      assert_in_delta 0.24 * Settings.agents.kiro.credit_usd * 100, stat.total_cents_precise.to_f, 0.0001
     end
 
     # A stream cut off before its final event says nothing about what the call cost, so
@@ -632,7 +632,7 @@ module Agents
 
       stat = session.reload.usage_statistic
       assert_equal [ "claude-opus-5" ], stat.models
-      assert_in_delta 0.1814, stat.total_cents_precise.to_f, 0.001
+      assert_in_delta 0.045368 * Settings.agents.kiro.credit_usd * 100, stat.total_cents_precise.to_f, 0.001
       assert_equal 0, stat.input_tokens
       event = stat.events_data.sole
       assert_in_delta 0.045368, event["creditsUsed"]
@@ -646,7 +646,7 @@ module Agents
       @adapter.ingest_usage(otlp_credits_payload(token: "tok-otel", credits: 0.1), session)
       @adapter.ingest_usage(otlp_credits_payload(token: "tok-otel", credits: 0.2), session)
 
-      assert_in_delta 1.2, session.reload.usage_statistic.total_cents_precise.to_f, 0.001
+      assert_in_delta 0.3 * Settings.agents.kiro.credit_usd * 100, session.reload.usage_statistic.total_cents_precise.to_f, 0.001
     end
 
     # A cumulative sum restates the total each time. Adding those up would multiply the

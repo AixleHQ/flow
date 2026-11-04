@@ -164,6 +164,7 @@ per-project namespaces and network policies separate them.
 | `AGENT_AUTH_PAUSE_LIMIT_MINUTES` | no     | `720`             | How long a workflow step whose agent's login was refused stays paused, waiting for the login to be renewed, before it fails. |
 | `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
+| `KIRO_CREDIT_USD`              | no       | `0.10`            | What one Kiro credit is reported as in a session's cost, in USD: the API-equivalent price other runtimes report, not what the Kiro plan charges. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 

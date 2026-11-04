@@ -30,6 +30,9 @@ governance, community health — carry none.
   later.
 
 ### Changed
+- **Sessions & Runs**: a Kiro session's cost is now its credits at an API-equivalent
+  rate ($0.10 a credit, `KIRO_CREDIT_USD`), comparable with what other agents report,
+  instead of at Kiro's overage price of $0.04 a credit.
 - **Integrations**: only a company admin can connect Slack or Microsoft Teams
   for the whole company, renew a company-wide Teams approval link, or share a
   project's connection with the company. Other members who can change a project
