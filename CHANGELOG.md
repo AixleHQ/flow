@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Templates**: `bin/rails templates:validate` runs without a database again. The
+  template repository's pull-request check failed on every pull request while the
+  catalog held a template with a stdio MCP server.
+
 ## [1.10.0] - 2026-11-03
 
 ### Added
