@@ -22,12 +22,9 @@ module Billing
     # workspace.
     class ForeignProduct < Error; end
 
-    # ResolveCustomer named our product and no licence. Nothing can be bound
-    # to such an arrival: the licence is the key every other call takes, and
-    # a token without one has no agreement behind it either. Seen once, from
-    # AWS itself -- a POST to the fulfilment URL eight seconds after the
-    # listing was submitted for Public, from an allowlisted account holding
-    # no agreement -- so a probe, not a buyer.
+    # ResolveCustomer named our product and no licence: nothing to bind, since
+    # the licence is the key every other call takes. AWS's own probe of the
+    # fulfilment URL, made when the listing changes, answers this way.
     class Unlicensed < Error; end
 
     # What ResolveCustomer answers, without the vendor's types.

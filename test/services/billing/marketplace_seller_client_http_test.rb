@@ -113,8 +113,8 @@ class Billing::MarketplaceSellerClientHttpTest < ActiveSupport::TestCase
     assert_match(/someoneelsesproduct/, error.message)
   end
 
-  # What AWS posted while the listing was going Public: our product, an
-  # account, and neither licence nor agreement. Nothing can be keyed on it.
+  # AWS's probe of the fulfilment URL: our product, an account, and neither
+  # licence nor agreement.
   test "a token with no licence behind it is refused before anything is bound" do
     stub_resolve(body: resolved_body("LicenseArn" => nil, "Metadata" => nil))
 

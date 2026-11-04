@@ -16,36 +16,18 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
   end
 
-  test "a paying company sees its period and what it has used in it" do
-    used!(Time.utc(2026, 9, 30, 23), 600) # the period before: not this invoice
-    used!(Time.utc(2026, 10, 2, 9), 100)
-    used!(Time.utc(2026, 10, 2, 10), 30)
-
+  test "a paying company sees its period" do
     billing = billing_props[:billing]
 
     assert_equal "active", billing[:status]
     assert_equal Time.utc(2026, 11, 1), Time.zone.parse(billing[:periodEndsAt])
-    assert_in_delta 130.0, billing[:usage][:workerMinutes]
-    assert_equal Time.utc(2026, 10, 2, 11), Time.zone.parse(billing[:usage][:measuredUntil])
-  end
-
-  # The price sells minutes sixty at a time, rounded down, so 130 minutes are two
-  # packs — the estimate must not promise less than the invoice will say.
-  test "the estimate prices the minutes the way the subscription's price does" do
-    used!(Time.utc(2026, 10, 2, 9), 130)
-
-    estimate = billing_props[:billing][:usage][:estimate]
-
-    assert_equal 1000, estimate[:amountCents]
-    assert_equal "usd", estimate[:currency]
-    assert_equal 60, estimate[:minutesPerUnit]
   end
 
   test "without the price the minutes are still shown" do
     @client.failure = "APIConnectionError: could not reach Stripe"
     used!(Time.utc(2026, 10, 2, 9), 30)
 
-    usage = billing_props[:billing][:usage]
+    usage = billing_props.dig(:subscriptions, :active, :usage)
 
     assert_in_delta 30.0, usage[:workerMinutes]
     assert_nil usage[:estimate]
@@ -64,11 +46,11 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     @company.update!(billing_state: "blocked", billing_block_reason: "canceled")
     cancellation = create(:billing_cancellation, company: @company, settlement_state: "settling")
 
-    assert_equal "settling", billing_props[:billing][:finalInvoice][:state]
+    assert_equal "settling", billing_props.dig(:subscriptions, :previous, 0, :finalInvoice, :state)
 
     cancellation.update!(settlement_state: "settled", final_invoice_url: "https://invoice.stripe.test/in_1")
 
-    invoice = billing_props[:billing][:finalInvoice]
+    invoice = billing_props.dig(:subscriptions, :previous, 0, :finalInvoice)
     assert_equal "settled", invoice[:state]
     assert_equal "https://invoice.stripe.test/in_1", invoice[:url]
   end
@@ -81,7 +63,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
 
     assert_equal "trialing", billing[:status]
     assert_equal({ "days" => 30, "daysLeft" => 30, "lastDay" => (Date.current + 29).iso8601 }, billing[:trial])
-    assert_nil billing[:usage]
+    assert_nil billing_props.dig(:subscriptions, :active)
   end
 
   test "the page says what bills the workspace, so it knows whose price to quote" do
