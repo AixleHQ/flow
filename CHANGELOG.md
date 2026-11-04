@@ -30,6 +30,10 @@ governance, community health — carry none.
 - **Templates**: `bin/rails templates:validate` runs without a database again. The
   template repository's pull-request check failed on every pull request while the
   catalog held a template with a stdio MCP server.
+- **Sessions & Runs**: when an agent asked for several secrets at the same moment,
+  one of them could stay unmasked in the session's proxy log and in the agent's own
+  transcript. Every secret a session receives is now masked there, however the
+  requests overlap.
 
 ## [1.10.0] - 2026-11-03
 
