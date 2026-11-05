@@ -193,31 +193,31 @@ gem "shrine", "~> 3.10"
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.235"
+gem "aws-sdk-s3", "~> 1.237"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.88"
+gem "aws-sdk-bedrockruntime", "~> 1.90"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.98"
+gem "aws-sdk-bedrock", "~> 1.100"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
-gem "aws-sdk-marketplacemetering", "~> 1.110"
+gem "aws-sdk-marketplacemetering", "~> 1.112"
 
 # Asked at registration what state the agreement is already in, because the
 # event that would say so races the buyer's arrival on the fulfilment page.
-gem "aws-sdk-marketplaceagreement", "~> 1.50"
+gem "aws-sdk-marketplaceagreement", "~> 1.52"
 
 # The queue a rule in the seller account delivers SaaS subscription events into.
 # Unlike the metering call above, that queue is in THIS account, so it is read
 # with the pod's own identity rather than the seller role.
-gem "aws-sdk-sqs", "~> 1.100"
+gem "aws-sdk-sqs", "~> 1.124"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
@@ -226,7 +226,7 @@ gem "faraday-retry", "~> 2.3"
 # Metered billing for the hosted product. The official client rather than our own
 # HTTP: webhook signature verification is the one part of this that must not be
 # hand-rolled, and idempotency keys on retried writes come with it.
-gem "stripe", "~> 20.0"
+gem "stripe", "~> 20.1"
 
 gem "lograge", "~> 0.15.1"
 
@@ -238,14 +238,14 @@ gem "sqlite3", "~> 2.10"
 
 # Time-based one-time codes: a step-up method in production, not just a test
 # fixture — User#totp_secret and Auth::Methods::Totp both run on it.
-gem "rotp", "~> 6.3"
+gem "rotp", "~> 6.4"
 
 # Renders the otpauth:// URI as the QR an authenticator app scans. Server-side so
 # the enrolment payload stays one response and no QR library reaches the bundle.
 gem "rqrcode", "~> 3.1"
 
 # Docker API for container management
-gem "docker-api", "~> 2.3"
+gem "docker-api", "~> 2.5"
 
 # Kubernetes API client for container runtime
 gem "kubeclient", "~> 4.13"
