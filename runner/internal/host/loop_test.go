@@ -333,13 +333,14 @@ func TestAnOpPastItsDeadlineIsExpiredNotRun(t *testing.T) {
 }
 
 func TestAnOpThisVersionDoesNotImplementAnswersAStableClass(t *testing.T) {
-	op := protocol.Op{ID: 3, Sequence: 1, Op: "container.start", DeadlineAt: now.Add(time.Minute), Payload: json.RawMessage(`{}`)}
+	// `session.start` is reserved in protocol 1 and has no handler (PROTOCOL.md §6).
+	op := protocol.Op{ID: 3, Sequence: 1, Op: "session.start", DeadlineAt: now.Add(time.Minute), Payload: json.RawMessage(`{}`)}
 	h := newHarness(t, t.TempDir(), newGateway(op))
 	if err := h.run(); err != nil {
 		t.Fatal(err)
 	}
 	r := h.gw.results[3]
-	if r.Status != protocol.StatusError || r.Error.Class != ClassUnsupportedOp || !strings.Contains(r.Error.Message, "container.start") {
+	if r.Status != protocol.StatusError || r.Error.Class != ClassUnsupportedOp || !strings.Contains(r.Error.Message, "session.start") {
 		t.Fatalf("posted %#v", r)
 	}
 }

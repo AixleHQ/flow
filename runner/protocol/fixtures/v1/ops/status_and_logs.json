@@ -1,0 +1,216 @@
+{
+  "description": "status answers the session container's state, with its exit code once it has terminated, and missing without one; logs answers the tail of /tmp/terminal_output.log (PROTOCOL.md §6.3).",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "running",
+      "op": "status",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "logs",
+      "op": "logs",
+      "payload": {
+        "bytes": 65536
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "terminated",
+      "op": "status",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "missing",
+      "op": "status",
+      "payload": {}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "running.id"
+              },
+              "sequence": {
+                "$var": "running.sequence"
+              },
+              "op": "status",
+              "deadline_at": {
+                "$var": "running.deadline_at"
+              },
+              "payload": {}
+            },
+            {
+              "id": {
+                "$var": "logs.id"
+              },
+              "sequence": {
+                "$var": "logs.sequence"
+              },
+              "op": "logs",
+              "deadline_at": {
+                "$var": "logs.deadline_at"
+              },
+              "payload": {
+                "bytes": 65536
+              }
+            },
+            {
+              "id": {
+                "$var": "terminated.id"
+              },
+              "sequence": {
+                "$var": "terminated.sequence"
+              },
+              "op": "status",
+              "deadline_at": {
+                "$var": "terminated.deadline_at"
+              },
+              "payload": {}
+            },
+            {
+              "id": {
+                "$var": "missing.id"
+              },
+              "sequence": {
+                "$var": "missing.sequence"
+              },
+              "op": "status",
+              "deadline_at": {
+                "$var": "missing.deadline_at"
+              },
+              "payload": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{running.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "state": "running",
+            "container_id": "4f1c0a6e9b2d4c8e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e",
+            "name": "aixle-aixle-r7-1f2e3d4c-123"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "running.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{logs.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "tail": "\u001b[32m✓\u001b[0m Done.\r\n",
+            "size": 48213,
+            "truncated": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "logs.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{terminated.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "state": "terminated",
+            "container_id": "4f1c0a6e9b2d4c8e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e",
+            "name": "aixle-aixle-r7-1f2e3d4c-123",
+            "exit_code": 137,
+            "oom_killed": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "terminated.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{missing.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "state": "missing"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "missing.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{missing.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

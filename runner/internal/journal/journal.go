@@ -41,7 +41,7 @@ type Entry struct {
 	// is an op that was interrupted: it is not run again.
 	Result *protocol.Result `json:"result,omitempty"`
 	// Accepted is set once the gateway took the result (or answered that the op is
-	// not this machine's).
+	// not this machine's). The result is dropped then.
 	Accepted bool `json:"accepted,omitempty"`
 }
 
@@ -137,6 +137,9 @@ func (j *Journal) Acknowledge(id int64) error {
 		return fmt.Errorf("op %d was not begun", id)
 	}
 	e.Accepted = true
+	// A settled result is never posted again, so it is not kept: session ops
+	// return up to 1 MiB per stream, and a read_file can return a credential.
+	e.Result = nil
 	j.data.Ops[key(id)] = e
 	if e.Sequence > j.data.After {
 		j.data.After = e.Sequence

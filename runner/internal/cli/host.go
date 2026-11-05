@@ -69,14 +69,19 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
 		"platform", creds.URL, "environment", creds.Environment.Key)
+	// The host runner runs every op itself, the session ops included, through the
+	// Docker API against the environment's session container (DESIGN.md §6.8).
+	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir}
+	handlers := map[string]host.Handler{}
+	for name, handler := range env.Handlers() {
+		handlers[name] = handler
+	}
 	loop := &host.Loop{
-		Gateway: client,
-		Tokens:  tokens.NewSource(store, client, creds),
-		Journal: j,
-		Handlers: map[string]host.Handler{
-			"image.ensure": docker.ImageEnsure(api, nil),
-		},
-		Logger: opts.Logger,
+		Gateway:  client,
+		Tokens:   tokens.NewSource(store, client, creds),
+		Journal:  j,
+		Handlers: handlers,
+		Logger:   opts.Logger,
 	}
 	return loop.Run(ctx)
 }

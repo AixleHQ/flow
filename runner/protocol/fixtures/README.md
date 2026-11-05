@@ -15,7 +15,10 @@ get. Both sides run them:
   answer as the protocol says. An exchange the client never sends (a protocol header other than
   `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
   checks, which the Rails side runs. The test fails if no register, token, unregister or ops
-  exchange was driven. It runs in the Go CI job.
+  exchange was driven. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
+  ties the `ops/` fixtures to the runner's handlers: every payload a fixture enqueues for an op
+  the runner implements passes that op's payload checks, and every error class a fixture posts
+  for such an op is one the runner reports.
 
 `v1/` holds the fixtures of protocol `1`. A protocol bump adds `v2/` next to it.
 

@@ -67,6 +67,8 @@ func TestEntriesAndAfterSurviveAReopen(t *testing.T) {
 	}
 	if e, _ := again.Lookup(1031); !e.Accepted {
 		t.Fatal("the acknowledgement was not persisted")
+	} else if e.Result != nil {
+		t.Fatalf("the settled result is still kept: %#v", e.Result)
 	}
 }
 

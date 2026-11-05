@@ -1,0 +1,243 @@
+{
+  "description": "batch runs its exec, write_file and read_file ops in order until the first that fails, and answers each step's result (PROTOCOL.md §6.3). An exec with a non-zero exit code fails its batch, and the ops after it do not run.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "all",
+      "op": "batch",
+      "payload": {
+        "ops": [
+          {
+            "op": "write_file",
+            "payload": {
+              "path": "/workspace/CLAUDE.md",
+              "content": "IyBUYXNrCg==",
+              "mode": 420,
+              "uid": 1000,
+              "gid": 1000
+            }
+          },
+          {
+            "op": "exec",
+            "payload": {
+              "cmd": [
+                "chmod",
+                "644",
+                "/workspace/CLAUDE.md"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "stopped",
+      "op": "batch",
+      "payload": {
+        "ops": [
+          {
+            "op": "exec",
+            "payload": {
+              "cmd": [
+                "test",
+                "-d",
+                "/workspace/repo/.git"
+              ]
+            }
+          },
+          {
+            "op": "exec",
+            "payload": {
+              "cmd": [
+                "git",
+                "-C",
+                "/workspace/repo",
+                "fetch"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "all.id"
+              },
+              "sequence": {
+                "$var": "all.sequence"
+              },
+              "op": "batch",
+              "deadline_at": {
+                "$var": "all.deadline_at"
+              },
+              "payload": {
+                "ops": [
+                  {
+                    "op": "write_file",
+                    "payload": {
+                      "path": "/workspace/CLAUDE.md",
+                      "content": "IyBUYXNrCg==",
+                      "mode": 420,
+                      "uid": 1000,
+                      "gid": 1000
+                    }
+                  },
+                  {
+                    "op": "exec",
+                    "payload": {
+                      "cmd": [
+                        "chmod",
+                        "644",
+                        "/workspace/CLAUDE.md"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": {
+                "$var": "stopped.id"
+              },
+              "sequence": {
+                "$var": "stopped.sequence"
+              },
+              "op": "batch",
+              "deadline_at": {
+                "$var": "stopped.deadline_at"
+              },
+              "payload": {
+                "ops": [
+                  {
+                    "op": "exec",
+                    "payload": {
+                      "cmd": [
+                        "test",
+                        "-d",
+                        "/workspace/repo/.git"
+                      ]
+                    }
+                  },
+                  {
+                    "op": "exec",
+                    "payload": {
+                      "cmd": [
+                        "git",
+                        "-C",
+                        "/workspace/repo",
+                        "fetch"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{all.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "results": [
+              {
+                "status": "ok"
+              },
+              {
+                "status": "ok",
+                "exit_code": 0,
+                "stdout": "",
+                "stderr": "",
+                "data": {
+                  "stdout_truncated": false,
+                  "stderr_truncated": false
+                }
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "all.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{stopped.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "data": {
+            "results": [
+              {
+                "status": "ok",
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": "",
+                "data": {
+                  "stdout_truncated": false,
+                  "stderr_truncated": false
+                }
+              }
+            ]
+          },
+          "error": {
+            "class": "batch_step_failed",
+            "message": "ops[0] (exec) failed: exit code 1; the 1 ops after it did not run"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "stopped.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{stopped.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

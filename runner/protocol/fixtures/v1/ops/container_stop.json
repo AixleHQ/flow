@@ -1,0 +1,128 @@
+{
+  "description": "container.stop stops and removes the session's container (PROTOCOL.md §6.2). A container that is already gone is not an error: `removed` says whether there was one.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "stopped",
+      "op": "container.stop",
+      "payload": {
+        "session_id": 123
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "gone",
+      "op": "container.stop",
+      "payload": {
+        "session_id": 123
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "stopped.id"
+              },
+              "sequence": {
+                "$var": "stopped.sequence"
+              },
+              "op": "container.stop",
+              "deadline_at": {
+                "$var": "stopped.deadline_at"
+              },
+              "payload": {
+                "session_id": 123
+              }
+            },
+            {
+              "id": {
+                "$var": "gone.id"
+              },
+              "sequence": {
+                "$var": "gone.sequence"
+              },
+              "op": "container.stop",
+              "deadline_at": {
+                "$var": "gone.deadline_at"
+              },
+              "payload": {
+                "session_id": 123
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{stopped.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "removed": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "stopped.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{gone.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "removed": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "gone.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{gone.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}
