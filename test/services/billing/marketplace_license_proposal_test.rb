@@ -258,6 +258,7 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
   # rest of a period is not paid for, and leaving it to run would bill the
   # same hours to Stripe and to AWS both.
   test "accepting records the card subscription as one to stop" do
+    @company.update!(billing_provider_since: Time.utc(2026, 8, 1, 10))
     propose
 
     proposal.accept!(by: @admin)
@@ -267,6 +268,7 @@ class Billing::MarketplaceLicenseProposalStripeTest < ActiveSupport::TestCase
     assert cancellation.cancelling?
     assert_equal "sub_1", cancellation.stripe_subscription_id
     assert_equal Time.utc(2026, 10, 3, 12), cancellation.period_started_at, "the period the final invoice covers"
+    assert_equal Time.utc(2026, 8, 1, 10), cancellation.started_at, "when the card took over, until Stripe says"
     assert_enqueued_with(job: Billing::SettleCancellationJob, args: [ cancellation.id ])
   end
 

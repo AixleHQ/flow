@@ -52,6 +52,12 @@ class Web::MarketplaceRegistrationsController < Web::ApplicationController
     redirect_to marketplace_registration_path(ticket: license.generate_token_for(:registration))
   rescue Billing::MarketplaceSellerClient::InvalidToken, Billing::MarketplaceSellerClient::ForeignProduct
     refuse(EXPIRED)
+  rescue Billing::MarketplaceSellerClient::Unlicensed => e
+    # AWS posts one to probe the fulfilment URL when the listing changes and
+    # expects a page back; a buyer in the same state is a question for AWS,
+    # so it is reported either way.
+    Sentry.capture_exception(e)
+    refuse(EXPIRED)
   rescue Billing::MarketplaceSellerClient::Error => e
     # Ours to fix, and nothing a buyer can act on.
     Sentry.capture_exception(e)

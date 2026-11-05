@@ -28,7 +28,9 @@ module Billing
 
       minutes = BigDecimal(minutes.to_s)
       pack = BigDecimal(terms[:minutes_per_unit])
-      units = round(minutes / pack, terms[:rounding])
+      # A price that sells no pack bills the minutes as the meter sent them,
+      # fractions included; rounding them here would promise less than the invoice.
+      units = terms[:rounding] ? round(minutes / pack, terms[:rounding]) : minutes / pack
 
       {
         amount_cents: (units * terms[:unit_amount_cents]).round.to_i,

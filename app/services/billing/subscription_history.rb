@@ -60,9 +60,10 @@ module Billing
     end
 
     # The period the final invoice covers starts where the last period did. A
-    # row from before that was recorded knows only the hours it still owed.
+    # row from before that was recorded cannot say what its invoice covered,
+    # and lists no usage rather than the tail of hours it still owed.
     def stopped_card(cancellation)
-      since = cancellation.period_started_at || cancellation.final_usage_by_hour.keys.min
+      since = cancellation.period_started_at
       entry(kind: "card", status: "cancelled",
             period_starts_at: cancellation.started_at, period_ends_at: cancellation.cancels_at,
             cancelled_at: cancellation.cancels_at,

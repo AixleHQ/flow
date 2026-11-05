@@ -22,6 +22,11 @@ module Billing
     # workspace.
     class ForeignProduct < Error; end
 
+    # ResolveCustomer named our product and no licence: nothing to bind, since
+    # the licence is the key every other call takes. AWS's own probe of the
+    # fulfilment URL, made when the listing changes, answers this way.
+    class Unlicensed < Error; end
+
     # What ResolveCustomer answers, without the vendor's types.
     #
     # `customer_identifier` IS populated, measured against the real listing.
@@ -125,6 +130,9 @@ module Billing
 
         unless answer.product_code == product_code
           raise ForeignProduct, "token resolves to product #{answer.product_code.inspect}, not ours"
+        end
+        if answer.license_arn.blank?
+          raise Unlicensed, "token resolves to account #{answer.customer_aws_account_id.inspect} with no licence"
         end
 
         Customer.new(
