@@ -1346,10 +1346,14 @@ session mode yet (task 6b):
   refuses at once. `configure` and `unregister` take the same lock and, while a host runner
   runs, refuse and say to run `aixle-runner service stop` first.
 - **`aixle-runner service install`** copies the running binary to
-  `/usr/local/bin/aixle-runner`, atomically, owned by root with mode `0755`, unless it runs
-  from there already. The unit always runs that copy, so a binary started from a directory
-  its user can write cannot be replaced under the service, whose Docker access is
-  root-equivalent (§9.7). `install` then creates the `aixle-runner` system user, adds it to
+  `/usr/local/bin/aixle-runner`, atomically, owned by root with mode `0755`. It opens the
+  running binary once, through `/proc/self/exe`, and both decides and copies from that
+  descriptor, so a swap of the path it was started from cannot change what it installs. It
+  skips the copy only when that path, read without following a link, already is the running
+  binary as a regular file owned by root that group and others cannot write. In every other
+  case it copies, and the rename replaces a symlink there itself, not its target. The unit
+  always runs that copy, so a binary started from a directory its user can write cannot be
+  replaced under the service, whose Docker access is root-equivalent (§9.7). `install` then creates the `aixle-runner` system user, adds it to
   the `docker` group, gives it the state directory (mode `0700`) and installs and enables
   `/etc/systemd/system/aixle-runner.service`, which runs
   `/usr/local/bin/aixle-runner --mode host` as that user. `uninstall` disables and removes

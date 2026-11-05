@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/template"
 
 	"github.com/aixlehq/aixle-runner/internal/fsutil"
@@ -84,31 +85,43 @@ type Manager struct {
 	Runner Runner
 	// UnitDir is where the unit file goes, /etc/systemd/system.
 	UnitDir string
-	// Source is the absolute path of the running aixle-runner binary, which
-	// `install` copies to Binary.
-	Source string
 	// Binary is the binary the unit runs, BinaryPath.
 	Binary string
 	// StateDir is the runner's state directory, which the service user owns.
 	StateDir string
-	// LookupUser and Chown are replaced in tests.
+	// OpenSelf opens the running binary, /proc/self/exe. `install` decides and
+	// copies from that one descriptor, so what it installs is what is running,
+	// whatever happens to the path it was started from.
+	OpenSelf func() (*os.File, error)
+	// LookupUser, Chown, Owner and Geteuid are replaced in tests. Owner is the uid
+	// that owns a file, or -1 when the platform does not say.
 	LookupUser func(name string) (*user.User, error)
 	Chown      func(path string, uid, gid int) error
+	Owner      func(info fs.FileInfo) int
 	Geteuid    func() int
 }
 
-// NewManager returns a manager of the real system. source is the running binary.
-func NewManager(source, stateDir string) *Manager {
+// NewManager returns a manager of the real system.
+func NewManager(stateDir string) *Manager {
 	return &Manager{
 		Runner:     ExecRunner{},
 		UnitDir:    "/etc/systemd/system",
-		Source:     source,
+		OpenSelf:   func() (*os.File, error) { return os.Open("/proc/self/exe") },
 		Binary:     BinaryPath,
 		StateDir:   stateDir,
 		LookupUser: user.Lookup,
 		Chown:      os.Lchown,
+		Owner:      fileOwner,
 		Geteuid:    os.Geteuid,
 	}
+}
+
+// fileOwner is the uid in info's stat data, or -1.
+func fileOwner(info fs.FileInfo) int {
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		return int(st.Uid)
+	}
+	return -1
 }
 
 func (m *Manager) unitPath() string { return filepath.Join(m.UnitDir, UnitName) }
@@ -128,10 +141,8 @@ func (m *Manager) Install(ctx context.Context) error {
 	if err := m.requireRoot(); err != nil {
 		return err
 	}
-	for _, p := range []string{m.Source, m.Binary} {
-		if !filepath.IsAbs(p) {
-			return fmt.Errorf("the binary path %q is not absolute", p)
-		}
+	if !filepath.IsAbs(m.Binary) {
+		return fmt.Errorf("the binary path %q is not absolute", m.Binary)
 	}
 	if err := m.installBinary(); err != nil {
 		return err
@@ -192,17 +203,29 @@ func (m *Manager) ownStateDir() error {
 	})
 }
 
-// installBinary copies Source to Binary atomically, owned by root with mode 0755,
-// unless the running binary is Binary already.
+// installBinary copies the running binary to Binary atomically, owned by root
+// with mode 0755, unless Binary is that already. It opens the running binary once
+// and both decides and copies from that descriptor, so a user who can write the
+// path `install` was started from cannot swap in other bytes meanwhile. The
+// rename replaces whatever is at Binary, a symlink included, not its target.
 func (m *Manager) installBinary() error {
-	same, err := sameFile(m.Source, m.Binary)
+	self, err := m.OpenSelf()
+	if err != nil {
+		return fmt.Errorf("opening the running binary: %w", err)
+	}
+	defer self.Close()
+	selfInfo, err := self.Stat()
+	if err != nil {
+		return fmt.Errorf("checking the running binary: %w", err)
+	}
+	installed, err := m.isInstalled(selfInfo)
 	if err != nil {
 		return err
 	}
-	if same {
+	if installed {
 		return nil
 	}
-	err = fsutil.CopyFileAtomic(m.Source, m.Binary, 0o755, func(name string) error {
+	err = fsutil.CopyFileAtomic(self, m.Binary, 0o755, func(name string) error {
 		return m.Chown(name, 0, 0)
 	})
 	if err != nil {
@@ -211,20 +234,21 @@ func (m *Manager) installBinary() error {
 	return nil
 }
 
-// sameFile says whether a and b are the same file. A missing b is not.
-func sameFile(a, b string) (bool, error) {
-	bi, err := os.Stat(b)
+// isInstalled says whether Binary already is what installBinary would make of
+// self: the same regular file, not through a link, owned by root, and writable by
+// neither group nor others. A missing Binary is not.
+func (m *Manager) isInstalled(self fs.FileInfo) (bool, error) {
+	info, err := os.Lstat(m.Binary)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("checking %s: %w", b, err)
+		return false, fmt.Errorf("checking %s: %w", m.Binary, err)
 	}
-	ai, err := os.Stat(a)
-	if err != nil {
-		return false, fmt.Errorf("checking %s: %w", a, err)
-	}
-	return os.SameFile(ai, bi), nil
+	return info.Mode().IsRegular() &&
+		os.SameFile(self, info) &&
+		m.Owner(info) == 0 &&
+		info.Mode().Perm()&0o022 == 0, nil
 }
 
 // Uninstall stops, disables and removes the unit. The user, the credentials and

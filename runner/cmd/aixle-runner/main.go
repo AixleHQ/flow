@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/aixlehq/aixle-runner/internal/cli"
@@ -130,15 +129,9 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 	if err := parse(fs, args[1:]); err != nil {
 		return err
 	}
-	binary, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("finding this binary's path: %w", err)
-	}
-	if binary, err = filepath.EvalSymlinks(binary); err != nil {
-		return fmt.Errorf("finding this binary's path: %w", err)
-	}
-	// install copies binary to service.BinaryPath, which the unit runs.
-	m := service.NewManager(binary, cli.DefaultStateDir)
+	// install copies the running binary (/proc/self/exe) to service.BinaryPath,
+	// which the unit runs.
+	m := service.NewManager(cli.DefaultStateDir)
 	switch args[0] {
 	case "install":
 		return m.Install(ctx)

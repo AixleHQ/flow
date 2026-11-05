@@ -19,18 +19,14 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 	}, nil)
 }
 
-// CopyFileAtomic replaces dst with a copy of src, as WriteFileAtomic does. Before
-// the rename it calls own, when given, with the temporary file's name, so the
-// copy has its final owner the moment it appears at dst. A missing directory is
-// created with mode 0755.
-func CopyFileAtomic(src, dst string, perm os.FileMode, own func(name string) error) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", src, err)
-	}
-	defer in.Close()
+// CopyFileAtomic replaces dst with what it reads from src, as WriteFileAtomic
+// does. src is read from where it is; the caller opens it, so the bytes come from
+// the file it opened even if its path changes. Before the rename it calls own,
+// when given, with the temporary file's name, so the copy has its final owner the
+// moment it appears at dst. A missing directory is created with mode 0755.
+func CopyFileAtomic(src io.Reader, dst string, perm os.FileMode, own func(name string) error) error {
 	return writeAtomic(dst, perm, 0o755, func(f *os.File) error {
-		_, err := io.Copy(f, in)
+		_, err := io.Copy(f, src)
 		return err
 	}, own)
 }
