@@ -164,6 +164,7 @@ per-project namespaces and network policies separate them.
 | `AGENT_AUTH_PAUSE_LIMIT_MINUTES` | no     | `720`             | How long a workflow step whose agent's login was refused stays paused, waiting for the login to be renewed, before it fails. |
 | `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
+| `KIRO_CREDIT_USD`              | no       | `0.10`            | What one Kiro credit is reported as in a session's cost, in USD: the API-equivalent price other runtimes report, not what the Kiro plan charges. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 
@@ -385,6 +386,11 @@ configured here; with none configured the item is not shown. The sender's name,
 email, company, the page they were on and the release go with the message, and
 so do the files sent with it (up to five, 20 MB each): in the same Slack post,
 and as attachments on the board card.
+
+The Slack channel also hears of every new company: its name, id, domain, who
+created it and when, and how — a self-serve signup, an AWS Marketplace signup or
+the admin. A post that fails is retried and then logged; the company is created
+regardless.
 
 | Variable                      | Required | Default | Purpose |
 | ----------------------------- | -------- | ------- | ------- |

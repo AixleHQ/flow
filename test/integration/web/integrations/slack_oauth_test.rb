@@ -61,6 +61,26 @@ class Web::Integrations::SlackOauthTest < ActionDispatch::IntegrationTest
     assert_equal "xoxb-acme-0001-bot", integration.credentials_data["bot_token"]
   end
 
+  test "a member who is not a company admin connects Slack for their project only" do
+    member = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: member)
+    sign_in_as(member)
+
+    assert_no_difference("Integration.count") do
+      get slack_oauth_callback_path, params: { code: "code-1", state: Slack::Oauth.sign_state(project, member) }
+    end
+    assert_equal "Only a company admin can connect Slack for the whole company", flash[:alert]
+    assert_empty @slack.oauth_exchanges
+
+    get slack_oauth_callback_path, params: { code: "code-2",
+                                             state: Slack::Oauth.sign_state(project, member, company_wide: false) }
+
+    assert_redirected_to company_project_integrations_path(project)
+    integration = @company.integrations.find_by!(provider: :slack)
+    assert integration.active?
+    assert_equal project.id, integration.project_id
+  end
+
   test "reconnecting the same workspace updates the existing install instead of creating a duplicate" do
     get slack_oauth_callback_path, params: { code: "code-1", state: Slack::Oauth.sign_state(@project, @user) }
     assert_equal 1, @company.integrations.where(provider: :slack).count

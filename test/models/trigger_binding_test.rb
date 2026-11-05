@@ -293,6 +293,23 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert off.reload.enabled
   end
 
+  test "save_checking_chat! counts Slack as connected only where the install serves the trigger's project" do
+    other = create(:project, owner: @user, company: @company)
+    create(:integration, provider: :slack, status: :active, company: @company, project: other)
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding(chat_channel: nil).save_checking_chat! }
+    assert_includes error.record.errors.full_messages, TriggerBinding.chat_not_connected("Slack")
+
+    create(:integration, provider: :slack, status: :active, company: @company, project: @project)
+    binding = slack_binding(chat_channel: nil, enabled: false)
+    binding.save_checking_chat!
+    binding.enabled = true
+    binding.chat_conversation = connect_chat_channel(company: @company, external_id: "C0OURS0001",
+                                                     integration: Integration.find_by!(project: @project))
+    binding.save_checking_chat!
+    assert binding.reload.enabled
+  end
+
   test "save_checking_chat! still saves other edits of a slack trigger whose workspace went away" do
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "chat.message", name: "before")
@@ -331,6 +348,17 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
     schedule_binding(enabled: true)
     schedule_binding(enabled: false).update!(name: "renamed")
+  end
+
+  test "pointing a schedule at another member leaves its Temporal schedule alone" do
+    binding = schedule_binding(enabled: false)
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    create(:agent_credential, user: member, company: @company)
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).never
+
+    binding.update!(created_by: member)
   end
 
   test "a chat message reaches only the triggers bound to its channel, and only where the channel is connected" do

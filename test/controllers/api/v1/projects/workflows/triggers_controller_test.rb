@@ -329,6 +329,56 @@ module Api
             end
             assert_response :no_content
           end
+
+          test "the owner points a trigger at another member, and the trigger keeps its id and settings" do
+            member = create(:user, :onboarding_completed, company: @company)
+            @project.add_collaborator(member)
+            create(:agent_credential, user: member, company: @company)
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                               event_type: "webhook.deploy", cooldown_seconds: 30)
+
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+                                     trigger: { run_as_user_id: member.id } }, as: :json
+
+            assert_response :success
+            assert_equal [ binding.id, member.id ], [ json["id"], json.dig("created_by", "id") ]
+            binding.reload
+            assert_equal [ member, 30 ], [ binding.created_by, binding.cooldown_seconds ]
+            assert_equal [ @user.id, member.id ], Audit.where(auditable: binding).sole.audited_changes["created_by_id"]
+          end
+
+          test "a column trigger has no Run as to change" do
+            binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, created_by: @user,
+                                                    trigger_mode: :auto, cooldown_seconds: 0)
+
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id, kind: "column",
+                                     trigger: { run_as_user_id: @user.id } }, as: :json
+
+            assert_response :unprocessable_entity
+            assert_match(/runs as the person the card is on/, json["errors"].first)
+
+            collaborator = create(:user, :onboarding_completed, company: @company)
+            @project.add_collaborator(collaborator)
+            sign_in collaborator
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id, kind: "column",
+                                     trigger: { run_as_user_id: @user.id } }, as: :json
+
+            assert_response :unprocessable_entity
+          end
+
+          test "index offers the members a trigger can run as only to whoever may change it" do
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+
+            assert_equal true, json.dig("run_as", "editable") # rubocop:disable Minitest/AssertTruthy
+            assert_equal [ @user.id ], json.dig("run_as", "members").map { |m| m["id"] }
+
+            collaborator = create(:user, :onboarding_completed, company: @company)
+            @project.add_collaborator(collaborator)
+            sign_in collaborator
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+
+            assert_equal({ "editable" => false, "members" => [] }, json["run_as"])
+          end
         end
       end
     end

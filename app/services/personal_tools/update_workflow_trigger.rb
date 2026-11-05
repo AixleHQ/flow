@@ -42,6 +42,10 @@ module PersonalTools
                             description: "kind=chat: move the trigger to another messenger. Its channel is dropped."
       param :chat_channel_id, type: :integer,
                               description: "kind=chat: the channel to listen to, from list_chat_channels."
+      param :run_as_user_id, type: :integer,
+                             description: "Off-board kinds: the project member (from list_project_members) whose agent " \
+                                          "and limits the trigger's runs use from now on. Company admins and the " \
+                                          "project owner only; the member needs an agent connected."
       param :filter_predicate, type: :object,
                                description: "Replaces the whole predicate: only fire when the event data contains " \
                                             "these key/value pairs. Pass {} to clear it; a chat trigger keeps its messenger."
@@ -56,7 +60,7 @@ module PersonalTools
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
 
-      params[:kind].to_s == "column" ? update_column(project, workflow) : update_binding(workflow)
+      params[:kind].to_s == "column" ? update_column(project, workflow) : update_binding(project, workflow)
     rescue ActiveRecord::RecordInvalid => e
       error(e.record.errors.full_messages.join(", "))
     rescue Temporalio::Error => e
@@ -70,6 +74,8 @@ module PersonalTools
     private
 
     def update_column(project, workflow)
+      return error("A column trigger runs as the person the card is on — it has no run_as_user_id") if params[:run_as_user_id]
+
       trigger = find_column_trigger!(project, workflow, params[:trigger_id])
       attrs = column_binding_attrs
       return error("No fields to update — a column trigger accepts trigger_mode and cooldown_seconds") if attrs.empty?
@@ -78,14 +84,17 @@ module PersonalTools
       success(serialize_column(trigger))
     end
 
-    def update_binding(workflow)
+    def update_binding(project, workflow)
+      if params[:run_as_user_id]
+        authorize!(project, :change_run_as?, policy: Api::V1::Projects::Workflows::TriggersPolicy, project: project)
+      end
       trigger = find_event_trigger!(workflow, params[:trigger_id])
       attrs = trigger_binding_attrs
-      return error("No fields to update") if attrs.empty? && params[:chat_provider].blank?
+      return error("No fields to update") if attrs.empty? && params[:chat_provider].blank? && params[:run_as_user_id].blank?
 
       trigger.assign_attributes(attrs)
       trigger.assign_chat_provider(params[:chat_provider])
-      trigger.save_checking_chat!
+      WorkflowTriggers::RunAs.save!(trigger, actor: user, user_id: params[:run_as_user_id]) { trigger.save_checking_chat! }
       success(serialize_binding(trigger))
     end
   end

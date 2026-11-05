@@ -48,7 +48,10 @@ class WorkspaceSignupTicketTest < ActiveSupport::TestCase
   test "what it carries cannot be read from the link" do
     issued = token(acceptance: evidence)
 
-    decoded = issued.split("--").map { |part| Base64.urlsafe_decode64(part) }.join
+    # URL-safe Base64 can itself contain "--", so the parts are cut from the end
+    # by their fixed lengths (12-byte IV, 16-byte auth tag), as the encryptor does.
+    parts = issued.match(/\A(.+)--([\w-]{16})--([\w-]{22})\z/).captures
+    decoded = parts.map { |part| Base64.urlsafe_decode64(part) }.join
     refute_includes decoded, "203.0.113.7"
     refute_includes decoded, "dana@acme-robotics.example"
   end

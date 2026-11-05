@@ -1,6 +1,6 @@
 # Shared chat workspaces and channel-bound chat triggers — technical design
 
-**Status:** Direction agreed 2026-10-22: decisions 1–23 (§2), no open questions. Phases 1 and 2 built
+**Status:** Direction agreed 2026-10-22: decisions 1–23 (§2), no open questions. Decisions 24 and 25 added 2026-11-04. Phases 1 and 2 built
 (§20, §21). Spikes S3 and S4 (§15.3) still want a live check on staging.
 **Board task:** #199, "Make channel selection required when launching a trigger via Slack".
 **Code baseline:** `715fc7c0`
@@ -93,6 +93,24 @@ Decided 2026-10-22 after a design review:
 23. **A refusal is private, and a code is kept as an HMAC.** Slack shows a refused code only to whoever
     posted it (ephemeral); Teams, which cannot, says it at most once a minute per person. The stored
     digest is keyed with a server secret, so a copy of the database does not give a live code back.
+
+Decided 2026-11-04 after a production report (board task #245):
+
+24. **A company with several workspaces of one messenger sees each one apart.** Every Slack or Teams
+    connection has its own channel list, holding only its workspace's channels; before, only the first
+    connection had one and it listed every workspace's channels together. A code asked for from a
+    connection's list carries that install (`chat_connect_codes.integration_id`) and connects nothing
+    in another workspace; a code from the trigger form or MCP without one still works in any workspace
+    the company connected. The trigger form groups channels by workspace, and agents qualify a Slack
+    channel by its workspace (`Workspace/#channel`) when the name alone matches more than one.
+
+Decided 2026-11-04 ([research](../research/technical-chat-integration-scope-research-2026-11-04.md) §9):
+
+25. **An install serves the whole company or one project.** Company-wide is the default and a company
+    admin's. Anyone else who can change the project connects it for that project only. A company holds
+    one install per workspace. A company admin can widen a project install, and nothing narrows a
+    company-wide one. Channel connections stay company-level (decision 15). Through a project install,
+    though, only that project's triggers, agents, help and `/run` reach them.
 
 Not taken from the same review: a separate "read any thread" level on a connection, and announcing or
 re-confirming the channels the migration connected. Within one company both are valid as they are, and
@@ -251,6 +269,7 @@ chat_workspaces (Slack team / M365 tenant) ── bot credentials, endpoint, ten
 |---|---|
 | `company_id`, `project_id`, `provider` | where the code may be redeemed, and for which messenger |
 | `trigger_binding_id` (nullable) | when requested from a trigger, the trigger to bind on success |
+| `integration_id` (nullable) | when requested from one install's channel list, the only workspace it works in (decision 24) |
 | `code_digest` | SHA-256 of the code. The code itself is never stored |
 | `requested_by_id`, `expires_at`, `redeemed_at`, `chat_channel_connection_id` | |
 
@@ -349,7 +368,8 @@ Redemption runs at the workspace step of inbound routing (§10.1), before help, 
    addressed channel message.
 2. **Reject direct chats.** A DM or 1:1 chat is refused: "Post it in the channel you want to connect".
 3. **Look up the code.** By digest: unredeemed and unexpired, and for this provider.
-4. **Check the workspace.** The code's company must have an active integration on this event's workspace.
+4. **Check the workspace.** The code's company must have an active integration on this event's workspace,
+   and a code that names an install must be posted in that install's workspace (decision 24).
 5. **Record the connection.** Upsert the `chat_conversations` row, then create the `chat_channel_connections`
    row unless it already exists. If the code carries a trigger, set its `chat_conversation_id` and enable it
    if it was waiting.
@@ -539,6 +559,7 @@ so it reveals nothing.
 
 - **Slack.** `SlackContext#resolve_slack_target` and `InstallResolver` resolve through the company's
   connections. The workspace is the run origin's when one exists, otherwise the one connected first, as today.
+  A name two connected workspaces share is refused until it is qualified as `Workspace/#channel`.
 - **Teams.** `Chat::TargetResolver.teams` already scopes by the company's integrations. It narrows from "any
   registry row" to "connected rows plus the origin".
 - **Agents learn the channel list.** The tools' descriptions and the run context list the company's connected
@@ -625,7 +646,8 @@ so it reveals nothing.
 ### 14.1 Integration card (Slack and Teams)
 
 - **Channels section.** For each connected channel: its name, who requested it, who posted the code, when,
-  and a link to the public confirmation. Plus "Connect a channel" (§8.1) and "Disconnect" (§8.6).
+  and a link to the public confirmation. Plus "Connect a channel" (§8.1) and "Disconnect" (§8.6). Each
+  install shows its own workspace's channels only (decision 24).
 - **Other companies are never shown** (decision 17).
 - **Workspace status.** Shown when the app was removed in Slack, or file access was not granted in Teams.
 

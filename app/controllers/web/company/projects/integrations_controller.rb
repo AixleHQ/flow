@@ -51,6 +51,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # Each provider has its own editable part: Azure its operation profile and
     # a replacement PAT, Jira its projects, GitLab its token, Coder its token
     # or its pool settings.
+    return share_chat_install(integration) if integration.slack? || integration.teams?
     return update_azure_devops(integration) if integration.azure_devops?
     return update_jira(integration) if integration.jira?
     return update_linear(integration) if integration.linear?
@@ -228,7 +229,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                          alert: "Microsoft Teams is not configured on this Aixle installation"
     end
 
-    _integration, token = Teams::Connection.start!(company: current_project.company, user: current_user)
+    return refuse_company_wide("Microsoft Teams") if company_wide_requested? && !company_admin?
+
+    _integration, token = Teams::Connection.start!(company: current_project.company, user: current_user,
+                                                   project: company_wide_requested? ? nil : current_project)
     flash[:teams_approval_url] = Teams::Connection.approval_url(token)
     redirect_to company_project_integrations_path(current_project),
                 notice: "Send the approval link to your Microsoft 365 administrator"
@@ -239,8 +243,12 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     send_data Teams::AppPackage.zip, filename: Teams::AppPackage.filename, type: "application/zip"
   end
 
+  # A pending connection's link is what connects the organization, so a
+  # company-wide one is a company admin's to renew.
   def teams_link
     integration = Integration.visible_for_project(current_project).where(provider: "teams").find(params[:id])
+    return refuse_company_wide("Microsoft Teams") if integration.project_id.nil? && !company_admin?
+
     flash[:teams_approval_url] = Teams::Connection.approval_url(Teams::Connection.renew_link!(integration))
     redirect_to company_project_integrations_path(current_project), notice: "A new approval link is ready"
   end
@@ -253,9 +261,12 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       return redirect_to company_project_integrations_path(current_project), alert: "Slack's app is not configured"
     end
 
+    return refuse_company_wide("Slack") if company_wide_requested? && !company_admin?
+
     # allow_other_host: the target is Slack's hardcoded authorize URL built from
     # deployment Settings.slack.* — never user-supplied.
-    redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
+    redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user,
+                                           company_wide: company_wide_requested?), allow_other_host: true
   end
 
   # Jira through Aixle's Atlassian OAuth app. A plain link, like Slack's: the
@@ -408,6 +419,33 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # A Slack or Teams connection serves the whole company unless it is asked for
+  # this project only.
+  def company_wide_requested?
+    params[:scope].to_s != "project"
+  end
+
+  def company_admin? = current_user.admin_of?(current_project.company)
+
+  def refuse_company_wide(label)
+    redirect_to company_project_integrations_path(current_project),
+                alert: "Only a company admin can connect #{label} for the whole company. Connect it for this project instead."
+  end
+
+  # The one change a project's Slack or Teams connection takes: serving every
+  # project of the company. Nothing narrows it back, because other projects'
+  # triggers would then lose it.
+  def share_chat_install(integration)
+    unless params[:scope].to_s == "company" && company_admin?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "Only a company admin can share #{integration.name} with the whole company"
+    end
+
+    integration.update!(project: nil)
+    redirect_to company_project_integrations_path(current_project),
+                notice: "#{integration.name} now serves every project of #{current_project.company.name}"
+  end
 
   # Only some providers' rows read each association; preloading it for every row
   # is an unused eager load (Bullet) on a page without those providers.

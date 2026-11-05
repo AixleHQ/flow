@@ -4,11 +4,13 @@ module Api
   module V1
     module Projects
       # The chat channels connected to the project's company, which its chat
-      # triggers can listen to and its workflows can post to.
+      # triggers can listen to and its workflows can post to; with
+      # `integration_id`, only those in that install's workspace.
       class ChatChannelsController < ApplicationController
         def index
-          rows = Chat::ChannelAccess.channels(current_project, provider: params[:provider].presence)
-                                    .includes(chat_channel_connections: :requested_by)
+          integration = Chat::ChannelAccess.installs(current_project).find(params[:integration_id]) if params[:integration_id].present?
+          rows = Chat::ChannelAccess.channels(current_project, provider: params[:provider].presence, integration: integration)
+                                    .includes(:chat_workspace, chat_channel_connections: :requested_by)
           render json: { channels: rows.map { |row| channel_json(row) } }
         end
 

@@ -58,6 +58,8 @@ class ChatConversation < ApplicationRecord
     chat_workspace&.posting_integration || (integration if integration&.active?)
   end
 
+  def workspace_name = chat_workspace&.name.presence
+
   def label
     return name.presence || (group? ? "Group chat" : external_id) if provider == "teams"
 

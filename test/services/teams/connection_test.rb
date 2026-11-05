@@ -50,6 +50,21 @@ class Teams::ConnectionTest < ActiveSupport::TestCase
     assert_nil Teams::Connection.find_by_token("not-#{token}")
   end
 
+  test "a connection asked for one project waits apart from the company's, and serves that project once approved" do
+    project = create(:project, company: @company, owner: @user)
+    company_wide, = Teams::Connection.start!(company: @company, user: @user)
+    for_project, = Teams::Connection.start!(company: @company, user: @user, project: project)
+
+    assert_not_equal company_wide, for_project
+    assert_equal project.id, for_project.project_id
+    approve(for_project)
+    assert for_project.reload.active?
+
+    # One company, one connection per organization, whatever it serves.
+    error = assert_raises(Teams::Connection::Refused) { approve(company_wide) }
+    assert_match(/has already connected that Microsoft 365 organization/, error.message)
+  end
+
   test "asking again replaces the link of the connection still waiting" do
     first, old_token = Teams::Connection.start!(company: @company, user: @user)
     second, new_token = Teams::Connection.start!(company: @company, user: @user)

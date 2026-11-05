@@ -115,4 +115,25 @@ class Chat::TeamsProviderTest < ActiveSupport::TestCase
 
     assert_equal [ chat.id ], TriggerDispatch.pluck(:trigger_binding_id)
   end
+
+  test "an organization connected for one project starts that project's triggers and no other project's" do
+    @teams.update!(project: @project)
+    chat = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "chat.message",
+                                    filter_predicate: { "provider" => "teams" })
+    other = create(:project, owner: @user, company: @company)
+    beta = build(:trigger_binding, project: other, workflow: create(:workflow, scope: other), created_by: @user,
+                                   event_type: "chat.message", filter_predicate: { "provider" => "teams" },
+                                   chat_channel: nil, chat_conversation: chat.chat_conversation)
+    assert_not beta.valid?
+    assert_includes beta.errors[:chat_channel], "is in a workspace connected for another project"
+    received = ReceivedWebhook.create!(webhook_endpoint: @endpoint, idempotency_key: "k1", event_type: "teams",
+                                       raw_payload: teams_activity)
+
+    WorkflowService.expects(:enqueue).with(has_entries(project: @project)).once.returns(build(:workflow_run))
+
+    Webhooks::ProcessEventJob.perform_now(received.id)
+
+    assert_equal [ [ @company.id, @project.id ] ], TriggerEvent.where(event_type: Chat::EVENT_TYPE).pluck(:company_id, :project_id)
+    assert_equal [ chat.id ], TriggerDispatch.pluck(:trigger_binding_id)
+  end
 end

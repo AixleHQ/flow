@@ -58,6 +58,16 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal :anthropic, result.provider
   end
 
+  test "detects the Claude subscription stops, but not a model-scoped limit it can carry on from" do
+    [ "You've hit your 5-hour limit · resets 3pm (Europe/Berlin)", "You’ve hit your weekly limit · resets Nov 9",
+      "You've hit your session limit · resets 11am", "You've hit your usage credit limit" ].each do |line|
+      result = QuotaErrorDetector.detect(line, agent_type: "claude_code")
+      assert result.quota_error?, line
+      assert_equal :anthropic, result.provider
+    end
+    assert_not QuotaErrorDetector.detect("You've hit your Opus limit · resets Nov 9", agent_type: "claude_code").quota_error?
+  end
+
   test "detects claude.ai individual spend limit message" do
     text = "You've hit your individual spend limit · ask your admin to raise it at claude.ai/settings/usage"
     result = QuotaErrorDetector.detect(text)
@@ -108,6 +118,15 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal "Quota exceeded. Check your plan and billing details.", result.message
   end
 
+  test "detects the Codex plan usage limit with either apostrophe" do
+    [ "■ You’ve hit your usage limit. Upgrade to Plus to continue using Codex (https://chatgpt.com/explore/plus), or try again at 3:05 PM.",
+      "You've hit your usage limit. To get more access now, send a request to your admin" ].each do |line|
+      result = QuotaErrorDetector.detect(line, agent_type: "codex")
+      assert result.quota_error?, line
+      assert_equal :openai, result.provider
+    end
+  end
+
   test "detects openai insufficient_credits" do
     result = QuotaErrorDetector.detect("Error: insufficient_credits — add more credits to continue")
     assert result.quota_error?
@@ -124,6 +143,12 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
 
   test "detects gemini RESOURCE_EXHAUSTED status" do
     result = QuotaErrorDetector.detect('{"status":"RESOURCE_EXHAUSTED","message":"Too many requests"}')
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
+  test "detects the Antigravity CLI's exhausted model quota as a Google quota stop" do
+    result = QuotaErrorDetector.detect("  ⎿  You have exhausted your quota on this model.", agent_type: "antigravity_cli")
     assert result.quota_error?
     assert_equal :gemini, result.provider
   end

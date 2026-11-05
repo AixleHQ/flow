@@ -75,20 +75,6 @@ class MCPServer < ApplicationRecord
     self.class.config_key_for(name)
   end
 
-  # `FOO=bar cmd` is shell syntax for a one-off environment variable. Spawned
-  # directly it is read as the name of the program to run.
-  ENV_ASSIGNMENT_FORMAT = /\A[A-Za-z_][A-Za-z0-9_]*=/
-  # Matched as whole tokens, so a quoted argument that merely contains one
-  # (`--filter="a && b"`) is left alone.
-  SHELL_OPERATORS = %w[| || & && ; > >> < << 2>&1].freeze
-
-  # A package runner installs the newest release at every session start unless the
-  # spec names one, so a publisher (or whoever takes over the package) changes what
-  # runs inside every agent container with the next release. `latest`, a range and a
-  # bare name are not pins.
-  PACKAGE_RUNNERS = %w[npx uvx pipx].freeze
-  EXACT_VERSION = /\A\d+(\.\d+){0,3}([-+][0-9A-Za-z.-]+)?\z/
-
   # A stdio launch line is stored split: the executable in `command`, its argv in
   # `args`. That is the shape .mcp.json wants, and the shape a catalog install
   # already arrives in (MCP::ConnectorAttributes). The install form takes one
@@ -110,7 +96,6 @@ class MCPServer < ApplicationRecord
   # Only when the launch line is being written, so a row that predates these rules
   # can still be edited for an unrelated reason (renamed, disabled).
   validate :launchable_command_line, if: -> { transport_stdio? && (command_changed? || args_changed?) }
-  validate :pinned_package, if: -> { transport_stdio? && (command_changed? || args_changed?) }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
@@ -369,71 +354,7 @@ class MCPServer < ApplicationRecord
     self.args = tokens.drop(1)
   end
 
-  # An MCP stdio server is spawned directly, not through a shell, so the three
-  # shapes below are accepted by the form today and then fail invisibly at session
-  # start — the process never comes up and a server that never starts looks exactly
-  # like one nobody called.
   def launchable_command_line
-    return errors.add(:command, "has an unbalanced quote") if unbalanced_quotes?
-
-    if command.to_s.match?(ENV_ASSIGNMENT_FORMAT)
-      errors.add(:command, "must start with the program to run — put environment variables in the Env section")
-    end
-
-    if ([ command.to_s ] + Array(args).map(&:to_s)).any? { |token| SHELL_OPERATORS.include?(token) }
-      errors.add(:command, "cannot use shell operators — the process is launched directly, without a shell")
-    end
-
-    # Same policy the connector catalog applies to a package target, from the same
-    # list: a runtime the agent image does not carry cannot be launched by hand
-    # either. See MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES.
-    unavailable = MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES[command.to_s]
-    errors.add(:command, unavailable) if unavailable
-  end
-
-  def pinned_package
-    runner = command.to_s
-    return unless PACKAGE_RUNNERS.include?(runner)
-
-    spec = package_spec(runner, Array(args).map(&:to_s))
-    return if spec.nil? || pinned_spec?(runner, spec)
-
-    errors.add(:command, "must pin #{spec.presence || 'the package'} to an exact version " \
-                      "(#{runner == 'npx' ? 'name@1.2.3' : 'name==1.2.3'}) — unpinned, every session installs whatever was released last")
-  end
-
-  # The registry package the runner will fetch, or nil when the line names something
-  # else — a local path or a URL, which is not a registry release. "" when there is
-  # no package at all.
-  def package_spec(runner, argv)
-    argv = argv.drop_while { |token| token != "run" }.drop(1) if runner == "pipx"
-    explicit = argv.each_with_index.find { |token, _| %w[-p --package --from --spec].include?(token) }
-    spec = explicit ? argv[explicit.last + 1] : argv.find { |token| !token.start_with?("-") }
-    spec ||= argv.find { |token| token.start_with?("--package=", "--from=", "--spec=") }&.split("=", 2)&.last
-    return "" if spec.nil?
-    return nil if spec.start_with?(".", "/", "~") || spec.include?("://") || spec.include?(":")
-
-    spec
-  end
-
-  def pinned_spec?(runner, spec)
-    # Every adapter rewrites this one to the version baked into the agent image
-    # (BaseAdapter#mcp_stdio_args), whatever the line says.
-    return true if runner == "npx" && spec.split(/(?<=.)@/, 2).first == Agents::BaseAdapter::PLAYWRIGHT_MCP_PACKAGE
-
-    version = if runner == "npx"
-      name_end = spec.start_with?("@") ? spec.index("@", 1) : spec.index("@")
-      name_end && spec[(name_end + 1)..]
-    else
-      spec.split(/==|@/, 2)[1]
-    end
-    version.to_s.match?(EXACT_VERSION)
-  end
-
-  def unbalanced_quotes?
-    Shellwords.split(command.to_s)
-    false
-  rescue ArgumentError
-    true
+    MCP::LaunchLine.new(command, args).errors.each { |message| errors.add(:command, message) }
   end
 end

@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 # Deployment-wide Slack OAuth callback. One redirect URI is registered on the
-# Slack app; the project being connected is carried in a signed, single-use
-# `state`, and we only ever bind the install to a project the current user can
-# access. The state also pins the initiating user (anti-CSRF) and is consumed once.
+# Slack app; the project being connected, and whether the install is for the
+# whole company, are carried in a signed, single-use `state`, and we only ever
+# bind the install to a project the current user can access. The state also pins
+# the initiating user (anti-CSRF) and is consumed once.
 class Web::Integrations::SlackOauthController < Web::ApplicationController
   before_action :require_auth
   # The OAuth return must land here even for super-admins (who are otherwise
@@ -19,13 +20,18 @@ class Web::Integrations::SlackOauthController < Web::ApplicationController
     return redirect_to(root_path, alert: "Invalid or expired Slack authorization") if project.nil?
 
     path = company_project_integrations_path(project)
+    # Checked again here: the admin role may have been taken away since the start.
+    company_wide = state.fetch("company_wide", true)
+    if company_wide && !current_user.admin_of?(project.company)
+      return redirect_to(path, alert: "Only a company admin can connect Slack for the whole company")
+    end
     # On cancel, leave the nonce intact so the user can retry within the TTL.
     return redirect_to(path, alert: "Slack connection was cancelled") if params[:error].present?
     # Single use: reject a replayed/already-consumed authorization link.
     return redirect_to(path, alert: "This Slack authorization link was already used") unless Slack::Oauth.consume_state_nonce(state["nonce"])
 
     integration = Slack::IntegrationService.new(
-      company: project.company, connected_by: current_user, project: project
+      company: project.company, connected_by: current_user, project: project, company_wide: company_wide
     ).create_from_oauth(code: params[:code].to_s)
 
     if integration.active?

@@ -79,7 +79,7 @@ module Chat
   # connected, and the channels connected to the company in each.
   def trigger_options(project)
     integrations = Integration.active.visible_for_project(project).where(provider: PROVIDERS.keys).to_a
-    known = ChannelAccess.channels(project).group_by(&:provider)
+    known = ChannelAccess.channels(project).preload(:chat_workspace).group_by(&:provider)
     integrations.map { |integration| integration.provider.to_s }.uniq.sort.map do |key|
       { key: key, label: provider(key).label, bot_name: bot_name(key, project, fetch: false),
         conversations: Array(known[key]).map { |row| ChannelAccess.describe(row) } }
@@ -88,10 +88,10 @@ module Chat
 
   # The name people type to mention the bot, for instructions shown in Aixle.
   # Slack's comes from the install, read once and kept; Teams' is the app's. `fetch: false` never calls Slack, for a page render.
-  def bot_name(key, project, fetch: true)
+  def bot_name(key, project, fetch: true, integration: nil)
     return Teams::AppPackage::NAME if key.to_s == TeamsProvider::KEY
 
-    integration = Slack::InstallResolver.call(company_id: project.company_id, project_id: project.id)
+    integration ||= Slack::InstallResolver.call(company_id: project.company_id, project_id: project.id)
     return nil if integration.nil?
 
     integration.settings.to_h["bot_name"].presence || (remember_slack_bot_name(integration) if fetch)

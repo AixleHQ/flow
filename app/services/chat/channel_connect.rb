@@ -57,6 +57,16 @@ module Chat
         end
 
         integration = company_install(event, record.company_id)
+        mismatch = integration && record.workspace_mismatch(integration)
+        if mismatch
+          record.update!(failure_reason: mismatch)
+          next nil
+        end
+        if integration&.project_id && integration.project_id != record.project_id
+          record.update!(failure_reason: "Posted in a workspace connected for another project")
+          next nil
+        end
+
         conversation = integration && provider.conversation_for(event, integration)
         if conversation.nil?
           record.update!(failure_reason: "Posted in a workspace this company has not connected")

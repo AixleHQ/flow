@@ -1,18 +1,21 @@
 # frozen_string_literal: true
 
 module Slack
-  # Connects a Slack workspace to a (company, project) via OAuth v2. Aixle runs
-  # ONE Slack app per deployment (app credentials in Settings.slack.*); each
-  # company installs it into its own workspace with one click, yielding a
-  # per-workspace bot token. The install is keyed by `team_id` (stored in
-  # `settings` for inbound routing) and the bot token lives in encrypted
-  # `credentials_data`. A refused install saves nothing: the returned record is
-  # unsaved, in :error, and carries the reason in `settings["error"]`.
+  # Connects a Slack workspace to a company, or to one of its projects, via OAuth
+  # v2. Aixle runs ONE Slack app per deployment (app credentials in
+  # Settings.slack.*); each company installs it into its own workspace with one
+  # click, yielding a per-workspace bot token. The install is keyed by `team_id`
+  # (stored in `settings` for inbound routing) and the bot token lives in
+  # encrypted `credentials_data`. A refused install saves nothing: the returned
+  # record is unsaved, in :error, and carries the reason in `settings["error"]`.
+  #
+  # Whether the caller may connect for the whole company is the caller's check.
   class IntegrationService
-    def initialize(company:, connected_by:, project: nil)
+    def initialize(company:, connected_by:, project: nil, company_wide: true)
       @company = company
       @connected_by = connected_by
       @project = project
+      @company_wide = company_wide || project.nil?
     end
 
     # Exchange the OAuth code for a bot token and persist the install.
@@ -23,6 +26,10 @@ module Slack
       return refused("Slack did not return a workspace id") if team_id.blank?
 
       integration = find_or_build_for_team(team_id)
+      problem = scope_problem(integration)
+      return refused(problem) if problem
+
+      integration.project = @company_wide ? nil : @project
       integration.connected_by = @connected_by
       integration.name = team["name"].presence || "Slack"
       integration.credentials_data = {
@@ -55,11 +62,25 @@ module Slack
 
     private
 
-    # A Slack install belongs to the COMPANY (project_id: nil) and serves every
-    # project — connecting from any project reuses the one company-wide install,
-    # and a company can connect several different workspaces (one per team_id).
+    # A company holds one install per workspace, for the whole company or for
+    # one project: two installs of one workspace in one company would hear every
+    # message twice. Connecting it for the whole company widens a project's
+    # install; nothing narrows a company-wide one, because the other projects'
+    # triggers depend on it.
+    def scope_problem(integration)
+      return nil if integration.new_record? || @company_wide || integration.project_id == @project.id
+
+      if integration.project_id.nil?
+        "#{integration.name} is already connected for every project of #{@company.name}, this one included. " \
+          "Only a company admin can reconnect it."
+      else
+        "#{integration.name} is already connected to another project of #{@company.name}. " \
+          "A company admin can connect it for the whole company instead."
+      end
+    end
+
     def build_integration
-      @company.integrations.build(provider: :slack, connected_by: @connected_by, project: nil)
+      @company.integrations.build(provider: :slack, connected_by: @connected_by)
     end
 
     # Every company that connected the workspace speaks through the same bot,
@@ -96,12 +117,12 @@ module Slack
       endpoint.save!
     end
 
-    # One install per (company, team_id): reconnecting the same workspace (from any
-    # project) updates the existing record (refreshed token) rather than
-    # duplicating it; a different team_id yields a separate company-wide install.
+    # One install per (company, team_id): reconnecting the same workspace updates
+    # the existing record (refreshed token) rather than duplicating it; a
+    # different team_id yields a separate install.
     def find_or_build_for_team(team_id)
       @company.integrations
-        .where(provider: :slack, project_id: nil)
+        .where(provider: :slack)
         .find { |i| i.settings.to_h["team_id"].to_s == team_id } || build_integration
     end
 

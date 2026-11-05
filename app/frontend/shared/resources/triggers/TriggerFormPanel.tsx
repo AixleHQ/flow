@@ -35,6 +35,7 @@ import { TrackerTriggerFields } from './TrackerTriggerFields';
 import type {
   ChatConversationOption,
   ChatProviderOption,
+  RunAsOptions,
   Trigger,
   TriggerColumnOption,
   TriggerWorkflowOption,
@@ -51,6 +52,7 @@ interface TriggerFormPanelProps {
   // Messengers the company has connected, with the channels connected to the company in each.
   chatProviders?: ChatProviderOption[];
   editing: Trigger | null;
+  runAs?: RunAsOptions | null;
   defaultKind: string;
   onClose: () => void;
   onSaved: () => void;
@@ -105,6 +107,7 @@ const conversationOption = (channel: ChatChannel): ChatConversationOption => ({
   label: channel.label,
   kind: channel.kind,
   teamName: channel.team_name,
+  workspace: channel.workspace,
   provider: channel.provider,
 });
 
@@ -154,6 +157,7 @@ export function TriggerFormPanel({
   trackers = [],
   chatProviders = [],
   editing,
+  runAs = null,
   defaultKind,
   onClose,
   onSaved,
@@ -183,6 +187,7 @@ export function TriggerFormPanel({
   const [mode, setMode] = useState(editing?.trigger_mode ?? 'auto');
   const [cooldown, setCooldown] = useState<number | string>(editing?.cooldown_seconds ?? 5);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
+  const [runAsId, setRunAsId] = useState<string | null>(editing?.created_by?.id?.toString() ?? null);
 
   const [chatProvider, setChatProvider] = useState(editing?.chat_provider ?? chatProviders[0]?.key ?? 'slack');
   const [chatChannelId, setChatChannelId] = useState<number | null>(editing?.chat_channel?.id ?? null);
@@ -225,6 +230,8 @@ export function TriggerFormPanel({
     { value: 'create_task', label: 'Create a task' },
   ];
   const cronDesc = describeCron(cron);
+  const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
+  const canPickRunAs = isEdit && runsAsCreator && Boolean(runAs?.editable);
   // A new trigger starts switched on, and a chat trigger is only on with a channel.
   const channelMissing = kind === 'chat' && chatChannelId === null && (!isEdit || enabled);
 
@@ -279,6 +286,10 @@ export function TriggerFormPanel({
         if (subjectTitleTemplate.trim()) trigger.subject_title_template = subjectTitleTemplate.trim();
       }
       if (isEdit) trigger.enabled = enabled;
+    }
+
+    if (canPickRunAs && runAsId && Number(runAsId) !== editing?.created_by?.id) {
+      trigger.run_as_user_id = Number(runAsId);
     }
 
     try {
@@ -348,6 +359,8 @@ export function TriggerFormPanel({
     subjectColumnId,
     subjectTitleTemplate,
     trackerValue,
+    canPickRunAs,
+    runAsId,
     projectId,
     workflowId,
     onSaved,
@@ -381,6 +394,7 @@ export function TriggerFormPanel({
     subjectColumnId,
     subjectTitleTemplate,
     trackerValue,
+    runAsId,
   });
   const [initialValues] = useState(values);
   const requestClose = useUnsavedChanges({
@@ -388,20 +402,24 @@ export function TriggerFormPanel({
     onClose: dismiss,
   });
 
-  const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
   // On create the trigger is recorded as the signed-in user; on edit it keeps
-  // the creator it was given (the creator is not reassignable in v1).
+  // the one it was given unless an admin picks another.
   const creatorName = isEdit ? (editing?.created_by?.name ?? null) : (currentUser?.name ?? null);
+  const runAsData = runAsSelectData(runAs?.members ?? [], editing?.created_by ?? null);
   // A missing creator only blocks the off-board kinds; on a column trigger it is
   // just an unknown, so it is not flagged red.
   const creatorTone = creatorName ? null : runsAsCreator ? 'var(--app-danger-fg)' : 'var(--app-text-tertiary)';
-  const creatorHint = creatorName
-    ? runsAsCreator
-      ? 'Unattended runs from this trigger belong to this user and use their credentials.'
-      : 'Recorded when the trigger was added. The run itself belongs to whoever the card is on.'
-    : runsAsCreator
-      ? 'Without a creator this trigger cannot start a run. Re-create it to record one.'
-      : 'This trigger was added before creators were recorded.';
+  const creatorHint = canPickRunAs
+    ? runAsId
+      ? 'Unattended runs from this trigger belong to this user and use their agent and its limits. A change applies from the next run.'
+      : 'Without someone to run as this trigger cannot start a run. Pick who its runs belong to.'
+    : creatorName
+      ? runsAsCreator
+        ? 'Unattended runs from this trigger belong to this user and use their credentials.'
+        : 'Recorded when the trigger was added. The run itself belongs to whoever the card is on.'
+      : runsAsCreator
+        ? 'Without a creator this trigger cannot start a run. An admin can pick who it runs as, or re-create it.'
+        : 'This trigger was added before creators were recorded.';
 
   const kindOptions = [
     { value: 'column', label: 'Task enters column' },
@@ -562,9 +580,9 @@ export function TriggerFormPanel({
                 )}
               </div>
 
-              {/* Creator — recorded on create, never editable */}
               <div style={{ marginBottom: 16 }}>
                 <label
+                  htmlFor={canPickRunAs ? 'trigger-run-as' : undefined}
                   style={{
                     fontSize: 13,
                     fontWeight: 500,
@@ -575,13 +593,34 @@ export function TriggerFormPanel({
                 >
                   {runsAsCreator ? 'Runs as' : 'Created by'}
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <IconUser size={13} style={{ color: creatorTone ?? 'var(--app-text-tertiary)' }} />
-                  <span style={{ fontSize: 13, color: creatorTone ?? 'var(--app-text-primary)' }}>
-                    {creatorName ?? 'Unknown'}
-                  </span>
-                  <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
-                </div>
+                {canPickRunAs ? (
+                  <Select
+                    id="trigger-run-as"
+                    data={runAsData}
+                    value={runAsId}
+                    onChange={(v) => v && setRunAsId(v)}
+                    placeholder="Pick a project member"
+                    searchable
+                    allowDeselect={false}
+                    leftSection={<IconUser size={13} />}
+                    styles={{
+                      input: {
+                        background: 'var(--app-bg-paper)',
+                        border: '1px solid var(--app-border-default)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <IconUser size={13} style={{ color: creatorTone ?? 'var(--app-text-tertiary)' }} />
+                    <span style={{ fontSize: 13, color: creatorTone ?? 'var(--app-text-primary)' }}>
+                      {creatorName ?? 'Unknown'}
+                    </span>
+                    <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
+                  </div>
+                )}
                 <div style={{ fontSize: 12, color: 'var(--app-text-tertiary)', marginTop: 4 }}>{creatorHint}</div>
               </div>
 
@@ -1488,6 +1527,23 @@ function WebhookCreatedView({
   );
 }
 
+// A member without an agent can't carry a run, so they are shown but can't be
+// picked; a current Run as who can no longer carry runs stays visible as the value.
+function runAsSelectData(
+  members: RunAsOptions['members'],
+  current: { id: number; name: string } | null,
+): ComboboxItem[] {
+  const items = members.map((m) => ({
+    value: m.id.toString(),
+    label: m.agent_connected ? m.name : `${m.name} (no agent connected)`,
+    disabled: !m.agent_connected,
+  }));
+  if (current && !members.some((m) => m.id === current.id)) {
+    items.unshift({ value: current.id.toString(), label: `${current.name} (can't run this trigger)`, disabled: true });
+  }
+  return items;
+}
+
 interface ChatChannelFieldsProps {
   projectId: number;
   triggerId?: number;
@@ -1502,12 +1558,20 @@ interface ChatChannelFieldsProps {
   isEdit: boolean;
 }
 
+// Channel names repeat across the workspaces a company connected, so with more than one each channel shows its own.
+function channelGroup(c: ChatConversationOption, severalWorkspaces: boolean): string | null {
+  const own = c.kind === 'group' ? 'Group chats' : c.teamName;
+  if (!severalWorkspaces || !c.workspace) return own;
+  return own ? `${c.workspace} / ${own}` : c.workspace;
+}
+
 function channelOptions(channels: ChatConversationOption[]): ComboboxData {
   const ungrouped: ComboboxItem[] = [];
   const groups = new Map<string, ComboboxItem[]>();
+  const severalWorkspaces = new Set(channels.map((c) => c.workspace)).size > 1;
   for (const c of channels) {
     const item = { value: String(c.id), label: c.label };
-    const group = c.kind === 'group' ? 'Group chats' : c.teamName;
+    const group = channelGroup(c, severalWorkspaces);
     if (group) groups.set(group, [...(groups.get(group) ?? []), item]);
     else ungrouped.push(item);
   }
@@ -1564,8 +1628,8 @@ function ChatChannelFields({
           label="Channel"
           description={
             channels.length > 0
-              ? 'The one channel this trigger listens to. Only channels connected to your company are listed.'
-              : `No ${providerLabel} channel is connected to your company yet.`
+              ? 'The one channel this trigger listens to. Only channels this project can use are listed.'
+              : `No ${providerLabel} channel is connected for this project yet.`
           }
           placeholder={channels.length > 0 ? 'Choose a channel' : 'No channel connected yet'}
           data={channelOptions(channels)}

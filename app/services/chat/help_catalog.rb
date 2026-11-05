@@ -24,7 +24,7 @@ module Chat
 
     def listening_projects(data)
       installs = Integration.find_by(id: data["integration_id"])&.chat_peers&.active
-      Project.where(company_id: installs ? installs.select(:company_id) : [])
+      installs ? Integration.served_projects(installs) : Project.none
     end
 
     # Whose a listed trigger is, when the list spans several companies. Never

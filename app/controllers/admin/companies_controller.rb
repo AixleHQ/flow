@@ -26,6 +26,7 @@ module Admin
         return render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
       end
 
+      Feedback::NewCompanyAnnouncement.later(company, source: "admin", by: true_user, invited: company.initial_admin_email)
       notice = company.billing_trialing? ? trial_notice(company) : translate_with_resource("create.success")
       redirect_with_invitations(company, notice, fallback: [ namespace, company ])
     end

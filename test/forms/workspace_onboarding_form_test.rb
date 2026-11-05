@@ -3,6 +3,8 @@
 require "test_helper"
 
 class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup { @user = create(:user, email: "dana@acme-robotics.example") }
 
   def form(**attrs)
@@ -183,5 +185,44 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
   test "it names the account from the address" do
     assert_equal "Dana", stranger.name_from_email
     assert_equal "Dana Scully", stranger(email: "dana.scully@northwind.example").name_from_email
+  end
+
+  def configure_feedback_channel
+    Settings.stubs(:feedback).returns(
+      Hashie::Mash.new(slack_bot_token: "xoxb-feedback-bot", slack_channel_id: "C0FEEDBACK")
+    )
+  end
+
+  def announced_text
+    enqueued_jobs.select { |job| job[:job] == Feedback::SlackPostJob }.sole.fetch(:args).first
+  end
+
+  test "the feedback channel hears of the company, as a signup by its owner" do
+    configure_feedback_channel
+    built = stranger
+
+    assert built.save(built.owner_for(nil)), built.errors.full_messages.to_sentence
+
+    text = announced_text
+    assert_includes text, "*Tenant ID:* #{built.company.id}"
+    assert_includes text, "*Source:* Self-serve signup"
+    assert_includes text, "dana@northwind.example"
+  end
+
+  test "a Marketplace buyer's company is announced as one" do
+    configure_feedback_channel
+    built = stranger(email_domain: "northwind.example", marketplace_license: create(:marketplace_license, :active))
+
+    assert built.save(built.owner_for(nil)), built.errors.full_messages.to_sentence
+
+    assert_includes announced_text, "*Source:* AWS Marketplace signup"
+  end
+
+  test "a refused save announces nothing" do
+    configure_feedback_channel
+    create(:company, email_domain: "acme-robotics.example")
+
+    assert_not form.save(@user)
+    assert_no_enqueued_jobs only: Feedback::SlackPostJob
   end
 end

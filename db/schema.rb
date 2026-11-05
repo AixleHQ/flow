@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_120100) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_04_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -468,9 +468,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120100) do
     t.datetime "updated_at", null: false
     t.string "channel_name"
     t.string "team_name"
+    t.bigint "integration_id"
     t.index ["chat_channel_connection_id"], name: "index_chat_connect_codes_on_chat_channel_connection_id"
     t.index ["code_digest"], name: "index_chat_connect_codes_on_code_digest", unique: true
     t.index ["company_id"], name: "index_chat_connect_codes_on_company_id"
+    t.index ["integration_id"], name: "index_chat_connect_codes_on_integration_id"
     t.index ["project_id"], name: "index_chat_connect_codes_on_project_id"
     t.index ["requested_by_id"], name: "index_chat_connect_codes_on_requested_by_id"
     t.index ["trigger_binding_id"], name: "index_chat_connect_codes_on_trigger_binding_id"
@@ -2301,6 +2303,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_120100) do
   add_foreign_key "chat_channel_connections", "users", column: "requested_by_id", on_delete: :nullify
   add_foreign_key "chat_connect_codes", "chat_channel_connections", on_delete: :nullify
   add_foreign_key "chat_connect_codes", "companies", on_delete: :cascade
+  add_foreign_key "chat_connect_codes", "integrations", on_delete: :cascade
   add_foreign_key "chat_connect_codes", "projects", on_delete: :cascade
   add_foreign_key "chat_connect_codes", "trigger_bindings", on_delete: :nullify
   add_foreign_key "chat_connect_codes", "users", column: "requested_by_id", on_delete: :nullify
