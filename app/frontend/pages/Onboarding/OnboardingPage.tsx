@@ -345,31 +345,40 @@ function AgentAuthTerminal({
 const UNFINISHED_LOGIN_STATES: ReadonlyArray<TerminalSession['state']> = ['not_started', 'queued', 'running', 'ready'];
 
 // Leaving the step — Back, Skip, Get started, another page, closing or reloading the tab —
-// throws its unfinished logins away, so their containers go now instead of at the login
-// TTL. StrictMode unmounts and remounts on mount, synchronously, so the discard waits a
-// microtask and skips if the step is mounted again by then. `keepalive` lets the request
-// outlive a closing tab.
-function useDiscardUnfinishedLoginsOnLeave(sessions: TerminalSession[]) {
+// finishes the unfinished logins this tab opened, so their containers go now instead of at
+// the login TTL. Only the ones it opened: `sessions` lists every active login the user has
+// in the company, including another tab's and the profile page's.
+// Finish, not reset: a reset cancels the session and its cleanup then saves nothing, which
+// would throw away a login the user completed in the CLI before the watcher noticed or
+// before a failed auto-finish was retried. StrictMode unmounts and remounts on mount,
+// synchronously, so the finish waits a microtask and skips if the step is mounted again
+// by then. `keepalive` lets the request outlive a closing tab.
+function useFinishOpenedLoginsOnLeave(sessions: TerminalSession[], expandedAgent: string | null) {
+  const openedIdsRef = useRef(new Set<number>());
   const unfinishedIdsRef = useRef<number[]>([]);
   const mountedRef = useRef(false);
 
   useEffect(() => {
-    unfinishedIdsRef.current = sessions.filter((s) => UNFINISHED_LOGIN_STATES.includes(s.state)).map((s) => s.id);
-  }, [sessions]);
+    const shown = sessions.find((s) => s.agentType === expandedAgent);
+    if (shown) openedIdsRef.current.add(shown.id);
+    unfinishedIdsRef.current = sessions
+      .filter((s) => openedIdsRef.current.has(s.id) && UNFINISHED_LOGIN_STATES.includes(s.state))
+      .map((s) => s.id);
+  }, [sessions, expandedAgent]);
 
   useEffect(() => {
     mountedRef.current = true;
-    const discard = () => {
+    const finishAll = () => {
       for (const id of unfinishedIdsRef.current) {
-        apiFetch(resetApiV1TerminalSessionPath(id), { method: 'POST', keepalive: true }).catch(() => {});
+        apiFetch(finishApiV1TerminalSessionPath(id), { method: 'POST', keepalive: true }).catch(() => {});
       }
     };
-    window.addEventListener('pagehide', discard);
+    window.addEventListener('pagehide', finishAll);
     return () => {
       mountedRef.current = false;
-      window.removeEventListener('pagehide', discard);
+      window.removeEventListener('pagehide', finishAll);
       queueMicrotask(() => {
-        if (!mountedRef.current) discard();
+        if (!mountedRef.current) finishAll();
       });
     };
   }, []);
@@ -395,7 +404,7 @@ function ConnectAgentsStep({
   onSkip: () => void;
 }) {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
-  useDiscardUnfinishedLoginsOnLeave(authSessions);
+  useFinishOpenedLoginsOnLeave(authSessions, expandedAgent);
   const configuredCount = AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)).length;
   const canSkip = isAdmin && configuredCount === 0;
 
