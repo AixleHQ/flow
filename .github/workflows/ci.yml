@@ -172,7 +172,7 @@ jobs:
   checks:
     name: Checks
     if: ${{ !cancelled() }}
-    needs: [ lint, system, rails, vitest, coverage, secret-scan ]
+    needs: [ lint, system, rails, vitest, coverage, secret-scan, runner ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -277,6 +277,52 @@ jobs:
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "chore(ci): coverage badges for ${GITHUB_SHA:0:7}"
           git push origin badges
+
+  # aixle-runner, the self-contained Go module under runner/ (DESIGN.md §14.1). No path
+  # filter: the whole job takes about a minute, and it is part of `Checks`, so a Go failure
+  # blocks a merge like any other check.
+  runner:
+    name: Runner (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # The version pinned in go.mod's `go` line.
+          go-version-file: runner/go.mod
+          # Keeps this job out of the 10 GB Actions cache (see build-cache): the
+          # module's dependencies download in seconds.
+          cache: false
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would reformat these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # The conformance tests against runner/protocol/fixtures/v1/ included
+      # (internal/protocol/conformance_test.go).
+      - name: go test
+        run: go test -race ./...
+
+      - name: Build linux/amd64 and linux/arm64
+        run: |
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags "-s -w" \
+              -o "$RUNNER_TEMP/aixle-runner-linux-$arch" ./cmd/aixle-runner
+          done
 
   secret-scan:
     name: Secret Scan

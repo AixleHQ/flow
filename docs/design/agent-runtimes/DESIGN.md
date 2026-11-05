@@ -1,7 +1,10 @@
 # External runners for agent sessions — design
 
-**Status:** proposed, revision 5 (design only, no implementation in this change)
-**Created:** 2026-10-20 · **Revised:** 2026-10-30
+**Status:** accepted, revision 5; implementation in progress. The §15 tasks marked
+**Done.** are built, and the sections they touch carry "What v1 has so far" notes. The rest
+of phase 2 (§15 tasks 6b and 8–10) and phases 3 to 7 are still pending: what this document
+says about them is design, not code yet.
+**Created:** 2026-10-20 · **Revised:** 2026-11-04
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
 **Baseline:** `origin/develop` @ `a837d6fd` (the feature flag chain #166–#172 is in)
 
@@ -1143,7 +1146,7 @@ environment op of the table above (`exec` to `env.scrub`/`env.reset`) as an opaq
 these names, and nothing executes them yet. `session_id?` comes with `terminal_session_id` (task 8), and the controller
 ops with task 19. Output is not capped by the gateway beyond its 2 MiB body limit (§6.1);
 `Settings.runners.op_output_limit` and the upload of larger output come with the runner and
-`RunnerRuntime` (tasks 6 and 8).
+`RunnerRuntime` (tasks 6b and 8).
 The op envelope and the result as built are in `PROTOCOL.md` §5.5 and §6. Each op's payload
 and result schema, with its fixtures, is added there by the task that first implements the op
 (6a, 6b, 8).
@@ -1192,7 +1195,8 @@ that environment's credential, and only while that session runs there.
   `aixle-runner`, not to a request. The runner buffers log chunks locally (up to 64 MiB,
   oldest dropped first and marked with a gap) and queues events.
 - **Op execution is at-most-once:** the runner that holds the environment credential keeps a
-  local journal (`~/.aixle-runner/journal`) of the op ids it has executed and their results
+  local journal (`journal.json` in its state directory, `/var/lib/aixle-runner` on `manual`)
+  of the op ids it has executed and their results
   for 24 h. That is the host runner on `manual` and `coder`, and the session runner in a
   `kubernetes` pod. A redelivered op returns the
   journalled result without re-executing it. This closes the ambiguous "did my exec run?"
@@ -1316,6 +1320,75 @@ in v1.
     amd64/arm64, a reachable Docker daemon (`docker version` API ≥ 1.41), and 20 GiB free
     for images plus the workspace volume. A missing prerequisite makes the environment
     `failed`, with the reason.
+
+**What v1 has so far (§15 task 6a).** The host runner's core, on `manual` only, with no
+session mode yet (task 6b):
+
+- **`aixle-runner configure`** runs the local preflight first: Linux on `amd64` or `arm64`,
+  the Docker daemon's API at 1.41 or later (read with the SDK's `ServerVersion`), and 20 GiB
+  free under the daemon's `DockerRootDir`. A failed check is listed and no `register` call is
+  made. It then calls `register` with the os, the arch and the preflight results as `facts`
+  (`docker`, `docker_api`, `docker_root_dir`, `disk_free_bytes`), and stores the platform URL,
+  the environment and the token pair in `/var/lib/aixle-runner/credentials`, mode `0600`
+  (`--state-dir` moves the directory for `configure`, `unregister` and `--mode host`; the
+  `service` commands take no `--state-dir` and always use `/var/lib/aixle-runner`). A
+  machine that is registered already is refused until it is unregistered. Before the
+  preflight, `configure` stops if it cannot tell whether a credentials file exists (any
+  error but a missing file) or cannot write the state directory (it creates the directory,
+  then writes and removes a probe file), so a non-root run cannot spend the token and then
+  fail to store the pair. With no credentials file, it deletes a stale `journal.json`
+  before it spends the token, so a new environment starts at `after=0`. `unregister` calls
+  `DELETE /registration`, then deletes the credentials and the journal; if the platform no
+  longer accepts the credentials, it deletes them anyway.
+- **The state directory's lock.** `--mode host` takes an exclusive `flock` on the state
+  directory itself (not a lock file, which a root `configure` would create and the
+  `aixle-runner` user could not open) and holds it while it runs; a second host runner
+  refuses at once. `configure` and `unregister` take the same lock and, while a host runner
+  runs, refuse and say to run `aixle-runner service stop` first.
+- **`aixle-runner service install`** copies the running binary to
+  `/usr/local/bin/aixle-runner`, atomically, owned by root with mode `0755`. It opens the
+  running binary once, through `/proc/self/exe`, and both decides and copies from that
+  descriptor, so a swap of the path it was started from cannot change what it installs. It
+  skips the copy only when that path, read without following a link, already is the running
+  binary as a regular file owned by root with mode `0755`, what the copy would make. In
+  every other case it copies, a root-owned `0700` binary the service user could not
+  execute included, and the rename replaces a symlink there itself, not its target. The unit
+  always runs that copy, so a binary started from a directory its user can write cannot be
+  replaced under the service, whose Docker access is root-equivalent (§9.7). `install` then creates the `aixle-runner` system user, adds it to
+  the `docker` group, gives it the state directory (mode `0700`) and installs and enables
+  `/etc/systemd/system/aixle-runner.service`, which runs
+  `/usr/local/bin/aixle-runner --mode host` as that user. `uninstall` disables and removes
+  the unit and keeps the user, the binary and the credentials. `start` and `stop` drive the
+  unit. A host runner stopped by a refusal that needs an operator, or started with a missing
+  or invalid credentials file or a `journal.json` that is not valid JSON, exits `3`, which
+  the unit does not restart. For the journal, the message names the file and says to run
+  `aixle-runner unregister`, then `configure` with a new token; both work with the corrupt
+  file in place. The journal's values are not validated beyond that: the runner writes the
+  file atomically, so impossible values only come from a hand edit.
+- **The service user's lookup** in `configure` (run as root after `service install`) runs
+  before `register`, next to the state directory's probe. Only a user that does not exist
+  yet is skipped; any other lookup failure, or a uid or gid that is not a number, stops
+  `configure` before the token is spent. The files are handed to the user after they are
+  stored.
+- **`--mode host`** long-polls `GET /runner/v1/ops?after=<after>&wait=25`, one poll at a time.
+  The access token is refreshed 5 minutes before it expires and on an access `invalid_token`;
+  every new pair is written atomically before it is used. Each refusal is handled as
+  `PROTOCOL.md` §3 says, with backoff from 1 s doubling to 60 s and jitter in the upper half
+  of each delay. No token reaches a log line or an error message.
+- **The journal** is `journal.json` in the state directory. An op is journalled before it
+  runs and its result before it is posted; `after` moves past an op only once its result is
+  settled (accepted, or dropped on a `404` or a runner-bug refusal), and is persisted there.
+  A redelivered op is answered from the journal, and an op that a restart interrupted is
+  answered `interrupted` without running again. A graceful stop (SIGTERM) during an op leaves
+  its entry begun instead of journalling the handler's cancellation, so it is answered
+  `interrupted` too. Accepted entries are kept for 24 h; an entry whose result was never
+  accepted is kept until it is. Every write syncs the file and its directory, and a failed
+  directory sync is an error. An op received
+  after its `deadline_at` is answered `expired`, and an op this version does not implement
+  `unsupported_op` (`PROTOCOL.md` §6).
+- **`image.ensure`** inspects `image@digest` through the Docker SDK and pulls it when the
+  daemon does not have it. It reports `{pulled, duration_ms}`, or an `image_pull_failed`
+  error with the registry's message (`PROTOCOL.md` §6.1).
 
 #### Container options (`config.container`)
 
@@ -1981,9 +2054,9 @@ Phase 2 details that stay from revision 3:
 - **The conformance fixtures are committed in this phase** (`runner/protocol/fixtures/v1/`,
   §14.1), and the gateway's Rails tests run them from the first PR. They are the contract
   the Go implementation is written against, and what makes the later extract safe.
-- Separate CI lanes for the Go code (`go test`, lint, the Go side of conformance) **may be
-  deferred**. Until they exist, `runner/` is built and tested locally and in the release
-  lane only.
+- The Go code has its own CI job, `Runner (Go)` in `.github/workflows/ci.yml` (`gofmt`,
+  `go vet`, `go test -race` with the Go side of conformance, and the builds for both
+  arches), with no path filter and part of the required `Checks` status (task 6a).
 - A dev-only `local` adapter starts a host runner as a container on the Compose network,
   with the Docker socket of the dev machine. The whole path is then testable in Docker, with
   no machine and no Coder needed. It is a `manual`-like adapter (registration, no
@@ -2249,6 +2322,21 @@ The pattern follows who deploys the artifact and on whose schedule. It does not 
 language or code style. Our runner is deployed by the customer on their schedule, which is
 why the extract is the intent.
 
+**What v1 has so far (§15 task 6a).** `runner/` is the Go module
+`github.com/aixlehq/aixle-runner`, the import path the extracted repository keeps. `go.mod`
+pins the Go version on its `go` line, and CI installs that version from it. It builds with
+`cd runner && go build ./...` and reaches Docker through
+the official SDK, `github.com/moby/moby/client`. The binary is `./cmd/aixle-runner`, built
+statically (`CGO_ENABLED=0`) for `linux/amd64` and `linux/arm64`. Its version is
+`internal/version.Version`, set at build time with
+`-ldflags "-X github.com/aixlehq/aixle-runner/internal/version.Version=<version>"`; a local
+build reports `0.0.0-dev`. The packages are under `runner/internal/`: `protocol` (the client
+and the refusal table of `PROTOCOL.md` §3), `tokens`, `credentials`, `journal`, `host` (the
+ops loop), `docker` (`image.ensure`), `preflight`, `service` and `cli`. The `Runner (Go)` job of
+`.github/workflows/ci.yml` runs `gofmt`, `go vet`, `go test -race` (the conformance tests
+against `runner/protocol/fixtures/v1/` included) and both builds on every pull request, with
+no path filter, as part of `Checks`. There is no `Dockerfile` and no release lane yet (task 10).
+
 ### 14.2 Versions and release lanes, independent of the application release
 
 There are **three distinct versions**, and none of them is the application version:
@@ -2380,11 +2468,12 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
 | 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
-| 6 | 2 | `aixle-runner` (Go, self-contained `runner/` with its own `go.mod`, §14.1), written against the protocol in `runner/protocol/` (task 7). `session` mode: poll and execute (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`), log shipping, heartbeat, reconnect and resume, the local proxy. `host` mode: `configure`, `service install`/`uninstall`, `unregister`, environment credential and journal, `image.ensure`, `container.start`/`stop` with labels, the Unix-socket relay for the in-container session runner, scrub and reset by label, self-update with the opt-out. |
-| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lanes follow with 6a (§12.2). |
-| 8 | 2 | `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. |
+| 6a | 2 | **Done.** `aixle-runner` in Go: the self-contained module `runner/` with its own `go.mod` and the Go version pinned (§14.1), one static binary for `linux/amd64` and `linux/arm64` with its version set at build time (`0.0.0-dev` for a local build), written against `runner/protocol/` (task 7). Docker is reached through the official Docker Engine SDK for Go (`github.com/moby/moby/client`). `configure` with its local preflight (Linux amd64/arm64, Docker API ≥ 1.41, 20 GiB free; a failed check registers nothing) and the credentials file (§6.3); `unregister`; `service install`/`uninstall`/`start`/`stop` with the systemd unit and the `aixle-runner` system user in the `docker` group (§9.7), the unit running the root-owned copy `/usr/local/bin/aixle-runner` that `install` makes. `--mode host`: refresh before expiry and on an access `invalid_token`, every rotation stored atomically before use, every refusal handled as `PROTOCOL.md` §3 says, no token in a log line; the ops loop, one long-poll at a time, `after` moved only past an accepted result; ops past `deadline_at` answered `expired`; the at-most-once journal (§6.7), with a graceful stop during an op answered `interrupted`; an exclusive `flock` on the state directory, held by `--mode host` and taken by `configure` and `unregister`; results retried until accepted, a `404` dropped; an op the runner does not implement answered `unsupported_op`; the `image.ensure` op, specified in `PROTOCOL.md` §6.1 with its fixture. The Go side of conformance (a fake gateway built from the fixtures) and the `Runner (Go)` CI job (`gofmt`, `go vet`, `go test -race`, both builds), part of `Checks`. |
+| 6b | 2 | `--mode session`, PID 1 in the agent container, and the session ops (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`); `container.start`/`stop` with labels, which land with session mode because the container's PID 1 is the session runner; the Unix-socket relay for the in-container session runner; `env.scrub`/`env.reset`, the scrub and reset by label. Each op's schema and fixtures go into `PROTOCOL.md` §6. |
+| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
+| 8 | 2 | The runner's side of `check-in`, heartbeat, log shipping and the local proxy (moved from task 6). `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. When this task adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
-| 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). |
+| 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update`, §14.4), moved from task 6. |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
 | 12 | 3 | `manual` end to end: `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
@@ -2439,14 +2528,39 @@ reviewable and lands behind the flags. The number in the second column is the ph
 - **Concurrent long-polls per environment.** Each waiting `GET /runner/v1/ops` holds a
   gateway thread for up to 25 s (§6.1), and the per-token throttle bounds requests per
   minute, not outstanding polls, so one buggy or leaked access token could occupy every
-  gateway thread with overlapping polls. It cannot happen yet: the gateway is not deployed
-  and there is no runner. Two things must be settled:
-  - before the gateway is deployed (the `aixle-infra` gateway task), bound the outstanding
-    polls per environment across gateway processes, for example with a Redis lease held
-    for the poll and released when it returns;
-  - with task 6 (`aixle-runner`), decide whether an overlapping poll is refused (`409` or
-    `429`) or replaces the older one. Replacing suits a runner that reconnects after a
-    dropped connection.
+  gateway thread with overlapping polls. It cannot happen yet: the gateway is not deployed.
+  - **Decided (Alex, 2026-11-02): a newer poll replaces the older poll of the same
+    poller.** The older one is answered at once with an empty batch, so its gateway thread
+    is freed, and the newer one waits. This suits a runner that polls again after a restart
+    or a dropped connection while the gateway still holds its old poll. Refusing the newer
+    poll (`409` or `429`) would keep such a runner out until the old poll timed out.
+  - **It is built on the existing wake-up channel** `runner_env_<id>` of 5b: a poll
+    announces itself there once subscribed, and an older poll of the same poller that hears
+    it returns. No separate lease key in Redis is needed.
+  - **What counts as one poller is settled by 6b.** With a session running, the session
+    runner also polls, through the host runner's socket and with the same environment
+    credential (§6.8, §15 row 6). So either the host runner and each session count as
+    separate pollers, or the host runner becomes the only poller and hands session ops to
+    the session runners.
+  - **The runner never overlaps its own polls** (task 6a): the host runner sends a new
+    `GET /runner/v1/ops` only after the previous one has answered.
+  - **The gateway change is a separate `flow` task,** cut after 6b and before the gateway
+    is deployed. Nothing in the gateway changes in task 6a.
+- **A lost `POST /runner/v1/token` response.** The gateway commits a rotation before it
+  answers. If the response is lost, the runner's retry presents the refresh token that was
+  just spent, and by `PROTOCOL.md` §4 that is reuse, which revokes the whole credential
+  family. A dropped connection during a refresh then forces a manual re-registration, as if
+  the credentials had been stolen. It cannot happen yet: the gateway is not deployed.
+  - **Where it is decided:** in the same `flow` task as the long-poll change above, after 6b
+    and before the gateway is deployed. Neither the runner nor `PROTOCOL.md` changes in
+    task 6a.
+  - **The default to propose there:** a short grace window, for example 60 s. Within it,
+    presenting the refresh token that was just spent counts as a retry: the gateway issues a
+    fresh pair and revokes the pair that was never picked up. The runner does not change.
+  - **The alternatives:** an idempotency key on `POST /runner/v1/token` with a replayable
+    response, for which the gateway must keep the issued pair, encrypted; or a runner that
+    stops on a network error of `POST /runner/v1/token` with an "outcome unknown" error,
+    which still needs a re-registration after a dropped connection.
 
 ---
 
