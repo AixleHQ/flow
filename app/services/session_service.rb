@@ -110,7 +110,7 @@ class SessionService
     end
 
     # The way out of a login that went wrong — a dead pane, a code pasted into the
-    # shell — short of waiting out the container's 23-hour signal timeout. The
+    # shell — short of waiting out the login's TTL (AgentAuthStrategy.login_ttl). The
     # session is cancelled, so its container is torn down and nothing it captured is
     # saved (AgentAuthStrategy#before_cleanup); a session that already ended, or is
     # already being finished, is left as it is.

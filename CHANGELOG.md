@@ -30,6 +30,11 @@ governance, community health — carry none.
   later.
 
 ### Changed
+- **Sign-in & onboarding**: leaving the "Connect your agents" step — Back, Skip,
+  Get started, or closing the tab — ends any agent login still in progress there.
+  An agent login left unfinished anywhere else now closes after an hour instead
+  of 23 hours, releasing its container. Operators can change the limit with
+  `AGENT_LOGIN_TTL_SECONDS`.
 - **Sessions & Runs**: a Kiro session's cost is now its credits at an API-equivalent
   rate ($0.10 a credit, `KIRO_CREDIT_USD`), comparable with what other agents report,
   instead of at Kiro's overage price of $0.04 a credit.

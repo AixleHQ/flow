@@ -342,6 +342,39 @@ function AgentAuthTerminal({
   );
 }
 
+const UNFINISHED_LOGIN_STATES: ReadonlyArray<TerminalSession['state']> = ['not_started', 'queued', 'running', 'ready'];
+
+// Leaving the step — Back, Skip, Get started, another page, closing or reloading the tab —
+// throws its unfinished logins away, so their containers go now instead of at the login
+// TTL. StrictMode unmounts and remounts on mount, synchronously, so the discard waits a
+// microtask and skips if the step is mounted again by then. `keepalive` lets the request
+// outlive a closing tab.
+function useDiscardUnfinishedLoginsOnLeave(sessions: TerminalSession[]) {
+  const unfinishedIdsRef = useRef<number[]>([]);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    unfinishedIdsRef.current = sessions.filter((s) => UNFINISHED_LOGIN_STATES.includes(s.state)).map((s) => s.id);
+  }, [sessions]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const discard = () => {
+      for (const id of unfinishedIdsRef.current) {
+        apiFetch(resetApiV1TerminalSessionPath(id), { method: 'POST', keepalive: true }).catch(() => {});
+      }
+    };
+    window.addEventListener('pagehide', discard);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener('pagehide', discard);
+      queueMicrotask(() => {
+        if (!mountedRef.current) discard();
+      });
+    };
+  }, []);
+}
+
 // ── Step 2+3: Connect Agents (unified) ────────────
 
 function ConnectAgentsStep({
@@ -362,6 +395,7 @@ function ConnectAgentsStep({
   onSkip: () => void;
 }) {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  useDiscardUnfinishedLoginsOnLeave(authSessions);
   const configuredCount = AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)).length;
   const canSkip = isAdmin && configuredCount === 0;
 

@@ -480,6 +480,53 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
   });
 
+  it('throws away unfinished logins when the user leaves the connect agents step', async () => {
+    const fetchSpy = answerFetch({
+      'POST /api/v1/terminal_sessions/:id/reset': { data: buildTerminalSession({ state: 'cancelled' }) },
+    });
+    const { unmount } = renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2' }),
+        authSessions: [
+          buildTerminalSession({ id: 7, agentType: 'claude_code', state: 'ready' }),
+          buildTerminalSession({ id: 8, agentType: 'codex', state: 'queued' }),
+          buildTerminalSession({ id: 9, agentType: 'gemini_cli', state: 'finishing' }),
+        ],
+      },
+    });
+
+    unmount();
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/7/reset',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/8/reset',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+  });
+
+  it('throws away unfinished logins when the tab is closed or reloaded', async () => {
+    const fetchSpy = answerFetch({
+      'POST /api/v1/terminal_sessions/:id/reset': { data: buildTerminalSession({ state: 'cancelled' }) },
+    });
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2' }),
+        authSessions: [buildTerminalSession({ id: 7, agentType: 'claude_code', state: 'ready' })],
+      },
+    });
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/7/reset',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+  });
+
   it('starts a stuck login over: the session is reset and the agent sessions reloaded', async () => {
     installFakeWebSocket();
     const fetchSpy = answerFetch({
