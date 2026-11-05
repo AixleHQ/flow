@@ -377,6 +377,7 @@ func TestInstallReplacesTheRunningBinaryAtTheFixedPathUnlessOnlyRootCanWriteIt(t
 		"writable by its group":      {0, 0o775},
 		"writable by others":         {0, 0o757},
 		"a user's, writable by many": {1000, 0o777},
+		"executable by root only":    {0, 0o700},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m, _, chowns := manager(t, true)

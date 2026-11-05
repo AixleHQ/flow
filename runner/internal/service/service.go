@@ -235,8 +235,9 @@ func (m *Manager) installBinary() error {
 }
 
 // isInstalled says whether Binary already is what installBinary would make of
-// self: the same regular file, not through a link, owned by root, and writable by
-// neither group nor others. A missing Binary is not.
+// self: the same regular file, not through a link, owned by root, with mode
+// exactly 0755. Any other mode is copied over, so a root-owned 0700 binary the
+// service user could not execute is replaced too. A missing Binary is not.
 func (m *Manager) isInstalled(self fs.FileInfo) (bool, error) {
 	info, err := os.Lstat(m.Binary)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -248,7 +249,7 @@ func (m *Manager) isInstalled(self fs.FileInfo) (bool, error) {
 	return info.Mode().IsRegular() &&
 		os.SameFile(self, info) &&
 		m.Owner(info) == 0 &&
-		info.Mode().Perm()&0o022 == 0, nil
+		info.Mode().Perm() == 0o755, nil
 }
 
 // Uninstall stops, disables and removes the unit. The user, the credentials and
