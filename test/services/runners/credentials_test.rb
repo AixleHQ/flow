@@ -216,6 +216,21 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_equal 1.minute.ago, access.reload.used_at
   end
 
+  test "an access token revoked after it was read records no use and is refused" do
+    access = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).access_token, kind: :access)
+    RunnerCredential.where(id: access.id).update_all(revoked_at: Time.current)
+
+    assert_equal false, Runners::Credentials.record_use!(access)
+    assert_nil access.reload.used_at
+  end
+
+  test "an access token another request marked used first is still accepted" do
+    access = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).access_token, kind: :access)
+    Runners::Credentials.record_use!(RunnerCredential.find(access.id))
+
+    assert_equal true, Runners::Credentials.record_use!(access)
+  end
+
   test "a spent refresh token replayed after its own expiry still revokes the live family" do
     first = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).refresh_token, kind: :refresh)
     second = RunnerCredential.find_by_token(Runners::Credentials.rotate!(first).refresh_token, kind: :refresh)

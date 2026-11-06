@@ -2343,11 +2343,19 @@ when both hold:
   which the gateway records in its `used_at`: one write per token, not one per request.
 
 On a retry, `Credentials.rotate!` revokes the unused pair and issues a fresh pair of the
-same family, answering `200` as a rotation does. The window counts from the first spend,
-so a retry does not extend it, and a second retry within it revokes the first retry's pair.
+same family, answering `200` as a rotation does, and logs the environment and the family
+(no token). The window counts from the first spend, so a retry does not extend it, and a
+second retry within it revokes the first retry's pair.
 Anything else is reuse, as before: a retry after 60 s, a retry after the new pair was used,
 and a refresh token two or more rotations old revoke the family, and the environment
 records `credential reuse detected` as its `state_reason`.
+
+An access token's first use and a retry of the refresh that issued it are serialized on
+the access token's row. The gateway records the first use only on an unrevoked row
+(`Credentials.record_use!`), and `rotate!` locks the issued pair before it reads it. If the
+retry revokes the pair first, the use is not recorded and the request answers
+`401 invalid_token`. If the use commits first, `rotate!` sees it and treats the spent token
+as reuse.
 
 What it costs:
 - **A dropped connection longer than the window.** The runner retries about 1, 3, 7, 15 and
@@ -3318,6 +3326,12 @@ reviewable and lands behind the flags. The number in the second column is the ph
     the tests, since the fixture format cannot hold two requests at once.
   - **The runner never overlaps its own polls** (task 6a): the host runner sends a new
     `GET /runner/v1/ops` only after the previous one has answered, so it does not change.
+  - **Known limitation: two pollers with the same credentials.** Two processes that poll with
+    one environment's access token, for example a machine whose credentials file was copied to
+    another, end each other's polls. Each re-polls at once after an empty answer, so they send
+    polls back to back until the per-token rate limit answers `429` and they back off. Ops are
+    still delivered, and reuse detection revokes the family at the next refresh. H3, rare: it
+    needs a duplicated machine, which is already an error state.
 - **Done (task #206): a lost `POST /runner/v1/token` response.** The gateway commits a
   rotation before it answers, so a runner whose response was lost retries with the refresh
   token that was just spent, which `PROTOCOL.md` §4 counted as reuse: the whole family was

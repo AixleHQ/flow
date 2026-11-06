@@ -2385,7 +2385,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
   add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
   add_foreign_key "runner_credentials", "companies", on_delete: :cascade
-  add_foreign_key "runner_credentials", "runner_credentials", column: "rotated_from_id", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_credentials", column: "rotated_from_id", on_delete: :nullify
   add_foreign_key "runner_credentials", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_credentials_environment_runner", on_delete: :cascade
   add_foreign_key "runner_credentials", "runner_environments", on_delete: :cascade
   add_foreign_key "runner_credentials", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_credentials_runner_company", on_delete: :cascade

@@ -123,6 +123,8 @@ module Runners
           issued = RunnerCredential.unrevoked.where(rotated_from_id: credential.id).lock.to_a
           if retry?(credential, issued)
             revoke!(issued)
+            Rails.logger.info("[Runners::Credentials] refresh retried within the window: " \
+                              "environment #{environment.id}, family #{credential.family_id}")
             issue_pair!(environment, family_id: credential.family_id, rotated_from: credential)
           else
             reused = true
@@ -156,12 +158,24 @@ module Runners
     # Records an access token's first accepted use, which ends the retry
     # window of the refresh that issued it (retry?). One write per token: a
     # token already marked is not written again.
+    #
+    # Returns false when the token was revoked before its use was recorded,
+    # and the request must then be refused. The update sets `used_at` only on
+    # an unrevoked row and takes that row's lock, which rotate! also takes
+    # when it reads the issued pair, so the two are serialized: if a retry
+    # revokes the pair first, the update changes no row; if the use commits
+    # first, rotate! sees it and treats the spent token as reuse. A row that a
+    # concurrent request of the same token marked first is still accepted.
     def record_use!(credential)
-      return if credential.used?
+      return true if credential.used?
 
       now = Time.current
-      RunnerCredential.where(id: credential.id, used_at: nil).update_all(used_at: now, updated_at: now)
+      recorded = RunnerCredential.where(id: credential.id, used_at: nil, revoked_at: nil)
+                                 .update_all(used_at: now, updated_at: now) == 1
+      return RunnerCredential.unrevoked.where(id: credential.id).where.not(used_at: nil).exists? unless recorded
+
       credential.used_at = now
+      true
     end
 
     # Holds the runner's row against a revocation until the caller's
