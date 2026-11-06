@@ -152,7 +152,8 @@ sessions can also run on their own). They share a single list.
   happened, what did it produce, what did it cost?"
 - **What you do.** Open a run to see its steps, which ran in parallel, and
   where it is waiting; watch a running step's terminal live, embedded in the
-  page (it shows *Session starting…* until the agent's container is ready);
+  page (it shows *Session starting…* until the agent's container is ready,
+  and *Session finishing…* while the session ends);
   approve a step that waits for a person (**Approve & continue**); retry or
   skip a step; open a finished session to read its full log.
 - *Afterwards:* every run leaves a trail — status, log, artifacts, tokens, and
@@ -339,6 +340,6 @@ from each other. Verified against the product as of 2026-08.
 | Gates | On a card, a gate chip reads **waiting**, **passed**, **failed**, or **stale** (CI never reported) |
 | Step failure options | **On Failure**: Fail / Retry / Skip; **Skip Policy**: Never / If outputs exist / Manual |
 | Human approval | A waiting step shows **Approve & continue** |
-| Live terminal | A running step embeds the agent's terminal; before the container is ready it reads **Session starting…**, then **Connecting to terminal…** |
+| Live terminal | A running step embeds the agent's terminal; before the container is ready it reads **Session starting…**, then **Connecting to terminal…**; while the session ends it reads **Session finishing…** |
 | Profile | Tabs **Account**, **Usage**, **MCP** — the last is personal access for agents run outside Aixle |
 | Docs | The operator documentation portal at `/docs`, reachable from the public site (**Documentation**); there is no docs item in the app sidebar |

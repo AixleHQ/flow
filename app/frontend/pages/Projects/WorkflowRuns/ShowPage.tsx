@@ -116,6 +116,14 @@ function groupSkippedSessions(steps: StepRun[]): SessionListEntry[] {
   return entries;
 }
 
+// The step stays running until the workflow advances past it, so its console
+// outlives the session it shows.
+const ENDING_SESSION_STATES = new Set(['finishing', 'finished', 'failed', 'cancelled']);
+
+function isSessionEnding(step: StepRun) {
+  return step.terminalSessionState !== undefined && ENDING_SESSION_STATES.has(step.terminalSessionState);
+}
+
 /** One live step's terminal; it shows its own "connecting…" state, so several load independently. */
 function StepConsole({ step, label, ownerName }: { step: StepRun; label: string; ownerName: string | null }) {
   return (
@@ -137,7 +145,7 @@ function StepConsole({ step, label, ownerName }: { step: StepRun; label: string;
         <div className={classes.terminalPlaceholder}>
           <Loader size="md" />
           <Text size="sm" c="dimmed">
-            Session starting…
+            {isSessionEnding(step) ? 'Session finishing…' : 'Session starting…'}
           </Text>
         </div>
       )}
