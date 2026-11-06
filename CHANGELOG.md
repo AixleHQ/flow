@@ -58,8 +58,8 @@ governance, community health — carry none.
   were charged, as shown in Kiro's own terminal. Since automatic sessions moved to
   Kiro's terminal UI, most were priced by how far the whole account's credit counter
   moved, which also counted the account's other sessions and its Kiro IDE use.
-- **Companies & projects**: a project whose name has no Latin letters or digits,
-  such as "Проект", can be created; it used to be refused with nothing shown.
+- **Companies & projects**: a project whose name has no Latin letters or digits
+  can be created; it used to be refused with nothing shown.
 - **Companies & projects**: the Create New Project dialog now shows why a project
   could not be created, including errors on fields other than the name, and keeps
   them visible when it was opened from the sidebar.
