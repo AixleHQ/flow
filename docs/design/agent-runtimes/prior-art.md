@@ -451,13 +451,17 @@ usually an injected binary.
 3. **The live log comes from a file or from the container's own output, read by offset or by the
    log API, never from the exec stream alone.** GitLab's `read-logs` resumes by byte offset.
    Tekton, Argo and CircleCI's log sidecar read the pod log API. Jenkins reads a log file.
-4. **Helpers live in another container that shares the job's network and volumes.** GitLab's
-   helper container, Argo's `wait` sidecar, Buildkite's `agent` and `checkout` containers,
-   CircleCI's log sidecar, service containers everywhere. Within a pod they share `localhost`.
-5. **A credential is kept from the job by putting it in a different container or process, not
-   by hiding it in the same one.** Argo's artifact credentials are in `wait`, Buildkite's agent
-   token is in `agent`, GitHub's and GitLab's runner credentials stay on the host. Coder and the
-   sandboxes do not try, because their sandbox belongs to the user.
+4. **Many systems run their privileged helpers in another container that shares the job's
+   network and volumes.** GitLab's helper container, Argo's `wait` sidecar, Buildkite's `agent`
+   and `checkout` containers, CircleCI's log sidecar, and service containers in most of them.
+   Within a pod they share `localhost`. It is not universal: GitHub Actions runs its checkout,
+   artifact and cache actions as steps in the job container, with no helper container (§1).
+5. **Systems that need to protect a runner credential keep it outside the job, in a different
+   container or process, not hidden in the same one.** Argo's artifact credentials are in
+   `wait`, Buildkite's agent token is in `agent`, GitHub's and GitLab's runner credentials stay
+   on the host. User-owned sandboxes may deliberately expose a scoped agent credential instead:
+   Coder puts its agent token in the workspace's environment (§14), and the other sandboxes do
+   not try to hide theirs, because the sandbox belongs to the user.
 6. **Only GitLab's terminal and CircleCI's SSH rerun need inbound access.** Coder and Daytona
    bring interactive traffic in through an outbound connection or a platform-operated relay.
    That is the shape DESIGN.md §12.2's tunnel already assumes.
