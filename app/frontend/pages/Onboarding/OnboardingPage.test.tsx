@@ -480,6 +480,76 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
   });
 
+  it('finishes the logins this tab opened when the user leaves the connect agents step', async () => {
+    const fetchSpy = answerFetch({
+      'POST /api/v1/terminal_sessions/:id/finish': { data: buildTerminalSession({ state: 'finishing' }) },
+    });
+    const { unmount } = renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2' }),
+        authSessions: [
+          buildTerminalSession({ id: 7, agentType: 'claude_code', state: 'ready' }),
+          buildTerminalSession({ id: 8, agentType: 'codex', state: 'queued' }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
+    // Claude's own button now reads Collapse, so Codex is the second Connect.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[1]);
+    unmount();
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/7/finish',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/8/finish',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+  });
+
+  it("leaves a login this tab never opened running, since it is another tab's or the profile page's", async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { unmount } = renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2' }),
+        authSessions: [buildTerminalSession({ id: 9, agentType: 'gemini_cli', state: 'ready' })],
+      },
+    });
+
+    window.dispatchEvent(new Event('pagehide'));
+    unmount();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('finishes the logins this tab opened when the tab is closed or reloaded', async () => {
+    const fetchSpy = answerFetch({
+      'POST /api/v1/terminal_sessions/:id/finish': { data: buildTerminalSession({ state: 'finishing' }) },
+    });
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2' }),
+        authSessions: [
+          buildTerminalSession({ id: 7, agentType: 'claude_code', state: 'ready' }),
+          buildTerminalSession({ id: 9, agentType: 'gemini_cli', state: 'ready' }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/terminal_sessions/7/finish',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+  });
+
   it('starts a stuck login over: the session is reset and the agent sessions reloaded', async () => {
     installFakeWebSocket();
     const fetchSpy = answerFetch({

@@ -9,10 +9,20 @@ module ContainerStrategies
   #   - phase_config: exec awaits container_finished signal
   #
   class AgentAuthStrategy < AgentBaseStrategy
+    DEFAULT_LOGIN_TTL = 1.hour.to_i
+
+    # How long a login container may wait for the user to finish signing in. When it
+    # runs out, the workflow moves on to cleanup and the pod is removed — this is what
+    # reclaims a login the user walked away from (onboarding, profile).
+    def self.login_ttl
+      ttl = Settings.agents.login_ttl_seconds.to_i
+      ttl.positive? ? ttl : DEFAULT_LOGIN_TTL
+    end
+
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
-      when :exec        then { timeout: 300, await_signal: :container_finished, signal_timeout: 82_800 }
+      when :exec        then { timeout: 300, await_signal: :container_finished, signal_timeout: self.class.login_ttl }
       when :cleanup     then { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } }
       else                   { timeout: 300 }
       end
@@ -68,12 +78,13 @@ module ContainerStrategies
     # A cancelled session saves nothing at all: cancelling is how the user throws a
     # login away (SessionService.reset_auth), whatever it captured.
 
-    def before_cleanup(container_id: nil, session_id: nil, **)
+    def before_cleanup(container_id: nil, session_id: nil, error: nil, **)
       return {} if container_id.blank?
 
       session = session_id ? TerminalSession.find(session_id) : nil
       if session&.cancelled?
         Rails.logger.info("[AgentAuth] before_cleanup: session #{session.id} was cancelled — no credential saved")
+        log_reaped(session, "cancelled")
         return { auth_completed: false }
       end
 
@@ -95,6 +106,7 @@ module ContainerStrategies
         end
       else
         Rails.logger.info("[AgentAuth] before_cleanup: auth not complete (#{auth_files.size} files) — no credential saved")
+        log_reaped(session, error.present? ? "failed" : "abandoned") unless completed
       end
 
       result
@@ -120,6 +132,18 @@ module ContainerStrategies
     end
 
     private
+
+    # One line per login pod torn down without a credential, so reaped logins can be
+    # counted and aged from the logs (`[AgentAuth] login_pod_reaped`).
+    def log_reaped(session, reason)
+      return if session.nil?
+
+      age = (Time.current - session.created_at).round
+      Rails.logger.info(
+        "[AgentAuth] login_pod_reaped session_id=#{session.id} agent_type=#{session.agent_type} " \
+        "reason=#{reason} age_seconds=#{age} ttl_seconds=#{self.class.login_ttl}"
+      )
+    end
 
     # Opaque auth kind carried on the session ("agent" = normal login). The adapter
     # interprets it; this strategy never branches on specific values.

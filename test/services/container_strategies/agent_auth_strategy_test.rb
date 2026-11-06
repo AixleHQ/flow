@@ -363,6 +363,47 @@ module ContainerStrategies
       assert_kind_of Array, env_vars
     end
 
+    # == Login TTL ==
+
+    test "an unfinished login waits an hour for completion by default" do
+      assert_equal 3600, build_strategy.phase_config(:exec)[:signal_timeout]
+    end
+
+    test "the login TTL is read from settings" do
+      Settings.agents.stubs(:login_ttl_seconds).returns("900")
+
+      assert_equal 900, build_strategy.phase_config(:exec)[:signal_timeout]
+    end
+
+    test "a blank or non-positive login TTL falls back to the default" do
+      [ "", "0", "-5", "soon" ].each do |value|
+        Settings.agents.stubs(:login_ttl_seconds).returns(value)
+        assert_equal 3600, build_strategy.phase_config(:exec)[:signal_timeout], "for #{value.inspect}"
+      end
+    end
+
+    test "before_cleanup logs an abandoned login with its age" do
+      strategy = build_strategy
+      strategy.stubs(:resolve_container).returns(mock("container"))
+      strategy.stubs(:read_file_from_container).returns(nil)
+      @session.update_columns(created_at: 61.minutes.ago)
+      Rails.logger.expects(:info).with(regexp_matches(
+        /login_pod_reaped session_id=#{@session.id} agent_type=claude_code reason=abandoned age_seconds=36\d\d ttl_seconds=3600/
+      ))
+
+      strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+    end
+
+    test "before_cleanup does not log a completed login as reaped" do
+      runtime = stub_container_runtime
+      runtime.write_file("abc", "/home/claude/.claude.json", { "oauthAccount" => { "emailAddress" => "u@x.com" } }.to_json)
+      runtime.write_file("abc", "/home/claude/.claude/.credentials.json",
+        { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-z", "refreshToken" => "sk-ant-ort01-z" } }.to_json)
+      Rails.logger.expects(:info).with(regexp_matches(/login_pod_reaped/)).never
+
+      build_strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+    end
+
     # == before_cleanup: credential persistence ==
 
     test "before_cleanup does not save a credential when auth is incomplete" do

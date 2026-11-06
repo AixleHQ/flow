@@ -571,6 +571,9 @@ agents:
   # How long a session whose agent lost its login waits for it to be renewed before it is
   # failed (Sessions::AuthPause). Bounded by the container's own 24 hours.
   auth_pause_limit_minutes: <%= ENV['AGENT_AUTH_PAUSE_LIMIT_MINUTES'] || 720 %>
+  # How long an agent login (onboarding, profile) waits for the user to finish before
+  # its container is removed (AgentAuthStrategy.login_ttl).
+  login_ttl_seconds: <%= ENV['AGENT_LOGIN_TTL_SECONDS'] || 3600 %>
 
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
