@@ -4,7 +4,7 @@
 **Done.** are built, and the sections they touch carry "What v1 has so far" notes. The rest
 of phase 2 (§15 tasks 6b and 8–10) and phases 3 to 7 are still pending: what this document
 says about them is design, not code yet.
-**Created:** 2026-10-20 · **Revised:** 2026-11-04
+**Created:** 2026-10-20 · **Revised:** 2026-11-06
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
 **Baseline:** `origin/develop` @ `a837d6fd` (the feature flag chain #166–#172 is in)
 
@@ -19,6 +19,28 @@ and are not a new numbered revision:
 - **Project-move edge cases are accepted, not fixed:** a queued manual launch naming a
   runner, the lock order against a concurrent workflow save, and a project that owns a
   runner (§3.4, "Known limitations of the move").
+
+**Decisions of 2026-11-05 and 2026-11-06, task #205** (Alex). §6.9 works out where the
+session ops, the callback proxy, the live log and the tunnel run on each type, with the
+research in [`prior-art.md`](prior-art.md). The sections each decision changes carry a short
+"Decided (§6.9)" note; their full rewrite is left to the task that implements them (§6.9.6):
+
+- **Nothing of the runner in the agent container on any type.** The environment's owner (the
+  host runner on `manual` and `coder`, the controller on `kubernetes`) does everything that
+  needs the environment credential, from outside the container.
+- **`kubernetes`:** the controller runs the session ops through the Kubernetes API, as the host
+  runner does through the Docker API on `manual` (§6.9.2).
+- **The callback proxy** is a sidecar in the agent's network namespace, on `127.0.0.1`,
+  relaying to the owner (§6.9.3).
+- **The live log** is the container's own log, followed by the owner (§6.9.4). A runner
+  session ends as a hosted one does: by `finish_session`, by `NoOutputWatchdog`, or by a dead
+  container.
+- **The tunnel** is relayed by the owner (§6.9.5).
+- **No complexity for rare, non-critical cases.** Each case is weighed by its harm and
+  likelihood (§6.9.7).
+- **Coder (2026-11-06):** v1 supports only Coder workspaces that are virtual machines. Container
+  mode runs one session per workspace (§15 row 17); the `host` execution mode is for Coder only
+  (§6.8, §15 row 20).
 
 **Revision 5** applies the six edits of the revision 4 review. Revision 4 (`2d5532f3`)
 stands where this list does not touch it; the delivery order, the flag design and the
@@ -141,8 +163,8 @@ The terms used throughout:
 | **Runner** | The connected target a user creates, names and selects, e.g. "Prod VPC Coder (EC2 large)". One row in `runners`. |
 | **Runner type** | `hosted`, `manual`, `coder` or `kubernetes`. Each type has one platform-side **adapter**. |
 | **Environment** | One concrete place where sessions execute: a machine registered to a `manual` runner, a Coder workspace, or a pod in the customer's cluster. Belongs to a Runner and has its own state machine (§5.2). |
-| **`aixle-runner`** | The binary that lives in an environment and speaks the runner protocol. It runs in three modes: `host` (on a `manual` machine or a Coder workspace, owns the environment and its session containers), `session` (PID 1 of an agent container) and `controller` (in a customer cluster, provisioning pods). |
-| **Execution mode** | Where the agent CLI runs inside an environment. v1 has one: `container`, the CLI in the stock agent image with `aixle-runner --mode session` as PID 1, on every type. The second value, `host` (services in containers, the CLI on the environment's host), is the last implementation phase (§6.8). Not to be confused with `aixle-runner --mode host`, the process that owns the environment in either execution mode. |
+| **`aixle-runner`** | The binary that lives in an environment and speaks the runner protocol. It runs in three modes: `host` (on a `manual` machine or a Coder workspace, owns the environment and its session containers), `session` (PID 1 of an agent container) and `controller` (in a customer cluster, provisioning pods). **Decided (§6.9):** the modes become `host`, `controller` and `proxy` (the session's proxy sidecar); `session` mode is not built. |
+| **Execution mode** | Where the agent CLI runs inside an environment. v1 has one: `container`, the CLI in the stock agent image with `aixle-runner --mode session` as PID 1, on every type. The second value, `host` (services in containers, the CLI on the environment's host), is the last implementation phase (§6.8). Not to be confused with `aixle-runner --mode host`, the process that owns the environment in either execution mode. **Decided (§6.9):** in `container` mode the image's `entrypoint.sh` is PID 1 and nothing of `aixle-runner` is in the container; `host` mode is for Coder workspaces only. |
 | **Gateway** | The platform endpoint (`/runner/v1/*`) that `aixle-runner` connects to, always outbound from the customer side. |
 
 `hosted` is not a row. It is the absence of a runner reference (`runner_id IS NULL`), so
@@ -168,6 +190,12 @@ The reasons the hybrid holds:
 3. **A dropped connection must not kill the agent.** The agent's process tree is local to
    `aixle-runner`. A disconnect becomes a reconnect-and-resume (§6.7) instead of an
    ambiguous dead exec stream.
+
+**Decided (§6.9.6):** reason 2 holds on the platform side (one `RunnerRuntime`, one
+protocol), while the runner gets two backends of one model for the session ops, the Docker
+Engine API and the Kubernetes API, both run by the environment's owner. Reason 3 holds with
+the container runtime on the customer's side (the Docker daemon, the kubelet) as the owner of
+the agent's process tree, instead of `aixle-runner`.
 
 The refinement for Kubernetes: outside-in provisioning would need a kubeconfig or service
 account that can create pods and secrets in the customer's cluster, plus reachability to
@@ -466,6 +494,12 @@ independently. Scoping rule: a project runner can use a company-wide Coder integ
 one of its own project's. A company runner can only use a company-wide one. When the
 integration becomes `inactive` or `error`, every runner on it goes `unreachable`, with a
 reason that names the integration. The template keys are in §2.7.
+
+**Decided (§6.9, Alex, 2026-11-06): v1 supports only Coder workspaces that are virtual
+machines.** A workspace that is a container on a shared server, or a pod, is not supported.
+The host runner's start check refuses it with a clear message (§6.9.7). A workspace runs one
+session at a time, in container mode by default (§6.8, §15 row 17) or in the `host` execution
+mode, which is for Coder only (§6.8, §15 row 20).
 
 ### 2.7 Runner configuration: the authoritative schema
 
@@ -839,6 +873,10 @@ The per-type mapping:
 | `teardown` | **No-op** on the machine. Removing a machine is `aixle-runner unregister` or Revoke (§9.3); the platform side only marks the row `gone` | Delete the workspace (or stop it, per `config.on_release`) | `controller.teardown {key}` |
 | `observe` | **Heartbeat-based**: `:running` while heartbeats arrive, `:unknown` after 90 s, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
 
+**Decided (§6.9.2):** `inject_bootstrap` on `kubernetes` mounts no bootstrap Secret and runs
+no init container. The bootstrap token travels in the `provision` op to the controller, which
+does the pod's check-in itself (§9.2).
+
 ### 5.2 Environment state machine
 
 ```
@@ -906,7 +944,7 @@ The hosted branch is the existing expression, character for character.
 | --- | --- | --- |
 | `pull_image` | Pull the image | Once an environment is assigned: `image.ensure`, the host runner pulls the agent image by digest (`manual`, `coder`). On `kubernetes` it is a no-op, because the kubelet pulls |
 | `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or, on a `provisionable` type, create a `requested` row and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments` (or, on `manual`, when every registered machine is busy), so the **existing** `capacity_wait` loop in V2 handles it |
-| `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats (immediate on `manual`, whose machine is already checked in). Raises a diagnosed failure on `bootstrap_timeout`. On `manual` and `coder` the host runner then gets `container.start` (§6.8) and the activity waits for the session runner inside the container to report ready |
+| `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats (immediate on `manual`, whose machine is already checked in). Raises a diagnosed failure on `bootstrap_timeout`. On `manual` and `coder` the host runner then gets `container.start` (§6.8) and the activity waits for the session runner inside the container to report ready. **Decided (§6.9.4):** nothing inside reports ready; `container.start` starts the container and waits for nothing more, as `ContainerRuntime::DockerRuntime#start_container` does |
 | `exec` | `before_exec` context assembly + tmux launch via `runtime.exec`/`write_file` | Same strategy code. Each primitive is a runner op |
 | (await `container_finished`) | Unchanged | Unchanged. `finish_session` reaches the platform through the runner's proxy (§6.6) |
 | `cleanup` | Collect logs and outputs, remove the pod | Same collection via `read_file`, then `Runners::Allocator.release(environment, outcome)`, which scrubs, resets or tears down (§7) |
@@ -1056,6 +1094,13 @@ The other rows of the table are later tasks: `check-in`,
 `heartbeat`, session logs and events and the proxy in task 8 and later, and the releases
 endpoints and `install.sh` in tasks 10 and 17.
 
+**Decided (§6.9.6), the callers.** No endpoint is called from the agent container. The
+environment's owner, the host runner on `manual` and `coder` and the controller on
+`kubernetes`, calls `check-in` (the controller once for each of its pods), `ops`, results,
+`heartbeat`, session logs and events, and the proxy, which it relays for the session's proxy
+sidecar (§6.9.3). The events endpoint carries no `agent_started` or `agent_exited`: a session
+ends as on hosted (§6.9.4).
+
 ### 6.3 Registration and tokens (summary; full model in §9.2)
 
 - **Kubernetes:** an admin creates the runner, the UI shows a one-time **registration
@@ -1161,6 +1206,11 @@ and result schema, with its fixtures, is added there by the task that first impl
 - **Final:** unchanged. `before_cleanup` runs `collect_logs`, `collect_terminal_output` and
   `collect_outputs` (`find /workspace/outputs`, `read_file`) through `RunnerRuntime`.
 
+**Decided (§6.9.4):** the live chunks come from the container's own log, which already
+carries the redacted pane output (`entrypoint.sh` writes it to `/proc/1/fd/1`), followed by
+the host runner through the Docker API and by the controller through the pod log API. No
+process tails the file inside the container. The final log stays as above.
+
 ### 6.6 The callback proxy
 
 Today the agent calls back to `internal_base`. That covers `/action_mcp` (MCP with
@@ -1185,6 +1235,14 @@ gateway:
 
 A session key copied out of an environment is therefore useless anywhere except through
 that environment's credential, and only while that session runs there.
+
+**Decided (§6.9.3):** the listener on `127.0.0.1:<port>` is a proxy sidecar
+(`aixle-runner --mode proxy`) that shares the agent's network namespace, not a process in
+the agent container. It holds no environment credential and relays to the environment's
+owner: the host runner over a Unix socket mounted into the sidecar only (`manual`, `coder`),
+or the controller with a per-session proxy key (`kubernetes`, §6.9.7). The owner adds the
+environment credential, so steps 1 to 3 above, the per-endpoint session-key checks included,
+are unchanged. With `network: host` the host runner listens itself.
 
 ### 6.7 Heartbeat, reconnect and resume
 
@@ -1220,6 +1278,14 @@ that environment's credential, and only while that session runs there.
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the grace expires.
 
+**Decided (§6.9.6):** the journal and the buffers belong to the environment's owner on
+every type, the controller on `kubernetes` instead of a session runner in the pod. The agent's
+process tree belongs to the container runtime (the Docker daemon, the kubelet). After its own
+restart, the owner re-reads the container's log from the last acknowledged offset (§6.9.4);
+a part rotated away meanwhile is a known limitation (§6.9.7). There is no session summary
+from inside: an exited container is read from its status by the owner and handled with
+`DeadContainerScan` semantics.
+
 ### 6.8 What runs inside the environment: container mode only in v1
 
 **Decision:** in v1 the agent runs in **the stock agent image**
@@ -1228,6 +1294,20 @@ alike. `aixle-runner --mode session` is PID 1 and supervises the image's `entryp
 This is **container mode**, and it is the only execution mode in v1. A Docker daemon is a
 prerequisite on `manual` and `coder`, reported at check-in (§8) rather than discovered
 mid-session. Revision 3's Coder `native` mode is dropped (see "Dropped" below).
+
+**Decided (§6.9):** `aixle-runner` is not PID 1 on any type, and nothing of it is in the
+agent container. The image's `entrypoint.sh` is PID 1, as in a hosted pod. The session ops,
+the live log and the tunnel's relay are the environment owner's (the host runner on `manual`
+and `coder`, as #204 builds it, and the controller on `kubernetes`), and the callback proxy is
+a sidecar in the agent's network namespace.
+
+**Decided (Alex, 2026-11-06), container mode on Coder (§15 row 17).** v1 supports only Coder
+workspaces that are virtual machines (§2.6). A workspace runs one session at a time; a second
+concurrent session gets another workspace, up to the runner's limit. `reuse` (the default)
+keeps the workspace warm between sessions, and `fresh` gives each session a new workspace and
+deletes it afterwards (§7.1). The reason for the type: it moves load from our cluster to the
+customer's machines, and the customer can run the machines in their own subnet, with access to
+private resources that are never exposed.
 
 #### The finding behind it
 
@@ -1292,6 +1372,12 @@ every type, prerequisites checked at check-in). The `host` mode is the third, an
 in v1.
 
 #### Per type
+
+**Decided (§6.9):** on `kubernetes`, session pods run the stock image with the proxy
+sidecar and no init container, and the controller runs the session ops through the
+Kubernetes API (§6.9.2). On `manual` and `coder` the session runner below is replaced by the
+host runner itself (#204) and the proxy sidecar (§6.9.3); the Unix socket goes into the
+sidecar, never into the agent container.
 
 - **Kubernetes:** session pods run the stock image with `aixle-runner` as PID 1. The kubelet
   is the container runtime. Of the `config.container` options, `resources` and
@@ -1413,6 +1499,8 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback URLs rewritten to the session runner's local proxy (§6.6). How
 that env is assembled is a `RunnerRuntime` concern, so there is no strategy change.
+**Decided (§6.9.3):** the URLs are rewritten to the proxy sidecar on `127.0.0.1:<port>`, or
+to the host runner's own listener with `network: host`.
 
 **Image size.** Agent images are pulled from GHCR on the machine (or through the customer's
 registry mirror) and kept on its disk between sessions, so only the first session on an
@@ -1421,6 +1509,17 @@ timeout counts it. If a Coder template prunes Docker images on a schedule, the w
 check of §12.5 is read with that counted.
 
 #### Deferred to the last phase (7): the `host` execution mode
+
+**Decided (Alex, 2026-11-06): the `host` mode is for Coder only, with one session per
+workspace (§15 row 20).** The agent CLI runs on the workspace's machine. The services that can
+run in Docker (`mitmdump`, the callback proxy and the others) run in containers, with
+their ports published on the machine, so that the runner and the agent reach them. The reason:
+a full development machine with no container around the agent, for example to run `docker
+compose up` as a developer would. The workspace is the unit of isolation, so the per-session OS
+user and the airtight scrub of §7.2, written for `manual`, are not needed for it: `fresh`
+deletes the workspace, and `reuse` keeps it for the next session of the same runner, as in
+container mode. The `host` mode is not planned for `manual`. The text below predates this
+decision; task 20 rewrites it for Coder.
 
 The axis is **where the agent CLI runs**: in the session container (`container`, v1) or on
 the environment's host (`host`). In `host` mode the services stay in containers and the CLI
@@ -1465,6 +1564,485 @@ it arrives:
 
 The toolcache session kits and prototype P2 (§16) move to phase 7 with it.
 
+### 6.9 Where the session-side pieces run on each type (decided, task #205)
+
+**Status: decided (Alex, 2026-11-05).** Alex accepted the shared rule of §6.9.1 and the
+recommendations of §6.9.2 to §6.9.5, with the agent's completion as on hosted (§6.9.4) and the
+cases of §6.9.7. The sections they change carry a short "Decided (§6.9)" note; the full rewrite
+of each is left to the task that implements it (§6.9.6). The research behind it, a section per
+comparable service with links to the documents and the source read, is in
+[`prior-art.md`](prior-art.md); "prior art §N" below points into it.
+
+**Why this section exists.** §6.8 puts `aixle-runner --mode session` in the agent container,
+as PID 1, on every type, running the session ops (§6.4), the callback proxy (§6.6) and the
+live log (§6.5), and later the tunnel's relay (§15 task 16). Task 6b (#204) builds `manual`
+without it, by decision of 2026-11-05: the host runner runs the session ops itself, through
+the Docker Engine API, against the session's container, as `ContainerRuntime::DockerRuntime`
+does in development, and the agent container runs the stock image with its own entrypoint,
+with nothing of the runner in it. That left four pieces without a settled place: the session
+ops on `kubernetes`, the callback proxy, the live log with the session's end, and the
+tunnel. The subsections below take them one at a time, with the options, what each costs and
+a recommendation, and §6.9.6 lists what the recommendations change elsewhere.
+
+#### 6.9.1 The rule the decisions share
+
+**The environment's owner does everything that needs the environment credential, from
+outside the agent container. The agent container stays the stock image, unchanged.**
+
+- **The owner** is the runner process that holds the environment credential and the
+  journal, and the only one that talks to the gateway. On `manual` and `coder` it is the host
+  runner (`aixle-runner --mode host`), running on the machine or the workspace next to the
+  Docker daemon. On `kubernetes` it is the controller (`aixle-runner --mode controller`),
+  running in the customer's cluster next to the session pods (§6.9.2). Being the only process
+  that talks to the gateway, it is the environment's only poller on every type, which extends
+  #204's answer for `manual` to the §16 question "what counts as one poller". The rest of this
+  section says "the owner" for whichever of the two it is on a type.
+- **The agent container** gets nothing of the runner: no binary, no socket, no token and
+  nothing of the state directory, on every type. This is #204's rule for `manual`, applied to
+  the other types.
+- **One helper container per session,** the proxy sidecar of §6.9.3, shares the agent's
+  network namespace and holds no environment credential (on `kubernetes` it holds a
+  per-session proxy key, §6.9.7). It is the only part of the runner that the agent can reach
+  over the network.
+
+The prior art supports this shape. Services that run an image the user chose, unmodified,
+execute from outside through the runtime's API (GitHub Actions, ARC, GitLab, Jenkins; prior
+art §1–§4, §8). The services that protect a runner credential keep it away from the job in
+another container or process (Argo's `wait` sidecar, Buildkite's `agent` container, the GitHub
+and GitLab runners on the host; prior art §17, pattern 5), and many run their privileged
+helpers in another container that shares the job's network (prior art §17, pattern 4). The
+counterexamples are the systems whose job or sandbox belongs to the user: GitHub's checkout
+and cache actions run in the job container, and Coder puts its agent token in the workspace.
+Our agent container is not trusted with the environment credential, so we follow the first
+group. The services that put their own
+binary into the job's container do it because they need a contract inside it, and our image
+already has one: `docker/base/entrypoint.sh` starts the services, the tmux session and the
+redacted pane sink, exactly as in a hosted pod.
+
+Summary of the decisions:
+
+| Piece | `manual` and `coder` | `kubernetes` |
+| --- | --- | --- |
+| Session ops (§6.4) | The host runner, through the Docker Engine API (#204) | The controller, through the Kubernetes API (§6.9.2) |
+| Callback proxy (§6.6) | A proxy sidecar in the agent's network namespace, on `127.0.0.1`, relaying to the host runner over a Unix socket mounted into the sidecar only (§6.9.3) | A proxy sidecar in the pod, on `127.0.0.1`, relaying to the controller with a per-session proxy key mounted into the sidecar only |
+| Live log (§6.5) and the session's end | The container's own log, followed by the host runner through the Docker API; a dead container read from its status (§6.9.4) | The pod log API, followed by the controller; a dead container read from the pod watch |
+| Tunnel (§15 task 16) | The host runner relays over one outbound WebSocket and reaches the ports through the proxy sidecar (§6.9.5) | The controller relays and dials the pod's IP |
+
+#### 6.9.2 Question 1: the session ops on `kubernetes` (task 19)
+
+**The options.**
+
+- **A. An in-pod session runner, as §6.8 has it.** An init container copies `aixle-runner`
+  into an `emptyDir`; the agent container runs `aixle-runner --mode session` as PID 1, which
+  supervises `entrypoint.sh`, checks in with the bootstrap token from a mounted Secret, holds
+  the environment credential and the journal, polls the gateway and runs the ops as local
+  processes. This is Tekton's, Argo's and CircleCI's (since 3.1) shape (prior art §7, §9, §10),
+  and Gitpod's `supervisor` (prior art §15).
+- **A′. A split pod.** As A, but the credential and the journal sit in a sidecar container of
+  the pod, and an injected executor in the agent container takes the ops over a Unix socket on
+  a shared `emptyDir`. This is Buildkite's `agent-stack-k8s` shape (prior art §6).
+- **B. The controller runs them through the Kubernetes API,** as `ContainerRuntime::KubernetesRuntime`
+  does for hosted pods today: `exec` over the API server's exec endpoint, `write_file` and
+  `read_file` as `tar` over exec, `status` from the pod watch it already keeps, `logs` from the
+  pod log API. The controller also does the environment's check-in, with the bootstrap token
+  it receives in the `provision` op, so it holds the environment credential and the journal.
+  This is the shape of ARC's container hooks, GitLab's Kubernetes executor and Jenkins' Kubernetes
+  plugin (prior art §2, §4, §8), and the same model #204 builds on `manual` with the Docker API.
+
+**Against §1.2 (outbound only, no kubeconfig held by the platform).** All three hold. In each,
+the only process that talks to the gateway runs in the customer's namespace and connects out,
+and the platform holds no Kubernetes credential. B gives the controller `pods/exec` in its
+namespace, which §9.6 does not grant today; that is the customer's controller holding a right
+in the customer's namespace, not the platform reaching in.
+
+**Against §6.7 (at-most-once, and "did my exec run?").**
+
+- **A and A′** are the strongest: an op is a local fork next to the journal, so the outcome is
+  unknown only when the pod itself dies, and then the session is lost anyway.
+- **B keeps at-most-once, with a bounded form of the "did my exec run?" case.** The controller
+  journals an op before it starts the exec, as the host runner does (§6.8, "What v1 has so far").
+  If the exec stream between the controller and the API server breaks (a controller restart,
+  an API server restart, a dropped connection), the outcome is unknown, and the op is answered
+  `interrupted`, never run twice. What §6.7 set out to close does stay closed: the exec no
+  longer crosses the link between the platform and the customer's network, as hosted exec does
+  today, so a lost gateway connection does not touch it. What stays open is an in-cluster stream
+  breaking mid-op. CircleCI left the exec API over this and over API-server load, and GitLab
+  reads output from a file in the pod to survive it (prior art §4, §7).
+  `interrupted` means "the outcome is unknown", not "it did not run": neither Kubernetes nor
+  Docker kills the process an exec started when the client goes away, so the command may keep
+  running in the pod, for example a half-done `tar -xf` of a `write_file`. Nothing re-runs the
+  op, so at-most-once holds; the platform's handling of `interrupted` assumes the op may still
+  be running. That case is rare and accepted (§6.9.7); a durable-task wrapper as Jenkins has
+  (prior art §8, pattern 7) is an option for task 19 if it turns out not to be.
+  A session sends tens of ops (a few batched context writes, the tmux launch, the final
+  collection), and under §6.9.4 neither the live log nor the status uses exec.
+
+**What each costs.**
+
+| | A. In-pod session runner | A′. Split pod | B. Controller through the API |
+| --- | --- | --- | --- |
+| Environment credential | **In the agent container**, in the session runner's memory and state, readable by an agent that runs as the same user or has `sudo`. The agent can then poll ops, post results and logs, and spend the refresh token, which revokes the family on reuse | In a sidecar; the agent cannot read it | In the controller; nothing in the pod |
+| Something of the runner in the agent container | Binary as PID 1, its state | Executor binary, a socket | Nothing |
+| New moving parts | Init container, PID 1 duties (signals, reaping), the bootstrap Secret, the runner image in every pod | All of A's, a sidecar and an IPC protocol between the two | `pods/exec`, a stateful controller (below) |
+| Runner code | A third implementation of the session ops, next to #204's Docker one: local processes | The same, split over a socket | A second backend behind #204's session-op handlers: `client-go` exec, `tar` over exec (as `kubectl cp`), the pod watch and the log API |
+| Controller restart | No effect on running ops | No effect | In-flight ops answered `interrupted`, and the command may still run; the agent keeps running |
+| RBAC (§9.6) | Unchanged | Unchanged | Adds `pods/exec` (`create`); a dedicated namespace becomes a requirement, as CircleCI assumes (prior art §7) |
+| API server load | None for ops | None | One exec per op; the live log is one log stream per session |
+| Hosted step B (§13) | Hosted pods change their PID 1 | Hosted pods gain a sidecar and an executor | The same controller can run in our cluster; the hosted pod spec stays as it is |
+
+**The stateful controller under B.** The controller already needs somewhere to keep its own
+rotating credential pair across restarts, which §9.6 does not say today. Under B it also keeps
+an environment credential per running pod and the journal, whose pending results can be as
+large as an op's output. A `Secret` is capped at 1 MiB, so the state is a small
+`PersistentVolumeClaim` mounted into the controller, with `replicas: 1` and the `Recreate`
+strategy. Those two do not fence a second live controller: a second replica started by
+mistake, or a hung controller still alive after Kubernetes started a new one, would poll the
+same environments. So the controller also takes leader election with a Kubernetes `Lease`,
+and carries a controller generation that the gateway checks, so a stale controller's calls are
+refused. This gives the exclusivity the host runner's `flock` gives (§6.8), across nodes; task
+19 defines the takeover order (§6.9.7).
+
+**How the controller polls under B.** The simplest form keeps §9.2 unchanged: one environment
+credential per pod, from the check-in the controller does itself, and one long-poll per
+running environment, exactly like N `manual` machines. Multiplexing every environment's ops
+into the controller's own poll would save gateway threads (§16, "Concurrent long-polls"), but
+widens the controller credential and changes the gateway's authorisation, so it is left to
+task 19 as an optimisation.
+
+**Decision (Alex, 2026-11-05): B.** It is the only option that keeps the environment credential
+out of the pod without adding a container and an IPC protocol, it puts nothing of ours into
+the agent container on any type, and it gives the runner two backends of one model (the
+Docker API on a host, the Kubernetes API in a cluster) instead of one backend and a second
+model. Its weak spot, an exec stream that breaks in the cluster, is bounded to `interrupted`
+by the journal, and our op volume is low.
+
+**What would change the decision.** If task 19's validation shows ops answered
+`interrupted` often enough to fail sessions, move to A′: the ops and the protocol stay the
+same, only who runs them changes. A is not recommended in any case, because it puts the
+environment credential where the agent can read it.
+
+#### 6.9.3 Question 2: the callback proxy (§6.6, task 8)
+
+**What the proxy can do, and what must not leak.** The proxy forwards allow-listed routes
+(MCP, credential sync and refresh, git and cloud credentials, assets, OTLP) for the session
+currently assigned to the environment, adding the environment credential. Anyone who can reach
+the proxy can therefore do what the agent can already do with its own session keys, and no
+more. So the question is not whether the agent can reach the proxy (it must), but **where the
+environment credential sits** and **who else can reach the proxy**.
+
+**How the agent's traffic is routed today.** `docker/base/logger/start-mitm.sh` exports
+`HTTP_PROXY` and `HTTPS_PROXY` pointing at `mitmdump`, and `NO_PROXY=localhost,127.0.0.1,::1`.
+A proxy on `127.0.0.1` is reached directly by every client. A proxy on any other address is
+sent through `mitmdump` by the clients that honour `HTTP_PROXY`, as hosted callbacks to
+`http://web:<port>` already are; `mitm_logger.py` logs only `MITM_TRACKED_DOMAINS` and redacts
+credential headers, so that is a detour, not a leak. Adding an address to `NO_PROXY` is a
+change to `start-mitm.sh`, which overwrites the variable.
+
+**The options.**
+
+- **a. A proxy sidecar in the agent's network namespace.** A second container per session,
+  running `aixle-runner --mode proxy`, holding no environment credential.
+  - On `manual` and `coder` it relays to the host runner over a Unix socket that the host runner
+    bind-mounts into the sidecar only. The host runner adds the environment credential and
+    serves only `/runner/v1/proxy/*` for the environment's current session on that socket: never
+    `ops`, results, `token` or `check-in`.
+  - On `kubernetes` it is a sidecar container of the pod (a native sidecar, which requires
+    Kubernetes 1.29 or later, §6.9.7). It relays to the controller over the pod network, over
+    TLS, authenticated by a per-session proxy key that the controller puts in a Secret mounted
+    into the sidecar container only; the controller maps the key to the environment and its
+    current session and adds the environment credential. The key opens the proxy routes for
+    that one session and nothing else, and is revoked when the session ends (§6.9.7).
+  - The agent reaches it on `127.0.0.1:<port>`, so `NO_PROXY` and the MITM stack need no change.
+  - This is the helper-container shape of GitLab, Argo, Buildkite and CircleCI (prior art §17,
+    pattern 4).
+- **b. A listener of the host runner or the controller.**
+  - On `manual` and `coder` the host runner listens on the gateway address of a per-environment
+    Docker network (`aixle-net-<key>`), so only that environment's containers and the machine's
+    own processes can reach it.
+  - On `kubernetes` the controller listens behind a cluster Service, and identifies the pod by a
+    per-session key embedded in the rewritten URL or by its source IP.
+  - The agent reaches it on a non-loopback address: through `mitmdump`, or with a `NO_PROXY`
+    addition in the image.
+- **c. A process inside the agent container** (§6.6 as written). It needs the runner's binary in
+  the agent container, and either the environment credential there or a socket to the host
+  runner there. Both contradict #204's rule for `manual` and the rule of §6.9.1.
+
+**What each costs.**
+
+| | a. Proxy sidecar | b. Owner's listener | c. In the agent container |
+| --- | --- | --- | --- |
+| Agent reaches it on | `127.0.0.1:<port>` | Network gateway IP or Service DNS name | `127.0.0.1:<port>` |
+| `NO_PROXY` and MITM | Unchanged | Through `mitmdump`, or an image change to `start-mitm.sh` | Unchanged |
+| Environment credential | In the owner; the sidecar holds no environment credential, only a socket (`manual`, `coder`) or a per-session proxy key that only opens the proxy routes for that session (`kubernetes`) | In the owner | In the container, or a socket there |
+| Who else can reach the proxy | Nobody outside the agent's network namespace | The machine's processes; on `kubernetes`, the cluster unless a NetworkPolicy narrows it | Nobody outside the container |
+| Depends on the host's setup | On the filesystem, not the network: the Docker daemon must resolve the host runner's paths for the bind mounts (socket and binary). A remote `DOCKER_HOST`, or a Coder workspace that uses its server's Docker, breaks it; the host runner's start check refuses such a setup (§6.9.7) | On the network: a host firewall that drops traffic from containers to the host (ufw's default), rootless Docker, or Docker inside a Coder workspace container break or change the path to the gateway address | No |
+| Moving parts | A second container per session, created, stopped and scrubbed with the agent's by label (§7.2) | A Docker network per environment; a Service and a listener in the controller | The binary in the agent container |
+| Survives an owner restart | Calls fail until the owner is back, and the agent retries (§6.7) | Same | Same, if it relays through the owner |
+
+**`network: host` (§6.8, "Container options").** The agent then shares the machine's network
+namespace, so there is no namespace for a sidecar to share. The host runner itself is in that
+namespace already, so with `network: host` it listens on `127.0.0.1:<port>` of the machine,
+with a port per environment, and no sidecar is created. Every process on the machine can then
+reach the proxy, with the agent's own power and no more. This is part of what `network: host`
+already gives up, and the form's wording for it should say so.
+
+**Decision (Alex, 2026-11-05): a, the proxy sidecar, on every type.** It keeps the agent on
+`127.0.0.1`, with no image change and no change to how the MITM stack routes traffic, keeps the
+environment credential with the owner, and does not depend on firewall rules on machines we do
+not control. It does need a Docker daemon that sees the host runner's files, which the host
+runner checks at start (§6.9.7); the session runner of §6.8 needed the same. Its cost is a
+second container per session, which the label scheme of §6.8 and the scrub of §7.2 already
+cover.
+
+The details task 8 fills in:
+
+- **Who owns the network namespace.** The sidecar is created first and the agent container
+  joins it (`NetworkMode: container:<sidecar>`), the way a Kubernetes pod's pause container
+  holds the pod's namespace. The proxy then outlives the agent's last call, `finish_session`
+  included, and the `network` option of §6.8 applies to the sidecar's creation. Unlike a pause
+  container, the sidecar runs code: if it exits, Docker removes the namespace's network and
+  never reattaches the agent, so the agent loses its network. The host runner then fails the
+  session; there is no pause container (§6.9.7).
+- **The sidecar's image on `manual` and `coder`.** The agent image, already pulled and pinned by
+  digest, with the host runner's own binary bind-mounted read-only and set as the entrypoint.
+  No second image to pull, and the proxy is the host runner's version by construction. On
+  `kubernetes` it is the runner image the chart already names (§9.6).
+- **The port** is a constant of `PROTOCOL.md`, outside the image's ports (7681, 7682, 4040, 4041,
+  8443, 8888), and `RunnerRuntime` rewrites the callback URLs to it (§6.6).
+
+#### 6.9.4 Question 3: the live log and how a session ends (§6.5, task 8)
+
+**What the image already does.** The `pipe-pane` sink in `entrypoint.sh` writes the agent pane,
+after `redact-stream.py`, to two places: `/tmp/terminal_output.log`, collected at cleanup, and
+`/proc/1/fd/1`, the container's own stdout. So the container's log already carries the
+redacted pane output, as the hosted pod's log does today.
+
+**The options.**
+
+- **The container's own log.** The host runner follows it through the Docker API (what
+  `docker logs -f` does), and the controller through the pod log API (`follow=true`). This is
+  how Tekton, Argo and CircleCI's logging sidecar read output (prior art §7, §9, §10).
+- **A tail of the file from outside.** The owner runs `tail -c +<offset> -F
+  /tmp/terminal_output.log` as a long-lived exec and resumes it from the last offset after a
+  break. This is GitLab's `read-logs` (prior art §4).
+- **A tail inside the container.** It needs a process of ours in the agent container, which
+  §6.9.1 rules out.
+
+**What each costs.**
+
+| | Container log | Tail of the file by exec | Tail inside |
+| --- | --- | --- | --- |
+| Exec per session | None | One long-lived exec | None |
+| Anything needed in the container | Nothing | `tail` (in the stock image) | Our binary |
+| Offsets for the gateway's de-duplication (§6.7) | Bytes of stdout since the container started, counted by the owner | Byte offsets of the file itself | Byte offsets of the file |
+| After an owner restart | Re-read from the start and skip to the last acknowledged offset. Docker's `local` driver (with its size cap) and the kubelet (10 MiB by default) rotate the log, so after a long session the start may be gone and a part of the live log is skipped. Accepted as a known limitation (§6.9.7); the final log is not affected | Resume from the offset | Not affected |
+| What it depends on | The log driver on `manual` and `coder`; the kubelet's rotation on `kubernetes` | A long exec through the API server on `kubernetes` | — |
+
+**Decision (Alex, 2026-11-05): the container's own log**, with stdout only, followed by the
+host runner and the controller and shipped as `POST /runner/v1/sessions/:id/log` chunks with
+the owner's byte count as the offset. It needs no exec and nothing in the container, and the
+same reader works for every session on a type. Two details make it dependable:
+
+- **The log driver is set per container on `manual` and `coder`.** The host runner creates the
+  agent container with Docker's `local` log driver and a size cap, so following the log does not
+  depend on the daemon's default driver, which a customer may have set to one Docker cannot read
+  back.
+- **The final log does not change.** `before_cleanup` still collects `/tmp/terminal_output.log`
+  through `read_file` (§6.5), so the stored log is the same file it is on hosted. The live
+  chunks only feed `LiveLogReader` and `NoOutputWatchdog`.
+
+The chunks are the raw pane stream, ANSI sequences included, while `LiveLogReader` returns
+`capture-pane`'s rendered text today. How a runner session's live text is rendered for the
+`get_session_log` tool and `AuthErrorDetector` is part of task 8 whichever source is chosen.
+
+**How a runner session ends: exactly as a hosted one (decided, Alex, 2026-11-05).** There is
+no agent-process contract and no event derived from the CLI; `agent_started` and
+`agent_exited` are not built. The CLI runs in the image's persistent tmux shell, so the
+container's state says nothing about the CLI itself, and hosted sessions do not need it to:
+
+- **The session ends when the agent calls `finish_session`** (or `fail_session`), which goes
+  through the proxy sidecar (§6.9.3) to the platform, as on hosted.
+- **A silent session is reaped by `Sessions::NoOutputWatchdog`** after 30 minutes without
+  output (`NO_OUTPUT_THRESHOLD`), fed by the live log above. A CLI that exited back to the
+  shell falls silent, and this is what catches it, as on hosted.
+- **A dead container fails the session with `DeadContainerScan` semantics,** from the
+  container's status as the owner reads it (`wait` and the event stream on Docker, the pod
+  watch on Kubernetes).
+- **`start_container` waits for nothing more** than the container running, as
+  `ContainerRuntime::DockerRuntime#start_container` does today: nothing inside reports ready.
+- `disk_low` comes from the host runner's own check of the daemon's disk (§17.2); on
+  Kubernetes the kubelet's eviction shows up as a dead container.
+
+#### 6.9.5 Question 4: the tunnel (task 16)
+
+**Why the owner connects to the ports, and not the other way round.** ttyd, the IDE and the
+watcher are servers: they wait for connections on their ports and never connect out. The
+browser is on the internet, and the platform has no inbound path into the customer's network
+(§1.2, §9.5). So the connection has to start from the customer's side: the owner keeps an
+outbound WebSocket to the gateway, the browser's connection arrives over it, and the owner
+opens the connection to the port for it.
+
+**The options.**
+
+- **The owner relays.** The host runner or the controller keeps one outbound WebSocket to the
+  gateway's tunnel endpoint and opens a stream per browser connection to one of the session's
+  ports: the writable ttyd (7681), the read-only ttyd (7682), the watcher (4040) and its upload
+  port (4041), and the IDE (8443). This is the shape of Coder's agent and Daytona's proxy
+  (prior art §13, §14): interactive traffic arrives through a connection the environment opened.
+- **A relay inside the container.** Our binary in the agent container, which §6.9.1 rules out.
+- **An inbound session server,** as GitLab Runner and CircleCI's SSH reruns have it (prior art
+  §5, §7). It needs an inbound path to the customer, which §1.2 and §9.5 rule out.
+
+**Decision (Alex, 2026-11-05): the owner relays.**
+
+- **How it reaches the ports.** On `manual` and `coder` the host runner reaches them through the
+  proxy sidecar, which is in the agent's network namespace and dials `127.0.0.1:<port>`, over
+  the same Unix socket as §6.9.3. That works on every Docker setup the start check of §6.9.7
+  accepts, rootless Docker included, where a container's IP is not reachable from the
+  machine's own namespace. With `network: host` there is no sidecar, and the host runner dials
+  the ports on the machine's `127.0.0.1` itself. On `kubernetes` the controller dials the
+  pod's IP. The writable ttyd (7681) has no password of its own, so a NetworkPolicy that lets
+  the controller, and only the controller, reach those ports is required, not optional, and
+  the Kubernetes validation checks that it is enforced (§6.9.7).
+- **Who may open what stays on the platform.** The gateway authenticates the browser exactly as
+  Traefik with `ws_auth` does for hosted pods (the session owner to 7681 and 4041, everyone else
+  to 7682), and the relay accepts only the five ports above for the environment's current
+  session.
+- **`network: host`.** The image's ports then bind on the machine, so two sessions on one
+  machine would collide. `entrypoint.sh` and the watcher take every port from the environment
+  (`TTYD_PORT`, `VIEW_PORT`, `WATCHER_PORT`, `UPLOAD_PORT`, `VSCODE_PORT`, `MITM_PROXY_PORT`), so
+  the host runner assigns free ports per session and the relay uses them.
+
+This is still "a relay of ports that already exist inside the container" (§6.8), with the relay
+moved from the container to its owner.
+
+**What task 16 defines for the relay protocol.** One WebSocket carries several streams with
+very different traffic (a terminal, the IDE, uploads), so task 16 specifies: stream ids with
+open, close and reset frames, and half-close; an independent flow-control window and a bounded
+buffer per stream, so one stalled or busy stream cannot block the others; the maximum frame
+size and the cap on concurrent streams; heartbeat, reconnect and what happens to open streams
+on a reconnect; cleanup when the browser disconnects; and revocation, closing every stream at
+once when the environment's current session changes or the viewer's authorization does. The
+gateway stays the browser's authorization point, and each open request names the current
+session and one of the five ports (§15 row 16).
+
+#### 6.9.6 What follows for the rest of the design
+
+These sections change with the decisions. Each carries a short "Decided (§6.9)" note now. The
+full rewrite of each is left to the task that implements it: task 8 (the host runner's
+session-side pieces on `manual`), 16 (the tunnel), 17 (Coder), 19 (Kubernetes) and 20 (the
+`host` mode on Coder). Until then, where a section's own text and its note disagree, the note
+and this section win.
+
+- **§1.1, the `aixle-runner` term.** The modes become `host`, `controller` and `proxy` (the
+  sidecar of §6.9.3). `session` mode is not built.
+- **§1.1, the "Execution mode" term.** `container` mode has the image's `entrypoint.sh` as PID
+  1, not `aixle-runner --mode session`. The `host` mode is for Coder only.
+- **§1.2, reasons 2 and 3.**
+  - Reason 2 (one implementation of exec, files and logs) holds on the platform side: one
+    `RunnerRuntime` and one protocol, with no exec over the Coder API or SSH. In the runner,
+    the session ops get two backends of the same model, the Docker Engine API (`manual`,
+    `coder`) and the Kubernetes API (`kubernetes`), behind the same op handlers and journal.
+  - Reason 3 (a dropped connection must not kill the agent) holds with a different owner: the
+    agent's process tree belongs to the container runtime on the customer's side (the Docker
+    daemon, the kubelet), not to `aixle-runner` and not to a request from the platform.
+- **§2.6, Coder.** v1 supports only Coder workspaces that are virtual machines, with one
+  session per workspace.
+- **§5, the adapter table.**
+  - `inject_bootstrap` on `kubernetes` mounts no bootstrap Secret and runs no init container:
+    the controller gets the bootstrap token in the `provision` op.
+  - `start_container` waits for nothing more than the container running, as
+    `ContainerRuntime::DockerRuntime#start_container` does (§6.9.4). Nothing inside reports
+    ready.
+- **§6.2, the callers.** `check-in`: the host runner (`manual`, `coder`) and the controller for
+  each of its pods (`kubernetes`). `ops`, results and `heartbeat`: the owner. Session logs: the
+  owner. The proxy: the owner, relaying the proxy sidecar. No endpoint is called from the agent
+  container. The events endpoint carries no `agent_started` or `agent_exited`.
+- **§6.5.** The live log is the container's log, followed by the owner (§6.9.4).
+- **§6.6.** The proxy is the sidecar of §6.9.3, not a listener of a session runner. It holds no
+  environment credential; on `kubernetes` it holds a per-session proxy key. The per-endpoint
+  session-key checks stay as they are.
+- **§6.7.** The journal is the owner's on every type, the controller's on `kubernetes`. While
+  disconnected, the owner buffers log chunks, and after its own restart it re-reads the
+  container's log from the last acknowledged offset, with the rotation limitation of §6.9.7.
+  There is no session summary from inside the container: the owner reads the container's
+  status.
+- **§6.8.** The decision paragraph and "Per type" no longer have `aixle-runner --mode session`
+  as PID 1 on any type. On `kubernetes`, session pods run the stock image with the proxy sidecar
+  and no init container. The callback URLs are rewritten to the proxy sidecar, not to a session
+  runner's proxy. Container mode on Coder runs one session per workspace, and the `host` mode is
+  for Coder only, with no per-session OS user.
+- **§7.1.** On `coder`, `reuse` keeps the workspace warm and `fresh` gives each session a new
+  workspace, in both execution modes.
+- **§9.2, tokens.** On `kubernetes` the bootstrap token travels in the `provision` op to the
+  controller, which does the check-in itself; no bootstrap Secret is mounted into a pod. The
+  environment credential of a pod is held by the controller.
+- **§9.6, the controller's footprint.**
+  - The Role gains `pods/exec` (`create`), and leaves the "not granted" list.
+  - `pods/log` (`get`) also serves the live log of running sessions, not only diagnosis.
+  - `secrets` serve the per-session proxy key instead of the bootstrap Secret.
+  - A dedicated namespace becomes a requirement of the chart, not a recommendation, because
+    `pods/exec` reaches every pod in the namespace.
+  - The chart gains the controller's `PersistentVolumeClaim`, `replicas: 1`, the `Recreate`
+    strategy, a `Lease` for leader election, and `kubeVersion: ">=1.29.0"`.
+  - The controller gains an in-cluster listener for the proxy relay, over TLS, with a Service.
+  - The NetworkPolicy becomes required: ingress to the controller only from session pods, and
+    ingress to the session pods' ports only from the controller.
+  - Session pods get the proxy sidecar and the proxy-key Secret mounted into it only, instead of
+    the init container and the bootstrap Secret.
+- **§13, step B.** Hosted sessions are run by a controller we operate in our cluster, which
+  executes the session ops through the Kubernetes API as on a customer's cluster. Hosted pods
+  keep their pod spec; they gain the proxy sidecar only if hosted moves its callbacks behind the
+  proxy, which step B does not need. `pods/exec` leaves the Rails application's ClusterRole for
+  the controller's namespaced Role. The §12.3 exit condition stays as written:
+  `KubernetesRuntime#exec` has no caller left in the session path.
+- **§14.4, where the runner lands.** The proxy sidecar runs the host runner's own binary, so it
+  is updated with it; there is no session runner. On `kubernetes` there is no init container:
+  the sidecar's image is the runner image named in the `provision` op.
+- **§15, rows 8, 16, 17, 19 and 20.**
+  - Row 8: the host runner's `check-in`, heartbeat and log shipping from the container's log;
+    the proxy sidecar with the host runner's socket relay; the URL rewrite to `127.0.0.1:<port>`;
+    the start check that the Docker daemon sees the host runner's files.
+  - Row 16: the relay in the host runner and the controller, through the proxy sidecar on
+    `manual` and `coder`; per-session ports with `network: host`; the relay protocol of §6.9.5.
+  - Row 17: container mode on Coder virtual machines, one session per workspace; the start check
+    that refuses a workspace that is not a virtual machine.
+  - Row 19: the controller's Kubernetes backend for the session ops, the check-in on behalf of
+    its pods, the pod log follow, the proxy sidecar and its key, the state volume, leader
+    election, the required NetworkPolicy, Kubernetes 1.29, the RBAC above.
+  - Row 20: the `host` mode on Coder only.
+- **§16.** The "Concurrent long-polls per environment" item is settled on every type: the owner
+  is the environment's only poller, so the gateway's replace rule is per environment. New open
+  items: the `interrupted` rate on `kubernetes` and the move to A′ it could trigger; multiplexing
+  a controller's polls; rendering the live text of a runner session.
+- **§17.1 and §17.2.** "The session runner buffers" becomes "the owner buffers", and `disk_low`
+  is sent by the host runner, not by a session runner.
+
+#### 6.9.7 Cases and decisions
+
+Alex's rule for this design and the tasks that follow: **no complexity for rare, non-critical
+cases.** Each case is weighed on two scales.
+
+- **Harm:**
+  - **H1** is security, data loss or double execution;
+  - **H2** is a session that fails or hangs with no recovery;
+  - **H3** is degraded with a workaround;
+  - **H4** is cosmetic.
+- **Likelihood:** often, sometimes or rare.
+- **What is covered:** H1 always. H2 unless it is rare, and then with a clear error. H3 and H4
+  are accepted as documented limitations unless the fix is trivial.
+
+| Case | Harm | Likelihood | Decision |
+| --- | --- | --- | --- |
+| Two controllers run at once, for example a second replica started by mistake, or a hung one still alive after Kubernetes started a new one, so both poll for the same environments. | H1 | rare | Covered: leader election with a Kubernetes `Lease`, and a controller generation that the gateway checks (task 19). |
+| The controller's inbound listener for the proxy relay, and its connections to the session pods' ports (ttyd 7681 has no password), are reachable from other pods. | H1 | — | Covered: TLS on the relay, and a NetworkPolicy that is required, not optional: ingress to the controller only from session pods, and ingress to the session pods' ports only from the controller. The Kubernetes validation checks that it is enforced (task 19). |
+| Someone in the cluster reads a pod's Secret and calls the proxy as that session, with the agent's own rights. | H1 | rare | Covered minimally: one key per session, revoked when the session ends. Task 19 may identify the pod by its IP behind the NetworkPolicy instead. |
+| The Docker daemon can't see the host runner's files, so the sidecar's socket mount fails: a remote `DOCKER_HOST`, or a Coder workspace that uses its server's Docker. | H2 | sometimes | Not supported: the host runner checks at start that the daemon sees its files, and refuses with a clear message (tasks 8 and 17). |
+| The proxy sidecar crashes during a session, and the agent loses its network. | H2 | rare | The session fails. No pause container (task 8). |
+| The host runner restarts during a long session after the container log has rotated, so a part of the live log is skipped. The final log, collected from the file at cleanup, is not affected. | H3 | sometimes | Accepted as a known limitation. The future fix: resume from the timestamp of the last shipped entry, and mark a possible gap. It is not part of task 8. |
+| The cluster runs Kubernetes older than 1.29, without native sidecars. | H3 | rare | Required: Kubernetes 1.29 or later (task 19). |
+| The controller restarts during an exec on `kubernetes`: the op is answered `interrupted`, but the command keeps running in the pod. | H3 | rare | Accepted; a note for task 19. |
+
 ---
 
 ## 7. Lifecycle and reset
@@ -1479,6 +2057,12 @@ what survives around it, and that differs per type:
 | `kubernetes` | Not offered | Always: a new pod per session. The image provides the warm state. |
 | `coder` | Default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | A new workspace is created per session and destroyed after it, for hosted-like isolation with the cold start accepted. |
 | `manual` | Default. The machine keeps the pulled images, the workspace volume and the cache volumes. Scrub after every session. | **Cannot mean a new machine.** It means the full wipe scope per session: a new container (always), a **Reset** of the workspace and cache volumes after every session instead of a scrub (§7.2), and, once host-side execution exists (phase 7), a new OS user. Pulled images stay; they are public, pinned by digest and identical for every session. The form says: "Fresh on a manual runner wipes everything Aixle put on the machine after every session. It does not give you a new machine." |
+
+**Decided (§6.9, Alex, 2026-11-06), `coder`.** v1 supports only Coder workspaces that are
+virtual machines, and a workspace runs one session at a time; a second concurrent session gets
+another workspace, up to the runner's limit. `reuse` and `fresh` mean the same in both
+execution modes: in the `host` mode the workspace is the unit of isolation, so `fresh` deletes
+it after the session and there is no per-session OS user (§6.8).
 
 ### 7.2 Setup, cleanup, scrub, reset, rebuild
 
@@ -1518,6 +2102,10 @@ guarantee. The mechanism:
   looking for what an agent might have written.
 - **Container mode (v1): the session container is the unit.** Everything a session does
   happens inside it, so `docker rm -f` is the scrub, and the label check confirms it.
+- **Decided (§6.9, Alex, 2026-11-06):** the `host` mode is for Coder only, where the
+  workspace is the unit of isolation, and is not planned for `manual`. The per-session OS user
+  below is therefore not needed and not built; the bullet is kept as the record of what
+  `host` mode on `manual` would cost.
 - **Host-side execution (`host` mode, phase 7): a throwaway OS user per session**,
   `aixle-s<session_id>`, with its own `$HOME`. The host-side CLI, ttyd, IDE and watcher
   run as that user, in a transient systemd scope with a private `/tmp`. Cleanup kills that
@@ -1629,6 +2217,10 @@ credentials, config items not attached to the session (still only through
 
 Every request re-checks the runner's status (cached for ≤ 5 s), so revocation takes effect
 within seconds and does not wait for tokens to expire.
+
+**Decided (§6.9.2):** on `kubernetes` the bootstrap token travels in the `provision` op to
+the controller, which calls `check-in` for the pod itself, so no bootstrap Secret is mounted
+into a pod and the pod's environment credential is held by the controller.
 
 **What a compromised runner can reach:**
 
@@ -1800,6 +2392,29 @@ Session pods get:
 
 The `<version>` comes from the platform in the `provision` op, so pods always run the
 platform-recommended runner whatever version the controller is.
+
+**Decided (§6.9.2, §6.9.3, §6.9.7), the footprint with the controller as the session pods'
+owner:**
+
+- the Role gains `pods/exec` (`create`), which leaves the "not granted" list above. `pods/log`
+  (`get`) also serves the live log of running sessions (§6.9.4), and `secrets` hold the
+  per-session proxy key instead of the bootstrap Secret; `leases` (`coordination.k8s.io`) serve
+  leader election;
+- a dedicated namespace becomes a requirement of the chart, not a recommendation, because
+  `pods/exec` reaches every pod in the namespace;
+- the controller keeps its credential pair, the environment credentials of its pods and the
+  journal on a `PersistentVolumeClaim` the chart creates, with `replicas: 1` and the
+  `Recreate` strategy, and takes leader election with a `Lease`; a controller generation that
+  the gateway checks refuses a stale controller's calls;
+- the controller gains an in-cluster listener for the proxy relay, over TLS, behind a Service;
+- the NetworkPolicy becomes required, not optional: ingress to the controller only from
+  session pods, and ingress to the session pods' ports only from the controller (ttyd 7681
+  has no password). The Kubernetes validation of task 19 checks that the cluster's CNI
+  enforces it;
+- the chart requires Kubernetes 1.29 or later (`kubeVersion`), for native sidecars;
+- session pods get the proxy sidecar from the runner image, with the proxy key mounted into
+  the sidecar only, instead of the init container and the bootstrap Secret. The `<version>` in
+  the `provision` op then names the sidecar's image.
 
 ### 9.7 A `manual` machine: what the operator takes on
 
@@ -2255,6 +2870,13 @@ Step B makes hosted inside-out as well, which would let us drop pod `exec` RBAC 
 own runtime ClusterRole. `hosted` would then become a seeded built-in runner that cannot be
 deleted, and `runner_id IS NULL` would keep meaning it, so no data migration is needed.
 
+**Decided (§6.9.6), step B without a PID 1 change.** Hosted sessions are run by an
+`aixle-runner --mode controller` we operate in our cluster, which runs the session ops through
+the Kubernetes API, as on a customer's cluster (§6.9.2). Hosted pods keep their pod spec, and
+`inject_bootstrap` stays a no-op. `pods/exec` moves from the Rails application's ClusterRole to
+that controller's namespaced Role, instead of disappearing. The exit condition of §12.3 stays
+as written: `KubernetesRuntime#exec` has no caller left in the session path.
+
 ---
 
 ## 14. Runner distribution and versioning
@@ -2446,6 +3068,10 @@ mentions any change to that file.
     survives logout and reboot. Self-update replaces the binary in place and restarts the
     unit while the machine is idle.
   - **Kubernetes:** the init container and image as in §9.6.
+  - **Decided (§6.9.6):** there is no session runner. The proxy sidecar on `manual` and
+    `coder` runs the host runner's own binary, bind-mounted, so it is updated with it. On
+    `kubernetes` there is no init container: the proxy sidecar's image is the runner image
+    named in the `provision` op.
   - **New type:** its adapter implements `inject_bootstrap` with whatever "run this script
     once" primitive the provider has. That is the only per-type part of distribution.
 
@@ -2471,7 +3097,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 6a | 2 | **Done.** `aixle-runner` in Go: the self-contained module `runner/` with its own `go.mod` and the Go version pinned (§14.1), one static binary for `linux/amd64` and `linux/arm64` with its version set at build time (`0.0.0-dev` for a local build), written against `runner/protocol/` (task 7). Docker is reached through the official Docker Engine SDK for Go (`github.com/moby/moby/client`). `configure` with its local preflight (Linux amd64/arm64, Docker API ≥ 1.41, 20 GiB free; a failed check registers nothing) and the credentials file (§6.3); `unregister`; `service install`/`uninstall`/`start`/`stop` with the systemd unit and the `aixle-runner` system user in the `docker` group (§9.7), the unit running the root-owned copy `/usr/local/bin/aixle-runner` that `install` makes. `--mode host`: refresh before expiry and on an access `invalid_token`, every rotation stored atomically before use, every refusal handled as `PROTOCOL.md` §3 says, no token in a log line; the ops loop, one long-poll at a time, `after` moved only past an accepted result; ops past `deadline_at` answered `expired`; the at-most-once journal (§6.7), with a graceful stop during an op answered `interrupted`; an exclusive `flock` on the state directory, held by `--mode host` and taken by `configure` and `unregister`; results retried until accepted, a `404` dropped; an op the runner does not implement answered `unsupported_op`; the `image.ensure` op, specified in `PROTOCOL.md` §6.1 with its fixture. The Go side of conformance (a fake gateway built from the fixtures) and the `Runner (Go)` CI job (`gofmt`, `go vet`, `go test -race`, both builds), part of `Checks`. |
 | 6b | 2 | `--mode session`, PID 1 in the agent container, and the session ops (`exec`, `write_file`, `read_file`, `batch`, `status`, `logs`); `container.start`/`stop` with labels, which land with session mode because the container's PID 1 is the session runner; the Unix-socket relay for the in-container session runner; `env.scrub`/`env.reset`, the scrub and reset by label. Each op's schema and fixtures go into `PROTOCOL.md` §6. |
 | 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
-| 8 | 2 | The runner's side of `check-in`, heartbeat, log shipping and the local proxy (moved from task 6). `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. When this task adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason. |
+| 8 | 2 | The runner's side of `check-in`, heartbeat, log shipping and the local proxy (moved from task 6). `ContainerRuntime::RunnerRuntime` + `ContainerRuntime.for_session`, env-var rewrite for proxied routes, live-log chunks for `LiveLogReader`/`NoOutputWatchdog`, dev `local` adapter and Compose service. From 5b: the producer of `runner_operations` (`RunnerRuntime` through the Temporal activities, calling `Runners::Operations.enqueue!`), `runner_operations.terminal_session_id` (and `session_id` in the op, §6.4), the platform-side expiry of undelivered ops past their `deadline_at` (`delivered` does not prove the runner received an op: a poll refused by the post-wait access re-check, or a response lost on the network, leaves its ops `delivered`, so this expiry must not rely on it), and the 7-day prune of completed rows (§2.3). The prune must keep each environment's newest row, because 5b takes the next sequence as `MAX(sequence) + 1` and a runner's `after` would otherwise hide every op enqueued after the newest row is pruned; or the sequence moves to a counter on the `runner_environments` row that `enqueue!` already locks. When this task adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason. **Decided (§6.9.6):** the host runner's `check-in`, heartbeat and log shipping, the live log followed from the container's own log with the `local` log driver set per container; the proxy sidecar (`aixle-runner --mode proxy`) in the agent's network namespace, with the host runner's Unix-socket relay that serves the proxy routes only; a sidecar exit fails the session (no pause container); the URL rewrite to `127.0.0.1:<port>`; with `network: host`, the host runner's own listener; the start check that the Docker daemon sees the host runner's files (§6.9.7). A session ends as on hosted, with no agent-process events (§6.9.4); the live log skipped after a restart past a rotation is a known limitation. |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update`, §14.4), moved from task 6. |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. |
@@ -2479,11 +3105,11 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
 | 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
-| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. Once it is done, named companies can get the `external_runners` override (§12.2). |
-| 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; the `coder` keys of §2.7 (template, `config.container`) and their validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. |
+| 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. Once it is done, named companies can get the `external_runners` override (§12.2). **Decided (§6.9.5):** the relay is the host runner's and the controller's, not a session runner's: on `manual` and `coder` it reaches the ports through the proxy sidecar, on `kubernetes` the controller dials the pod's IP; per-session ports with `network: host`. **Requirement for this task:** the relay protocol's framing (stream ids, open, close and reset frames, half-close), per-stream flow control with bounded buffers, limits (frame size, concurrent streams), heartbeat and reconnect, cleanup on a browser disconnect, and revocation of every stream when the current session or the viewer's authorization changes (§6.9.5). |
+| 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; the `coder` keys of §2.7 (template, `config.container`) and their validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. **Decided (§6.9, Alex, 2026-11-06): mode 1, container mode.** v1 supports only Coder workspaces that are virtual machines; the host runner's start check refuses a workspace that is a container on a shared server or a pod, with a clear message, and a Docker daemon that does not see its files (§6.9.7). A workspace runs one session at a time, and a second concurrent session gets another workspace, up to the runner's limit. `reuse` (the default) keeps the workspace warm; `fresh` gives each session a new workspace and deletes it afterwards. The session-side pieces are the host runner's, as on `manual`. |
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
-| 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. |
-| 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. |
+| 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. **Decided (§6.9.2):** the controller runs the session ops through the Kubernetes API (`client-go` exec, `tar` over exec, the pod watch and the log API) behind the session-op handlers of #204, does the check-in for each pod with the bootstrap token from the `provision` op, follows the pod log, creates the proxy sidecar and its per-session proxy key (TLS on the relay, revoked when the session ends), keeps its state on a `PersistentVolumeClaim`, takes leader election with a `Lease` and a controller generation the gateway checks, requires Kubernetes 1.29 and an enforced NetworkPolicy (checked by the validation), and gets the RBAC of §9.6's decided footprint. An `interrupted` op may still run in the pod (§6.9.7). |
+| 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
 
 ---
 
@@ -2542,6 +3168,9 @@ reviewable and lands behind the flags. The number in the second column is the ph
     credential (§6.8, §15 row 6). So either the host runner and each session count as
     separate pollers, or the host runner becomes the only poller and hands session ops to
     the session runners.
+  - **Decided (§6.9.1), for the other types:** the environment's owner is its only poller
+    on every type, the host runner on `coder` as on `manual` (#204) and the controller on
+    `kubernetes`, so the gateway's replace rule is per environment everywhere.
   - **The runner never overlaps its own polls** (task 6a): the host runner sends a new
     `GET /runner/v1/ops` only after the previous one has answered.
   - **The gateway change is a separate `flow` task,** cut after 6b and before the gateway
@@ -2561,6 +3190,16 @@ reviewable and lands behind the flags. The number in the second column is the ph
     response, for which the gateway must keep the issued pair, encrypted; or a runner that
     stops on a network error of `POST /runner/v1/token` with an "outcome unknown" error,
     which still needs a re-registration after a dropped connection.
+- **Decided (§6.9), still open:**
+  - **Exec through the Kubernetes API on customer clusters.** Settled by task 19's
+    validation: the share of ops answered `interrupted` because an in-cluster exec stream
+    broke. If it fails sessions, the session ops move into the pod in the split shape A′ of
+    §6.9.2, with the same ops and protocol.
+  - **Multiplexing a controller's polls.** One long-poll per running pod keeps §9.2 as it is
+    and costs a gateway thread each. Folding them into the controller's own poll is an
+    optimisation for task 19, with a wider controller credential.
+  - **The live text of a runner session.** The chunks of §6.9.4 are the raw pane stream, and
+    `LiveLogReader` returns rendered text today. Settled in task 8.
 
 ---
 
@@ -2584,7 +3223,10 @@ watching it.
 
 What is covered: a **host-runner restart** (self-update, crash, `systemctl restart`). The
 session container keeps running, the session runner buffers, and the host runner
-reattaches to it by name (§6.8); §12.4 step 10 tests it. A reboot **while idle** comes back
+reattaches to it by name (§6.8); §12.4 step 10 tests it. **Decided (§6.9.6):** there is no
+session runner; the container keeps running, and the host runner, on its return, follows the
+container's log again from the last acknowledged offset (§6.9.4, with the rotation limitation
+of §6.9.7). A reboot **while idle** comes back
 as an idle machine (§12.4 step 11).
 
 What is not described: a **reboot of the machine during a session**, which on a long-lived
@@ -2615,7 +3257,8 @@ volume and the `aixle-cache-<key>-*` volumes (§7.1). Over months:
 - **Caches grow** without a bound. Reset (§7.2) empties them, but nothing triggers it for
   size.
 - **`disk_low` is an event with no reaction.** The session runner can send it (§6.2), and
-  nothing in this design says what it does.
+  nothing in this design says what it does. **Decided (§6.9.6):** the host runner sends it,
+  from its own check of the daemon's disk; there is no session runner.
 
 A full version needs, scoped by the same ownership rule as scrub (only what Aixle itself
 created, selected by label and name, §7.2):
