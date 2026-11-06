@@ -14,6 +14,12 @@ module Runners
   # enqueued while the poll starts is never missed, and it returns its Active
   # Record connection to the pool while it waits, so the gateway's threads, not
   # its pool, bound how many machines can wait at once.
+  #
+  # One poll of an environment waits at a time (§6.1). A poll that is going to
+  # wait announces itself on the same channel once subscribed, and a waiting
+  # poll of that environment that hears another poll's announcement stops
+  # waiting and answers an empty list. Its ops stay deliverable until `after`
+  # acknowledges them, so none is lost.
   module Operations
     MAX_WAIT = 25
     BATCH_SIZE = 20
@@ -21,6 +27,10 @@ module Runners
     # reads anyway. Without that confirmation, an op enqueued in the gap is
     # still delivered, at the latest when the wait ends.
     SUBSCRIBE_TIMEOUT = 2
+    # Starts a waiting poll's announcement on the channel, followed by the
+    # poll's own id. An enqueue publishes a bare sequence, which never starts
+    # with it.
+    ANNOUNCEMENT = "poll:"
 
     RESULT_STATES = { "ok" => "completed", "error" => "failed", "expired" => "expired" }.freeze
 
@@ -47,7 +57,9 @@ module Runners
     # The environment's ops with `sequence > after`, oldest first, at most
     # BATCH_SIZE of them; the pending ones become `delivered`. With nothing to
     # return it waits up to `wait` seconds for an enqueue, and answers an empty
-    # list when the wait ends. Must not be called inside a transaction: the
+    # list when the wait ends, or at once when a newer poll of the environment
+    # announces itself. A poll with `wait` 0 neither waits nor announces, so it
+    # ends no other poll. Must not be called inside a transaction: the
     # connection goes back to the pool while it waits.
     def poll(environment, after:, wait:)
       wait = wait.clamp(0, MAX_WAIT)
@@ -55,13 +67,15 @@ module Runners
 
       deadline = monotonic_now + wait
       channel = channel_for(environment.id)
-      wakeups = Thread::Queue.new
-      on_message = ->(_sequence) { wakeups << true }
+      announcement = "#{ANNOUNCEMENT}#{SecureRandom.uuid}"
+      messages = Thread::Queue.new
+      on_message = ->(message) { messages << message unless message == announcement }
       confirmed = Thread::Queue.new
       release_connection
       pubsub.subscribe(channel, on_message, -> { confirmed << true })
       confirmed.pop(timeout: SUBSCRIBE_TIMEOUT)
       instrument("subscribed", environment.id)
+      announce(channel, announcement)
 
       loop do
         operations = deliver!(environment.id, after: after)
@@ -69,7 +83,11 @@ module Runners
         return operations if operations.any? || !remaining.positive?
 
         release_connection
-        instrument("wait", environment.id) { wakeups.pop(timeout: remaining) }
+        message = instrument("wait", environment.id) { messages.pop(timeout: remaining) }
+        if message&.start_with?(ANNOUNCEMENT)
+          instrument("replaced", environment.id)
+          return []
+        end
       end
     ensure
       pubsub.unsubscribe(channel, on_message) if on_message
@@ -119,6 +137,17 @@ module Runners
       # The op is committed: a poll that missed this wake-up still takes it at
       # its next read, at the latest when its wait ends.
       Rails.logger.warn("[Runners::Operations] wake-up of runner_env_#{environment_id} failed: #{e.class}: #{e.message}")
+    end
+
+    # Ends the environment's older waiting poll, which hears this on its
+    # subscription. Sent once subscribed, so of two polls that start together
+    # at least the later one's announcement reaches the earlier one: at most
+    # one of them keeps waiting, and both may answer empty.
+    def announce(channel, announcement)
+      pubsub.broadcast(channel, announcement)
+    rescue StandardError => e
+      # The older poll then waits out its own `wait`, as before this rule.
+      Rails.logger.warn("[Runners::Operations] announcing a poll on #{channel} failed: #{e.class}: #{e.message}")
     end
 
     def channel_for(environment_id)

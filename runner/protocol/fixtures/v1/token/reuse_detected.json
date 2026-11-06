@@ -1,5 +1,5 @@
 {
-  "description": "A refresh token presented a second time answers 401 credential_reuse_detected and revokes the whole family: the newest pair stops working too.",
+  "description": "A spent refresh token presented again after the pair its spend issued was used answers 401 credential_reuse_detected and revokes the whole family: the newest pair stops working too.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
     {
@@ -14,6 +14,10 @@
         }
       },
       "capture": {"second.access_token": "/access_token", "second.refresh_token": "/refresh_token"}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{second.access_token}}"},
+      "response": {"status": 200, "body": {"ops": []}}
     },
     {
       "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},

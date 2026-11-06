@@ -111,6 +111,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     first = Runners::Credentials.issue_pair!(@environment)
     old_refresh = RunnerCredential.find_by_token(first.refresh_token, kind: :refresh)
     second = Runners::Credentials.rotate!(old_refresh)
+    Runners::Credentials.record_use!(RunnerCredential.find_by_token(second.access_token, kind: :access))
     other_machine = Runners::Credentials.issue_pair!(create(:runner_environment, runner: @runner))
 
     error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(old_refresh.reload) }
@@ -120,6 +121,99 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert RunnerCredential.where(family_id: old_refresh.family_id).all?(&:revoked?)
     assert_nil Runners::Credentials.usable(second.access_token, kind: :access)
     assert Runners::Credentials.usable(other_machine.access_token, kind: :access)
+  end
+
+  # == a retry after a lost response (§9.2) ==
+
+  test "a spent refresh token presented again within the window, its pair unused, rotates as a retry" do
+    first = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    lost = Runners::Credentials.rotate!(first)
+    spent_at = first.reload.used_at
+    travel 30.seconds
+
+    retried = Runners::Credentials.rotate!(first.reload)
+
+    assert_nil Runners::Credentials.usable(lost.access_token, kind: :access)
+    assert_nil Runners::Credentials.refreshable(lost.refresh_token)
+    assert Runners::Credentials.usable(retried.access_token, kind: :access)
+    fresh = refresh_credential(retried)
+    assert_equal [ first.family_id, first.id ], [ fresh.family_id, fresh.rotated_from_id ]
+    assert_equal spent_at, first.reload.used_at, "a retry does not extend the window"
+    assert_nil @environment.reload.state_reason
+    assert Runners::Credentials.rotate!(fresh), "the retried pair rotates in turn"
+  end
+
+  test "a second retry within the window revokes the first retry's pair, and the window counts from the spend" do
+    first = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    Runners::Credentials.rotate!(first)
+    travel 20.seconds
+    once = Runners::Credentials.rotate!(first.reload)
+    travel 20.seconds
+
+    twice = Runners::Credentials.rotate!(first.reload)
+
+    assert_nil Runners::Credentials.usable(once.access_token, kind: :access)
+    assert_nil Runners::Credentials.refreshable(once.refresh_token)
+    assert Runners::Credentials.usable(twice.access_token, kind: :access)
+    travel 21.seconds
+    assert_reuse_detected first
+    assert_nil Runners::Credentials.usable(twice.access_token, kind: :access)
+  end
+
+  test "a spent refresh token is reuse once the pair it issued was used, by its access or its refresh token" do
+    used_access = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    by_access = Runners::Credentials.rotate!(used_access)
+    Runners::Credentials.record_use!(RunnerCredential.find_by_token(by_access.access_token, kind: :access))
+    assert_reuse_detected used_access
+
+    other = create(:runner_environment, runner: @runner)
+    used_refresh = refresh_credential(Runners::Credentials.issue_pair!(other))
+    Runners::Credentials.rotate!(refresh_credential(Runners::Credentials.rotate!(used_refresh)))
+    assert_reuse_detected used_refresh.reload
+  end
+
+  test "a spent refresh token presented 60 seconds after the spend is reuse, its pair unused" do
+    first = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    lost = Runners::Credentials.rotate!(first)
+    travel Runners::Credentials::RETRY_WINDOW
+
+    assert_reuse_detected first.reload
+    assert_nil Runners::Credentials.usable(lost.access_token, kind: :access)
+  end
+
+  test "a refresh token two rotations old is reuse within the window" do
+    first = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    second = refresh_credential(Runners::Credentials.rotate!(first))
+    newest = Runners::Credentials.rotate!(second)
+
+    assert_reuse_detected first.reload
+    assert_nil Runners::Credentials.usable(newest.access_token, kind: :access)
+  end
+
+  test "a spent refresh token of a revoked runner or a gone environment is refused within the window, as before" do
+    revoked = refresh_credential(Runners::Credentials.issue_pair!(@environment))
+    Runners::Credentials.rotate!(revoked)
+    @runner.revoke!
+    gone_environment = create(:runner_environment, runner: create(:runner, :manual, company: @runner.company))
+    gone = refresh_credential(Runners::Credentials.issue_pair!(gone_environment))
+    Runners::Credentials.rotate!(gone)
+    gone_environment.update!(state: :gone)
+
+    assert_equal "runner_revoked", assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(revoked.reload) }.reason
+    assert_equal "invalid_token", assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(gone.reload) }.reason
+    assert_equal 4, RunnerCredential.where(runner_environment: gone_environment).count, "no pair is issued"
+    assert_nil gone_environment.reload.state_reason
+  end
+
+  test "recording an access token's use writes it once" do
+    access = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).access_token, kind: :access)
+    freeze_time
+
+    Runners::Credentials.record_use!(access)
+    travel 1.minute
+    Runners::Credentials.record_use!(RunnerCredential.find(access.id))
+
+    assert_equal 1.minute.ago, access.reload.used_at
   end
 
   test "a spent refresh token replayed after its own expiry still revokes the live family" do
@@ -190,5 +284,18 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
 
     assert_equal %w[runner_revoked runner_revoked], [ rotation.reason, registering.reason ]
     assert_equal 1, RunnerEnvironment.count
+  end
+
+  private
+
+  def refresh_credential(pair)
+    RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
+  end
+
+  def assert_reuse_detected(credential)
+    error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(credential) }
+    assert_equal "credential_reuse_detected", error.reason
+    assert_equal "credential reuse detected", credential.runner_environment.reload.state_reason
+    assert_empty RunnerCredential.where(family_id: credential.family_id).unrevoked
   end
 end

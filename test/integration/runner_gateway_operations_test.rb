@@ -111,6 +111,66 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     assert_equal [ false ], held
   end
 
+  # == one waiting poll per environment (§6.1) ==
+
+  test "a newer poll of the environment ends the waiting one, which answers empty at once, and the newer one gets the op" do
+    older = waiting_poll(@pair)
+    enqueuer = nil
+    on_wait = OnStart.new do
+      next if Thread.current.thread_variable_get(:background_poll)
+
+      enqueuer ||= Thread.new do
+        older.join
+        enqueue
+      end
+    end
+
+    started = monotonic_now
+    ActiveSupport::Notifications.subscribed(on_wait, "wait.runner_operations") { poll(@pair, wait: 10) }
+    enqueuer.join
+
+    assert_equal [ 1 ], sequences
+    status, body, finished_at = older.value
+    assert_equal [ 200, { "ops" => [] } ], [ status, body ]
+    assert_operator finished_at - started, :<, 2
+  end
+
+  test "a poll of another environment does not end a waiting one" do
+    theirs = registered_pair(name: "build-02")
+    older = waiting_poll(@pair)
+
+    poll(theirs, wait: 1)
+    assert_equal [], sequences
+    enqueue
+
+    status, body, = older.value
+    assert_equal [ 200, [ 1 ] ], [ status, body["ops"].pluck("sequence") ]
+  end
+
+  test "a poll with wait=0 does not end a waiting one" do
+    older = waiting_poll(@pair)
+
+    poll(@pair, wait: 0)
+    assert_equal [], sequences
+    enqueue
+
+    status, body, = older.value
+    assert_equal [ 200, [ 1 ] ], [ status, body["ops"].pluck("sequence") ]
+  end
+
+  # A poll hears its own announcement on the channel too, and ignores it: a
+  # lone poll still waits out its wait (above) and is woken by an enqueue.
+  test "a lone poll is not ended by its own announcement" do
+    replaced = []
+    on_replaced = OnStart.new { |payload| replaced << payload }
+
+    elapsed = ActiveSupport::Notifications.subscribed(on_replaced, "replaced.runner_operations") { timed { poll(@pair, wait: 1) } }
+
+    assert_equal({ "ops" => [] }, response.parsed_body)
+    assert_operator elapsed, :>=, 1
+    assert_empty replaced
+  end
+
   test "after leaves out acknowledged ops, and ops past it are delivered again until acknowledged" do
     3.times { enqueue }
 
@@ -365,6 +425,28 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     yield
     Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  end
+
+  # Starts a poll of `pair` on its own thread and integration session, and
+  # returns that thread once the poll is waiting. Its value is the poll's
+  # status, its body and when it answered (monotonic_now).
+  def waiting_poll(pair, wait: 10)
+    waiting = Queue.new
+    on_wait = OnStart.new { waiting << true if Thread.current.thread_variable_get(:background_poll) }
+    thread = Thread.new do
+      Thread.current.thread_variable_set(:background_poll, true)
+      session = open_session
+      ActiveSupport::Notifications.subscribed(on_wait, "wait.runner_operations") do
+        session.get "/runner/v1/ops", params: { after: 0, wait: wait }, headers: headers_for(pair["access_token"])
+      end
+      [ session.response.status, session.response.parsed_body, monotonic_now ]
+    end
+    waiting.pop(timeout: 5) || flunk("the background poll never waited")
+    thread
   end
 
   def assert_refused(status, error)
