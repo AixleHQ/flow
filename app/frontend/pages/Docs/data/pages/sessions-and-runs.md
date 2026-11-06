@@ -38,7 +38,8 @@ status, id, and totals in the header.
 
 - A **running session shows its terminal live**, embedded in the page. Before
   the container is ready it reads *Session starting…*, then *Connecting to
-  terminal…*, then you are watching the agent work. Someone else's session
+  terminal…*, then you are watching the agent work. When the session ends it
+  reads *Session finishing…* until the run moves on. Someone else's session
   reads *Live view is private* when its owner has turned off *Show my active
   sessions* in their profile.
 - A **parallel run shows every active session at once**, each with its own
