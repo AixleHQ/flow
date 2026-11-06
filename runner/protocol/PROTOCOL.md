@@ -464,6 +464,12 @@ resolved, is the runner's state directory, is inside it or contains it, is refus
 `forbidden_mount`: the state directory holds the environment's credentials. A source the runner
 cannot resolve is refused the same way.
 
+A runner installed as the service runs with systemd's `PrivateTmp=true`, so it sees a private
+`/tmp` and `/var/tmp`, not the machine's. A `bind` whose `source` is under the machine's `/tmp`
+or `/var/tmp` does not resolve there and is refused with `forbidden_mount`. This is a known
+limitation: a bind source must be outside those directories when the runner runs as the
+service.
+
 The container is also created with the restart policy `no` (an agent cannot resume mid-turn, so
 a container that stops stays stopped and keeps its exit code), the `NET_RAW` capability dropped,
 and no published ports. The runner creates the workspace and cache volumes with the
