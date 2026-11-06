@@ -29,7 +29,14 @@ const (
 	// ClassInterrupted: the runner stopped while the op ran. At-most-once means it
 	// is not run again.
 	ClassInterrupted = "interrupted"
+	// ClassResultTooLarge: the op ran, but its encoded result is over the gateway's
+	// body cap, so this small error is posted in its place (PROTOCOL.md §6).
+	ClassResultTooLarge = "result_too_large"
 )
+
+// ResultLimit is the largest encoded result the loop posts: the gateway's body cap
+// less a margin, so that a result near the cap is never refused with `413`.
+const ResultLimit = protocol.MaxBodyBytes - 16<<10
 
 // Handler runs one op. It always returns a result: a failure is an `error` result.
 type Handler func(ctx context.Context, payload json.RawMessage) protocol.Result
@@ -187,7 +194,7 @@ func (l *Loop) resultFor(ctx context.Context, op protocol.Op, log *slog.Logger) 
 	}
 	log.Info("running op")
 	started := l.Now()
-	result := handler(ctx, op.Payload)
+	result := handler(protocol.WithOpDeadline(ctx, op.DeadlineAt), op.Payload)
 	if ctx.Err() != nil {
 		// The runner is stopping, so the handler's result says why it was cut short,
 		// not how the op went. The entry stays begun: the next start answers
@@ -197,10 +204,37 @@ func (l *Loop) resultFor(ctx context.Context, op protocol.Op, log *slog.Logger) 
 		return nil, ctx.Err()
 	}
 	log.Info("op finished", "status", result.Status, "elapsed", l.Now().Sub(started).Round(time.Millisecond))
+	result = fitResult(op, result, log)
 	if err := l.Journal.Finish(op.ID, result); err != nil {
 		return nil, err
 	}
 	return &result, nil
+}
+
+// fitResult replaces a result whose encoded body is over ResultLimit with a
+// `result_too_large` error. The gateway would refuse the body with `413`, which is
+// not resent, and the op would never be answered.
+func fitResult(op protocol.Op, result protocol.Result, log *slog.Logger) protocol.Result {
+	encoded, err := json.Marshal(result)
+	if err != nil || len(encoded) <= ResultLimit {
+		// A result that cannot be encoded fails the same way in the client.
+		return result
+	}
+	message := fmt.Sprintf("%s's result is %d bytes, over the gateway's %d-byte cap", op.Op, len(encoded), protocol.MaxBodyBytes)
+	if op.Op == "batch" {
+		var p struct {
+			Ops []json.RawMessage `json:"ops"`
+		}
+		_ = json.Unmarshal(op.Payload, &p)
+		ran := 0
+		if steps, ok := result.Data["results"].([]protocol.Result); ok {
+			ran = len(steps)
+		}
+		message += fmt.Sprintf("; the batch has %d steps, of which %d ran", len(p.Ops), ran)
+	}
+	log.Warn("the op's result is over the gateway's body cap, answering result_too_large instead",
+		"bytes", len(encoded), "status", result.Status)
+	return protocol.ErrorResult(ClassResultTooLarge, message)
 }
 
 // post sends the result until the gateway accepts it (§5.5: the first result wins,

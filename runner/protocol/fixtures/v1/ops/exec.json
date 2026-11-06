@@ -1,0 +1,290 @@
+{
+  "description": "exec runs a command in the session container with its user, env, cwd and stdin, and answers its exit code and output, each stream capped at 1 MiB and marked when capped (PROTOCOL.md §6.3). A non-zero exit code is still an ok result; a command past its timeout is an exec_timeout error.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "ran",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "git",
+          "-C",
+          "/workspace/repo",
+          "rev-parse",
+          "--abbrev-ref",
+          "HEAD"
+        ],
+        "env": {
+          "GIT_TERMINAL_PROMPT": "0"
+        },
+        "cwd": "/workspace",
+        "user": "agent",
+        "timeout": 30
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "failed",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "sh",
+          "-c",
+          "cat > /tmp/in; exit 3"
+        ],
+        "stdin": "input"
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "capped",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "cat",
+          "/workspace/repo/big.log"
+        ]
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "timed_out",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "sleep",
+          "600"
+        ],
+        "timeout": 5
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "ran.id"
+              },
+              "sequence": {
+                "$var": "ran.sequence"
+              },
+              "op": "exec",
+              "deadline_at": {
+                "$var": "ran.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "git",
+                  "-C",
+                  "/workspace/repo",
+                  "rev-parse",
+                  "--abbrev-ref",
+                  "HEAD"
+                ],
+                "env": {
+                  "GIT_TERMINAL_PROMPT": "0"
+                },
+                "cwd": "/workspace",
+                "user": "agent",
+                "timeout": 30
+              }
+            },
+            {
+              "id": {
+                "$var": "failed.id"
+              },
+              "sequence": {
+                "$var": "failed.sequence"
+              },
+              "op": "exec",
+              "deadline_at": {
+                "$var": "failed.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "sh",
+                  "-c",
+                  "cat > /tmp/in; exit 3"
+                ],
+                "stdin": "input"
+              }
+            },
+            {
+              "id": {
+                "$var": "capped.id"
+              },
+              "sequence": {
+                "$var": "capped.sequence"
+              },
+              "op": "exec",
+              "deadline_at": {
+                "$var": "capped.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "cat",
+                  "/workspace/repo/big.log"
+                ]
+              }
+            },
+            {
+              "id": {
+                "$var": "timed_out.id"
+              },
+              "sequence": {
+                "$var": "timed_out.sequence"
+              },
+              "op": "exec",
+              "deadline_at": {
+                "$var": "timed_out.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "sleep",
+                  "600"
+                ],
+                "timeout": 5
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{ran.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "exit_code": 0,
+          "stdout": "main\n",
+          "stderr": "",
+          "data": {
+            "stdout_truncated": false,
+            "stderr_truncated": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "ran.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{failed.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "exit_code": 3,
+          "stdout": "",
+          "stderr": "",
+          "data": {
+            "stdout_truncated": false,
+            "stderr_truncated": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "failed.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{capped.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "exit_code": 0,
+          "stdout": "(the first 1 MiB of the output)",
+          "stderr": "",
+          "data": {
+            "stdout_truncated": true,
+            "stderr_truncated": false
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "capped.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{timed_out.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "exit_code": 124,
+          "stdout": "",
+          "stderr": "",
+          "data": {
+            "stdout_truncated": false,
+            "stderr_truncated": false
+          },
+          "error": {
+            "class": "exec_timeout",
+            "message": "the command did not finish within its timeout of 5 s and was ended"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "timed_out.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{timed_out.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

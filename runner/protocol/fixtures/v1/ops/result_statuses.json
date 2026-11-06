@@ -27,7 +27,7 @@
           "status": "error",
           "exit_code": 1,
           "stderr": "boom\n",
-          "error": {"class": "CommandFailed", "message": "exit 1"}
+          "error": {"class": "exec_failed", "message": "starting the exec failed"}
         }
       },
       "response": {"status": 200, "body": {"id": {"$var": "b.id"}, "state": "failed"}}

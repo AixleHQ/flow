@@ -1,0 +1,255 @@
+{
+  "description": "container.start creates and starts the session's agent container from the image pinned by digest, with the payload's env, mounts, network, pid and resources (PROTOCOL.md §6.2). A second container of the environment, and a bind that would expose the runner's state directory, are refused with their classes.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "started",
+      "op": "container.start",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code",
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "session_id": 123,
+        "env": {
+          "TTYD_CMD": "claude --dangerously-skip-permissions",
+          "ROUTE_TOKEN": "rt-1"
+        },
+        "workspace_volume": true,
+        "mounts": [
+          {
+            "type": "cache",
+            "name": "pip",
+            "target": "/home/agent/.cache/pip"
+          },
+          {
+            "type": "bind",
+            "source": "/opt/toolchains",
+            "target": "/opt/toolchains",
+            "writable": false
+          }
+        ],
+        "network": "bridge",
+        "pid": "private",
+        "resources": {
+          "cpus": 2,
+          "memory_bytes": 8589934592,
+          "pids_limit": 4096
+        },
+        "privilege_escalation": false
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "exists",
+      "op": "container.start",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code",
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "session_id": 124
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "forbidden",
+      "op": "container.start",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code",
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "session_id": 125,
+        "mounts": [
+          {
+            "type": "bind",
+            "source": "/var/lib",
+            "target": "/mnt/lib"
+          }
+        ]
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "started.id"
+              },
+              "sequence": {
+                "$var": "started.sequence"
+              },
+              "op": "container.start",
+              "deadline_at": {
+                "$var": "started.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code",
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "session_id": 123,
+                "env": {
+                  "TTYD_CMD": "claude --dangerously-skip-permissions",
+                  "ROUTE_TOKEN": "rt-1"
+                },
+                "workspace_volume": true,
+                "mounts": [
+                  {
+                    "type": "cache",
+                    "name": "pip",
+                    "target": "/home/agent/.cache/pip"
+                  },
+                  {
+                    "type": "bind",
+                    "source": "/opt/toolchains",
+                    "target": "/opt/toolchains",
+                    "writable": false
+                  }
+                ],
+                "network": "bridge",
+                "pid": "private",
+                "resources": {
+                  "cpus": 2,
+                  "memory_bytes": 8589934592,
+                  "pids_limit": 4096
+                },
+                "privilege_escalation": false
+              }
+            },
+            {
+              "id": {
+                "$var": "exists.id"
+              },
+              "sequence": {
+                "$var": "exists.sequence"
+              },
+              "op": "container.start",
+              "deadline_at": {
+                "$var": "exists.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code",
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "session_id": 124
+              }
+            },
+            {
+              "id": {
+                "$var": "forbidden.id"
+              },
+              "sequence": {
+                "$var": "forbidden.sequence"
+              },
+              "op": "container.start",
+              "deadline_at": {
+                "$var": "forbidden.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code",
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                "session_id": 125,
+                "mounts": [
+                  {
+                    "type": "bind",
+                    "source": "/var/lib",
+                    "target": "/mnt/lib"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{started.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "container_id": "4f1c0a6e9b2d4c8e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e",
+            "name": "aixle-aixle-r7-1f2e3d4c-123"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "started.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{exists.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "container_exists",
+            "message": "environment aixle-r7-1f2e3d4c already has a container (aixle-aixle-r7-1f2e3d4c-123): run container.stop or env.scrub first"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "exists.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{forbidden.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "forbidden_mount",
+            "message": "the bind source /var/lib would expose the runner's state directory /var/lib/aixle-runner, which holds its credentials"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "forbidden.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{forbidden.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

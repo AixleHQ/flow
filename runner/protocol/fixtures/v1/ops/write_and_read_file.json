@@ -1,0 +1,228 @@
+{
+  "description": "write_file writes a file with its mode and owner through the archive API, and read_file reads it back as base64 (PROTOCOL.md §6.3). A file over 1 MiB, and a path that does not exist, are refused with their classes.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "write",
+      "op": "write_file",
+      "payload": {
+        "path": "/home/agent/.claude/.credentials.json",
+        "content": "eyJ0b2tlbiI6ICJ4In0K",
+        "mode": 384,
+        "uid": 1000,
+        "gid": 1000
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "read",
+      "op": "read_file",
+      "payload": {
+        "path": "/home/agent/.claude/.credentials.json"
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "too_large",
+      "op": "read_file",
+      "payload": {
+        "path": "/workspace/outputs/video.mp4"
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "missing",
+      "op": "read_file",
+      "payload": {
+        "path": "/workspace/outputs/nothing.md"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "write.id"
+              },
+              "sequence": {
+                "$var": "write.sequence"
+              },
+              "op": "write_file",
+              "deadline_at": {
+                "$var": "write.deadline_at"
+              },
+              "payload": {
+                "path": "/home/agent/.claude/.credentials.json",
+                "content": "eyJ0b2tlbiI6ICJ4In0K",
+                "mode": 384,
+                "uid": 1000,
+                "gid": 1000
+              }
+            },
+            {
+              "id": {
+                "$var": "read.id"
+              },
+              "sequence": {
+                "$var": "read.sequence"
+              },
+              "op": "read_file",
+              "deadline_at": {
+                "$var": "read.deadline_at"
+              },
+              "payload": {
+                "path": "/home/agent/.claude/.credentials.json"
+              }
+            },
+            {
+              "id": {
+                "$var": "too_large.id"
+              },
+              "sequence": {
+                "$var": "too_large.sequence"
+              },
+              "op": "read_file",
+              "deadline_at": {
+                "$var": "too_large.deadline_at"
+              },
+              "payload": {
+                "path": "/workspace/outputs/video.mp4"
+              }
+            },
+            {
+              "id": {
+                "$var": "missing.id"
+              },
+              "sequence": {
+                "$var": "missing.sequence"
+              },
+              "op": "read_file",
+              "deadline_at": {
+                "$var": "missing.deadline_at"
+              },
+              "payload": {
+                "path": "/workspace/outputs/nothing.md"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{write.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "write.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{read.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "content": "eyJ0b2tlbiI6ICJ4In0K",
+            "size": 15
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "read.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{too_large.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "file_too_large",
+            "message": "/workspace/outputs/video.mp4 is 52428800 bytes, over the 1048576-byte limit of read_file"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "too_large.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{missing.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "file_not_found",
+            "message": "/workspace/outputs/nothing.md does not exist in the session container"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "missing.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{missing.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

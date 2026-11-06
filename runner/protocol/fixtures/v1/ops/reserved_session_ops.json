@@ -1,0 +1,122 @@
+{
+  "description": "session.start and session.stop are reserved in protocol 1 and have no schema: the runner answers them unsupported_op (PROTOCOL.md §6).",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "start",
+      "op": "session.start",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "stop",
+      "op": "session.stop",
+      "payload": {}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "start.id"
+              },
+              "sequence": {
+                "$var": "start.sequence"
+              },
+              "op": "session.start",
+              "deadline_at": {
+                "$var": "start.deadline_at"
+              },
+              "payload": {}
+            },
+            {
+              "id": {
+                "$var": "stop.id"
+              },
+              "sequence": {
+                "$var": "stop.sequence"
+              },
+              "op": "session.stop",
+              "deadline_at": {
+                "$var": "stop.deadline_at"
+              },
+              "payload": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{start.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "unsupported_op",
+            "message": "aixle-runner 1.4.0 does not implement the op \"session.start\""
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "start.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{stop.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "unsupported_op",
+            "message": "aixle-runner 1.4.0 does not implement the op \"session.stop\""
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "stop.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{stop.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}
