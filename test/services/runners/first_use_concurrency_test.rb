@@ -45,7 +45,7 @@ class Runners::FirstUseConcurrencyTest < ActiveSupport::TestCase
       -> { Runners::Credentials.record_use!(@lost_access) }
     )
 
-    assert_equal false, recorded
+    assert_not recorded
     assert_nil @lost_access.reload.used_at
     assert @lost_access.revoked?
     assert Runners::Credentials.usable(retried.access_token, kind: :access)
@@ -58,7 +58,7 @@ class Runners::FirstUseConcurrencyTest < ActiveSupport::TestCase
       -> { Runners::Credentials.rotate!(RunnerCredential.find(@spent.id)) }
     )
 
-    assert_equal true, recorded
+    assert recorded
     assert_equal "credential_reuse_detected", refusal.reason
     assert_equal Runners::Credentials::REUSE_DETECTED, @environment.reload.state_reason
     assert_empty RunnerCredential.where(family_id: @spent.family_id).unrevoked

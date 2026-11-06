@@ -220,7 +220,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     access = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).access_token, kind: :access)
     RunnerCredential.where(id: access.id).update_all(revoked_at: Time.current)
 
-    assert_equal false, Runners::Credentials.record_use!(access)
+    assert_not Runners::Credentials.record_use!(access)
     assert_nil access.reload.used_at
   end
 
@@ -228,7 +228,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     access = RunnerCredential.find_by_token(Runners::Credentials.issue_pair!(@environment).access_token, kind: :access)
     Runners::Credentials.record_use!(RunnerCredential.find(access.id))
 
-    assert_equal true, Runners::Credentials.record_use!(access)
+    assert Runners::Credentials.record_use!(access)
   end
 
   test "a spent refresh token replayed after its own expiry still revokes the live family" do
