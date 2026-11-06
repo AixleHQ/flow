@@ -340,7 +340,12 @@ jobs:
         # licence key for organisation-owned repositories, while the scanner
         # itself is free. Pinned by tag so a new release cannot change the
         # verdict without a commit here.
+        #
+        # `--log-opts=HEAD` keeps the scan to the history of the commit under
+        # test. Without it gitleaks runs `git log --all`, and the full-depth
+        # checkout fetches every branch, so a finding on one open pull request
+        # failed every other one, judged by a config that lacked its allowlist.
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo \
             ghcr.io/gitleaks/gitleaks:v8.30.1 \
-            git /repo --config /repo/.gitleaks.toml --redact --no-banner --verbose
+            git /repo --config /repo/.gitleaks.toml --log-opts=HEAD --redact --no-banner --verbose

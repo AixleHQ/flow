@@ -57,3 +57,10 @@ condition = "AND"
 paths = ['''^runner(?:/|-)protocol/PROTOCOL\.md$''']
 regexTarget = "line"
 regexes = ['''"key": "aixle-r\d+-[0-9a-f]{8}"''']
+
+[[allowlists]]
+description = "Runner Go tests: the environment key of a test environment (`aixle-r<runner id>-<hex>`), an identifier the runner puts in container and volume names, not a credential"
+condition = "AND"
+paths = ['''^runner/internal/.+_test\.go$''']
+regexTarget = "line"
+regexes = ['''const (?:envKey|otherKey) += "aixle-r\d+-[0-9a-f]+"''']

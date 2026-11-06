@@ -296,7 +296,7 @@ fix: rubocop-fix eslint-fix fsd-fix
 # The secret scan CI runs (.github/workflows/ci.yml). Runs on the host: it needs Docker.
 secret-scan:
 	docker run --rm -v "$$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
-	  git /repo --config /repo/.gitleaks.toml --redact --no-banner
+	  git /repo --config /repo/.gitleaks.toml --log-opts=HEAD --redact --no-banner
 
 # Run TypeScript compiler check
 typescript:
