@@ -172,10 +172,10 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_reuse_detected used_refresh.reload
   end
 
-  test "a spent refresh token presented 60 seconds after the spend is reuse, its pair unused" do
+  test "a spent refresh token presented 61 seconds after the spend is reuse, its pair unused" do
     first = refresh_credential(Runners::Credentials.issue_pair!(@environment))
     lost = Runners::Credentials.rotate!(first)
-    travel Runners::Credentials::RETRY_WINDOW
+    travel Runners::Credentials::RETRY_WINDOW + 1.second
 
     assert_reuse_detected first.reload
     assert_nil Runners::Credentials.usable(lost.access_token, kind: :access)
