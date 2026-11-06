@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
@@ -290,5 +291,54 @@ func TestTheReservedSessionOpsHaveNoHandler(t *testing.T) {
 	sort.Strings(names)
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("handlers %v", names)
+	}
+}
+
+func TestContainerStartRefusesAVolumeThatIsNotTheEnvironments(t *testing.T) {
+	for _, labels := range []map[string]string{{}, {LabelEnvironment: otherKey}} {
+		h := newEnvironment(t)
+		name := "aixle-cache-" + envKey + "-pip"
+		h.engine.mu.Lock()
+		h.engine.volumes[name] = &fakeVolume{Name: name, Labels: labels, Files: map[string][]byte{"data": []byte("theirs")}}
+		h.engine.mu.Unlock()
+		r := h.run(h.env.ContainerStart, startPayload(map[string]any{
+			"mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}},
+		}))
+		if r.Status != protocol.StatusError || r.Error.Class != ClassVolumeNotOwned || !strings.Contains(r.Error.Message, name) {
+			t.Fatalf("%v: %#v", labels, r)
+		}
+		h.engine.mu.Lock()
+		creates, v := len(h.engine.creates), h.engine.volumes[name]
+		h.engine.mu.Unlock()
+		if creates != 0 {
+			t.Fatalf("%v: a container was created", labels)
+		}
+		if !reflect.DeepEqual(v.Labels, labels) || string(v.Files["data"]) != "theirs" {
+			t.Fatalf("%v: the volume was changed: %#v", labels, v)
+		}
+	}
+}
+
+func TestContainerStopRefusesAContainerWithTheNameButNotTheLabels(t *testing.T) {
+	name := "aixle-" + envKey + "-123"
+	for _, labels := range []map[string]string{
+		nil,
+		{LabelEnvironment: envKey},
+		{LabelEnvironment: otherKey, LabelSession: "123"},
+		{LabelEnvironment: envKey, LabelSession: "124"},
+	} {
+		h := newEnvironment(t)
+		h.engine.mu.Lock()
+		c := &fakeContainer{ID: h.engine.nextID(), Name: name, Config: container.Config{Labels: labels},
+			State: container.State{Status: container.StateRunning, Running: true}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
+		h.engine.containers[c.ID] = c
+		h.engine.mu.Unlock()
+		r := h.run(h.env.ContainerStop, map[string]any{"session_id": 123})
+		if r.Status != protocol.StatusError || r.Error.Class != ClassContainerNotOwned || !strings.Contains(r.Error.Message, name) {
+			t.Fatalf("%v: %#v", labels, r)
+		}
+		if after := h.only(); after.ID != c.ID || !after.State.Running {
+			t.Fatalf("%v: the container was stopped or removed", labels)
+		}
 	}
 }

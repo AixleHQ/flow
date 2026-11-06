@@ -1,11 +1,13 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -105,7 +107,7 @@ func TestAHostRunnerRestartDoesNotStopTheAgent(t *testing.T) {
 	block := make(chan struct{})
 	defer close(block)
 	h.engine.run = func(x *fakeExec, _ []byte) fakeRun {
-		if reflect.DeepEqual(x.Request.Cmd, []string{"sleep", "30"}) {
+		if reflect.DeepEqual(command(x.Request.Cmd), []string{"sleep", "30"}) {
 			return fakeRun{Block: block}
 		}
 		return fakeRun{Stdout: []byte("after the restart\n")}
@@ -185,9 +187,52 @@ func (h *harness) execsOf(cmd []string) int {
 	defer h.engine.mu.Unlock()
 	n := 0
 	for _, x := range h.engine.execs {
-		if reflect.DeepEqual(x.Request.Cmd, cmd) {
+		if reflect.DeepEqual(command(x.Request.Cmd), cmd) {
 			n++
 		}
 	}
 	return n
+}
+
+// command is an exec's command without the `timeout -k <s> <s>` that bounds it
+// by its timeout or by the op's deadline.
+func command(cmd []string) []string {
+	if len(cmd) > 4 && cmd[0] == "timeout" && cmd[1] == "-k" {
+		return cmd[4:]
+	}
+	return cmd
+}
+
+func TestAResultOverTheGatewaysBodyCapIsAnsweredResultTooLarge(t *testing.T) {
+	h := newEnvironment(t)
+	c := h.session()
+	for _, p := range []string{"/a", "/b"} {
+		h.put(c, p, &fakeFile{Content: bytes.Repeat([]byte("x"), 900<<10), Mode: 0o644})
+	}
+	gw := &opsGateway{results: map[int64]protocol.Result{}, posts: map[int64]int{}}
+	gw.add(1, "batch", map[string]any{"ops": []map[string]any{
+		{"op": "read_file", "payload": map[string]any{"path": "/a"}},
+		{"op": "read_file", "payload": map[string]any{"path": "/b"}},
+	}})
+	gw.add(2, "read_file", map[string]any{"path": "/a"})
+	loop := hostRunner(t, h.state, h.env, gw)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	gw.mu.Lock()
+	gw.idle = cancel
+	gw.mu.Unlock()
+	if err := loop.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r, posts := gw.result(1)
+	if posts != 1 || r.Error == nil || r.Error.Class != host.ClassResultTooLarge || r.Data != nil {
+		t.Fatalf("batch: %d posts, %#v", posts, r)
+	}
+	if !strings.Contains(r.Error.Message, "batch's result is") || !strings.Contains(r.Error.Message, "2 steps, of which 2 ran") {
+		t.Fatalf("message %q", r.Error.Message)
+	}
+	// One file of 900 KiB fits.
+	if r, posts := gw.result(2); posts != 1 || r.Status != protocol.StatusOK {
+		t.Fatalf("read_file: %d posts, %#v", posts, r)
+	}
 }

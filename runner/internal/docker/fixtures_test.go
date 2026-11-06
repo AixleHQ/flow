@@ -22,10 +22,10 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 		t.Fatalf("no ops fixtures: %v", err)
 	}
 	classes := map[string]bool{
-		host.ClassUnsupportedOp: true, host.ClassInterrupted: true,
+		host.ClassUnsupportedOp: true, host.ClassInterrupted: true, host.ClassResultTooLarge: true,
 		ClassInvalidPayload: true, ClassDockerError: true, ClassImagePull: true,
 		ClassNoSessionContainer: true, ClassContainerExists: true, ClassImageNotFound: true,
-		ClassForbiddenMount: true, ClassContainerStartFailed: true,
+		ClassForbiddenMount: true, ClassContainerStartFailed: true, ClassVolumeNotOwned: true, ClassContainerNotOwned: true,
 		ClassExecFailed: true, ClassExecTimeout: true, ClassWriteFailed: true, ClassFileNotFound: true,
 		ClassNotAFile: true, ClassFileTooLarge: true, ClassBatchStepFailed: true,
 		ClassScrubFailed: true, ClassResetFailed: true,

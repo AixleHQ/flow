@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -168,11 +169,20 @@ func (e *Environment) exec(ctx context.Context, p ExecPayload) protocol.Result {
 	}
 
 	cmd := p.Cmd
-	if p.Timeout > 0 {
+	// An exec without a timeout is bounded by the op's `deadline_at`: after it,
+	// nobody waits for the result, and the serial ops loop must move on.
+	timeout, byDeadline := p.Timeout, false
+	if timeout == 0 {
+		if deadline, ok := protocol.OpDeadline(ctx); ok {
+			timeout = max(int64(math.Ceil(time.Until(deadline).Seconds())), 1)
+			byDeadline = true
+		}
+	}
+	if timeout > 0 {
 		// The daemon cannot end an exec, so the command runs under coreutils
 		// `timeout`, which the agent images have. It signals the command's whole
 		// process group.
-		cmd = append([]string{"timeout", "-k", strconv.Itoa(timeoutKillAfter), strconv.FormatInt(p.Timeout, 10)}, cmd...)
+		cmd = append([]string{"timeout", "-k", strconv.Itoa(timeoutKillAfter), strconv.FormatInt(timeout, 10)}, cmd...)
 	}
 	env := make([]string, 0, len(p.Env))
 	for name, value := range p.Env {
@@ -192,9 +202,9 @@ func (e *Environment) exec(ctx context.Context, p ExecPayload) protocol.Result {
 	}
 
 	runCtx := ctx
-	if p.Timeout > 0 {
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, time.Duration(p.Timeout)*time.Second+time.Duration(timeoutKillAfter)*time.Second+timeoutGrace)
+		runCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second+time.Duration(timeoutKillAfter)*time.Second+timeoutGrace)
 		defer cancel()
 	}
 	started := time.Now()
@@ -247,12 +257,15 @@ func (e *Environment) exec(ctx context.Context, p ExecPayload) protocol.Result {
 	}
 
 	timedOut := guardFired ||
-		(p.Timeout > 0 && result.ExitCode != nil && (code == timeoutExitTerm || code == timeoutExitKill) &&
-			elapsed >= time.Duration(p.Timeout)*time.Second)
+		(timeout > 0 && result.ExitCode != nil && (code == timeoutExitTerm || code == timeoutExitKill) &&
+			elapsed >= time.Duration(timeout)*time.Second)
 	if timedOut {
+		message := fmt.Sprintf("the command did not finish within its timeout of %d s and was ended", timeout)
+		if byDeadline {
+			message = fmt.Sprintf("the command has no timeout and was still running at the op's deadline_at, %d s after it started; it was ended", timeout)
+		}
 		result.Status = protocol.StatusError
-		result.Error = &protocol.ResultError{Class: ClassExecTimeout,
-			Message: fmt.Sprintf("the command did not finish within its timeout of %d s and was ended", p.Timeout)}
+		result.Error = &protocol.ResultError{Class: ClassExecTimeout, Message: message}
 	}
 	return result
 }
@@ -279,18 +292,23 @@ func (e *Environment) execExit(ctx context.Context, id string) (code int, runnin
 
 // WriteFilePayload is the payload of `write_file`.
 type WriteFilePayload struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-	Mode    *int64 `json:"mode"`
-	UID     *int   `json:"uid"`
-	GID     *int   `json:"gid"`
+	Path string `json:"path"`
+	// Content is required: absent and `null` are refused, so that a payload that
+	// lost its content never truncates a file. `""` writes an empty file.
+	Content *string `json:"content"`
+	Mode    *int64  `json:"mode"`
+	UID     *int    `json:"uid"`
+	GID     *int    `json:"gid"`
 }
 
 func (p WriteFilePayload) validate() ([]byte, *protocol.Result) {
 	if r := validTarget("path", p.Path); r != nil {
 		return nil, r
 	}
-	content, err := base64.StdEncoding.DecodeString(p.Content)
+	if p.Content == nil {
+		return nil, invalid("`content` is required: a base64 string, `\"\"` for an empty file")
+	}
+	content, err := base64.StdEncoding.DecodeString(*p.Content)
 	if err != nil {
 		return nil, invalid("`content` is not base64: %v", err)
 	}

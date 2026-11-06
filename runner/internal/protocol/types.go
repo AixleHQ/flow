@@ -5,6 +5,7 @@
 package protocol
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -14,6 +15,24 @@ const ProtocolVersion = "1"
 
 // MaxWait is the longest long-poll the gateway holds (§5.4).
 const MaxWait = 25 * time.Second
+
+// MaxBodyBytes is the gateway's cap on a request body (§2). A larger body is
+// answered `413` and never resent.
+const MaxBodyBytes = 2 << 20
+
+type deadlineKey struct{}
+
+// WithOpDeadline carries an op's `deadline_at` to its handler. It is a value, not
+// a context deadline: the context ending still means that the runner is stopping.
+func WithOpDeadline(ctx context.Context, deadline time.Time) context.Context {
+	return context.WithValue(ctx, deadlineKey{}, deadline)
+}
+
+// OpDeadline is the `deadline_at` of the op a handler runs, when the loop set it.
+func OpDeadline(ctx context.Context) (time.Time, bool) {
+	d, ok := ctx.Value(deadlineKey{}).(time.Time)
+	return d, ok && !d.IsZero()
+}
 
 // Environment is the machine as register returns it (§5.1). The runner does not
 // parse its id or key.

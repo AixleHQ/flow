@@ -366,6 +366,15 @@ does. Nothing of the runner runs inside the agent container.
   with the daemon's message.
 - **The output cap is 1 MiB** (1 048 576 bytes): the most an op returns of one output stream or
   one file. It is a constant of protocol 1, since the runner reads no platform settings.
+- **A result over the body cap is `result_too_large`.** Before it journals and posts a result,
+  the runner encodes it once. If the encoded result is over the gateway's 2 MiB body cap (§2) less
+  a 16 KiB margin, the runner posts an `error` result with `error.class` `result_too_large`
+  instead, and nothing else: the gateway would refuse the larger body with `413`, which is not
+  resent (§3), and the op would never be answered. The message names the op and the encoded size,
+  and for a `batch` how many steps it has and how many ran. The op did run: a `batch` of
+  `write_file`s, for example, wrote its files. It happens to an `exec` near the output cap on both
+  streams, a `batch` of large steps, or output that JSON escapes heavily (`<`, `>`, `&` and control
+  bytes such as the `ESC` of a terminal's colours take 6 bytes each).
 - **`error.class` is the contract**; `error.message` is for people and may change.
 
 **An op this runner does not implement.** The platform can be newer than the runner. A runner
@@ -458,7 +467,10 @@ cannot resolve is refused the same way.
 The container is also created with the restart policy `no` (an agent cannot resume mid-turn, so
 a container that stops stays stopped and keeps its exit code), the `NET_RAW` capability dropped,
 and no published ports. The runner creates the workspace and cache volumes with the
-environment's label before it creates the container.
+environment's label before it creates the container. Creating a volume that already exists
+returns it unchanged, so a volume with one of these names that does not carry
+`aixle.com/environment=<key>` is not the environment's: `container.start` refuses with
+`volume_not_owned`, naming it, and neither mounts nor changes it.
 
 Results:
 
@@ -468,6 +480,7 @@ Results:
 | The environment already has a container, of a session or left over | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
 | The daemon does not have the image | `error` | | `image_not_found` |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
+| A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
 | The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
@@ -478,13 +491,17 @@ Results:
 #### `container.stop`
 
 Stops the session's container, sending SIGTERM and SIGKILL 10 seconds later, and removes it with
-its anonymous volumes. The workspace and cache volumes stay.
+its anonymous volumes. The workspace and cache volumes stay. The name alone is not proof: a
+container named `aixle-<key>-<session_id>` that does not carry both
+`aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
+`container_not_owned`, and is neither stopped nor removed.
 
 Payload: `{"session_id": <integer above 0>}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | The container is gone | `ok` | `{"removed": <boolean>}`: `false` when there was no container `aixle-<key>-<session_id>` to remove | |
+| A container has the name but not both labels | `error` | | `container_not_owned`; the container is not touched |
 | The daemon refused | `error` | | `docker_error` |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
@@ -513,13 +530,13 @@ Runs a command in the session container through the daemon's exec API, without a
 | `env` | object | Optional, string to string. Added to the container's environment for this command. |
 | `cwd` | string | Optional, an absolute path. Default: the image's working directory. |
 | `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
-| `timeout` | integer | Optional, seconds, `0` or absent for none. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. |
+| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. Absent or `0`: the op's `deadline_at` bounds the command instead, the same way, with the seconds left until it when the command starts (at least 1). After the deadline nobody waits for the result, and the runner runs one op at a time. |
 | `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
 
 | Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
 | --- | --- | --- | --- | --- | --- |
 | The command ran, whatever its exit code | `ok` | Its exit code | Each up to the output cap | `{"stdout_truncated": <boolean>, "stderr_truncated": <boolean>}` | |
-| The command ran past its `timeout` and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
+| The command ran past its `timeout`, or without one past the op's `deadline_at`, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
 | The daemon refused the exec | `error` | | | | `exec_failed` |
 | No running session container | `error` | | | | `no_session_container` |
 | The payload is not the one above | `error` | | | | `invalid_payload` |
@@ -541,7 +558,7 @@ replaced.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `path` | string | Required. An absolute, clean path other than `/`. |
-| `content` | string | Required. The file's bytes, standard base64 with padding. `""` writes an empty file. |
+| `content` | string | Required. The file's bytes, standard base64 with padding. `""` writes an empty file. An absent or `null` `content` is `invalid_payload`, in a `batch` step too, and nothing is written. |
 | `mode` | integer | Optional, default `420` (`0644`). From `0` to `4095` (`07777`). |
 | `uid`, `gid` | integer | Optional, default `0`, not negative. The file's owner. |
 
@@ -637,7 +654,9 @@ wrote through a writable bind mount is outside the guarantee.
    directory and is removed. A `/workspace/outputs` that is a symlink is not followed.
 4. Checks by label again that no container is left.
 
-Repository checkouts, the cache volumes and the pulled images stay.
+Repository checkouts, the cache volumes and the pulled images stay. A workspace volume that does
+not carry `aixle.com/environment=<key>` is not the environment's: step 3 does not mount it, nothing
+is emptied, and the scrub answers `scrub_failed` naming it.
 
 Payload: `{"image": <string>, "digest": <string>}`, as in `image.ensure`: the agent image the
 container of step 3 runs. The daemon must have it.
@@ -645,7 +664,7 @@ container of step 3 runs. The daemon must have it.
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | Scrubbed | `ok` | `{"removed_containers": [<name>, …], "outputs_emptied": <boolean>}`: the containers removed, sorted, and whether a workspace volume was there to empty | |
-| A container could not be removed, one is left, or the outputs could not be emptied | `error` | | `scrub_failed` |
+| A container could not be removed, one is left, the outputs could not be emptied, or the workspace volume is not the environment's | `error` | | `scrub_failed` |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 #### `env.reset`
@@ -654,12 +673,18 @@ The scrub's steps 1 and 2, then the removal of the workspace volume and every ca
 the environment, and a check that none of them is left. There are no outputs to empty, since
 the volume goes. Pulled images stay.
 
+Before it removes a volume, the reset looks for volumes named like the environment's that are not
+its own: `aixle-ws-<key>`, or `aixle-cache-<key>-*`, without `aixle.com/environment=<key>`. A cache
+volume whose label is another key `<other>` and whose name starts with `aixle-cache-<other>-`
+belongs to that environment and is not counted. If there is one, no volume is removed, and the
+reset answers `reset_failed` naming it.
+
 Payload: `{}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | Reset | `ok` | `{"removed_containers": [<name>, …], "removed_volumes": [<name>, …]}`, each sorted | |
-| A container or a volume could not be removed, for example a volume another container uses, or one is left | `error` | | `reset_failed` |
+| A container or a volume could not be removed, for example a volume another container uses, one is left, or a volume named like the environment's is not its own | `error` | | `reset_failed` |
 
 Fixtures: `ops/env_scrub_and_reset.json`.
 
@@ -680,11 +705,16 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   `POST /runner/v1/sessions/:id/events` and the callback proxy `/runner/v1/proxy/:route/*`: task 8
   and later.
 - `session_id` in the op envelope: task 8. Until then the session ops act on the environment's one
-  session container (§6.3).
+  session container (§6.3), so a late op of a finished session could reach the next session's
+  container. Task 8 moves it:
+  - `session_id` leaves the payloads of `container.start` and `container.stop` for the envelope.
+    Nothing is released, so no compatibility is needed;
+  - every session op checks the container's `aixle.com/session` label against it, and refuses on
+    a mismatch.
 - Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
   and `read_file` refuses a larger file. How larger output and files come back is task 8. Until
-  then a result body is bounded only by the gateway's 2 MiB cap (§2): an `exec` near the cap on
-  both streams, or a `batch` of large steps, can exceed it, and its result is refused with `413`.
+  then a result whose encoded body is over the gateway's 2 MiB cap is answered
+  `result_too_large` (§6).
 - `session.start` and `session.stop`: reserved, answered `unsupported_op`.
 - The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
   `GET /runner/v1/releases/:version/checksums`: task 10.

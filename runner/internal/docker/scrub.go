@@ -71,15 +71,22 @@ func (e *Environment) Scrub(ctx context.Context, raw json.RawMessage) protocol.R
 
 // Reset is `env.reset` (DESIGN.md §7.2): the containers as in a scrub, then the
 // workspace volume and every cache volume of the environment, each selected by
-// its name and the environment's label. Pulled images stay.
+// its name and the environment's label. Pulled images stay. A volume with the
+// environment's name but without its label is not the environment's: the reset
+// removes no volume and answers `reset_failed` naming it.
 func (e *Environment) Reset(ctx context.Context, _ json.RawMessage) protocol.Result {
 	removed, r := e.removeContainers(ctx, ClassResetFailed)
 	if r != nil {
 		return *r
 	}
-	volumes, err := e.volumes(ctx)
+	volumes, foreign, err := e.volumes(ctx)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, "listing the environment's volumes failed: "+err.Error())
+	}
+	if len(foreign) > 0 {
+		return protocol.ErrorResult(ClassResetFailed, fmt.Sprintf(
+			"volumes named like this environment's do not carry the label %s=%s, so they are not its own and no volume was removed: %s",
+			LabelEnvironment, e.Key, strings.Join(foreign, ", ")))
 	}
 	removedVolumes := []string{}
 	for _, name := range volumes {
@@ -92,7 +99,7 @@ func (e *Environment) Reset(ctx context.Context, _ json.RawMessage) protocol.Res
 		}
 		removedVolumes = append(removedVolumes, name)
 	}
-	left, err := e.volumes(ctx)
+	left, _, err := e.volumes(ctx)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, "listing the environment's volumes failed: "+err.Error())
 	}
@@ -150,35 +157,53 @@ func (e *Environment) checkNoContainer(ctx context.Context, class string) *proto
 
 // volumes are the environment's volumes: `aixle-ws-<key>` and
 // `aixle-cache-<key>-*`, each also labelled with the environment. The label
-// keeps the prefix of another environment's key from matching.
-func (e *Environment) volumes(ctx context.Context) ([]string, error) {
-	res, err := e.API.VolumeList(ctx, client.VolumeListOptions{Filters: e.environmentFilter()})
+// keeps the prefix of another environment's key from matching. foreign are the
+// volumes with such a name that are not the environment's: without its label,
+// and not explained by another environment's label either (a cache volume of a
+// key that starts with this one's is that environment's, not foreign).
+func (e *Environment) volumes(ctx context.Context) (owned, foreign []string, err error) {
+	res, err := e.API.VolumeList(ctx, client.VolumeListOptions{Filters: make(client.Filters).Add("name", "aixle-")})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var out []string
 	for _, v := range res.Items {
-		if v.Labels[LabelEnvironment] != e.Key {
+		label := v.Labels[LabelEnvironment]
+		switch {
+		case v.Name == e.WorkspaceVolume():
+		case strings.HasPrefix(v.Name, e.cacheVolumePrefix()):
+			if label != e.Key && label != "" && strings.HasPrefix(v.Name, "aixle-cache-"+label+"-") {
+				continue
+			}
+		default:
 			continue
 		}
-		if v.Name == e.WorkspaceVolume() || strings.HasPrefix(v.Name, e.cacheVolumePrefix()) {
-			out = append(out, v.Name)
+		if label == e.Key {
+			owned = append(owned, v.Name)
+		} else {
+			foreign = append(foreign, v.Name)
 		}
 	}
-	sort.Strings(out)
-	return out, nil
+	sort.Strings(owned)
+	sort.Strings(foreign)
+	return owned, foreign, nil
 }
 
 // emptyOutputs runs a short-lived container of the agent image with the workspace
 // volume mounted, which empties /workspace/outputs and is removed. It answers
-// false when the environment has no workspace volume.
+// false when the environment has no workspace volume. A workspace volume without
+// the environment's label is not its own: it is not mounted, and nothing is
+// emptied.
 func (e *Environment) emptyOutputs(ctx context.Context, ref string) (bool, error) {
-	_, err := e.API.VolumeInspect(ctx, e.WorkspaceVolume(), client.VolumeInspectOptions{})
+	inspected, err := e.API.VolumeInspect(ctx, e.WorkspaceVolume(), client.VolumeInspectOptions{})
 	if cerrdefs.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
+	}
+	if got := inspected.Volume.Labels[LabelEnvironment]; got != e.Key {
+		return false, fmt.Errorf("the volume %s does not carry the label %s=%s (it has %q), so it is not this environment's; it was not mounted or changed",
+			e.WorkspaceVolume(), LabelEnvironment, e.Key, got)
 	}
 
 	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{

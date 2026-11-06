@@ -2,6 +2,8 @@ package docker
 
 import (
 	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
@@ -11,7 +13,7 @@ const otherKey = "aixle-r7-1f2e3d4c0"
 
 // twoEnvironments starts a session container on this environment and on another
 // one whose key has this one's as a prefix, with a workspace and a cache volume
-// each, and leaves a volume that only looks like this environment's.
+// each.
 func twoEnvironments(t *testing.T) (*harness, *Environment) {
 	h := newEnvironment(t)
 	other := h.another(otherKey)
@@ -24,8 +26,6 @@ func twoEnvironments(t *testing.T) (*harness, *Environment) {
 		h.engine.volumes[name].Files["repo/README.md"] = []byte("checkout")
 		h.engine.volumes[name].Files["outputs/report.md"] = []byte("report")
 	}
-	// Named like this environment's, but not labelled with it: not Aixle's.
-	h.engine.volumes["aixle-cache-"+envKey+"-foreign"] = &fakeVolume{Name: "aixle-cache-" + envKey + "-foreign", Labels: map[string]string{}, Files: map[string][]byte{}}
 	return h, other
 }
 
@@ -135,7 +135,7 @@ func TestResetAlsoRemovesTheEnvironmentsVolumes(t *testing.T) {
 		volumes = append(volumes, name)
 	}
 	h.engine.mu.Unlock()
-	want := map[string]bool{"aixle-ws-" + otherKey: true, "aixle-cache-" + otherKey + "-pip": true, "aixle-cache-" + envKey + "-foreign": true}
+	want := map[string]bool{"aixle-ws-" + otherKey: true, "aixle-cache-" + otherKey + "-pip": true}
 	if len(volumes) != len(want) {
 		t.Fatalf("volumes left %v", volumes)
 	}
@@ -176,4 +176,82 @@ func (h *harness) only2(name string) *fakeContainer {
 	}
 	h.t.Fatalf("no container %s", name)
 	return nil
+}
+
+// addVolume adds a volume that nothing of this environment created.
+func (h *harness) addVolume(name string, labels map[string]string) {
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	h.engine.volumes[name] = &fakeVolume{Name: name, Labels: labels, Files: map[string][]byte{"outputs/theirs.md": []byte("theirs")}}
+}
+
+func (h *harness) volumeNames() []string {
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	var names []string
+	for name := range h.engine.volumes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func TestScrubRefusesAWorkspaceVolumeThatIsNotTheEnvironments(t *testing.T) {
+	for _, labels := range []map[string]string{{}, {LabelEnvironment: otherKey}} {
+		h := newEnvironment(t)
+		h.addVolume("aixle-ws-"+envKey, labels)
+		r := h.run(h.env.Scrub, scrubPayload())
+		if r.Status != protocol.StatusError || r.Error.Class != ClassScrubFailed || !strings.Contains(r.Error.Message, "aixle-ws-"+envKey) {
+			t.Fatalf("%v: %#v", labels, r)
+		}
+		if files := h.volumeFiles("aixle-ws-" + envKey); string(files["outputs/theirs.md"]) != "theirs" {
+			t.Fatalf("%v: the volume was emptied: %v", labels, files)
+		}
+		h.engine.mu.Lock()
+		creates := len(h.engine.creates)
+		h.engine.mu.Unlock()
+		if creates != 0 {
+			t.Fatalf("%v: a container mounted the volume", labels)
+		}
+	}
+}
+
+func TestResetRefusesAVolumeThatIsNotTheEnvironments(t *testing.T) {
+	for _, foreign := range []struct {
+		name   string
+		labels map[string]string
+	}{
+		{"aixle-ws-" + envKey, map[string]string{}},
+		{"aixle-ws-" + envKey, map[string]string{LabelEnvironment: otherKey}},
+		{"aixle-cache-" + envKey + "-foreign", map[string]string{}},
+		{"aixle-cache-" + envKey + "-foreign", map[string]string{LabelEnvironment: otherKey}},
+	} {
+		h := newEnvironment(t)
+		h.start(h.env, map[string]any{"workspace_volume": false, "mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}}})
+		h.addVolume(foreign.name, foreign.labels)
+		r := h.run(h.env.Reset, map[string]any{})
+		if r.Status != protocol.StatusError || r.Error.Class != ClassResetFailed || !strings.Contains(r.Error.Message, foreign.name) {
+			t.Fatalf("%s %v: %#v", foreign.name, foreign.labels, r)
+		}
+		// No volume is removed, the environment's own included.
+		names, want := h.volumeNames(), []string{"aixle-cache-" + envKey + "-pip", foreign.name}
+		sort.Strings(want)
+		if !reflect.DeepEqual(names, want) {
+			t.Fatalf("%s %v: volumes %v", foreign.name, foreign.labels, names)
+		}
+	}
+}
+
+func TestResetLeavesTheCacheVolumesOfAKeyThatStartsWithThisOne(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	longer := h.another(envKey + "-x")
+	h.start(longer, map[string]any{"mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}}})
+	r := h.run(h.env.Reset, map[string]any{})
+	if r.Status != protocol.StatusOK || !reflect.DeepEqual(r.Data["removed_volumes"], []string{"aixle-ws-" + envKey}) {
+		t.Fatalf("%#v %v", r, r.Error)
+	}
+	if names, want := h.volumeNames(), []string{"aixle-cache-" + envKey + "-x-pip", "aixle-ws-" + envKey + "-x"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("volumes %v", names)
+	}
 }

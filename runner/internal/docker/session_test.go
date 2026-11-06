@@ -114,6 +114,40 @@ func TestExecTimeoutEndsTheCommand(t *testing.T) {
 	}
 }
 
+func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
+	h := newEnvironment(t)
+	h.session()
+	h.engine.run = func(x *fakeExec, _ []byte) fakeRun {
+		if x.Request.Cmd[0] == "timeout" {
+			return fakeRun{Delay: 1100 * time.Millisecond, Code: 124}
+		}
+		return fakeRun{}
+	}
+	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Second))
+	r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"sleep", "infinity"}}))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassExecTimeout || !strings.Contains(r.Error.Message, "deadline_at") {
+		t.Fatalf("%#v %v", r, r.Error)
+	}
+	for _, x := range h.engine.execs {
+		if want := []string{"timeout", "-k", "5", "1", "sleep", "infinity"}; !reflect.DeepEqual(x.Request.Cmd, want) {
+			t.Fatalf("cmd %v", x.Request.Cmd)
+		}
+	}
+	// An explicit timeout is kept, whatever the deadline.
+	h.engine.mu.Lock()
+	h.engine.execs = map[string]*fakeExec{}
+	h.engine.mu.Unlock()
+	ctx = protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Hour))
+	if r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"true"}, "timeout": 30})); r.Status != protocol.StatusOK {
+		t.Fatalf("%#v", r)
+	}
+	for _, x := range h.engine.execs {
+		if want := []string{"timeout", "-k", "5", "30", "true"}; !reflect.DeepEqual(x.Request.Cmd, want) {
+			t.Fatalf("cmd %v", x.Request.Cmd)
+		}
+	}
+}
+
 func TestExecRefusesInvalidPayloads(t *testing.T) {
 	h := newEnvironment(t)
 	h.session()
@@ -171,6 +205,32 @@ func TestWriteFileDefaultsToRoot0644(t *testing.T) {
 		if r := h.run(h.env.WriteFile, p); r.Error == nil || r.Error.Class != ClassInvalidPayload {
 			t.Errorf("%v: %#v", p, r)
 		}
+	}
+}
+
+func TestWriteFileWithoutContentTruncatesNothing(t *testing.T) {
+	h := newEnvironment(t)
+	c := h.session()
+	h.put(c, "/home/agent/.claude/.credentials.json", &fakeFile{Content: []byte("secret"), Mode: 0o600})
+	for _, p := range []map[string]any{
+		{"path": "/home/agent/.claude/.credentials.json"},
+		{"path": "/home/agent/.claude/.credentials.json", "content": nil},
+	} {
+		r := h.run(h.env.WriteFile, p)
+		if r.Error == nil || r.Error.Class != ClassInvalidPayload || !strings.Contains(r.Error.Message, "`content` is required") {
+			t.Errorf("%v: %#v", p, r)
+		}
+		r = h.run(h.env.Batch, map[string]any{"ops": []map[string]any{{"op": "write_file", "payload": p}}})
+		if r.Error == nil || r.Error.Class != ClassInvalidPayload || !strings.Contains(r.Error.Message, "ops[0]: `content` is required") {
+			t.Errorf("batch of %v: %#v", p, r)
+		}
+	}
+	if f := c.Files["/home/agent/.claude/.credentials.json"]; string(f.Content) != "secret" {
+		t.Fatalf("the file was changed to %q", f.Content)
+	}
+	// An empty string still writes an empty file.
+	if r := h.run(h.env.WriteFile, map[string]any{"path": "/empty", "content": ""}); r.Status != protocol.StatusOK || c.Files["/empty"] == nil || len(c.Files["/empty"].Content) != 0 {
+		t.Fatalf("%#v", r)
 	}
 }
 

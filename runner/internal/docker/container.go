@@ -25,6 +25,11 @@ const (
 	ClassImageNotFound        = "image_not_found"
 	ClassForbiddenMount       = "forbidden_mount"
 	ClassContainerStartFailed = "container_start_failed"
+	// ClassVolumeNotOwned: a volume has the environment's name but not its label.
+	ClassVolumeNotOwned = "volume_not_owned"
+	// ClassContainerNotOwned: a container has the session's name but not the
+	// environment's and the session's labels.
+	ClassContainerNotOwned = "container_not_owned"
 )
 
 // volumeName is what a cache mount's `name` may be: what Docker accepts in a
@@ -284,10 +289,18 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	}
 
 	// The volumes are created with the environment's label, so that reset finds
-	// them by label as well as by name.
+	// them by label as well as by name. Creating a volume that exists returns it
+	// unchanged, so one with the name but not the label is not the environment's:
+	// it is refused and left alone (PROTOCOL.md §6.2).
 	for _, v := range volumes {
-		if _, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}}); err != nil {
+		res, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}})
+		if err != nil {
 			return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("creating the volume %s failed: %v", v, err))
+		}
+		if got := res.Volume.Labels[LabelEnvironment]; got != e.Key {
+			return protocol.ErrorResult(ClassVolumeNotOwned, fmt.Sprintf(
+				"the volume %s exists without the label %s=%s (it has %q), so it is not this environment's; it was not mounted or changed",
+				v, LabelEnvironment, e.Key, got))
 		}
 	}
 
@@ -324,7 +337,8 @@ type ContainerStopPayload struct {
 // ContainerStop is `container.stop`: it stops the session's container, giving the
 // entrypoint StopTimeout seconds to shut down, and removes it with its anonymous
 // volumes. The named volumes stay. A container that is already gone is not an
-// error.
+// error. The name alone does not prove the container is the session's: one
+// without the environment's and the session's labels is refused and not touched.
 func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) protocol.Result {
 	var p ContainerStopPayload
 	if r := decodePayload(raw, &p, "{session_id}"); r != nil {
@@ -334,7 +348,25 @@ func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) pr
 		return *r
 	}
 	name := e.ContainerName(p.SessionID)
-	removed, err := e.removeContainer(ctx, name, true)
+	inspected, err := e.API.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
+	if cerrdefs.IsNotFound(err) {
+		return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"removed": false}}
+	}
+	if err != nil {
+		return protocol.ErrorResult(ClassDockerError, fmt.Sprintf("inspecting %s failed: %v", name, err))
+	}
+	var labels map[string]string
+	if inspected.Container.Config != nil {
+		labels = inspected.Container.Config.Labels
+	}
+	session := strconv.FormatInt(p.SessionID, 10)
+	if labels[LabelEnvironment] != e.Key || labels[LabelSession] != session {
+		return protocol.ErrorResult(ClassContainerNotOwned, fmt.Sprintf(
+			"the container %s does not carry the labels %s=%s and %s=%s, so it is not this session's; it was not stopped or removed",
+			name, LabelEnvironment, e.Key, LabelSession, session))
+	}
+	// By ID, so that what is removed is the container whose labels were checked.
+	removed, err := e.removeContainer(ctx, inspected.Container.ID, true)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, err.Error())
 	}
