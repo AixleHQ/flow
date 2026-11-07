@@ -13,6 +13,10 @@ import (
 const (
 	image  = "ghcr.io/aixlehq/flow-agent-claude-code"
 	digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	// pinned is the image by digest, the reference most tests start their
+	// container from; tagged is the same image by tag.
+	pinned = image + "@" + digest
+	tagged = image + ":1.4"
 )
 
 func payload(t *testing.T, v any) json.RawMessage {
@@ -28,42 +32,63 @@ func steppingClock() func() time.Time {
 	return func() time.Time { t = t.Add(1500 * time.Millisecond); return t }
 }
 
+func ensure(t *testing.T, api API, ref string) protocol.Result {
+	t.Helper()
+	return ImageEnsure(api, steppingClock())(context.Background(), payload(t, map[string]string{"image": ref}))
+}
+
 func TestPullsAnImageTheDaemonDoesNotHave(t *testing.T) {
-	f, c := newFakeEngine(t)
-	r := ImageEnsure(c, steppingClock())(context.Background(), payload(t, map[string]string{"image": image, "digest": digest}))
-	if r.Status != protocol.StatusOK || r.Data["pulled"] != true || r.Data["duration_ms"] != int64(1500) {
-		t.Fatalf("result %#v", r)
-	}
-	if len(f.pulls) != 1 || f.pulls[0] != image+"@"+digest {
-		t.Fatalf("pulls %v", f.pulls)
+	for _, ref := range []string{tagged, pinned} {
+		f, c := newFakeEngine(t)
+		r := ensure(t, c, ref)
+		if r.Status != protocol.StatusOK || r.Data["pulled"] != true || r.Data["duration_ms"] != int64(1500) {
+			t.Fatalf("%s: result %#v", ref, r)
+		}
+		if len(f.pulls) != 1 || f.pulls[0] != ref {
+			t.Fatalf("%s: pulls %v", ref, f.pulls)
+		}
 	}
 }
 
-func TestDoesNotPullAnImageTheDaemonHas(t *testing.T) {
+func TestAlwaysPullsAndReportsWhetherThePullBroughtANewImage(t *testing.T) {
 	f, c := newFakeEngine(t)
-	f.images[image+"@"+digest] = true
-	r := ImageEnsure(c, steppingClock())(context.Background(), payload(t, map[string]string{"image": image, "digest": digest}))
-	if r.Status != protocol.StatusOK || r.Data["pulled"] != false {
+	f.images[tagged] = true
+	if r := ensure(t, c, tagged); r.Status != protocol.StatusOK || r.Data["pulled"] != false {
+		t.Fatalf("an image that is up to date: result %#v", r)
+	}
+	f.pullNewer = true
+	if r := ensure(t, c, tagged); r.Status != protocol.StatusOK || r.Data["pulled"] != true {
+		t.Fatalf("a tag that moved: result %#v", r)
+	}
+	if len(f.pulls) != 2 {
+		t.Fatalf("pulls %v: every image.ensure pulls", f.pulls)
+	}
+}
+
+func TestAReferenceWithoutATagIsPulledAsLatest(t *testing.T) {
+	f, c := newFakeEngine(t)
+	if r := ensure(t, c, image); r.Status != protocol.StatusOK {
 		t.Fatalf("result %#v", r)
 	}
-	if len(f.pulls) != 0 {
-		t.Fatalf("pulled %v", f.pulls)
+	if len(f.pulls) != 1 || f.pulls[0] != image+":latest" {
+		t.Fatalf("pulls %v", f.pulls)
 	}
 }
 
 func TestAPullFailureCarriesTheRegistrysMessage(t *testing.T) {
 	f, c := newFakeEngine(t)
-	f.pullError = "manifest for " + image + "@" + digest + " not found: manifest unknown"
-	r := ImageEnsure(c, nil)(context.Background(), payload(t, map[string]string{"image": image, "digest": digest}))
+	f.images[tagged] = true
+	f.pullError = "manifest for " + tagged + " not found: manifest unknown"
+	r := ensure(t, c, tagged)
 	if r.Status != protocol.StatusError || r.Error.Class != ClassImagePull || !strings.Contains(r.Error.Message, "manifest unknown") {
-		t.Fatalf("result %#v", r)
+		t.Fatalf("result %#v: a pull that fails is a failure, even with the image there", r)
 	}
 }
 
 func TestARefusedPullCarriesTheDaemonsMessage(t *testing.T) {
 	f, c := newFakeEngine(t)
 	f.pullStatus = 404
-	r := ImageEnsure(c, nil)(context.Background(), payload(t, map[string]string{"image": image, "digest": digest}))
+	r := ensure(t, c, pinned)
 	if r.Status != protocol.StatusError || r.Error.Class != ClassImagePull || !strings.Contains(r.Error.Message, "pull access denied") {
 		t.Fatalf("result %#v", r)
 	}
@@ -73,12 +98,11 @@ func TestInvalidPayloads(t *testing.T) {
 	f, c := newFakeEngine(t)
 	for _, p := range []json.RawMessage{
 		json.RawMessage(`[]`),
-		payload(t, map[string]string{"digest": digest}),
-		payload(t, map[string]string{"image": image}),
-		payload(t, map[string]string{"image": image, "digest": "sha256:abc"}),
-		payload(t, map[string]string{"image": image, "digest": "latest"}),
-		payload(t, map[string]string{"image": image + "@" + digest, "digest": digest}),
-		payload(t, map[string]string{"image": "Not A Repo", "digest": digest}),
+		payload(t, map[string]string{}),
+		payload(t, map[string]string{"image": " "}),
+		payload(t, map[string]string{"image": image + "@sha256:abc"}),
+		payload(t, map[string]string{"image": "Not A Repo"}),
+		payload(t, map[string]any{"image": 7}),
 	} {
 		r := ImageEnsure(c, nil)(context.Background(), p)
 		if r.Status != protocol.StatusError || r.Error.Class != ClassInvalidPayload {
@@ -93,7 +117,7 @@ func TestInvalidPayloads(t *testing.T) {
 func TestUnknownPayloadFieldsAreIgnored(t *testing.T) {
 	// A newer platform may add optional fields (PROTOCOL.md §7).
 	_, c := newFakeEngine(t)
-	r := ImageEnsure(c, nil)(context.Background(), payload(t, map[string]any{"image": image, "digest": digest, "platform": "linux/amd64"}))
+	r := ImageEnsure(c, nil)(context.Background(), payload(t, map[string]any{"image": pinned, "platform": "linux/amd64"}))
 	if r.Status != protocol.StatusOK {
 		t.Fatalf("result %#v", r)
 	}

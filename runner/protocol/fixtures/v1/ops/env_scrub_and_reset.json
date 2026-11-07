@@ -11,8 +11,7 @@
       "as": "scrub",
       "op": "env.scrub",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest"
       }
     },
     {
@@ -28,8 +27,7 @@
       "as": "failed",
       "op": "env.scrub",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest"
       }
     },
     {
@@ -54,8 +52,7 @@
                 "$var": "scrub.deadline_at"
               },
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest"
               }
             },
             {
@@ -83,8 +80,7 @@
                 "$var": "failed.deadline_at"
               },
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest"
               }
             }
           ]

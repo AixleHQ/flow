@@ -8,11 +8,14 @@ module Runners
   # flag for the company, visibility to the project, and status.
   #
   # A record with no runner is hosted and returns nil without reading anything,
-  # which keeps the hosted path free of the flag (§12.3). Every other outcome is a
-  # refusal: nothing falls back to hosted. In phase 1 that includes a runner that
-  # passes every check, because no remote runtime exists yet (§12.2).
+  # which keeps the hosted path free of the flag (§12.3). A runner that passes
+  # every check is returned; every other outcome is a refusal, and nothing falls
+  # back to hosted. A `manual` runner with no registered machine, or whose every
+  # machine failed its reset, is refused as unreachable (§8); one whose machines
+  # are all busy is not: its session waits for a free machine at pull_image
+  # (Runners::Machines).
   #
-  #   Runners::Resolver.resolve!(run)  # => nil (hosted), or raises Refused
+  #   Runners::Resolver.resolve!(run)  # => nil (hosted), the Runner, or raises Refused
   module Resolver
     class Refused < StandardError
       attr_reader :reason
@@ -25,8 +28,8 @@ module Runners
 
     UNAVAILABLE = "runner_unavailable"
     FORBIDDEN = "runner_forbidden"
-    EXECUTION_NOT_ENABLED = "runner_execution_not_enabled"
-    REASONS = [ UNAVAILABLE, FORBIDDEN, EXECUTION_NOT_ENABLED ].freeze
+    UNREACHABLE = "runner_unreachable"
+    REASONS = [ UNAVAILABLE, FORBIDDEN, UNREACHABLE ].freeze
 
     module_function
 
@@ -49,7 +52,10 @@ module Runners
       end
 
       check_status!(runner, pick_from)
-      raise Refused.new(EXECUTION_NOT_ENABLED, "Runner \"#{runner.name}\" can't take sessions yet: runner execution not enabled.")
+      unavailable = Machines.unavailable_message(runner, pick_from)
+      raise Refused.new(UNREACHABLE, unavailable) if unavailable
+
+      runner
     end
 
     def check_status!(runner, pick_from)

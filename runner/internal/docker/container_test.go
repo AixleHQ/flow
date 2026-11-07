@@ -27,7 +27,7 @@ type harness struct {
 func newEnvironment(t *testing.T) *harness {
 	t.Helper()
 	f, c := newFakeEngine(t)
-	f.images[image+"@"+digest] = true
+	f.images[pinned] = true
 	state := filepath.Join(t.TempDir(), "aixle-runner")
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		t.Fatal(err)
@@ -40,22 +40,36 @@ func (h *harness) another(key string) *Environment {
 	return &Environment{API: h.env.API, Key: key, StateDir: h.state}
 }
 
+// sessionID is the session of the ops a test runs, unless it names another.
+const sessionID = int64(123)
+
 func startPayload(extra map[string]any) map[string]any {
-	p := map[string]any{"image": image, "digest": digest, "session_id": 123}
+	p := map[string]any{"image": pinned}
 	for k, v := range extra {
 		p[k] = v
 	}
 	return p
 }
 
+// sessionCtx is the context of an op whose envelope names the session id.
+func sessionCtx(id int64) context.Context {
+	return protocol.WithOpSession(context.Background(), &id)
+}
+
 func (h *harness) run(handler Handler, payload any) protocol.Result {
 	h.t.Helper()
-	return handler(context.Background(), mustJSON(h.t, payload))
+	return h.runAs(sessionID, handler, payload)
+}
+
+// runAs runs an op whose envelope names the session id.
+func (h *harness) runAs(id int64, handler Handler, payload any) protocol.Result {
+	h.t.Helper()
+	return handler(sessionCtx(id), mustJSON(h.t, payload))
 }
 
 func (h *harness) start(env *Environment, extra map[string]any) protocol.Result {
 	h.t.Helper()
-	r := env.ContainerStart(context.Background(), mustJSON(h.t, startPayload(extra)))
+	r := env.ContainerStart(sessionCtx(sessionID), mustJSON(h.t, startPayload(extra)))
 	if r.Status != protocol.StatusOK {
 		h.t.Fatalf("container.start: %#v %v", r, r.Error)
 	}
@@ -91,7 +105,7 @@ func TestContainerStartRunsTheImageAsAHostedPodDoes(t *testing.T) {
 	if want := map[string]string{LabelEnvironment: envKey, LabelSession: "123"}; !reflect.DeepEqual(c.Config.Labels, want) {
 		t.Fatalf("labels %v", c.Config.Labels)
 	}
-	if c.Config.Image != image+"@"+digest {
+	if c.Config.Image != pinned {
 		t.Fatalf("image %q", c.Config.Image)
 	}
 	// The image's own entrypoint and command, unchanged.
@@ -196,9 +210,8 @@ func TestContainerStartRefusesABindThatExposesTheStateDirectory(t *testing.T) {
 func TestContainerStartRefusesInvalidPayloads(t *testing.T) {
 	h := newEnvironment(t)
 	for _, extra := range []map[string]any{
-		{"session_id": 0},
-		{"session_id": "123"},
-		{"digest": "latest"},
+		{"image": "Not A Repo"},
+		{"image": ""},
 		{"env": map[string]string{"A=B": "c"}},
 		{"network": "none"},
 		{"pid": "container:x"},
@@ -218,15 +231,38 @@ func TestContainerStartRefusesInvalidPayloads(t *testing.T) {
 	}
 }
 
-func TestContainerStartRefusesASecondContainer(t *testing.T) {
+func TestContainerStartRefusesAnotherSessionsContainer(t *testing.T) {
 	h := newEnvironment(t)
 	h.start(h.env, nil)
-	r := h.run(h.env.ContainerStart, startPayload(map[string]any{"session_id": 124}))
-	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerExists || !strings.Contains(r.Error.Message, "aixle-"+envKey+"-123") {
+	r := h.runAs(124, h.env.ContainerStart, startPayload(nil))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassSessionMismatch || !strings.Contains(r.Error.Message, "aixle-"+envKey+"-123") {
 		t.Fatalf("%#v", r)
+	}
+	if c := h.only(); !c.State.Running || c.Config.Labels[LabelSession] != "123" {
+		t.Fatal("the other session's container was touched")
 	}
 	// Another environment on the same machine is not affected.
 	h.start(h.another("aixle-r7-99999999"), nil)
+}
+
+func TestContainerStartOverItsOwnContainerOrALeftoverIsContainerExists(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	// A create retried after an answer that never arrived finds its own container.
+	if r := h.run(h.env.ContainerStart, startPayload(nil)); r.Status != protocol.StatusError || r.Error.Class != ClassContainerExists {
+		t.Fatalf("its own container: %#v", r)
+	}
+
+	h = newEnvironment(t)
+	h.engine.mu.Lock()
+	leftover := &fakeContainer{ID: h.engine.nextID(), Name: "aixle-" + envKey + "-leftover", Config: container.Config{Labels: map[string]string{LabelEnvironment: envKey}},
+		State: container.State{Status: container.StateExited}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
+	h.engine.containers[leftover.ID] = leftover
+	h.engine.mu.Unlock()
+	r := h.run(h.env.ContainerStart, startPayload(nil))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerExists || !strings.Contains(r.Error.Message, leftover.Name) {
+		t.Fatalf("a leftover without a session: %#v", r)
+	}
 }
 
 func TestContainerStartWithoutTheImage(t *testing.T) {
@@ -253,29 +289,38 @@ func TestAContainerThatCannotStartIsRemoved(t *testing.T) {
 func TestContainerStopStopsAndRemovesTheContainer(t *testing.T) {
 	h := newEnvironment(t)
 	h.start(h.env, nil)
-	r := h.run(h.env.ContainerStop, map[string]any{"session_id": 123})
+	r := h.run(h.env.ContainerStop, map[string]any{})
 	if r.Status != protocol.StatusOK || r.Data["removed"] != true {
 		t.Fatalf("%#v", r)
 	}
 	if len(h.engine.containers) != 0 || h.engine.volumes["aixle-ws-"+envKey] == nil {
 		t.Fatalf("containers %v, volumes %v", h.engine.containers, h.engine.volumes)
 	}
-	// A container already gone is not an error.
-	r = h.run(h.env.ContainerStop, map[string]any{"session_id": 123})
-	if r.Status != protocol.StatusOK || r.Data["removed"] != false {
-		t.Fatalf("%#v", r)
-	}
-	if r := h.run(h.env.ContainerStop, map[string]any{}); r.Error == nil || r.Error.Class != ClassInvalidPayload {
+	// Without the session's container, the stop says so.
+	r = h.run(h.env.ContainerStop, map[string]any{})
+	if r.Status != protocol.StatusError || r.Error.Class != ClassNoSessionContainer {
 		t.Fatalf("%#v", r)
 	}
 }
 
-func TestContainerStopLeavesOtherSessionsAlone(t *testing.T) {
+func TestContainerStopOfAnotherSessionsContainerIsAMismatch(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	r := h.runAs(124, h.env.ContainerStop, map[string]any{})
+	if r.Status != protocol.StatusError || r.Error.Class != ClassSessionMismatch {
+		t.Fatalf("%#v", r)
+	}
+	if c := h.only(); !c.State.Running || c.Config.Labels[LabelSession] != "123" {
+		t.Fatal("the other session's container was stopped or removed")
+	}
+}
+
+func TestContainerStopLeavesOtherEnvironmentsAlone(t *testing.T) {
 	h := newEnvironment(t)
 	other := h.another("aixle-r7-99999999")
 	h.start(other, nil)
-	r := h.run(h.env.ContainerStop, map[string]any{"session_id": 123})
-	if r.Status != protocol.StatusOK || r.Data["removed"] != false || len(h.engine.containers) != 1 {
+	r := h.run(h.env.ContainerStop, map[string]any{})
+	if r.Status != protocol.StatusError || r.Error.Class != ClassNoSessionContainer || len(h.engine.containers) != 1 {
 		t.Fatalf("%#v, %d containers", r, len(h.engine.containers))
 	}
 }
@@ -333,12 +378,28 @@ func TestContainerStopRefusesAContainerWithTheNameButNotTheLabels(t *testing.T) 
 			State: container.State{Status: container.StateRunning, Running: true}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
 		h.engine.containers[c.ID] = c
 		h.engine.mu.Unlock()
-		r := h.run(h.env.ContainerStop, map[string]any{"session_id": 123})
+		r := h.run(h.env.ContainerStop, map[string]any{})
 		if r.Status != protocol.StatusError || r.Error.Class != ClassContainerNotOwned || !strings.Contains(r.Error.Message, name) {
 			t.Fatalf("%v: %#v", labels, r)
 		}
 		if after := h.only(); after.ID != c.ID || !after.State.Running {
 			t.Fatalf("%v: the container was stopped or removed", labels)
 		}
+	}
+}
+
+func TestContainerStartNamesAndLabelsTheContainerFromTheEnvelope(t *testing.T) {
+	h := newEnvironment(t)
+	// A session_id left in the payload is an unknown field, and ignored.
+	r := h.runAs(456, h.env.ContainerStart, startPayload(map[string]any{"session_id": 999}))
+	if r.Status != protocol.StatusOK {
+		t.Fatalf("%#v", r)
+	}
+	c := h.only()
+	if c.Name != "aixle-"+envKey+"-456" || c.Config.Labels[LabelSession] != "456" || c.Config.Labels[LabelEnvironment] != envKey {
+		t.Fatalf("name %q, labels %v", c.Name, c.Config.Labels)
+	}
+	if r := h.runAs(456, h.env.Status, map[string]any{}); r.Status != protocol.StatusOK || r.Data["state"] != StateRunning {
+		t.Fatalf("%#v", r)
 	}
 }

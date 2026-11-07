@@ -194,7 +194,7 @@ func (l *Loop) resultFor(ctx context.Context, op protocol.Op, log *slog.Logger) 
 	}
 	log.Info("running op")
 	started := l.Now()
-	result := handler(protocol.WithOpDeadline(ctx, op.DeadlineAt), op.Payload)
+	result := handler(protocol.WithOpSession(protocol.WithOpDeadline(ctx, op.DeadlineAt), op.SessionID), op.Payload)
 	if ctx.Err() != nil {
 		// The runner is stopping, so the handler's result says why it was cut short,
 		// not how the op went. The entry stays begun: the next start answers

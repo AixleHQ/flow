@@ -654,6 +654,25 @@ container_execution:
       cpu_percent: 200     # two cores
       pids_limit: 4096
 
+# External runners (docs/design/agent-runtimes/DESIGN.md). Not deployment
+# inputs: the same for every installation, and set here so the tests can shorten
+# them (config/settings/test.yml).
+runners:
+  # How long ContainerRuntime::RunnerRuntime first waits between two looks at
+  # an op's result, in seconds. It doubles up to one second.
+  op_poll_interval: 0.25
+  # The deadline of a session op that names no time of its own (a file op, an
+  # exec without a timeout), in seconds: what DockerRuntime's exec waits by
+  # default. An op never outlives the activity that sent it.
+  op_timeout: 60
+  # The deadline of an image pull, a container start or stop, or a reset that
+  # no activity bounds, in seconds.
+  lifecycle_op_timeout: 600
+  # The cap on an op of a sweep that reads every session in turn (the dead
+  # container, quota and no-output scans), in seconds: a machine that does not
+  # answer reads as unknown, never as dead or idle, and costs the sweep no more.
+  scan_op_timeout: 15
+
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.
 # Unset reads as `saas`, which is the safe direction — see app/services/deployment.rb.

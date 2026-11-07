@@ -2,9 +2,11 @@
   "description": "`after` acknowledges ops: a poll returns only the ops with a sequence above it, oldest first.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "first",
       "op": "exec",
       "payload": {"cmd": ["true"]}
@@ -12,6 +14,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "second",
       "op": "write_file",
       "payload": {"path": "/tmp/x", "content": ""}
@@ -26,6 +29,7 @@
               "id": {"$var": "first.id"},
               "sequence": {"$var": "first.sequence"},
               "op": "exec",
+              "session_id": {"$var": "s.id"},
               "deadline_at": {"$var": "first.deadline_at"},
               "payload": {"cmd": ["true"]}
             },
@@ -33,6 +37,7 @@
               "id": {"$var": "second.id"},
               "sequence": {"$var": "second.sequence"},
               "op": "write_file",
+              "session_id": {"$var": "s.id"},
               "deadline_at": {"$var": "second.deadline_at"},
               "payload": {"path": "/tmp/x", "content": ""}
             }
@@ -54,6 +59,7 @@
               "id": {"$var": "second.id"},
               "sequence": {"$var": "second.sequence"},
               "op": "write_file",
+              "session_id": {"$var": "s.id"},
               "deadline_at": {"$var": "second.deadline_at"},
               "payload": {"path": "/tmp/x", "content": ""}
             }

@@ -53,11 +53,17 @@ func (g *opsGateway) PostResult(_ context.Context, _ string, id int64, r protoco
 	return protocol.ResultState{ID: id, State: "completed"}, nil
 }
 
+// add enqueues an op. A session op's envelope names the session the tests run.
 func (g *opsGateway) add(id int64, name string, payload any) {
 	raw, _ := json.Marshal(payload)
+	op := protocol.Op{ID: id, Sequence: id, Op: name, DeadlineAt: time.Now().Add(time.Hour), Payload: raw}
+	if !strings.HasPrefix(name, "env.") && name != "image.ensure" {
+		session := sessionID
+		op.SessionID = &session
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	g.ops = append(g.ops, protocol.Op{ID: id, Sequence: id, Op: name, DeadlineAt: time.Now().Add(time.Hour), Payload: raw})
+	g.ops = append(g.ops, op)
 }
 
 func (g *opsGateway) result(id int64) (protocol.Result, int) {

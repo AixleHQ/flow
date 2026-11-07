@@ -87,7 +87,7 @@ class WorkflowServiceRunnerTest < ActiveSupport::TestCase
 
   # == launch ==
 
-  test "a run on a runner fails before it is dispatched, and every step and the board task say why" do
+  test "a run on a runner with no machine fails before it is dispatched, and every step and the board task say why" do
     @workflow.update!(runner: @runner)
     task = create_task
     TemporalWorkflowRegistry.expects(:start_workflow_execution).never
@@ -96,10 +96,11 @@ class WorkflowServiceRunnerTest < ActiveSupport::TestCase
       WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web, task: task)
     end
 
-    message = "Runner \"Prod VPC\" can't take sessions yet: runner execution not enabled."
+    message = "Runner \"Prod VPC\" has no machine registered. Register a machine on it, or pick another runner " \
+              "on the workflow."
     assert_equal "failed", run.reload.state
     assert_nil run.started_at
-    assert_equal "runner_execution_not_enabled", run.failure_reason
+    assert_equal "runner_unreachable", run.failure_reason
     assert_equal [ message ] * 2, run.step_runs.map(&:error_message)
     assert_equal %w[failed failed], run.step_runs.map(&:state)
     assert_equal 0, TerminalSession.count

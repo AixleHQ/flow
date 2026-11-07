@@ -1,19 +1,38 @@
 {
-  "description": "container.start creates and starts the session's agent container from the image pinned by digest, with the payload's env, mounts, network, pid and resources (PROTOCOL.md §6.2). A second container of the environment, and a bind that would expose the runner's state directory, are refused with their classes.",
+  "description": "container.start creates and starts the session's agent container from the image reference it is given (a tag or a digest), with the payload's env, mounts, network, pid and resources (PROTOCOL.md §6.2). Over another session's container it answers session_mismatch, over a container of the environment that names no session container_exists, and a bind that would expose the runner's state directory is refused with forbidden_mount.",
   "steps": [
     {
       "given": "registered_machine",
       "as": "m"
     },
     {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s2"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s3"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s4"
+    },
+    {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "started",
       "op": "container.start",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 123,
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest",
         "env": {
           "TTYD_CMD": "claude --dangerously-skip-permissions",
           "ROUTE_TOKEN": "rt-1"
@@ -45,23 +64,21 @@
     {
       "given": "op_enqueued",
       "machine": "m",
-      "as": "exists",
+      "session": "s2",
+      "as": "other_session",
       "op": "container.start",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 124
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest"
       }
     },
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s3",
       "as": "forbidden",
       "op": "container.start",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 125,
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest",
         "mounts": [
           {
             "type": "bind",
@@ -69,6 +86,16 @@
             "target": "/mnt/lib"
           }
         ]
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s4",
+      "as": "leftover",
+      "op": "container.start",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code:latest"
       }
     },
     {
@@ -89,13 +116,14 @@
                 "$var": "started.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "started.deadline_at"
               },
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 123,
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest",
                 "env": {
                   "TTYD_CMD": "claude --dangerously-skip-permissions",
                   "ROUTE_TOKEN": "rt-1"
@@ -126,19 +154,20 @@
             },
             {
               "id": {
-                "$var": "exists.id"
+                "$var": "other_session.id"
               },
               "sequence": {
-                "$var": "exists.sequence"
+                "$var": "other_session.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s2.id"
+              },
               "deadline_at": {
-                "$var": "exists.deadline_at"
+                "$var": "other_session.deadline_at"
               },
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 124
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest"
               }
             },
             {
@@ -149,13 +178,14 @@
                 "$var": "forbidden.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s3.id"
+              },
               "deadline_at": {
                 "$var": "forbidden.deadline_at"
               },
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 125,
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest",
                 "mounts": [
                   {
                     "type": "bind",
@@ -163,6 +193,24 @@
                     "target": "/mnt/lib"
                   }
                 ]
+              }
+            },
+            {
+              "id": {
+                "$var": "leftover.id"
+              },
+              "sequence": {
+                "$var": "leftover.sequence"
+              },
+              "op": "container.start",
+              "session_id": {
+                "$var": "s4.id"
+              },
+              "deadline_at": {
+                "$var": "leftover.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code:latest"
               }
             }
           ]
@@ -195,13 +243,13 @@
     {
       "request": {
         "method": "POST",
-        "path": "/runner/v1/ops/{{exists.id}}/result",
+        "path": "/runner/v1/ops/{{other_session.id}}/result",
         "token": "{{m.access_token}}",
         "body": {
           "status": "error",
           "error": {
-            "class": "container_exists",
-            "message": "environment aixle-r7-1f2e3d4c already has a container (aixle-aixle-r7-1f2e3d4c-123): run container.stop or env.scrub first"
+            "class": "session_mismatch",
+            "message": "environment aixle-r7-1f2e3d4c has the session container aixle-aixle-r7-1f2e3d4c-123 of session 123, not the op's session 124; nothing was started"
           }
         }
       },
@@ -209,7 +257,7 @@
         "status": 200,
         "body": {
           "id": {
-            "$var": "exists.id"
+            "$var": "other_session.id"
           },
           "state": "failed"
         }
@@ -240,8 +288,31 @@
     },
     {
       "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{leftover.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "container_exists",
+            "message": "environment aixle-r7-1f2e3d4c already has a container (aixle-aixle-r7-1f2e3d4c-leftover): run container.stop or env.scrub first"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "leftover.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
         "method": "GET",
-        "path": "/runner/v1/ops?after={{forbidden.sequence}}&wait=0",
+        "path": "/runner/v1/ops?after={{leftover.sequence}}&wait=0",
         "token": "{{m.access_token}}"
       },
       "response": {

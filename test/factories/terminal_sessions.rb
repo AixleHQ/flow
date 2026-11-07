@@ -111,4 +111,21 @@ FactoryBot.define do
       started_at { 5.minutes.ago }
     end
   end
+
+  # A non-interactive session of a `manual` runner's machine, in a project of
+  # the runner's company. `environment:` is the machine; pass `runner_environment: nil`
+  # for a session the machine was not assigned to yet.
+  factory :runner_session, parent: :terminal_session do
+    transient do
+      environment { association(:runner_environment) }
+    end
+
+    session_type { "agent_session" }
+    mode { "non_interactive" }
+    initial_prompt { "go" }
+    project { association(:project, :standalone, company: environment.company) }
+    user { project.owner }
+    runner { environment.runner }
+    runner_environment { environment }
+  end
 end

@@ -27,6 +27,11 @@ const (
 // Result error classes of the agent-container ops (runner/protocol/PROTOCOL.md §6).
 const (
 	ClassNoSessionContainer = "no_session_container"
+	// ClassSessionMismatch: the environment's session container is labelled with
+	// another session than the op's envelope names, so the op does not touch it.
+	ClassSessionMismatch = "session_mismatch"
+	// ClassSessionRequired: a session op whose envelope names no session.
+	ClassSessionRequired = "session_required"
 )
 
 // OutputCap is the most an op returns of one stream or one file: 1 MiB
@@ -122,8 +127,14 @@ func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectR
 // requireSession is the session container a session op acts on. `running` asks
 // for a running one, as `exec` needs; the archive API of the file ops works on a
 // container that has exited too. Without one, the op answers
-// `no_session_container`.
+// `no_session_container`. The container must carry the session of the op's
+// envelope: one labelled with another session answers `session_mismatch`, so a
+// late op of a finished session never reaches the next session's container.
 func (e *Environment) requireSession(ctx context.Context, running bool) (*container.InspectResponse, *protocol.Result) {
+	sessionID, r := opSession(ctx)
+	if r != nil {
+		return nil, r
+	}
 	c, err := e.sessionContainer(ctx)
 	if err != nil {
 		r := protocol.ErrorResult(ClassDockerError, "finding the session container failed: "+err.Error())
@@ -132,6 +143,9 @@ func (e *Environment) requireSession(ctx context.Context, running bool) (*contai
 	if c == nil {
 		r := protocol.ErrorResult(ClassNoSessionContainer, fmt.Sprintf("environment %s has no session container: run container.start first", e.Key))
 		return nil, &r
+	}
+	if r := checkSession(c, sessionID); r != nil {
+		return nil, r
 	}
 	if running && (c.State == nil || !c.State.Running) {
 		status := "unknown"
@@ -144,6 +158,42 @@ func (e *Environment) requireSession(ctx context.Context, running bool) (*contai
 	return c, nil
 }
 
+// opSession is the session of the op's envelope. A session op without one is
+// refused before anything is run.
+func opSession(ctx context.Context) (int64, *protocol.Result) {
+	id, ok := protocol.OpSession(ctx)
+	if !ok || id <= 0 {
+		r := protocol.ErrorResult(ClassSessionRequired, "a session op needs the session_id of its envelope, a positive integer; the op was not run")
+		return 0, &r
+	}
+	return id, nil
+}
+
+// checkSession refuses a container that is labelled with another session than id.
+func checkSession(c *container.InspectResponse, id int64) *protocol.Result {
+	var label string
+	if c.Config != nil {
+		label = c.Config.Labels[LabelSession]
+	}
+	if label != strconv.FormatInt(id, 10) {
+		r := protocol.ErrorResult(ClassSessionMismatch, fmt.Sprintf(
+			"the session container %s carries %s=%s, not the op's session %d; the op was not run", trimName(c.Name), LabelSession, label, id))
+		return &r
+	}
+	return nil
+}
+
+// sessionOp refuses a session op whose envelope names no session, before its
+// payload is read.
+func sessionOp(h Handler) Handler {
+	return func(ctx context.Context, payload json.RawMessage) protocol.Result {
+		if _, r := opSession(ctx); r != nil {
+			return *r
+		}
+		return h(ctx, payload)
+	}
+}
+
 func trimName(name string) string {
 	if len(name) > 0 && name[0] == '/' {
 		return name[1:]
@@ -153,18 +203,19 @@ func trimName(name string) string {
 
 // Handlers are the ops the host runner runs against this environment. Of the op
 // names of protocol 1, `session.start` and `session.stop` stay reserved and have
-// no handler, so the loop answers them `unsupported_op` (PROTOCOL.md §6).
+// no handler, so the loop answers them `unsupported_op` (PROTOCOL.md §6). Every
+// session op needs the envelope's `session_id`; the environment ops take none.
 func (e *Environment) Handlers() map[string]Handler {
 	return map[string]Handler{
 		"image.ensure":    ImageEnsure(e.API, e.Now),
-		"container.start": e.ContainerStart,
-		"container.stop":  e.ContainerStop,
-		"exec":            e.Exec,
-		"write_file":      e.WriteFile,
-		"read_file":       e.ReadFile,
-		"batch":           e.Batch,
-		"status":          e.Status,
-		"logs":            e.Logs,
+		"container.start": sessionOp(e.ContainerStart),
+		"container.stop":  sessionOp(e.ContainerStop),
+		"exec":            sessionOp(e.Exec),
+		"write_file":      sessionOp(e.WriteFile),
+		"read_file":       sessionOp(e.ReadFile),
+		"batch":           sessionOp(e.Batch),
+		"status":          sessionOp(e.Status),
+		"logs":            sessionOp(e.Logs),
 		"env.scrub":       e.Scrub,
 		"env.reset":       e.Reset,
 	}

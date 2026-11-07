@@ -123,7 +123,7 @@ func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
 		}
 		return fakeRun{}
 	}
-	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Second))
+	ctx := protocol.WithOpDeadline(sessionCtx(sessionID), time.Now().Add(time.Second))
 	r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"sleep", "infinity"}}))
 	if r.Status != protocol.StatusError || r.Error.Class != ClassExecTimeout || !strings.Contains(r.Error.Message, "deadline_at") {
 		t.Fatalf("%#v %v", r, r.Error)
@@ -137,7 +137,7 @@ func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
 	h.engine.mu.Lock()
 	h.engine.execs = map[string]*fakeExec{}
 	h.engine.mu.Unlock()
-	ctx = protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Hour))
+	ctx = protocol.WithOpDeadline(sessionCtx(sessionID), time.Now().Add(time.Hour))
 	if r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"true"}, "timeout": 30})); r.Status != protocol.StatusOK {
 		t.Fatalf("%#v", r)
 	}
@@ -371,6 +371,8 @@ func TestSessionOpsWithoutASessionContainer(t *testing.T) {
 		"read_file":  map[string]any{"path": "/x"},
 		"logs":       map[string]any{},
 		"batch":      map[string]any{"ops": []map[string]any{{"op": "exec", "payload": map[string]any{"cmd": []string{"true"}}}}},
+		// Nor does container.stop find one to stop.
+		"container.stop": map[string]any{},
 	}
 	handlers := h.env.Handlers()
 	for op, p := range ops {
@@ -412,7 +414,7 @@ func TestAStoppingRunnerCutsAnExecShort(t *testing.T) {
 	h.session()
 	block := make(chan struct{})
 	h.engine.run = func(*fakeExec, []byte) fakeRun { return fakeRun{Block: block} }
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(sessionCtx(sessionID))
 	done := make(chan protocol.Result)
 	go func() { done <- h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"sleep", "30"}})) }()
 	time.Sleep(100 * time.Millisecond)
@@ -426,4 +428,64 @@ func TestAStoppingRunnerCutsAnExecShort(t *testing.T) {
 		t.Fatal("the exec did not return when the runner stopped")
 	}
 	close(block)
+}
+
+func TestASessionOpOfAnotherSessionIsRefused(t *testing.T) {
+	h := newEnvironment(t)
+	c := h.session()
+	h.put(c, "/tmp/notes", &fakeFile{Content: []byte("mine"), Mode: 0o644})
+	ops := map[string]any{
+		"exec":       map[string]any{"cmd": []string{"true"}},
+		"write_file": map[string]any{"path": "/tmp/notes", "content": base64.StdEncoding.EncodeToString([]byte("theirs"))},
+		"read_file":  map[string]any{"path": "/tmp/notes"},
+		"logs":       map[string]any{},
+		"status":     map[string]any{},
+		"batch":      map[string]any{"ops": []map[string]any{{"op": "exec", "payload": map[string]any{"cmd": []string{"true"}}}}},
+		// The lifecycle ops refuse the same way: neither stops nor starts over it.
+		"container.stop":  map[string]any{},
+		"container.start": startPayload(nil),
+	}
+	handlers := h.env.Handlers()
+	for op, p := range ops {
+		r := h.runAs(124, handlers[op], p)
+		if r.Status != protocol.StatusError {
+			t.Errorf("%s: %#v", op, r)
+			continue
+		}
+		class, message := r.Error.Class, r.Error.Message
+		if op == "batch" {
+			step := r.Data["results"].([]protocol.Result)[0]
+			class, message = step.Error.Class, step.Error.Message
+		}
+		if class != ClassSessionMismatch || !strings.Contains(message, "124") {
+			t.Errorf("%s: %#v", op, r.Error)
+		}
+	}
+	for _, x := range h.engine.execs {
+		t.Fatalf("an exec ran in %s", x.Container)
+	}
+	if got := string(c.Files["/tmp/notes"].Content); got != "mine" {
+		t.Fatalf("the other session's write reached the container: %q", got)
+	}
+	if after := h.only(); after.ID != c.ID || !after.State.Running {
+		t.Fatal("the container was stopped or removed")
+	}
+}
+
+func TestASessionOpWithoutASessionIsRefused(t *testing.T) {
+	h := newEnvironment(t)
+	h.session()
+	handlers := h.env.Handlers()
+	for _, op := range []string{"container.start", "container.stop", "exec", "write_file", "read_file", "batch", "status", "logs"} {
+		r := handlers[op](context.Background(), mustJSON(t, map[string]any{}))
+		if r.Status != protocol.StatusError || r.Error.Class != ClassSessionRequired {
+			t.Errorf("%s: %#v", op, r)
+		}
+	}
+	if len(h.engine.execs) != 0 || len(h.engine.creates) != 1 {
+		t.Fatalf("%d execs, %d creates", len(h.engine.execs), len(h.engine.creates))
+	}
+	if !h.only().State.Running {
+		t.Fatal("the session container was stopped")
+	}
 }

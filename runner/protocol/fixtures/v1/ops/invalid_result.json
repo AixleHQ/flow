@@ -2,7 +2,8 @@
   "description": "A result with an unknown or missing `status`, a field of the wrong type, or an `error` that is not exactly {class, message} of strings is 422 invalid_result and changes nothing.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
-    {"given": "op_enqueued", "machine": "m", "as": "op", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
+    {"given": "op_enqueued", "machine": "m", "session": "s", "as": "op", "op": "exec", "payload": {"cmd": ["true"]}},
     {
       "request": {
         "method": "POST",
@@ -85,6 +86,7 @@
               "id": {"$var": "op.id"},
               "sequence": {"$var": "op.sequence"},
               "op": "exec",
+              "session_id": {"$var": "s.id"},
               "deadline_at": {"$var": "op.deadline_at"},
               "payload": {"cmd": ["true"]}
             }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -22,36 +21,32 @@ const (
 	ClassImagePull      = "image_pull_failed"
 )
 
-var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-
 // ImageEnsurePayload is the payload of `image.ensure`.
 type ImageEnsurePayload struct {
-	Image  string `json:"image"`
-	Digest string `json:"digest"`
+	// Image is the reference as the platform was given it: a tag or a digest.
+	Image string `json:"image"`
 }
 
-// Reference validates the payload and returns `image@digest`.
+// Reference validates the payload and returns the reference the daemon is
+// asked for: the payload's, with the tag `latest` when it names neither a tag
+// nor a digest, as `docker pull` reads it.
 func (p ImageEnsurePayload) Reference() (string, error) {
-	if p.Image == "" {
+	if strings.TrimSpace(p.Image) == "" {
 		return "", fmt.Errorf("`image` is required")
 	}
-	if strings.Contains(p.Image, "@") {
-		return "", fmt.Errorf("`image` must not carry a digest, the digest is its own field: got %q", p.Image)
+	named, err := reference.ParseNormalizedNamed(p.Image)
+	if err != nil {
+		return "", fmt.Errorf("`image` %q is not an image reference: %v", p.Image, err)
 	}
-	if !digestPattern.MatchString(p.Digest) {
-		return "", fmt.Errorf("`digest` must be sha256:<64 lowercase hex digits>, got %q", p.Digest)
-	}
-	ref := p.Image + "@" + p.Digest
-	if _, err := reference.ParseNormalizedNamed(ref); err != nil {
-		return "", fmt.Errorf("%q is not an image reference: %v", ref, err)
-	}
-	return ref, nil
+	return reference.FamiliarString(reference.TagNameOnly(named)), nil
 }
 
-// ImageEnsure is the `image.ensure` handler: it pulls `image@digest` unless the
-// daemon has it already, and reports whether it pulled and how long the op took.
-// A pull that fails is an `error` result with the registry's message (DESIGN.md §8,
-// "Agent image cannot be pulled").
+// ImageEnsure is the `image.ensure` handler: it always pulls the reference, so a
+// tag that moved is followed, and the daemon downloads only the layers it lacks.
+// It reports whether the pull brought anything new (the image was missing, or
+// the reference now names another image) and how long the op took. A pull that
+// fails is an `error` result with the registry's or the daemon's words
+// (DESIGN.md §8, "Agent image cannot be pulled").
 func ImageEnsure(api API, now func() time.Time) func(ctx context.Context, payload json.RawMessage) protocol.Result {
 	if now == nil {
 		now = time.Now
@@ -59,7 +54,7 @@ func ImageEnsure(api API, now func() time.Time) func(ctx context.Context, payloa
 	return func(ctx context.Context, raw json.RawMessage) protocol.Result {
 		var payload ImageEnsurePayload
 		if err := json.Unmarshal(raw, &payload); err != nil {
-			return protocol.ErrorResult(ClassInvalidPayload, "the payload is not {image, digest}: "+err.Error())
+			return protocol.ErrorResult(ClassInvalidPayload, "the payload is not {image}: "+err.Error())
 		}
 		ref, err := payload.Reference()
 		if err != nil {
@@ -67,18 +62,21 @@ func ImageEnsure(api API, now func() time.Time) func(ctx context.Context, payloa
 		}
 
 		started := now()
-		pulled := false
-		_, err = api.ImageInspect(ctx, ref)
-		switch {
-		case err == nil:
-		case cerrdefs.IsNotFound(err):
-			if err := pull(ctx, api, ref); err != nil {
-				return protocol.ErrorResult(ClassImagePull, fmt.Sprintf("pulling %s failed: %v", ref, err))
-			}
-			pulled = true
-		default:
+		before, err := imageID(ctx, api, ref)
+		if err != nil {
 			return protocol.ErrorResult(ClassDockerError, fmt.Sprintf("inspecting %s failed: %v", ref, err))
 		}
+		if err := pull(ctx, api, ref); err != nil {
+			return protocol.ErrorResult(ClassImagePull, fmt.Sprintf("pulling %s failed: %v", ref, err))
+		}
+		after, err := imageID(ctx, api, ref)
+		if err != nil {
+			return protocol.ErrorResult(ClassDockerError, fmt.Sprintf("inspecting %s after its pull failed: %v", ref, err))
+		}
+		if after == "" {
+			return protocol.ErrorResult(ClassDockerError, fmt.Sprintf("the daemon does not have %s after pulling it", ref))
+		}
+		pulled := before != after
 
 		return protocol.Result{
 			Status: protocol.StatusOK,
@@ -88,6 +86,18 @@ func ImageEnsure(api API, now func() time.Time) func(ctx context.Context, payloa
 			},
 		}
 	}
+}
+
+// imageID is the ID of the image the daemon has under ref, or "" when it has none.
+func imageID(ctx context.Context, api API, ref string) (string, error) {
+	inspected, err := api.ImageInspect(ctx, ref)
+	if cerrdefs.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return inspected.ID, nil
 }
 
 func pull(ctx context.Context, api API, ref string) error {

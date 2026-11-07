@@ -3,9 +3,11 @@
   "steps": [
     {"given": "registered_machine", "as": "m"},
     {"given": "registered_machine", "as": "other", "name": "build-02"},
+    {"given": "session_on_machine", "machine": "other", "as": "t"},
     {
       "given": "op_enqueued",
       "machine": "other",
+      "session": "t",
       "as": "theirs",
       "op": "exec",
       "payload": {"cmd": ["true"]}
@@ -24,6 +26,7 @@
               "id": {"$var": "theirs.id"},
               "sequence": {"$var": "theirs.sequence"},
               "op": "exec",
+              "session_id": {"$var": "t.id"},
               "deadline_at": {"$var": "theirs.deadline_at"},
               "payload": {"cmd": ["true"]}
             }

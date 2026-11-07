@@ -281,15 +281,12 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
   end
 
   test "write verification failure does not update last_used_at" do
-    service = AgentCredentialsService.new("claude_code")
     runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
     runtime.stubs(:write_file).returns(true)
-    service.instance_variable_set(:@runtime, runtime)
-    ContainerRuntime.stubs(:build).returns(runtime)
     credential = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code", last_used_at: nil)
 
     error = assert_raises(AgentCredentialsService::CredentialWriteError) do
-      credential.write_to_container("container123")
+      credential.write_to_container("container123", runtime: runtime)
     end
 
     refute error.details[:exists]

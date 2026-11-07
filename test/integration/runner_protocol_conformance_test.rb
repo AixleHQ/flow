@@ -37,7 +37,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   SETUP_STEPS = {
     "registration_token" => { "as" => true },
     "registered_machine" => { "as" => true, "name" => false },
-    "op_enqueued" => { "machine" => true, "as" => true, "op" => true, "payload" => true },
+    "session_on_machine" => { "machine" => true, "as" => true },
+    "op_enqueued" => { "machine" => true, "session" => false, "as" => true, "op" => true, "payload" => true },
     "runner_revoked" => {},
     "flag_off" => {},
     "flag_on" => {},
@@ -72,6 +73,7 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   setup do
     @company = create(:company)
     @runner = create(:runner, :manual, company: @company)
+    @project = create(:project, :standalone, company: @company)
     FeatureFlag.find_or_create_by!(key: "external_runners").overrides.create!(company: @company, enabled: true,
                                                                                reason: "conformance")
     @variables = {}
@@ -130,6 +132,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
       define(step["as"], Runners::Credentials.mint_registration!(@runner), where)
     when "registered_machine"
       register_machine(step["as"], step.fetch("name", step["as"]), where)
+    when "session_on_machine"
+      session_on_machine(step, where)
     when "op_enqueued"
       enqueue_op(step, where)
     when "runner_revoked"
@@ -153,9 +157,20 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     define("#{as}.environment_id", result.environment.id, where)
   end
 
+  # A session of the runner that runs on the machine, as Runners::Machines
+  # leaves it.
+  def session_on_machine(step, where)
+    environment = @runner.environments.find(variable("#{step['machine']}.environment_id", where))
+    session = create(:terminal_session, :agent_session, user: @project.owner, project: @project, runner: @runner,
+                                                        runner_environment: environment, mode: "non_interactive",
+                                                        initial_prompt: "go")
+    define("#{step['as']}.id", session.id, where)
+  end
+
   def enqueue_op(step, where)
     environment = @runner.environments.find(variable("#{step['machine']}.environment_id", where))
-    operation = Runners::Operations.enqueue!(environment, op: step["op"], payload: step["payload"],
+    session = TerminalSession.find(variable("#{step['session']}.id", where)) if step.key?("session")
+    operation = Runners::Operations.enqueue!(environment, op: step["op"], payload: step["payload"], session: session,
                                                           deadline_at: OP_DEADLINE.from_now.change(usec: 0))
     define("#{step['as']}.id", operation.id, where)
     define("#{step['as']}.sequence", operation.sequence, where)

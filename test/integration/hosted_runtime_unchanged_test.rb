@@ -47,7 +47,44 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     assert_empty on[:runner_gateway_queries]
   end
 
+  test "the live log and the session scanners read a hosted session the same with the flag on" do
+    off = scan_trace
+    on = with_feature(:external_runners, true, company: @company) { scan_trace }
+
+    assert_equal off, on
+    assert on[:execs].any?, "the scanners reached the runtime"
+    assert_empty on[:runner_gateway_queries]
+  end
+
   private
+
+  # A hosted step session that is up, read by everything that reads one session
+  # through ContainerRuntime.for_session besides its phases.
+  def scan_trace
+    runtime = stub_container_runtime("kubernetes", agent_type: "claude_code")
+    session = launch_step
+    admission = session.session_admission.reload
+    activity = Activities::Container::AdmittedPhaseActivity.new
+    %w[pull_image create_container start_container exec].each do |phase|
+      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, permit_token: admission.permit_token))
+    end
+    session.reload.update_columns(started_at: 2.hours.ago)
+    runtime.execs.clear
+    sql = []
+    results = ActiveSupport::Notifications.subscribed(->(*, payload) { sql << payload[:sql] }, "sql.active_record") do
+      {
+        tail: Sessions::LiveLogReader.new(session).tail(lines: 10).status,
+        dead: Activities::Session::ScanDeadContainersActivity.new.run,
+        quota: Activities::Workflow::ScanQuotaErrorsActivity.new.run,
+        no_output: Activities::Workflow::ScanNoOutputSessionsActivity.new.run
+      }
+    end
+    # Out of the next trace's scans.
+    session.update_columns(state: "finished")
+
+    { results: results, execs: runtime.execs.map { |cmd| normalize(Array(cmd).join(" ")) },
+      runner_gateway_queries: sql.grep(/runner_(environments|credentials|operations)/) }
+  end
 
   def launch_standalone
     SessionService.create_and_start(
