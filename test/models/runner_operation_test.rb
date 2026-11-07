@@ -78,7 +78,7 @@ class RunnerOperationTest < ActiveSupport::TestCase
   private
 
   def build_operation(payload: { "cmd" => "true" }, **attributes)
-    RunnerOperation.new({ runner_environment: @environment, sequence: 1, op: "exec", state: :pending,
+    RunnerOperation.new({ runner_environment: @environment, sequence: 1, op: "env.scrub", state: :pending,
                           deadline_at: 1.minute.from_now, payload: payload }.merge(attributes))
   end
 

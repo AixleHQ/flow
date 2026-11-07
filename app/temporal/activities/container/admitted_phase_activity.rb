@@ -45,7 +45,7 @@ module Activities
           return operation.result.deep_symbolize_keys if operation.state == "completed"
 
           if phase == "create_container"
-            runtime = ContainerRuntime.build
+            runtime = ContainerRuntime.for_session(session)
             # Identity is persisted before the create so cleanup can find the
             # object even if the answer to the create never arrives.
             admission.update!(runtime_id: runtime.session_identity(session), runtime_kind: runtime.class.name)
@@ -117,7 +117,7 @@ module Activities
           unresolved = admission.session_runtime_operations.pinning.exists?
         end
 
-        runtime = ContainerRuntime.build
+        runtime = ContainerRuntime.for_session(session)
         raise "Runtime changed; operator reconciliation required" if admission.runtime_kind && admission.runtime_kind != runtime.class.name
 
         absent = admission.runtime_id.blank? || runtime.session_absent?(admission.runtime_id)

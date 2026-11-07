@@ -41,7 +41,7 @@ module Agents
 
         if write(session, adapter, credentials)
           took << session
-          Sessions::AuthPause.new(session, runtime: container_runtime).resume!
+          Sessions::AuthPause.new(session, runtime: container_runtime(session)).resume!
         else
           failed += 1
         end
@@ -59,7 +59,7 @@ module Agents
     # copy regardless. A container we could not write to is one that was going to die on
     # its stale token anyway.
     def write(session, adapter, credentials)
-      raise "the container did not take it" unless adapter.deliver_credential(container_runtime, session.container_id, credentials)
+      raise "the container did not take it" unless adapter.deliver_credential(container_runtime(session), session.container_id, credentials)
 
       Rails.logger.info("[CredentialDelivery] session=#{session.id} container=#{session.container_id} " \
                         "took a refreshed #{session.agent_type} token")
@@ -70,8 +70,13 @@ module Agents
       false
     end
 
-    def container_runtime
-      @container_runtime ||= runtime || ContainerRuntime.build
+    # The session's runtime (ContainerRuntime.for_session); every hosted session
+    # shares one.
+    def container_runtime(session)
+      return runtime if runtime
+      return ContainerRuntime.for_session(session) if session.runner_id
+
+      @container_runtime ||= ContainerRuntime.build
     end
   end
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1253,7 +1253,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
     t.string "protocol_version"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "current_session_id"
     t.index ["company_id"], name: "index_runner_environments_on_company_id"
+    t.index ["current_session_id"], name: "index_runner_environments_on_current_session_id", unique: true
     t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
     t.index ["runner_id", "key"], name: "index_runner_environments_on_runner_id_and_key", unique: true
     t.index ["runner_id"], name: "index_runner_environments_on_runner_id"
@@ -1273,9 +1275,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "terminal_session_id"
     t.index ["company_id"], name: "index_runner_operations_on_company_id"
     t.index ["runner_environment_id", "sequence"], name: "index_runner_operations_on_runner_environment_id_and_sequence", unique: true
     t.index ["runner_id"], name: "index_runner_operations_on_runner_id"
+    t.index ["state", "completed_at"], name: "index_runner_operations_on_state_and_completed_at"
+    t.index ["terminal_session_id"], name: "index_runner_operations_on_terminal_session_id"
   end
 
   create_table "runners", force: :cascade do |t|
@@ -1782,12 +1787,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
     t.bigint "user_id"
     t.jsonb "version_ids", default: {}, null: false
     t.bigint "runner_id"
+    t.bigint "runner_environment_id"
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["finished_at"], name: "index_terminal_sessions_on_finished_at"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
+    t.index ["runner_environment_id"], name: "index_terminal_sessions_on_runner_environment_id"
     t.index ["runner_id"], name: "index_terminal_sessions_on_runner_id"
     t.index ["session_type"], name: "index_terminal_sessions_on_session_type"
     t.index ["state"], name: "index_terminal_sessions_on_state"
@@ -2393,11 +2400,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
   add_foreign_key "runner_environments", "companies", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", on_delete: :cascade
+  add_foreign_key "runner_environments", "terminal_sessions", column: "current_session_id", on_delete: :nullify
   add_foreign_key "runner_operations", "companies", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_operations_environment_runner", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", on_delete: :cascade
   add_foreign_key "runner_operations", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_operations_runner_company", on_delete: :cascade
   add_foreign_key "runner_operations", "runners", on_delete: :cascade
+  add_foreign_key "runner_operations", "terminal_sessions", on_delete: :cascade
   add_foreign_key "runners", "companies", on_delete: :cascade
   add_foreign_key "runners", "integrations"
   add_foreign_key "runners", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runners_integration_company"
@@ -2453,6 +2462,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "companies"
   add_foreign_key "terminal_sessions", "projects", on_delete: :nullify
+  add_foreign_key "terminal_sessions", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_terminal_sessions_environment_runner"
+  add_foreign_key "terminal_sessions", "runner_environments", on_delete: :nullify
   add_foreign_key "terminal_sessions", "runners"
   add_foreign_key "terminal_sessions", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_terminal_sessions_runner_company"
   add_foreign_key "terminal_sessions", "users", on_delete: :nullify

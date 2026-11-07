@@ -17,7 +17,7 @@ class ContainerRuntime::RuntimeContractTest < ActiveSupport::TestCase
     assert_operator ABSTRACT.size, :>, 10
   end
 
-  [ ContainerRuntime::DockerRuntime, ContainerRuntime::KubernetesRuntime ].each do |runtime|
+  [ ContainerRuntime::DockerRuntime, ContainerRuntime::KubernetesRuntime, ContainerRuntime::RunnerRuntime ].each do |runtime|
     test "#{runtime.name.demodulize} implements every abstract method" do
       missing = ABSTRACT.select { |name| runtime.instance_method(name).owner == ContainerRuntime::BaseRuntime }
 

@@ -594,14 +594,22 @@ const (
 
 // Status is `status`: the session container's state, read the way
 // `DockerRuntime#container_status` reads it. A paused container counts as
-// running: it has not exited. A terminated one also reports its exit code.
+// running: it has not exited. A terminated one also reports its exit code. A
+// container of another session is refused with `session_mismatch`.
 func (e *Environment) Status(ctx context.Context, _ json.RawMessage) protocol.Result {
+	sessionID, r := opSession(ctx)
+	if r != nil {
+		return *r
+	}
 	c, err := e.sessionContainer(ctx)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, "finding the session container failed: "+err.Error())
 	}
 	if c == nil {
 		return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"state": StateMissing}}
+	}
+	if r := checkSession(c, sessionID); r != nil {
+		return *r
 	}
 	data := map[string]any{"container_id": c.ID, "name": trimName(c.Name)}
 	state := c.State

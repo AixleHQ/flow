@@ -217,6 +217,27 @@ services:
     networks: [ default, agents ]
     attach: false
 
+  # The dev `local` adapter (docs/design/agent-runtimes/DESIGN.md §12.2): a host
+  # runner of a `manual` runner, registered and started with bin/runner-local.
+  # Only with the `runners` profile, so `make up` does not start it. It shares
+  # web's network namespace to reach the runner gateway on 127.0.0.1, and drives
+  # this machine's Docker daemon, where it starts the session containers.
+  runner-local:
+    profiles: [ runners ]
+    build:
+      context: ./runner
+      dockerfile: ../docker/runner-local/Dockerfile
+    image: aixle/runner-local:dev
+    network_mode: "service:web"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - runner_local_state:/var/lib/aixle-runner
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: on-failure:5
+    attach: false
+
   otlp-ingest:
     build:
       context: ./docker/otlp-ingest
@@ -230,6 +251,7 @@ services:
 volumes:
   pg_data:
   redis_data:
+  runner_local_state:
 
 networks:
   # Fixed, not Compose-derived (docs/project/worktree-stack.md).

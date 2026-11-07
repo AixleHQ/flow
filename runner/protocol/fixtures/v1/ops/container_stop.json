@@ -6,22 +6,25 @@
       "as": "m"
     },
     {
-      "given": "op_enqueued",
+      "given": "session_on_machine",
       "machine": "m",
-      "as": "stopped",
-      "op": "container.stop",
-      "payload": {
-        "session_id": 123
-      }
+      "as": "s"
     },
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
+      "as": "stopped",
+      "op": "container.stop",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
       "as": "gone",
       "op": "container.stop",
-      "payload": {
-        "session_id": 123
-      }
+      "payload": {}
     },
     {
       "request": {
@@ -41,12 +44,13 @@
                 "$var": "stopped.sequence"
               },
               "op": "container.stop",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "stopped.deadline_at"
               },
-              "payload": {
-                "session_id": 123
-              }
+              "payload": {}
             },
             {
               "id": {
@@ -56,12 +60,13 @@
                 "$var": "gone.sequence"
               },
               "op": "container.stop",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "gone.deadline_at"
               },
-              "payload": {
-                "session_id": 123
-              }
+              "payload": {}
             }
           ]
         }

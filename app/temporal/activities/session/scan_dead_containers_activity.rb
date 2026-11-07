@@ -64,7 +64,7 @@ module Activities
 
         candidate_sessions.find_each do |session|
           checked += 1
-          status = runtime.container_status(session.container_id)
+          status = runtime_for(session).container_status(session.container_id)
 
           if DEAD_STATUSES.include?(status)
             failed += 1 if confirm_or_mark(session, status)
@@ -109,7 +109,7 @@ module Activities
       def failure_message(session, status)
         return MESSAGES.fetch(status) unless status == :terminated
 
-        describe_termination(runtime.container_termination(session.container_id)) || MESSAGES.fetch(status)
+        describe_termination(runtime_for(session).container_termination(session.container_id)) || MESSAGES.fetch(status)
       end
 
       def describe_termination(termination)
@@ -153,7 +153,11 @@ module Activities
         session.remove_jsonb_keys!(:metadata, MARKER_KEY)
       end
 
-      def runtime
+      # The session's runtime (ContainerRuntime.for_session): its runner's for a
+      # session on an external runner. Every hosted session shares one.
+      def runtime_for(session)
+        return ContainerRuntime.for_session(session) if session.runner_id
+
         @runtime ||= ContainerRuntime.build
       end
     end

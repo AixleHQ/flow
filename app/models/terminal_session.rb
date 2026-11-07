@@ -63,6 +63,11 @@ class TerminalSession < ApplicationRecord
   # create a per-company (billed) agent credential — see SessionCompany.
   belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
+  # The runner machine the session runs on, assigned by Runners::Machines when
+  # its first runtime phase needs one (DESIGN.md §2.4). Kept after the session,
+  # as the record of where it ran.
+  belongs_to :runner_environment, optional: true
+  validate :runner_environment_is_the_runners, if: -> { runner_environment_id && will_save_change_to_runner_environment_id? }
   has_one :usage_statistic, dependent: :destroy
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
@@ -339,6 +344,10 @@ class TerminalSession < ApplicationRecord
 
   def company_is_project_company
     errors.add(:company_id, "must be the project's company") if company_id != project.company_id
+  end
+
+  def runner_environment_is_the_runners
+    errors.add(:runner_environment, "must be a machine of the session's runner") if runner_environment&.runner_id != runner_id
   end
 
   # == State machine callbacks ==

@@ -20,7 +20,7 @@ module Activities
         skipped    = 0
 
         candidate_sessions.find_each do |session|
-          watchdog = Sessions::NoOutputWatchdog.new(session, runtime: runtime)
+          watchdog = Sessions::NoOutputWatchdog.new(session, runtime: runtime_for(session))
           unless watchdog.stale?
             skipped += 1
             next
@@ -49,7 +49,11 @@ module Activities
           .where.not(id: TerminalSession.auth_paused.select(:id))
       end
 
-      def runtime
+      # The session's runtime (ContainerRuntime.for_session): its runner's for a
+      # session on an external runner. Every hosted session shares one.
+      def runtime_for(session)
+        return ContainerRuntime.for_session(session) if session.runner_id
+
         @runtime ||= ContainerRuntime.build
       end
     end

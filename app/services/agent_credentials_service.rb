@@ -24,8 +24,11 @@ class AgentCredentialsService
 
   attr_reader :adapter, :agent_type
 
-  def initialize(agent_type)
+  # `runtime` writes into a session whose runtime is not the hosted one
+  # (ContainerRuntime.for_session).
+  def initialize(agent_type, runtime: nil)
     @agent_type = agent_type
+    @runtime = runtime
     adapter_class = ADAPTERS[agent_type]
     raise ArgumentError, "Unknown agent type: #{agent_type}" unless adapter_class
 
@@ -100,8 +103,8 @@ class AgentCredentialsService
   # --- Class methods ---
 
   class << self
-    def for(agent_type)
-      new(agent_type)
+    def for(agent_type, runtime: nil)
+      new(agent_type, runtime: runtime)
     end
 
     def supported_agents

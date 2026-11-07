@@ -23,6 +23,16 @@ schedules:
     enabled: true
     overlap: skip
 
+  # The external runners' op queue (Runners::Operations): expires ops past their
+  # deadline that no runner answered, `delivered` ones included, and prunes
+  # finished ops after seven days, keeping each machine's newest. An op someone
+  # waits for is expired by that wait itself, so the cadence only bounds how
+  # long an abandoned op stays deliverable.
+  - workflow: runner_operations_sweep_workflow
+    cron: "*/5 * * * *"
+    enabled: true
+    overlap: skip
+
   - workflow: quota_error_scan_workflow
     cron: "* * * * *"
     enabled: true

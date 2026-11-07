@@ -260,7 +260,7 @@ module Sessions
     end
 
     def container_runtime
-      @runtime ||= ContainerRuntime.build
+      @runtime ||= ContainerRuntime.for_session(session)
     end
 
     def log(level, message)

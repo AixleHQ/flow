@@ -37,7 +37,7 @@ module Activities
           terminal = live_terminal_output(session)
           message = blocker_message_for(session, terminal)
           if message.blank?
-            auth_paused += 1 if Sessions::AuthPause.new(session, runtime: runtime).observe(terminal) == :paused
+            auth_paused += 1 if Sessions::AuthPause.new(session, runtime: runtime_for(session)).observe(terminal) == :paused
             next
           end
 
@@ -105,18 +105,18 @@ module Activities
       # Sessions::AuthPause#quiet?: the mtime counts only from a read that also
       # captured the pane, never from a container whose tmux is gone.
       def pane_quiet?(session)
-        tail = Sessions::LiveLogReader.new(session, runtime: runtime).tail(lines: 1)
+        tail = Sessions::LiveLogReader.new(session, runtime: runtime_for(session)).tail(lines: 1)
         last_output_at = tail.ok? ? tail.last_output_at : nil
         last_output_at.present? && last_output_at < QuotaErrorDetector::QUIET_BEFORE_FAIL.ago
       end
 
       def live_terminal_output(session)
-        container = runtime.resolve_container(session.container_id)
+        container = runtime_for(session).resolve_container(session.container_id)
         return "" unless container
 
         # exec! (not exec) so a destroyed pod arrives as ContainerUnreachableError
         # instead of an exit code of 1 that looks like an ordinary command failure.
-        runtime.exec!(
+        runtime_for(session).exec!(
           container,
           [ "sh", "-c", "tmux capture-pane -t agent -p -S -1000 2>/dev/null || true" ],
           stdout: true, stderr: true
@@ -128,7 +128,11 @@ module Activities
         ""
       end
 
-      def runtime
+      # The session's runtime (ContainerRuntime.for_session): its runner's for a
+      # session on an external runner. Every hosted session shares one.
+      def runtime_for(session)
+        return ContainerRuntime.for_session(session) if session.runner_id
+
         @runtime ||= ContainerRuntime.build
       end
     end

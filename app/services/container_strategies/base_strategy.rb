@@ -194,11 +194,14 @@ module ContainerStrategies
     protected
 
     def resolve_container(container_id)
-      ContainerRuntime.build.resolve_container(container_id)
+      runtime.resolve_container(container_id)
     end
 
+    # The session's own runtime: its runner's for a session on an external
+    # runner, the hosted one otherwise (ContainerRuntime.for_session). A tool
+    # container names no session and is hosted.
     def runtime
-      @runtime ||= ContainerRuntime.build
+      @runtime ||= ContainerRuntime.for_session(current_terminal_session)
     end
 
     def runtime_container_id(container)

@@ -6,14 +6,29 @@
       "as": "m"
     },
     {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s2"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s3"
+    },
+    {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "started",
       "op": "container.start",
       "payload": {
         "image": "ghcr.io/aixlehq/flow-claude-code",
         "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 123,
         "env": {
           "TTYD_CMD": "claude --dangerously-skip-permissions",
           "ROUTE_TOKEN": "rt-1"
@@ -45,23 +60,23 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s2",
       "as": "exists",
       "op": "container.start",
       "payload": {
         "image": "ghcr.io/aixlehq/flow-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 124
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
     },
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s3",
       "as": "forbidden",
       "op": "container.start",
       "payload": {
         "image": "ghcr.io/aixlehq/flow-claude-code",
         "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "session_id": 125,
         "mounts": [
           {
             "type": "bind",
@@ -89,13 +104,15 @@
                 "$var": "started.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "started.deadline_at"
               },
               "payload": {
                 "image": "ghcr.io/aixlehq/flow-claude-code",
                 "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 123,
                 "env": {
                   "TTYD_CMD": "claude --dangerously-skip-permissions",
                   "ROUTE_TOKEN": "rt-1"
@@ -132,13 +149,15 @@
                 "$var": "exists.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s2.id"
+              },
               "deadline_at": {
                 "$var": "exists.deadline_at"
               },
               "payload": {
                 "image": "ghcr.io/aixlehq/flow-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 124
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
               }
             },
             {
@@ -149,13 +168,15 @@
                 "$var": "forbidden.sequence"
               },
               "op": "container.start",
+              "session_id": {
+                "$var": "s3.id"
+              },
               "deadline_at": {
                 "$var": "forbidden.deadline_at"
               },
               "payload": {
                 "image": "ghcr.io/aixlehq/flow-claude-code",
                 "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-                "session_id": 125,
                 "mounts": [
                   {
                     "type": "bind",

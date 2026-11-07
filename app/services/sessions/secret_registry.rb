@@ -86,7 +86,7 @@ module Sessions
     end
 
     def container_runtime
-      @container_runtime ||= runtime || ContainerRuntime.build
+      @container_runtime ||= runtime || ContainerRuntime.for_session(session)
     end
   end
 end

@@ -97,7 +97,7 @@ module Activities
       end
 
       def cleanup_session(session)
-        container = session.container_id.present? ? runtime.resolve_container(session.container_id) : nil
+        container = session.container_id.present? ? runtime_for(session).resolve_container(session.container_id) : nil
 
         if container
           full_cleanup(session, container)
@@ -132,7 +132,11 @@ module Activities
         log(:warn, "Failed to cancel workflow for session #{session.id}: #{e.message}")
       end
 
-      def runtime
+      # The session's runtime (ContainerRuntime.for_session): its runner's for a
+      # session on an external runner. Every hosted session shares one.
+      def runtime_for(session)
+        return ContainerRuntime.for_session(session) if session.runner_id
+
         @runtime ||= ContainerRuntime.build
       end
     end

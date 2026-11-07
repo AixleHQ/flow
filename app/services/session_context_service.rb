@@ -112,6 +112,8 @@ class SessionContextService
     #   credential was injected, nil when none was (mirrors #write_to_container,
     #   which itself only ever returns true or raises)
     def assemble_session_context(container_id, session, credential: nil)
+      return assemble_on_runner(container_id, session, credential: credential) if runner_session?(session)
+
       context_log = ContextLog.new(session)
 
       # Resolve MCP server names early — needed for pre-approving servers
@@ -184,7 +186,7 @@ class SessionContextService
 
     def inject_credential(container_id, credential, workflow_config)
       Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
-      credential.write_to_container(container_id, workflow_config)
+      credential.write_to_container(container_id, workflow_config, runtime: Thread.current[:session_context_runner_runtime])
     end
 
     def credential_workflow_config(session, credential, mcp_server_names = nil)
@@ -900,8 +902,22 @@ class SessionContextService
       :unknown
     end
 
+    # A runner session's context is written through its runner's runtime, for
+    # the one assembly (#assemble_on_runner); hosted sessions keep the runtime
+    # this thread built first.
     def runtime
-      Thread.current[:session_context_runtime] ||= ContainerRuntime.build
+      Thread.current[:session_context_runner_runtime] || (Thread.current[:session_context_runtime] ||= ContainerRuntime.build)
+    end
+
+    def runner_session?(session)
+      session.runner_id.present? && Thread.current[:session_context_runner_runtime].nil?
+    end
+
+    def assemble_on_runner(container_id, session, credential:)
+      Thread.current[:session_context_runner_runtime] = ContainerRuntime.for_session(session)
+      assemble_session_context(container_id, session, credential: credential)
+    ensure
+      Thread.current[:session_context_runner_runtime] = nil
     end
   end
 end

@@ -5,6 +5,11 @@
 # through the runner gateway (§5.2), which creates the row `registered`;
 # unregistering marks it `gone`. The rest of the §5.2 state machine arrives with
 # Runners::Allocator.
+#
+# `current_session` is the session that holds the machine (Runners::Machines):
+# a `registered` machine without one is free. It is cleared once the machine
+# has been reset after the session, and kept when the reset fails, which keeps
+# the machine out of rotation until it is returned to service (task 11).
 class RunnerEnvironment < ApplicationRecord
   extend Enumerize
 
@@ -14,7 +19,10 @@ class RunnerEnvironment < ApplicationRecord
 
   belongs_to :runner
   belongs_to :company
+  belongs_to :current_session, class_name: "TerminalSession", optional: true
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
+
+  scope :free, -> { where(state: "registered", current_session_id: nil) }
 
   before_validation { self.company_id ||= runner&.company_id }
 

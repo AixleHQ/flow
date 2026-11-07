@@ -34,6 +34,23 @@ func OpDeadline(ctx context.Context) (time.Time, bool) {
 	return d, ok && !d.IsZero()
 }
 
+type sessionKey struct{}
+
+// WithOpSession carries an op's `session_id` to its handler. A nil id, the
+// envelope of an environment op, carries nothing.
+func WithOpSession(ctx context.Context, sessionID *int64) context.Context {
+	if sessionID == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, sessionKey{}, *sessionID)
+}
+
+// OpSession is the `session_id` of the op a handler runs, when its envelope has one.
+func OpSession(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(sessionKey{}).(int64)
+	return id, ok
+}
+
 // Environment is the machine as register returns it (§5.1). The runner does not
 // parse its id or key.
 type Environment struct {
@@ -66,11 +83,13 @@ type Registration struct {
 	TokenPair
 }
 
-// Op is one op of a GET ops answer (§6).
+// Op is one op of a GET ops answer (§6). SessionID is set on a session op and
+// absent on an environment op.
 type Op struct {
 	ID         int64           `json:"id"`
 	Sequence   int64           `json:"sequence"`
 	Op         string          `json:"op"`
+	SessionID  *int64          `json:"session_id,omitempty"`
 	DeadlineAt time.Time       `json:"deadline_at"`
 	Payload    json.RawMessage `json:"payload"`
 }

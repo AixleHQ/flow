@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# The dev `local` adapter (docs/design/agent-runtimes/DESIGN.md §12.2): a host
+# runner in a container on the Compose stack, with this machine's Docker socket,
+# registered as a machine of a `manual` runner. The whole runner path then runs
+# in Docker, with no separate machine. Development only.
+#
+#   bin/runner-local register <runner id>   mint a registration token, configure, start
+#   bin/runner-local unregister             stop the runner and unregister the machine
+#   bin/runner-local logs                   follow the runner's log
+#
+# The stack must be up (`make up`), and the runner a live `manual` runner of a
+# company with `external_runners` on. The runner shares the web container's
+# network namespace, so it reaches the runner gateway on 127.0.0.1, the only
+# address aixle-runner accepts plain http on.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+compose=(docker compose --profile runners)
+gateway="http://127.0.0.1:${RUNNER_GATEWAY_PORT:-4003}"
+
+case "${1:-}" in
+  register)
+    runner_id="${2:?usage: bin/runner-local register <runner id>}"
+    # Printed once, straight into configure; nothing writes it down.
+    token=$(docker compose exec -T web bin/rails runner \
+      'runner = Runner.find(ARGV.first); abort("runner #{runner.id} is not a manual runner") unless runner.manual?; print Runners::Credentials.mint_registration!(runner)' \
+      "$runner_id")
+    "${compose[@]}" build runner-local
+    "${compose[@]}" run --rm -T runner-local configure --url "$gateway" --token "$token" \
+      --name "${RUNNER_LOCAL_NAME:-local}"
+    "${compose[@]}" up -d runner-local
+    ;;
+  unregister)
+    "${compose[@]}" stop runner-local
+    "${compose[@]}" run --rm -T runner-local unregister
+    ;;
+  logs)
+    "${compose[@]}" logs -f runner-local
+    ;;
+  *)
+    echo "usage: bin/runner-local register <runner id> | unregister | logs" >&2
+    exit 2
+    ;;
+esac

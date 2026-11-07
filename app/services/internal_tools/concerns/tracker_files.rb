@@ -58,7 +58,7 @@ module InternalTools
         return [ nil, error("No container is running to read files from") ] if container.blank?
 
         path = entry[:file_path].to_s
-        runtime = ContainerRuntime.build
+        runtime = ContainerRuntime.for_session(session)
         out, _err, code = runtime.exec(container, [ "stat", "-c", "%s", path ])
         size = Array(out).join.strip
         return [ nil, error("files[#{index}] file not found in the container: #{path}") ] unless code.to_i.zero? && size.match?(/\A\d+\z/)

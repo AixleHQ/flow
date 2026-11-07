@@ -28,7 +28,7 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
     assert_equal "External runners are not enabled for this company.", flash[:alert]
   end
 
-  test "with the flag the drawer's pick is frozen on the run, which fails at launch" do
+  test "with the flag the drawer's pick is frozen on the run, which fails at launch without a machine" do
     enable_runners
 
     post company_project_workflow_runs_path(@project), params: {
@@ -37,7 +37,7 @@ class RunnerSelectionTest < ActionDispatch::IntegrationTest
 
     run = WorkflowRun.sole
     assert_redirected_to company_project_workflow_run_path(@project, run)
-    assert_equal [ @runner.id, "failed", "runner_execution_not_enabled" ], [ run.runner_id, run.state, run.failure_reason ]
+    assert_equal [ @runner.id, "failed", "runner_unreachable" ], [ run.runner_id, run.state, run.failure_reason ]
   end
 
   test "a drawer that sends no pick runs on the workflow's runner, and a null pick is hosted" do

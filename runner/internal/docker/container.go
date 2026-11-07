@@ -43,12 +43,12 @@ const WorkspaceTarget = "/workspace"
 // kills the container.
 const StopTimeout = 10
 
-// ContainerStartPayload is the payload of `container.start`.
+// ContainerStartPayload is the payload of `container.start`. The session is the
+// envelope's `session_id`, not a payload field.
 type ContainerStartPayload struct {
-	Image     string            `json:"image"`
-	Digest    string            `json:"digest"`
-	SessionID int64             `json:"session_id"`
-	Env       map[string]string `json:"env"`
+	Image  string            `json:"image"`
+	Digest string            `json:"digest"`
+	Env    map[string]string `json:"env"`
 	// WorkspaceVolume mounts `aixle-ws-<key>` at /workspace. Absent means true.
 	WorkspaceVolume     *bool      `json:"workspace_volume"`
 	Mounts              []Mount    `json:"mounts"`
@@ -104,13 +104,6 @@ func validTarget(field, p string) *protocol.Result {
 	return nil
 }
 
-func validSessionID(id int64) *protocol.Result {
-	if id <= 0 {
-		return invalid("`session_id` must be a positive integer, got %d", id)
-	}
-	return nil
-}
-
 // within says whether p is dir or inside it.
 func within(p, dir string) bool {
 	return p == dir || dir == "/" || strings.HasPrefix(p, dir+"/")
@@ -153,13 +146,10 @@ func (e *Environment) checkBind(source string) *protocol.Result {
 	return nil
 }
 
-func (e *Environment) containerSpec(p ContainerStartPayload) (*container.Config, *container.HostConfig, []string, *protocol.Result) {
+func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*container.Config, *container.HostConfig, []string, *protocol.Result) {
 	ref, err := ImageEnsurePayload{Image: p.Image, Digest: p.Digest}.Reference()
 	if err != nil {
 		return nil, nil, nil, invalid("%s", err.Error())
-	}
-	if r := validSessionID(p.SessionID); r != nil {
-		return nil, nil, nil, r
 	}
 
 	env := make([]string, 0, len(p.Env))
@@ -254,7 +244,7 @@ func (e *Environment) containerSpec(p ContainerStartPayload) (*container.Config,
 		Env:   env,
 		Labels: map[string]string{
 			LabelEnvironment: e.Key,
-			LabelSession:     strconv.FormatInt(p.SessionID, 10),
+			LabelSession:     strconv.FormatInt(sessionID, 10),
 		},
 	}
 	return config, host, volumes, nil
@@ -262,18 +252,23 @@ func (e *Environment) containerSpec(p ContainerStartPayload) (*container.Config,
 
 // ContainerStart is `container.start`: it creates and starts the session's agent
 // container from the image pinned by digest, running the image's own entrypoint
-// and command, as a hosted pod does. Nothing of the runner goes into it: no
-// binary, no socket, no token and nothing of the state directory.
+// and command, as a hosted pod does. The container is named and labelled with
+// the envelope's session. Nothing of the runner goes into it: no binary, no
+// socket, no token and nothing of the state directory.
 func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) protocol.Result {
+	sessionID, r := opSession(ctx)
+	if r != nil {
+		return *r
+	}
 	var p ContainerStartPayload
 	if r := decodePayload(raw, &p, "a container.start payload"); r != nil {
 		return *r
 	}
-	config, host, volumes, r := e.containerSpec(p)
+	config, host, volumes, r := e.containerSpec(p, sessionID)
 	if r != nil {
 		return *r
 	}
-	name := e.ContainerName(p.SessionID)
+	name := e.ContainerName(sessionID)
 
 	existing, err := e.containers(ctx)
 	if err != nil {
@@ -329,25 +324,25 @@ func containerLabel(c container.Summary) string {
 	return c.ID
 }
 
-// ContainerStopPayload is the payload of `container.stop`.
-type ContainerStopPayload struct {
-	SessionID int64 `json:"session_id"`
-}
+// ContainerStopPayload is the payload of `container.stop`: `{}`. The session is
+// the envelope's `session_id`.
+type ContainerStopPayload struct{}
 
-// ContainerStop is `container.stop`: it stops the session's container, giving the
-// entrypoint StopTimeout seconds to shut down, and removes it with its anonymous
-// volumes. The named volumes stay. A container that is already gone is not an
-// error. The name alone does not prove the container is the session's: one
+// ContainerStop is `container.stop`: it stops the envelope's session's container,
+// giving the entrypoint StopTimeout seconds to shut down, and removes it with its
+// anonymous volumes. The named volumes stay. A container that is already gone is
+// not an error. The name alone does not prove the container is the session's: one
 // without the environment's and the session's labels is refused and not touched.
 func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) protocol.Result {
+	sessionID, r := opSession(ctx)
+	if r != nil {
+		return *r
+	}
 	var p ContainerStopPayload
-	if r := decodePayload(raw, &p, "{session_id}"); r != nil {
+	if r := decodePayload(raw, &p, "{}"); r != nil {
 		return *r
 	}
-	if r := validSessionID(p.SessionID); r != nil {
-		return *r
-	}
-	name := e.ContainerName(p.SessionID)
+	name := e.ContainerName(sessionID)
 	inspected, err := e.API.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
 	if cerrdefs.IsNotFound(err) {
 		return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"removed": false}}
@@ -359,7 +354,7 @@ func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) pr
 	if inspected.Container.Config != nil {
 		labels = inspected.Container.Config.Labels
 	}
-	session := strconv.FormatInt(p.SessionID, 10)
+	session := strconv.FormatInt(sessionID, 10)
 	if labels[LabelEnvironment] != e.Key || labels[LabelSession] != session {
 		return protocol.ErrorResult(ClassContainerNotOwned, fmt.Sprintf(
 			"the container %s does not carry the labels %s=%s and %s=%s, so it is not this session's; it was not stopped or removed",

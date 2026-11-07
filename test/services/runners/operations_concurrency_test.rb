@@ -98,7 +98,7 @@ class Runners::OperationsConcurrencyTest < ActiveSupport::TestCase
   end
 
   def enqueue
-    Runners::Operations.enqueue!(@environment, op: "exec", payload: { "cmd" => [ "true" ] }, deadline_at: 1.minute.from_now)
+    Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now)
   end
 
   def on_own_connection(&)
