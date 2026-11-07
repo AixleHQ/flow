@@ -7,12 +7,7 @@ require "test_helper"
 # the envelope, and an op that fails answers as the hosted runtime answers.
 # FakeHostRunner (test/support/fakes/fake_host_runner.rb) answers the ops.
 class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
-  DIGEST = "sha256:#{'a' * 64}".freeze
-
-  # Pins every image to DIGEST, as the registry would.
-  class FixedPin
-    def call(reference) = { "image" => reference.to_s.split(":").first, "digest" => DIGEST }
-  end
+  IMAGE = "ghcr.io/aixlehq/flow-claude-code:latest"
 
   setup do
     @runner = create(:runner, :manual, config: { "container" => { "network" => "host", "workspace_volume" => false,
@@ -21,24 +16,34 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @environment = create(:runner_environment, runner: @runner, key: "aixle-r9-0a1b2c3d")
     @session = create(:runner_session, environment: @environment, runner_environment: nil)
     @host_runner = ContainerRuntime::FakeHostRunner.new(@environment)
-    @runtime = ContainerRuntime::RunnerRuntime.new(@session, image_pin: FixedPin.new)
+    @runtime = ContainerRuntime::RunnerRuntime.new(@session)
   end
 
   teardown { @host_runner.stop }
 
-  test "pull_image takes a free machine and ensures the image pinned by digest, as an environment op" do
-    result = @runtime.pull_image("ghcr.io/aixlehq/flow-claude-code:latest")
+  test "pull_image takes a free machine and ensures the image as it was given, as an environment op" do
+    result = @runtime.pull_image(IMAGE)
 
-    assert_equal({ status: :pulled, image: "ghcr.io/aixlehq/flow-claude-code:latest", duration_seconds: 0 }, result)
+    assert_equal({ status: :pulled, image: IMAGE, duration_seconds: 0 }, result)
     assert_equal @environment.id, @session.reload.runner_environment_id
     assert_equal @session.id, @environment.reload.current_session_id
-    assert_equal [ { op: "image.ensure", session_id: nil,
-                     payload: { "image" => "ghcr.io/aixlehq/flow-claude-code", "digest" => DIGEST } } ], @host_runner.operations
+    assert_equal [ { op: "image.ensure", session_id: nil, payload: { "image" => IMAGE } } ], @host_runner.operations
+    assert @runtime.identity_before_pull?
+    assert_equal "runner-session-#{@session.id}", @runtime.session_identity(@session)
+  end
+
+  test "the runner's image override is the image pulled and started" do
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "registry.internal/agents/claude:7" }))
+
+    @runtime.pull_image(IMAGE)
+    @runtime.create_container(image: IMAGE, env_vars: [], host_config: {})
+
+    assert_equal [ "registry.internal/agents/claude:7" ] * 2, @host_runner.operations.map { |op| op[:payload]["image"] }
   end
 
   test "create_container starts the container with the strategy's env and the runner's container options" do
-    @runtime.pull_image("ghcr.io/aixlehq/flow-claude-code:latest")
-    spec = { image: "ghcr.io/aixlehq/flow-claude-code:latest", env_vars: [ "SESSION_ID=#{@session.id}", "TTYD_CMD=bash", "A=b=c" ],
+    @runtime.pull_image(IMAGE)
+    spec = { image: IMAGE, env_vars: [ "SESSION_ID=#{@session.id}", "TTYD_CMD=bash", "A=b=c" ],
              host_config: { "Memory" => 4.gigabytes, "CpuPeriod" => 100_000, "CpuQuota" => 200_000, "PidsLimit" => 4096 },
              privilege_escalation: false }
 
@@ -49,7 +54,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal "container.start", start[:op]
     assert_equal @session.id, start[:session_id]
     assert_equal({
-      "image" => "ghcr.io/aixlehq/flow-claude-code", "digest" => DIGEST,
+      "image" => IMAGE,
       "env" => { "SESSION_ID" => @session.id.to_s, "TTYD_CMD" => "bash", "A" => "b=c" },
       "workspace_volume" => false,
       "mounts" => [ { "type" => "cache", "name" => "pip", "target" => "/home/agent/.cache/pip" } ],
@@ -115,7 +120,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert @runtime.session_absent?(nil)
   end
 
-  test "a failed reset keeps the machine held, with the reason, and the session's cleanup is over" do
+  test "a failed reset moves the machine to failed, with the reason, and the session's cleanup is over" do
     start_session
     @host_runner.answer_with("env.reset", "status" => "error",
                                           "error" => { "class" => "reset_failed", "message" => "volume aixle-ws-x is in use" })
@@ -123,19 +128,49 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @runtime.cleanup_session(nil)
 
     @environment.reload
-    assert_equal @session.id, @environment.current_session_id
-    assert_equal "env.reset failed: reset_failed: volume aixle-ws-x is in use", @environment.state_reason
+    assert_equal "failed", @environment.state
+    assert_nil @environment.current_session_id, "the session no longer holds it"
+    assert_equal "env.reset failed after session #{@session.id}: reset_failed: volume aixle-ws-x is in use", @environment.state_reason
     assert @runtime.session_absent?(nil)
+    assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(another_session) }
   end
 
-  test "an image the platform cannot pin fails the pull with what to do" do
-    pin = Object.new
-    pin.define_singleton_method(:call) { |_| raise Runners::ImagePin::Error, "the registry ghcr.io answered 404" }
-    runtime = ContainerRuntime::RunnerRuntime.new(@session, image_pin: pin)
+  test "a failed container.stop is logged and the reset still runs" do
+    start_session
+    @host_runner.answer_with("container.stop", "status" => "error",
+                                               "error" => { "class" => "docker_error", "message" => "the daemon refused" })
 
-    error = assert_raises(ContainerRuntime::ImagePullError) { runtime.pull_image("ghcr.io/aixlehq/nope:1") }
+    @runtime.cleanup_session(nil)
 
-    assert_match(/Could not pin ghcr.io\/aixlehq\/nope:1 to a digest: the registry ghcr.io answered 404/, error.message)
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_nil @environment.reload.current_session_id
+    assert_equal "registered", @environment.state
+  end
+
+  test "a session that holds no machine sends nothing: its ops answer as a container that is not there" do
+    start_session
+    @runtime.cleanup_session(nil)
+    @host_runner.operations.clear
+
+    assert_raises(ContainerRuntime::ContainerUnreachableError) { @runtime.exec!("c", [ "true" ]) }
+    assert_equal 1, @runtime.exec("c", [ "true" ]).last
+    assert_equal :missing, @runtime.container_status("c")
+    assert_nil @runtime.read_file("c", "/tmp/x")
+    assert_not @runtime.write_file("c", "/tmp/x", "y")
+    assert_nothing_raised { @runtime.stop_container("c") }
+    @runtime.cleanup_session(nil)
+
+    assert_empty @host_runner.operations, "a late op of a finished session never reaches the machine"
+  end
+
+  test "an image.ensure that fails fails the pull with the runner's words" do
+    @host_runner.answer_with("image.ensure", "status" => "error",
+                                             "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
+
+    error = assert_raises(ContainerRuntime::ImagePullError) { @runtime.pull_image("ghcr.io/aixlehq/nope:1") }
+
+    assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: image.ensure failed: image_pull_failed: pull access denied}, error.message)
+    assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
   end
 
   test "a capped runtime, as the scanners use, gives every op that cap at most" do
@@ -147,14 +182,27 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_operator RunnerOperation.order(:id).last.deadline_at, :<=, 16.seconds.from_now
   end
 
-  test "an op's deadline is the end of the activity that sends it" do
+  test "an op's deadline is the end of the activity that sends it, less the margin" do
     start_session
-    info = Temporalio::Testing::ActivityEnvironment.default_info.with(started_time: Time.current, start_to_close_timeout: 20.0)
-    finished = Temporalio::Testing::ActivityEnvironment.new(info: info, activity_executors: TemporalActivityHelper::EXECUTORS)
-                                                       .run(DeadlineProbe, @runtime)
+    finished = in_activity(20.0, DeadlineProbe)
 
-    assert_operator finished, :<=, 21.seconds.from_now
-    assert_operator finished, :>=, 15.seconds.from_now
+    assert_operator finished, :<=, (21 - ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN).seconds.from_now
+    assert_operator finished, :>=, (14 - ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN).seconds.from_now
+  end
+
+  # The wait for an op ends at its deadline, inside the activity, so an
+  # unanswered reset reaches the machine's failure before the activity ends.
+  test "cleanup inside an activity with an unanswered env.reset ends with the machine failed and the reason" do
+    start_session
+    @host_runner.answer_with("env.reset", :none)
+
+    in_activity(ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN + 1.0, CleanupProbe)
+
+    @environment.reload
+    assert_equal "failed", @environment.state
+    assert_nil @environment.current_session_id
+    assert_equal "env.reset failed after session #{@session.id}: the runner did not answer", @environment.state_reason
+    assert RunnerOperation.find_by(op: "env.reset").expired?
   end
 
   # Sends one op from inside an activity and reports its deadline.
@@ -165,10 +213,27 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     end
   end
 
+  class CleanupProbe < Temporalio::Activity::Definition
+    def execute(runtime)
+      runtime.cleanup_session(nil)
+      nil
+    end
+  end
+
   private
 
   def start_session
-    @runtime.pull_image("ghcr.io/aixlehq/flow-claude-code:latest")
-    @runtime.create_container(image: "ghcr.io/aixlehq/flow-claude-code:latest", env_vars: [], host_config: {})
+    @runtime.pull_image(IMAGE)
+    @runtime.create_container(image: IMAGE, env_vars: [], host_config: {})
+  end
+
+  def another_session
+    create(:runner_session, environment: @environment, runner_environment: nil)
+  end
+
+  def in_activity(timeout, activity)
+    info = Temporalio::Testing::ActivityEnvironment.default_info.with(started_time: Time.current, start_to_close_timeout: timeout)
+    Temporalio::Testing::ActivityEnvironment.new(info: info, activity_executors: TemporalActivityHelper::EXECUTORS)
+                                            .run(activity, @runtime)
   end
 end

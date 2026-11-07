@@ -307,7 +307,7 @@ The full touch-point list, frontend included, is in the Kiro CLI research report
 
 Runtime selected by `Settings.container_runtime` (`CONTAINER_RUNTIME`: `kubernetes` or `k8s` selects Kubernetes, anything else Docker). Docker is the local-development runtime; production runs Kubernetes.
 
-Both runtimes' `exec` return `[stdout, stderr, exit_code]` with stdout and stderr as arrays of strings. Use `exec!` where "the container is gone" must not read as "the command failed": on Kubernetes it raises `ContainerRuntime::ContainerUnreachableError` instead of returning exit code 1 (Docker answers as `exec` does).
+Both runtimes' `exec` return `[stdout, stderr, exit_code]` with stdout and stderr as arrays of strings. Use `exec!` where "the container is gone" must not read as "the command failed": it raises `ContainerUnreachableError` instead of returning exit code 1, on Kubernetes for a pod it cannot reach and on Docker for a container the daemon does not know. A session on an external runner gets `ContainerRuntime::RunnerRuntime` instead (`ContainerRuntime.for_session`), which answers the same way.
 
 ---
 

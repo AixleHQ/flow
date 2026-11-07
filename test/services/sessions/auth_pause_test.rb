@@ -187,5 +187,29 @@ module Sessions
       refute AuthPause.new(@session, runtime: @runtime).resume!
       refute_includes @runtime.execs, RESUME_PROMPT_TYPED
     end
+
+    # A heal hands the grant to every holder of the credential, each through its
+    # own runtime: the paused session's runtime is bound to that one session.
+    test "a heal writes a runner holder through its machine and a hosted holder through the hosted runtime" do
+      runner = create(:runner, :manual, company: @company, created_by: @user)
+      machine = create(:runner_environment, runner: runner)
+      runner_holder = create(:runner_session, environment: machine, user: @user, company: @company, project: @project,
+                                              agent_type: "claude_code", state: "ready", started_at: 1.hour.ago,
+                                              container_id: "aixle-#{machine.key}-runner")
+      machine.update!(current_session: runner_holder)
+      host_runner = ContainerRuntime::FakeHostRunner.new(machine)
+      host_runner.machine.start(runner_holder.id)
+
+      assert_equal :resumed, observe
+
+      assert_equal "rt-1", delivered_refresh_token, "the paused hosted session took it through the hosted runtime"
+      write = host_runner.operations.find { |op| op[:op] == "write_file" }
+      assert write, "the runner holder was written through its machine: #{host_runner.ops.inspect}"
+      assert_equal runner_holder.id, write[:session_id]
+      written = host_runner.machine.container.files["/home/claude/.claude/.credentials.json"]
+      assert_equal "rt-1", JSON.parse(written).dig("claudeAiOauth", "refreshToken")
+    ensure
+      host_runner&.stop
+    end
   end
 end

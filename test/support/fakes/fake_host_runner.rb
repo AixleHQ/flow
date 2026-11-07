@@ -61,7 +61,7 @@ module ContainerRuntime
       case op
       when "image.ensure" then ok("data" => { "pulled" => !machine.image?(payload), "duration_ms" => 0 }).tap { machine.pull(payload) }
       when "container.start" then container_start(payload, session_id)
-      when "container.stop" then ok("data" => { "removed" => machine.stop(session_id) })
+      when "container.stop" then container_stop(session_id)
       when "env.reset" then ok("data" => { "removed_containers" => machine.reset, "removed_volumes" => [] })
       when "env.scrub" then ok("data" => { "removed_containers" => machine.reset, "outputs_emptied" => false })
       when "status" then status(session_id)
@@ -70,10 +70,20 @@ module ContainerRuntime
     end
 
     def container_start(payload, session_id)
-      return error("container_exists", "the environment already has #{machine.container.name}") if machine.container
+      container = machine.container
+      return mismatch(container, session_id) if container&.session_id && container.session_id != session_id
+      return error("container_exists", "the environment already has #{container.name}") if container
 
       container = machine.start(session_id, payload)
       ok("data" => { "container_id" => container.id, "name" => container.name })
+    end
+
+    def container_stop(session_id)
+      container = machine.container
+      return error("no_session_container", "the environment has no session container") if container.nil?
+      return mismatch(container, session_id) if container.session_id != session_id
+
+      ok("data" => { "removed" => machine.stop(session_id) })
     end
 
     def status(session_id)
@@ -149,8 +159,8 @@ module ContainerRuntime
       @on_exec = block
     end
 
-    def image?(payload) = images.include?(payload.values_at("image", "digest"))
-    def pull(payload) = images << payload.values_at("image", "digest")
+    def image?(payload) = images.include?(payload["image"])
+    def pull(payload) = images << payload["image"]
 
     def start(session_id, payload = {}, name: "aixle-#{key}-#{session_id}")
       @container = Container.new(id: SecureRandom.hex(32), name: name, session_id: session_id, payload: payload,

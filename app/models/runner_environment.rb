@@ -3,19 +3,20 @@
 # One place a runner executes sessions (docs/design/agent-runtimes/DESIGN.md
 # §2.2). In v1 so far the only entry path is a `manual` machine registering
 # through the runner gateway (§5.2), which creates the row `registered`;
-# unregistering marks it `gone`. The rest of the §5.2 state machine arrives with
-# Runners::Allocator.
+# unregistering marks it `gone`. A machine whose `env.reset` failed after a
+# session is `failed` (Runners::Machines.fail!), with the reason in
+# `state_reason`, and takes no session until it is returned to service
+# (task 11). The rest of the §5.2 state machine arrives with Runners::Allocator.
 #
 # `current_session` is the session that holds the machine (Runners::Machines):
 # a `registered` machine without one is free. It is cleared once the machine
-# has been reset after the session, and kept when the reset fails, which keeps
-# the machine out of rotation until it is returned to service (task 11).
+# has been reset after the session, and when it fails.
 class RunnerEnvironment < ApplicationRecord
   extend Enumerize
 
   # Prefixed: origin and state share the value `registered`.
   enumerize :origin, in: %i[registered], predicates: { prefix: true }
-  enumerize :state, in: %i[registered gone], predicates: true
+  enumerize :state, in: %i[registered failed gone], predicates: true
 
   belongs_to :runner
   belongs_to :company

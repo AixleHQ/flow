@@ -164,7 +164,20 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
   end
 
-  test "a credential reaches its own environment only" do
+  # A machine whose reset failed takes no session, but stays reachable, so that
+  # Return to service (task 11) can reach it: only `gone` is refused.
+  test "a failed machine's credentials keep working" do
+    pair = registered_pair
+    environment = RunnerEnvironment.sole
+    Runners::Machines.fail!(environment, "env.reset failed after session 1: reset_failed: volume in use")
+    assert environment.reload.failed?
+
+    refresh(pair["refresh_token"])
+    assert_response :ok
+    unregister(response.parsed_body["access_token"])
+    assert_response :no_content
+    assert environment.reload.gone?
+  end
     mine = registered_pair
     theirs = registered_pair(name: "build-02")
 

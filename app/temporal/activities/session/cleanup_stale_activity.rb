@@ -97,7 +97,9 @@ module Activities
       end
 
       def cleanup_session(session)
-        container = session.container_id.present? ? runtime_for(session).resolve_container(session.container_id) : nil
+        return cleanup_runner_session(session) if session.runner_id
+
+        container = session.container_id.present? ? runtime.resolve_container(session.container_id) : nil
 
         if container
           full_cleanup(session, container)
@@ -132,12 +134,27 @@ module Activities
         log(:warn, "Failed to cancel workflow for session #{session.id}: #{e.message}")
       end
 
-      # The session's runtime (ContainerRuntime.for_session): its runner's for a
-      # session on an external runner, whose ops are capped so a machine that
-      # does not answer cannot hold up the sweep. Every hosted session shares one.
-      def runtime_for(session)
-        return ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout) if session.runner_id
+      # A stale session on an external runner is not cleaned through its
+      # machine. Its admission is released, which happens only once its machine
+      # is free or `failed`, so it should hold none. One that still does is taken
+      # out of rotation (`failed`, with the reason) and nothing is sent to the
+      # runner: an `env.reset` under the scanners' cap could fail a healthy
+      # machine, and without the cap one silent machine would hold up the sweep.
+      # Return to service is task 11.
+      def cleanup_runner_session(session)
+        machine = Runners::Machines.held_by(session)
+        if machine
+          reason = "held by stale session #{session.id}"
+          Runners::Machines.fail!(machine, reason)
+          log(:warn, "Machine #{machine.key} of runner #{session.runner_id} was #{reason}; moved to failed")
+        end
+        session.update(error_message: "Stale session: workflow ended without cleanup")
+        session.fail! if session.may_fail?
+      end
 
+      # Every hosted session shares one runtime. A runner session never reaches
+      # it (#cleanup_runner_session).
+      def runtime
         @runtime ||= ContainerRuntime.build
       end
     end

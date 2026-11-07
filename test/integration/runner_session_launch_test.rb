@@ -9,7 +9,7 @@ require "test_helper"
 # machine's host runner. Every runtime call of the strategy is one op, and the
 # hosted runtime is never asked anything.
 class RunnerSessionLaunchTest < ActiveSupport::TestCase
-  IMAGE = "ghcr.io/aixlehq/flow-claude-code@sha256:#{'b' * 64}".freeze
+  IMAGE = "ghcr.io/aixlehq/flow-claude-code:latest"
 
   setup do
     @company = create(:company, email_domain: "test.com")
@@ -47,8 +47,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal "aixle-#{@machine.key}-#{session.id}", session.container_id
     assert_equal "ContainerRuntime::RunnerRuntime", admission.reload.runtime_kind
     assert_equal %w[image.ensure container.start status write_file exec], @host_runner.ops
-    assert_equal({ "image" => "ghcr.io/aixlehq/flow-claude-code", "digest" => "sha256:#{'b' * 64}" },
-                 @host_runner.operations.first[:payload])
+    assert_equal({ "image" => IMAGE }, @host_runner.operations.first[:payload], "the image as it was given, by tag")
     assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.fourth[:payload]["path"]
     start = @host_runner.operations.second
     assert_equal({ "cpus" => 2.0, "memory_bytes" => 4096.megabytes, "pids_limit" => 4096 }, start[:payload]["resources"],
@@ -83,6 +82,40 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
     assert_equal @machine.id, second.reload.runner_environment_id
     assert_equal second.id, @machine.reload.current_session_id
+  end
+
+  test "a pull that fails still runs the cleanup, which resets the machine and frees it" do
+    @host_runner.answer_with("image.ensure", "status" => "error",
+                                             "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
+    session = launch
+
+    assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "pull_image") }
+    admission = session.session_admission.reload
+    assert_equal "runner-session-#{session.id}", admission.runtime_id, "the identity was persisted before the pull"
+    assert_equal session.id, @machine.reload.current_session_id
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_nil @machine.reload.current_session_id, "the machine is free again"
+    assert admission.reload.released_at
+  end
+
+  test "a stop between the pull and the create still resets the machine and frees it" do
+    session = launch
+    run_phases(session, %w[pull_image])
+    assert_equal session.id, @machine.reload.current_session_id
+
+    SessionAdmissionService.cancel!(session)
+    assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "create_container") }
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_equal %w[image.ensure], @host_runner.ops.first(1)
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_nil @machine.reload.current_session_id
+    assert session.session_admission.reload.released_at
+    assert_equal "cancelled", session.reload.state, "stopped before it was ever ready"
   end
 
   test "a runner with no machine fails the launch with the message that names it" do

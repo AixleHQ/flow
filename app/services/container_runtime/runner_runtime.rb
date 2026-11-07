@@ -15,7 +15,10 @@ module ContainerRuntime
   #
   # - pull_image takes a free machine of the session's runner
   #   (Runners::Machines; every machine busy is a CapacityError, so the session
-  #   waits) and sends `image.ensure` with the image pinned by digest.
+  #   waits) and sends `image.ensure` with the image reference as it was given,
+  #   a tag or a digest: the runner always pulls it. The admission's identity
+  #   is persisted before this phase (identity_before_pull?), so a failure or a
+  #   stop here still runs cleanup_session and frees the machine.
   # - create_container sends `container.start`: the container's environment,
   #   which carries the session's secrets, exists only in this phase
   #   (ContainerService::CREATE_ONLY_KEYS), and the runner creates and starts
@@ -23,7 +26,18 @@ module ContainerRuntime
   # - start_container and wait_for_ready wait for nothing more than the
   #   container running (`status`), as DockerRuntime#start_container does.
   # - cleanup_session sends `container.stop` and `env.reset`, and frees the
-  #   machine once the reset succeeded.
+  #   machine once the reset succeeded; a failed reset moves it to `failed`.
+  #
+  # A session's ops go to its machine only while the session holds it
+  # (runner_environments.current_session_id). Once it has released the machine,
+  # or never had one, every op answers `no_session_container` here and nothing
+  # is enqueued, so a late op of a finished session, from a scanner or a sweep
+  # racing the cleanup, never reaches the next session's machine. The runner's
+  # own `session_mismatch` check is the safety net for the remaining race.
+  #
+  # The wait for an op ends at its `deadline_at`, which is the activity's end
+  # less ACTIVITY_MARGIN: the op is then expired here, and the strategy gets the
+  # expired outcome before Temporal times the activity out.
   #
   # An op that ends `error` or `expired` gives the strategy what a hosted
   # failure gives: a container the runner does not find is unreachable
@@ -39,6 +53,10 @@ module ContainerRuntime
     EXEC_GRACE = 30
     READY_TIMEOUT = 30
     READY_INTERVAL = 1
+    # How long before its activity's end an op's deadline falls: what is left
+    # for the activity to act on an op that expired, a machine's reset that
+    # failed for one.
+    ACTIVITY_MARGIN = 5
     # `container.resources.memory` is a Kubernetes quantity on every type (§2.7).
     MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
                      "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
@@ -62,37 +80,40 @@ module ContainerRuntime
     # `op_timeout` caps every op's deadline, for a caller that reads many
     # sessions in turn (the scanners): a machine that does not answer then
     # costs it seconds, not a minute per call.
-    def initialize(session, image_pin: Runners::ImagePin.new, op_timeout: nil)
+    def initialize(session, op_timeout: nil)
       super()
       @session = session
-      @image_pin = image_pin
       @op_timeout = op_timeout
     end
 
     # -- Identity and cleanup (AdmittedPhaseActivity) -------------------------
 
-    # Persisted before the create, when no machine may be assigned yet, so it
-    # names the session rather than its container.
+    # Names the session rather than its container, so it is known before any
+    # machine is assigned.
     def session_identity(_session)
       "runner-session-#{session.id}"
     end
 
-    # A session never given a machine has nothing to remove, and one that
-    # released its machine has had its container stopped and the machine reset.
-    # A machine the session still holds is not absent until the cleanup has run:
-    # it still needs its reset. One whose reset failed is out of rotation, held
-    # by the session until it is returned to service (task 11), and the
-    # session's reservation does not wait for that.
+    # pull_image already takes a machine, so the admission's identity is
+    # persisted before it: a failure or a stop in that phase, or before the
+    # create, still runs cleanup_session.
+    def identity_before_pull?
+      true
+    end
+
+    # Absent once the session holds no machine: it never took one, its machine
+    # was reset and is free again, or its reset failed and the machine is
+    # `failed`, out of rotation.
     def session_absent?(_id)
-      environment = machine
-      environment.nil? || Runners::Machines.reset_failed?(environment)
+      machine.nil?
     end
 
     # `container.stop`, then `env.reset`, which removes every container and the
     # workspace and cache volumes of the machine, so nothing of the session
     # reaches the next one (§7.2), and the machine is free again. A failed
-    # reset, a machine that does not answer included, keeps the machine held
-    # by this session, out of rotation, with the reason.
+    # `container.stop` is logged, and the reset still runs. A failed reset, a
+    # machine that does not answer included, moves the machine to `failed`
+    # with the reason.
     def cleanup_session(_id)
       environment = machine
       return if environment.nil?
@@ -103,9 +124,9 @@ module ContainerRuntime
       reset = call("env.reset", {}, lifecycle: true, environment_op: true)
       return Runners::Machines.release!(environment, session) if reset.ok?
 
-      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} kept out")
+      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
       reason = reset.expired? ? "the runner did not answer" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}"
-      Runners::Machines.hold_failed!(environment, session, reason)
+      Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}")
     end
 
     # -- Lifecycle ------------------------------------------------------------
@@ -114,7 +135,8 @@ module ContainerRuntime
       raise ArgumentError, "image is required" if image.blank?
 
       Runners::Machines.acquire!(session)
-      outcome = call("image.ensure", pin(image), lifecycle: true, environment_op: true)
+      image = runner_image(image)
+      outcome = call("image.ensure", { "image" => image }, lifecycle: true, environment_op: true)
       raise ImagePullError, "Could not pull #{image}: #{outcome.message}" unless outcome.ok?
 
       pulled = outcome.data["pulled"] == true
@@ -149,9 +171,10 @@ module ContainerRuntime
       end
     end
 
+    # A container that is already gone is stopped, as on Docker.
     def stop_container(_id, _timeout = nil, _options = {})
       outcome = call("container.stop", {}, lifecycle: true)
-      raise RuntimeError, outcome.message unless outcome.ok?
+      raise RuntimeError, outcome.message unless outcome.ok? || outcome.error_class == "no_session_container"
     end
 
     def remove_container(id, _options = {})
@@ -208,8 +231,6 @@ module ContainerRuntime
     end
 
     def container_status(_id)
-      return :missing if machine_of_session.nil?
-
       outcome = call("status", {})
       return :missing if GONE.include?(outcome.error_class)
       return :unknown unless outcome.ok?
@@ -219,8 +240,6 @@ module ContainerRuntime
     end
 
     def container_termination(_id)
-      return nil if machine_of_session.nil?
-
       outcome = call("status", {})
       return nil unless outcome.ok? && outcome.data["state"] == "terminated"
 
@@ -260,8 +279,6 @@ module ContainerRuntime
 
     private
 
-    attr_reader :image_pin
-
     def run_exec(_id, cmd, opts, raise_on_gone:)
       payload = { "cmd" => Array(cmd).map(&:to_s) }
       timeout = opts[:timeout].to_i
@@ -273,7 +290,7 @@ module ContainerRuntime
         exit_code = outcome.result["exit_code"] || (outcome.ok? ? 0 : 124)
         return [ lines(outcome.result["stdout"]), lines(outcome.result["stderr"]), exit_code ]
       end
-      if raise_on_gone && (GONE.include?(outcome.error_class) || outcome.expired? || machine_of_session.nil?)
+      if raise_on_gone && (GONE.include?(outcome.error_class) || outcome.expired?)
         raise ContainerUnreachableError.new(outcome.message, container_identifier: container_name)
       end
 
@@ -284,12 +301,13 @@ module ContainerRuntime
       text.to_s.empty? ? [] : text.to_s.lines
     end
 
-    # Sends one op to the session's machine and waits for its outcome. A
-    # session op names the session in its envelope; an environment op names
-    # none. Without a machine there is nobody to ask, and the op answers as a
-    # container that is not there.
+    # Sends one op to the session's machine and waits for its outcome, until
+    # the op's deadline at most. A session op names the session in its
+    # envelope; an environment op names none. A session that holds no machine
+    # has nobody to ask: the op answers as a container that is not there, and
+    # nothing is enqueued.
     def call(op, payload, lifecycle: false, environment_op: false, seconds: nil)
-      environment = machine_of_session
+      environment = machine
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if environment.nil?
 
       operation = Runners::Operations.enqueue!(environment, op: op, payload: payload,
@@ -300,27 +318,17 @@ module ContainerRuntime
     end
 
     def no_machine_result
-      { "error" => { "class" => "no_session_container", "message" => "the session has no runner machine" } }
+      { "error" => { "class" => "no_session_container", "message" => "the session holds no runner machine" } }
     end
 
-    # The machine the session runs on. Ops of a session that already released
-    # its machine still go there: the runner refuses them with
-    # `session_mismatch` when the machine's container is another session's.
-    def machine_of_session
-      return nil if session.runner_environment_id.nil?
-
-      @machine_of_session = nil if @machine_of_session&.id != session.runner_environment_id
-      @machine_of_session ||= RunnerEnvironment.find_by(id: session.runner_environment_id)
-    end
-
-    # The machine while the session still holds it, read fresh: the hold is
-    # what the cleanup changes.
+    # The machine while the session holds it, read fresh for every op: the
+    # hold is what the cleanup changes.
     def machine
       RunnerEnvironment.find_by(current_session_id: session.id)
     end
 
-    # An op's deadline is the activity's own end, so no op outlives the
-    # activity that waits for it (§6.4), and within it the op's own budget.
+    # An op's deadline is its own budget, and at most the activity's end less
+    # ACTIVITY_MARGIN, so the wait for it ends before the activity does (§6.4).
     def deadline_at(seconds, lifecycle)
       seconds ||= lifecycle ? Settings.runners.lifecycle_op_timeout.to_i : Settings.runners.op_timeout.to_i
       seconds = [ seconds, @op_timeout ].min if @op_timeout
@@ -332,7 +340,7 @@ module ContainerRuntime
 
       info = Temporalio::Activity::Context.current.info
       timeout = info.start_to_close_timeout.to_f
-      info.started_time + timeout if timeout.positive? && info.started_time
+      info.started_time + timeout - ACTIVITY_MARGIN if timeout.positive? && info.started_time
     end
 
     def heartbeat
@@ -340,22 +348,20 @@ module ContainerRuntime
     end
 
     def container_name
-      environment = machine_of_session
+      environment = session.runner_environment_id && RunnerEnvironment.find_by(id: session.runner_environment_id)
       environment && "aixle-#{environment.key}-#{session.id}"
     end
 
-    def pin(image)
-      image_pin.call(image)
-    rescue Runners::ImagePin::Error => e
-      raise ImagePullError, "Could not pin #{image} to a digest: #{e.message}. " \
-                            "The platform needs to reach the image's registry, or agents.images to pin it."
+    # The image the runner pulls and starts: the runner's
+    # `container.image_override` where it sets one, else the strategy's, as it
+    # was given.
+    def runner_image(image)
+      setting("container.image_override").presence || image
     end
 
     def container_payload(spec)
-      container = Runners::ConfigSchema.value(runner_config, "container.image_override")
-      image = container.presence || spec[:image]
       {
-        **pin(image),
+        "image" => runner_image(spec[:image]),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting("container.workspace_volume"),
         "mounts" => mounts,

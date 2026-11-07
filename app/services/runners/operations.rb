@@ -36,9 +36,10 @@ module Runners
 
     RESULT_STATES = { "ok" => "completed", "error" => "failed", "expired" => "expired" }.freeze
 
-    # How long past its deadline an op still waits for the runner's own answer
-    # before the platform expires it. A runner that received the op in time
-    # posts its result a moment after the deadline at most.
+    # How long past its deadline an op that nobody waits for still waits for
+    # the runner's own answer before the sweep expires it (#expire_overdue!). A
+    # runner that received the op in time posts its result a moment after the
+    # deadline at most. The wait of #await has no grace: it ends at the deadline.
     EXPIRY_GRACE = 10.seconds
     # Finished ops older than this are pruned (DESIGN.md §2.3).
     RETENTION = 7.days
@@ -71,9 +72,10 @@ module Runners
     end
 
     # Waits for the op's result and returns the op, finished. An op still
-    # without a result EXPIRY_GRACE after its deadline is expired here, as the
-    # sweep would expire it: nobody waits for it any longer. Must not be called
-    # inside a transaction, which would hide the result from it.
+    # without a result at its deadline is expired here, so the caller, whose
+    # activity the deadline was set inside, learns the outcome before the
+    # activity ends. Must not be called inside a transaction, which would hide
+    # the result from it.
     #
     # `on_wait` runs between two looks, an activity's heartbeat for one.
     def await(operation, poll_interval: Settings.runners.op_poll_interval.to_f, on_wait: nil)
@@ -82,7 +84,7 @@ module Runners
         operation = RunnerOperation.uncached { RunnerOperation.find(operation.id) }
         return operation unless operation.deliverable?
 
-        if Time.current > operation.deadline_at + EXPIRY_GRACE
+        if Time.current >= operation.deadline_at
           expire!(operation)
           return operation.reload
         end
@@ -107,9 +109,10 @@ module Runners
       operation
     end
 
-    # Expires every op past its deadline (and the grace) that has no result,
-    # `pending` or `delivered`: `delivered` does not prove the runner received
-    # an op (§5.4), so a runner that never answers must not leave it open.
+    # Expires every op past its deadline and EXPIRY_GRACE that has no result,
+    # `pending` or `delivered`, the ops nobody waits for:
+    # `delivered` does not prove the runner received an op (§5.4), so a runner
+    # that never answers must not leave it open.
     # Rows a result holds are skipped, and the next sweep sees them settled.
     def expire_overdue!(now: Time.current)
       expired = 0

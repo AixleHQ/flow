@@ -107,8 +107,8 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     assert_equal [ "completed", { "data" => { "removed_volumes" => [] } } ], [ awaited.state, awaited.result ]
   end
 
-  test "await expires an op the runner did not answer by its deadline and the grace" do
-    operation = enqueue(deadline_at: 1.minute.ago)
+  test "await expires an op the runner did not answer at its deadline, without the sweep's grace" do
+    operation = enqueue(deadline_at: 1.second.ago)
     waits = 0
 
     awaited = Runners::Operations.await(operation, on_wait: -> { waits += 1 })

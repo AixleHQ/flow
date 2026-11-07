@@ -10,9 +10,10 @@ module Runners
   # A record with no runner is hosted and returns nil without reading anything,
   # which keeps the hosted path free of the flag (§12.3). A runner that passes
   # every check is returned; every other outcome is a refusal, and nothing falls
-  # back to hosted. A `manual` runner with no registered machine is refused as
-  # unreachable (§8); one whose machines are all busy is not: its session waits
-  # for a free machine at create_container (Runners::Machines).
+  # back to hosted. A `manual` runner with no registered machine, or whose every
+  # machine failed its reset, is refused as unreachable (§8); one whose machines
+  # are all busy is not: its session waits for a free machine at pull_image
+  # (Runners::Machines).
   #
   #   Runners::Resolver.resolve!(run)  # => nil (hosted), the Runner, or raises Refused
   module Resolver
@@ -51,7 +52,8 @@ module Runners
       end
 
       check_status!(runner, pick_from)
-      raise Refused.new(UNREACHABLE, Machines.no_machine_message(runner, pick_from)) unless Machines.registered?(runner)
+      unavailable = Machines.unavailable_message(runner, pick_from)
+      raise Refused.new(UNREACHABLE, unavailable) if unavailable
 
       runner
     end
