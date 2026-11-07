@@ -88,6 +88,15 @@ governance, community health — carry none.
   edits a build file or runs a command on a path an earlier command printed.
 
 ### Fixed
+- **Sessions & Runs**: an automatic Kiro step whose agent ends its turn without
+  `finish_session` no longer waits for a person. A minute or two later the agent
+  is reminded in its terminal to finish or continue, up to 3 times, and the step
+  fails with a message saying so if it stops again. Nothing is typed while
+  someone is typing in the session's terminal.
+- **Sessions & Runs**: a step whose terminal screen has not changed for 30
+  minutes now fails even when the terminal keeps redrawing the same screen, for
+  example while its web terminal is open. Before, such a step could stay
+  running for hours.
 - **Sessions & Runs**: a run's live console reads *Session finishing…* while a
   session is ending, instead of *Session starting…* as if it were starting again.
 - **Sessions & Runs**: a Kiro session's cost is now the credits its own model calls
