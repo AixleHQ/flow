@@ -87,7 +87,7 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
 
     live = on_both { |runtime, _| Sessions::LiveLogReader.new(@session, runtime: runtime).tail(lines: 5).to_h }
     @machine.reset
-    gone = on_both { |runtime, _| Sessions::LiveLogReader.new(@session, runtime: runtime).tail(lines: 5).status }
+    gone = on_both(@session.container_id) { |runtime, _| Sessions::LiveLogReader.new(@session, runtime: runtime).tail(lines: 5).status }
 
     assert_same_on_both live
     assert_equal :ok, live["RunnerRuntime"][:status]

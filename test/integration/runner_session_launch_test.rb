@@ -51,8 +51,9 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
                  @host_runner.operations.first[:payload])
     assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.fourth[:payload]["path"]
 
-    run_phases(session, %w[cleanup])
+    cleaned = run_phase(session, "cleanup")
 
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
     assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
     assert_equal "finished", session.reload.state
     assert_nil @machine.reload.current_session_id, "the machine is free after its reset"
