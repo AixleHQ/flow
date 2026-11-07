@@ -668,6 +668,10 @@ runners:
   # The deadline of an image pull, a container start or stop, or a reset that
   # no activity bounds, in seconds.
   lifecycle_op_timeout: 600
+  # The cap on an op of a sweep that reads every session in turn (the dead
+  # container, quota and no-output scans), in seconds: a machine that does not
+  # answer reads as unknown, never as dead or idle, and costs the sweep no more.
+  scan_op_timeout: 15
 
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.

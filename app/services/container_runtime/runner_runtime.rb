@@ -59,10 +59,14 @@ module ContainerRuntime
 
     attr_reader :session
 
-    def initialize(session, image_pin: Runners::ImagePin.new)
+    # `op_timeout` caps every op's deadline, for a caller that reads many
+    # sessions in turn (the scanners): a machine that does not answer then
+    # costs it seconds, not a minute per call.
+    def initialize(session, image_pin: Runners::ImagePin.new, op_timeout: nil)
       super()
       @session = session
       @image_pin = image_pin
+      @op_timeout = op_timeout
     end
 
     # -- Identity and cleanup (AdmittedPhaseActivity) -------------------------
@@ -76,34 +80,32 @@ module ContainerRuntime
     # A session never given a machine has nothing to remove, and one that
     # released its machine has had its container stopped and the machine reset.
     # A machine the session still holds is not absent until the cleanup has run:
-    # it still needs its reset. One whose reset failed stays held, and the
-    # session is absent once its container is gone.
+    # it still needs its reset. One whose reset failed is out of rotation, held
+    # by the session until it is returned to service (task 11), and the
+    # session's reservation does not wait for that.
     def session_absent?(_id)
       environment = machine
-      return true if environment.nil?
-      return false unless Runners::Machines.reset_failed?(environment)
-
-      container_status(nil) == :missing
+      environment.nil? || Runners::Machines.reset_failed?(environment)
     end
 
-    # `container.stop`, then `env.reset`, which removes the workspace and cache
-    # volumes so nothing of the session reaches the next one (§7.2), then the
-    # machine is free again. A failed reset keeps the machine held by this
-    # session, out of rotation, with the reason.
+    # `container.stop`, then `env.reset`, which removes every container and the
+    # workspace and cache volumes of the machine, so nothing of the session
+    # reaches the next one (§7.2), and the machine is free again. A failed
+    # reset, a machine that does not answer included, keeps the machine held
+    # by this session, out of rotation, with the reason.
     def cleanup_session(_id)
       environment = machine
       return if environment.nil?
 
       stopped = call("container.stop", {}, lifecycle: true)
-      raise RuntimeError, stopped.message unless stopped.ok?
+      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
 
       reset = call("env.reset", {}, lifecycle: true, environment_op: true)
-      if reset.ok?
-        Runners::Machines.release!(environment, session)
-      else
-        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} kept out")
-        Runners::Machines.hold_failed!(environment, session, reset.expired? ? "expired" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}")
-      end
+      return Runners::Machines.release!(environment, session) if reset.ok?
+
+      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} kept out")
+      reason = reset.expired? ? "the runner did not answer" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}"
+      Runners::Machines.hold_failed!(environment, session, reason)
     end
 
     # -- Lifecycle ------------------------------------------------------------
@@ -239,7 +241,7 @@ module ContainerRuntime
 
     # The tail of the terminal output, which the image's entrypoint writes to
     # the container's stdout as well (PROTOCOL.md §6.3, `logs`).
-    def container_logs(_id, stdout: true, stderr: true)
+    def container_logs(_id, stdout: true, **)
       outcome = stdout ? call("logs", {}) : nil
       { stdout: outcome&.ok? ? outcome.data["tail"].to_s : "", stderr: "" }
     end
@@ -321,6 +323,7 @@ module ContainerRuntime
     # activity that waits for it (§6.4), and within it the op's own budget.
     def deadline_at(seconds, lifecycle)
       seconds ||= lifecycle ? Settings.runners.lifecycle_op_timeout.to_i : Settings.runners.op_timeout.to_i
+      seconds = [ seconds, @op_timeout ].min if @op_timeout
       [ Time.current + seconds, activity_deadline ].compact.min.change(usec: 0)
     end
 

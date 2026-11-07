@@ -133,9 +133,10 @@ module Activities
       end
 
       # The session's runtime (ContainerRuntime.for_session): its runner's for a
-      # session on an external runner. Every hosted session shares one.
+      # session on an external runner, whose ops are capped so a machine that
+      # does not answer cannot hold up the sweep. Every hosted session shares one.
       def runtime_for(session)
-        return ContainerRuntime.for_session(session) if session.runner_id
+        return ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout) if session.runner_id
 
         @runtime ||= ContainerRuntime.build
       end

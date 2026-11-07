@@ -138,6 +138,15 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_match(/Could not pin ghcr.io\/aixlehq\/nope:1 to a digest: the registry ghcr.io answered 404/, error.message)
   end
 
+  test "a capped runtime, as the scanners use, gives every op that cap at most" do
+    start_session
+    capped = ContainerRuntime.for_session(@session, op_timeout: 15)
+
+    capped.container_status(nil)
+
+    assert_operator RunnerOperation.order(:id).last.deadline_at, :<=, 16.seconds.from_now
+  end
+
   test "an op's deadline is the end of the activity that sends it" do
     start_session
     info = Temporalio::Testing::ActivityEnvironment.default_info.with(started_time: Time.current, start_to_close_timeout: 20.0)
