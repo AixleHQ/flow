@@ -252,6 +252,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   end
 
   # As ToolStrategy#wait_with_heartbeat: a stopped session stops waiting at once.
+  # CancelProbe does not take Temporal's asynchronous raise, so it is the
+  # wait's own check that stops it.
   test "the wait for an op checks the activity's cancellation on every look" do
     handle = start_session
     cancellation, cancel = Temporalio::Cancellation.new
@@ -263,7 +265,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     started = Time.current
 
     assert_raises(Temporalio::Error::CanceledError) do
-      in_activity(60.0, DeadlineProbe, handle, cancellation: cancellation)
+      in_activity(60.0, CancelProbe, handle, cancellation: cancellation)
     end
     assert_operator Time.current - started, :<, 5, "the wait did not stop at the cancellation"
     assert RunnerOperation.find_by(op: "status").deliverable?, "the op is left to its deadline"
@@ -274,6 +276,14 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     def execute(runtime, id)
       runtime.container_status(id)
       RunnerOperation.order(:id).last.deadline_at
+    end
+  end
+
+  class CancelProbe < Temporalio::Activity::Definition
+    activity_cancel_raise false
+
+    def execute(runtime, id)
+      runtime.container_status(id)
     end
   end
 
