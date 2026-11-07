@@ -12,6 +12,12 @@
 # company with `external_runners` on. The runner shares the web container's
 # network namespace, so it reaches the runner gateway on 127.0.0.1, the only
 # address aixle-runner accepts plain http on.
+#
+# The machine pulls the agent image pinned by digest, which the platform looks
+# up in the image's registry: point the agent images at a registry, e.g.
+# AGENT_IMAGE_PREFIX=ghcr.io/aixlehq/flow- for the stock images, or pin one with
+# AGENT_IMAGE_CLAUDE_CODE=<image>@sha256:<digest>. A locally built image has no
+# registry digest.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
