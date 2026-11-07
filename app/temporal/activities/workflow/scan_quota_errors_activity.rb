@@ -14,8 +14,10 @@
 # session's own container workflow reach its cleanup phase instead of waiting out its
 # 23-hour signal timeout.
 #
-# A third condition is not fatal: an agent whose login was refused is paused until it
-# is renewed (Sessions::AuthPause), not failed.
+# Two more conditions are not fatal. An agent whose login was refused is paused until it
+# is renewed (Sessions::AuthPause), not failed. An automatic session's agent that ended
+# its turn without `finish_session` is typed a reminder (Sessions::TurnEndNudge) — task
+# #208 — and failed only once it has stopped again after the last one.
 #
 # All checks share this sweep's single `capture-pane` per session on purpose: the
 # pod-exec handshake is the expensive part of the scan, and a second per-minute
@@ -32,12 +34,20 @@ module Activities
         cleaned = 0
         unreachable = 0
         auth_paused = 0
+        nudged = 0
 
         candidate_sessions.find_each do |session|
           terminal = live_terminal_output(session)
           message = blocker_message_for(session, terminal)
           if message.blank?
-            auth_paused += 1 if Sessions::AuthPause.new(session, runtime: runtime).observe(terminal) == :paused
+            auth = Sessions::AuthPause.new(session, runtime: runtime).observe(terminal)
+            auth_paused += 1 if auth == :paused
+            next if auth
+
+            case Sessions::TurnEndNudge.new(session, runtime: runtime).observe(terminal)
+            when :nudged then nudged += 1
+            when :failed then cleaned += 1
+            end
             next
           end
 
@@ -60,7 +70,7 @@ module Activities
           log(:warn, "Failed to process session #{session.id}: #{e.message}")
         end
 
-        { cleaned: cleaned, unreachable: unreachable, auth_paused: auth_paused }
+        { cleaned: cleaned, unreachable: unreachable, auth_paused: auth_paused, nudged: nudged }
       end
 
       private

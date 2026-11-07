@@ -1,0 +1,45 @@
+       ⢸⣿⣿⣿⣿⣿⣿⣄⣼⣿⣄⣼⣿⣿⣿        Learn more: https://kiro.dev/docs/cli/v3/
+       ⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+      ⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿        kiro-cli --v2   Launch the previous experience instead
+      ⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃
+        ⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁
+         ⠙⠛⠛⠛⠋⠁⠙⠛⠛⠉
+
+
+▸ What's new
+  Approve for me, cloud sessions, memory, local sandbox and specs.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  › Run the shell command: sleep 8 && echo done. Then reply with the word DONE and end your turn.
+
+• Thought for 1s...
+    ╰ The user wants me to run a shell command: `sleep 8 && echo done`, then reply with "DONE".
+• Shell sleep 8 && echo done
+    ╰ description=Sleep 8 seconds then echo done, run_in_background=false
+    done
+
+• DONE
+
+▸ Credits: turn 0.10 • session 0.10 | Time: 10s
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  › Aixle: your turn ended, but this automatic session is not finished. If all work is done, call `finish_session`. Otherwise continue from where you stopped.
+
+• Thought for 1s...
+    ╰ The user is asking me to call `finish_session` if all work is done. However, I don't have a `finish_session` tool available. The task was simply to run
+      the shell command and reply with "DONE", which I've already done. I should let the user know that the task is complete and I don't have a `finish_session`
+      tool.
+• The task is complete — the shell command sleep 8 && echo done ran successfully and I replied with "DONE". There is no finish_session tool available to me, so
+  I'll simply note that all requested work is finished.
+
+▸ Credits: turn 0.06 • session 0.17 | Time: 2s
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Trust All Tools active, confirmations are off · /quit to exit
+Warning: Kiro CLI is running as root.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+Default · claude-sonnet-4.6 · thinking · high · ◔ 2%                                                                                                /workspace
+
+›  ask a question or describe a task ↵
+                                                                                                                       /sessions to resume · /copy to clipboard
+
+
+
