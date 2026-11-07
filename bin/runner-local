@@ -27,10 +27,12 @@ gateway="http://127.0.0.1:${RUNNER_GATEWAY_PORT:-4003}"
 case "${1:-}" in
   register)
     runner_id="${2:?usage: bin/runner-local register <runner id>}"
-    # Printed once, straight into configure; nothing writes it down.
+    # Printed once, straight into configure; nothing writes it down. The web
+    # container logs to stdout too, so the token is the line that names it.
     token=$(docker compose exec -T web bin/rails runner \
-      'runner = Runner.find(ARGV.first); abort("runner #{runner.id} is not a manual runner") unless runner.manual?; print Runners::Credentials.mint_registration!(runner)' \
-      "$runner_id")
+      'runner = Runner.find(ARGV.first); abort("runner #{runner.id} is not a manual runner") unless runner.manual?; puts "AIXLE_REGISTRATION_TOKEN=#{Runners::Credentials.mint_registration!(runner)}"' \
+      "$runner_id" | sed -n 's/^AIXLE_REGISTRATION_TOKEN=//p')
+    [ -n "$token" ] || { echo "bin/runner-local: no registration token was minted for runner $runner_id" >&2; exit 1; }
     "${compose[@]}" build runner-local
     "${compose[@]}" run --rm -T runner-local configure --url "$gateway" --token "$token" \
       --name "${RUNNER_LOCAL_NAME:-local}"
