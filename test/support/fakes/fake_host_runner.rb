@@ -21,9 +21,9 @@ module ContainerRuntime
   class FakeHostRunner
     attr_reader :machine, :operations
 
-    def initialize(*environments, machine: FakeMachine.new)
+    def initialize(*environments, machine: nil)
       @environment_ids = environments.map(&:id)
-      @machine = machine
+      @machine = machine || FakeMachine.new(key: environments.first.key)
       @operations = []
       @overrides = {}
       @subscriber = ActiveSupport::Notifications.subscribe("enqueued.runner_operations") do |*, payload|

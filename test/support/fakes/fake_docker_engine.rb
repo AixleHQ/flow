@@ -13,7 +13,7 @@ module ContainerRuntime
   class FakeDockerEngine
     include WebMock::API
 
-    URL = "tcp://docker.test:2375"
+    URL = "http://docker.test:2375"
     BASE = %r{\Ahttp://docker\.test:2375}
 
     def initialize(machine)
