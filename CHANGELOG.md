@@ -54,6 +54,8 @@ governance, community health — carry none.
   edits a build file or runs a command on a path an earlier command printed.
 
 ### Fixed
+- **Workflows**: personal MCP can set a step's repositories, assets, expected
+  input and output files, failure action, retry limit and skip policy.
 - **Sessions & Runs**: a run's live console reads *Session finishing…* while a
   session is ending, instead of *Session starting…* as if it were starting again.
 - **Sessions & Runs**: a Kiro session's cost is now the credits its own model calls
