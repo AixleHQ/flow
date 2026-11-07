@@ -15,9 +15,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
     @runner = create(:runner, :manual, company: @company, created_by: @user)
     @machine = create(:runner_environment, runner: @runner)
-    @sessions = 2.times.map do
-      create(:runner_session, environment: @machine, runner_environment: nil, project: @project, user: @user)
-    end
+    @sessions = create_list(:runner_session, 2, environment: @machine, runner_environment: nil, project: @project, user: @user)
   end
 
   teardown do
