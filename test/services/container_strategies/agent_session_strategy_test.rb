@@ -50,6 +50,14 @@ module ContainerStrategies
 
     # == Inheritance Tests ==
 
+    # A runner pulls the image in create_container (container.start); on hosted
+    # the larger budget is the only change (DESIGN.md §12.3).
+    test "create_container has 600 s, as the pull does" do
+      assert_equal({ timeout: 600 }, build_strategy.phase_config(:create_container))
+      assert_equal({ timeout: 600 }, build_strategy.phase_config(:pull_image))
+      assert_equal({ timeout: 300 }, build_strategy.phase_config(:start_container))
+    end
+
     test "inherits from AgentBaseStrategy" do
       assert_operator AgentSessionStrategy, :<, AgentBaseStrategy
     end

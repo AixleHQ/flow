@@ -20,6 +20,9 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
     @environment = create(:runner_environment, key: "aixle-r1-0a1b2c3d")
     @session = create(:runner_session, environment: @environment)
     @environment.update!(current_session: @session)
+    # RunnerRuntime finds the session from the admission whose runtime_id
+    # names the container, as AdmittedPhaseActivity writes it after the create.
+    ContainerRuntime::FakeHostRunner.identify!(@session, "aixle-#{@environment.key}-#{@session.id}")
     @machine = ContainerRuntime::FakeMachine.new(key: @environment.key)
     @host_runner = ContainerRuntime::FakeHostRunner.new(@environment, machine: @machine)
     @engine = ContainerRuntime::FakeDockerEngine.new(@machine).install!
@@ -108,7 +111,7 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
     name ||= @machine.container.name
     {
       "DockerRuntime" => yield(ContainerRuntime::DockerRuntime.new, name),
-      "RunnerRuntime" => yield(ContainerRuntime::RunnerRuntime.new(@session), name)
+      "RunnerRuntime" => yield(ContainerRuntime::RunnerRuntime.new, name)
     }
   end
 

@@ -70,15 +70,6 @@ module ContainerRuntime
       # No-op by default; overridden in DockerRuntime.
     end
 
-    # Whether AdmittedPhaseActivity persists the admission's identity
-    # (`session_identity`) before `pull_image` rather than before
-    # `create_container`: true for a runtime that takes something for the
-    # session while it pulls (RunnerRuntime takes a machine), so a failure or a
-    # stop before the create still cleans it up.
-    def identity_before_pull?
-      false
-    end
-
     # Resolve the pulled image's repo digest (for reproducibility pinning).
     # Returns a digest String or nil. Docker-specific; nil by default.
     def image_digest(_image)

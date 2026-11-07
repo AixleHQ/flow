@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1368,6 +1368,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_100000) do
     t.string "wait_reason", default: "concurrency_limit"
     t.index ["permit_token"], name: "index_session_admissions_on_permit_token", unique: true
     t.index ["released_at"], name: "index_session_admissions_on_released_at"
+    t.index ["runtime_id"], name: "index_session_admissions_on_runner_runtime_id", where: "((runtime_kind)::text = 'ContainerRuntime::RunnerRuntime'::text)"
     t.index ["session_admission_pool_id", "id"], name: "session_admission_fifo", where: "(released_at IS NULL)"
     t.index ["session_admission_pool_id"], name: "index_session_admissions_on_session_admission_pool_id"
     t.index ["terminal_session_id"], name: "index_session_admissions_on_terminal_session_id", unique: true

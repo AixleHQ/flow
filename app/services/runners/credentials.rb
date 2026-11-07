@@ -96,8 +96,10 @@ module Runners
 
     # Spends a refresh token on a new pair of the same family, which names it
     # as `rotated_from`. A refresh token presented a second time means two
-    # holders have it, so the whole family is revoked and the environment
-    # records why (§9.2); the revocation commits before the refusal is raised.
+    # holders have it, so the whole family is revoked and the machine moves to
+    # `failed`, held by no session, with the reason in `state_reason` for people
+    # (§9.2, Runners::Machines.fail!); the revocation commits before the
+    # refusal is raised.
     # A spent token counts as reused even past its own expiry: the 30-day limit
     # is for a token left unused, and the family it was rotated into may still
     # be live.
@@ -129,7 +131,7 @@ module Runners
           else
             reused = true
             revoke_family!(credential.family_id)
-            environment.update!(state_reason: REUSE_DETECTED)
+            Runners::Machines.fail!(environment, REUSE_DETECTED)
             nil
           end
         elsif credential.expired?

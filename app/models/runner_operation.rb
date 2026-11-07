@@ -7,7 +7,7 @@
 #
 # A session op is for one session, which the envelope names as `session_id`, and
 # the runner checks it against the container's label (PROTOCOL.md §5.4, §6.3).
-# An environment op (`image.ensure`, `env.scrub`, `env.reset`) names none.
+# An environment op (`env.scrub`, `env.reset`) names none.
 #
 # `sequence` is monotonic per environment, and the runner acknowledges by it.
 # The payload carries what a hosted pod receives through `write_file` today,
@@ -23,9 +23,9 @@ class RunnerOperation < ApplicationRecord
   # `observe`) come with the controller (§15 task 19).
   OPS = %w[
     exec write_file read_file batch status logs session.start session.stop
-    image.ensure container.start container.stop env.scrub env.reset
+    container.start container.stop env.scrub env.reset
   ].freeze
-  ENVIRONMENT_OPS = %w[image.ensure env.scrub env.reset].freeze
+  ENVIRONMENT_OPS = %w[env.scrub env.reset].freeze
   SESSION_OPS = (OPS - ENVIRONMENT_OPS).freeze
   DELIVERABLE_STATES = %w[pending delivered].freeze
   FINISHED_STATES = %w[completed failed expired].freeze

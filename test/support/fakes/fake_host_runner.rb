@@ -16,6 +16,10 @@ module ContainerRuntime
   #   runner.operations  # => [{ op:, session_id:, payload: }, ...]
   #   runner.stop
   #
+  # RunnerRuntime finds a call's session from the admission whose `runtime_id`
+  # the call's id is; `FakeHostRunner.identify!` writes that admission for a
+  # test that drives the runtime without AdmittedPhaseActivity.
+  #
   # `answer_with` replaces the answer of one op name, to simulate a runner that
   # expires an op, a reset that fails, or one that never answers (`:none`).
   class FakeHostRunner
@@ -33,6 +37,20 @@ module ContainerRuntime
 
     def stop
       ActiveSupport::Notifications.unsubscribe(@subscriber)
+    end
+
+    # The session's admission, with `runtime_id` as AdmittedPhaseActivity
+    # writes it: the cleanup identity before the create, the container's name
+    # after it.
+    def self.identify!(session, runtime_id = "runner-session-#{session.id}")
+      pool = SessionAdmissionPool.find_or_create_by!(key: "fake-host-runner") do |created|
+        created.limit = 100
+        created.policy_revision = 1
+      end
+      admission = SessionAdmission.find_or_initialize_by(terminal_session_id: session.id)
+      admission.session_admission_pool ||= pool
+      admission.update!(runtime_kind: RunnerRuntime.name, runtime_id: runtime_id)
+      admission
     end
 
     # `result` is a Hash in the shape of a result body (PROTOCOL.md §5.5), or
@@ -59,7 +77,6 @@ module ContainerRuntime
 
     def run(op, payload, session_id)
       case op
-      when "image.ensure" then ok("data" => { "pulled" => !machine.image?(payload), "duration_ms" => 0 }).tap { machine.pull(payload) }
       when "container.start" then container_start(payload, session_id)
       when "container.stop" then container_stop(session_id)
       when "env.reset" then ok("data" => { "removed_containers" => machine.reset, "removed_volumes" => [] })
@@ -74,6 +91,8 @@ module ContainerRuntime
       return mismatch(container, session_id) if container&.session_id && container.session_id != session_id
       return error("container_exists", "the environment already has #{container.name}") if container
 
+      # The runner always pulls the image, then creates and starts the container.
+      machine.pull(payload)
       container = machine.start(session_id, payload)
       ok("data" => { "container_id" => container.id, "name" => container.name })
     end
@@ -159,7 +178,6 @@ module ContainerRuntime
       @on_exec = block
     end
 
-    def image?(payload) = images.include?(payload["image"])
     def pull(payload) = images << payload["image"]
 
     def start(session_id, payload = {}, name: "aixle-#{key}-#{session_id}")

@@ -77,7 +77,12 @@ module Runners
     # activity ends. Must not be called inside a transaction, which would hide
     # the result from it.
     #
-    # `on_wait` runs between two looks, an activity's heartbeat for one.
+    # `on_wait` runs between two looks, an activity's heartbeat and
+    # cancellation check for one.
+    #
+    # Waiting by polling the database is to be revisited with P1 (DESIGN.md
+    # §16), for example with a wake-up on the pub/sub the long-poll already
+    # uses (#wake).
     def await(operation, poll_interval: Settings.runners.op_poll_interval.to_f, on_wait: nil)
       interval = poll_interval
       loop do

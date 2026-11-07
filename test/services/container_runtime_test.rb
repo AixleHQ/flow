@@ -59,6 +59,6 @@ class ContainerRuntimeTest < ActiveSupport::TestCase
     runtime = ContainerRuntime.for_session(session)
 
     assert_instance_of ContainerRuntime::RunnerRuntime, runtime
-    assert_equal session, runtime.session
+    assert_not_respond_to runtime, :session, "a RunnerRuntime is not bound to a session"
   end
 end

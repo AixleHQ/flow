@@ -46,10 +46,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal @machine.id, session.runner_environment_id
     assert_equal "aixle-#{@machine.key}-#{session.id}", session.container_id
     assert_equal "ContainerRuntime::RunnerRuntime", admission.reload.runtime_kind
-    assert_equal %w[image.ensure container.start status write_file exec], @host_runner.ops
-    assert_equal({ "image" => IMAGE }, @host_runner.operations.first[:payload], "the image as it was given, by tag")
-    assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.fourth[:payload]["path"]
-    start = @host_runner.operations.second
+    assert_equal %w[container.start status write_file exec], @host_runner.ops
+    start = @host_runner.operations.first
+    assert_equal IMAGE, start[:payload]["image"], "the image as it was given, by tag, which container.start pulls"
+    assert_equal [ IMAGE ], @host_runner.machine.images
+    assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.third[:payload]["path"]
     assert_equal({ "cpus" => 2.0, "memory_bytes" => 4096.megabytes, "pids_limit" => 4096 }, start[:payload]["resources"],
                  "the hosted container's limits")
     assert_equal session.id.to_s, start[:payload]["env"]["SESSION_ID"]
@@ -70,28 +71,30 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
   test "a second session waits while the machine is busy, and takes it once the first is done" do
     first = launch
-    run_phases(first, %w[pull_image])
+    run_phases(first, %w[pull_image create_container])
     second = launch
+    run_phases(second, %w[pull_image])
 
-    assert_equal({ "capacity_wait" => true }, run_phase(second, "pull_image"))
+    assert_equal({ "capacity_wait" => true }, run_phase(second, "create_container"))
     assert_match(/Waiting for a free machine on runner "Build farm" \(1 of 1 busy\)/,
                  second.session_admission.reload.last_error)
 
-    run_phases(first, %w[create_container start_container exec cleanup])
-    run_phases(second, %w[pull_image])
+    run_phases(first, %w[start_container exec cleanup])
+    run_phases(second, %w[create_container])
 
     assert_equal @machine.id, second.reload.runner_environment_id
     assert_equal second.id, @machine.reload.current_session_id
   end
 
-  test "a pull that fails still runs the cleanup, which resets the machine and frees it" do
-    @host_runner.answer_with("image.ensure", "status" => "error",
-                                             "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
+  test "a pull that fails in container.start still runs the cleanup, which resets the machine and frees it" do
+    @host_runner.answer_with("container.start", "status" => "error",
+                                                "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
     session = launch
+    run_phases(session, %w[pull_image])
 
-    assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "pull_image") }
+    assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "create_container") }
     admission = session.session_admission.reload
-    assert_equal "runner-session-#{session.id}", admission.runtime_id, "the identity was persisted before the pull"
+    assert_equal "runner-session-#{session.id}", admission.runtime_id, "the identity was persisted before the create"
     assert_equal session.id, @machine.reload.current_session_id
     cleaned = run_phase(session, "cleanup")
 
@@ -101,18 +104,17 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert admission.reload.released_at
   end
 
-  test "a stop between the pull and the create still resets the machine and frees it" do
+  test "a stop between the pull and the create takes no machine, and the cleanup sends nothing" do
     session = launch
     run_phases(session, %w[pull_image])
-    assert_equal session.id, @machine.reload.current_session_id
+    assert_nil @machine.reload.current_session_id, "the machine is taken in create_container"
 
     SessionAdmissionService.cancel!(session)
     assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "create_container") }
     cleaned = run_phase(session, "cleanup")
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
-    assert_equal %w[image.ensure], @host_runner.ops.first(1)
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_empty @host_runner.operations
     assert_nil @machine.reload.current_session_id
     assert session.session_admission.reload.released_at
     assert_equal "cancelled", session.reload.state, "stopped before it was ever ready"
