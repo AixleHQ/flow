@@ -41,6 +41,25 @@ module PersonalTools
             description: "MCP server ids. Replaces the whole list — read the current value with " \
                          "get_workflow_step first.",
             items: { type: "integer" }
+      param :repository_ids, type: :array,
+            description: "Repository ids cloned for this step.",
+            items: { type: "integer" }
+      param :asset_ids, type: :array,
+            description: "Asset ids mounted for this step.",
+            items: { type: "integer" }
+      param :input_asset_specs, type: :array,
+            description: "Expected input files. Entries are required unless marked optional.",
+            items: { type: "object", properties: { name: { type: "string" }, required: { type: "boolean" },
+                                                   asset_type: { type: "string" }, name_pattern: { type: "string" } } }
+      param :output_asset_specs, type: :array,
+            description: "Expected output files or globs under /workspace/outputs.",
+            items: { type: "object", properties: { name: { type: "string" }, required: { type: "boolean" },
+                                                   asset_type: { type: "string" }, name_pattern: { type: "string" },
+                                                   min_size: { type: "integer" },
+                                                   required_sections: { type: "array", items: { type: "string" } } } }
+      param :on_failure, type: :string, description: "Action when the step fails.", enum: Step.on_failure.values
+      param :max_retries, type: :integer, description: "Maximum retries when on_failure is retry."
+      param :skip_policy, type: :string, description: "When to skip this step.", enum: Step.skip_policy.values
       param :config_item_ids, type: :array,
             description: "Config item ids (secrets / environment variables) this step's agent may read with " \
                          "get_config_item. Attach a credential here instead of writing it into the " \
@@ -59,6 +78,7 @@ module PersonalTools
     end
 
     OPTIONAL = %i[required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids mcp_server_ids
+                repository_ids asset_ids input_asset_specs output_asset_specs on_failure max_retries skip_policy
                 config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive].freeze
 
     def execute
@@ -77,6 +97,9 @@ module PersonalTools
       end
       success(id: step.id, workflow_id: workflow.id, name: step.name, position: step.position,
               tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,
+              repository_ids: step.repository_ids, asset_ids: step.asset_ids,
+              input_asset_specs: step.input_asset_specs, output_asset_specs: step.output_asset_specs,
+              on_failure: step.on_failure.to_s, max_retries: step.max_retries, skip_policy: step.skip_policy.to_s,
               config_item_ids: step.config_item_ids,
               depends_on_step_ids: step.depends_on_step_ids, bmad_enabled: step.bmad_enabled,
               allow_non_interactive: step.allow_non_interactive,
