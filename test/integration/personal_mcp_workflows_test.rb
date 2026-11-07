@@ -151,6 +151,87 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert step.allow_non_interactive
   end
 
+  test "workflow step tools create and update resources, file specs and execution policies" do
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+    attributes = {
+      repository_ids: [ create(:repository, scope: @project).id ],
+      asset_ids: [ create(:asset, scope: @project).id ],
+      input_asset_specs: [ { name: "brief.md", required: true } ],
+      output_asset_specs: [ { name: "reports/*.md", required: true } ],
+      on_failure: "retry", max_retries: 2, skip_policy: "if_outputs_exist"
+    }
+    keys = attributes.keys.map(&:to_s)
+
+    created = call_tool("create_workflow_step", workflow_args.merge(attributes, name: "Report"))
+    assert_not error?(created)
+    assert_equal attributes.as_json, payload(created).slice(*keys)
+    step_args = workflow_args.merge(step_id: payload(created).fetch("id"))
+    assert_equal attributes.as_json, payload(call_tool("get_workflow_step", step_args)).slice(*keys)
+
+    replacement = {
+      repository_ids: [ create(:repository, scope: @project).id ],
+      asset_ids: [ create(:asset, scope: @project).id ],
+      input_asset_specs: [],
+      output_asset_specs: [ { name: "summary.md", required: false } ],
+      on_failure: "skip", max_retries: 0, skip_policy: "never"
+    }
+    updated = call_tool("update_workflow_step", step_args.merge(replacement))
+    assert_not error?(updated)
+    assert_equal keys.sort, payload(updated).fetch("updated_fields").sort
+    assert_equal replacement.as_json, payload(call_tool("get_workflow_step", step_args)).slice(*keys)
+
+    cleared = call_tool("update_workflow_step", step_args.merge(repository_ids: [], asset_ids: [], output_asset_specs: []))
+    assert_not error?(cleared)
+    expected = replacement.merge(repository_ids: [], asset_ids: [], output_asset_specs: [])
+    assert_equal expected.as_json, payload(call_tool("get_workflow_step", step_args)).slice(*keys)
+
+    [ PersonalTools::CreateWorkflowStep, PersonalTools::UpdateWorkflowStep ].each do |tool|
+      assert_empty keys - tool.tool_definition.input_schema.fetch("properties").keys
+    end
+  end
+
+  test "workflow step tools require string input name patterns" do
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+    invalid_specs = [ { name_pattern: 42 } ]
+
+    assert_no_difference("Step.count") do
+      invalid = call_tool("create_workflow_step",
+                          workflow_args.merge(name: "Invalid pattern", input_asset_specs: invalid_specs))
+      assert error?(invalid)
+      assert_match(/name_pattern/, text(invalid))
+    end
+
+    specs = [ { name_pattern: "^report-[0-9]+[.]md$" } ]
+    created = call_tool("create_workflow_step", workflow_args.merge(name: "Report", input_asset_specs: specs))
+    assert_not error?(created)
+    step_args = workflow_args.merge(step_id: payload(created).fetch("id"))
+
+    invalid = call_tool("update_workflow_step", step_args.merge(input_asset_specs: invalid_specs))
+    assert error?(invalid)
+    assert_match(/name_pattern/, text(invalid))
+    assert_equal specs.as_json, payload(call_tool("get_workflow_step", step_args))["input_asset_specs"]
+  end
+
+  test "workflow step tools refuse repository and asset ids from another project" do
+    other_project = create(:project, company: @company, owner: @user)
+    step = create(:step, workflow: @workflow)
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+    foreign_ids = { repository_ids: [ create(:repository, scope: other_project).id ],
+                    asset_ids: [ create(:asset, scope: other_project).id ] }
+
+    foreign_ids.each do |key, ids|
+      created = call_tool("create_workflow_step", workflow_args.merge(name: "Foreign resource", key => ids))
+      assert error?(created)
+      assert_match(/outside this project/, text(created))
+
+      updated = call_tool("update_workflow_step", workflow_args.merge(step_id: step.id, name: "Must fail", key => ids))
+      assert error?(updated)
+      assert_match(/outside this project/, text(updated))
+    end
+    assert_equal [ [], [] ], [ step.reload.repository_ids, step.asset_ids ]
+    refute_equal "Must fail", step.name
+  end
+
   test "update_workflow_step toggles bmad_enabled and allow_non_interactive" do
     step = create(:step, workflow: @workflow)
 

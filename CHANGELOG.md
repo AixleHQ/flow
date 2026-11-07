@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Workflows**: personal MCP can set a step's repositories, assets, expected
+  input and output files, failure action, retry limit and skip policy.
+
 ## [1.11.0] - 2026-11-09
 
 ### Added
