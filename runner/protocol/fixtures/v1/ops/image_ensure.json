@@ -1,5 +1,5 @@
 {
-  "description": "An image.ensure op is delivered with its {image, digest} payload (PROTOCOL.md §6.1). A pull reports whether it pulled and how long it took, and a failed pull is an error result that carries the registry's message.",
+  "description": "An image.ensure op is delivered with its {image} payload, a reference by tag or by digest (PROTOCOL.md §6.1). The runner always pulls it and reports whether the pull brought a new image and how long it took. A failed pull is an error result that carries the registry's message.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
     {
@@ -8,8 +8,7 @@
       "as": "pulled",
       "op": "image.ensure",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-agent-claude-code",
-        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        "image": "ghcr.io/aixlehq/flow-agent-claude-code:latest"
      }
    },
     {
@@ -18,8 +17,7 @@
       "as": "missing",
       "op": "image.ensure",
       "payload": {
-        "image": "ghcr.io/aixlehq/flow-agent-claude-code",
-        "digest": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+        "image": "ghcr.io/aixlehq/flow-agent-claude-code@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
      }
    },
     {
@@ -34,8 +32,7 @@
               "op": "image.ensure",
               "deadline_at": {"$var": "pulled.deadline_at"},
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-agent-claude-code",
-                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                "image": "ghcr.io/aixlehq/flow-agent-claude-code:latest"
              }
            },
             {
@@ -44,8 +41,7 @@
               "op": "image.ensure",
               "deadline_at": {"$var": "missing.deadline_at"},
               "payload": {
-                "image": "ghcr.io/aixlehq/flow-agent-claude-code",
-                "digest": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+                "image": "ghcr.io/aixlehq/flow-agent-claude-code@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
              }
            }
           ]

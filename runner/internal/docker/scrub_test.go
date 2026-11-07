@@ -48,7 +48,7 @@ func (h *harness) volumeFiles(name string) map[string][]byte {
 	return nil
 }
 
-func scrubPayload() map[string]any { return map[string]any{"image": image, "digest": digest} }
+func scrubPayload() map[string]any { return map[string]any{"image": pinned} }
 
 func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 	h, _ := twoEnvironments(t)
@@ -67,7 +67,7 @@ func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 	}
 	// The checkout, the cache volume and the image stay; the other environment is
 	// not touched.
-	if h.volumeFiles("aixle-cache-"+envKey+"-pip") == nil || !h.engine.images[image+"@"+digest] {
+	if h.volumeFiles("aixle-cache-"+envKey+"-pip") == nil || !h.engine.images[pinned] {
 		t.Fatal("the scrub removed a cache volume or the image")
 	}
 	if files := h.volumeFiles("aixle-ws-" + otherKey); len(files) != 2 {
@@ -81,7 +81,7 @@ func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 			scrub = &fakeContainerRequest{c.Config.Image, c.Config.User, string(c.HostConfig.NetworkMode), len(c.HostConfig.Mounts), c.Config.Labels[LabelEnvironment]}
 		}
 	}
-	if scrub == nil || *scrub != (fakeContainerRequest{image + "@" + digest, "0:0", "none", 1, envKey}) {
+	if scrub == nil || *scrub != (fakeContainerRequest{pinned, "0:0", "none", 1, envKey}) {
 		t.Fatalf("scrub container %#v", scrub)
 	}
 }
@@ -144,7 +144,7 @@ func TestResetAlsoRemovesTheEnvironmentsVolumes(t *testing.T) {
 			t.Fatalf("volumes left %v", volumes)
 		}
 	}
-	if !reflect.DeepEqual(h.containerNames(), []string{"aixle-" + otherKey + "-123"}) || !h.engine.images[image+"@"+digest] {
+	if !reflect.DeepEqual(h.containerNames(), []string{"aixle-" + otherKey + "-123"}) || !h.engine.images[pinned] {
 		t.Fatal("the reset touched another environment or the image")
 	}
 	// A reset of an environment with nothing left is not an error.

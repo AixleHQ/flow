@@ -29,11 +29,11 @@ const OutputsPath = WorkspaceTarget + "/outputs"
 // the agent replaced with a link empties nothing outside the volume.
 const emptyOutputs = `if [ -d ` + OutputsPath + ` ]; then find ` + OutputsPath + ` -mindepth 1 -delete; fi`
 
-// ScrubPayload is the payload of `env.scrub`: the agent image, pinned by digest,
-// that the container emptying the outputs runs. `image.ensure` pulled it.
+// ScrubPayload is the payload of `env.scrub`: the agent image, as in
+// `image.ensure`, that the container emptying the outputs runs. `image.ensure`
+// pulled it.
 type ScrubPayload struct {
-	Image  string `json:"image"`
-	Digest string `json:"digest"`
+	Image string `json:"image"`
 }
 
 // Scrub is `env.scrub` (DESIGN.md §7.2): it removes the environment's containers
@@ -43,7 +43,7 @@ type ScrubPayload struct {
 // volume name, and never walks a host mount.
 func (e *Environment) Scrub(ctx context.Context, raw json.RawMessage) protocol.Result {
 	var p ScrubPayload
-	if r := decodePayload(raw, &p, "{image, digest}"); r != nil {
+	if r := decodePayload(raw, &p, "{image}"); r != nil {
 		return *r
 	}
 	ref, err := ImageEnsurePayload(p).Reference()

@@ -382,14 +382,21 @@ for the session its envelope names, and for no other (§6.2, §6.3):
   `error.class` `session_required`.
 - A session op that finds the environment's session container labelled with another session
   (`aixle.com/session`) does not touch it: it answers an `error` result with `error.class`
-  `session_mismatch`. So a late op of a finished session never reaches the next session's
-  container.
+  `session_mismatch`. This holds for `container.start` and `container.stop` too (§6.2). So a late
+  op of a finished session never reaches the next session's container.
+- A session op that finds no session container answers `no_session_container` (`status`
+  answers `missing` instead, §6.3).
 
-**The platform's side of a deadline.** An op that still has no result 10 seconds past its
-`deadline_at`, `pending` or `delivered`, is marked `expired` by the platform, as if the runner had
-answered `expired`: `delivered` does not prove the runner received it (§5.4). A result that
-arrives later changes nothing (§5.5, the first result wins). Finished ops are kept 7 days, and
-each machine's newest op is kept longer, so `sequence` keeps growing.
+The platform sends a session's ops only while the session holds the machine; once it has
+released it, the platform answers them itself, as `no_session_container`, and enqueues nothing.
+The runner's check is the safety net for an op enqueued just before the release.
+
+**The platform's side of a deadline.** The platform stops waiting for an op at its `deadline_at`
+and marks it `expired`, as if the runner had answered `expired`. An op that nobody waits for any
+more, still without a result 10 seconds past its `deadline_at`, `pending` or `delivered`, is
+marked `expired` by the platform's sweep: `delivered` does not prove the runner received it
+(§5.4). A result that arrives later changes nothing (§5.5, the first result wins). Finished ops
+are kept 7 days, and each machine's newest op is kept longer, so `sequence` keeps growing.
 
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
 `logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
@@ -439,26 +446,26 @@ labels.
 
 ### 6.1 `image.ensure`
 
-A host-runner op (`manual`, and `coder` later): the runner makes sure the machine's Docker daemon
-has an agent image, pinned by digest, pulling it when it is missing.
+A host-runner op (`manual`, and `coder` later): the runner pulls an agent image onto the
+machine's Docker daemon.
 
 Payload:
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `image` | string | Required. The repository, without a digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code`. |
-| `digest` | string | Required. `sha256:` and 64 lowercase hex digits. |
+| `image` | string | Required. An image reference as the platform was given it, by tag or by digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code:latest` or `ghcr.io/aixlehq/flow-agent-claude-code@sha256:…`. A reference with neither is read as `:latest`, as `docker pull` reads it. |
 
-Other payload fields are ignored. The runner works on the reference `<image>@<digest>`. If the
-daemon has it, nothing is pulled. Otherwise the runner pulls it through the Docker Engine API.
+Other payload fields are ignored. The runner always pulls the reference through the Docker
+Engine API, so a tag that moved is followed; the daemon downloads only the layers it lacks.
+There is no pull policy, and no digest is returned: the platform never contacts a registry.
 
 Results:
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
-| The image is there, pulled or not | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether it was pulled, and how long the op took in milliseconds | |
-| The pull failed | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
-| The daemon could not be asked whether it has the image | `error` | | `docker_error` |
+| The image is there | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether the pull brought anything new (the daemon did not have the image, or the reference now names another image), and how long the op took in milliseconds | |
+| The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
+| The daemon could not be asked which image it has | `error` | | `docker_error` |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 ```json
@@ -481,8 +488,8 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 
 #### `container.start`
 
-Creates and starts the session's agent container from the agent image pinned by digest, named
-and labelled with the envelope's `session_id`. The container runs the image's own entrypoint and
+Creates and starts the session's agent container from the agent image, named and labelled with
+the envelope's `session_id`. The container runs the image's own entrypoint and
 command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
@@ -491,8 +498,7 @@ Payload:
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `image` | string | Required. As in `image.ensure` (§6.1): the repository, without a digest. |
-| `digest` | string | Required. As in `image.ensure`. The daemon must have `<image>@<digest>`: `image.ensure` pulls it. |
+| `image` | string | Required. The reference, as in `image.ensure` (§6.1). The daemon must have it: `image.ensure` pulls it. |
 | `env` | object | Optional, string to string. The container's environment variables, on top of the image's. A name must not be empty or contain `=`. |
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
@@ -532,7 +538,8 @@ Results:
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | The container runs | `ok` | `{"container_id": <string>, "name": <string>}` | |
-| The environment already has a container, of a session or left over | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
+| The environment has another session's container | `error` | | `session_mismatch`; the message names it and both sessions, and nothing is started |
+| The environment already has a container: this session's own, or one left over that names no session | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
 | The daemon does not have the image | `error` | | `image_not_found` |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
@@ -549,14 +556,17 @@ Stops the container of the envelope's session, sending SIGTERM and SIGKILL 10 se
 removes it with its anonymous volumes. The workspace and cache volumes stay. The name alone is
 not proof: a container named `aixle-<key>-<session_id>` that does not carry both
 `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
-`container_not_owned`, and is neither stopped nor removed. A container of another session is
-left alone: it does not have this session's name, so the answer is `{"removed": false}`.
+`container_not_owned`, and is neither stopped nor removed. Without a container of this session
+the op answers an `error` and touches nothing, so that the platform can tell "this session's
+container is already gone" from "the machine holds another session".
 
 Payload: `{}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
-| The container is gone | `ok` | `{"removed": <boolean>}`: `false` when there was no container `aixle-<key>-<session_id>` to remove | |
+| The container is gone | `ok` | `{"removed": <boolean>}`: `false` only when the container went away while it was being stopped | |
+| The environment's session container is another session's | `error` | | `session_mismatch`; the container is not touched |
+| The environment has no session container | `error` | | `no_session_container` |
 | A container has the name but not both labels | `error` | | `container_not_owned`; the container is not touched |
 | The daemon refused | `error` | | `docker_error` |
 | The payload is not the one above | `error` | | `invalid_payload` |
@@ -719,7 +729,7 @@ Repository checkouts, the cache volumes and the pulled images stay. A workspace 
 not carry `aixle.com/environment=<key>` is not the environment's: step 3 does not mount it, nothing
 is emptied, and the scrub answers `scrub_failed` naming it.
 
-Payload: `{"image": <string>, "digest": <string>}`, as in `image.ensure`: the agent image the
+Payload: `{"image": <string>}`, the reference as in `image.ensure`: the agent image the
 container of step 3 runs. The daemon must have it.
 
 | Outcome | `status` | `data` | `error.class` |

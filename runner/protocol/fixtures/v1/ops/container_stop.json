@@ -1,5 +1,5 @@
 {
-  "description": "container.stop stops and removes the session's container (PROTOCOL.md §6.2). A container that is already gone is not an error: `removed` says whether there was one.",
+  "description": "container.stop stops and removes the session's container (PROTOCOL.md §6.2). Without this session's container it answers an error and touches nothing: no_session_container when the environment has no session container, session_mismatch when it is another session's.",
   "steps": [
     {
       "given": "registered_machine",
@@ -9,6 +9,11 @@
       "given": "session_on_machine",
       "machine": "m",
       "as": "s"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s2"
     },
     {
       "given": "op_enqueued",
@@ -23,6 +28,14 @@
       "machine": "m",
       "session": "s",
       "as": "gone",
+      "op": "container.stop",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s2",
+      "as": "mismatch",
       "op": "container.stop",
       "payload": {}
     },
@@ -67,6 +80,22 @@
                 "$var": "gone.deadline_at"
               },
               "payload": {}
+            },
+            {
+              "id": {
+                "$var": "mismatch.id"
+              },
+              "sequence": {
+                "$var": "mismatch.sequence"
+              },
+              "op": "container.stop",
+              "session_id": {
+                "$var": "s2.id"
+              },
+              "deadline_at": {
+                "$var": "mismatch.deadline_at"
+              },
+              "payload": {}
             }
           ]
         }
@@ -100,9 +129,10 @@
         "path": "/runner/v1/ops/{{gone.id}}/result",
         "token": "{{m.access_token}}",
         "body": {
-          "status": "ok",
-          "data": {
-            "removed": false
+          "status": "error",
+          "error": {
+            "class": "no_session_container",
+            "message": "environment aixle-r7-1f2e3d4c has no container of session 123: nothing was stopped"
           }
         }
       },
@@ -112,14 +142,37 @@
           "id": {
             "$var": "gone.id"
           },
-          "state": "completed"
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{mismatch.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "session_mismatch",
+            "message": "the session container aixle-aixle-r7-1f2e3d4c-125 carries aixle.com/session=125, not the op's session 124; the op was not run"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "mismatch.id"
+          },
+          "state": "failed"
         }
       }
     },
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/ops?after={{gone.sequence}}&wait=0",
+        "path": "/runner/v1/ops?after={{mismatch.sequence}}&wait=0",
         "token": "{{m.access_token}}"
       },
       "response": {

@@ -371,6 +371,8 @@ func TestSessionOpsWithoutASessionContainer(t *testing.T) {
 		"read_file":  map[string]any{"path": "/x"},
 		"logs":       map[string]any{},
 		"batch":      map[string]any{"ops": []map[string]any{{"op": "exec", "payload": map[string]any{"cmd": []string{"true"}}}}},
+		// Nor does container.stop find one to stop.
+		"container.stop": map[string]any{},
 	}
 	handlers := h.env.Handlers()
 	for op, p := range ops {
@@ -439,6 +441,9 @@ func TestASessionOpOfAnotherSessionIsRefused(t *testing.T) {
 		"logs":       map[string]any{},
 		"status":     map[string]any{},
 		"batch":      map[string]any{"ops": []map[string]any{{"op": "exec", "payload": map[string]any{"cmd": []string{"true"}}}}},
+		// The lifecycle ops refuse the same way: neither stops nor starts over it.
+		"container.stop":  map[string]any{},
+		"container.start": startPayload(nil),
 	}
 	handlers := h.env.Handlers()
 	for op, p := range ops {
@@ -461,11 +466,6 @@ func TestASessionOpOfAnotherSessionIsRefused(t *testing.T) {
 	}
 	if got := string(c.Files["/tmp/notes"].Content); got != "mine" {
 		t.Fatalf("the other session's write reached the container: %q", got)
-	}
-	// container.stop acts on its own session's name, so the running container
-	// of another session is left alone.
-	if r := h.runAs(124, handlers["container.stop"], map[string]any{}); r.Status != protocol.StatusOK || r.Data["removed"] != false {
-		t.Fatalf("%#v", r)
 	}
 	if after := h.only(); after.ID != c.ID || !after.State.Running {
 		t.Fatal("the container was stopped or removed")
