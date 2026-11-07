@@ -8,19 +8,31 @@ get. Both sides run them:
 - **The gateway.** `test/integration/runner_protocol_conformance_test.rb` runs every fixture
   against the Rails gateway's routes, in the normal Rails CI shards. A new fixture file is picked
   up without a code change.
-- **The runner.** A Go fake of the gateway that implements the same setup steps can run them
-  against `aixle-runner`'s client later (§15 task 6a of `docs/design/agent-runtimes/DESIGN.md`).
+- **The runner.** `runner/internal/protocol/conformance_test.go` builds a Go fake of the gateway
+  from each fixture and drives `aixle-runner`'s client through every exchange the client can
+  send. The fake checks that each request is exactly the fixture's request, and answers with the
+  fixture's response, its matchers filled in with concrete values; the client must read that
+  answer as the protocol says. An exchange the client never sends (a protocol header other than
+  `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
+  checks, which the Rails side runs. The test fails if no register, token, unregister or ops
+  exchange was driven. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
+  ties the `ops/` fixtures to the runner's handlers: every payload a fixture enqueues for an op
+  the runner implements passes that op's payload checks, and every error class a fixture posts
+  for such an op is one the runner reports.
 
 `v1/` holds the fixtures of protocol `1`. A protocol bump adds `v2/` next to it.
 
 ## What the fixtures do not cover
 
-These clauses of `PROTOCOL.md` are verified outside the portable suite. A Go fake of the gateway
-does not get them from the fixtures, so it implements them from `PROTOCOL.md` directly.
+These clauses of `PROTOCOL.md` are verified outside the portable suite. The Go fake replays only
+what the fixtures say, so the runner's handling of these answers (the `413`, the `429` and the
+other refusals) is covered by the runner's own unit tests (`runner/internal/protocol/client_test.go`,
+the table of §3 in `TestClassify`).
 
 | Clause | Why it is not a fixture | Verified by |
 | --- | --- | --- |
 | Timing and concurrency: the long-poll waking up when an op is enqueued, a poll that holds its wait, the check after the wait, and races between two requests | A fixture runs its steps one after another, and every fixture polls with `wait=0`. | `test/integration/runner_gateway_operations_test.rb` and `test/services/runners/operations_test.rb` |
+| One waiting poll per machine: a newer poll ends the older one, which answers `{"ops": []}` at once (§5.4) | It needs two requests in flight at once, which the fixture format cannot express. | `test/integration/runner_gateway_operations_test.rb` ("a newer poll of the environment ends the waiting one, …", "a poll of another environment does not end a waiting one", "a poll with wait=0 does not end a waiting one") |
 | A `wait` above 25 treated as 25 (§5.4) | The poll would be held for 25 seconds. | Not tested. `Runners::Operations.poll` clamps it to `MAX_WAIT`. |
 | The `413` for a body over 2 MiB (§2) | Puma answers it before the application, and the Rails tests have no Puma. | No test sends a body through Puma. The cap is `http_content_length_limit` in `config/puma_runner_gateway.rb`. |
 | The `429` of the rate limits (§2) | Rack::Attack is off in the tests, and a limit takes hundreds of requests. | The status and the three limits: `test/integration/rack_attack_test.rb` ("registering runners from one address is cut off", "the runner gateway is capped per credential, whichever address it calls from", "the runner gateway is capped per address, whatever bearer value each request sends"). Its plain-text body and the absent `Retry-After` are Rack::Attack's defaults, not tested. |

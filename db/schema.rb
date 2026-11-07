@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_04_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1235,8 +1235,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_04_120000) do
     t.datetime "revoked_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "rotated_from_id"
     t.index ["company_id"], name: "index_runner_credentials_on_company_id"
     t.index ["family_id"], name: "index_runner_credentials_on_family_id"
+    t.index ["rotated_from_id"], name: "index_runner_credentials_on_rotated_from_id"
     t.index ["runner_environment_id"], name: "index_runner_credentials_on_runner_environment_id"
     t.index ["runner_id"], name: "index_runner_credentials_on_runner_id"
     t.index ["token_digest"], name: "index_runner_credentials_on_token_digest", unique: true
@@ -2390,6 +2392,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_04_120000) do
   add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
   add_foreign_key "runner_credentials", "companies", on_delete: :cascade
+  add_foreign_key "runner_credentials", "runner_credentials", column: "rotated_from_id", on_delete: :nullify
   add_foreign_key "runner_credentials", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_credentials_environment_runner", on_delete: :cascade
   add_foreign_key "runner_credentials", "runner_environments", on_delete: :cascade
   add_foreign_key "runner_credentials", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_credentials_runner_company", on_delete: :cascade

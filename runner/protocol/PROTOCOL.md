@@ -92,7 +92,7 @@ These are the only refusals without this shape:
 | `invalid_request` | 400 | `GET ops` | `after` or `wait` is malformed or out of range (§5.4). |
 | `invalid_token` | 401 | all | The token is unknown, of the wrong kind for the endpoint, revoked, expired, already used (a registration token), or of an unregistered machine. |
 | `runner_revoked` | 401 | all | The token is valid, but its runner is revoked or deleted. |
-| `credential_reuse_detected` | 401 | `token` | A refresh token was presented a second time. Its whole family is now revoked (§4). |
+| `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
 | `not_found` | 404 | `ops/:id/result` | The op does not exist, or belongs to another machine. |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
@@ -107,7 +107,8 @@ These are the only refusals without this shape:
    machine and, for a registration token, unused. Anything else is `invalid_token`, before the
    runner or the flag is looked at, so a dead token learns nothing about either. The one
    exception is a spent refresh token: it passes this step, even past its own expiry, so that
-   `POST /token` can answer `credential_reuse_detected` (§4).
+   `POST /token` can tell a retry after a lost response from a reuse, and answer
+   `credential_reuse_detected` for a reuse (§4).
 3. The runner's status: revoked or deleted is `runner_revoked`. The gateway caches this check for
    up to 5 seconds, so a revocation reaches it within 5 seconds.
 4. The `external_runners` flag for the runner's company: off is `runners_disabled`.
@@ -142,6 +143,11 @@ then gets the refusal, not the ops (§5.4).
 "Backs off" means retrying with increasing delays, with jitter, so that a fleet of machines does
 not retry in step.
 
+**A network error on `POST /token`.** When the connection fails before the runner has the
+response (a timeout, a reset, a dropped connection), the runner does not know whether the
+gateway spent its refresh token. It backs off and retries with the same refresh token. The
+gateway answers such a retry like a rotation, within the limits of §4.
+
 ## 4. Tokens
 
 Tokens are opaque strings with a prefix by kind, so a leaked one is recognisable. A runner must
@@ -170,6 +176,21 @@ The rules:
 - **Reusing a refresh token revokes its family.** A spent refresh token presented again means two
   holders have it: the gateway answers `credential_reuse_detected` and revokes every token of the
   family, the newest pair included. This holds even after the spent token's own 30-day expiry.
+- **Except a retry after a lost response.** A spent refresh token presented again is a retry,
+  not a reuse, when both of these hold:
+  - it was spent less than 60 seconds ago;
+  - the pair its spend issued is unused: the gateway has accepted neither its access token nor
+    its refresh token.
+
+  The gateway then revokes that unused pair and answers `200` with a fresh pair of the same
+  family, exactly as a rotation does. The 60 seconds count from the first spend, so a retry does
+  not extend them, and a second retry within them revokes the first retry's pair. Anything else
+  is reuse: a spent token presented 60 seconds or more after its spend, after the pair it issued
+  was used, or two or more rotations old.
+- **The retry's limit.** A runner retries a failed refresh about 1, 3, 7, 15 and 31 seconds after
+  the first failure, so a dropped connection of up to about 30 seconds is covered. If the
+  connection drops right after the gateway commits the rotation and stays down longer, the
+  retry comes after the 60 seconds and is reuse: the machine must be registered again.
 - **Unregistering revokes every token of the machine** (`DELETE /registration`), and revoking or
   deleting the runner revokes every token of every one of its machines.
 
@@ -247,7 +268,10 @@ The refresh token, sent as the bearer, is exchanged for a new pair (§4). No bod
 }
 ```
 
-Its own refusal: `401 credential_reuse_detected`, for a refresh token presented a second time.
+Its own refusal: `401 credential_reuse_detected`, for a spent refresh token presented again. A
+spent refresh token presented again within 60 seconds of its spend, while the pair the spend
+issued is unused, is a retry after a lost response instead: it answers `200` with a fresh pair,
+and the unused pair is revoked (§4).
 
 Fixtures: `token/`.
 
@@ -278,6 +302,11 @@ Anything else is `400 invalid_request`.
 - **Waiting.** With nothing to return, the gateway holds the request for up to `wait` seconds and
   answers as soon as an op is enqueued. When the wait ends with nothing, the answer is
   `{"ops": []}`, and the runner polls again.
+- **One waiting poll per machine.** Only one poll of a machine waits at a time. A newer poll with
+  `wait` above 0 ends the machine's older waiting poll, which answers `{"ops": []}` at once, and
+  the newer one waits. A poll with `wait=0` ends no other poll. Two polls that start together may
+  both answer `{"ops": []}`. No op is lost: an op stays deliverable until `after` acknowledges it.
+  A runner that sends one poll at a time never sees this.
 - **Acknowledging.** `after` is the acknowledgement: an op at or below it is not returned again.
   An op above it is returned by every poll until it is acknowledged or has a result. So a runner
   sets `after` to the highest `sequence` it has recorded, and must expect to receive an op it has
@@ -289,7 +318,8 @@ Anything else is `400 invalid_request`.
   again before it answers (§3). If one fails, it answers the refusal without the ops, and those
   ops stay deliverable.
 
-Fixtures: `ops/` (all with `wait=0`; the waiting itself is tested by the gateway's own tests).
+Fixtures: `ops/` (all with `wait=0`; the waiting itself, and a newer poll ending an older one, are
+tested by the gateway's own tests).
 
 ### 5.5 `POST /runner/v1/ops/:id/result`
 
@@ -346,10 +376,353 @@ The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`,
 `logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
 `env.scrub` and `env.reset`.
 
-**Payload and result schemas are not part of this version of the document.** The gateway
-carries the payload as an opaque object. Each op's payload and result, with its fixtures, are
-specified by the task that first implements the op: 6a for the host ops, 6b for the session ops,
-and 8 for the platform side that enqueues them.
+**Payload and result schemas.** The gateway carries the payload as an opaque object. Each op's
+payload and result, with its fixtures, are specified below: `image.ensure` (§6.1), the agent
+container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform side that
+enqueues them is task 8. `session.start` and `session.stop` are reserved and have no schema:
+a runner answers them `unsupported_op` (below).
+
+**Who runs them.** On `manual` the host runner runs every op of this section itself. It runs the
+session ops through the Docker Engine API against the environment's session container (exec,
+the archive API for files, inspect for the status), as the platform's development runtime
+does. Nothing of the runner runs inside the agent container.
+
+**Rules every op follows.**
+
+- **Unknown payload fields are ignored**, so a newer platform can add optional fields (§7). A
+  payload field of the wrong type, or a value outside its rule, is an `error` result with
+  `error.class` `invalid_payload`, and nothing is run.
+- **A failure of the Docker daemon** that the op's own classes do not cover is `docker_error`,
+  with the daemon's message.
+- **The output cap is 1 MiB** (1 048 576 bytes): the most an op returns of one output stream or
+  one file. It is a constant of protocol 1, since the runner reads no platform settings.
+- **A result over the body cap is `result_too_large`.** Before it journals and posts a result,
+  the runner encodes it once. If the encoded result is over the gateway's 2 MiB body cap (§2) less
+  a 16 KiB margin, the runner posts an `error` result with `error.class` `result_too_large`
+  instead, and nothing else: the gateway would refuse the larger body with `413`, which is not
+  resent (§3), and the op would never be answered. The message names the op and the encoded size,
+  and for a `batch` how many steps it has and how many ran. The op did run: a `batch` of
+  `write_file`s, for example, wrote its files. It happens to an `exec` near the output cap on both
+  streams, a `batch` of large steps, or output that JSON escapes heavily (`<`, `>`, `&` and control
+  bytes such as the `ESC` of a terminal's colours take 6 bytes each).
+- **`error.class` is the contract**; `error.message` is for people and may change.
+
+**An op this runner does not implement.** The platform can be newer than the runner. A runner
+that receives an op name it does not implement does not run it, and answers an `error` result
+with `error.class` `unsupported_op` and a message that names the op and the runner's version.
+
+**An op interrupted by a restart.** Ops run at most once. A runner that stopped while an op ran
+does not run it again when it is redelivered: it answers an `error` result with `error.class`
+`interrupted`. This holds for the session ops too. The session container belongs to the Docker
+daemon, not to the runner, so a runner restart does not stop it: a command an `exec` started
+keeps running in the container, and the restarted runner finds the container again by its
+labels.
+
+### 6.1 `image.ensure`
+
+A host-runner op (`manual`, and `coder` later): the runner makes sure the machine's Docker daemon
+has an agent image, pinned by digest, pulling it when it is missing.
+
+Payload:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `image` | string | Required. The repository, without a digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code`. |
+| `digest` | string | Required. `sha256:` and 64 lowercase hex digits. |
+
+Other payload fields are ignored. The runner works on the reference `<image>@<digest>`. If the
+daemon has it, nothing is pulled. Otherwise the runner pulls it through the Docker Engine API.
+
+Results:
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| The image is there, pulled or not | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether it was pulled, and how long the op took in milliseconds | |
+| The pull failed | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
+| The daemon could not be asked whether it has the image | `error` | | `docker_error` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+```json
+{ "status": "ok", "data": { "pulled": true, "duration_ms": 41250 } }
+```
+
+Fixtures: `ops/image_ensure.json`.
+
+### 6.2 The agent container: `container.start` and `container.stop`
+
+Host-runner ops (`manual`). An environment has at most one session container at a time.
+
+**Names, labels and volumes.** For an environment of key `<key>`:
+
+| What | Name | Label |
+| --- | --- | --- |
+| The session container | `aixle-<key>-<session_id>` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
+| The workspace volume | `aixle-ws-<key>` | `aixle.com/environment=<key>` |
+| A cache volume | `aixle-cache-<key>-<name>` | `aixle.com/environment=<key>` |
+
+#### `container.start`
+
+Creates and starts the session's agent container from the agent image pinned by digest. The
+container runs the image's own entrypoint and command, unchanged, as a hosted pod does. The
+runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
+directory.
+
+Payload:
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `image` | string | Required. As in `image.ensure` (§6.1): the repository, without a digest. |
+| `digest` | string | Required. As in `image.ensure`. The daemon must have `<image>@<digest>`: `image.ensure` pulls it. |
+| `session_id` | integer | Required, above 0. The session's id, in the container's name and label. |
+| `env` | object | Optional, string to string. The container's environment variables, on top of the image's. A name must not be empty or contain `=`. |
+| `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
+| `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
+| `network` | string | Optional: `bridge` (the default) or `host`. |
+| `pid` | string | Optional: `private` (the default) or `host`. |
+| `resources` | object | Optional: `{"cpus": <number>, "memory_bytes": <integer>, "pids_limit": <integer>}`, each optional and not negative. An absent or `0` field sets no limit. `memory_bytes` also caps swap. |
+| `privilege_escalation` | boolean | Optional, default `false`. `false` starts the container with `no-new-privileges`, as the hosted pod is started for a runtime that needs no `sudo`. |
+
+A `mounts` entry:
+
+| `type` | Fields | Mounted as |
+| --- | --- | --- |
+| `cache` | `name`: letters, digits, `_`, `.` and `-`, starting with a letter or digit; `target` | The cache volume `aixle-cache-<key>-<name>` at `target`, writable. |
+| `bind` | `source`: an absolute, clean path of the machine; `target`; `writable`, a boolean, default `false` | `source` at `target`, read-only unless `writable` is `true`. |
+
+A `target` is an absolute, clean path other than `/`. A `bind` whose `source`, symlinks
+resolved, is the runner's state directory, is inside it or contains it, is refused with
+`forbidden_mount`: the state directory holds the environment's credentials. A source the runner
+cannot resolve is refused the same way.
+
+A runner installed as the service runs with systemd's `PrivateTmp=true`, so it sees a private
+`/tmp` and `/var/tmp`, not the machine's. A `bind` whose `source` is under the machine's `/tmp`
+or `/var/tmp` does not resolve there and is refused with `forbidden_mount`. This is a known
+limitation: a bind source must be outside those directories when the runner runs as the
+service.
+
+The container is also created with the restart policy `no` (an agent cannot resume mid-turn, so
+a container that stops stays stopped and keeps its exit code), the `NET_RAW` capability dropped,
+and no published ports. The runner creates the workspace and cache volumes with the
+environment's label before it creates the container. Creating a volume that already exists
+returns it unchanged, so a volume with one of these names that does not carry
+`aixle.com/environment=<key>` is not the environment's: `container.start` refuses with
+`volume_not_owned`, naming it, and neither mounts nor changes it.
+
+Results:
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| The container runs | `ok` | `{"container_id": <string>, "name": <string>}` | |
+| The environment already has a container, of a session or left over | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
+| The daemon does not have the image | `error` | | `image_not_found` |
+| A bind would expose the state directory | `error` | | `forbidden_mount` |
+| A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
+| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+```json
+{ "status": "ok", "data": { "container_id": "4f1c…", "name": "aixle-aixle-r7-1f2e3d4c-123" } }
+```
+
+#### `container.stop`
+
+Stops the session's container, sending SIGTERM and SIGKILL 10 seconds later, and removes it with
+its anonymous volumes. The workspace and cache volumes stay. The name alone is not proof: a
+container named `aixle-<key>-<session_id>` that does not carry both
+`aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
+`container_not_owned`, and is neither stopped nor removed.
+
+Payload: `{"session_id": <integer above 0>}`.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| The container is gone | `ok` | `{"removed": <boolean>}`: `false` when there was no container `aixle-<key>-<session_id>` to remove | |
+| A container has the name but not both labels | `error` | | `container_not_owned`; the container is not touched |
+| The daemon refused | `error` | | `docker_error` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+Fixtures: `ops/container_start.json`, `ops/container_stop.json`.
+
+### 6.3 The session ops
+
+`exec`, `write_file`, `read_file`, `batch`, `status` and `logs` act on the environment's session
+container, the one labelled `aixle.com/environment=<key>` and `aixle.com/session`. Protocol 1 has
+no `session_id` in the op envelope yet (§8): the environment's one session container is the
+target.
+
+**Without a session container.** `exec`, and an `exec` in a `batch`, need the container
+running. `write_file`, `read_file` and `logs` need it to exist, and work on a container that has
+exited, so that the platform can collect the output of an agent that ended. Without what it
+needs, an op answers an `error` result with `error.class` `no_session_container`. `status`
+answers `missing` instead.
+
+#### `exec`
+
+Runs a command in the session container through the daemon's exec API, without a TTY.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `cmd` | array of strings | Required, not empty. The command and its arguments; no shell is added. |
+| `env` | object | Optional, string to string. Added to the container's environment for this command. |
+| `cwd` | string | Optional, an absolute path. Default: the image's working directory. |
+| `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
+| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. Absent or `0`: the op's `deadline_at` bounds the command instead, the same way, with the seconds left until it when the command starts (at least 1). After the deadline nobody waits for the result, and the runner runs one op at a time. |
+| `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
+
+| Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
+| --- | --- | --- | --- | --- | --- |
+| The command ran, whatever its exit code | `ok` | Its exit code | Each up to the output cap | `{"stdout_truncated": <boolean>, "stderr_truncated": <boolean>}` | |
+| The command ran past its `timeout`, or without one past the op's `deadline_at`, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
+| The daemon refused the exec | `error` | | | | `exec_failed` |
+| No running session container | `error` | | | | `no_session_container` |
+| The payload is not the one above | `error` | | | | `invalid_payload` |
+
+**The output cap.** Each stream keeps its first 1 MiB; the rest is read and dropped, so the
+command never blocks on a full pipe, and `<stream>_truncated` is `true`. A UTF-8 character cut
+by the cap is dropped, and bytes that are not UTF-8 arrive as U+FFFD.
+
+```json
+{ "status": "ok", "exit_code": 0, "stdout": "main\n", "stderr": "", "data": { "stdout_truncated": false, "stderr_truncated": false } }
+```
+
+#### `write_file`
+
+Writes one file into the session container through the archive API (what `docker cp` does).
+Missing parent directories are created, owned by root with mode `0755`; an existing file is
+replaced.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `path` | string | Required. An absolute, clean path other than `/`. |
+| `content` | string | Required. The file's bytes, standard base64 with padding. `""` writes an empty file. An absent or `null` `content` is `invalid_payload`, in a `batch` step too, and nothing is written. |
+| `mode` | integer | Optional, default `420` (`0644`). From `0` to `4095` (`07777`). |
+| `uid`, `gid` | integer | Optional, default `0`, not negative. The file's owner. |
+
+| Outcome | `status` | `error.class` |
+| --- | --- | --- |
+| Written | `ok`, no `data` | |
+| The daemon refused the write | `error` | `write_failed` |
+| No session container | `error` | `no_session_container` |
+| The payload is not the one above | `error` | `invalid_payload` |
+
+#### `read_file`
+
+Reads one regular file of the session container through the archive API. A symlink is followed
+once, to the target the daemon resolves.
+
+Payload: `{"path": <an absolute, clean path other than />}`.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| Read | `ok` | `{"content": <base64>, "size": <integer>}`: the file's bytes and their number | |
+| The file is over the output cap | `error` | | `file_too_large`. Nothing of it is returned (§8). |
+| No such file | `error` | | `file_not_found` |
+| A directory or another non-regular file | `error` | | `not_a_file` |
+| No session container | `error` | | `no_session_container` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+#### `batch`
+
+An ordered list of `exec`, `write_file` and `read_file` ops, run one after another until the
+first that fails. A step fails when its result is an `error`, or when it is an `exec` whose
+exit code is not `0`.
+
+Payload: `{"ops": [{"op": <"exec" | "write_file" | "read_file">, "payload": <that op's payload>}, …]}`,
+at least one. Every step is checked before the first runs: an empty list, another op name (a
+nested `batch` included) or an invalid step payload is `invalid_payload`, and nothing runs.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| Every step succeeded | `ok` | `{"results": [<result>, …]}`: each step's result, in the shape of §5.5, in order | |
+| A step failed | `error` | `{"results": […]}`, ending with the failed step's result | `batch_step_failed`; the message names the step's index and op, and how many did not run |
+
+#### `status`
+
+The session container's state, read from the daemon's inspect. Payload: `{}`.
+
+| `data.state` | When | Other `data` |
+| --- | --- | --- |
+| `running` | The container runs (a paused one counts: it has not exited) | `container_id`, `name` |
+| `starting` | Created and not started yet, or restarting | `container_id`, `name` |
+| `terminated` | Exited, dead, or being removed | `container_id`, `name`, `exit_code` (integer), `oom_killed` (boolean) |
+| `missing` | The environment has no session container | none |
+
+Each is an `ok` result. A daemon that cannot be asked is `docker_error`.
+
+#### `logs`
+
+The tail of the terminal-output file, `/tmp/terminal_output.log`, which the agent image's
+entrypoint writes from the agent's tmux pane (DESIGN.md §6.5).
+
+Payload: `{"bytes": <integer>}`, optional: how much of the end of the file to return, from `1`
+to the output cap. Absent or `0` means the output cap.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| Read | `ok` | `{"tail": <string>, "size": <integer>, "truncated": <boolean>}`: the last `bytes` of the file as text, the file's size, and whether the tail is shorter than the file. Before the agent has written anything the file does not exist, and `tail` is `""` with `size` `0`. | |
+| No session container | `error` | | `no_session_container` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+A UTF-8 character cut at the start of the tail is dropped, and bytes that are not UTF-8 arrive
+as U+FFFD.
+
+Fixtures: `ops/exec.json`, `ops/write_and_read_file.json`, `ops/batch.json`,
+`ops/status_and_logs.json`, `ops/no_session_container.json`, `ops/reserved_session_ops.json`.
+
+### 6.4 `env.scrub` and `env.reset`
+
+Host-runner ops (`manual`), the scrub and the reset of DESIGN.md §7.2. Who decides between
+them, and when, is the platform's.
+
+**Scope by ownership, never by enumeration.** Both act only on what the runner created for the
+environment: containers labelled `aixle.com/environment=<key>`, and the volumes `aixle-ws-<key>`
+and `aixle-cache-<key>-*` that also carry that label. Nothing of another environment is touched,
+even one whose key starts with this one's. Neither op walks a host-path mount: what an agent
+wrote through a writable bind mount is outside the guarantee.
+
+#### `env.scrub`
+
+1. Removes every container of the environment with `docker rm -f` and its anonymous volumes.
+2. Checks by label that none is left.
+3. If the workspace volume exists, empties `/workspace/outputs` on it: a short-lived container
+   of the agent image, labelled with the environment and `aixle.com/role=scrub`, running as root
+   with no network and only the workspace volume mounted, deletes everything inside the
+   directory and is removed. A `/workspace/outputs` that is a symlink is not followed.
+4. Checks by label again that no container is left.
+
+Repository checkouts, the cache volumes and the pulled images stay. A workspace volume that does
+not carry `aixle.com/environment=<key>` is not the environment's: step 3 does not mount it, nothing
+is emptied, and the scrub answers `scrub_failed` naming it.
+
+Payload: `{"image": <string>, "digest": <string>}`, as in `image.ensure`: the agent image the
+container of step 3 runs. The daemon must have it.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| Scrubbed | `ok` | `{"removed_containers": [<name>, …], "outputs_emptied": <boolean>}`: the containers removed, sorted, and whether a workspace volume was there to empty | |
+| A container could not be removed, one is left, the outputs could not be emptied, or the workspace volume is not the environment's | `error` | | `scrub_failed` |
+| The payload is not the one above | `error` | | `invalid_payload` |
+
+#### `env.reset`
+
+The scrub's steps 1 and 2, then the removal of the workspace volume and every cache volume of
+the environment, and a check that none of them is left. There are no outputs to empty, since
+the volume goes. Pulled images stay.
+
+Before it removes a volume, the reset looks for volumes named like the environment's that are not
+its own: `aixle-ws-<key>`, or `aixle-cache-<key>-*`, without `aixle.com/environment=<key>`. A cache
+volume whose label is another key `<other>` and whose name starts with `aixle-cache-<other>-`
+belongs to that environment and is not counted. If there is one, no volume is removed, and the
+reset answers `reset_failed` naming it.
+
+Payload: `{}`.
+
+| Outcome | `status` | `data` | `error.class` |
+| --- | --- | --- | --- |
+| Reset | `ok` | `{"removed_containers": [<name>, …], "removed_volumes": [<name>, …]}`, each sorted | |
+| A container or a volume could not be removed, for example a volume another container uses, one is left, or a volume named like the environment's is not its own | `error` | | `reset_failed` |
+
+Fixtures: `ops/env_scrub_and_reset.json`.
 
 ## 7. Versioning
 
@@ -367,7 +740,18 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
 - `POST /runner/v1/check-in`, `POST /runner/v1/heartbeat`, `POST /runner/v1/sessions/:id/log`,
   `POST /runner/v1/sessions/:id/events` and the callback proxy `/runner/v1/proxy/:route/*`: task 8
   and later.
-- `session_id` in the op envelope: task 8.
+- `session_id` in the op envelope: task 8. Until then the session ops act on the environment's one
+  session container (§6.3), so a late op of a finished session could reach the next session's
+  container. Task 8 moves it:
+  - `session_id` leaves the payloads of `container.start` and `container.stop` for the envelope.
+    Nothing is released, so no compatibility is needed;
+  - every session op checks the container's `aixle.com/session` label against it, and refuses on
+    a mismatch.
+- Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
+  and `read_file` refuses a larger file. How larger output and files come back is task 8. Until
+  then a result whose encoded body is over the gateway's 2 MiB cap is answered
+  `result_too_large` (§6).
+- `session.start` and `session.stop`: reserved, answered `unsupported_op`.
 - The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
   `GET /runner/v1/releases/:version/checksums`: task 10.
 - `409 busy` on `DELETE /registration` while a session runs: the first task that assigns a session

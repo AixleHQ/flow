@@ -7,7 +7,9 @@
 # `registration` is a single-use `manual` registration token; once used it
 # names the environment it created. `access` and `refresh` are an
 # environment's pair, and every pair a refresh rotates into shares the first
-# pair's `family_id`.
+# pair's `family_id` and names that refresh credential as `rotated_from`.
+# `used_at` is when a registration or refresh token was spent, and when an
+# access token was first accepted.
 class RunnerCredential < ApplicationRecord
   extend Enumerize
 
@@ -16,6 +18,7 @@ class RunnerCredential < ApplicationRecord
   belongs_to :runner
   belongs_to :company
   belongs_to :runner_environment, optional: true
+  belongs_to :rotated_from, class_name: "RunnerCredential", optional: true
 
   before_validation { self.company_id ||= runner&.company_id }
 

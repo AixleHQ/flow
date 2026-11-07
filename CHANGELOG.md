@@ -50,6 +50,11 @@ governance, community health — carry none.
   and is not made where that is empty; the seller role needs
   `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
   a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
+- **Sign-in & onboarding**: leaving the "Connect your agents" step — Back, Skip,
+  Get started, or closing the tab — ends any agent login still in progress there.
+  An agent login left unfinished anywhere else now closes after an hour instead
+  of 23 hours, releasing its container. Operators can change the limit with
+  `AGENT_LOGIN_TTL_SECONDS`.
 - **Sessions & Runs**: a Kiro session's cost is now its credits at an API-equivalent
   rate ($0.10 a credit, `KIRO_CREDIT_USD`), comparable with what other agents report,
   instead of at Kiro's overage price of $0.04 a credit.
@@ -83,12 +88,14 @@ governance, community health — carry none.
   edits a build file or runs a command on a path an earlier command printed.
 
 ### Fixed
+- **Sessions & Runs**: a run's live console reads *Session finishing…* while a
+  session is ending, instead of *Session starting…* as if it were starting again.
 - **Sessions & Runs**: a Kiro session's cost is now the credits its own model calls
   were charged, as shown in Kiro's own terminal. Since automatic sessions moved to
   Kiro's terminal UI, most were priced by how far the whole account's credit counter
   moved, which also counted the account's other sessions and its Kiro IDE use.
-- **Companies & projects**: a project whose name has no Latin letters or digits,
-  such as "Проект", can be created; it used to be refused with nothing shown.
+- **Companies & projects**: a project whose name has no Latin letters or digits
+  can be created; it used to be refused with nothing shown.
 - **Companies & projects**: the Create New Project dialog now shows why a project
   could not be created, including errors on fields other than the name, and keeps
   them visible when it was opened from the sidebar.

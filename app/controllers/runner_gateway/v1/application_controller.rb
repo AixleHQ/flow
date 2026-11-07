@@ -38,7 +38,10 @@ module RunnerGateway
       private
 
       # A spent refresh token passes the token check, so that
-      # Runners::Credentials.rotate! sees a second use of one.
+      # Runners::Credentials.rotate! sees a second use of one. An access
+      # token's first accepted use is recorded: it ends the retry window of the
+      # refresh that issued it (Runners::Credentials.retry?). An access token
+      # that a retry of that refresh revoked since it was read is refused here.
       def authenticate(kind)
         @credential = if kind == :refresh
           Runners::Credentials.refreshable(bearer_token)
@@ -49,8 +52,12 @@ module RunnerGateway
         return refuse(:unauthorized, "runner_revoked", "The runner is revoked or deleted.") unless runner_live?(@credential.runner_id)
 
         unless Feature.enabled?(:external_runners, company: @credential.company)
-          refuse(:forbidden, "runners_disabled", "External runners are turned off for this company.")
+          return refuse(:forbidden, "runners_disabled", "External runners are turned off for this company.")
         end
+
+        return if !@credential.access? || Runners::Credentials.record_use!(@credential)
+
+        refuse(:unauthorized, "invalid_token", "The token is unknown, used, revoked or expired.")
       end
 
       def runner_live?(runner_id)

@@ -14,7 +14,7 @@
       "machine": "m",
       "as": "second",
       "op": "write_file",
-      "payload": {"path": "/tmp/x"}
+      "payload": {"path": "/tmp/x", "content": ""}
     },
     {
       "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
@@ -34,7 +34,7 @@
               "sequence": {"$var": "second.sequence"},
               "op": "write_file",
               "deadline_at": {"$var": "second.deadline_at"},
-              "payload": {"path": "/tmp/x"}
+              "payload": {"path": "/tmp/x", "content": ""}
             }
           ]
         }
@@ -55,7 +55,7 @@
               "sequence": {"$var": "second.sequence"},
               "op": "write_file",
               "deadline_at": {"$var": "second.deadline_at"},
-              "payload": {"path": "/tmp/x"}
+              "payload": {"path": "/tmp/x", "content": ""}
             }
           ]
         }

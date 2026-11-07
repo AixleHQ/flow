@@ -1,0 +1,182 @@
+{
+  "description": "env.scrub removes the environment's containers and empties /workspace/outputs, and env.reset also removes its workspace and cache volumes, each selected by the environment's label and name (PROTOCOL.md §6.4). A scrub that leaves something behind is a scrub_failed error.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "scrub",
+      "op": "env.scrub",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code",
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "reset",
+      "op": "env.reset",
+      "payload": {}
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "as": "failed",
+      "op": "env.scrub",
+      "payload": {
+        "image": "ghcr.io/aixlehq/flow-claude-code",
+        "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "scrub.id"
+              },
+              "sequence": {
+                "$var": "scrub.sequence"
+              },
+              "op": "env.scrub",
+              "deadline_at": {
+                "$var": "scrub.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code",
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+              }
+            },
+            {
+              "id": {
+                "$var": "reset.id"
+              },
+              "sequence": {
+                "$var": "reset.sequence"
+              },
+              "op": "env.reset",
+              "deadline_at": {
+                "$var": "reset.deadline_at"
+              },
+              "payload": {}
+            },
+            {
+              "id": {
+                "$var": "failed.id"
+              },
+              "sequence": {
+                "$var": "failed.sequence"
+              },
+              "op": "env.scrub",
+              "deadline_at": {
+                "$var": "failed.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/flow-claude-code",
+                "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{scrub.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "removed_containers": [
+              "aixle-aixle-r7-1f2e3d4c-123"
+            ],
+            "outputs_emptied": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "scrub.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{reset.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "removed_containers": [],
+            "removed_volumes": [
+              "aixle-cache-aixle-r7-1f2e3d4c-pip",
+              "aixle-ws-aixle-r7-1f2e3d4c"
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "reset.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{failed.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "scrub_failed",
+            "message": "emptying /workspace/outputs failed: the container exited with 1"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "failed.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{failed.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

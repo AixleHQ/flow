@@ -511,6 +511,17 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     expect(screen.queryByText('Live view is private')).not.toBeInTheDocument();
   });
 
+  it.each(['finishing', 'finished'])(
+    'says a step is finishing, not starting, while its %s session winds down',
+    (terminalSessionState) => {
+      const running = buildStepRun({ id: 705, stepName: 'Collect data', state: 'running', terminalSessionState });
+      renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
+
+      expect(screen.getByText('Session finishing…')).toBeInTheDocument();
+      expect(screen.queryByText('Session starting…')).not.toBeInTheDocument();
+    },
+  );
+
   it('shows a console and action bar for every concurrently active step in a parallel run', async () => {
     const runningA = buildStepRun({
       id: 711,
