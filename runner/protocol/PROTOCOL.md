@@ -291,7 +291,8 @@ Anything else is `400 invalid_request`.
 ```json
 {
   "ops": [
-    { "id": 1031, "sequence": 7, "op": "exec", "deadline_at": "2026-10-31T14:05:00Z", "payload": { } }
+    { "id": 1031, "sequence": 7, "op": "exec", "session_id": 123, "deadline_at": "2026-10-31T14:05:00Z", "payload": { } },
+    { "id": 1032, "sequence": 8, "op": "env.reset", "deadline_at": "2026-10-31T14:15:00Z", "payload": { } }
   ]
 }
 ```
@@ -367,10 +368,28 @@ An op, as `GET ops` returns it:
 | `id` | integer | The op's identity, used in its result's path and to recognise a redelivery. |
 | `sequence` | integer | Its position in the machine's queue. Each op's is greater than every earlier op's. |
 | `op` | string | The op's name, below. |
+| `session_id` | integer | The session a session op is for, above 0. A session op always has it; an environment op (`image.ensure`, `env.scrub`, `env.reset`) never has the key. |
 | `deadline_at` | timestamp | A runner that receives the op after this time does not run it, and reports `expired`. |
 | `payload` | object | The op's arguments. |
 
 The result shape is the body of §5.5.
+
+**The session ops** are `exec`, `write_file`, `read_file`, `batch`, `status`, `logs`,
+`container.start`, `container.stop`, `session.start` and `session.stop`. Every one of them acts
+for the session its envelope names, and for no other (§6.2, §6.3):
+
+- A session op whose envelope has no `session_id` is not run: it answers an `error` result with
+  `error.class` `session_required`.
+- A session op that finds the environment's session container labelled with another session
+  (`aixle.com/session`) does not touch it: it answers an `error` result with `error.class`
+  `session_mismatch`. So a late op of a finished session never reaches the next session's
+  container.
+
+**The platform's side of a deadline.** An op that still has no result 10 seconds past its
+`deadline_at`, `pending` or `delivered`, is marked `expired` by the platform, as if the runner had
+answered `expired`: `delivered` does not prove the runner received it (§5.4). A result that
+arrives later changes nothing (§5.5, the first result wins). Finished ops are kept 7 days, and
+each machine's newest op is kept longer, so `sequence` keeps growing.
 
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
 `logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
@@ -378,8 +397,8 @@ The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`,
 
 **Payload and result schemas.** The gateway carries the payload as an opaque object. Each op's
 payload and result, with its fixtures, are specified below: `image.ensure` (§6.1), the agent
-container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform side that
-enqueues them is task 8. `session.start` and `session.stop` are reserved and have no schema:
+container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform enqueues
+them from `ContainerRuntime::RunnerRuntime`, one op per runtime call of the session's strategy. `session.start` and `session.stop` are reserved and have no schema:
 a runner answers them `unsupported_op` (below).
 
 **Who runs them.** On `manual` the host runner runs every op of this section itself. It runs the
@@ -456,14 +475,15 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 
 | What | Name | Label |
 | --- | --- | --- |
-| The session container | `aixle-<key>-<session_id>` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
+| The session container | `aixle-<key>-<session_id>`, with the envelope's `session_id` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
 | The workspace volume | `aixle-ws-<key>` | `aixle.com/environment=<key>` |
 | A cache volume | `aixle-cache-<key>-<name>` | `aixle.com/environment=<key>` |
 
 #### `container.start`
 
-Creates and starts the session's agent container from the agent image pinned by digest. The
-container runs the image's own entrypoint and command, unchanged, as a hosted pod does. The
+Creates and starts the session's agent container from the agent image pinned by digest, named
+and labelled with the envelope's `session_id`. The container runs the image's own entrypoint and
+command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
 
@@ -473,7 +493,6 @@ Payload:
 | --- | --- | --- |
 | `image` | string | Required. As in `image.ensure` (§6.1): the repository, without a digest. |
 | `digest` | string | Required. As in `image.ensure`. The daemon must have `<image>@<digest>`: `image.ensure` pulls it. |
-| `session_id` | integer | Required, above 0. The session's id, in the container's name and label. |
 | `env` | object | Optional, string to string. The container's environment variables, on top of the image's. A name must not be empty or contain `=`. |
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
@@ -526,13 +545,14 @@ Results:
 
 #### `container.stop`
 
-Stops the session's container, sending SIGTERM and SIGKILL 10 seconds later, and removes it with
-its anonymous volumes. The workspace and cache volumes stay. The name alone is not proof: a
-container named `aixle-<key>-<session_id>` that does not carry both
+Stops the container of the envelope's session, sending SIGTERM and SIGKILL 10 seconds later, and
+removes it with its anonymous volumes. The workspace and cache volumes stay. The name alone is
+not proof: a container named `aixle-<key>-<session_id>` that does not carry both
 `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
-`container_not_owned`, and is neither stopped nor removed.
+`container_not_owned`, and is neither stopped nor removed. A container of another session is
+left alone: it does not have this session's name, so the answer is `{"removed": false}`.
 
-Payload: `{"session_id": <integer above 0>}`.
+Payload: `{}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
@@ -546,9 +566,14 @@ Fixtures: `ops/container_start.json`, `ops/container_stop.json`.
 ### 6.3 The session ops
 
 `exec`, `write_file`, `read_file`, `batch`, `status` and `logs` act on the environment's session
-container, the one labelled `aixle.com/environment=<key>` and `aixle.com/session`. Protocol 1 has
-no `session_id` in the op envelope yet (§8): the environment's one session container is the
-target.
+container, the one labelled `aixle.com/environment=<key>` and `aixle.com/session`, and only when
+its `aixle.com/session` is the envelope's `session_id` (§6). Every step of a `batch` is checked
+the same way.
+
+| Outcome | `status` | `error.class` |
+| --- | --- | --- |
+| The envelope has no `session_id` | `error` | `session_required`; nothing is run |
+| The session container is another session's | `error` | `session_mismatch`; the message names the container and both sessions, and the container is not touched. `status` answers this too, not `missing`. |
 
 **Without a session container.** `exec`, and an `exec` in a `batch`, need the container
 running. `write_file`, `read_file` and `logs` need it to exist, and work on a container that has
@@ -737,24 +762,18 @@ Fixtures: `ops/env_scrub_and_reset.json`.
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
-- `POST /runner/v1/check-in`, `POST /runner/v1/heartbeat`, `POST /runner/v1/sessions/:id/log`,
-  `POST /runner/v1/sessions/:id/events` and the callback proxy `/runner/v1/proxy/:route/*`: task 8
-  and later.
-- `session_id` in the op envelope: task 8. Until then the session ops act on the environment's one
-  session container (§6.3), so a late op of a finished session could reach the next session's
-  container. Task 8 moves it:
-  - `session_id` leaves the payloads of `container.start` and `container.stop` for the envelope.
-    Nothing is released, so no compatibility is needed;
-  - every session op checks the container's `aixle.com/session` label against it, and refuses on
-    a mismatch.
+- The callback proxy `/runner/v1/proxy/:route/*`: task 8b. `POST /runner/v1/check-in`,
+  `POST /runner/v1/heartbeat` and `POST /runner/v1/sessions/:id/log`: task 8c.
+  `POST /runner/v1/sessions/:id/events`: later.
 - Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
-  and `read_file` refuses a larger file. How larger output and files come back is task 8. Until
-  then a result whose encoded body is over the gateway's 2 MiB cap is answered
+  and `read_file` refuses a larger file. They come back through an upload to a signed URL with
+  task 8c. Until then a result whose encoded body is over the gateway's 2 MiB cap is answered
   `result_too_large` (§6).
 - `session.start` and `session.stop`: reserved, answered `unsupported_op`.
 - The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
   `GET /runner/v1/releases/:version/checksums`: task 10.
-- `409 busy` on `DELETE /registration` while a session runs: the first task that assigns a session
-  to a machine.
+- `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
+  without it, so a machine unregistered during a session leaves that session's next ops
+  unanswered until they expire, and the session fails as one whose container is gone.
 - An endpoint that issues registration tokens ("Add machine"): task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.
