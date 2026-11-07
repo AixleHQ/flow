@@ -232,6 +232,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - runner_local_state:/var/lib/aixle-runner
+      # The preflight measures the free space of the daemon's root directory as a
+      # path of its own filesystem. A volume lives on that filesystem, on Linux
+      # and in Docker Desktop's VM alike, so mounting one there measures it.
+      - runner_local_docker_root:/var/lib/docker:ro
     depends_on:
       web:
         condition: service_healthy
@@ -252,6 +256,7 @@ volumes:
   pg_data:
   redis_data:
   runner_local_state:
+  runner_local_docker_root:
 
 networks:
   # Fixed, not Compose-derived (docs/project/worktree-stack.md).
