@@ -181,6 +181,11 @@ module Billing
       store(license, event)
       license.confirm! if license.may_confirm?
       start(license.company)
+      # After the workspace is running, so a price that cannot be written
+      # cannot leave it waiting; and only when nothing has read it yet -- the
+      # registration, or a store that moved the agreement, asked already.
+      MarketplaceLicensePricing.record!(license, client: client) if license.price_per_minute.nil?
+      nil
     end
 
     # The workspace is created blocked when the licence is still pending, which
@@ -211,6 +216,9 @@ module Billing
       changes[:license_arn] = arn if arn.present? && arn != license.license_arn
 
       license.update!(**changes) if changes.any?
+      # A new agreement or a new offer may carry a new price; a licence event
+      # names neither and changes nothing about what is charged.
+      MarketplaceLicensePricing.record!(license, client: client) if changes.key?(:agreement_id) || changes.key?(:offer_identifier)
     end
 
     # Not the metering deadline: AWS opens the final window on the

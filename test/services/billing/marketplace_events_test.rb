@@ -413,6 +413,55 @@ class Billing::MarketplaceEventsTest < ActiveSupport::TestCase
     assert license.active?
   end
 
+  # The price is the agreement's, so it is read when the agreement is created
+  # and again when an amendment moves the subscription onto another offer -- a
+  # private offer replacing the public one, as a rule.
+  test "a creation prices the licence, and an amendment onto a new offer re-prices it" do
+    client = FakeMarketplaceSellerClient.new
+    events = Billing::MarketplaceEvents.new(final_meter: @meter, client: client)
+    license = create(:marketplace_license, agreement_id: "agmt-1")
+
+    events.record(envelope(detail_type: Billing::MarketplaceEvents::CREATED))
+    events.apply_pending
+
+    assert_equal FakeMarketplaceSellerClient::PUBLIC_RATE, license.reload.price_per_minute
+    assert_equal "USD", license.price_currency
+
+    client.rates = { Billing::Meter::AwsMarketplaceSaas::DIMENSION => BigDecimal("0.05") }
+    events.record(
+      envelope(id: "ev-2", detail_type: Billing::MarketplaceEvents::AMENDED,
+               detail: { "agreement" => { "id" => "agmt-1" }, "offer" => { "id" => "offer-private" } })
+    )
+    events.apply_pending
+
+    assert_equal BigDecimal("0.05"), license.reload.price_per_minute
+    assert_equal %w[agmt-1 agmt-1], client.priced
+  end
+
+  test "a creation reads no price for a licence that already carries one" do
+    client = FakeMarketplaceSellerClient.new
+    events = Billing::MarketplaceEvents.new(final_meter: @meter, client: client)
+    create(:marketplace_license, agreement_id: "agmt-1", price_per_minute: BigDecimal("0.05"), price_currency: "USD")
+
+    events.record(envelope(detail_type: Billing::MarketplaceEvents::CREATED))
+    events.apply_pending
+
+    assert_empty client.priced
+  end
+
+  test "a licence event changes nothing about the price" do
+    client = FakeMarketplaceSellerClient.new
+    events = Billing::MarketplaceEvents.new(final_meter: @meter, client: client)
+    create(:marketplace_license, :active, agreement_id: "agmt-1", license_arn: "arn:lic:1",
+                                          price_per_minute: BigDecimal("0.05"), price_currency: "USD")
+
+    events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_UPDATED,
+                           detail: { "license" => { "arn" => "arn:lic:1" }, "agreement" => { "id" => "agmt-1" } }))
+    events.apply_pending
+
+    assert_empty client.priced
+  end
+
   test "a failure leaves the event for the next sweep, with the reason on it" do
     create(:marketplace_license, :active, agreement_id: "agmt-1", company: create(:company))
     @events.record(envelope(detail_type: Billing::MarketplaceEvents::LICENSE_DEPROVISIONED))

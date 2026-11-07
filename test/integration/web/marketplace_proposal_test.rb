@@ -419,8 +419,8 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
 
     assert_inertia_page "Company/Settings/BillingPage"
     assert_inertia_props do |props|
-      assert_equal MarketplaceLicense.last.customer_aws_account_id, props.dig(:marketplaceBilling, :awsAccountId)
-      assert_not props.dig(:marketplaceBilling, :ended)
+      assert_equal "aws_marketplace", props.dig(:subscriptions, :active, :kind)
+      assert_equal MarketplaceLicense.last.customer_aws_account_id, props.dig(:subscriptions, :active, :awsAccountId)
       # Two meanings, two names. `marketplace` is the shared prop the
       # stopped-workspace banner reads; a page prop of that name shadows it and
       # the banner announces an ended subscription to a running workspace.
@@ -430,12 +430,15 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "a workspace nobody AWS-bills has no marketplace panel" do
+  test "a workspace nobody AWS-bills lists no AWS subscription" do
     sign_in_as(@admin)
 
     get company_settings_billing_path
 
-    assert_inertia_props { |props| assert_nil props[:marketplaceBilling] }
+    assert_inertia_props do |props|
+      assert_not_equal "aws_marketplace", props.dig(:subscriptions, :active, :kind)
+      assert_empty props.dig(:subscriptions, :previous)
+    end
   end
 
   test "an answered request cannot be answered twice" do

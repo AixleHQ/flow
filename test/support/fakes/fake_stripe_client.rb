@@ -40,6 +40,7 @@ class FakeStripeClient
   def add_subscription(id:, status: "active", period_start: 10.days.ago, period_end: 20.days.from_now, **extra)
     @subscriptions[id] = {
       id: id, object: "subscription", status: status, cancel_at_period_end: false, cancel_at: nil,
+      start_date: period_start.to_i,
       items: { object: "list", data: [ { object: "subscription_item",
                                          current_period_start: period_start.to_i,
                                          current_period_end: period_end.to_i } ] }

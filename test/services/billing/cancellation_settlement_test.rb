@@ -78,7 +78,7 @@ class Billing::CancellationSettlementTest < ActiveSupport::TestCase
   # A handover to AWS Marketplace records the cancellation before Stripe is
   # told, so the subscription is stopped from here and the rest follows.
   test "a cancellation Stripe has not heard of stops the subscription first, then settles" do
-    @client.add_subscription(id: "sub_card")
+    @client.add_subscription(id: "sub_card", period_start: Time.utc(2026, 9, 12, 14, 20))
     @cancellation.update!(settlement_state: "cancelling", stripe_subscription_id: "sub_card",
                           final_invoice_id: nil, cancels_at: Time.utc(2026, 10, 12, 14, 20))
 
@@ -91,6 +91,8 @@ class Billing::CancellationSettlementTest < ActiveSupport::TestCase
     assert_equal "settled", @cancellation.settlement_state
     assert_equal "in_final_sub_card", @cancellation.final_invoice_id
     assert_equal Time.utc(2026, 10, 12, 14, 21), @cancellation.cancels_at
+    assert_equal Time.utc(2026, 9, 12, 14, 20), @cancellation.started_at,
+                 "when the card started paying, read off Stripe while the subscription was still there to ask"
     assert_equal "paid", @client.invoices.fetch("in_final_sub_card")[:status]
   end
 

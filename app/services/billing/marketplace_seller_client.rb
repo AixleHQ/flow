@@ -22,6 +22,11 @@ module Billing
     # workspace.
     class ForeignProduct < Error; end
 
+    # ResolveCustomer named our product and no licence: nothing to bind, since
+    # the licence is the key every other call takes. AWS's own probe of the
+    # fulfilment URL, made when the listing changes, answers this way.
+    class Unlicensed < Error; end
+
     # What ResolveCustomer answers, without the vendor's types.
     #
     # `customer_identifier` IS populated, measured against the real listing.
@@ -48,6 +53,34 @@ module Billing
       # cancelled, expired, superseded, or a spelling we have not seen -- leaves
       # the licence where it was, which bills nobody.
       def live? = status == "ACTIVE"
+    end
+
+    # What GetAgreementTerms answers that this application cares about: the
+    # per-unit price of each usage dimension, under the agreement actually
+    # accepted. A private offer carries its own prices, which is why the public
+    # listing's cannot stand in for them.
+    Pricing = Data.define(:agreement_id, :currency, :rates) do
+      # `terms` are the SDK's accepted terms, of whatever kind; only the
+      # usage-based one carries rate cards, and an agreement may carry several
+      # (a free trial beside the paid rates, say) -- the later card wins.
+      def self.from_terms(agreement_id, terms)
+        currency = nil
+        rates = {}
+        Array(terms).each do |term|
+          pricing = term.usage_based_pricing_term
+          next if pricing.nil?
+
+          currency = pricing.currency_code.presence || currency
+          Array(pricing.rate_cards).each do |card|
+            Array(card.rate_card).each do |rate|
+              rates[rate.dimension_key] = BigDecimal(rate.price.to_s) if rate.dimension_key.present? && rate.price.present?
+            end
+          end
+        end
+        new(agreement_id: agreement_id, currency: currency, rates: rates)
+      end
+
+      def rate_for(dimension) = rates[dimension]
     end
 
     # What AWS answers per record. A replay of the same quantity comes back
@@ -98,6 +131,9 @@ module Billing
         unless answer.product_code == product_code
           raise ForeignProduct, "token resolves to product #{answer.product_code.inspect}, not ours"
         end
+        if answer.license_arn.blank?
+          raise Unlicensed, "token resolves to account #{answer.customer_aws_account_id.inspect} with no licence"
+        end
 
         Customer.new(
           license_arn: answer.license_arn,
@@ -125,6 +161,28 @@ module Billing
           offer_id: answer.proposal_summary&.offer_id,
           acceptor_account_id: answer.acceptor&.account_id
         )
+      end
+    rescue Error
+      nil
+    end
+
+    # The prices the agreement was accepted at, from every page of its terms.
+    # Nil when they cannot be read, as #describe_agreement answers: a price is
+    # what the Billing tab estimates a bill with, and an estimate withheld is
+    # better than a subscription left unconfirmed over it.
+    def agreement_pricing(agreement_id:)
+      return nil if agreement_id.blank?
+
+      api do
+        terms = []
+        next_token = nil
+        loop do
+          answer = agreement_client.get_agreement_terms(agreement_id: agreement_id, next_token: next_token)
+          terms.concat(Array(answer.accepted_terms))
+          next_token = answer.next_token
+          break if next_token.blank?
+        end
+        Pricing.from_terms(agreement_id, terms)
       end
     rescue Error
       nil
