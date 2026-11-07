@@ -71,6 +71,11 @@ module ContainerRuntime
     MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
                      "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
 
+    # The runner answered that the pull of `container.start` failed: it created
+    # nothing (PROTOCOL.md §6.1), so the create's outcome is known and pins no
+    # reservation (AdmittedPhaseActivity#record_failed_operation).
+    class PullFailed < ImagePullError; end
+
     # One op's outcome.
     Outcome = Data.define(:op, :state, :result) do
       def ok? = state == "completed"
@@ -147,7 +152,7 @@ module ContainerRuntime
       payload = container_payload(session, spec)
       outcome = call(session, "container.start", payload, lifecycle: true)
       return outcome.data["name"] if outcome.ok?
-      raise ImagePullError, "Could not pull #{payload['image']}: #{outcome.message}" if outcome.error_class == "image_pull_failed"
+      raise PullFailed, "Could not pull #{payload['image']}: #{outcome.message}" if outcome.error_class == "image_pull_failed"
       # A create retried after an answer that never arrived finds its own
       # container running (SessionRuntimeOperation#replayable?).
       if outcome.error_class == "container_exists" && %i[running starting].include?(status_of(session))

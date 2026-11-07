@@ -212,7 +212,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
 
-    error = assert_raises(ContainerRuntime::ImagePullError) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
+    error = assert_raises(ContainerRuntime::RunnerRuntime::PullFailed) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
 
     assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: container.start failed: image_pull_failed: pull access denied}, error.message)
     assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
@@ -254,9 +254,12 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   # As ToolStrategy#wait_with_heartbeat: a stopped session stops waiting at once.
   test "the wait for an op checks the activity's cancellation on every look" do
     handle = start_session
-    @host_runner.answer_with("status", :none)
     cancellation, cancel = Temporalio::Cancellation.new
-    cancel.call
+    # The session is stopped once the op is on the queue, and the runner never answers.
+    @host_runner.answer_with("status") do
+      cancel.call
+      :none
+    end
     started = Time.current
 
     assert_raises(Temporalio::Error::CanceledError) do

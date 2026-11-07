@@ -189,7 +189,8 @@ module Sessions
     end
 
     # A heal hands the grant to every holder of the credential, each through its
-    # own runtime: the paused session's runtime is bound to that one session.
+    # own runtime (ContainerRuntime.for_session): a runner holder's goes to its
+    # machine, a hosted holder's to the hosted runtime.
     test "a heal writes a runner holder through its machine and a hosted holder through the hosted runtime" do
       runner = create(:runner, :manual, company: @company, created_by: @user)
       machine = create(:runner_environment, runner: runner)
@@ -197,6 +198,7 @@ module Sessions
                                               agent_type: "claude_code", state: "ready", started_at: 1.hour.ago,
                                               container_id: "aixle-#{machine.key}-runner")
       machine.update!(current_session: runner_holder)
+      ContainerRuntime::FakeHostRunner.identify!(runner_holder, runner_holder.container_id)
       host_runner = ContainerRuntime::FakeHostRunner.new(machine)
       host_runner.machine.start(runner_holder.id)
 

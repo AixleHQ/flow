@@ -302,19 +302,6 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_equal 1, RunnerEnvironment.count
   end
 
-  private
-
-  def refresh_credential(pair)
-    RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
-  end
-
-  def assert_reuse_detected(credential)
-    error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(credential) }
-    assert_equal "credential_reuse_detected", error.reason
-    assert_equal "credential reuse detected", credential.runner_environment.reload.state_reason
-    assert_empty RunnerCredential.where(family_id: credential.family_id).unrevoked
-  end
-
   test "a machine whose refresh token was reused is not given a session" do
     pair = Runners::Credentials.issue_pair!(@environment)
     refresh = RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
@@ -331,5 +318,18 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
     assert_match(/its machine failed: .*\(credential reuse detected\)/, error.message)
     assert_nil session.reload.runner_environment_id
+  end
+
+  private
+
+  def refresh_credential(pair)
+    RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
+  end
+
+  def assert_reuse_detected(credential)
+    error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(credential) }
+    assert_equal "credential_reuse_detected", error.reason
+    assert_equal "credential reuse detected", credential.runner_environment.reload.state_reason
+    assert_empty RunnerCredential.where(family_id: credential.family_id).unrevoked
   end
 end

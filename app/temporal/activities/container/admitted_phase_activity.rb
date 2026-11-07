@@ -106,7 +106,8 @@ module Activities
 
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
         resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) } ||
-          cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError)
+          cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError) ||
+          cause.is_a?(ContainerRuntime::RunnerRuntime::PullFailed)
         operation.update!(state: resolved ? "retryable" : "uncertain", error: "#{cause.class}: #{error.message}")
       end
 
