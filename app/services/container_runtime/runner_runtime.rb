@@ -39,6 +39,9 @@ module ContainerRuntime
     EXEC_GRACE = 30
     READY_TIMEOUT = 30
     READY_INTERVAL = 1
+    # `container.resources.memory` is a Kubernetes quantity on every type (§2.7).
+    MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
+                     "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
 
     # One op's outcome.
     Outcome = Data.define(:op, :state, :result) do
@@ -57,6 +60,7 @@ module ContainerRuntime
     attr_reader :session
 
     def initialize(session, image_pin: Runners::ImagePin.new)
+      super()
       @session = session
       @image_pin = image_pin
     end
@@ -411,11 +415,7 @@ module ContainerRuntime
       resources
     end
 
-    MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
-                     "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
-
-    # `4Gi`, `512M`: Kubernetes quantities, which `container.resources.memory`
-    # takes on every type (DESIGN.md §2.7).
+    # `4Gi`, `512M`.
     def memory_bytes(quantity)
       number, unit = quantity.to_s.match(/\A([0-9]+(?:\.[0-9]+)?)([a-zA-Z]*)\z/)&.captures
       return 0 if number.nil?
