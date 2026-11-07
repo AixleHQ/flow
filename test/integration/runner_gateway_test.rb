@@ -69,13 +69,15 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
 
   # == POST /runner/v1/token ==
 
-  test "a refresh token rotates once, and reusing it revokes the family" do
+  test "a refresh token rotates once, and reusing it after the new pair is used revokes the family" do
     first = registered_pair
 
     refresh(first["refresh_token"])
     assert_response :ok
     second = response.parsed_body
     assert_not_equal first["refresh_token"], second["refresh_token"]
+    get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(second["access_token"])
+    assert_response :ok
 
     refresh(first["refresh_token"])
     assert_refused :unauthorized, "credential_reuse_detected"
@@ -85,6 +87,55 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
     unregister(second["access_token"])
     assert_refused :unauthorized, "invalid_token"
+  end
+
+  # The runner lost the response to its refresh and retries it with the token
+  # it had: within a minute, and while the pair the spend issued is unused,
+  # that is a retry (§9.2).
+  test "a refresh retried after a lost response gets a fresh pair, and the lost pair stops working" do
+    first = registered_pair
+    refresh(first["refresh_token"])
+    lost = response.parsed_body
+
+    refresh(first["refresh_token"])
+
+    assert_response :ok
+    assert_equal "no-store", response.headers["Cache-Control"]
+    retried = response.parsed_body
+    get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(lost["access_token"])
+    assert_refused :unauthorized, "invalid_token"
+    refresh(lost["refresh_token"])
+    assert_refused :unauthorized, "invalid_token"
+    get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(retried["access_token"])
+    assert_response :ok
+    refresh(retried["refresh_token"])
+    assert_response :ok
+    assert_nil RunnerEnvironment.sole.state_reason
+  end
+
+  test "an access token's first accepted use is recorded once" do
+    pair = registered_pair
+    access = RunnerCredential.find_by_token(pair["access_token"], kind: :access)
+    assert_not access.used?
+
+    get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(pair["access_token"])
+    first_use = access.reload.used_at
+    travel 1.minute
+    get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(pair["access_token"])
+
+    assert_not_nil first_use
+    assert_equal first_use, access.reload.used_at
+  end
+
+  test "an access token refused for the flag is not recorded as used" do
+    pair = registered_pair
+
+    with_feature(:external_runners, false, company: @company) do
+      get "/runner/v1/ops", params: { wait: 0 }, headers: headers_for(pair["access_token"])
+    end
+
+    assert_refused :forbidden, "runners_disabled"
+    assert_not RunnerCredential.find_by_token(pair["access_token"], kind: :access).used?
   end
 
   test "rotation refuses an access token and a refresh token unused for 30 days" do

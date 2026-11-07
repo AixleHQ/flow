@@ -13,6 +13,10 @@ module Runners
     ACCESS_TTL = 1.hour
     # A refresh token is used once, so this is also how long one may go unused.
     REFRESH_TTL = 30.days
+    # How long after a refresh token is spent presenting it again may still be
+    # a retry of that refresh, whose response was lost (rotate!). The runner's
+    # retries come about 1, 3, 7, 15 and 31 s after the first failure.
+    RETRY_WINDOW = 60.seconds
 
     PREFIXES = { registration: "arreg_", access: "aracc_", refresh: "arref_" }.freeze
 
@@ -50,12 +54,12 @@ module Runners
       token
     end
 
-    def issue_pair!(environment, family_id: SecureRandom.uuid)
+    def issue_pair!(environment, family_id: SecureRandom.uuid, rotated_from: nil)
       access = generate(:access)
       refresh = generate(:refresh)
       now = Time.current
       common = { runner_id: environment.runner_id, company_id: environment.company_id,
-                 runner_environment_id: environment.id, family_id: family_id }
+                 runner_environment_id: environment.id, family_id: family_id, rotated_from_id: rotated_from&.id }
       RunnerCredential.create!(common.merge(kind: :access, token_digest: RunnerCredential.digest(access),
                                             expires_at: now + ACCESS_TTL))
       RunnerCredential.create!(common.merge(kind: :refresh, token_digest: RunnerCredential.digest(refresh),
@@ -90,17 +94,23 @@ module Runners
       credential
     end
 
-    # Spends a refresh token on a new pair of the same family. A refresh token
-    # presented a second time means two holders have it, so the whole family is
-    # revoked and the environment records why (§9.2); the revocation commits
-    # before the refusal is raised. A spent token counts as reused even past
-    # its own expiry: the 30-day limit is for a token left unused, and the
-    # family it was rotated into may still be live.
+    # Spends a refresh token on a new pair of the same family, which names it
+    # as `rotated_from`. A refresh token presented a second time means two
+    # holders have it, so the whole family is revoked and the environment
+    # records why (§9.2); the revocation commits before the refusal is raised.
+    # A spent token counts as reused even past its own expiry: the 30-day limit
+    # is for a token left unused, and the family it was rotated into may still
+    # be live.
+    #
+    # The one exception is a retry after a lost response (retry?): within
+    # RETRY_WINDOW of the spend, while the pair it issued is unused, the
+    # gateway revokes that pair and issues a fresh one, as a rotation does. The
+    # window counts from the first spend, so a retry does not extend it.
     #
     # Locks in the one order every issuer and revoker uses: the runner (see
     # lock_live_runner!), then the environment (Registration.unregister! locks
-    # it to mark it `gone`), then the credential. So a pair is never issued
-    # into a revoked runner or a `gone` environment.
+    # it to mark it `gone`), then the credential, then the pair it issued. So
+    # a pair is never issued into a revoked runner or a `gone` environment.
     def rotate!(credential)
       reused = false
       pair = RunnerCredential.transaction do
@@ -110,21 +120,62 @@ module Runners
         if credential.revoked? || environment.gone?
           nil
         elsif credential.used?
-          reused = true
-          revoke_family!(credential.family_id)
-          environment.update!(state_reason: REUSE_DETECTED)
-          nil
+          issued = RunnerCredential.unrevoked.where(rotated_from_id: credential.id).lock.to_a
+          if retry?(credential, issued)
+            revoke!(issued)
+            Rails.logger.info("[Runners::Credentials] refresh retried within the window: " \
+                              "environment #{environment.id}, family #{credential.family_id}")
+            issue_pair!(environment, family_id: credential.family_id, rotated_from: credential)
+          else
+            reused = true
+            revoke_family!(credential.family_id)
+            environment.update!(state_reason: REUSE_DETECTED)
+            nil
+          end
         elsif credential.expired?
           nil
         else
           credential.update!(used_at: Time.current)
-          issue_pair!(environment, family_id: credential.family_id)
+          issue_pair!(environment, family_id: credential.family_id, rotated_from: credential)
         end
       end
       raise Refused.new("credential_reuse_detected", "This refresh token was already used; the machine's credentials are revoked.") if reused
       raise Refused.new("invalid_token", "The refresh token is revoked or expired.") if pair.nil?
 
       pair
+    end
+
+    # A spent refresh token presented again is the runner retrying a refresh
+    # whose response it never got when it was spent less than RETRY_WINDOW ago
+    # and the pair the spend issued (`issued`, its unrevoked credentials) is
+    # whole and unused: the gateway has accepted neither its access token
+    # (record_use!) nor its refresh token. Anything else is reuse.
+    def retry?(credential, issued)
+      ok = credential.used_at > RETRY_WINDOW.ago && issued.none?(&:used?)
+      ok && issued.map(&:kind).map(&:to_s).sort == %w[access refresh]
+    end
+
+    # Records an access token's first accepted use, which ends the retry
+    # window of the refresh that issued it (retry?). One write per token: a
+    # token already marked is not written again.
+    #
+    # Returns false when the token was revoked before its use was recorded,
+    # and the request must then be refused. The update sets `used_at` only on
+    # an unrevoked row and takes that row's lock, which rotate! also takes
+    # when it reads the issued pair, so the two are serialized: if a retry
+    # revokes the pair first, the update changes no row; if the use commits
+    # first, rotate! sees it and treats the spent token as reuse. A row that a
+    # concurrent request of the same token marked first is still accepted.
+    def record_use!(credential)
+      return true if credential.used?
+
+      now = Time.current
+      recorded = RunnerCredential.where(id: credential.id, used_at: nil, revoked_at: nil)
+                                 .update_all(used_at: now, updated_at: now) == 1
+      return RunnerCredential.unrevoked.where(id: credential.id).where.not(used_at: nil).exists? unless recorded
+
+      credential.used_at = now
+      true
     end
 
     # Holds the runner's row against a revocation until the caller's
@@ -144,6 +195,11 @@ module Runners
     def revoke_family!(family_id)
       now = Time.current
       RunnerCredential.unrevoked.where(family_id: family_id).update_all(revoked_at: now, updated_at: now)
+    end
+
+    def revoke!(credentials)
+      now = Time.current
+      RunnerCredential.where(id: credentials.map(&:id)).update_all(revoked_at: now, updated_at: now)
     end
 
     def generate(kind)

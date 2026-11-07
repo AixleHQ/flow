@@ -92,7 +92,7 @@ These are the only refusals without this shape:
 | `invalid_request` | 400 | `GET ops` | `after` or `wait` is malformed or out of range (§5.4). |
 | `invalid_token` | 401 | all | The token is unknown, of the wrong kind for the endpoint, revoked, expired, already used (a registration token), or of an unregistered machine. |
 | `runner_revoked` | 401 | all | The token is valid, but its runner is revoked or deleted. |
-| `credential_reuse_detected` | 401 | `token` | A refresh token was presented a second time. Its whole family is now revoked (§4). |
+| `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
 | `not_found` | 404 | `ops/:id/result` | The op does not exist, or belongs to another machine. |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
@@ -107,7 +107,8 @@ These are the only refusals without this shape:
    machine and, for a registration token, unused. Anything else is `invalid_token`, before the
    runner or the flag is looked at, so a dead token learns nothing about either. The one
    exception is a spent refresh token: it passes this step, even past its own expiry, so that
-   `POST /token` can answer `credential_reuse_detected` (§4).
+   `POST /token` can tell a retry after a lost response from a reuse, and answer
+   `credential_reuse_detected` for a reuse (§4).
 3. The runner's status: revoked or deleted is `runner_revoked`. The gateway caches this check for
    up to 5 seconds, so a revocation reaches it within 5 seconds.
 4. The `external_runners` flag for the runner's company: off is `runners_disabled`.
@@ -142,6 +143,11 @@ then gets the refusal, not the ops (§5.4).
 "Backs off" means retrying with increasing delays, with jitter, so that a fleet of machines does
 not retry in step.
 
+**A network error on `POST /token`.** When the connection fails before the runner has the
+response (a timeout, a reset, a dropped connection), the runner does not know whether the
+gateway spent its refresh token. It backs off and retries with the same refresh token. The
+gateway answers such a retry like a rotation, within the limits of §4.
+
 ## 4. Tokens
 
 Tokens are opaque strings with a prefix by kind, so a leaked one is recognisable. A runner must
@@ -170,6 +176,21 @@ The rules:
 - **Reusing a refresh token revokes its family.** A spent refresh token presented again means two
   holders have it: the gateway answers `credential_reuse_detected` and revokes every token of the
   family, the newest pair included. This holds even after the spent token's own 30-day expiry.
+- **Except a retry after a lost response.** A spent refresh token presented again is a retry,
+  not a reuse, when both of these hold:
+  - it was spent less than 60 seconds ago;
+  - the pair its spend issued is unused: the gateway has accepted neither its access token nor
+    its refresh token.
+
+  The gateway then revokes that unused pair and answers `200` with a fresh pair of the same
+  family, exactly as a rotation does. The 60 seconds count from the first spend, so a retry does
+  not extend them, and a second retry within them revokes the first retry's pair. Anything else
+  is reuse: a spent token presented 60 seconds or more after its spend, after the pair it issued
+  was used, or two or more rotations old.
+- **The retry's limit.** A runner retries a failed refresh about 1, 3, 7, 15 and 31 seconds after
+  the first failure, so a dropped connection of up to about 30 seconds is covered. If the
+  connection drops right after the gateway commits the rotation and stays down longer, the
+  retry comes after the 60 seconds and is reuse: the machine must be registered again.
 - **Unregistering revokes every token of the machine** (`DELETE /registration`), and revoking or
   deleting the runner revokes every token of every one of its machines.
 
@@ -247,7 +268,10 @@ The refresh token, sent as the bearer, is exchanged for a new pair (§4). No bod
 }
 ```
 
-Its own refusal: `401 credential_reuse_detected`, for a refresh token presented a second time.
+Its own refusal: `401 credential_reuse_detected`, for a spent refresh token presented again. A
+spent refresh token presented again within 60 seconds of its spend, while the pair the spend
+issued is unused, is a retry after a lost response instead: it answers `200` with a fresh pair,
+and the unused pair is revoked (§4).
 
 Fixtures: `token/`.
 
@@ -278,6 +302,11 @@ Anything else is `400 invalid_request`.
 - **Waiting.** With nothing to return, the gateway holds the request for up to `wait` seconds and
   answers as soon as an op is enqueued. When the wait ends with nothing, the answer is
   `{"ops": []}`, and the runner polls again.
+- **One waiting poll per machine.** Only one poll of a machine waits at a time. A newer poll with
+  `wait` above 0 ends the machine's older waiting poll, which answers `{"ops": []}` at once, and
+  the newer one waits. A poll with `wait=0` ends no other poll. Two polls that start together may
+  both answer `{"ops": []}`. No op is lost: an op stays deliverable until `after` acknowledges it.
+  A runner that sends one poll at a time never sees this.
 - **Acknowledging.** `after` is the acknowledgement: an op at or below it is not returned again.
   An op above it is returned by every poll until it is acknowledged or has a result. So a runner
   sets `after` to the highest `sequence` it has recorded, and must expect to receive an op it has
@@ -289,7 +318,8 @@ Anything else is `400 invalid_request`.
   again before it answers (§3). If one fails, it answers the refusal without the ops, and those
   ops stay deliverable.
 
-Fixtures: `ops/` (all with `wait=0`; the waiting itself is tested by the gateway's own tests).
+Fixtures: `ops/` (all with `wait=0`; the waiting itself, and a newer poll ending an older one, are
+tested by the gateway's own tests).
 
 ### 5.5 `POST /runner/v1/ops/:id/result`
 

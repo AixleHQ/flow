@@ -1021,9 +1021,21 @@ never reaches Rails.
 - **No database connection while waiting.** `poll` returns the thread's Active Record
   connection to the pool before it subscribes and before every wait, and takes one again
   to read. A waiting poll holds a Puma thread but no connection.
+- **One waiting poll per environment (task #206, §16).** A poll that is going to wait
+  (`wait` above 0) publishes an announcement, `poll:<uuid>`, on the same `runner_env_<id>`
+  once it is subscribed, and ignores its own. A waiting poll of the environment that hears
+  another poll's announcement stops waiting and answers `{"ops": []}` at once, freeing its
+  gateway thread, and the newer poll waits. An enqueue publishes a bare sequence, so the two
+  are told apart. A `wait=0` poll does not announce, so it ends no other poll. Of two polls
+  that start together at least the later announcement reaches the earlier poll, so at most
+  one keeps waiting; both may answer empty. No op is lost, since an op stays deliverable
+  until `after` acknowledges it, and the replaced poll goes through the controller's check
+  after the wait like any poll that waited. The channel is in Redis, so the rule holds
+  across gateway processes. The poller is the environment on every type (§6.9.1), so the
+  rule is per environment.
 
 What this means for `RUNNER_GATEWAY_MAX_THREADS`: each thread of the gateway holds at most
-one waiting poll, so the thread count is the number of machines one gateway process can
+one waiting poll, and each environment at most one waiting poll, so the thread count is the number of machines one gateway process can
 hold waiting at once (a machine waits up to 25 s per poll). The pool (`DB_POOL`, by default
 `RAILS_MAX_THREADS + 3`) only has to cover the requests that read or write at the same
 moment: the token and flag checks, the queue reads and the results, each a few queries.
@@ -2318,6 +2330,49 @@ credentials, config items not attached to the session (still only through
 Every request re-checks the runner's status (cached for ≤ 5 s), so revocation takes effect
 within seconds and does not wait for tokens to expire.
 
+**Reuse detection and a retry after a lost response (task #206).** The gateway commits a
+rotation before it answers, so a runner whose `POST /runner/v1/token` response was lost
+retries with the refresh token that was just spent. That retry is not counted as reuse
+when both hold:
+
+- the token was spent less than 60 s ago, by its `used_at`
+  (`Runners::Credentials::RETRY_WINDOW`);
+- the pair the spend issued is unrevoked and unused. Each issued credential names the
+  refresh credential whose spend issued it (`runner_credentials.rotated_from_id`). A refresh
+  token is used once it is spent, and an access token once the gateway first accepts it,
+  which the gateway records in its `used_at`: one write per token, not one per request.
+
+On a retry, `Credentials.rotate!` revokes the unused pair and issues a fresh pair of the
+same family, answering `200` as a rotation does, and logs the environment and the family
+(no token). The window counts from the first spend, so a retry does not extend it, and a
+second retry within it revokes the first retry's pair.
+Anything else is reuse, as before: a retry after 60 s, a retry after the new pair was used,
+and a refresh token two or more rotations old revoke the family, and the environment
+records `credential reuse detected` as its `state_reason`.
+
+An access token's first use and a retry of the refresh that issued it are serialized on
+the access token's row. The gateway records the first use only on an unrevoked row
+(`Credentials.record_use!`), and `rotate!` locks the issued pair before it reads it. If the
+retry revokes the pair first, the use is not recorded and the request answers
+`401 invalid_token`. If the use commits first, `rotate!` sees it and treats the spent token
+as reuse.
+
+What it costs:
+- **A dropped connection longer than the window.** The runner retries about 1, 3, 7, 15 and
+  31 s after the first failure (`runner/internal/backoff`), so the window covers a dropped
+  connection of up to about 30 s. One that starts right after the gateway commits the
+  rotation and lasts longer still ends in a re-registration (H2, rare).
+- **A stolen spent token inside the window.** A second holder who presents the spent token
+  within 60 s, before the legitimate runner has used its new pair, gets a pair, and the
+  legitimate runner's pair is revoked. The runner then gets `invalid_token`, stops and asks
+  for re-registration, rather than the family being revoked as reuse. Presenting a spent
+  token needs the token itself, which the runner keeps in a `0600` file and never logs.
+
+The alternatives were an idempotency key on `POST /runner/v1/token` with a replayable
+response, for which the gateway would have to keep the issued pair encrypted, and a runner
+that stops on a network error with an "outcome unknown" error, which still needs a
+re-registration after every dropped connection.
+
 **Decided (§6.9.2):** on `kubernetes` the bootstrap token travels in the `provision` op to
 the controller, which calls `check-in` for the pod itself, so no bootstrap Secret is mounted
 into a pod and the pod's environment credential is held by the controller.
@@ -3251,43 +3306,50 @@ reviewable and lands behind the flags. The number in the second column is the ph
 
   What would settle it is the pricing decision for the first non-staging customer. It has
   to be made before trigger 2 of §14.1, and nothing earlier depends on it.
-- **Concurrent long-polls per environment.** Each waiting `GET /runner/v1/ops` holds a
-  gateway thread for up to 25 s (§6.1), and the per-token throttle bounds requests per
-  minute, not outstanding polls, so one buggy or leaked access token could occupy every
-  gateway thread with overlapping polls. It cannot happen yet: the gateway is not deployed.
+- **Done (task #206): concurrent long-polls per environment.** Each waiting
+  `GET /runner/v1/ops` holds a gateway thread for up to 25 s (§6.1), and the per-token
+  throttle bounds requests per minute, not outstanding polls, so one buggy or leaked access
+  token could have occupied every gateway thread with overlapping polls.
   - **Decided (Alex, 2026-11-02): a newer poll replaces the older poll of the same
     poller.** The older one is answered at once with an empty batch, so its gateway thread
     is freed, and the newer one waits. This suits a runner that polls again after a restart
     or a dropped connection while the gateway still holds its old poll. Refusing the newer
     poll (`409` or `429`) would keep such a runner out until the old poll timed out.
-  - **It is built on the existing wake-up channel** `runner_env_<id>` of 5b: a poll
-    announces itself there once subscribed, and an older poll of the same poller that hears
-    it returns. No separate lease key in Redis is needed.
-  - **What counts as one poller: settled by 6b (decision 1, Alex 2026-11-05).** On `manual`
-    there is no runner inside the agent container: the host runner runs the session ops
-    itself through the Docker API, so it is the environment's only poller, with one `after`
-    and one journal. The gateway's replace rule is therefore per environment: a newer poll of
-    an environment replaces its older poll. How `kubernetes` runs the session ops, and so who
-    polls there, is task #205.
-  - **Decided (§6.9.1), for the other types:** the environment's owner is its only poller
-    on every type, the host runner on `coder` as on `manual` (#204) and the controller on
-    `kubernetes`, so the gateway's replace rule is per environment everywhere.
+  - **One poller per environment** on every type (§6.9.1, and on `manual` decision 1 of
+    6b, Alex 2026-11-05), so the rule is per environment.
+  - **What was built:** in `Runners::Operations.poll`, on the existing wake-up channel
+    `runner_env_<id>` of 5b, with no lease key in Redis. A poll that is going to wait
+    announces itself there once subscribed, and an older waiting poll of the environment
+    that hears it answers `{"ops": []}`. A `wait=0` poll announces nothing. Two polls that
+    start together may both answer empty; at most one keeps waiting. §6.1 has the details,
+    `PROTOCOL.md` §5.4 the wire rule, and `test/integration/runner_gateway_operations_test.rb`
+    the tests, since the fixture format cannot hold two requests at once.
   - **The runner never overlaps its own polls** (task 6a): the host runner sends a new
-    `GET /runner/v1/ops` only after the previous one has answered.
-  - **The gateway change is a separate `flow` task,** cut after 6b and before the gateway
-    is deployed. Nothing in the gateway changes in task 6a.
-- **A lost `POST /runner/v1/token` response.** The gateway commits a rotation before it
-  answers. If the response is lost, the runner's retry presents the refresh token that was
-  just spent, and by `PROTOCOL.md` §4 that is reuse, which revokes the whole credential
-  family. A dropped connection during a refresh then forces a manual re-registration, as if
-  the credentials had been stolen. It cannot happen yet: the gateway is not deployed.
-  - **Where it is decided:** in the same `flow` task as the long-poll change above, after 6b
-    and before the gateway is deployed. Neither the runner nor `PROTOCOL.md` changes in
-    task 6a.
-  - **The default to propose there:** a short grace window, for example 60 s. Within it,
-    presenting the refresh token that was just spent counts as a retry: the gateway issues a
-    fresh pair and revokes the pair that was never picked up. The runner does not change.
-  - **The alternatives:** an idempotency key on `POST /runner/v1/token` with a replayable
+    `GET /runner/v1/ops` only after the previous one has answered, so it does not change.
+  - **Known limitation: two pollers with the same credentials.** Two processes that poll with
+    one environment's access token, for example a machine whose credentials file was copied to
+    another, end each other's polls. Each re-polls at once after an empty answer, so they send
+    polls back to back until the per-token rate limit answers `429` and they back off. Ops are
+    still delivered, and reuse detection revokes the family at the next refresh. H3, rare: it
+    needs a duplicated machine, which is already an error state.
+- **Done (task #206): a lost `POST /runner/v1/token` response.** The gateway commits a
+  rotation before it answers, so a runner whose response was lost retries with the refresh
+  token that was just spent, which `PROTOCOL.md` §4 counted as reuse: the whole family was
+  revoked and the machine had to be registered again.
+  - **Decided (Alex, 2026-11-06): a 60 s grace window.** Within 60 s of the spend, while
+    the pair it issued is unused, presenting the spent token again is a retry: the gateway
+    revokes that pair and issues a fresh one of the same family. Anything else is reuse.
+    The runner does not change: it already retries a failed refresh with the same refresh
+    token (`runner/internal/tokens`, `runner/internal/backoff`).
+  - **What was built:** `Runners::Credentials.rotate!` and `retry?`, with
+    `runner_credentials.rotated_from_id` naming the refresh credential whose spend issued a
+    pair, and an access token's first accepted use recorded in its `used_at`
+    (`Credentials.record_use!`, one write per token). §9.2 has the rule and what it costs,
+    `PROTOCOL.md` §4 and §5.3 the wire rule, and `fixtures/v1/token/` the scenarios.
+  - **Known limitation:** a dropped connection that starts right after the gateway commits
+    the rotation and lasts longer than about 30 s still ends in a re-registration (H2,
+    rare; §9.2).
+  - **Not chosen:** an idempotency key on `POST /runner/v1/token` with a replayable
     response, for which the gateway must keep the issued pair, encrypted; or a runner that
     stops on a network error of `POST /runner/v1/token` with an "outcome unknown" error,
     which still needs a re-registration after a dropped connection.

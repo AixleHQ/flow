@@ -1,0 +1,35 @@
+{
+  "description": "A spent refresh token presented 61 seconds after its spend is reuse, even though the pair the spend issued was never used: 401 credential_reuse_detected, and the family is revoked.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 200,
+        "body": {
+          "access_token": {"$prefix": "aracc_"},
+          "access_token_expires_at": {"$type": "timestamp"},
+          "refresh_token": {"$prefix": "arref_"},
+          "refresh_token_expires_at": {"$type": "timestamp"}
+        }
+      },
+      "capture": {"second.access_token": "/access_token", "second.refresh_token": "/refresh_token"}
+    },
+    {"given": "time_passes", "seconds": 61},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{m.refresh_token}}"},
+      "response": {
+        "status": 401,
+        "body": {"error": "credential_reuse_detected", "message": {"$type": "string"}}
+      }
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/token", "token": "{{second.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{second.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}
