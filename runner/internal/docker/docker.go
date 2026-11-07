@@ -1,6 +1,6 @@
 // Package docker is the host runner's use of the Docker Engine API, through the
 // official Go SDK (github.com/moby/moby/client): the preflight's daemon checks,
-// `image.ensure`, the agent container (`container.start` / `container.stop`), the
+// the agent container and its image (`container.start` / `container.stop`), the
 // session ops run against it, and `env.scrub` / `env.reset`.
 package docker
 
@@ -14,7 +14,6 @@ import (
 type API interface {
 	ServerVersion(ctx context.Context, options client.ServerVersionOptions) (client.ServerVersionResult, error)
 	Info(ctx context.Context, options client.InfoOptions) (client.SystemInfoResult, error)
-	ImageInspect(ctx context.Context, imageID string, inspectOpts ...client.ImageInspectOption) (client.ImageInspectResult, error)
 	ImagePull(ctx context.Context, refStr string, options client.ImagePullOptions) (client.ImagePullResponse, error)
 
 	ContainerCreate(ctx context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error)

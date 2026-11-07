@@ -368,7 +368,7 @@ An op, as `GET ops` returns it:
 | `id` | integer | The op's identity, used in its result's path and to recognise a redelivery. |
 | `sequence` | integer | Its position in the machine's queue. Each op's is greater than every earlier op's. |
 | `op` | string | The op's name, below. |
-| `session_id` | integer | The session a session op is for, above 0. A session op always has it; an environment op (`image.ensure`, `env.scrub`, `env.reset`) never has the key. |
+| `session_id` | integer | The session a session op is for, above 0. A session op always has it; an environment op (`env.scrub`, `env.reset`) never has the key. |
 | `deadline_at` | timestamp | A runner that receives the op after this time does not run it, and reports `expired`. |
 | `payload` | object | The op's arguments. |
 
@@ -399,11 +399,11 @@ marked `expired` by the platform's sweep: `delivered` does not prove the runner 
 are kept 7 days, and each machine's newest op is kept longer, so `sequence` keeps growing.
 
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
-`logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
-`env.scrub` and `env.reset`.
+`logs`, `session.start`, `session.stop`, `container.start`, `container.stop`, `env.scrub` and
+`env.reset`. There is no op that only pulls an image: `container.start` pulls it (§6.1).
 
 **Payload and result schemas.** The gateway carries the payload as an opaque object. Each op's
-payload and result, with its fixtures, are specified below: `image.ensure` (§6.1), the agent
+payload and result, with its fixtures, are specified below: the agent image (§6.1), the agent
 container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform enqueues
 them from `ContainerRuntime::RunnerRuntime`, one op per runtime call of the session's strategy. `session.start` and `session.stop` are reserved and have no schema:
 a runner answers them `unsupported_op` (below).
@@ -444,35 +444,22 @@ daemon, not to the runner, so a runner restart does not stop it: a command an `e
 keeps running in the container, and the restarted runner finds the container again by its
 labels.
 
-### 6.1 `image.ensure`
+### 6.1 The agent image
 
-A host-runner op (`manual`, and `coder` later): the runner pulls an agent image onto the
-machine's Docker daemon.
+The agent image is pulled by `container.start` (§6.2), as a Kubernetes pod pulls its image: the
+platform never sends an op that only pulls, and its own pull phase does nothing on a runner.
 
-Payload:
+An `image` in a payload is an image reference as the platform was given it, by tag or by digest,
+e.g. `ghcr.io/aixlehq/flow-agent-claude-code:latest` or
+`ghcr.io/aixlehq/flow-agent-claude-code@sha256:…`. A reference with neither is read as `:latest`,
+as `docker pull` reads it. A value that is not a reference is `invalid_payload`.
 
-| Field | Type | Rule |
-| --- | --- | --- |
-| `image` | string | Required. An image reference as the platform was given it, by tag or by digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code:latest` or `ghcr.io/aixlehq/flow-agent-claude-code@sha256:…`. A reference with neither is read as `:latest`, as `docker pull` reads it. |
-
-Other payload fields are ignored. The runner always pulls the reference through the Docker
-Engine API, so a tag that moved is followed; the daemon downloads only the layers it lacks.
-There is no pull policy, and no digest is returned: the platform never contacts a registry.
-
-Results:
-
-| Outcome | `status` | `data` | `error.class` |
-| --- | --- | --- | --- |
-| The image is there | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether the pull brought anything new (the daemon did not have the image, or the reference now names another image), and how long the op took in milliseconds | |
-| The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
-| The daemon could not be asked which image it has | `error` | | `docker_error` |
-| The payload is not the one above | `error` | | `invalid_payload` |
-
-```json
-{ "status": "ok", "data": { "pulled": true, "duration_ms": 41250 } }
-```
-
-Fixtures: `ops/image_ensure.json`.
+`container.start` always pulls the reference through the Docker Engine API before it creates the
+container, because Docker's create API does not pull. A tag that moved is followed, and the
+daemon downloads only the layers it lacks. There is no pull policy, and no digest is returned:
+the platform never contacts a registry. A pull that fails is the `container.start` outcome
+`image_pull_failed`, even with an older copy of the image on the daemon, and its message carries
+the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied`.
 
 ### 6.2 The agent container: `container.start` and `container.stop`
 
@@ -488,8 +475,8 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 
 #### `container.start`
 
-Creates and starts the session's agent container from the agent image, named and labelled with
-the envelope's `session_id`. The container runs the image's own entrypoint and
+Pulls the agent image (§6.1), then creates and starts the session's agent container from it,
+named and labelled with the envelope's `session_id`. The container runs the image's own entrypoint and
 command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
@@ -498,7 +485,7 @@ Payload:
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `image` | string | Required. The reference, as in `image.ensure` (§6.1). The daemon must have it: `image.ensure` pulls it. |
+| `image` | string | Required. The agent image's reference (§6.1), which the op always pulls before it creates the container. |
 | `env` | object | Optional, string to string. The container's environment variables, on top of the image's. A name must not be empty or contain `=`. |
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
@@ -540,7 +527,7 @@ Results:
 | The container runs | `ok` | `{"container_id": <string>, "name": <string>}` | |
 | The environment has another session's container | `error` | | `session_mismatch`; the message names it and both sessions, and nothing is started |
 | The environment already has a container: this session's own, or one left over that names no session | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
-| The daemon does not have the image | `error` | | `image_not_found` |
+| The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words (§6.1). Nothing is created. |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
 | The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
@@ -729,8 +716,8 @@ Repository checkouts, the cache volumes and the pulled images stay. A workspace 
 not carry `aixle.com/environment=<key>` is not the environment's: step 3 does not mount it, nothing
 is emptied, and the scrub answers `scrub_failed` naming it.
 
-Payload: `{"image": <string>}`, the reference as in `image.ensure`: the agent image the
-container of step 3 runs. The daemon must have it.
+Payload: `{"image": <string>}`, a reference as in §6.1: the agent image the container of step 3
+runs. The daemon must have it: the session's `container.start` pulled it.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |

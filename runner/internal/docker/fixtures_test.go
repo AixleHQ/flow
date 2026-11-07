@@ -24,7 +24,7 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 	classes := map[string]bool{
 		host.ClassUnsupportedOp: true, host.ClassInterrupted: true, host.ClassResultTooLarge: true,
 		ClassInvalidPayload: true, ClassDockerError: true, ClassImagePull: true,
-		ClassNoSessionContainer: true, ClassContainerExists: true, ClassImageNotFound: true,
+		ClassNoSessionContainer: true, ClassContainerExists: true,
 		ClassForbiddenMount: true, ClassContainerStartFailed: true, ClassVolumeNotOwned: true, ClassContainerNotOwned: true,
 		ClassExecFailed: true, ClassExecTimeout: true, ClassWriteFailed: true, ClassFileNotFound: true,
 		ClassNotAFile: true, ClassFileTooLarge: true, ClassBatchStepFailed: true,

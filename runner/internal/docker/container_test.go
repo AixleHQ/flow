@@ -265,12 +265,61 @@ func TestContainerStartOverItsOwnContainerOrALeftoverIsContainerExists(t *testin
 	}
 }
 
-func TestContainerStartWithoutTheImage(t *testing.T) {
+func TestContainerStartAlwaysPullsTheImageThenCreatesTheContainer(t *testing.T) {
+	for _, ref := range []string{pinned, tagged} {
+		h := newEnvironment(t)
+		h.engine.images = map[string]bool{}
+		h.start(h.env, map[string]any{"image": ref})
+		if len(h.engine.pulls) != 1 || h.engine.pulls[0] != ref || h.only().Config.Image != ref {
+			t.Fatalf("%s: pulls %v", ref, h.engine.pulls)
+		}
+	}
+	// An image the daemon already has is pulled again, so a tag that moved is followed.
 	h := newEnvironment(t)
-	h.engine.images = map[string]bool{}
-	r := h.run(h.env.ContainerStart, startPayload(nil))
-	if r.Status != protocol.StatusError || r.Error.Class != ClassImageNotFound {
+	h.start(h.env, nil)
+	if len(h.engine.pulls) != 1 || h.engine.pulls[0] != pinned {
+		t.Fatalf("pulls %v: every container.start pulls", h.engine.pulls)
+	}
+}
+
+func TestContainerStartPullsAReferenceWithoutATagAsLatest(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, map[string]any{"image": image})
+	if len(h.engine.pulls) != 1 || h.engine.pulls[0] != image+":latest" || h.only().Config.Image != image+":latest" {
+		t.Fatalf("pulls %v", h.engine.pulls)
+	}
+}
+
+func TestAFailedPullIsAnOutcomeOfContainerStartAndCreatesNothing(t *testing.T) {
+	for name, fail := range map[string]func(f *fakeEngine){
+		// The registry's words arrive in the progress stream, even with an older copy there.
+		"in the stream": func(f *fakeEngine) { f.pullError = "manifest for " + pinned + " not found: manifest unknown" },
+		"refused":       func(f *fakeEngine) { f.pullStatus = 404 },
+	} {
+		h := newEnvironment(t)
+		fail(h.engine)
+		r := h.run(h.env.ContainerStart, startPayload(nil))
+		if r.Status != protocol.StatusError || r.Error.Class != ClassImagePull {
+			t.Fatalf("%s: %#v", name, r)
+		}
+		if !strings.Contains(r.Error.Message, "manifest unknown") && !strings.Contains(r.Error.Message, "pull access denied") {
+			t.Fatalf("%s: the message does not carry the registry's words: %s", name, r.Error.Message)
+		}
+		if len(h.engine.containers) != 0 || len(h.engine.creates) != 0 || len(h.engine.volumes) != 0 {
+			t.Fatalf("%s: something was created after a failed pull", name)
+		}
+	}
+}
+
+func TestContainerStartPullsNothingWhenItRefuses(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	r := h.runAs(124, h.env.ContainerStart, startPayload(nil))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassSessionMismatch {
 		t.Fatalf("%#v", r)
+	}
+	if len(h.engine.pulls) != 1 {
+		t.Fatalf("pulls %v: a refused start pulled", h.engine.pulls)
 	}
 }
 
@@ -332,7 +381,7 @@ func TestTheReservedSessionOpsHaveNoHandler(t *testing.T) {
 	for name := range handlers {
 		names = append(names, name)
 	}
-	want := []string{"batch", "container.start", "container.stop", "env.reset", "env.scrub", "exec", "image.ensure", "logs", "read_file", "status", "write_file"}
+	want := []string{"batch", "container.start", "container.stop", "env.reset", "env.scrub", "exec", "logs", "read_file", "status", "write_file"}
 	sort.Strings(names)
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("handlers %v", names)

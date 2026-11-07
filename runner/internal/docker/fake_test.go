@@ -32,12 +32,6 @@ type fakeEngine struct {
 	mu         sync.Mutex
 	apiVersion string
 	images     map[string]bool
-	// imageIDs are the IDs of the images by reference; an image without one has
-	// a fixed ID.
-	imageIDs map[string]string
-	// pullNewer makes a pull bring a new image under its reference, as a tag
-	// that moved does.
-	pullNewer bool
 	// pullError is sent in the progress stream, the way a registry failure arrives.
 	pullError string
 	// pullStatus, when set, refuses the pull with that HTTP status before streaming.
@@ -148,11 +142,7 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 			writeJSON(w, http.StatusNotFound, map[string]any{"message": "No such image: " + ref})
 			return
 		}
-		id := f.imageIDs[ref]
-		if id == "" {
-			id = "sha256:" + strings.Repeat("0", 64)
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"Id": id, "RepoDigests": []string{ref}})
+		writeJSON(w, http.StatusOK, map[string]any{"Id": "sha256:" + strings.Repeat("0", 64), "RepoDigests": []string{ref}})
 	case p == "/images/create" && r.Method == http.MethodPost:
 		// The SDK sends a digest as the `tag`, as the daemon's API takes it.
 		tag := r.URL.Query().Get("tag")
@@ -175,10 +165,6 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 			return
 		}
 		_ = enc.Encode(map[string]any{"status": "Digest: " + tag})
-		if f.pullNewer {
-			f.seq++
-			f.imageIDs[ref] = fmt.Sprintf("sha256:%064x", f.seq)
-		}
 		f.images[ref] = true
 	default:
 		notFound(w, r)
@@ -594,7 +580,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func newFakeEngine(t *testing.T) (*fakeEngine, *client.Client) {
 	t.Helper()
 	f := &fakeEngine{
-		apiVersion: "1.47", images: map[string]bool{}, imageIDs: map[string]string{}, rootDir: "/var/lib/docker",
+		apiVersion: "1.47", images: map[string]bool{}, rootDir: "/var/lib/docker",
 		containers: map[string]*fakeContainer{}, execs: map[string]*fakeExec{}, volumes: map[string]*fakeVolume{},
 		release: make(chan struct{}),
 	}

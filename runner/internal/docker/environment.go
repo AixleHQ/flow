@@ -207,7 +207,6 @@ func trimName(name string) string {
 // session op needs the envelope's `session_id`; the environment ops take none.
 func (e *Environment) Handlers() map[string]Handler {
 	return map[string]Handler{
-		"image.ensure":    ImageEnsure(e.API, e.Now),
 		"container.start": sessionOp(e.ContainerStart),
 		"container.stop":  sessionOp(e.ContainerStop),
 		"exec":            sessionOp(e.Exec),

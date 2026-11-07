@@ -1,5 +1,5 @@
 {
-  "description": "container.start creates and starts the session's agent container from the image reference it is given (a tag or a digest), with the payload's env, mounts, network, pid and resources (PROTOCOL.md §6.2). Over another session's container it answers session_mismatch, over a container of the environment that names no session container_exists, and a bind that would expose the runner's state directory is refused with forbidden_mount.",
+  "description": "container.start pulls the image reference it is given (a tag or a digest), always, then creates and starts the session's agent container from it, with the payload's env, mounts, network, pid and resources (PROTOCOL.md §6.2). Over another session's container it answers session_mismatch, over a container of the environment that names no session container_exists, and a bind that would expose the runner's state directory is refused with forbidden_mount, and a pull that fails is image_pull_failed, with nothing created.",
   "steps": [
     {
       "given": "registered_machine",
@@ -24,6 +24,11 @@
       "given": "session_on_machine",
       "machine": "m",
       "as": "s4"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s5"
     },
     {
       "given": "op_enqueued",
@@ -96,6 +101,16 @@
       "op": "container.start",
       "payload": {
         "image": "ghcr.io/aixlehq/flow-claude-code:latest"
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s5",
+      "as": "unpullable",
+      "op": "container.start",
+      "payload": {
+        "image": "ghcr.io/aixlehq/nope:1"
       }
     },
     {
@@ -212,6 +227,24 @@
               "payload": {
                 "image": "ghcr.io/aixlehq/flow-claude-code:latest"
               }
+            },
+            {
+              "id": {
+                "$var": "unpullable.id"
+              },
+              "sequence": {
+                "$var": "unpullable.sequence"
+              },
+              "op": "container.start",
+              "session_id": {
+                "$var": "s5.id"
+              },
+              "deadline_at": {
+                "$var": "unpullable.deadline_at"
+              },
+              "payload": {
+                "image": "ghcr.io/aixlehq/nope:1"
+              }
             }
           ]
         }
@@ -311,8 +344,31 @@
     },
     {
       "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{unpullable.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "image_pull_failed",
+            "message": "pulling ghcr.io/aixlehq/nope:1 failed: Error response from daemon: pull access denied for ghcr.io/aixlehq/nope, repository does not exist or may require 'docker login'"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "unpullable.id"
+          },
+          "state": "failed"
+        }
+      }
+    },
+    {
+      "request": {
         "method": "GET",
-        "path": "/runner/v1/ops?after={{leftover.sequence}}&wait=0",
+        "path": "/runner/v1/ops?after={{unpullable.sequence}}&wait=0",
         "token": "{{m.access_token}}"
       },
       "response": {

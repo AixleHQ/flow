@@ -22,7 +22,6 @@ import (
 // Result error classes of `container.start` (runner/protocol/PROTOCOL.md §6.2).
 const (
 	ClassContainerExists      = "container_exists"
-	ClassImageNotFound        = "image_not_found"
 	ClassForbiddenMount       = "forbidden_mount"
 	ClassContainerStartFailed = "container_start_failed"
 	// ClassVolumeNotOwned: a volume has the environment's name but not its label.
@@ -46,7 +45,8 @@ const StopTimeout = 10
 // ContainerStartPayload is the payload of `container.start`. The session is the
 // envelope's `session_id`, not a payload field.
 type ContainerStartPayload struct {
-	// Image is the reference as in `image.ensure`, a tag or a digest.
+	// Image is the agent image's reference, a tag or a digest, as the platform
+	// was given it. `container.start` pulls it.
 	Image string            `json:"image"`
 	Env   map[string]string `json:"env"`
 	// WorkspaceVolume mounts `aixle-ws-<key>` at /workspace. Absent means true.
@@ -147,7 +147,7 @@ func (e *Environment) checkBind(source string) *protocol.Result {
 }
 
 func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*container.Config, *container.HostConfig, []string, *protocol.Result) {
-	ref, err := ImageEnsurePayload{Image: p.Image}.Reference()
+	ref, err := imageReference(p.Image)
 	if err != nil {
 		return nil, nil, nil, invalid("%s", err.Error())
 	}
@@ -250,9 +250,10 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 	return config, host, volumes, nil
 }
 
-// ContainerStart is `container.start`: it creates and starts the session's agent
-// container from the payload's image, which `image.ensure` pulled, running the
-// image's own entrypoint and command, as a hosted pod does. The container is
+// ContainerStart is `container.start`: it pulls the payload's image, always, then
+// creates and starts the session's agent container from it, running the image's
+// own entrypoint and command, as a hosted pod does. Docker's create API does not
+// pull, and a failed pull is `image_pull_failed`, with nothing created. The container is
 // named and labelled with the envelope's session. Nothing of the runner goes into
 // it: no binary, no socket, no token and nothing of the state directory. Over
 // another session's container it answers `session_mismatch`; over its own, or
@@ -291,6 +292,12 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 			"environment %s already has a container (%s): run container.stop or env.scrub first", e.Key, strings.Join(names, ", ")))
 	}
 
+	// Pulled once the cheap refusals above are out of the way, so a session
+	// that cannot start here pulls nothing.
+	if err := pull(ctx, e.API, config.Image); err != nil {
+		return protocol.ErrorResult(ClassImagePull, fmt.Sprintf("pulling %s failed: %v", config.Image, err))
+	}
+
 	// The volumes are created with the environment's label, so that reset finds
 	// them by label as well as by name. Creating a volume that exists returns it
 	// unchanged, so one with the name but not the label is not the environment's:
@@ -310,8 +317,6 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Config: config, HostConfig: host})
 	switch {
 	case err == nil:
-	case cerrdefs.IsNotFound(err):
-		return protocol.ErrorResult(ClassImageNotFound, fmt.Sprintf("the daemon does not have %s: run image.ensure first (%v)", config.Image, err))
 	case cerrdefs.IsConflict(err):
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf("creating %s failed: %v", name, err))
 	default:

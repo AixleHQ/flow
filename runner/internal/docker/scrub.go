@@ -29,9 +29,9 @@ const OutputsPath = WorkspaceTarget + "/outputs"
 // the agent replaced with a link empties nothing outside the volume.
 const emptyOutputs = `if [ -d ` + OutputsPath + ` ]; then find ` + OutputsPath + ` -mindepth 1 -delete; fi`
 
-// ScrubPayload is the payload of `env.scrub`: the agent image, as in
-// `image.ensure`, that the container emptying the outputs runs. `image.ensure`
-// pulled it.
+// ScrubPayload is the payload of `env.scrub`: the agent image, a reference as in
+// `container.start`, that the container emptying the outputs runs. The daemon
+// has it: the session's `container.start` pulled it.
 type ScrubPayload struct {
 	Image string `json:"image"`
 }
@@ -46,7 +46,7 @@ func (e *Environment) Scrub(ctx context.Context, raw json.RawMessage) protocol.R
 	if r := decodePayload(raw, &p, "{image}"); r != nil {
 		return *r
 	}
-	ref, err := ImageEnsurePayload(p).Reference()
+	ref, err := imageReference(p.Image)
 	if err != nil {
 		return *invalid("%s", err.Error())
 	}
@@ -222,7 +222,7 @@ func (e *Environment) emptyOutputs(ctx context.Context, ref string) (bool, error
 		},
 	})
 	if cerrdefs.IsNotFound(err) {
-		return false, fmt.Errorf("the daemon does not have %s: run image.ensure first (%v)", ref, err)
+		return false, fmt.Errorf("the daemon does not have %s: container.start pulls it (%v)", ref, err)
 	}
 	if err != nil {
 		return false, err

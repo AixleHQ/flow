@@ -57,7 +57,7 @@ func (g *opsGateway) PostResult(_ context.Context, _ string, id int64, r protoco
 func (g *opsGateway) add(id int64, name string, payload any) {
 	raw, _ := json.Marshal(payload)
 	op := protocol.Op{ID: id, Sequence: id, Op: name, DeadlineAt: time.Now().Add(time.Hour), Payload: raw}
-	if !strings.HasPrefix(name, "env.") && name != "image.ensure" {
+	if !strings.HasPrefix(name, "env.") {
 		session := sessionID
 		op.SessionID = &session
 	}
