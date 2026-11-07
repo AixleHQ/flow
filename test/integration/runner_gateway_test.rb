@@ -178,6 +178,8 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_response :no_content
     assert environment.reload.gone?
   end
+
+  test "a credential reaches its own environment only" do
     mine = registered_pair
     theirs = registered_pair(name: "build-02")
 
