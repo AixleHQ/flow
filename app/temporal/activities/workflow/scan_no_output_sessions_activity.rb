@@ -20,7 +20,10 @@ module Activities
         skipped    = 0
 
         candidate_sessions.find_each do |session|
-          watchdog = Sessions::NoOutputWatchdog.new(session, runtime: runtime_for(session))
+          # A runner session's ops are capped, so a machine that does not answer
+          # cannot hold up the sweep.
+          runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
+          watchdog = Sessions::NoOutputWatchdog.new(session, runtime: runtime)
           unless watchdog.stale?
             skipped += 1
             next
@@ -47,15 +50,6 @@ module Activities
           .where.not(container_id: [ nil, "" ])
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
           .where.not(id: TerminalSession.auth_paused.select(:id))
-      end
-
-      # The session's runtime (ContainerRuntime.for_session): its runner's for a
-      # session on an external runner, whose ops are capped so a machine that
-      # does not answer cannot hold up the sweep. Every hosted session shares one.
-      def runtime_for(session)
-        return ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout) if session.runner_id
-
-        @runtime ||= ContainerRuntime.build
       end
     end
   end

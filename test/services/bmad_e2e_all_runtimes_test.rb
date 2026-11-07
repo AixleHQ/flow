@@ -70,17 +70,11 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     Rails.logger.stubs(:error)
     Rails.logger.stubs(:debug)
 
-    Thread.current[:session_context_runtime] = nil
-
     @runtime_mock = mock("runtime")
     @runtime_mock.stubs(:write_file).returns(true)
     @runtime_mock.stubs(:exec).returns([ [], [], 0 ])
     @runtime_mock.stubs(:read_file).returns(nil)
     ContainerRuntime.stubs(:build).returns(@runtime_mock)
-  end
-
-  teardown do
-    Thread.current[:session_context_runtime] = nil
   end
 
   # ====================================================================
@@ -376,7 +370,6 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
         true
       end.returns([ [], [], 0 ])
 
-      Thread.current[:session_context_runtime] = nil
       ContainerRuntime.stubs(:build).returns(runtime)
 
       SessionContextService.assemble_session_context("ctr-full-#{agent_type}", session)

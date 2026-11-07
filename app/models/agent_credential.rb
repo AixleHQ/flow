@@ -329,11 +329,10 @@ class AgentCredential < ApplicationRecord
     adapter.generate_config(config_data, workflow_config)
   end
 
-  # Write credentials to a running container, through `runtime` when the
-  # session's runtime is not the hosted one.
-  def write_to_container(container_id, workflow_config = {}, runtime: nil)
-    service = runtime ? AgentCredentialsService.for(agent_type, runtime: runtime) : AgentCredentialsService.for(agent_type)
-    result = service.write_to_container(container_id, config_data, workflow_config)
+  # Write credentials to a running container, through the session's runtime
+  # (SessionContextService, ContainerRuntime.for_session).
+  def write_to_container(container_id, workflow_config = {}, runtime:)
+    result = AgentCredentialsService.for(agent_type, runtime: runtime).write_to_container(container_id, config_data, workflow_config)
     touch(:last_used_at)
     result
   end

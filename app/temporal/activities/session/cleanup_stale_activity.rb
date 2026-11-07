@@ -99,6 +99,7 @@ module Activities
       def cleanup_session(session)
         return cleanup_runner_session(session) if session.runner_id
 
+        runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
         container = session.container_id.present? ? runtime.resolve_container(session.container_id) : nil
 
         if container
@@ -150,12 +151,6 @@ module Activities
         end
         session.update(error_message: "Stale session: workflow ended without cleanup")
         session.fail! if session.may_fail?
-      end
-
-      # Every hosted session shares one runtime. A runner session never reaches
-      # it (#cleanup_runner_session).
-      def runtime
-        @runtime ||= ContainerRuntime.build
       end
     end
   end

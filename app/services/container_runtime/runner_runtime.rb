@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "temporalio/activity"
 
 module ContainerRuntime
   # The runtime of a session on an external runner

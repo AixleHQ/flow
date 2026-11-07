@@ -87,16 +87,17 @@ module Activities
       # machine) has its identity persisted before the pull, so the cleanup of
       # a pull that fails, or of a stop before the create, still reaches
       # `cleanup_session`. Its identity names the session, not a container, so
-      # it is the one the create writes again. A hosted session's runtime is not
-      # even built here, so the hosted path is unchanged (§12.3).
+      # it is the one the create writes again. A hosted runtime answers false,
+      # so the hosted path persists nothing here (§12.3).
       def persist_identity_before_pull(admission, session)
-        return if admission.runtime_id.present? || session.runner_id.nil?
+        return if admission.runtime_id.present?
 
         runtime = ContainerRuntime.for_session(session)
         return unless runtime.identity_before_pull?
 
         admission.update!(runtime_id: runtime.session_identity(session), runtime_kind: runtime.class.name)
       end
+
       # A login the user has to renew is reported to them on the step, and a phase
       # that breaks once a stop was requested is the container being torn down
       # under it — the stop, not a fault. Cleanup never gets here: it sets the stop

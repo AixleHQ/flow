@@ -188,7 +188,6 @@ module ContainerStrategies
     # arrival ("Login expired · Please run /login").
     test "before_exec tops up a token that would expire mid-session and hands the container the new one" do
       runtime = stub_container_runtime
-      Thread.current[:session_context_runtime] = nil
       @credential.update!(config_data: {
         "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
                              "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
@@ -208,7 +207,6 @@ module ContainerStrategies
     # authorization", and the user signs in to Design again for a login that was fine.
     test "before_exec hands the container the topped-up design token, not the one it replaced" do
       runtime = stub_container_runtime
-      Thread.current[:session_context_runtime] = nil
       @credential.update!(config_data: {
         "claudeAiOauth" => { "accessToken" => "base-tok", "refreshToken" => "base-ref",
                              "expiresAt" => (3.hours.from_now.to_f * 1000).to_i },
@@ -429,7 +427,8 @@ module ContainerStrategies
     # first attempt — no reseed.
     test "Codex preflight fails immediately when the written auth file disappears, without reseeding" do
       strategy, = build_codex_preflight_strategy(nil)
-      SessionContextService.expects(:inject_credential).never
+      SessionContextService.unstub(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context).once.returns(true)
 
       error = assert_raises(AgentSessionStrategy::ProvisioningError) do
         strategy.before_exec(container_id: "container_ref")
@@ -447,7 +446,6 @@ module ContainerStrategies
       )
       SessionContextService.unstub(:assemble_session_context)
       SessionContextService.expects(:assemble_session_context).once.raises(write_error)
-      SessionContextService.expects(:inject_credential).never
 
       error = assert_raises(AgentSessionStrategy::ProvisioningError) do
         strategy.before_exec(container_id: "container_ref")
@@ -1163,7 +1161,6 @@ module ContainerStrategies
       strategy.stubs(:resolve_container).returns(container)
       strategy.stubs(:runtime).returns(runtime)
       SessionContextService.stubs(:assemble_session_context).returns(true)
-      SessionContextService.stubs(:inject_credential).returns(true)
       [ strategy, runtime, container ]
     end
   end

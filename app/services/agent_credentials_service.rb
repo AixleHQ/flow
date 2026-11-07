@@ -24,8 +24,8 @@ class AgentCredentialsService
 
   attr_reader :adapter, :agent_type
 
-  # `runtime` writes into a session whose runtime is not the hosted one
-  # (ContainerRuntime.for_session).
+  # `runtime` is the runtime of the session written into
+  # (ContainerRuntime.for_session); without one, the hosted runtime.
   def initialize(agent_type, runtime: nil)
     @agent_type = agent_type
     @runtime = runtime
