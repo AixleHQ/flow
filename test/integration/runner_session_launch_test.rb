@@ -150,8 +150,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
   def assert_ops_name_their_session(session)
     RunnerOperation.order(:sequence).each do |operation|
-      expected = RunnerOperation::ENVIRONMENT_OPS.include?(operation.op) ? nil : session.id
-      assert_equal expected, operation.terminal_session_id, "#{operation.op} names the wrong session"
+      if RunnerOperation::ENVIRONMENT_OPS.include?(operation.op)
+        assert_nil operation.terminal_session_id, "#{operation.op} is an environment op and names no session"
+      else
+        assert_equal session.id, operation.terminal_session_id, "#{operation.op} names the wrong session"
+      end
     end
   end
 end
