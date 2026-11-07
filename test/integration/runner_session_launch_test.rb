@@ -50,6 +50,10 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal({ "image" => "ghcr.io/aixlehq/flow-claude-code", "digest" => "sha256:#{'b' * 64}" },
                  @host_runner.operations.first[:payload])
     assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.fourth[:payload]["path"]
+    start = @host_runner.operations.second
+    assert_equal({ "cpus" => 2.0, "memory_bytes" => 4096.megabytes, "pids_limit" => 4096 }, start[:payload]["resources"],
+                 "the hosted container's limits")
+    assert_equal session.id.to_s, start[:payload]["env"]["SESSION_ID"]
 
     cleaned = run_phase(session, "cleanup")
 

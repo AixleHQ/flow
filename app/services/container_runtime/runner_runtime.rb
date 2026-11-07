@@ -361,7 +361,7 @@ module ContainerRuntime
         "mounts" => mounts,
         "network" => setting("container.network"),
         "pid" => setting("container.pid"),
-        "resources" => resources(spec[:host_config] || {}),
+        "resources" => resources((spec[:host_config] || {}).stringify_keys),
         "privilege_escalation" => spec[:privilege_escalation] == true
       }
     end
