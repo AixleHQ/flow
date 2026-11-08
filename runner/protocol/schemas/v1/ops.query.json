@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AixleHQ/flow/runner/protocol/schemas/v1/ops.query.json",
+  "title": "GET /runner/v1/ops: the query parameters",
+  "description": "PROTOCOL.md §5.4. A query string carries text: a parameter written as a decimal integer is read as that integer before it is checked, and any other value stays a string, which fails `type`. Parameters that fail this schema are 400 invalid_request. Other parameters are ignored.",
+  "type": "object",
+  "properties": {
+    "after": {
+      "description": "Default 0. The highest `sequence` the runner has taken.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "wait": {
+      "description": "Default 25, in seconds. A value above 25 is treated as 25; 0 answers at once.",
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

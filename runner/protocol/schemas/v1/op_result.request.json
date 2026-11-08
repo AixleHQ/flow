@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AixleHQ/flow/runner/protocol/schemas/v1/op_result.request.json",
+  "title": "POST /runner/v1/ops/:id/result: the request body",
+  "description": "PROTOCOL.md §5.5. A body that fails this schema is 422 invalid_result. A `null` field counts as absent, and other fields are ignored.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "description": "`ok` completes the op, `error` fails it, `expired` expires it.",
+      "enum": ["ok", "error", "expired"]
+    },
+    "exit_code": { "type": ["integer", "null"] },
+    "stdout": { "type": ["string", "null"] },
+    "stderr": { "type": ["string", "null"] },
+    "data": {
+      "description": "What the op returns beyond its output.",
+      "type": ["object", "null"]
+    },
+    "error": {
+      "description": "Exactly {\"class\": <string>, \"message\": <string>}, no other keys.",
+      "type": ["object", "null"],
+      "required": ["class", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "class": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

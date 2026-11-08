@@ -93,16 +93,20 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert @own.reload.deleted?
   end
 
+  # A write finds the runner among the project's own, so a company runner is
+  # not found by one, whoever asks.
   test "nobody manages a company runner from a project page" do
     %i[admin owner].each do |role|
       sign_in_as(user_for(role))
 
       patch company_project_runner_path(@project, @company_runner), params: { runner: { name: "Hijacked" } }, as: :json
-      assert_equal AuthorizationMatrix::DENIAL_ALERT, flash[:alert]
-      post disable_company_project_runner_path(@project, @company_runner)
-      assert_equal AuthorizationMatrix::DENIAL_ALERT, flash[:alert]
+      assert_response :not_found
+      %i[disable enable revoke].each do |action|
+        post public_send(:"#{action}_company_project_runner_path", @project, @company_runner)
+        assert_response :not_found
+      end
       delete company_project_runner_path(@project, @company_runner)
-      assert_equal AuthorizationMatrix::DENIAL_ALERT, flash[:alert]
+      assert_response :not_found
     end
 
     @company_runner.reload
@@ -112,6 +116,37 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
 
     get company_project_runner_path(@project, @company_runner)
     assert_inertia_props { |props| props[:canManage] == false }
+  end
+
+  test "a disabled company runner cannot be enabled from a project page" do
+    @company_runner.disable!
+    sign_in_as(@owner)
+
+    post enable_company_project_runner_path(@project, @company_runner)
+
+    assert_response :not_found
+    assert_equal "disabled", @company_runner.reload.status
+  end
+
+  test "the show page's can_manage is the policy's answer and whether the runner is the project's own" do
+    sign_in_as(@owner)
+    get company_project_runner_path(@project, @own)
+    assert_inertia_props { |props| props[:canManage] == true }
+
+    sign_in_as(@collaborator)
+    get company_project_runner_path(@project, @own)
+    assert_inertia_props { |props| props[:canManage] == false }
+  end
+
+  test "another project's runner is not found by a write from this page" do
+    other = create(:runner, :project_runner, company: @company, created_by: @admin)
+    sign_in_as(@admin)
+
+    patch company_project_runner_path(@project, other), params: { runner: { name: "Hijacked" } }, as: :json
+    assert_response :not_found
+    delete company_project_runner_path(@project, other)
+    assert_response :not_found
+    assert_not other.reload.deleted?
   end
 
   test "coder and kubernetes runners are refused as not available yet" do

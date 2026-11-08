@@ -131,6 +131,77 @@ class RunnerTest < ActiveSupport::TestCase
     assert_includes kubernetes.errors[:reuse_policy], "must be fresh on a kubernetes runner"
   end
 
+  # == config ==
+
+  test "a config that breaks a type rule is refused by any save, not only through Runners::Save" do
+    runner = build(:runner, :manual, company: @company, created_by: @user,
+                                     config: { "container" => { "docker_socket" => true } })
+
+    assert_not runner.save
+    assert_includes runner.errors[:config],
+                    "container.docker_socket requires container.allow_privileged_mounts: it gives the agent root on the machine"
+  end
+
+  test "the config checks run when config or the type changes, and not on other saves" do
+    runner = create(:runner, :manual, company: @company, created_by: @user)
+    stale = { "container" => { "extra_mounts" => [ { "source" => "/srv", "target" => "/out", "writable" => true } ] } }
+    Runner.where(id: runner.id).update_all(config: stale)
+    runner.reload
+
+    assert runner.update(max_concurrency: 2), runner.errors.full_messages.to_sentence
+    assert_not runner.update(config: stale.deep_merge("container" => { "network" => "host" }))
+    assert_includes runner.errors[:config], "container.acknowledged_writable_mounts must list /out: it is a writable host mount"
+    runner.reload
+    runner.runner_type = :kubernetes
+    assert_not runner.valid?
+    assert runner.errors[:config].any?
+  end
+
+  # A stored config that a later, tighter schema refuses must not block the
+  # runner's own revoke or delete, which raise on a failed save.
+  test "a runner whose stored config no longer passes the checks can still be disabled, enabled, revoked and deleted" do
+    stale = { "container" => { "home_mount" => { "writable" => false }, "gpu" => true } }
+    revoked = create(:runner, :manual, company: @company, created_by: @user)
+    deleted = create(:runner, :manual, company: @company, created_by: @user)
+    Runner.where(id: [ revoked.id, deleted.id ]).update_all(config: stale)
+    [ revoked, deleted ].each(&:reload)
+    assert_not Runners::ConfigSchema.errors(revoked.config, "manual").empty?
+
+    revoked.disable!
+    revoked.enable!
+    revoked.revoke!
+    deleted.soft_delete!
+
+    assert revoked.reload.revoked?
+    assert deleted.reload.deleted?
+    assert deleted.revoked?
+  end
+
+  # == the tenant rule ==
+
+  test "of_tenant is the company's company-level runners and the project's own, deleted ones included" do
+    own = create(:runner, company: @company, created_by: @user, project: @project)
+    company_runner = create(:runner, company: @company, created_by: @user)
+    deleted = create(:runner, company: @company, created_by: @user, project: @project).tap(&:soft_delete!)
+    other_project = create(:runner, company: @company, created_by: @user, project: create(:project, company: @company, owner: @user))
+    foreign = create(:runner, company: create(:company))
+
+    ids = ->(**tenant) { Runner.of_tenant(**tenant).pluck(:id).sort }
+    assert_equal [ own.id, company_runner.id, deleted.id ].sort, ids.call(company_id: @company.id, project_id: @project.id)
+    assert_equal [ company_runner.id ], ids.call(company_id: @company.id)
+    assert_empty ids.call(company_id: nil, project_id: @project.id)
+    assert_equal ids.call(company_id: @company.id, project_id: @project.id),
+                 TenantScope.owned(Runner, project: @project).pluck(:id).sort
+    assert_equal [ company_runner.id ], TenantScope.owned(Runner, company: @company).pluck(:id)
+
+    tenant = { company_id: @company.id, project_id: @project.id }
+    [ own, company_runner, deleted ].each { |runner| assert runner.of_tenant?(**tenant), runner.name }
+    [ other_project, foreign ].each { |runner| assert_not runner.of_tenant?(**tenant), runner.name }
+    assert company_runner.of_tenant?(company_id: @company.id)
+    assert_not own.of_tenant?(company_id: @company.id)
+    assert_not company_runner.of_tenant?(company_id: nil, project_id: @project.id)
+  end
+
   # == visible_for_project ==
 
   test "visible_for_project returns the project's runners and the company's, never deleted or foreign ones" do

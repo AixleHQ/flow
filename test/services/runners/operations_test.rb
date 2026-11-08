@@ -30,7 +30,8 @@ class Runners::OperationsTest < ActiveSupport::TestCase
       assert_empty @pubsub.broadcasts(channel(@environment)), "nothing is published before the commit"
     end
 
-    assert_equal [ "1" ], @pubsub.broadcasts(channel(@environment))
+    assert_equal [ { "type" => "op_enqueued", "sequence" => 1 } ],
+                 @pubsub.broadcasts(channel(@environment)).map { |message| JSON.parse(message) }
   end
 
   test "a rolled-back enqueue wakes nothing" do
