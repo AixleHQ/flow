@@ -70,7 +70,7 @@ module Runners
         # Serializes the enqueues of one environment, and reads its holder and
         # its counter fresh.
         environment.lock!
-        return nil unless environment.current_session_id == session.id
+        next nil unless environment.current_session_id == session.id
 
         sequence = environment.op_sequence + 1
         environment.update_columns(op_sequence: sequence)

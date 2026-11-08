@@ -2403,8 +2403,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
   add_foreign_key "runner_environments", "companies", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", on_delete: :cascade
-  add_foreign_key "runner_environments", "terminal_sessions", column: ["current_session_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_current_session_company", deferrable: :deferred
   add_foreign_key "runner_environments", "terminal_sessions", column: "current_session_id", on_delete: :nullify
+  add_foreign_key "runner_environments", "terminal_sessions", column: ["current_session_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_current_session_company", deferrable: :deferred
   add_foreign_key "runner_operations", "companies", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_operations_environment_runner", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", on_delete: :cascade

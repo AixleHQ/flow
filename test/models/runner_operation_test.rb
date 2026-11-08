@@ -72,7 +72,8 @@ class RunnerOperationTest < ActiveSupport::TestCase
     assert_not_equal @environment.company_id, other_session.company_id
 
     error = assert_raises(ActiveRecord::InvalidForeignKey) do
-      build_operation(op: "exec", terminal_session: other_session).save!(validate: false)
+      build_operation(op: "exec", terminal_session: other_session, runner: @environment.runner,
+                      company: @environment.company).save!(validate: false)
     end
     assert_match "fk_runner_operations_session_company", error.message
   end
