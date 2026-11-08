@@ -773,7 +773,9 @@ class SessionServiceTest < ActiveSupport::TestCase
 
     step_run.step.update!(preferred_model: "gemini-2.5-pro", reasoning_effort: nil)
 
-    config = SessionContextService.credential_workflow_config(session.reload, nil, [])
+    session.reload
+    assembly = SessionContextService.new("ctr1", session, runtime: ContainerRuntime.for_session(session))
+    config = assembly.credential_workflow_config(nil, [])
     assert_equal "gemini-3-pro", config[:model]
     assert_equal "low", config[:reasoning_effort]
   end

@@ -6,8 +6,14 @@
       "as": "m"
     },
     {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "write",
       "op": "write_file",
       "payload": {
@@ -21,6 +27,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "read",
       "op": "read_file",
       "payload": {
@@ -30,6 +37,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "too_large",
       "op": "read_file",
       "payload": {
@@ -39,6 +47,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "missing",
       "op": "read_file",
       "payload": {
@@ -63,6 +72,9 @@
                 "$var": "write.sequence"
               },
               "op": "write_file",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "write.deadline_at"
               },
@@ -82,6 +94,9 @@
                 "$var": "read.sequence"
               },
               "op": "read_file",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "read.deadline_at"
               },
@@ -97,6 +112,9 @@
                 "$var": "too_large.sequence"
               },
               "op": "read_file",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "too_large.deadline_at"
               },
@@ -112,6 +130,9 @@
                 "$var": "missing.sequence"
               },
               "op": "read_file",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "missing.deadline_at"
               },

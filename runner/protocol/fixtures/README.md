@@ -98,13 +98,15 @@ defined once per scenario.
 
 A setup step is `{"given": "<name>", ...arguments}`. A harness implements each with the real
 services it tests: the Rails harness calls `Runners::Credentials.mint_registration!`,
-`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke.
+`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke, and
+creates a session of the machine for `session_on_machine`.
 
 | `given` | Arguments | What it does | Defines |
 | --- | --- | --- | --- |
 | `registration_token` | `as` | Mints a registration token for the runner, as "Add machine" will. There is no endpoint for this yet. | `<as>`: the token |
 | `registered_machine` | `as`, `name` (optional, default: the value of `as`) | Registers one machine of the runner with a fresh registration token, as a successful `POST /runner/v1/register` does, with protocol `1` and runner version `1.4.0`. | `<as>.access_token`, `<as>.refresh_token`, `<as>.environment_id` (an integer) |
-| `op_enqueued` | `machine` (a `registered_machine`'s `as`), `as`, `op` (an op name), `payload` (an object) | Puts an op on that machine's queue with a deadline 5 minutes ahead, in whole seconds. | `<as>.id` and `<as>.sequence` (integers), `<as>.deadline_at` (the ISO 8601 string the gateway sends) |
+| `session_on_machine` | `machine` (a `registered_machine`'s `as`), `as` | Creates a session of the runner that runs on that machine, as the platform assigns one. | `<as>.id` (an integer: the `session_id` its ops carry) |
+| `op_enqueued` | `machine` (a `registered_machine`'s `as`), `session` (optional, a `session_on_machine`'s `as` of the same machine), `as`, `op` (an op name), `payload` (an object) | Puts an op on that machine's queue with a deadline 5 minutes ahead, in whole seconds. A session op (PROTOCOL.md §6) needs `session`, and its envelope then carries that session's `session_id`; an environment op takes none. The platform enqueues an op only while its session holds the machine, so the step first makes `session`, or for an environment op a session of the machine, its holder. | `<as>.id` and `<as>.sequence` (integers), `<as>.deadline_at` (the ISO 8601 string the gateway sends) |
 | `runner_revoked` | none | Revokes the runner, which revokes all of its credentials. | nothing |
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |
 | `flag_on` | none | Turns it back on. | nothing |

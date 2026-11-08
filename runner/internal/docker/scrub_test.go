@@ -48,11 +48,11 @@ func (h *harness) volumeFiles(name string) map[string][]byte {
 	return nil
 }
 
-func scrubPayload() map[string]any { return map[string]any{"image": image, "digest": digest} }
+func scrubPayload() map[string]any { return map[string]any{"image": pinned} }
 
 func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 	h, _ := twoEnvironments(t)
-	r := h.run(h.env.Scrub, scrubPayload())
+	r := h.runEnv(h.env.Scrub, scrubPayload())
 	if r.Status != protocol.StatusOK || r.Data["outputs_emptied"] != true {
 		t.Fatalf("%#v %v", r, r.Error)
 	}
@@ -67,7 +67,7 @@ func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 	}
 	// The checkout, the cache volume and the image stay; the other environment is
 	// not touched.
-	if h.volumeFiles("aixle-cache-"+envKey+"-pip") == nil || !h.engine.images[image+"@"+digest] {
+	if h.volumeFiles("aixle-cache-"+envKey+"-pip") == nil || !h.engine.images[pinned] {
 		t.Fatal("the scrub removed a cache volume or the image")
 	}
 	if files := h.volumeFiles("aixle-ws-" + otherKey); len(files) != 2 {
@@ -81,7 +81,7 @@ func TestScrubRemovesTheSessionContainersAndEmptiesTheOutputs(t *testing.T) {
 			scrub = &fakeContainerRequest{c.Config.Image, c.Config.User, string(c.HostConfig.NetworkMode), len(c.HostConfig.Mounts), c.Config.Labels[LabelEnvironment]}
 		}
 	}
-	if scrub == nil || *scrub != (fakeContainerRequest{image + "@" + digest, "0:0", "none", 1, envKey}) {
+	if scrub == nil || *scrub != (fakeContainerRequest{pinned, "0:0", "none", 1, envKey}) {
 		t.Fatalf("scrub container %#v", scrub)
 	}
 }
@@ -95,7 +95,7 @@ type fakeContainerRequest struct {
 func TestScrubWithoutAWorkspaceVolume(t *testing.T) {
 	h := newEnvironment(t)
 	h.start(h.env, map[string]any{"workspace_volume": false})
-	r := h.run(h.env.Scrub, scrubPayload())
+	r := h.runEnv(h.env.Scrub, scrubPayload())
 	if r.Status != protocol.StatusOK || r.Data["outputs_emptied"] != false || len(h.containerNames()) != 0 {
 		t.Fatalf("%#v", r)
 	}
@@ -105,21 +105,21 @@ func TestAFailedScrubSaysSo(t *testing.T) {
 	h := newEnvironment(t)
 	h.start(h.env, nil)
 	h.engine.scrubExit = 1
-	r := h.run(h.env.Scrub, scrubPayload())
+	r := h.runEnv(h.env.Scrub, scrubPayload())
 	if r.Status != protocol.StatusError || r.Error.Class != ClassScrubFailed {
 		t.Fatalf("%#v", r)
 	}
 	if len(h.containerNames()) != 0 {
 		t.Fatal("the scrub container was left behind")
 	}
-	if r := h.run(h.env.Scrub, map[string]any{}); r.Error == nil || r.Error.Class != ClassInvalidPayload {
+	if r := h.runEnv(h.env.Scrub, map[string]any{}); r.Error == nil || r.Error.Class != ClassInvalidPayload {
 		t.Fatalf("%#v", r)
 	}
 }
 
 func TestResetAlsoRemovesTheEnvironmentsVolumes(t *testing.T) {
 	h, _ := twoEnvironments(t)
-	r := h.run(h.env.Reset, map[string]any{})
+	r := h.runEnv(h.env.Reset, map[string]any{})
 	if r.Status != protocol.StatusOK {
 		t.Fatalf("%#v %v", r, r.Error)
 	}
@@ -144,11 +144,11 @@ func TestResetAlsoRemovesTheEnvironmentsVolumes(t *testing.T) {
 			t.Fatalf("volumes left %v", volumes)
 		}
 	}
-	if !reflect.DeepEqual(h.containerNames(), []string{"aixle-" + otherKey + "-123"}) || !h.engine.images[image+"@"+digest] {
+	if !reflect.DeepEqual(h.containerNames(), []string{"aixle-" + otherKey + "-123"}) || !h.engine.images[pinned] {
 		t.Fatal("the reset touched another environment or the image")
 	}
 	// A reset of an environment with nothing left is not an error.
-	if r := h.run(h.env.Reset, map[string]any{}); r.Status != protocol.StatusOK {
+	if r := h.runEnv(h.env.Reset, map[string]any{}); r.Status != protocol.StatusOK {
 		t.Fatalf("%#v", r)
 	}
 }
@@ -161,7 +161,7 @@ func TestAVolumeInUseFailsTheReset(t *testing.T) {
 	h.engine.containers["intruder"] = &fakeContainer{ID: "intruder", Name: "intruder", Files: map[string]*fakeFile{}, exited: make(chan struct{})}
 	h.engine.containers["intruder"].Host.Mounts = h.only2("aixle-" + envKey + "-123").Host.Mounts
 	h.engine.mu.Unlock()
-	r := h.run(h.env.Reset, map[string]any{})
+	r := h.runEnv(h.env.Reset, map[string]any{})
 	if r.Status != protocol.StatusError || r.Error.Class != ClassResetFailed {
 		t.Fatalf("%#v", r)
 	}
@@ -200,7 +200,7 @@ func TestScrubRefusesAWorkspaceVolumeThatIsNotTheEnvironments(t *testing.T) {
 	for _, labels := range []map[string]string{{}, {LabelEnvironment: otherKey}} {
 		h := newEnvironment(t)
 		h.addVolume("aixle-ws-"+envKey, labels)
-		r := h.run(h.env.Scrub, scrubPayload())
+		r := h.runEnv(h.env.Scrub, scrubPayload())
 		if r.Status != protocol.StatusError || r.Error.Class != ClassScrubFailed || !strings.Contains(r.Error.Message, "aixle-ws-"+envKey) {
 			t.Fatalf("%v: %#v", labels, r)
 		}
@@ -229,7 +229,7 @@ func TestResetRefusesAVolumeThatIsNotTheEnvironments(t *testing.T) {
 		h := newEnvironment(t)
 		h.start(h.env, map[string]any{"workspace_volume": false, "mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}}})
 		h.addVolume(foreign.name, foreign.labels)
-		r := h.run(h.env.Reset, map[string]any{})
+		r := h.runEnv(h.env.Reset, map[string]any{})
 		if r.Status != protocol.StatusError || r.Error.Class != ClassResetFailed || !strings.Contains(r.Error.Message, foreign.name) {
 			t.Fatalf("%s %v: %#v", foreign.name, foreign.labels, r)
 		}
@@ -247,7 +247,7 @@ func TestResetLeavesTheCacheVolumesOfAKeyThatStartsWithThisOne(t *testing.T) {
 	h.start(h.env, nil)
 	longer := h.another(envKey + "-x")
 	h.start(longer, map[string]any{"mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}}})
-	r := h.run(h.env.Reset, map[string]any{})
+	r := h.runEnv(h.env.Reset, map[string]any{})
 	if r.Status != protocol.StatusOK || !reflect.DeepEqual(r.Data["removed_volumes"], []string{"aixle-ws-" + envKey}) {
 		t.Fatalf("%#v %v", r, r.Error)
 	}

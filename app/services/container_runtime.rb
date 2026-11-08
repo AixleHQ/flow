@@ -13,6 +13,16 @@ module ContainerRuntime
     end
   end
 
+  # The runtime of one session (docs/design/agent-runtimes/DESIGN.md §5.3): its
+  # runner's for a session on an external runner, and for every other session
+  # exactly what `build` gives, so the hosted path is unchanged (§12.3).
+  # `op_timeout` caps a runner op's deadline (RunnerRuntime). A RunnerRuntime
+  # is not bound to the session: each of its calls finds its session from its
+  # own argument.
+  def self.for_session(session, op_timeout: nil)
+    session&.runner_id ? RunnerRuntime.new(op_timeout: op_timeout) : ContainerRuntime.build
+  end
+
   def self.from_settings
     return "docker" unless defined?(Settings) && Settings.respond_to?(:container_runtime)
 

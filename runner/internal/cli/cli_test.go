@@ -233,7 +233,7 @@ func storeCreds(t *testing.T, dir, url string) {
 		t.Fatal(err)
 	}
 	j, _ := journal.Open(dir, nil)
-	_ = j.Record(protocol.Op{ID: 1, Sequence: 1, Op: "image.ensure"}, protocol.Result{Status: protocol.StatusOK})
+	_ = j.Record(protocol.Op{ID: 1, Sequence: 1, Op: "env.scrub"}, protocol.Result{Status: protocol.StatusOK})
 }
 
 func TestUnregisterDeletesTheRegistrationThenTheLocalState(t *testing.T) {
@@ -301,7 +301,7 @@ func TestConfigureDeletesTheJournalOfAPreviousRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = j.Record(protocol.Op{ID: 900, Sequence: 7, Op: "image.ensure"}, protocol.Result{Status: protocol.StatusOK})
+	_ = j.Record(protocol.Op{ID: 900, Sequence: 7, Op: "env.scrub"}, protocol.Result{Status: protocol.StatusOK})
 	if err := j.Acknowledge(900); err != nil || j.After() != 7 {
 		t.Fatalf("after %d, %v", j.After(), err)
 	}

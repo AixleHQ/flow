@@ -84,7 +84,7 @@ module InternalTools
       container_id = session.container_id
       return error("No container available to read file from") unless container_id.present?
 
-      content = ContainerRuntime.build.read_file(container_id, path)
+      content = ContainerRuntime.for_session(session).read_file(container_id, path)
       return error("File not found in container: #{path}") unless content
 
       content

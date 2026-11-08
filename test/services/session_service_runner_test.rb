@@ -13,14 +13,27 @@ class SessionServiceRunnerTest < ActiveSupport::TestCase
     @runner = create(:runner, company: @company, created_by: @user, name: "Prod VPC")
   end
 
-  test "a standalone session on a runner is saved, then failed before admission with the message" do
+  test "a standalone session on a runner with no machine is saved, then failed before admission with the message" do
     session = with_feature(:external_runners, true, company: @company) { create_session(runner_id: @runner.id) }
 
     assert session.persisted?
     assert_equal "failed", session.reload.state
     assert_equal @runner.id, session.runner_id
-    assert_equal "Runner \"Prod VPC\" can't take sessions yet: runner execution not enabled.", session.error_message
+    assert_equal "Runner \"Prod VPC\" has no machine registered. Register a machine on it, or pick another runner " \
+                 "for the session.", session.error_message
     assert_nil session.session_admission
+  end
+
+  test "a standalone session on a runner with a registered machine is admitted, on the runner" do
+    mock_temporal_start
+    create(:runner_environment, runner: @runner)
+
+    session = with_feature(:external_runners, true, company: @company) { create_session(runner_id: @runner.id) }
+
+    assert_equal @runner.id, session.runner_id
+    assert session.session_admission.present?
+    assert_not_equal "failed", session.reload.state
+    assert_nil session.runner_environment_id, "the machine is taken by the first runtime phase, not at launch"
   end
 
   test "a disabled runner fails the session with what to do" do
@@ -68,7 +81,7 @@ class SessionServiceRunnerTest < ActiveSupport::TestCase
       assert_raises(Runners::Resolver::Refused) { SessionService.create_for_workflow_step(step_run: step_run) }
     end
 
-    assert_equal "runner_execution_not_enabled", refusal.reason
+    assert_equal "runner_unreachable", refusal.reason
     assert_nil step_run.reload.terminal_session
     assert_equal 0, TerminalSession.count
   end

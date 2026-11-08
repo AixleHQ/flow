@@ -43,7 +43,7 @@ module InternalTools
       repos = target_repositories
       return error(nothing_to_refresh_message) if repos.empty?
 
-      runtime = ContainerRuntime.build
+      runtime = ContainerRuntime.for_session(session)
       setup = GitCredentials::SessionGitSetup.new(runtime: runtime, container_id: container_id, session: session)
       setup.install_helper!(container_uid)
 

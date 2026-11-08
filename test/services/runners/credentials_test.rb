@@ -107,7 +107,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert Runners::Credentials.usable(second.access_token, kind: :access)
   end
 
-  test "reusing a spent refresh token revokes the whole family and says so on the environment" do
+  test "reusing a spent refresh token revokes the whole family and moves the machine to failed, with the reason" do
     first = Runners::Credentials.issue_pair!(@environment)
     old_refresh = RunnerCredential.find_by_token(first.refresh_token, kind: :refresh)
     second = Runners::Credentials.rotate!(old_refresh)
@@ -117,7 +117,8 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(old_refresh.reload) }
 
     assert_equal "credential_reuse_detected", error.reason
-    assert_equal "credential reuse detected", @environment.reload.state_reason
+    assert_equal "failed", @environment.reload.state
+    assert_equal "credential reuse detected", @environment.state_reason
     assert RunnerCredential.where(family_id: old_refresh.family_id).all?(&:revoked?)
     assert_nil Runners::Credentials.usable(second.access_token, kind: :access)
     assert Runners::Credentials.usable(other_machine.access_token, kind: :access)
@@ -299,6 +300,24 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
 
     assert_equal %w[runner_revoked runner_revoked], [ rotation.reason, registering.reason ]
     assert_equal 1, RunnerEnvironment.count
+  end
+
+  test "a machine whose refresh token was reused is not given a session" do
+    pair = Runners::Credentials.issue_pair!(@environment)
+    refresh = RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh)
+    Runners::Credentials.record_use!(
+      RunnerCredential.find_by_token(Runners::Credentials.rotate!(refresh).access_token, kind: :access)
+    )
+    holder = create(:runner_session, environment: @environment, runner_environment: nil)
+    @environment.update!(current_session: holder)
+
+    assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(refresh.reload) }
+
+    assert_nil @environment.reload.current_session_id, "a failed machine is held by no session"
+    session = create(:runner_session, environment: @environment, runner_environment: nil)
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
+    assert_match(/its machine failed: .*\(credential reuse detected\)/, error.message)
+    assert_nil session.reload.runner_environment_id
   end
 
   private

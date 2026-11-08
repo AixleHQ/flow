@@ -41,4 +41,24 @@ class ContainerRuntimeTest < ActiveSupport::TestCase
 
     assert_equal "kubernetes", ContainerRuntime.from_settings
   end
+
+  test "for_session gives a hosted session, and no session, the runtime build gives" do
+    hosted = create(:terminal_session, :agent_session, user: create(:user))
+
+    %w[kubernetes docker].each do |name|
+      Settings.stubs(:container_runtime).returns(name)
+
+      assert_instance_of ContainerRuntime.build.class, ContainerRuntime.for_session(hosted)
+      assert_instance_of ContainerRuntime.build.class, ContainerRuntime.for_session(nil)
+    end
+  end
+
+  test "for_session gives a session on a runner its runner's runtime" do
+    session = create(:runner_session)
+
+    runtime = ContainerRuntime.for_session(session)
+
+    assert_instance_of ContainerRuntime::RunnerRuntime, runtime
+    assert_not_respond_to runtime, :session, "a RunnerRuntime is not bound to a session"
+  end
 end

@@ -21,10 +21,6 @@ module Agents
   class CredentialDelivery
     Result = Struct.new(:delivered, :failed, :sessions, keyword_init: true)
 
-    def initialize(runtime: nil)
-      @runtime = runtime
-    end
-
     # @param credential [AgentCredential] carrying the tokens to hand out
     # @param sessions [Enumerable<TerminalSession>] the holders to write to
     # @return [Result] how many containers took it, how many could not be written, and which took it
@@ -39,9 +35,10 @@ module Agents
       sessions.each do |session|
         next if session.container_id.blank?
 
-        if write(session, adapter, credentials)
+        runtime = ContainerRuntime.for_session(session)
+        if write(session, runtime, adapter, credentials)
           took << session
-          Sessions::AuthPause.new(session, runtime: container_runtime).resume!
+          Sessions::AuthPause.new(session, runtime: runtime).resume!
         else
           failed += 1
         end
@@ -52,14 +49,12 @@ module Agents
 
     private
 
-    attr_reader :runtime
-
     # A delivery that fails is logged and counted, never raised: the sweep that called it
     # has already rotated the token and persisted it, and the next launch reads the stored
     # copy regardless. A container we could not write to is one that was going to die on
     # its stale token anyway.
-    def write(session, adapter, credentials)
-      raise "the container did not take it" unless adapter.deliver_credential(container_runtime, session.container_id, credentials)
+    def write(session, runtime, adapter, credentials)
+      raise "the container did not take it" unless adapter.deliver_credential(runtime, session.container_id, credentials)
 
       Rails.logger.info("[CredentialDelivery] session=#{session.id} container=#{session.container_id} " \
                         "took a refreshed #{session.agent_type} token")
@@ -68,10 +63,6 @@ module Agents
       Rails.logger.warn("[CredentialDelivery] session=#{session.id} container=#{session.container_id} " \
                         "could not take the refreshed token: #{e.class}: #{e.message}")
       false
-    end
-
-    def container_runtime
-      @container_runtime ||= runtime || ContainerRuntime.build
     end
   end
 end

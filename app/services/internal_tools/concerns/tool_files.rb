@@ -47,7 +47,7 @@ module InternalTools
         return [ nil, error("No container available to read file from") ] if container_id.blank?
 
         path = f[:file_path].to_s
-        bytes = ContainerRuntime.build.read_file(container_id, path)
+        bytes = ContainerRuntime.for_session(session).read_file(container_id, path)
         return [ nil, error("files[#{index}] file not found in container: #{path}") ] if bytes.nil?
 
         filename = f[:filename].presence || File.basename(path)

@@ -64,10 +64,13 @@ module Activities
 
         candidate_sessions.find_each do |session|
           checked += 1
+          # A runner session's ops are capped, so a machine that does not answer
+          # cannot hold up the sweep.
+          runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
           status = runtime.container_status(session.container_id)
 
           if DEAD_STATUSES.include?(status)
-            failed += 1 if confirm_or_mark(session, status)
+            failed += 1 if confirm_or_mark(session, status, runtime)
           elsif ALIVE_STATUSES.include?(status)
             clear_marker(session)
           end
@@ -90,7 +93,7 @@ module Activities
       # First sighting only records the time; the session is failed on a later
       # sighting, once CONFIRMATION_DELAY has passed and it is still both dead and
       # active. Returns true when the session was failed.
-      def confirm_or_mark(session, status)
+      def confirm_or_mark(session, status, runtime)
         first_seen = marker_at(session)
 
         if first_seen.nil?
@@ -101,12 +104,12 @@ module Activities
         return false if first_seen > CONFIRMATION_DELAY.ago
         return false unless ACTIVE_STATES.include?(session.reload.state)
 
-        SessionService.fail_session(session: session, error_message: failure_message(session, status))
+        SessionService.fail_session(session: session, error_message: failure_message(session, status, runtime))
         log(:info, "Failed session #{session.id}: container #{status}")
         true
       end
 
-      def failure_message(session, status)
+      def failure_message(session, status, runtime)
         return MESSAGES.fetch(status) unless status == :terminated
 
         describe_termination(runtime.container_termination(session.container_id)) || MESSAGES.fetch(status)
@@ -151,10 +154,6 @@ module Activities
         return unless session.metadata.is_a?(Hash) && session.metadata.key?(MARKER_KEY)
 
         session.remove_jsonb_keys!(:metadata, MARKER_KEY)
-      end
-
-      def runtime
-        @runtime ||= ContainerRuntime.build
       end
     end
   end

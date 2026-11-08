@@ -35,9 +35,14 @@ module ContainerStrategies
     # and the BMAD install, which alone may take BmadMethodInjector::INSTALL_TIMEOUT
     # — so its budget has to cover all of them. An exec that outruns it cannot be
     # retried (SessionRuntimeOperation#replayable?): the session fails.
+    #
+    # `create_container` has 600 s because a runner pulls the image in it
+    # (ContainerRuntime::RunnerRuntime, `container.start`); on hosted it is only
+    # a larger timeout (DESIGN.md §12.3).
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
+      when :create_container then { timeout: 600 }
       when :exec        then { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 }
       when :cleanup     then { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } }
       else                   { timeout: 300 }

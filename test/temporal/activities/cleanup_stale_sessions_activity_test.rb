@@ -286,6 +286,41 @@ module Activities
         assert_equal "failed", stale.state
         assert_not_nil stale.finished_at
       end
+
+      # == A session on an external runner ==
+
+      test "a stale runner session that still holds its machine moves the machine to failed and sends the runner nothing" do
+        machine = create(:runner_environment)
+        stale = create(:runner_session, environment: machine, state: "running", started_at: 1.hour.ago,
+                                        container_id: "aixle-#{machine.key}-1")
+        machine.update!(current_session: stale)
+        @runtime_mock.expects(:resolve_container).never
+
+        result = run_activity(CleanupStaleActivity)
+
+        assert_equal 1, result[:cleaned_running]
+        machine.reload
+        assert_equal "failed", machine.state
+        assert_nil machine.current_session_id
+        assert_equal "held by stale session #{stale.id}", machine.state_reason
+        assert_equal 0, RunnerOperation.count, "nothing was sent to the runner"
+        assert_equal "failed", stale.reload.state
+        assert_raises(Runners::Machines::NoMachine) do
+          Runners::Machines.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
+        end
+      end
+
+      test "a stale runner session that holds no machine is failed and leaves the machines alone" do
+        machine = create(:runner_environment)
+        stale = create(:runner_session, environment: machine, state: "running", started_at: 1.hour.ago,
+                                        container_id: "aixle-#{machine.key}-1")
+
+        run_activity(CleanupStaleActivity)
+
+        assert_equal "failed", stale.reload.state
+        assert_equal "registered", machine.reload.state
+        assert_equal 0, RunnerOperation.count
+      end
     end
   end
 end
