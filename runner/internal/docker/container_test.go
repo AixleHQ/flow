@@ -313,6 +313,31 @@ func TestThePullSendsTheDockerCredentialsOfTheImagesRegistry(t *testing.T) {
 	}
 }
 
+// `docker login` stores Docker Hub's credentials under https://index.docker.io/v1/,
+// not under the reference's domain, docker.io.
+func TestAPullOfADockerHubImageSendsTheCredentialsDockerLoginStored(t *testing.T) {
+	login := base64.StdEncoding.EncodeToString([]byte("hub-bot:hub-s3cret"))
+	for _, ref := range []string{"myorg/agent:1", "docker.io/myorg/agent:1", "index.docker.io/myorg/agent:1"} {
+		h := newEnvironment(t)
+		withDockerConfig(t, `{"auths": {"https://index.docker.io/v1/": {"auth": "`+login+`"}, "ghcr.io": {"auth": "b3RoZXI6b3RoZXI="}}}`)
+		h.run(h.env.ContainerStart, startPayload(map[string]any{"image": ref}))
+		if len(h.engine.pullAuths) != 1 || h.engine.pullAuths[0] == "" {
+			t.Fatalf("%s: pull auths %q: the pull carried no credentials", ref, h.engine.pullAuths)
+		}
+		decoded, err := base64.URLEncoding.DecodeString(h.engine.pullAuths[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sent map[string]string
+		if err := json.Unmarshal(decoded, &sent); err != nil {
+			t.Fatal(err)
+		}
+		if sent["username"] != "hub-bot" || sent["password"] != "hub-s3cret" {
+			t.Fatalf("%s: sent %v: not Docker Hub's credentials", ref, sent)
+		}
+	}
+}
+
 func TestAPullWithNoCredentialsForItsRegistryIsAnonymous(t *testing.T) {
 	h := newEnvironment(t)
 	withDockerConfig(t, `{"auths": {"registry.internal": {"auth": "b3RoZXI6b3RoZXI="}}}`)
@@ -337,6 +362,27 @@ func TestContainerStartCreatesNothingPastItsDeadline(t *testing.T) {
 	if len(h.engine.containers) != 0 || len(h.engine.creates) != 0 || len(h.engine.volumes) != 0 {
 		t.Fatalf("something was created past the deadline: %d containers, %d creates, %d volumes",
 			len(h.engine.containers), len(h.engine.creates), len(h.engine.volumes))
+	}
+}
+
+// A runner that stops (SIGTERM, a restart) while ContainerCreate runs cancels the
+// op's context; that is not its deadline.
+func TestContainerStartCutShortByTheRunnerStoppingDuringTheCreateLeavesNothing(t *testing.T) {
+	h := newEnvironment(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.engine.onCreate = cancel
+	r := h.env.ContainerStart(ctx, sessionID, mustJSON(t, startPayload(nil)))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerStartFailed || !strings.Contains(r.Error.Message, "cut short") {
+		t.Fatalf("%#v", r)
+	}
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	if len(h.engine.creates) != 1 {
+		t.Fatalf("%d creates: the create never ran", len(h.engine.creates))
+	}
+	if len(h.engine.containers) != 0 {
+		t.Fatalf("%d containers left after the cut-short create", len(h.engine.containers))
 	}
 }
 

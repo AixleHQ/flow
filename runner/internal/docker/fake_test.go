@@ -57,7 +57,10 @@ type fakeEngine struct {
 	// release ends every exec that is still blocked when the test ends.
 	release chan struct{}
 	creates []container.CreateRequest
-	removed []string
+	// onCreate, when set, runs once a create has made its container. The create
+	// then never answers: it waits until the client gives up.
+	onCreate func()
+	removed  []string
 }
 
 type fakeContainer struct {
@@ -355,6 +358,15 @@ func (f *fakeEngine) createContainer(w http.ResponseWriter, r *http.Request) {
 	c := &fakeContainer{ID: f.nextID(), Name: name, Config: *req.Config, Host: *req.HostConfig,
 		State: container.State{Status: container.StateCreated}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
 	f.containers[c.ID] = c
+	if f.onCreate != nil {
+		// The container exists, but its answer waits until the client gives up.
+		hook := f.onCreate
+		f.mu.Unlock()
+		hook()
+		<-r.Context().Done()
+		f.mu.Lock()
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"Id": c.ID, "Warnings": []string{}})
 }
 

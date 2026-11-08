@@ -334,9 +334,14 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	switch {
 	case err == nil:
 	case ctx.Err() != nil:
-		// The daemon may have created it before the answer was cut off.
+		// The daemon may have created it before the answer was cut off: by the
+		// op's deadline, or by the runner stopping. Either way it is removed.
 		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), name, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
-		return *pastDeadline(ctx, "creating "+name)
+		if r := pastDeadline(ctx, "creating "+name); r != nil {
+			return *r
+		}
+		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf(
+			"creating %s was cut short (%v); nothing was created", name, ctx.Err()))
 	case cerrdefs.IsConflict(err):
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf("creating %s failed: %v", name, err))
 	default:

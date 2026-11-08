@@ -397,7 +397,7 @@ and marks it `expired`, as if the runner had answered `expired`. An op that nobo
 more, still without a result 10 seconds past its `deadline_at`, `pending` or `delivered`, is
 marked `expired` by the platform's sweep: `delivered` does not prove the runner received it
 (§5.4). A result that arrives later changes nothing (§5.5, the first result wins). Finished ops
-are kept 7 days, and each machine's newest op is kept longer, so `sequence` keeps growing.
+are kept 7 days. `sequence` comes from a per-machine counter, so it keeps growing after a prune.
 
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
 `logs`, `session.start`, `session.stop`, `container.start`, `container.stop`, `env.scrub` and
@@ -462,7 +462,9 @@ the platform never contacts a registry.
 
 The runner pulls with the Docker credentials of the user it runs as, resolved as the Docker CLI
 resolves them for `docker pull`: from that user's Docker configuration (`$DOCKER_CONFIG`, or
-`~/.docker/config.json`), credential helpers included, for the image's registry. An operator who
+`~/.docker/config.json`), credential helpers included, for the image's registry. Docker Hub's
+credentials are looked up under `https://index.docker.io/v1/`, where `docker login` stores them,
+for a reference on `docker.io` or `index.docker.io`. An operator who
 runs agent images from a private registry runs `docker login`, or configures a credential helper,
 as that user. With no credentials for the registry, the pull is anonymous. A pull that fails is the `container.start` outcome
 `image_pull_failed`, even with an older copy of the image on the daemon, and its message carries
