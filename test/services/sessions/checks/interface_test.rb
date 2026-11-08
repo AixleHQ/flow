@@ -33,7 +33,8 @@ module Sessions
 
     class KeptStateTest < ActiveSupport::TestCase
       setup do
-        @session = create(:terminal_session, metadata: { "turn_end_screen" => "old", "step_name" => "Build" })
+        @session = create(:terminal_session, user: create(:user, :with_company),
+                                             metadata: { "turn_end_screen" => "old", "step_name" => "Build" })
       end
 
       test "collects a pass's changes and writes them in one update that leaves other keys alone" do

@@ -18,6 +18,7 @@ module Sessions
     SCREEN_LINES = ScreenDigest::LINES
 
     def self.read(session, parts:, runtime:)
+      parts = parts.map { |name| Parts.fetch(name).name }.uniq
       new(source_for(session, runtime: runtime).read(parts).to_h do |name, raw|
         [ name, Parts.fetch(name).parse.call(raw) ]
       end)
