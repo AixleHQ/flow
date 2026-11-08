@@ -104,6 +104,71 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert admission.reload.released_at
   end
 
+  # The runner runs a machine's ops one at a time, in order, so a cleanup op
+  # queued behind an unfinished `container.start` would expire behind it.
+  test "a stop while container.start is unanswered sends the cleanup only once the start has its answer" do
+    cancellation, cancel = Temporalio::Cancellation.new
+    # The session is stopped once the start is on the queue, and the runner is still pulling.
+    @host_runner.answer_with("container.start") do
+      cancel.call
+      :none
+    end
+    session = launch
+    run_phases(session, %w[pull_image])
+
+    assert_raises(Temporalio::Error) { run_phase_in_activity(session, "create_container", cancellation) }
+    start = RunnerOperation.find_by!(op: "container.start")
+    assert start.deliverable?, "nothing answered the start"
+
+    assert run_phase(session, "cleanup")[:cleanup_pending], "the cleanup waits for the start"
+    assert_equal %w[container.start], @host_runner.ops, "nothing is queued behind the start"
+
+    # The runner answers late: the pull ended within the start's deadline, and the container runs.
+    container = @host_runner.machine.start(session.id, @host_runner.operations.first[:payload])
+    Runners::Operations.record_result!(start, status: "ok",
+                                              result: { "data" => { "container_id" => container.id, "name" => container.name } })
+    run_phase(session, "cleanup")
+
+    assert_equal "container.start", @host_runner.ops.first
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "the cleanup ran after the start's answer"
+    assert_nil @host_runner.machine.container, "the late start's container is gone"
+    @machine.reload
+    assert_equal [ "registered", nil ], [ @machine.state, @machine.current_session_id ], "the machine is free"
+  end
+
+  test "a start the runner refused releases the admission at once: nothing of the create can appear later" do
+    %w[container_start_failed volume_not_owned].each do |klass|
+      @host_runner.answer_with("container.start", "status" => "error", "error" => { "class" => klass, "message" => "refused" })
+      session = launch
+      run_phases(session, %w[pull_image])
+
+      assert_raises(Temporalio::Error::ApplicationError, klass) { run_phase(session, "create_container") }
+      cleaned = run_phase(session, "cleanup")
+
+      assert_not cleaned.key?(:cleanup_pending), "#{klass}: cleanup left #{cleaned.inspect}"
+      assert session.session_admission.reload.released_at, "#{klass}: the admission is released"
+      assert_nil @machine.reload.current_session_id, "#{klass}: the machine is free"
+    end
+  end
+
+  test "a machine unregistered during a session stops holding it, and the session's cleanup releases its admission" do
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+    admission = session.session_admission.reload
+    runtime = ContainerRuntime.for_session(session)
+    @host_runner.operations.clear
+
+    Runners::Registration.unregister!(@machine)
+
+    assert_nil @machine.reload.current_session_id
+    assert runtime.session_absent?(admission.runtime_id)
+    assert_equal :missing, runtime.container_status(admission.runtime_id), "its ops answer as a container that is gone"
+    cleaned = run_phase(session, "cleanup")
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert admission.reload.released_at
+    assert_empty @host_runner.operations, "nothing is sent to a machine that left"
+  end
+
   test "a stop between the pull and the create takes no machine, and the cleanup sends nothing" do
     session = launch
     run_phases(session, %w[pull_image])
@@ -163,6 +228,16 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal "finished", session.state
   end
 
+  # Does not take Temporal's asynchronous raise, so it is the op wait's own
+  # cancellation check that stops the phase.
+  class PhaseProbe < Temporalio::Activity::Definition
+    activity_cancel_raise false
+
+    def execute(input)
+      Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(input))
+    end
+  end
+
   private
 
   def launch
@@ -185,6 +260,16 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     else
       activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, permit_token: admission.permit_token))
     end
+  end
+
+  # Runs a phase inside an activity, whose cancellation the op wait checks.
+  def run_phase_in_activity(session, phase, cancellation)
+    admission = session.session_admission.reload
+    info = Temporalio::Testing::ActivityEnvironment.default_info.with(started_time: Time.current, start_to_close_timeout: 600.0)
+    Temporalio::Testing::ActivityEnvironment.new(info: info, cancellation: cancellation,
+                                                 activity_executors: TemporalActivityHelper::EXECUTORS)
+                                            .run(PhaseProbe, { phase: phase, admission_id: admission.id,
+                                                               permit_token: admission.permit_token })
   end
 
   def assert_ops_name_their_session(session)

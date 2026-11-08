@@ -10,11 +10,13 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     @machine = create(:runner_environment, runner: @runner)
   end
 
-  test "a session takes a free machine, and both sides record it" do
+  test "a session takes a free machine, and both sides record it, without touching the caller's session" do
     session = runner_session
+    session.initial_prompt = "changed by the caller"
 
     assert_equal @machine, Runners::Machines.acquire!(session)
-    assert_equal @machine.id, session.runner_environment_id
+    assert_nil session.runner_environment_id, "the caller's object is not changed"
+    assert_equal [ "initial_prompt" ], session.changed, "nor saved"
     assert_equal @machine.id, session.reload.runner_environment_id
     assert_equal session.id, @machine.reload.current_session_id
     assert_equal @machine, Runners::Machines.acquire!(session), "the session keeps the machine it holds"
@@ -82,6 +84,35 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     error = assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
 
     assert_equal "Waiting for a free machine on runner \"Build farm\" (1 of 1 busy).", error.message
+  end
+
+  test "a late failure of a session that released the machine leaves the next session's hold alone" do
+    first = runner_session
+    observed = Runners::Machines.acquire!(first)
+    Runners::Machines.release!(observed, first)
+    second = runner_session
+    Runners::Machines.acquire!(second)
+
+    Runners::Machines.fail!(observed, "env.reset failed after session #{first.id}: the runner did not answer", holder: first)
+
+    @machine.reload
+    assert_equal [ "registered", second.id, nil ], [ @machine.state, @machine.current_session_id, @machine.state_reason ]
+    Runners::Machines.fail!(observed, "refresh token reused")
+    assert_equal [ "failed", nil ], [ @machine.reload.state, @machine.current_session_id ],
+                 "without a holder, the machine fails whoever holds it"
+  end
+
+  test "availability is a result: available, none registered, or every machine failed" do
+    assert_equal :available, Runners::Machines.availability(@runner).status
+    Runners::Machines.acquire!(runner_session)
+    assert Runners::Machines.availability(@runner).available?, "a busy machine can come back"
+
+    Runners::Machines.fail!(@machine, "env.reset failed after session 7: reset_failed: volume in use")
+    failed = Runners::Machines.availability(@runner)
+    assert_equal [ :all_failed, [ @machine ] ], [ failed.status, failed.failed ]
+
+    @machine.update!(state: :gone)
+    assert_equal :none_registered, Runners::Machines.availability(@runner).status
   end
 
   test "a gone machine stays gone when it fails" do

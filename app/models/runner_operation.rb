@@ -7,9 +7,12 @@
 #
 # A session op is for one session, which the envelope names as `session_id`, and
 # the runner checks it against the container's label (PROTOCOL.md §5.4, §6.3).
-# An environment op (`env.scrub`, `env.reset`) names none.
+# An environment op (`env.scrub`, `env.reset`) names none. Either kind is
+# created only while its session holds the environment, which
+# Runners::Operations.enqueue! checks under the environment's lock.
 #
-# `sequence` is monotonic per environment, and the runner acknowledges by it.
+# `sequence` is monotonic per environment, taken from the environment's
+# `op_sequence` counter, and the runner acknowledges by it.
 # The payload carries what a hosted pod receives through `write_file` today,
 # credentials included, so it is encrypted with `runners_key` and nulled once
 # the op completes, fails or expires. The result carries command output and
@@ -50,7 +53,6 @@ class RunnerOperation < ApplicationRecord
   validates :op, :state, :deadline_at, presence: true
   validates :terminal_session, presence: { message: "is required for a session op" }, if: :session_op?
   validates :terminal_session, absence: { message: "must be empty for an environment op" }, unless: :session_op?
-  validate :session_is_on_the_environment, if: -> { terminal_session && will_save_change_to_terminal_session_id? }
 
   scope :deliverable, -> { where(state: DELIVERABLE_STATES) }
 
@@ -80,14 +82,5 @@ class RunnerOperation < ApplicationRecord
 
   def result=(value)
     self.encrypted_result = value.nil? ? nil : encrypt_secret(value.to_json, column: "encrypted_result")
-  end
-
-  private
-
-  # An op goes to the machine its session runs on, and to no other.
-  def session_is_on_the_environment
-    return if terminal_session.runner_environment_id == runner_environment_id
-
-    errors.add(:terminal_session, "does not run on this environment")
   end
 end

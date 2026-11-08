@@ -17,17 +17,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     @default_runtime_mock.stubs(:write_file).returns(true)
     @default_runtime_mock.stubs(:exec).returns([ [], [], 0 ])
     @default_runtime_mock.stubs(:read_file).returns(nil)
-    ContainerRuntime.stubs(:build).returns(@default_runtime_mock)
+    # Every test hands the assembly its runtime; only the test of
+    # assemble_session_context's own choice goes through the factory.
+    ContainerRuntime.expects(:build).never
   end
 
   teardown do
     cleanup_runtime_overrides
   end
 
-  # One assembly, on the runtime the session gets: the test's stub of
-  # ContainerRuntime.build for a hosted session.
-  def context_service(session, container_id = "ctr1")
-    SessionContextService.new(container_id, session, runtime: ContainerRuntime.for_session(session))
+  # One assembly, on the runtime the test hands it.
+  def context_service(session, container_id = "ctr1", runtime: @default_runtime_mock)
+    SessionContextService.new(container_id, session, runtime: runtime)
   end
 
   # ====================================================================
@@ -43,12 +44,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     written = {}
     runtime_mock.stubs(:write_file).with { |ctr, path, content, **| written[path] = { ctr: ctr, content: content }; true }.returns(true)
 
-    context_service(session, "abc123").inject_config_files
+    context_service(session, "abc123", runtime: runtime_mock).inject_config_files
 
     assert_equal "abc123", written["/home/claude/.claude/settings.json"][:ctr]
     assert_equal '{"permissions":{}}', written["/home/claude/.claude/settings.json"][:content]
@@ -59,10 +59,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:write_file).never
 
-    context_service(session, "abc123").inject_config_files
+    context_service(session, "abc123", runtime: runtime_mock).inject_config_files
   end
 
   test "inject_config_files skips when config_files is nil" do
@@ -71,10 +70,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:write_file).never
 
-    context_service(session, "abc123").inject_config_files
+    context_service(session, "abc123", runtime: runtime_mock).inject_config_files
   end
 
   # ====================================================================
@@ -198,7 +196,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     existing_toml = "[ui]\npermission_mode = \"always-approve\"\n"
     runtime_mock.expects(:read_file).with("abc123", "/home/grok/.grok/config.toml").returns(existing_toml)
@@ -208,7 +205,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("permission_mode") && content.include?('[mcp_servers."tavily"]')
     end.returns(true)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: runtime_mock).inject_mcp_config
   end
 
   test "generate_mcp_config Codex uses http_headers not headers" do
@@ -356,14 +353,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
         JSON.parse(content)["mcpServers"]["tavily"].present?
     end.returns(true)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: runtime_mock).inject_mcp_config
   end
 
   test "inject_mcp_config merges Gemini settings" do
@@ -373,7 +369,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file returns existing settings
     existing_settings = { "security" => { "auth" => { "selectedType" => "oauth-personal" } } }
@@ -389,7 +384,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       false
     end.returns(true)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: runtime_mock).inject_mcp_config
   end
 
   test "inject_mcp_config appends Codex TOML" do
@@ -399,7 +394,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file returns existing config.toml
     existing_toml = "approval_policy = \"never\"\n"
@@ -411,7 +405,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("approval_policy") && content.include?('[mcp_servers."tavily"]')
     end.returns(true)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: runtime_mock).inject_mcp_config
   end
 
   # The Codex append is a read-modify-write over the same config.toml the credential
@@ -422,13 +416,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_mcp_config keeps an unreadable config.toml instead of overwriting it" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
 
-    fake = stub_container_runtime(agent_type: "codex")
+    fake = ContainerRuntime::FakeRuntime.new(agent_type: "codex")
     toml_path = "/home/codex/.codex/config.toml"
     credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
     fake.fs[toml_path] = credential_config
     fake.fail_read(toml_path)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: fake).inject_mcp_config
 
     assert_equal credential_config, fake.fs[toml_path]
   end
@@ -440,14 +434,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_mcp_config keeps a config.toml it could neither read nor probe" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
 
-    fake = stub_container_runtime(agent_type: "codex")
+    fake = ContainerRuntime::FakeRuntime.new(agent_type: "codex")
     toml_path = "/home/codex/.codex/config.toml"
     credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
     fake.fs[toml_path] = credential_config
     fake.fail_read(toml_path)
     fake.raise_on_exec("test -f", error: ContainerRuntime::ContainerUnreachableError.new(container_identifier: "abc123"))
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: fake).inject_mcp_config
 
     assert_equal credential_config, fake.fs[toml_path]
   end
@@ -455,10 +449,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_mcp_config writes a fresh config.toml when there is none to append to" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
 
-    fake = stub_container_runtime(agent_type: "codex")
+    fake = ContainerRuntime::FakeRuntime.new(agent_type: "codex")
     toml_path = "/home/codex/.codex/config.toml"
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: fake).inject_mcp_config
 
     assert_includes fake.fs[toml_path], "[mcp_servers."
   end
@@ -467,14 +461,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
         JSON.parse(content).dig("mcpServers", "aixle-tools").present?
     end.returns(true)
 
-    context_service(session, "abc123").inject_mcp_config
+    context_service(session, "abc123", runtime: runtime_mock).inject_mcp_config
   end
 
   # ====================================================================
@@ -498,7 +491,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:exec).with do |ctr, cmd, _opts|
       ctr == "abc123" &&
@@ -508,7 +500,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         cmd[cmd.index("--skill") + 1] == "mantine-form"
     end.returns([ [], [], 0 ])
 
-    result = context_service(session, "abc123").inject_skills
+    result = context_service(session, "abc123", runtime: runtime_mock).inject_skills
 
     assert_equal "ok", result["mantinedev/skills@mantine-form"]
   end
@@ -522,7 +514,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # The path is the one `skills add -g -a claude-code` would have used, the
     # directory name equals the skill name as the Agent Skills spec requires, and it
@@ -534,7 +525,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                 .returns(true)
     runtime_mock.expects(:exec).never
 
-    result = context_service(session, "abc123").inject_skills
+    result = context_service(session, "abc123", runtime: runtime_mock).inject_skills
 
     assert_equal "ok", result["house-style"]
   end
@@ -549,7 +540,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:write_file)
                 .with("abc123", "/home/claude/.claude/skills/pdf/SKILL.md", "---\nname: pdf\n---\n", uid: 1001, gid: 1001)
                 .returns(true)
@@ -558,7 +548,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                 .returns(true)
     runtime_mock.expects(:exec).never
 
-    assert_equal "ok", context_service(session, "abc123").inject_skills["anthropics/skills@pdf"]
+    assert_equal "ok", context_service(session, "abc123", runtime: runtime_mock).inject_skills["anthropics/skills@pdf"]
   end
 
   test "inject_skills reports a failed manual write instead of raising" do
@@ -568,10 +558,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(false)
 
-    result = context_service(session, "abc123").inject_skills
+    result = context_service(session, "abc123", runtime: runtime_mock).inject_skills
 
     assert_match(/error/, result["house-style"])
   end
@@ -626,7 +615,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -637,7 +625,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("<output-rules")
     end.returns(true)
 
-    context_service(session, "ctr1").inject_context_file
+    context_service(session, "ctr1", runtime: runtime_mock).inject_context_file
   end
 
   test "inject_context_file stores context_metadata on session" do
@@ -645,11 +633,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec)
 
-    context_service(session, "ctr1").inject_context_file
+    context_service(session, "ctr1", runtime: runtime_mock).inject_context_file
     session.reload
 
     assert_not_nil session.context_metadata
@@ -671,13 +658,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                        agent_type: agent_type, mode: "interactive")
 
       runtime_mock = mock("runtime_#{agent_type}")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
       runtime_mock.expects(:write_file).with do |_ctr, path, _content|
         path == expected_path
       end.returns(true)
 
-      context_service(session, "ctr1").inject_context_file
+      context_service(session, "ctr1", runtime: runtime_mock).inject_context_file
     end
   end
 
@@ -688,7 +674,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       agent_type: "claude_code", mode: "interactive", configured_agent: agent)
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:write_file).with do |_ctr, _path, content|
       content.include?("<agent-role") &&
@@ -696,7 +681,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("You review code carefully.")
     end.returns(true)
 
-    context_service(session, "ctr1").inject_context_file
+    context_service(session, "ctr1", runtime: runtime_mock).inject_context_file
   end
 
   # ====================================================================
@@ -786,7 +771,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     credential_mock = mock("credential")
     credential_mock.stubs(:agent_type).returns("claude_code")
@@ -820,7 +804,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "ctr1" && path == "/var/log/context.log"
     end.returns(true).in_sequence(call_order)
 
-    SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble(credential: credential_mock)
   end
 
   test "assemble_session_context redacts resolved secrets from context.log but keeps them in the container config" do
@@ -831,7 +815,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:read_file).returns(nil)
 
     captured = {}
@@ -840,7 +823,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       true
     end.returns(true)
 
-    SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble(credential: nil)
 
     mcp_config = captured["/workspace/.mcp.json"]
     context_log = captured["/var/log/context.log"]
@@ -862,7 +845,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # MCP config (aixle-tools)
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
@@ -879,7 +861,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "ctr1" && path == "/var/log/context.log"
     end.returns(true)
 
-    result = SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+    result = context_service(session, "ctr1", runtime: runtime_mock).assemble(credential: nil)
     assert_nil result
   end
 
@@ -890,7 +872,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
 
     credential_mock = mock("credential")
@@ -899,7 +880,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     credential_mock.stubs(:default_model).returns(nil)
     credential_mock.expects(:write_to_container).returns(true)
 
-    result = SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
+    result = context_service(session, "ctr1", runtime: runtime_mock).assemble(credential: credential_mock)
     assert result
   end
 
@@ -936,7 +917,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive")
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # Allow all runtime calls
     runtime_mock.stubs(:write_file).returns(true)
@@ -949,7 +929,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     logged_messages = []
     Rails.logger.stubs(:info).with { |msg| logged_messages << msg; true }
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
 
     step_logs = logged_messages.select { |m| m.include?("[SessionContext] Step") }
     assert step_logs.any? { |m| m.include?("'config_files'") }
@@ -1015,7 +995,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   test "inject_assets downloads into the assets directory and skips a stored path that would leave it" do
-    runtime = stub_container_runtime
+    runtime = ContainerRuntime::FakeRuntime.new
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     assets = { good: [ "spec.md", "docs" ], bad_name: [ "x", nil ], bad_folder: [ "y", nil ] }.transform_values do |(name, folder)|
       create(:asset, scope: @project, created_by: @user, name: name, folder: folder).tap do |asset|
@@ -1026,7 +1006,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assets[:bad_folder].update_columns(folder: "..", name: "..")
     session.input_assets << assets.values
 
-    context_service(session, "ctr1").send(:inject_assets)
+    context_service(session, "ctr1", runtime: runtime).send(:inject_assets)
 
     downloads = runtime.execs.map { |cmd| Array(cmd).join(" ") }.select { |c| c.include?("curl") }
     assert_equal 1, downloads.size
@@ -1035,10 +1015,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_repositories clones GitHub repositories without the token in any command or remote" do
     session, (repo, *) = github_session("acme/my-app")
-    runtime = stub_container_runtime
+    runtime = ContainerRuntime::FakeRuntime.new
     Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_test_token"))
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     clone = commands.find { |c| c.include?("clone") }
@@ -1057,19 +1037,19 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_repositories mints a token narrowed to each repository" do
     session, = github_session("acme/app", "acme/infra")
-    stub_container_runtime
+    runtime = ContainerRuntime::FakeRuntime.new
     tokens = FakeGithub::TokenService.new(token: "ghs_scoped")
     Github::TokenService.stubs(:new).returns(tokens)
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     assert_equal [ [ "app" ], [ "infra" ] ], tokens.calls_to(:generate_installation_token).map { |call| call[:repositories] }
   end
 
   test "inject_repositories records a failing clone and still clones the others, retrying once" do
     session, (repo_bad, repo_ok) = github_session("acme/bad", "acme/good")
-    runtime = stub_container_runtime
-    service = context_service(session)
+    runtime = ContainerRuntime::FakeRuntime.new
+    service = context_service(session, runtime: runtime)
     service.stubs(:sleep)
     Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_token"))
     runtime.fail_exec("acme/bad.git", stderr: "fatal: Authentication failed", exit_code: 128)
@@ -1085,10 +1065,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_repositories fails only the repository the installation cannot reach" do
     session, (repo_ok, _repo_bad) = github_session("acme/good", "acme/bad")
-    stub_container_runtime
+    runtime = ContainerRuntime::FakeRuntime.new
     Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_scoped", unreachable: [ "bad" ]))
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     assert_not_nil repo_ok.reload.last_fetched_at
     failed = session.reload.metadata["failed_repos"]
@@ -1103,9 +1083,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     repo = create(:repository, full_name: "team/service", source_branch: "main", integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << repo
-    runtime = stub_container_runtime
+    runtime = ContainerRuntime::FakeRuntime.new
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     assert commands.any? { |c| c.include?("clone --filter=blob:none --branch=main https://gitlab.example.com/team/service.git") }
@@ -1119,7 +1099,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << repo
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     Github::TokenService.expects(:new).never
 
@@ -1128,7 +1107,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         !cmd[2].include?("x-access-token")
     end.returns([ [], [], 0 ])
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime_mock).send(:inject_repositories)
 
     repo.reload
     assert_not_nil repo.last_fetched_at
@@ -1143,10 +1122,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << repo
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:exec).never
 
-    context_service(session, "ctr1").send(:inject_repositories)
+    context_service(session, "ctr1", runtime: runtime_mock).send(:inject_repositories)
 
     session.reload
     assert_equal 1, session.metadata["failed_repos"].size
@@ -1194,7 +1172,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: { "bmad_enabled" => true })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
@@ -1202,7 +1179,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     injector_mock.expects(:inject!).once
     BmadMethodInjector.expects(:new).with("ctr1", session, runtime: runtime_mock).returns(injector_mock)
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
   end
 
   test "assemble_session_context skips BmadMethodInjector when bmad_enabled is false" do
@@ -1210,13 +1187,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: { "bmad_enabled" => false })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
     BmadMethodInjector.expects(:new).never
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
   end
 
   test "assemble_session_context skips BmadMethodInjector when bmad_enabled is absent" do
@@ -1224,13 +1200,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: {})
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
     BmadMethodInjector.expects(:new).never
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
   end
 
   test "assemble_session_context measures bmad_method step timing" do
@@ -1238,7 +1213,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: { "bmad_enabled" => true })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
@@ -1250,7 +1224,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     logged_messages = []
     Rails.logger.stubs(:info).with { |msg| logged_messages << msg; true }
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
 
     assert logged_messages.any? { |m| m.include?("[SessionContext] Step 'bmad_method'") },
       "Expected bmad_method step timing to be logged"
@@ -1261,7 +1235,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: { "bmad_enabled" => true })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:write_file).returns(true)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
@@ -1279,7 +1252,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     injector_mock.stubs(:inject!)
     BmadMethodInjector.stubs(:new).returns(injector_mock)
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
 
     repo_idx = step_order.index("repositories")
     bmad_idx = step_order.index("bmad_method")
@@ -1297,7 +1270,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                      mode: "interactive", session_config: { "bmad_enabled" => true, "bmad_modules" => %w[bmm cis] })
 
     runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.stubs(:exec).returns([ [], [], 0 ])
 
     injector_mock = mock("bmad_injector")
@@ -1310,7 +1282,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       true
     end.returns(true)
 
-    SessionContextService.assemble_session_context("ctr1", session)
+    context_service(session, "ctr1", runtime: runtime_mock).assemble
 
     assert_not_nil context_log_content, "Context log should be written"
     assert_includes context_log_content, "bmad_method"

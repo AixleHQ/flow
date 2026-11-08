@@ -226,8 +226,8 @@ services:
     profiles: [ runners ]
     build:
       context: ./runner
-      dockerfile: ../docker/runner-local/Dockerfile
-    image: aixle/runner-local:dev
+      dockerfile: ../docker/runner/local/Dockerfile
+    image: ${RUNNER_IMAGE:-runner}
     network_mode: "service:web"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

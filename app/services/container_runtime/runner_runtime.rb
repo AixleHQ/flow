@@ -37,13 +37,19 @@ module ContainerRuntime
   #   container running (`status`), as DockerRuntime#start_container does.
   # - cleanup_session sends `container.stop` and `env.reset`, and frees the
   #   machine once the reset succeeded; a failed reset moves it to `failed`.
+  #   It waits for nothing queued: while an earlier op of the session is
+  #   unfinished on the machine (a `container.start` whose wait a stop cut
+  #   short), cleanup_ready? is false, and the cleanup is retried until that op
+  #   is answered or expired. Its deadline bounds the wait.
   #
   # A session's ops go to its machine only while the session holds it
-  # (runner_environments.current_session_id). Once it has released the machine,
-  # or never had one, every op answers `no_session_container` here and nothing
-  # is enqueued, so a late op of a finished session, from a scanner or a sweep
-  # racing the cleanup, never reaches the next session's machine. The runner's
-  # own `session_mismatch` check is the safety net for the remaining race.
+  # (runner_environments.current_session_id): Runners::Operations.enqueue!
+  # checks the hold under the machine's lock and creates nothing otherwise.
+  # Once the session has released the machine, or never had one, every op
+  # answers `no_session_container` here, so a late op of a finished session,
+  # from a scanner or a sweep racing the cleanup, never reaches the next
+  # session's machine, its `env.reset` included. The runner's own
+  # `session_mismatch` check is the safety net on the machine.
   #
   # The wait for an op ends at its `deadline_at`, which is the activity's end
   # less ACTIVITY_MARGIN: the op is then expired here, and the strategy gets the
@@ -70,11 +76,6 @@ module ContainerRuntime
     # `container.resources.memory` is a Kubernetes quantity on every type (§2.7).
     MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
                      "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
-
-    # The runner answered that the pull of `container.start` failed: it created
-    # nothing (PROTOCOL.md §6.1), so the create's outcome is known and pins no
-    # reservation (AdmittedPhaseActivity#record_failed_operation).
-    class PullFailed < ImagePullError; end
 
     # One op's outcome.
     Outcome = Data.define(:op, :state, :result) do
@@ -114,6 +115,17 @@ module ContainerRuntime
       session.nil? || machine(session).nil?
     end
 
+    # False while an op of the session is still `pending` or `delivered` on
+    # its machine: the runner runs a machine's ops one at a time, in order, so
+    # a cleanup op would wait behind it and expire.
+    def cleanup_ready?(id)
+      session = session_for(id)
+      environment = session && machine(session)
+      return true if environment.nil?
+
+      !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id, terminal_session_id: session.id)
+    end
+
     # `container.stop`, then `env.reset`, which removes every container and the
     # workspace and cache volumes of the machine, so nothing of the session
     # reaches the next one (§7.2), and the machine is free again. A failed
@@ -128,12 +140,12 @@ module ContainerRuntime
       stopped = call(session, "container.stop", {}, lifecycle: true)
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
 
-      reset = call(session, "env.reset", {}, lifecycle: true, environment_op: true)
+      reset = call(session, "env.reset", {}, lifecycle: true)
       return Runners::Machines.release!(environment, session) if reset.ok?
 
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
       reason = reset.expired? ? "the runner did not answer" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}"
-      Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}")
+      Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}", holder: session)
     end
 
     # -- Lifecycle ------------------------------------------------------------
@@ -146,20 +158,26 @@ module ContainerRuntime
       { status: :skipped, image: image, duration_seconds: 0 }
     end
 
+    # A refusal the runner answered is a CreateRefusedError: the runner created
+    # nothing, or removed what it could not start (PROTOCOL.md §6.2), so the
+    # create pins no reservation. An expired create stays uncertain.
     def create_container(spec)
       session = spec_session(spec)
       Runners::Machines.acquire!(session)
       payload = container_payload(session, spec)
       outcome = call(session, "container.start", payload, lifecycle: true)
       return outcome.data["name"] if outcome.ok?
-      raise PullFailed, "Could not pull #{payload['image']}: #{outcome.message}" if outcome.error_class == "image_pull_failed"
+      raise RuntimeError, outcome.message if outcome.expired?
+      if outcome.error_class == "image_pull_failed"
+        raise CreateRefusedError, "Could not pull #{payload['image']}: #{outcome.message}"
+      end
       # A create retried after an answer that never arrived finds its own
       # container running (SessionRuntimeOperation#replayable?).
       if outcome.error_class == "container_exists" && %i[running starting].include?(status_of(session))
         return container_name(session)
       end
 
-      raise RuntimeError, outcome.message
+      raise CreateRefusedError, outcome.message
     end
 
     def start_container(id)
@@ -339,14 +357,16 @@ module ContainerRuntime
     # the op's deadline at most. A session op names the session in its
     # envelope; an environment op names none. A session that holds no machine,
     # or no session at all, has nobody to ask: the op answers as a container
-    # that is not there, and nothing is enqueued.
-    def call(session, op, payload, lifecycle: false, environment_op: false, seconds: nil)
+    # that is not there, and nothing is enqueued. The hold read here is checked
+    # again by the enqueue, under the machine's lock.
+    def call(session, op, payload, lifecycle: false, seconds: nil)
       environment = session && machine(session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if environment.nil?
 
       operation = Runners::Operations.enqueue!(environment, op: op, payload: payload,
-                                                            deadline_at: deadline_at(seconds, lifecycle),
-                                                            session: (session unless environment_op))
+                                                            deadline_at: deadline_at(seconds, lifecycle), session: session)
+      return Outcome.new(op: op, state: "failed", result: no_machine_result) if operation.nil?
+
       operation = Runners::Operations.await(operation, on_wait: method(:on_wait))
       Outcome.new(op: op, state: operation.state.to_s, result: operation.result)
     end
@@ -388,8 +408,10 @@ module ContainerRuntime
       context.cancellation.check!
     end
 
+    # The name `container.start` gives the session's container, on the machine
+    # the session holds.
     def container_name(session)
-      environment = session.runner_environment_id && RunnerEnvironment.find_by(id: session.runner_environment_id)
+      environment = machine(session)
       environment && "aixle-#{environment.key}-#{session.id}"
     end
 

@@ -146,7 +146,7 @@ module Activities
         machine = Runners::Machines.held_by(session)
         if machine
           reason = "held by stale session #{session.id}"
-          Runners::Machines.fail!(machine, reason)
+          Runners::Machines.fail!(machine, reason, holder: session)
           log(:warn, "Machine #{machine.key} of runner #{session.runner_id} was #{reason}; moved to failed")
         end
         session.update(error_message: "Stale session: workflow ended without cleanup")

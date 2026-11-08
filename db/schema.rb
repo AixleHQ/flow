@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1254,6 +1254,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_200000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "current_session_id"
+    t.bigint "op_sequence", default: 0, null: false
     t.index ["company_id"], name: "index_runner_environments_on_company_id"
     t.index ["current_session_id"], name: "index_runner_environments_on_current_session_id", unique: true
     t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
@@ -1792,6 +1793,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_200000) do
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["finished_at"], name: "index_terminal_sessions_on_finished_at"
+    t.index ["id", "company_id"], name: "index_terminal_sessions_on_id_and_company_id", unique: true
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
@@ -2401,12 +2403,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_200000) do
   add_foreign_key "runner_environments", "companies", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", on_delete: :cascade
+  add_foreign_key "runner_environments", "terminal_sessions", column: ["current_session_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_current_session_company", deferrable: :deferred
   add_foreign_key "runner_environments", "terminal_sessions", column: "current_session_id", on_delete: :nullify
   add_foreign_key "runner_operations", "companies", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_operations_environment_runner", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", on_delete: :cascade
   add_foreign_key "runner_operations", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_operations_runner_company", on_delete: :cascade
   add_foreign_key "runner_operations", "runners", on_delete: :cascade
+  add_foreign_key "runner_operations", "terminal_sessions", column: ["terminal_session_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_operations_session_company", on_delete: :cascade
   add_foreign_key "runner_operations", "terminal_sessions", on_delete: :cascade
   add_foreign_key "runners", "companies", on_delete: :cascade
   add_foreign_key "runners", "integrations"

@@ -167,9 +167,21 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     define("#{step['as']}.id", session.id, where)
   end
 
+  # The platform enqueues an op only while its session holds the machine
+  # (Runners::Operations.enqueue!), so the op's session, or for an environment
+  # op whichever session of the machine is at hand, is made its holder first,
+  # as Runners::Machines would have.
   def enqueue_op(step, where)
     environment = @runner.environments.find(variable("#{step['machine']}.environment_id", where))
-    session = TerminalSession.find(variable("#{step['session']}.id", where)) if step.key?("session")
+    session = if step.key?("session")
+      TerminalSession.find(variable("#{step['session']}.id", where))
+    else
+      environment.reload.current_session || TerminalSession.where(runner_environment: environment).first ||
+        create(:terminal_session, :agent_session, user: @project.owner, project: @project, runner: @runner,
+                                                  runner_environment: environment, mode: "non_interactive", initial_prompt: "go")
+    end
+    RunnerEnvironment.where(current_session_id: session.id).where.not(id: environment.id).update_all(current_session_id: nil)
+    environment.update!(current_session_id: session.id)
     operation = Runners::Operations.enqueue!(environment, op: step["op"], payload: step["payload"], session: session,
                                                           deadline_at: OP_DEADLINE.from_now.change(usec: 0))
     define("#{step['as']}.id", operation.id, where)

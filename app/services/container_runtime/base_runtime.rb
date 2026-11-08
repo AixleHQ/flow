@@ -76,6 +76,15 @@ module ContainerRuntime
       nil
     end
 
+    # Whether the cleanup of the session `id` names may run now. False while
+    # the runtime still runs an earlier request of the session, so that the
+    # cleanup is not queued behind it (AdmittedPhaseActivity#cleanup retries).
+    # Every request of a hosted runtime has returned by the time its cleanup
+    # runs.
+    def cleanup_ready?(_id)
+      true
+    end
+
     # -- Execution ------------------------------------------------------------
 
     def exec(_id, _cmd, _opts = {})

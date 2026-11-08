@@ -53,7 +53,8 @@ class Runners::OperationsTest < ActiveSupport::TestCase
 
   test "a payload that is not an object is refused" do
     assert_raises(ArgumentError) do
-      Runners::Operations.enqueue!(@environment, op: "exec", payload: "rm -rf /", deadline_at: 1.minute.from_now)
+      Runners::Operations.enqueue!(@environment, op: "exec", payload: "rm -rf /", deadline_at: 1.minute.from_now,
+                                                 session: holder)
     end
   end
 
@@ -73,29 +74,41 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     end
   end
 
-  test "a session op names its session, which runs on the op's machine; an environment op names none" do
-    session = create(:runner_session, environment: @environment)
+  test "a session op names its session; an environment op names none, and both need the session that holds the machine" do
+    session = holder
 
     operation = Runners::Operations.enqueue!(@environment, op: "exec", payload: { "cmd" => [ "true" ] },
                                                            deadline_at: 1.minute.from_now, session: session)
+    reset = Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now,
+                                                       session: session)
 
     assert_equal session, operation.terminal_session
-    refusals = [
-      -> { Runners::Operations.enqueue!(@environment, op: "exec", payload: {}, deadline_at: 1.minute.from_now) },
-      -> { Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now, session: session) },
-      lambda do
-        other = create(:runner_environment, runner: @environment.runner)
-        Runners::Operations.enqueue!(other, op: "exec", payload: {}, deadline_at: 1.minute.from_now, session: session)
-      end
-    ]
-    messages = refusals.map { |refusal| assert_raises(ActiveRecord::RecordInvalid) { refusal.call }.message }
+    assert_nil reset.terminal_session, "an environment op names no session on the wire"
+    assert_raises(ArgumentError) do
+      Runners::Operations.enqueue!(@environment, op: "exec", payload: {}, deadline_at: 1.minute.from_now, session: nil)
+    end
+    other = create(:runner_environment, runner: @environment.runner)
+    assert_nil Runners::Operations.enqueue!(other, op: "exec", payload: {}, deadline_at: 1.minute.from_now, session: session),
+               "a machine the session does not hold gets nothing"
+    assert_equal 2, RunnerOperation.count
+  end
 
-    assert_equal [
-      "Validation failed: Terminal session is required for a session op",
-      "Validation failed: Terminal session must be empty for an environment op",
-      "Validation failed: Terminal session does not run on this environment"
-    ], messages
-    assert_equal 1, RunnerOperation.count
+  # The holder was read before the pause; the machine changed hands during it.
+  test "an op read for a session that has since released the machine is not created, an env.reset included" do
+    first = holder
+    observed = RunnerEnvironment.find(@environment.id)
+    Runners::Machines.release!(observed, first)
+    second = create(:runner_session, environment: @environment, runner_environment: nil)
+    Runners::Machines.acquire!(second)
+
+    late = %w[exec env.reset].map do |op|
+      Runners::Operations.enqueue!(observed, op: op, payload: {}, deadline_at: 1.minute.from_now, session: first)
+    end
+
+    assert_equal [ nil, nil ], late
+    assert_equal 0, RunnerOperation.count
+    assert_empty @pubsub.broadcasts(channel(@environment)), "nothing woke the runner"
+    assert_equal second.id, @environment.reload.current_session_id
   end
 
   test "await returns the op once it has its result" do
@@ -139,7 +152,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     assert_not_nil in_grace.encrypted_payload
   end
 
-  test "the prune deletes finished ops after seven days and keeps each environment's newest" do
+  test "the prune deletes every finished op after seven days, and the sequence goes on from the environment's counter" do
     other = create(:runner_environment, runner: @environment.runner)
     old = 3.times.map { enqueue }
     open_op = enqueue
@@ -151,16 +164,42 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     Runners::Operations.record_result!(newest, status: "ok", result: {})
     RunnerOperation.where(id: old + [ other_op, newest ]).update_all(completed_at: 8.days.ago)
 
-    assert_equal 3, Runners::Operations.prune!
+    assert_equal 5, Runners::Operations.prune!
 
-    assert_equal [ open_op.id, other_op.id, young.id, newest.id ].sort, RunnerOperation.pluck(:id).sort
-    assert_equal newest.sequence + 1, enqueue.sequence, "the next sequence follows the newest op, which the prune kept"
+    assert_equal [ open_op.id, young.id ].sort, RunnerOperation.pluck(:id).sort
+    assert_equal newest.sequence + 1, enqueue.sequence, "the next sequence follows the newest op, which the prune deleted"
+    assert_equal other_op.sequence + 1, enqueue(other).sequence
+  end
+
+  test "a deleted session's ops are deleted with it, and the sequence does not go back" do
+    session = holder
+    ops = 2.times.map do
+      Runners::Operations.enqueue!(@environment, op: "exec", payload: { "cmd" => [ "true" ] },
+                                                 deadline_at: 1.minute.from_now, session: session)
+    end
+    ops.each { |op| Runners::Operations.record_result!(op, status: "ok", result: {}) }
+    acknowledged = ops.last.sequence
+    Runners::Machines.release!(@environment, session)
+
+    session.destroy!
+    @holders = nil
+
+    assert_equal 0, RunnerOperation.where(id: ops).count
+    assert_operator enqueue.sequence, :>, acknowledged, "the runner's `after` does not hide the next op"
   end
 
   private
 
   def enqueue(environment = @environment, deadline_at: 1.minute.from_now)
-    Runners::Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: deadline_at)
+    Runners::Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: deadline_at,
+                                              session: holder(environment))
+  end
+
+  # The session that holds the machine, which every op of it needs.
+  def holder(environment = @environment)
+    @holders ||= {}
+    @holders[environment.id] ||= environment.reload.current_session ||
+                                 create(:runner_session, :holding, environment: environment)
   end
 
   def channel(environment)

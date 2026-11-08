@@ -4,7 +4,7 @@ module Runners
   # The queue between the platform and an environment's runner
   # (docs/design/agent-runtimes/DESIGN.md §2.3, §6.1, §6.4):
   #
-  #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now, session:)
+  #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now, session:)  # nil unless session holds it
   #   ops = Runners::Operations.poll(environment, after: 41, wait: 25)   # GET /runner/v1/ops
   #   Runners::Operations.record_result!(operation, status: "ok", result: {...})
   #   Runners::Operations.await(operation)                               # ContainerRuntime::RunnerRuntime
@@ -47,22 +47,35 @@ module Runners
 
     module_function
 
-    # Puts a `pending` op with the environment's next sequence on its queue.
-    # A session op names its session, which the envelope carries as
-    # `session_id`; an environment op names none (RunnerOperation). The
-    # producer is ContainerRuntime::RunnerRuntime.
+    # Puts a `pending` op with the environment's next sequence on its queue,
+    # for `session`, and answers it, or nil when the session no longer holds
+    # the environment (runner_environments.current_session_id): then nothing
+    # is created. The hold is checked under the environment's row lock, which
+    # Runners::Machines takes too, so an op read for a session that has since
+    # released the machine never reaches the next session's machine, an
+    # environment op (`env.reset`) included.
     #
-    # The next sequence is MAX(sequence) + 1, so the prune keeps each
-    # environment's newest op (see #prune!).
-    def enqueue!(environment, op:, payload:, deadline_at:, session: nil)
+    # A session op carries its session in the envelope as `session_id`; an
+    # environment op carries none on the wire (RunnerOperation). The producer
+    # is ContainerRuntime::RunnerRuntime.
+    #
+    # The next sequence is the environment's own counter
+    # (runner_environments.op_sequence), so the prune and a session's deletion
+    # can remove any finished op.
+    def enqueue!(environment, op:, payload:, deadline_at:, session:)
       raise ArgumentError, "payload must be a Hash" unless payload.is_a?(Hash)
+      raise ArgumentError, "session is required" if session.nil?
 
       RunnerOperation.transaction do
-        # Serializes the enqueues of one environment, so the next sequence is
-        # taken by one of them at a time.
+        # Serializes the enqueues of one environment, and reads its holder and
+        # its counter fresh.
         environment.lock!
-        sequence = RunnerOperation.where(runner_environment_id: environment.id).maximum(:sequence).to_i + 1
-        operation = RunnerOperation.create!(runner_environment: environment, terminal_session: session,
+        return nil unless environment.current_session_id == session.id
+
+        sequence = environment.op_sequence + 1
+        environment.update_columns(op_sequence: sequence)
+        operation = RunnerOperation.create!(runner_environment: environment,
+                                            terminal_session: (session unless RunnerOperation::ENVIRONMENT_OPS.include?(op)),
                                             sequence: sequence, op: op, payload: payload,
                                             deadline_at: deadline_at, state: :pending)
         ActiveRecord.after_all_transactions_commit { wake(environment.id, sequence) }
@@ -132,15 +145,10 @@ module Runners
       expired
     end
 
-    # Deletes finished ops older than RETENTION, except each environment's
-    # newest op. #enqueue! takes the next sequence as MAX(sequence) + 1, so
-    # pruning the newest row would hand out a sequence the runner has already
-    # acknowledged, and its `after` would hide every op enqueued from then on.
+    # Deletes finished ops older than RETENTION. The sequence lives on the
+    # environment's counter (#enqueue!), so no row has to stay for it.
     def prune!(now: Time.current)
-      newest = RunnerOperation.select("DISTINCT ON (runner_environment_id) id").order(:runner_environment_id, sequence: :desc)
-      scope = RunnerOperation.where(state: RunnerOperation::FINISHED_STATES)
-                             .where(completed_at: ...(now - RETENTION))
-                             .where.not(id: newest)
+      scope = RunnerOperation.where(state: RunnerOperation::FINISHED_STATES).where(completed_at: ...(now - RETENTION))
       pruned = 0
       scope.in_batches(of: PRUNE_BATCH) { |batch| pruned += batch.delete_all }
       pruned

@@ -212,11 +212,57 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
 
-    error = assert_raises(ContainerRuntime::RunnerRuntime::PullFailed) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
+    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
 
     assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: container.start failed: image_pull_failed: pull access denied}, error.message)
     assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
     assert_not @runtime.session_absent?(@identity)
+  end
+
+  test "every refusal the runner answers is a refused create; an expired create is not" do
+    %w[container_start_failed volume_not_owned forbidden_mount invalid_payload].each do |klass|
+      @host_runner.answer_with("container.start", "status" => "error", "error" => { "class" => klass, "message" => "no" })
+
+      error = assert_raises(ContainerRuntime::CreateRefusedError, klass) { @runtime.create_container(spec) }
+      assert_match(/container.start failed: #{klass}: no/, error.message)
+    end
+    @host_runner.answer_with("container.start", "status" => "expired")
+
+    error = assert_raises(RuntimeError) { @runtime.create_container(spec) }
+    assert_not_kind_of ContainerRuntime::CreateRefusedError, error, "nobody knows what an expired create left"
+  end
+
+  # The holder was read before the pause; the machine changed hands during it.
+  test "a session op and an env.reset of a session that released its machine after the read are not created" do
+    handle = start_session
+    observed = Runners::Machines.held_by(@session)
+    Runners::Machines.release!(observed, @session)
+    next_session = another_session
+    Runners::Machines.acquire!(next_session)
+    Runners::Machines.stubs(:held_by).with(@session).returns(observed)
+    Runners::Machines.stubs(:held_by).with(next_session).returns(@environment.reload)
+    @host_runner.operations.clear
+
+    assert_raises(ContainerRuntime::ContainerUnreachableError) { @runtime.exec!(handle, [ "true" ]) }
+    @runtime.cleanup_session(handle)
+
+    assert_empty @host_runner.operations, "neither op reached the next session's machine"
+    @environment.reload
+    assert_equal [ "registered", next_session.id ], [ @environment.state, @environment.current_session_id ],
+                 "the late reset's failure leaves the next session's hold alone"
+  end
+
+  test "the cleanup is not ready while an op of the session is unfinished on its machine" do
+    handle = start_session
+    assert @runtime.cleanup_ready?(handle)
+    @host_runner.answer_with("logs", :none)
+    operation = Runners::Operations.enqueue!(@environment, op: "logs", payload: {}, deadline_at: 1.minute.from_now,
+                                                           session: @session)
+
+    assert_not @runtime.cleanup_ready?(handle)
+    Runners::Operations.record_result!(operation, status: "ok", result: { "data" => { "tail" => "" } })
+    assert @runtime.cleanup_ready?(handle)
+    assert @runtime.cleanup_ready?("not-an-admission"), "a session without a machine has nothing queued"
   end
 
   test "a capped runtime, as the scanners use, gives every op that cap at most" do

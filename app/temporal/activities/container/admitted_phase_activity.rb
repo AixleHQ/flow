@@ -107,7 +107,7 @@ module Activities
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
         resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) } ||
           cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError) ||
-          cause.is_a?(ContainerRuntime::RunnerRuntime::PullFailed)
+          cause.is_a?(ContainerRuntime::CreateRefusedError)
         operation.update!(state: resolved ? "retryable" : "uncertain", error: "#{cause.class}: #{error.message}")
       end
 
@@ -124,7 +124,11 @@ module Activities
         raise "Runtime changed; operator reconciliation required" if admission.runtime_kind && admission.runtime_kind != runtime.class.name
 
         absent = admission.runtime_id.blank? || runtime.session_absent?(admission.runtime_id)
-        unless absent
+        # A runtime that still runs an earlier request of the session (an
+        # external runner's `container.start` the stop cut short) takes no
+        # cleanup behind it: the pass comes back pending and is retried, until
+        # that request has its answer or its deadline.
+        if !absent && runtime.cleanup_ready?(admission.runtime_id)
           state = collect_outputs(admission, session, state)
           runtime.cleanup_session(admission.runtime_id)
           absent = runtime.session_absent?(admission.runtime_id)

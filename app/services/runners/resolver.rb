@@ -12,7 +12,7 @@ module Runners
   # every check is returned; every other outcome is a refusal, and nothing falls
   # back to hosted. A `manual` runner with no registered machine, or whose every
   # machine failed its reset, is refused as unreachable (§8); one whose machines
-  # are all busy is not: its session waits for a free machine at pull_image
+  # are all busy is not: its session waits for a free machine at create_container
   # (Runners::Machines).
   #
   #   Runners::Resolver.resolve!(run)  # => nil (hosted), the Runner, or raises Refused
@@ -28,7 +28,7 @@ module Runners
 
     UNAVAILABLE = "runner_unavailable"
     FORBIDDEN = "runner_forbidden"
-    UNREACHABLE = "runner_unreachable"
+    UNREACHABLE = Machines::UNREACHABLE
     REASONS = [ UNAVAILABLE, FORBIDDEN, UNREACHABLE ].freeze
 
     module_function
@@ -52,8 +52,8 @@ module Runners
       end
 
       check_status!(runner, pick_from)
-      unavailable = Machines.unavailable_message(runner, pick_from)
-      raise Refused.new(UNREACHABLE, unavailable) if unavailable
+      availability = Machines.availability(runner)
+      raise Refused.new(UNREACHABLE, Machines.unavailable_message(runner, availability, pick_from)) unless availability.available?
 
       runner
     end

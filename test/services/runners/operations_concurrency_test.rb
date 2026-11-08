@@ -97,8 +97,11 @@ class Runners::OperationsConcurrencyTest < ActiveSupport::TestCase
     [ holder, waiter ].compact.each(&:join)
   end
 
+  # Put on the queue directly: the races here are the delivery's and the
+  # result's, and an enqueue would need a session of the machine.
   def enqueue
-    Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now)
+    RunnerOperation.create!(runner_environment: @environment, sequence: 1, op: "env.reset", payload: {},
+                            deadline_at: 1.minute.from_now, state: :pending)
   end
 
   def on_own_connection(&)

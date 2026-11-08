@@ -393,9 +393,9 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
   private
 
-  # A session op is for a session of the machine.
+  # An op is for the session that holds the machine.
   def enqueue(environment = @environment, op: "exec", payload: { "cmd" => "true" })
-    session = create(:runner_session, environment: environment) if RunnerOperation::SESSION_OPS.include?(op)
+    session = environment.reload.current_session || create(:runner_session, :holding, environment: environment)
     Runners::Operations.enqueue!(environment, op: op, payload: payload, session: session,
                                               deadline_at: 5.minutes.from_now.change(usec: 0))
   end
