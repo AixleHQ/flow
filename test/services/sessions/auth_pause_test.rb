@@ -231,6 +231,70 @@ module Sessions
       refute_includes @runtime.execs, RESUME_PROMPT_TYPED
     end
 
+    # The marker and the run's pause are written in one transaction. A delivery that lands
+    # right after the pause's commit (here: when the pause announces itself, which used to
+    # happen before the run was paused) finds the run paused already and resumes it.
+    test "a delivery between the pause marker and the run's pause leaves no paused run behind" do
+      runtime = @runtime
+      delivered = nil
+      @session.define_singleton_method(:touch) do |*args, **kwargs|
+        delivered = AuthPause.new(TerminalSession.find(id), runtime: runtime).resume! if delivered.nil?
+        super(*args, **kwargs)
+      end
+
+      assert AuthPause.new(@session, runtime: @runtime).pause!("Login expired · Please run /login")
+
+      assert delivered, "the delivery found the session paused and resumed it"
+      refute AuthPause.paused?(@session.reload)
+      assert_equal "running", @run.reload.state, "no paused run is left without a paused session"
+    end
+
+    # The two unpauses are serialized on the run's row lock. Here the second one runs while the
+    # first holds its locks (`still` is called inside the first's transaction): it sees the
+    # first session still paused and leaves the run alone, and the first then resumes it.
+    test "two sessions of one run unpaused concurrently resume the run" do
+      other = step_session
+      [ @session, other ].each { |s| s.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601) }
+      @run.pause!
+      second = AuthPause.new(TerminalSession.find(other.id), runtime: @runtime)
+
+      first = AuthPause.new(@session, runtime: @runtime).unpause_quietly do
+        assert second.unpause_quietly, "the second session is unpaused"
+        assert_equal "paused", WorkflowRun.find(@run.id).state, "the first session still waits"
+        true
+      end
+
+      assert first
+      refute AuthPause.paused?(@session.reload)
+      refute AuthPause.paused?(other.reload)
+      assert_equal "running", @run.reload.state
+    end
+
+    test "a duplicate delivery returns false" do
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
+      @run.pause!
+      duplicate = AuthPause.new(TerminalSession.find(@session.id), runtime: @runtime)
+
+      assert AuthPause.new(@session, runtime: @runtime).resume!
+
+      refute duplicate.resume!, "the session was already resumed by the first delivery"
+      assert_equal "running", @run.reload.state
+    end
+
+    # Two passes read the counter before either wrote it: only the first spends a heal.
+    test "a heal that is no longer due under the lock is not attempted" do
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
+      stale = AuthPause.new(TerminalSession.find(@session.id), runtime: @runtime)
+      TerminalSession.find(@session.id).merge_jsonb!(:metadata, "auth_heal_attempts" => 1,
+                                                                "auth_heal_attempted_at" => Time.current.iso8601)
+
+      assert stale.heal_due?, "the stale row says a heal is due"
+      stale.heal!(if_due: true)
+
+      assert_equal 1, @session.reload.metadata["auth_heal_attempts"]
+      assert_nil delivered_refresh_token
+    end
+
     # A heal hands the grant to every holder of the credential, each through its
     # own runtime (ContainerRuntime.for_session): a runner holder's goes to its
     # machine, a hosted holder's to the hosted runtime.
