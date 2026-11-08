@@ -776,7 +776,12 @@ error ended the turn. Two sweeps cover that state:
     the scan, or a second scan of the same screen, then types nothing. A
     reminder whose typing failed is used up. The turn end after the third fails
     the session with a message that says the agent ended its turn without
-    `finish_session` 4 times.
+    `finish_session` 4 times. Before failing, the session is read again under
+    its row lock: one that started finishing or was auth-paused since the scan
+    loaded it is left as it is.
+  - The prompt is matched on its start (`› ask a question`), because a narrow
+    pane wraps the placeholder. The signature is checked against captures at
+    30x20, 80x24, 160x45 and 220x50.
 - **The silence watchdog.** `ScanNoOutputSessionsActivity` runs every 5 minutes
   and reads every unattended `ready` step from its start, so a silent session is
   ended 30 to 35 minutes after it stopped changing.

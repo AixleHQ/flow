@@ -145,6 +145,36 @@ module Sessions
       assert_match(/3 reminders/, @session.error_message)
     end
 
+    # The scan loads its sessions up front and reads one pane at a time, so the copy it
+    # hands over can be seconds old. Another process changes the row in between.
+    def give_up_on_a_stale_copy
+      @session.merge_jsonb!(:metadata, TurnEndNudge::COUNT_KEY => TurnEndNudge::LIMIT)
+      TurnEndNudge.new(@session, runtime: @runtime).observe(pane("turn_ended"))
+      travel 1.minute
+      scan_copy = TerminalSession.find(@session.id)
+      yield TerminalSession.find(@session.id)
+
+      TurnEndNudge.new(scan_copy, runtime: @runtime).observe(pane("turn_ended"))
+    end
+
+    test "a session that started finishing after the scan read it is not failed at the limit" do
+      result = give_up_on_a_stale_copy { |other| other.update!(state: "finishing") }
+
+      assert_nil result
+      @session.reload
+      assert_equal "finishing", @session.state
+      assert_nil @session.error_message
+    end
+
+    test "a session auth-paused after the scan read it is not failed at the limit" do
+      result = give_up_on_a_stale_copy { |other| other.merge_jsonb!(:metadata, "auth_paused_at" => Time.current.iso8601) }
+
+      assert_nil result
+      @session.reload
+      assert_equal "ready", @session.state
+      assert_nil @session.error_message
+    end
+
     test "every reminder counts toward the limit" do
       TurnEndNudge::LIMIT.times do |i|
         assert_equal :nudged, observe_twice(pane(i.even? ? "turn_ended" : "turn_ended_after_nudge"))
