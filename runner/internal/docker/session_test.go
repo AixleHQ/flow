@@ -148,6 +148,32 @@ func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
 	}
 }
 
+func TestAnExecTimeoutLongerThanTheOpsDeadlineIsCutToIt(t *testing.T) {
+	h := newEnvironment(t)
+	h.session()
+	h.engine.run = func(x *fakeExec, _ []byte) fakeRun {
+		if x.Request.Cmd[0] == "timeout" {
+			return fakeRun{Delay: 1100 * time.Millisecond, Code: 124}
+		}
+		return fakeRun{}
+	}
+	started := time.Now()
+	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Second))
+	r := h.env.Exec(ctx, sessionID, mustJSON(t, map[string]any{"cmd": []string{"sleep", "600"}, "timeout": 600}))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassExecTimeout ||
+		!strings.Contains(r.Error.Message, "600 s") || !strings.Contains(r.Error.Message, "deadline_at") {
+		t.Fatalf("%#v %v", r, r.Error)
+	}
+	if time.Since(started) > 10*time.Second {
+		t.Fatal("the exec held the ops loop past its op's deadline")
+	}
+	for _, x := range h.engine.execs {
+		if want := []string{"timeout", "-k", "5", "1", "sleep", "600"}; !reflect.DeepEqual(x.Request.Cmd, want) {
+			t.Fatalf("cmd %v", x.Request.Cmd)
+		}
+	}
+}
+
 func TestExecRefusesInvalidPayloads(t *testing.T) {
 	h := newEnvironment(t)
 	h.session()

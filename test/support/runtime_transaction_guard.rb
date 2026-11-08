@@ -29,10 +29,11 @@ module RuntimeTransactionGuard
     session_identity: "names the session's object from the session row"
   }.freeze
 
-  # The runtime interface's public methods (ContainerRuntime::BaseRuntime), the
-  # ones a runtime adds to it included: each reaches a container, a cluster, a
-  # registry or a runner. Taken from the interface, so a new runtime method is
-  # checked without a change here.
+  # The public methods ContainerRuntime::BaseRuntime itself declares: each
+  # reaches a container, a cluster, a registry or a runner. Taken from
+  # BaseRuntime, so a method declared there is checked without a change here.
+  # A public method only a runtime subclass defines is not checked: declare a
+  # runtime method on BaseRuntime for the guard to cover it.
   CALLS = (ContainerRuntime::BaseRuntime.public_instance_methods(false) - EXEMPT.keys).sort.freeze
 
   @violations = []

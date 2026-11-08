@@ -169,13 +169,15 @@ func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) 
 	}
 
 	cmd := p.Cmd
-	// An exec without a timeout is bounded by the op's `deadline_at`: after it,
-	// nobody waits for the result, and the serial ops loop must move on.
+	// An exec is bounded by the op's `deadline_at`: after it, nobody waits for
+	// the result, and the serial ops loop must move on. A command without a
+	// timeout gets the time left until the deadline, and a longer timeout is cut
+	// to it.
 	timeout, byDeadline := p.Timeout, false
-	if timeout == 0 {
-		if deadline, ok := protocol.OpDeadline(ctx); ok {
-			timeout = max(int64(math.Ceil(time.Until(deadline).Seconds())), 1)
-			byDeadline = true
+	if deadline, ok := protocol.OpDeadline(ctx); ok {
+		left := max(int64(math.Ceil(time.Until(deadline).Seconds())), 1)
+		if timeout == 0 || timeout > left {
+			timeout, byDeadline = left, true
 		}
 	}
 	if timeout > 0 {
@@ -261,8 +263,11 @@ func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) 
 			elapsed >= time.Duration(timeout)*time.Second)
 	if timedOut {
 		message := fmt.Sprintf("the command did not finish within its timeout of %d s and was ended", timeout)
-		if byDeadline {
+		switch {
+		case byDeadline && p.Timeout == 0:
 			message = fmt.Sprintf("the command has no timeout and was still running at the op's deadline_at, %d s after it started; it was ended", timeout)
+		case byDeadline:
+			message = fmt.Sprintf("the command's timeout of %d s runs past the op's deadline_at; it was still running at the deadline, %d s after it started, and was ended", p.Timeout, timeout)
 		}
 		result.Status = protocol.StatusError
 		result.Error = &protocol.ResultError{Class: ClassExecTimeout, Message: message}

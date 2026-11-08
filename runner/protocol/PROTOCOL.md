@@ -600,13 +600,13 @@ Runs a command in the session container through the daemon's exec API, without a
 | `env` | object | Optional, string to string. Added to the container's environment for this command. |
 | `cwd` | string | Optional, an absolute path. Default: the image's working directory. |
 | `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
-| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. Absent or `0`: the op's `deadline_at` bounds the command instead, the same way, with the seconds left until it when the command starts (at least 1). After the deadline nobody waits for the result, and the runner runs one op at a time. |
+| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. The op's `deadline_at` bounds it too: absent or `0`, or longer than the seconds left until `deadline_at` when the command starts, the command gets those seconds instead (at least 1), the same way. After the deadline nobody waits for the result, and the runner runs one op at a time. |
 | `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
 
 | Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
 | --- | --- | --- | --- | --- | --- |
 | The command ran, whatever its exit code | `ok` | Its exit code | Each up to the output cap | `{"stdout_truncated": <boolean>, "stderr_truncated": <boolean>}` | |
-| The command ran past its `timeout`, or without one past the op's `deadline_at`, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
+| The command ran past its `timeout`, or past the op's `deadline_at` when that came first, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
 | The daemon refused the exec | `error` | | | | `exec_failed` |
 | No running session container | `error` | | | | `no_session_container` |
 | The payload is not the one above | `error` | | | | `invalid_payload` |
