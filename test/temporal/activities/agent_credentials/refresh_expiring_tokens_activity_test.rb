@@ -147,6 +147,54 @@ module Activities
         assert_equal "at-new", kiro_access_token(@runtime.read_file(session.container_id, KIRO_STATE_PATH))
       end
 
+      # Decision 12 of task #211: right before it rotates, the sweep reads every holder on
+      # demand, through the session monitor's read path. The last pass saw this Kiro holder
+      # parked at its prompt for 20 minutes; it started a turn since, and only a read made
+      # now can tell.
+      def kiro_holder_parked_on_the_last_pass
+        blob = kiro_state(access_token: "at-old", expires_at: 5.minutes.from_now)
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "kiro_cli",
+                                                    { "state_b64" => Base64.strict_encode64(blob) })
+        parked = file_fixture("terminal_panes/kiro_cli/turn_ended.txt").read
+        session = create(:terminal_session, user: @user, company_id: @company.id, agent_type: "kiro_cli",
+                                            state: "ready", container_id: "ctr-1",
+                                            metadata: { Sessions::Checks::NoOutput::SCREEN_KEY => Sessions::ScreenDigest.of(parked),
+                                                        Sessions::Checks::NoOutput::SCREEN_CHANGED_AT_KEY => 20.minutes.ago.iso8601 })
+        @runtime.fs[KIRO_STATE_PATH] = blob
+        refresh = stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL).to_return(
+          status: 200, headers: { "Content-Type" => "application/json" },
+          body: { accessToken: "at-new", refreshToken: "rt-new", expiresIn: 3600 }.to_json
+        )
+        [ credential, session, parked, refresh ]
+      end
+
+      test "a holder that started a turn after the last pass blocks the rotation" do
+        credential, session, _parked, refresh = kiro_holder_parked_on_the_last_pass
+        @runtime.set_terminal_pane(file_fixture("terminal_panes/kiro_cli/working.txt").read, last_output_at: 5.seconds.ago)
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:skipped_busy]
+        assert_equal 0, result[:refreshed]
+        assert_not_requested refresh
+        assert_equal "at-old", kiro_access_token(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+        assert @runtime.execs.any? { |cmd| Array(cmd).join(" ").include?(Sessions::Snapshot::Command::MARKER_PREFIX) },
+               "the holder was read through the monitor's snapshot"
+        assert_in_delta 5.seconds.ago, Time.zone.parse(session.reload.metadata["screen_changed_at"]), 1.second,
+                        "the read feeds the same record as the passes"
+      end
+
+      test "a holder still parked on the same screen lets the rotation go ahead" do
+        credential, _session, parked, refresh = kiro_holder_parked_on_the_last_pass
+        @runtime.set_terminal_pane(parked, last_output_at: 5.seconds.ago)
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+        assert_requested refresh
+        assert_equal "at-new", kiro_access_token(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+      end
+
       test "leaves a credential alone while its holder is mid-turn" do
         credential = claude_credential
         holder_session

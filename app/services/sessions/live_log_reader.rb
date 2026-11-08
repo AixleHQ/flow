@@ -7,9 +7,9 @@ module Sessions
   # /tmp/terminal_output.log (docker/base/entrypoint.sh), but that file is only
   # collected into a SessionLog during the container workflow's cleanup phase —
   # so while a session runs, the only way to see it is to ask the container.
-  # This is the same read Activities::Workflow::ScanQuotaErrorsActivity has done
-  # since the quota watchdog shipped, factored out so the MCP tool and the
-  # watchdog cannot drift apart.
+  # It serves the reads for people and agents (Sessions::LogTail: the live
+  # terminal's tail and `get_session_log`). The checks of Sessions::Monitor read
+  # through Sessions::Snapshot instead.
   #
   # `capture-pane` rather than the raw file on purpose: it returns the rendered
   # screen plus scrollback, already free of the ANSI redraw stream that makes

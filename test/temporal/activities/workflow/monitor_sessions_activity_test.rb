@@ -4,18 +4,22 @@ require "test_helper"
 
 module Activities
   module Workflow
-    class ScanQuotaErrorsActivityTest < ActiveSupport::TestCase
+    # One pass of Sessions::Monitor, through the activity the schedule runs. These are the
+    # quota scan's tests (task #195, #605) carried over unchanged in what they assert: the
+    # checks and their order (Sessions::Checks) are the scan's, read from one snapshot.
+    class MonitorSessionsActivityTest < ActiveSupport::TestCase
       setup do
         @company = create(:company)
         @user = create(:user, :admin, company: @company)
-        @runtime_mock = mock("runtime")
-        ContainerRuntime.stubs(:build).returns(@runtime_mock)
-        @runtime_mock.stubs(:resolve_container).returns(nil)
-        @runtime_mock.stubs(:exec!).returns([ [], [], 0 ])
+        @runtime = stub_container_runtime
 
         Rails.logger.stubs(:info)
         Rails.logger.stubs(:warn)
         Rails.logger.stubs(:error)
+      end
+
+      teardown do
+        cleanup_runtime_overrides
       end
 
       # Joins pattern text that the source keeps split (see the task #195 tests below).
@@ -32,7 +36,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Credit balance too low · Add funds: https://platform.claude.com/settings/billing")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -52,7 +56,7 @@ module Activities
 
         stub_pane("container-live", [ "Credit balance too low · Add funds: https://platform.claude.com/settings/billing\n" ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -76,7 +80,7 @@ module Activities
           "Credit balance too low · Add funds: https://platform.claude.com/settings/billing"
         ])
 
-        run_activity(ScanQuotaErrorsActivity)
+        run_activity(MonitorSessionsActivity)
 
         session.reload
         assert_equal "Credit balance too low · Add funds: https://platform.claude.com/settings/billing",
@@ -98,7 +102,7 @@ module Activities
           "You're out of usage. Ask your admin to increase your limit to continue.\n"
         ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -121,7 +125,7 @@ module Activities
         # reclaimed. It is the same leak the dead-container watchdog had to avoid.
         TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         assert_equal "failed", session.reload.state
@@ -136,15 +140,9 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: nil)
 
-        container = mock("container")
-        @runtime_mock.stubs(:resolve_container).with("container-gone").returns(container)
-        @runtime_mock.stubs(:exec!).raises(
-          ContainerRuntime::ContainerUnreachableError.new(
-            status_code: 404, container_identifier: "aixle/terminal-gone"
-          )
-        )
+        @runtime.unreachable_on_exec("capture-pane")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal 1, result[:unreachable]
@@ -162,11 +160,9 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Credit balance too low")
 
-        container = mock("container")
-        @runtime_mock.stubs(:resolve_container).with("container-busy").returns(container)
-        @runtime_mock.stubs(:exec!).returns([ [], [ "no server running on /tmp/tmux-0/default\n" ], 1 ])
+        @runtime.fail_exec("capture-pane", stderr: "no server running on /tmp/tmux-0/default\n")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         assert_equal 0, result[:unreachable]
@@ -181,7 +177,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Connection refused")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -195,7 +191,7 @@ module Activities
           started_at: 30.seconds.ago,
           error_message: "Credit balance too low")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -210,7 +206,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Credit balance too low")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -224,7 +220,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "insufficient_quota")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -232,7 +228,7 @@ module Activities
       end
 
       test "returns cleaned count of 0 when no candidate sessions exist" do
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
         assert_equal 0, result[:cleaned]
       end
 
@@ -260,7 +256,7 @@ module Activities
 
         stub_trust_prompt_pane("container-trust")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -281,7 +277,7 @@ module Activities
 
         stub_trust_prompt_pane("container-trust-interactive")
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -310,7 +306,7 @@ module Activities
           "● Thinking...\n"
         ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -328,7 +324,7 @@ module Activities
           "› Working (12s • esc to interrupt)\n"
         ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
@@ -341,7 +337,7 @@ module Activities
           *Array.new(QuotaErrorDetector::TAIL_LINES) { |i| "test #{i} passed\n" }
         ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
@@ -351,7 +347,7 @@ module Activities
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-busy")
         stub_pane("container-kiro-busy", [ "#{KIRO_STOP}\n" ], last_output_at: 10.seconds.ago)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
@@ -361,7 +357,7 @@ module Activities
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-unknown")
         stub_pane("container-kiro-unknown", [ "#{KIRO_STOP}\n" ], last_output_at: nil)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
@@ -372,7 +368,7 @@ module Activities
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-no-tmux")
         stub_pane("container-kiro-no-tmux", [ "#{KIRO_STOP}\n" ], last_output_at: 2.minutes.ago, tmux_up: false)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
@@ -382,7 +378,7 @@ module Activities
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-quiet")
         stub_pane("container-kiro-quiet", [ "● Thinking...\n", "#{KIRO_STOP}\n", "\n", "\n" ], last_output_at: 2.minutes.ago)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -410,7 +406,7 @@ module Activities
           session = create_step_session(agent_type: agent_type, container_id: container_id)
           stub_pane(container_id, [ "● Working on the task\n", "#{message}\n" ])
 
-          result = run_activity(ScanQuotaErrorsActivity)
+          result = run_activity(MonitorSessionsActivity)
 
           assert_equal 1, result[:cleaned]
           session.reload
@@ -427,10 +423,73 @@ module Activities
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-kiro-foreign")
         stub_pane("container-kiro-foreign", [ "#{OWN_QUOTA_STOPS.fetch('claude_code')}\n" ])
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:cleaned]
         assert_equal "ready", session.reload.state
+      end
+
+      # ===================================================================
+      # The mechanism (task #211): one read per session per pass, the re-check before a
+      # check acts, the pass's own log line.
+      # ===================================================================
+
+      test "reads each live session once, with one exec, for every check that applies" do
+        session = create_step_session(agent_type: "kiro_cli", container_id: "container-one-read")
+        stub_pane("container-one-read", [ "● Working on the task\n" ])
+
+        result = run_activity(MonitorSessionsActivity)
+
+        assert_equal 1, result[:read]
+        assert_equal 1, @runtime.execs.size
+        command = @runtime.execs.first.join(" ")
+        %w[capture-pane list-clients terminal_output.log].each { |part| assert_includes command, part }
+        assert_equal "ready", session.reload.state
+      end
+
+      test "does not read a session no check applies to" do
+        create(:terminal_session, :running, user: @user, session_type: :workflow_step, started_at: 30.seconds.ago)
+
+        result = run_activity(MonitorSessionsActivity)
+
+        assert_equal 0, result[:read]
+        assert_empty @runtime.execs
+      end
+
+      # The pass loaded the row before it read the terminal; finish_session landed while the
+      # read was in flight. The check reads the row again under its lock before it fails it.
+      test "does not fail a session that started finishing while the pass read it" do
+        session = create_step_session(agent_type: "kiro_cli", container_id: "container-finishing")
+        stub_pane("container-finishing", [ "● Thinking...\n", "#{KIRO_STOP}\n" ], last_output_at: 2.minutes.ago)
+        @runtime.on_next_exec("capture-pane") { TerminalSession.find(session.id).update!(state: "finishing") }
+
+        result = run_activity(MonitorSessionsActivity)
+
+        assert_equal 0, result[:cleaned]
+        session.reload
+        assert_equal "finishing", session.state
+        assert_nil session.error_message
+      end
+
+      test "does not fail a session on a blocking prompt that started finishing while the pass read it" do
+        session = create_step_session(agent_type: "codex", container_id: "container-trust-paused")
+        stub_trust_prompt_pane("container-trust-paused")
+        @runtime.on_next_exec("capture-pane") do
+          TerminalSession.find(session.id).update!(state: "finishing")
+        end
+
+        run_activity(MonitorSessionsActivity)
+
+        assert_equal "finishing", session.reload.state
+      end
+
+      test "logs every pass's duration and the number of sessions it read" do
+        create_step_session(agent_type: "kiro_cli", container_id: "container-logged")
+        Rails.logger.expects(:info).with { |line| line.to_s.match?(/\A\[Sessions::Monitor\] pass read=1 duration_ms=\d+ /) }
+
+        result = run_activity(MonitorSessionsActivity)
+
+        assert_kind_of Integer, result[:duration_ms]
       end
 
       private
@@ -450,30 +509,23 @@ module Activities
           error_message: nil)
       end
 
-      # The pane the sweep captures, and the pipe-pane log's mtime that
-      # Sessions::LiveLogReader reads once a quota error is on screen: a pane counts
-      # only once it has been quiet for QuotaErrorDetector::QUIET_BEFORE_FAIL.
-      def stub_pane(container_id, lines, last_output_at: 5.minutes.ago, tmux_up: true)
-        container = mock("container")
-        @runtime_mock.stubs(:resolve_container).with(container_id).returns(container)
-        @runtime_mock.stubs(:exec!).returns([ lines, [], 0 ])
-        mtime = last_output_at ? "#{last_output_at.to_i}\n" : ""
-        @runtime_mock.stubs(:exec!).with { |_container, cmd, *| cmd.last.start_with?("stat ") }
-                     .returns([ [ "#{mtime}#{Sessions::LiveLogReader::MARKER}\n", *lines ], [], tmux_up ? 0 : 1 ])
+      # The pane the pass captures, and the pipe-pane log's mtime that comes with it in the
+      # same read: a pane counts only once it has been quiet for
+      # QuotaErrorDetector::QUIET_BEFORE_FAIL.
+      def stub_pane(_container_id, lines, last_output_at: 5.minutes.ago, tmux_up: true)
+        @runtime.set_terminal_pane(lines.map { |line| line.end_with?("\n") ? line : "#{line}\n" }.join,
+                                   last_output_at: last_output_at)
+        @runtime.fail_exec("capture-pane") unless tmux_up
       end
 
       def stub_trust_prompt_pane(container_id)
-        container = mock("container")
-        @runtime_mock.stubs(:resolve_container).with(container_id).returns(container)
-        @runtime_mock.stubs(:exec!).returns([
-          [ "  Folder access\n",
-            "  /workspace\n",
-            "  Trust this folder? Codex can read, edit, and run files here, subject to your\n",
-            "› 1. Trust and continue\n",
-            "  2. Quit\n",
-            "  enter continue · esc quit\n" ],
-          [],
-          0
+        stub_pane(container_id, [
+          "  Folder access\n",
+          "  /workspace\n",
+          "  Trust this folder? Codex can read, edit, and run files here, subject to your\n",
+          "› 1. Trust and continue\n",
+          "  2. Quit\n",
+          "  enter continue · esc quit\n"
         ])
       end
     end

@@ -6,7 +6,7 @@ module ContainerRuntime
   #
   # This is deliberately distinct from "the command ran and exited non-zero",
   # which #exec reports as an exit code. Collapsing both into `["", "", 1]` is
-  # what let ScanQuotaErrorsActivity re-exec into destroyed pods forever: it
+  # what let the quota scan (now Sessions::Monitor) re-exec into destroyed pods forever: it
   # could not tell a dead container from a command that simply failed.
   class ContainerUnreachableError < StandardError
     attr_reader :status_code, :container_identifier

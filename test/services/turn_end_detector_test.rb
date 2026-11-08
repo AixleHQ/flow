@@ -6,7 +6,7 @@ class TurnEndDetectorTest < ActiveSupport::TestCase
   # `tmux capture-pane` of kiro-cli 3.0.0 (`--v3 chat`, TUI), task #208. In a 160x45 pane:
   #   turn_ended                — the agent replied and ended its turn without calling a tool
   #   turn_ended_provider_error — the turn ended on a failed model call (the proxy dropped it)
-  #   turn_ended_after_nudge    — the agent answered Sessions::TurnEndNudge's message, then stopped again
+  #   turn_ended_after_nudge    — the agent answered Sessions::Checks::TurnEnd's message, then stopped again
   #   working                   — mid-turn, while a shell tool runs
   # The same turn end at other pane sizes, and on 2.34.0:
   #   turn_ended_80x24          — the hint line fits; the window a laptop web terminal leaves

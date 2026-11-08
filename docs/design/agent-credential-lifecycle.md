@@ -288,9 +288,10 @@ population that causes the incident.
 
 **What shipped in place of the first sketch of 2c.** The sweep no longer stands down on
 every held credential. It splits them: a credential whose every holder has been silent for
-ten minutes (`IDLE_BEFORE_REFRESH`, read through the same pane the no-output watchdog
-reads, and judged like it: by whether the screen changed for Kiro, by the log's bytes for
-the other runtimes) is refreshed
+ten minutes (`IDLE_BEFORE_REFRESH`, judged by the no-output check,
+`Sessions::Checks::NoOutput`, on a snapshot of each holder read right before the rotation
+through `Sessions::Monitor.snapshot`: by whether the screen changed for Kiro, by the log's
+bytes for the other runtimes) is refreshed
 and the result delivered; one with a holder mid-turn still defers, and
 an unreadable container counts as working rather than as idle. That covers the incident
 shape — a session parked for twenty hours — without rotating a grant under an agent that
@@ -451,8 +452,9 @@ reach a person. Claude Code does not exit when that happens. It prints
 workspace intact. The no-output watchdog used to end that wait 30 minutes later, and the
 deleted container took the work with it.
 
-- **Detecting.** The per-minute pane read in `ScanQuotaErrorsActivity` also runs
-  `Sessions::AuthPause`. A session is paused when all three hold:
+- **Detecting.** The per-minute snapshot `Sessions::Monitor` reads of each workflow step is
+  also handed to `Sessions::Checks::AuthPause`, which takes `Sessions::AuthPause`'s actions
+  (docs/architecture/workflows.md, "Session monitoring"). A session is paused when all three hold:
   - the adapter's narrow `auth_banner_pattern` appears in the last 40 lines;
   - no resume prompt comes after it;
   - the pane has been quiet for a minute.

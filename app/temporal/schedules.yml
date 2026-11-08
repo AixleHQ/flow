@@ -33,20 +33,16 @@ schedules:
     enabled: true
     overlap: skip
 
-  - workflow: quota_error_scan_workflow
+  # Sessions::Monitor: reads each live workflow step's terminal once, with one exec, and
+  # hands the snapshot to the checks (Sessions::Checks: quota stop, blocking prompt,
+  # refused login, turn end, silence). The cron is the pass's interval, N = 1 minute for
+  # now; the checks' timings assume it (Checks::TurnEnd confirms a turn end on two passes,
+  # and a silent session is ended 30 to 31 minutes after its screen stopped changing).
+  # SKIP overlap: a pass that runs long drops the next one rather than racing it over the
+  # same sessions, so the time between reads grows; every pass logs its duration and the
+  # number of sessions it read.
+  - workflow: session_monitor_workflow
     cron: "* * * * *"
-    enabled: true
-
-  # Terminates sessions that have been `ready` (agent working) but produced no
-  # terminal output for 30 minutes. Catches agents blocked on an interactive
-  # prompt (e.g. claude.ai spend-limit dialog) that the quota scanner misses
-  # because the blocking prompt may appear before any quota-error text. Kiro is
-  # judged by its rendered screen instead of the log's bytes (task #208). Every
-  # 5 minutes: each sweep reads every unattended step, young ones included, so a
-  # silent session is ended 30 to 35 minutes after it stopped changing.
-  # SKIP overlap: same sessions could be processed by two concurrent sweeps.
-  - workflow: no_output_scan_workflow
-    cron: "*/5 * * * *"
     overlap: skip
     enabled: true
 
