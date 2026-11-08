@@ -1,14 +1,17 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -313,6 +316,31 @@ func TestThePullSendsTheDockerCredentialsOfTheImagesRegistry(t *testing.T) {
 	}
 }
 
+// `docker login` stores Docker Hub's credentials under https://index.docker.io/v1/,
+// not under the reference's domain, docker.io.
+func TestAPullOfADockerHubImageSendsTheCredentialsDockerLoginStored(t *testing.T) {
+	login := base64.StdEncoding.EncodeToString([]byte("hub-bot:hub-s3cret"))
+	for _, ref := range []string{"myorg/agent:1", "docker.io/myorg/agent:1", "index.docker.io/myorg/agent:1"} {
+		h := newEnvironment(t)
+		withDockerConfig(t, `{"auths": {"https://index.docker.io/v1/": {"auth": "`+login+`"}, "ghcr.io": {"auth": "b3RoZXI6b3RoZXI="}}}`)
+		h.run(h.env.ContainerStart, startPayload(map[string]any{"image": ref}))
+		if len(h.engine.pullAuths) != 1 || h.engine.pullAuths[0] == "" {
+			t.Fatalf("%s: pull auths %q: the pull carried no credentials", ref, h.engine.pullAuths)
+		}
+		decoded, err := base64.URLEncoding.DecodeString(h.engine.pullAuths[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sent map[string]string
+		if err := json.Unmarshal(decoded, &sent); err != nil {
+			t.Fatal(err)
+		}
+		if sent["username"] != "hub-bot" || sent["password"] != "hub-s3cret" {
+			t.Fatalf("%s: sent %v: not Docker Hub's credentials", ref, sent)
+		}
+	}
+}
+
 func TestAPullWithNoCredentialsForItsRegistryIsAnonymous(t *testing.T) {
 	h := newEnvironment(t)
 	withDockerConfig(t, `{"auths": {"registry.internal": {"auth": "b3RoZXI6b3RoZXI="}}}`)
@@ -338,6 +366,99 @@ func TestContainerStartCreatesNothingPastItsDeadline(t *testing.T) {
 		t.Fatalf("something was created past the deadline: %d containers, %d creates, %d volumes",
 			len(h.engine.containers), len(h.engine.creates), len(h.engine.volumes))
 	}
+}
+
+// A runner that stops (SIGTERM, a restart) while ContainerCreate runs cancels the
+// op's context; that is not its deadline.
+func TestContainerStartCutShortByTheRunnerStoppingDuringTheCreateLeavesNothing(t *testing.T) {
+	h := newEnvironment(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.engine.onCreate = cancel
+	r := h.env.ContainerStart(ctx, sessionID, mustJSON(t, startPayload(nil)))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerStartFailed || !strings.Contains(r.Error.Message, "cut short") {
+		t.Fatalf("%#v", r)
+	}
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	if len(h.engine.creates) != 1 {
+		t.Fatalf("%d creates: the create never ran", len(h.engine.creates))
+	}
+	if len(h.engine.containers) != 0 {
+		t.Fatalf("%d containers left after the cut-short create", len(h.engine.containers))
+	}
+}
+
+// A daemon that stalls in the removal after a cut-short create holds the op for
+// the removal's own timeout at most, not for ever: the serial ops loop goes on.
+func TestARemovalThatBlocksAfterACutShortCreateReturnsWithinItsTimeout(t *testing.T) {
+	h := newEnvironment(t)
+	logs := captureLogs(h.env)
+	h.env.RemoveTimeout = 200 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.engine.onCreate = func() {
+		h.engine.mu.Lock()
+		h.engine.removeBlocks = true
+		h.engine.mu.Unlock()
+		cancel()
+	}
+	started := time.Now()
+	r := h.env.ContainerStart(ctx, sessionID, mustJSON(t, startPayload(nil)))
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("container.start ran %s: the removal was not bounded", elapsed)
+	}
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerStartFailed || !strings.Contains(r.Error.Message, "env.reset removes it") {
+		t.Fatalf("%#v", r)
+	}
+	if !strings.Contains(logs.String(), "removing the container of a failed container.start failed") {
+		t.Fatalf("the failed removal was not logged: %q", logs.String())
+	}
+}
+
+// A removal the daemon refuses after a failed start is logged, and the answer
+// stays container_start_failed: the cleanup's env.reset removes what is left.
+func TestARemovalThatErrorsAfterAFailedStartIsLogged(t *testing.T) {
+	h := newEnvironment(t)
+	logs := captureLogs(h.env)
+	h.engine.startError = "OCI runtime create failed"
+	h.engine.removeError = "driver failed to remove the root filesystem"
+	r := h.run(h.env.ContainerStart, startPayload(nil))
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerStartFailed || !strings.Contains(r.Error.Message, "OCI runtime") {
+		t.Fatalf("%#v", r)
+	}
+	if !strings.Contains(r.Error.Message, "driver failed to remove") {
+		t.Fatalf("the answer does not say the removal failed: %s", r.Error.Message)
+	}
+	out := logs.String()
+	if !strings.Contains(out, "removing the container of a failed container.start failed") || !strings.Contains(out, "driver failed to remove") {
+		t.Fatalf("the failed removal was not logged: %q", out)
+	}
+}
+
+// captureLogs sends the environment's log to a buffer the test reads.
+func captureLogs(env *Environment) *syncBuffer {
+	b := &syncBuffer{}
+	env.Logger = slog.New(slog.NewTextHandler(b, nil))
+	return b
+}
+
+// syncBuffer is a bytes.Buffer that the handler may write while the test reads.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestContainerStartPullsAReferenceWithoutATagAsLatest(t *testing.T) {

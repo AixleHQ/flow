@@ -397,7 +397,7 @@ and marks it `expired`, as if the runner had answered `expired`. An op that nobo
 more, still without a result 10 seconds past its `deadline_at`, `pending` or `delivered`, is
 marked `expired` by the platform's sweep: `delivered` does not prove the runner received it
 (§5.4). A result that arrives later changes nothing (§5.5, the first result wins). Finished ops
-are kept 7 days, and each machine's newest op is kept longer, so `sequence` keeps growing.
+are kept 7 days. `sequence` comes from a per-machine counter, so it keeps growing after a prune.
 
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
 `logs`, `session.start`, `session.stop`, `container.start`, `container.stop`, `env.scrub` and
@@ -462,7 +462,9 @@ the platform never contacts a registry.
 
 The runner pulls with the Docker credentials of the user it runs as, resolved as the Docker CLI
 resolves them for `docker pull`: from that user's Docker configuration (`$DOCKER_CONFIG`, or
-`~/.docker/config.json`), credential helpers included, for the image's registry. An operator who
+`~/.docker/config.json`), credential helpers included, for the image's registry. Docker Hub's
+credentials are looked up under `https://index.docker.io/v1/`, where `docker login` stores them,
+for a reference on `docker.io` or `index.docker.io`. An operator who
 runs agent images from a private registry runs `docker login`, or configures a credential helper,
 as that user. With no credentials for the registry, the pull is anonymous. A pull that fails is the `container.start` outcome
 `image_pull_failed`, even with an older copy of the image on the daemon, and its message carries
@@ -540,7 +542,7 @@ Results:
 | The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words (§6.1). Nothing is created. |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
-| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
+| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 ```json
@@ -598,13 +600,13 @@ Runs a command in the session container through the daemon's exec API, without a
 | `env` | object | Optional, string to string. Added to the container's environment for this command. |
 | `cwd` | string | Optional, an absolute path. Default: the image's working directory. |
 | `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
-| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. Absent or `0`: the op's `deadline_at` bounds the command instead, the same way, with the seconds left until it when the command starts (at least 1). After the deadline nobody waits for the result, and the runner runs one op at a time. |
+| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. The op's `deadline_at` bounds it too: absent or `0`, or longer than the seconds left until `deadline_at` when the command starts, the command gets those seconds instead (at least 1), the same way. After the deadline nobody waits for the result, and the runner runs one op at a time. |
 | `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
 
 | Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
 | --- | --- | --- | --- | --- | --- |
 | The command ran, whatever its exit code | `ok` | Its exit code | Each up to the output cap | `{"stdout_truncated": <boolean>, "stderr_truncated": <boolean>}` | |
-| The command ran past its `timeout`, or without one past the op's `deadline_at`, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
+| The command ran past its `timeout`, or past the op's `deadline_at` when that came first, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
 | The daemon refused the exec | `error` | | | | `exec_failed` |
 | No running session container | `error` | | | | `no_session_container` |
 | The payload is not the one above | `error` | | | | `invalid_payload` |
@@ -782,6 +784,8 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
 - `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
   without it: a machine unregistered during a session stops holding that session, the session's
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
-  container is gone.
+  container is gone. That session's container keeps running on the machine: nothing can stop it,
+  because the runner is unregistered and its credentials are revoked, so the operator removes it
+  by hand. Scrub and return to service are tasks 11 and 13.
 - An endpoint that issues registration tokens ("Add machine"): task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.

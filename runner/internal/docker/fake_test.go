@@ -57,7 +57,15 @@ type fakeEngine struct {
 	// release ends every exec that is still blocked when the test ends.
 	release chan struct{}
 	creates []container.CreateRequest
-	removed []string
+	// onCreate, when set, runs once a create has made its container. The create
+	// then never answers: it waits until the client gives up.
+	onCreate func()
+	removed  []string
+	// removeBlocks keeps every container removal from answering until the
+	// client gives up, as a stalled daemon does.
+	removeBlocks bool
+	// removeError refuses every container removal with a 500.
+	removeError string
 }
 
 type fakeContainer struct {
@@ -236,6 +244,15 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		f.waitContainer(w, r, ref)
 		return
 	}
+	if action == "" && r.Method == http.MethodDelete {
+		f.mu.Lock()
+		blocks := f.removeBlocks
+		f.mu.Unlock()
+		if blocks {
+			<-r.Context().Done()
+			return
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := f.lookup(ref)
@@ -266,6 +283,10 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		config, host := c.Config, c.Host
 		writeJSON(w, http.StatusOK, container.InspectResponse{ID: c.ID, Name: "/" + c.Name, State: &state, Config: &config, HostConfig: &host, Image: "sha256:" + strings.Repeat("1", 64)})
 	case action == "" && r.Method == http.MethodDelete:
+		if f.removeError != "" {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": f.removeError})
+			return
+		}
 		if c.State.Running && r.URL.Query().Get("force") != "1" {
 			writeJSON(w, http.StatusConflict, map[string]any{"message": "container is running"})
 			return
@@ -355,6 +376,15 @@ func (f *fakeEngine) createContainer(w http.ResponseWriter, r *http.Request) {
 	c := &fakeContainer{ID: f.nextID(), Name: name, Config: *req.Config, Host: *req.HostConfig,
 		State: container.State{Status: container.StateCreated}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
 	f.containers[c.ID] = c
+	if f.onCreate != nil {
+		// The container exists, but its answer waits until the client gives up.
+		hook := f.onCreate
+		f.mu.Unlock()
+		hook()
+		<-r.Context().Done()
+		f.mu.Lock()
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"Id": c.ID, "Warnings": []string{}})
 }
 

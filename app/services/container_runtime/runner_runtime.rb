@@ -37,10 +37,11 @@ module ContainerRuntime
   #   container running (`status`), as DockerRuntime#start_container does.
   # - cleanup_session sends `container.stop` and `env.reset`, and frees the
   #   machine once the reset succeeded; a failed reset moves it to `failed`.
-  #   It waits for nothing queued: while an earlier op of the session is
-  #   unfinished on the machine (a `container.start` whose wait a stop cut
-  #   short), cleanup_ready? is false, and the cleanup is retried until that op
-  #   is answered or expired. Its deadline bounds the wait.
+  #   It waits for nothing queued: while an earlier op is unfinished on the
+  #   machine the session holds (a `container.start` whose wait a stop cut
+  #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
+  #   is false, and the cleanup is retried until that op is answered or
+  #   expired. Its deadline bounds the wait.
   #
   # A session's ops go to its machine only while the session holds it
   # (runner_environments.current_session_id): Runners::Operations.enqueue!
@@ -115,15 +116,17 @@ module ContainerRuntime
       session.nil? || machine(session).nil?
     end
 
-    # False while an op of the session is still `pending` or `delivered` on
-    # its machine: the runner runs a machine's ops one at a time, in order, so
-    # a cleanup op would wait behind it and expire.
+    # False while any op is still `pending` or `delivered` on the machine the
+    # session holds, an `env.reset`, which names no session, included: the
+    # session holds the machine, so every op on it is the session's. The
+    # runner runs a machine's ops one at a time, in order, so a cleanup op
+    # would wait behind it and expire.
     def cleanup_ready?(id)
       session = session_for(id)
       environment = session && machine(session)
       return true if environment.nil?
 
-      !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id, terminal_session_id: session.id)
+      !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id)
     end
 
     # `container.stop`, then `env.reset`, which removes every container and the
@@ -161,12 +164,18 @@ module ContainerRuntime
     # A refusal the runner answered is a CreateRefusedError: the runner created
     # nothing, or removed what it could not start (PROTOCOL.md §6.2), so the
     # create pins no reservation. An expired create stays uncertain.
+    #
+    # The container's name is the platform's, container_name(session), never
+    # the runner's answer: it becomes the admission's runtime_id, which every
+    # later call resolves to its session (session_for). An answer that names
+    # another container is an error, and the create stays uncertain, so the
+    # cleanup still resets the machine.
     def create_container(spec)
       session = spec_session(spec)
       Runners::Machines.acquire!(session)
       payload = container_payload(session, spec)
       outcome = call(session, "container.start", payload, lifecycle: true)
-      return outcome.data["name"] if outcome.ok?
+      return started_container_name(session, outcome) if outcome.ok?
       raise RuntimeError, outcome.message if outcome.expired?
       if outcome.error_class == "image_pull_failed"
         raise CreateRefusedError, "Could not pull #{payload['image']}: #{outcome.message}"
@@ -321,6 +330,14 @@ module ContainerRuntime
 
     def lines(text)
       text.to_s.empty? ? [] : text.to_s.lines
+    end
+
+    def started_container_name(session, outcome)
+      expected = container_name(session)
+      return expected if expected && outcome.data["name"].to_s == expected
+
+      raise RuntimeError, "container.start answered the container #{outcome.data['name'].inspect}, " \
+                          "not the session's #{expected.inspect}"
     end
 
     def status_of(session)

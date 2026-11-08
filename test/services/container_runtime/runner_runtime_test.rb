@@ -265,6 +265,61 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert @runtime.cleanup_ready?("not-an-admission"), "a session without a machine has nothing queued"
   end
 
+  # The session holds the machine, so every op on it is the session's, an
+  # env.reset, which names no session, included.
+  test "a cleanup retry behind an unfinished env.reset queues nothing until that reset finishes or expires" do
+    handle = start_session
+    @host_runner.answer_with("env.reset", :none)
+    pending_reset = Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now,
+                                                               session: @session)
+    assert_nil pending_reset.terminal_session_id
+    @host_runner.operations.clear
+
+    assert_not @runtime.cleanup_ready?(handle), "the retry would queue container.stop and env.reset behind the reset"
+    Runners::Operations.expire!(pending_reset)
+    assert @runtime.cleanup_ready?(handle), "an expired reset holds the cleanup up no longer"
+
+    finished_reset = Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now,
+                                                                session: @session)
+    assert_not @runtime.cleanup_ready?(handle)
+    Runners::Operations.record_result!(finished_reset, status: "ok", result: { "data" => { "removed_containers" => [] } })
+    assert @runtime.cleanup_ready?(handle), "a finished reset holds the cleanup up no longer"
+    assert_equal %w[env.reset], @host_runner.ops, "nothing but the test's own reset was queued"
+  end
+
+  # The admission's runtime_id is what create_container returns, and every
+  # later call resolves its session from it: the runner's answer must not
+  # choose it.
+  test "a container.start answer that names another session's container is an error, and no later call reaches that session" do
+    # Another runner, so that the other session cannot take this session's machine.
+    other_environment = create(:runner_environment, runner: create(:runner, :manual), key: "aixle-r9-4e5f6a7b")
+    other_runner = ContainerRuntime::FakeHostRunner.new(other_environment)
+    other = create(:runner_session, environment: other_environment, runner_environment: nil)
+    others_container = @runtime.create_container(spec(session: other))
+    assert_equal other.id, other_environment.reload.current_session_id
+    ContainerRuntime::FakeHostRunner.identify!(other, others_container)
+    other_runner.operations.clear
+    @host_runner.answer_with("container.start") do |_payload, session_id|
+      @host_runner.machine.start(session_id)
+      { "status" => "ok", "data" => { "container_id" => "f" * 64, "name" => others_container } }
+    end
+
+    error = assert_raises(RuntimeError) { @runtime.create_container(spec) }
+
+    assert_not_kind_of ContainerRuntime::CreateRefusedError, error, "the runner may have created a container"
+    assert_match(/answered the container "#{others_container}", not the session's "aixle-#{@environment.key}-#{@session.id}"/,
+                 error.message)
+    # The admission keeps the cleanup identity, as AdmittedPhaseActivity leaves it after a failed create.
+    @runtime.container_status(@identity)
+    @runtime.cleanup_session(@identity)
+    assert_empty other_runner.operations, "no call of the session reached the other session's machine"
+    assert_equal %w[container.start status container.stop env.reset], @host_runner.ops
+    assert_equal other.id, other_environment.reload.current_session_id
+    assert_equal :running, @runtime.container_status(others_container)
+  ensure
+    other_runner&.stop
+  end
+
   test "a capped runtime, as the scanners use, gives every op that cap at most" do
     handle = start_session
     capped = ContainerRuntime.for_session(@session, op_timeout: 15)

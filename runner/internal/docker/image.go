@@ -73,7 +73,7 @@ func registryAuth(ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host := reference.Domain(named)
+	host := authConfigKey(reference.Domain(named))
 	found, err := dockerConfig().GetAuthConfig(host)
 	if err != nil {
 		return "", fmt.Errorf("reading the Docker credentials of %s failed: %w", host, err)
@@ -83,4 +83,18 @@ func registryAuth(ref string) (string, error) {
 		return "", nil
 	}
 	return authconfig.Encode(auth)
+}
+
+// dockerHubAuthKey is the key `docker login` and the credential helpers store
+// Docker Hub's credentials under (the CLI's registry.IndexServer).
+const dockerHubAuthKey = "https://index.docker.io/v1/"
+
+// authConfigKey is the key of a registry's credentials in the Docker
+// configuration, as the Docker CLI's getAuthConfigKey maps it: Docker Hub's are
+// under dockerHubAuthKey, every other registry's under its domain.
+func authConfigKey(domain string) string {
+	if domain == "docker.io" || domain == "index.docker.io" {
+		return dockerHubAuthKey
+	}
+	return domain
 }

@@ -15,10 +15,16 @@ module Activities
       # stay usable instead of needing an operator. Every client we speak to
       # raises its own error class on the wire — Kubeclient::HttpError,
       # Docker::Error::*, Errno, OpenSSL, Timeout — so none of these can be a
-      # half-sent RPC. Anything outside this list keeps AD-5's default: unknown
-      # means the slot is held.
+      # half-sent RPC. Runners::Machines::NoMachine is raised by
+      # RunnerRuntime#create_container's machine acquisition, before this
+      # attempt sends any runner op: a machine unregistered or failed after the
+      # launch resolved its runner. A replayed create whose first attempt was
+      # dispatched is resolved the same way: its machine is out of rotation, so
+      # no other session meets that container. Anything outside this list keeps
+      # AD-5's default: unknown means the slot is held.
       NEVER_DISPATCHED = [
-        ActiveRecord::ActiveRecordError, NoMethodError, NameError, ArgumentError, TypeError, KeyError
+        ActiveRecord::ActiveRecordError, NoMethodError, NameError, ArgumentError, TypeError, KeyError,
+        Runners::Machines::NoMachine
       ].freeze
 
       def run(input)

@@ -67,7 +67,8 @@ module Sessions
 
     # One look at the pane of a live session (ScanQuotaErrorsActivity).
     # @return [Symbol, nil] :nudged, :failed, :pending (seen once, or a person is working
-    #   in the terminal), or nil when the pane is not at a turn end
+    #   in the terminal), or nil when the pane is not at a turn end or the session does not
+    #   take reminders
     def observe(pane)
       return nil if pane.blank? || !self.class.applies_to?(session)
 
@@ -138,7 +139,15 @@ module Sessions
       end
     end
 
+    # Fails the session after its last reminder. The scan read this session at the top of
+    # its batch, seconds ago, so the row is read again under its lock first, as `claim`
+    # does: a session that started finishing, was auth-paused or was otherwise taken out
+    # of the reminders since then is left as it is. SessionService.fail_session runs after
+    # the lock is released, so its Temporal signal is not sent from inside a transaction.
     def give_up
+      due = session.with_lock { self.class.applies_to?(session) && nudges >= LIMIT }
+      return log(:info, "no longer takes reminders (state=#{session.state}); not failed") unless due
+
       SessionService.fail_session(session: session, error_message: self.class.message_after_limit)
       log(:info, "stopped again after #{LIMIT} reminders; failed")
       :failed

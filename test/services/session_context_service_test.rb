@@ -31,6 +31,21 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.new(container_id, session, runtime: runtime)
   end
 
+  # The rest of this file runs the assembly on Mocha doubles, which
+  # test/support/runtime_transaction_guard.rb does not see. This one runs a whole
+  # assembly on a real runtime (FakeRuntime), under the guard: no runtime call
+  # is made inside a database transaction.
+  test "a whole assembly on a real runtime makes no runtime call inside a database transaction" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    credential = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    runtime = ContainerRuntime::FakeRuntime.new
+
+    context_service(session, "ctr1", runtime: runtime).assemble(credential: credential)
+
+    assert runtime.fs["/var/log/context.log"].present?, "the assembly ran to its end"
+    assert_empty RuntimeTransactionGuard.take
+  end
+
   # ====================================================================
   # Story 9.2: inject_config_files
   # ====================================================================

@@ -82,6 +82,22 @@ module Sessions
       assert_equal "rt-2", delivered_refresh_token
     end
 
+    # heal! renews the grant, then delivers it to every holder, on a real runtime
+    # (FakeRuntime), which test/support/runtime_transaction_guard.rb checks: no
+    # runtime call is made inside a database transaction, the renewal's included.
+    test "a heal that renews and delivers makes no runtime call inside a database transaction" do
+      travel 30.minutes
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: hash_including("refresh_token" => "rt-1"))
+        .to_return(status: 200, body: { access_token: "at-2", refresh_token: "rt-2", expires_in: 28_800 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :resumed, observe
+
+      assert_equal "rt-2", delivered_refresh_token
+      assert_empty RuntimeTransactionGuard.take
+    end
+
     test "pauses the step and its run when the login cannot be renewed" do
       @credential.mark_refresh_error!("invalid_grant", permanent: true)
 
