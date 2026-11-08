@@ -23,12 +23,14 @@ module Sessions
   class Monitor
     # The order is the order of precedence: a session that cannot go on (quota, a dialog
     # nobody will answer) is failed before anything waits on it, a refused login is paused
-    # before a turn end is reminded.
+    # before a turn end is reminded, and silence is judged last, once nothing else has
+    # taken the session over on this pass.
     CHECKS = [
       Checks::QuotaError,
       Checks::BlockingPrompt,
       Checks::AuthPause,
-      Checks::TurnEnd
+      Checks::TurnEnd,
+      Checks::NoOutput
     ].freeze
 
     COUNTED = { failed: :cleaned, paused: :auth_paused, nudged: :nudged }.freeze

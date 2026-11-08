@@ -803,6 +803,7 @@ pass and hands the snapshot to them (task #211).
   | `Checks::BlockingPrompt` | the same, `non_interactive` only | `scrollback` | fails the session on a dialog it cannot answer (`InteractivePromptDetector`) |
   | `Checks::AuthPause` | the same as `QuotaError` | `scrollback`, `log_mtime` | pauses, heals, unpauses or expires a refused login (`Sessions::AuthPause`) |
   | `Checks::TurnEnd` | `ready`, `non_interactive`, not auth-paused | `scrollback`, `clients` | types a reminder after a turn end, fails after the last one (below) |
+  | `Checks::NoOutput` | `ready` steps that are not interactive and not auth-paused, from their start | `scrollback`, `log_mtime` | fails a session whose screen (Kiro) or log (other runtimes) has not changed for 30 minutes (below) |
 
 - **The re-check before acting, and the conditional state change.** The
   snapshot and the row it came with can be seconds old. Every state change a
@@ -830,16 +831,25 @@ pass and hands the snapshot to them (task #211).
   | `BlockingPrompt` | nothing | — |
   | `AuthPause` | nothing | `auth_paused_at`, `auth_pause_reason`, `auth_renewed_at`, `auth_heal_attempts`, `auth_heal_attempted_at` (also written by a delivery's `resume!` and by a refused login the CLI writes back) |
   | `TurnEnd` | `turn_end_screen`, `turn_end_seen_at` (the turn end seen on an earlier pass) | `turn_end_nudges` (the reminder count) |
+  | `NoOutput` | `screen_digest`, `screen_changed_at` (the screen and when it last changed; screen-rule runtimes only) | — |
 
+- **The on-demand snapshot.** `Sessions::Monitor.snapshot(session, parts:)`
+  reads one session right now, through the same read path and registry. The
+  token-refresh sweep uses it (`RefreshExpiringTokensActivity#parked?`): right
+  before it rotates a grant, it reads every holder of that credential and runs
+  `Checks::NoOutput#silent_for?(snapshot, 10.minutes)` on it. A pass's kept
+  record cannot answer that: a grant is rotated only while every holder is
+  parked, which a pass reading one session after another cannot see at one
+  moment, and the record is up to a minute old, so an agent that started a turn
+  since would read as parked and have its grant rotated mid-turn (the
+  2026-09-05 incident). The on-demand read feeds the same kept record, and
+  costs execs only for the holders of a due credential, every 5 minutes.
 - **Outside the mechanism.** `ScanDeadContainersActivity` reads the pod status
   through the runtime API, with no exec; `CleanupStaleActivity` reads only
   timestamps. The live terminal in the UI, `get_session_log` and the
   `session_log` tool (`Sessions::LogTail`, `Sessions::LiveLogReader`) are reads
   for people and agents, and the launch-time wait for the shell prompt
-  (`AgentBaseStrategy`) is part of starting the CLI. The no-output watchdog
-  (`ScanNoOutputSessionsActivity`) and the token-refresh sweep's idle probe
-  still read through `Sessions::LiveLogReader` until step 2 of task #211 moves
-  them onto the mechanism.
+  (`AgentBaseStrategy`) is part of starting the CLI.
 
 ### When an automatic session's agent stops without `finish_session`
 
@@ -874,18 +884,19 @@ error ended the turn. Two sweeps cover that state:
   - The prompt is matched on its start (`› ask a question`), because a narrow
     pane wraps the placeholder. The signature is checked against captures at
     30x20, 80x24, 160x45 and 220x50.
-- **The silence watchdog.** `ScanNoOutputSessionsActivity` runs every 5 minutes
-  and reads every unattended `ready` step from its start, so a silent session is
-  ended 30 to 35 minutes after it stopped changing.
-  - **Kiro: judged by its screen.** `Sessions::NoOutputWatchdog` keeps a digest
-    of the pane (`screen_digest`, `screen_changed_at`) and fails the session
+- **The silence watchdog.** `Sessions::Checks::NoOutput` runs on every pass of
+  `Sessions::Monitor`, last, and reads every unattended `ready` step from its
+  start, so a silent session is ended 30 to 31 minutes after it stopped
+  changing.
+  - **Kiro: judged by its screen.** The check keeps a digest of the current
+    screen (`screen_digest`, `screen_changed_at`) and fails the session
     once its rendered screen has not changed for 30 minutes. The mtime of
     `/tmp/terminal_output.log` is not enough, because an idle TUI repaints its
     unchanged screen whenever the pane is resized, for example by an attached
     web terminal. A working Kiro keeps its screen changing
     (`Kiro is working · 1m 15s`).
   - **Other runtimes: judged by the log's mtime, as before.** The screen rule is
-    opt-in through `NoOutputWatchdog::SCREEN_RULE_RUNTIMES`, which holds
+    opt-in through `Checks::NoOutput::SCREEN_RULE_RUNTIMES`, which holds
     `kiro_cli` only. A runtime joins once its working screen, tool calls
     included, has been captured on its pinned CLI and shown to change between
     reads; an indicator that animates only through colour would otherwise read
@@ -893,7 +904,8 @@ error ended the turn. Two sweeps cover that state:
   - When the pane shows Kiro's idle prompt, the failure says the agent stopped
     without `finish_session`.
   - The token-refresh sweep reads the same verdict through
-    `silent_for?(10.minutes)`. A Kiro session parked at its prompt counts as
+    `silent_for?(snapshot, 10.minutes)`, on an on-demand snapshot (above). A
+    Kiro session parked at its prompt counts as
     parked even while it repaints, and a working one does not. Other runtimes
     count as parked only when their log got no bytes for 10 minutes, as before.
 
