@@ -49,5 +49,51 @@ module Activities
         run_activity(ScanNoOutputSessionsActivity, nil)
       end
     end
+
+    # The watchdog for real, at the schedule's 5-minute cadence, on a Kiro session that has
+    # no screen record yet (task #208, case 1): its screen stands still from the start while
+    # repaints keep the log's mtime fresh.
+    class ScanNoOutputSessionsScreenTest < ActiveSupport::TestCase
+      SWEEP_EVERY = 5.minutes
+
+      setup do
+        @user = create(:user, :with_company)
+        @project = create(:project, owner: @user, company: @user.companies.first)
+        @runtime = stub_container_runtime(agent_type: "kiro_cli")
+        @session = create(:terminal_session, session_type: "workflow_step", state: "ready", mode: "non_interactive",
+                                             agent_type: "kiro_cli", user: @user, project: @project,
+                                             container_id: "ctr-kiro", started_at: Time.current,
+                                             initial_prompt: "do the work")
+        @pane = file_fixture("terminal_panes/kiro_cli/turn_ended.txt").read
+        Rails.logger.stubs(:info)
+        Rails.logger.stubs(:warn)
+      end
+
+      teardown do
+        cleanup_runtime_overrides
+      end
+
+      def sweep
+        @runtime.set_terminal_pane(@pane, last_output_at: 2.seconds.ago)
+        run_activity(ScanNoOutputSessionsActivity, nil)
+      end
+
+      test "an unchanged screen is ended 30 minutes after it stopped changing, not after a first read at minute 31" do
+        sweep
+        stopped_at = Time.zone.parse(@session.reload.metadata["screen_changed_at"])
+        assert_in_delta 2.seconds.ago, stopped_at, 2.seconds, "the first sweep, at the session's start, starts the record"
+
+        until @session.reload.state == "failed"
+          travel SWEEP_EVERY
+          sweep
+          flunk "still alive #{(Time.current - stopped_at).round / 60} minutes later" if Time.current - stopped_at > 35.minutes
+        end
+
+        elapsed = Time.current - stopped_at
+        assert_operator elapsed, :>=, Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD
+        assert_operator elapsed, :<=, Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD + SWEEP_EVERY
+        assert_match(/ended its turn without calling `finish_session`/, @session.error_message)
+      end
+    end
   end
 end

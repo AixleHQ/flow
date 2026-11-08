@@ -171,7 +171,7 @@ class InteractivePromptDetector
   # separator rows, so blank lines carry no signal here — dropping them is what makes
   # "the last line" mean the last thing the CLI actually rendered.
   def self.current_screen(text)
-    text.to_s.lines.map(&:rstrip).reject(&:empty?).last(TAIL_LINES)
+    Sessions::ScreenDigest.lines(text, last: TAIL_LINES)
   end
   private_class_method :current_screen
 

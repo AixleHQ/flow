@@ -147,6 +147,14 @@ module ContainerRuntime
       self
     end
 
+    # The clients `tmux list-clients` reports on the agent pane, as [read_only, last_input_at]
+    # pairs, and the container clock that comes with them.
+    def set_terminal_clients(clients, now: Time.current)
+      @terminal_clients = clients
+      @terminal_clock = now
+      self
+    end
+
     # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
@@ -423,6 +431,7 @@ module ContainerRuntime
       return "open\n" if cmd_str.include?("echo 'open'")
       return "0\n" if cmd_str.include?(".agent_done")
       return live_terminal_read(cmd_str) if cmd_str.include?("capture-pane")
+      return terminal_clients if cmd_str.include?("tmux list-clients")
       return KIRO_MODEL_CATALOGUE if cmd_str.include?("--list-models")
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
@@ -465,6 +474,13 @@ module ContainerRuntime
 
       mtime = @terminal_log_mtime ? "#{@terminal_log_mtime.to_i}\n" : ""
       "#{mtime}#{::Sessions::LiveLogReader::MARKER}\n#{pane}"
+    end
+
+    # `date +%s` and then one `#{client_readonly} #{client_activity}` line per client.
+    def terminal_clients
+      clock = (@terminal_clock || Time.current).to_i
+      lines = Array(@terminal_clients).map { |read_only, input_at| "#{read_only ? 1 : 0} #{input_at.to_i}" }
+      [ clock, *lines ].join("\n")
     end
 
     # -- Per-agent virtual filesystem with realistic fixture data -------------

@@ -1,0 +1,53 @@
+  Welcome to Kiro CLI V3
+  Learn more:
+  https://kiro.dev/docs/cli/
+  v3/
+
+  kiro-cli --v2   Launch the
+                  previous
+                  experience
+                  instead
+
+• Initializing...
+──────────────────────────────
+ Trust All Tools active,
+ confirmations are off · /quit
+ to exit
+  sandbox and specs.
+
+──────────────────────────────
+ Trust All Tools active,
+ confirmations are off · /quit
+ to exit
+    DONE and end your turn. Do
+    not call any tools.
+
+ᗣ Thinking... (esc to cancel)
+
+──────────────────────────────
+ Trust All Tools active,
+ confirmations are off · /quit
+
+──────────────────────────────
+ Trust All Tools active,
+ confirmations are off · /quit
+
+• DONE
+
+▸ Credits: turn 0.04 • session
+  0.04 | Time: 1s
+
+──────────────────────────────
+ Trust All Tools active,
+ confirmations are off · /quit
+ to exit
+Warning: Kiro CLI is running a
+──────────────────────────────
+Default · auto · ◔ 3%    ~/wor
+                         k
+
+›  ask a question or describe
+   a task ↵
+   /sessions to resume ·
+   /copy to clipboard
+

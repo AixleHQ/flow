@@ -1948,7 +1948,9 @@ container's state says nothing about the CLI itself, and hosted sessions do not 
 - **The session ends when the agent calls `finish_session`** (or `fail_session`), which goes
   through the proxy sidecar (§6.9.3) to the platform, as on hosted.
 - **A silent session is reaped by `Sessions::NoOutputWatchdog`** after 30 minutes without
-  output (`NO_OUTPUT_THRESHOLD`), fed by the live log above. A CLI that exited back to the
+  output (`NO_OUTPUT_THRESHOLD`), fed by the live log above, by a sweep that runs every
+  5 minutes. For Kiro, output means a change on its rendered screen: bytes that only
+  repaint the same screen do not count (task #208, `SCREEN_RULE_RUNTIMES`). A CLI that exited back to the
   shell falls silent, and this is what catches it, as on hosted.
 - **A dead container fails the session with `DeadContainerScan` semantics,** from the
   container's status as the owner reads it (`wait` and the event stream on Docker, the pod

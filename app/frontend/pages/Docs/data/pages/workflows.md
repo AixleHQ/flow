@@ -197,5 +197,13 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
 - **Parallel steps share the workflow run** but not their containers —
   they cannot read each other's `/workspace/` directly. Use
   `output_asset_specs` to hand artifacts forward.
+- **An automatic step ends only when its agent calls `finish_session` or
+  `fail_session`.** A Kiro agent that ends its turn without either gets a
+  reminder typed into its terminal a minute or two later, up to 3 times. If it
+  stops a fourth time, the step fails with a message saying so. Nothing is typed
+  while someone has typed into the session's terminal in the last 10 minutes.
+  A step whose terminal stays unchanged fails 30 to 35 minutes later. For Kiro,
+  "unchanged" means its screen, even while the terminal keeps redrawing it; for
+  other runtimes, that the terminal sent no output at all.
 
 Writing the instructions themselves: see the [Prompt guide](/docs/prompt-guide).
