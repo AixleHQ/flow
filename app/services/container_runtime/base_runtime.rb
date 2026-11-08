@@ -36,6 +36,18 @@ module ContainerRuntime
   #   list_session_resources                     → [ContainerRuntime::SessionResource]
   #   delete_session_resource(resource)          → true/false
   #
+  # == Transactions
+  # A runtime call is external I/O: a Docker or Kubernetes request, or an op
+  # an external runner executes. It is never made inside a database
+  # transaction, on any runtime, hosted included. RunnerRuntime enqueues its op
+  # (Runners::Operations.enqueue!), which may join a caller's transaction, and
+  # then waits for the op's result: inside a transaction the runner's gateway
+  # cannot see the op until it commits, which it does only once the wait ends,
+  # so the op expires unanswered. Enqueueing atomically with other writes is
+  # legitimate; waiting for a result inside that transaction is what
+  # deadlocks. The test suite fails a runtime call made inside an application
+  # transaction (test/support/runtime_transaction_guard.rb).
+  #
   # Raised by #wait_container when `timeout` elapses with the workload still running.
   class WaitTimeout < StandardError; end
 
