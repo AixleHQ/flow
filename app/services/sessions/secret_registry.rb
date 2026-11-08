@@ -48,11 +48,12 @@ module Sessions
       # drop a value the agent already had, which then reached the proxy log and the
       # transcript unmasked. Under the lock the last writer reads the accesses after
       # every earlier one was recorded, so the list it leaves covers them all.
-      ConfigItemAccess.transaction do
-        ConfigItemAccess.connection.execute(
-          ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                                                  "secret_registry:#{session.id}" ])
-        )
+      #
+      # The lock is the connection's, not a transaction's: the write is a runtime
+      # call, which is never made inside a transaction (ContainerRuntime::BaseRuntime).
+      # On an external runner it is an op the runner's gateway could not see before
+      # the transaction committed, so the write would wait for it until its deadline.
+      with_session_lock do
         container_runtime.write_file(target, LIST_PATH, payload, mode: FILE_MODE, uid: 0, gid: 0)
       end
     rescue StandardError => e
@@ -63,6 +64,22 @@ module Sessions
     private
 
     attr_reader :session, :runtime
+
+    # Serializes the publications of one session, across processes, with a
+    # session-level advisory lock that is released however the block ends.
+    def with_session_lock
+      connection = ConfigItemAccess.connection
+      connection.execute(lock_sql("pg_advisory_lock"))
+      begin
+        yield
+      ensure
+        connection.execute(lock_sql("pg_advisory_unlock"))
+      end
+    end
+
+    def lock_sql(function)
+      ActiveRecord::Base.sanitize_sql_array([ "SELECT #{function}(hashtextextended(?, 0))", "secret_registry:#{session.id}" ])
+    end
 
     def payload
       values.map { |value| Base64.strict_encode64(value) }.join("\n") + "\n"
@@ -86,7 +103,7 @@ module Sessions
     end
 
     def container_runtime
-      @container_runtime ||= runtime || ContainerRuntime.build
+      @container_runtime ||= runtime || ContainerRuntime.for_session(session)
     end
   end
 end

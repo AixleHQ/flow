@@ -6,8 +6,14 @@
       "as": "m"
     },
     {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "all",
       "op": "batch",
       "payload": {
@@ -38,6 +44,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "stopped",
       "op": "batch",
       "payload": {
@@ -84,6 +91,9 @@
                 "$var": "all.sequence"
               },
               "op": "batch",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "all.deadline_at"
               },
@@ -120,6 +130,9 @@
                 "$var": "stopped.sequence"
               },
               "op": "batch",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "stopped.deadline_at"
               },

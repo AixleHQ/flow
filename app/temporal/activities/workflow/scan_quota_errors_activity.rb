@@ -37,8 +37,11 @@ module Activities
         nudged = 0
 
         candidate_sessions.find_each do |session|
-          terminal = live_terminal_output(session)
-          message = blocker_message_for(session, terminal)
+          # A runner session's ops are capped, so a machine that does not answer
+          # cannot hold up the sweep.
+          runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
+          terminal = live_terminal_output(session, runtime)
+          message = blocker_message_for(session, terminal, runtime)
           if message.blank?
             auth = Sessions::AuthPause.new(session, runtime: runtime).observe(terminal).to_s.inquiry
             auth_paused += 1 if auth.paused?
@@ -84,8 +87,8 @@ module Activities
       end
 
       # nil when the session looks healthy.
-      def blocker_message_for(session, terminal)
-        quota = quota_stop(session, terminal)
+      def blocker_message_for(session, terminal, runtime)
+        quota = quota_stop(session, terminal, runtime)
         return quota.message if quota&.quota_error?
 
         # Only for sessions nobody can rescue by typing: an interactive session's
@@ -102,12 +105,12 @@ module Activities
       # a grep of ShowPage.tsx failed a Kiro session with an OpenAI identifier). So the
       # pane counts only for the session's own provider, only on its current screen, and
       # only once it has gone quiet: a CLI stopped on quota prints nothing more.
-      def quota_stop(session, terminal)
+      def quota_stop(session, terminal, runtime)
         recorded = QuotaErrorDetector.detect(session.error_message, agent_type: session.agent_type)
         return recorded if recorded.quota_error?
 
         on_screen = QuotaErrorDetector.detect_on_screen(terminal, agent_type: session.agent_type)
-        on_screen if on_screen.quota_error? && pane_quiet?(session)
+        on_screen if on_screen.quota_error? && pane_quiet?(session, runtime)
       end
 
       # Read only once the screen already shows a quota error, so the sweep's single
@@ -115,13 +118,13 @@ module Activities
       # container cannot say: an unknown pane is not a quiet one. Same check as
       # Sessions::AuthPause#quiet?: the mtime counts only from a read that also
       # captured the pane, never from a container whose tmux is gone.
-      def pane_quiet?(session)
+      def pane_quiet?(session, runtime)
         tail = Sessions::LiveLogReader.new(session, runtime: runtime).tail(lines: 1)
         last_output_at = tail.ok? ? tail.last_output_at : nil
         last_output_at.present? && last_output_at < QuotaErrorDetector::QUIET_BEFORE_FAIL.ago
       end
 
-      def live_terminal_output(session)
+      def live_terminal_output(session, runtime)
         container = runtime.resolve_container(session.container_id)
         return "" unless container
 
@@ -137,10 +140,6 @@ module Activities
       rescue StandardError => e
         log(:warn, "Failed to read terminal for session #{session.id}: #{e.message}")
         ""
-      end
-
-      def runtime
-        @runtime ||= ContainerRuntime.build
       end
     end
   end

@@ -24,8 +24,10 @@ module RunnerGateway
                                  environment: RunnerGatewayEnvironmentResource.new(result.environment).to_h)
       end
 
-      # The `409 busy` refusal of §6.2 arrives with the first task that assigns
-      # a session to an environment.
+      # A machine unregistered during a session is not refused: `409 busy` is
+      # not built (runner/protocol/PROTOCOL.md §8). The machine stops holding
+      # the session, whose next ops answer `no_session_container`, so the
+      # session fails as one whose container is gone (Runners::Registration).
       def destroy
         Runners::Registration.unregister!(@credential.runner_environment)
         head :no_content

@@ -2,8 +2,9 @@
   "description": "Revoking the runner revokes every credential it has, so each of its tokens is 401 invalid_token on every endpoint.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
     {"given": "registration_token", "as": "reg"},
-    {"given": "op_enqueued", "machine": "m", "as": "op", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "op_enqueued", "machine": "m", "session": "s", "as": "op", "op": "exec", "payload": {"cmd": ["true"]}},
     {"given": "runner_revoked"},
     {
       "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},

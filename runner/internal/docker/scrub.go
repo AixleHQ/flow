@@ -29,11 +29,11 @@ const OutputsPath = WorkspaceTarget + "/outputs"
 // the agent replaced with a link empties nothing outside the volume.
 const emptyOutputs = `if [ -d ` + OutputsPath + ` ]; then find ` + OutputsPath + ` -mindepth 1 -delete; fi`
 
-// ScrubPayload is the payload of `env.scrub`: the agent image, pinned by digest,
-// that the container emptying the outputs runs. `image.ensure` pulled it.
+// ScrubPayload is the payload of `env.scrub`: the agent image, a reference as in
+// `container.start`, that the container emptying the outputs runs. The daemon
+// has it: the session's `container.start` pulled it.
 type ScrubPayload struct {
-	Image  string `json:"image"`
-	Digest string `json:"digest"`
+	Image string `json:"image"`
 }
 
 // Scrub is `env.scrub` (DESIGN.md §7.2): it removes the environment's containers
@@ -43,10 +43,10 @@ type ScrubPayload struct {
 // volume name, and never walks a host mount.
 func (e *Environment) Scrub(ctx context.Context, raw json.RawMessage) protocol.Result {
 	var p ScrubPayload
-	if r := decodePayload(raw, &p, "{image, digest}"); r != nil {
+	if r := decodePayload(raw, &p, "{image}"); r != nil {
 		return *r
 	}
-	ref, err := ImageEnsurePayload(p).Reference()
+	ref, err := imageReference(p.Image)
 	if err != nil {
 		return *invalid("%s", err.Error())
 	}
@@ -222,7 +222,7 @@ func (e *Environment) emptyOutputs(ctx context.Context, ref string) (bool, error
 		},
 	})
 	if cerrdefs.IsNotFound(err) {
-		return false, fmt.Errorf("the daemon does not have %s: run image.ensure first (%v)", ref, err)
+		return false, fmt.Errorf("the daemon does not have %s: container.start pulls it (%v)", ref, err)
 	}
 	if err != nil {
 		return false, err

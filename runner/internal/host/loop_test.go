@@ -139,13 +139,13 @@ func newHarness(t *testing.T, dir string, gw *gateway) *harness {
 		Tokens:  source,
 		Journal: j,
 		Handlers: map[string]Handler{
-			"image.ensure": func(_ context.Context, payload json.RawMessage) protocol.Result {
+			"env.scrub": func(_ context.Context, _ *int64, payload json.RawMessage) protocol.Result {
 				var p struct {
 					ID int64 `json:"id"`
 				}
 				_ = json.Unmarshal(payload, &p)
 				h.ran[p.ID]++
-				return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"pulled": true}}
+				return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"outputs_emptied": true}}
 			},
 		},
 		Logger:  slog.New(slog.NewTextHandler(h.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
@@ -173,9 +173,9 @@ func (h *harness) run() error {
 	return err
 }
 
-func ensureOp(id, seq int64) protocol.Op {
+func envOp(id, seq int64) protocol.Op {
 	payload, _ := json.Marshal(map[string]any{"id": id})
-	return protocol.Op{ID: id, Sequence: seq, Op: "image.ensure", DeadlineAt: now.Add(5 * time.Minute), Payload: payload}
+	return protocol.Op{ID: id, Sequence: seq, Op: "env.scrub", DeadlineAt: now.Add(5 * time.Minute), Payload: payload}
 }
 
 func refusal(e protocol.Endpoint, status int, code string) error {
@@ -183,7 +183,7 @@ func refusal(e protocol.Endpoint, status int, code string) error {
 }
 
 func TestRunsAnOpOncePostsItsResultAndMovesAfter(t *testing.T) {
-	h := newHarness(t, t.TempDir(), newGateway(ensureOp(1031, 7), ensureOp(1032, 8)))
+	h := newHarness(t, t.TempDir(), newGateway(envOp(1031, 7), envOp(1032, 8)))
 	if err := h.run(); err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestRunsAnOpOncePostsItsResultAndMovesAfter(t *testing.T) {
 }
 
 func TestTheResultIsJournalledBeforeItIsPosted(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	h := newHarness(t, t.TempDir(), gw)
 	var journalled bool
 	gw.resultErrs = []error{nil}
@@ -234,7 +234,7 @@ func (p postHook) PostResult(ctx context.Context, access string, id int64, r pro
 
 func TestARestartDoesNotRunAnOpAgain(t *testing.T) {
 	dir := t.TempDir()
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	first := newHarness(t, dir, gw)
 	// The result never arrives, and the runner is stopped while it retries.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -255,7 +255,7 @@ func TestARestartDoesNotRunAnOpAgain(t *testing.T) {
 	if second.ran[1] != 0 {
 		t.Fatal("the op ran again after the restart")
 	}
-	if gw.results[1].Status != protocol.StatusOK || gw.results[1].Data["pulled"] != true {
+	if gw.results[1].Status != protocol.StatusOK || gw.results[1].Data["outputs_emptied"] != true {
 		t.Fatalf("posted %#v", gw.results[1])
 	}
 
@@ -271,7 +271,7 @@ func TestARestartDoesNotRunAnOpAgain(t *testing.T) {
 
 func TestAnOpInterruptedByARestartIsNotRunAgain(t *testing.T) {
 	dir := t.TempDir()
-	op := ensureOp(5, 3)
+	op := envOp(5, 3)
 	j, _ := journal.Open(dir, func() time.Time { return now })
 	if err := j.Begin(op); err != nil {
 		t.Fatal(err)
@@ -289,16 +289,16 @@ func TestAnOpInterruptedByARestartIsNotRunAgain(t *testing.T) {
 
 func TestAGracefulStopDuringAnOpIsAnsweredAsInterrupted(t *testing.T) {
 	dir := t.TempDir()
-	gw := newGateway(ensureOp(5, 3))
+	gw := newGateway(envOp(5, 3))
 	first := newHarness(t, dir, gw)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// The handler runs until the runner is stopped, as a pull does on SIGTERM, and
+	// The handler runs until the runner is stopped, as a long op does on SIGTERM, and
 	// then fails because of the cancellation.
-	first.loop.Handlers["image.ensure"] = func(ctx context.Context, _ json.RawMessage) protocol.Result {
+	first.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
 		cancel()
 		<-ctx.Done()
-		return protocol.ErrorResult("image_pull_failed", "pulling failed: "+ctx.Err().Error())
+		return protocol.ErrorResult("scrub_failed", "scrubbing failed: "+ctx.Err().Error())
 	}
 	if err := first.loop.Run(ctx); err != nil {
 		t.Fatal(err)
@@ -321,7 +321,7 @@ func TestAGracefulStopDuringAnOpIsAnsweredAsInterrupted(t *testing.T) {
 }
 
 func TestAnOpPastItsDeadlineIsExpiredNotRun(t *testing.T) {
-	op := ensureOp(9, 1)
+	op := envOp(9, 1)
 	op.DeadlineAt = now.Add(-time.Second)
 	h := newHarness(t, t.TempDir(), newGateway(op))
 	if err := h.run(); err != nil {
@@ -346,7 +346,7 @@ func TestAnOpThisVersionDoesNotImplementAnswersAStableClass(t *testing.T) {
 }
 
 func TestANotFoundResultIsDropped(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1), ensureOp(2, 2))
+	gw := newGateway(envOp(1, 1), envOp(2, 2))
 	gw.resultErrs = []error{refusal(protocol.EndpointResult, 404, "not_found")}
 	h := newHarness(t, t.TempDir(), gw)
 	if err := h.run(); err != nil {
@@ -365,7 +365,7 @@ func TestARefusedResultIsNotResent(t *testing.T) {
 		refusal(protocol.EndpointResult, 422, "invalid_result"),
 		refusal(protocol.EndpointResult, 413, ""),
 	} {
-		gw := newGateway(ensureOp(1, 1))
+		gw := newGateway(envOp(1, 1))
 		gw.resultErrs = []error{err}
 		h := newHarness(t, t.TempDir(), gw)
 		if err := h.run(); err != nil {
@@ -381,7 +381,7 @@ func TestARefusedResultIsNotResent(t *testing.T) {
 }
 
 func TestResultsAreRetriedUntilAccepted(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	gw.resultErrs = []error{
 		refusal(protocol.EndpointResult, 429, ""),
 		refusal(protocol.EndpointResult, 503, ""),
@@ -400,7 +400,7 @@ func TestResultsAreRetriedUntilAccepted(t *testing.T) {
 }
 
 func TestDisabledRunnersBackOffAndKeepTheCredentials(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	gw.pollErrs = []error{
 		refusal(protocol.EndpointOps, 403, "runners_disabled"),
 		refusal(protocol.EndpointOps, 403, "runners_disabled"),
@@ -420,7 +420,7 @@ func TestDisabledRunnersBackOffAndKeepTheCredentials(t *testing.T) {
 }
 
 func TestAnAccessInvalidTokenRefreshesAndRetries(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	gw.pollErrs = []error{refusal(protocol.EndpointOps, 401, "invalid_token")}
 	h := newHarness(t, t.TempDir(), gw)
 	if err := h.run(); err != nil {
@@ -460,7 +460,7 @@ func TestARefusedPollStopsAsABug(t *testing.T) {
 }
 
 func TestNoTokenReachesTheLog(t *testing.T) {
-	gw := newGateway(ensureOp(1, 1))
+	gw := newGateway(envOp(1, 1))
 	gw.pollErrs = []error{refusal(protocol.EndpointOps, 401, "invalid_token"), refusal(protocol.EndpointOps, 403, "runners_disabled")}
 	gw.resultErrs = []error{&protocol.NetworkError{Endpoint: protocol.EndpointResult, Err: errors.New("reset")}}
 	h := newHarness(t, t.TempDir(), gw)

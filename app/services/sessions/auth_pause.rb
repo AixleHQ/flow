@@ -172,7 +172,9 @@ module Sessions
       end
 
       holders = credential.reload.live_holder_sessions.where.not(container_id: [ nil, "" ]).to_a
-      Agents::CredentialDelivery.new(runtime: container_runtime).deliver(credential, sessions: holders)
+      # Not this session's runtime: each holder is written through its own
+      # (ContainerRuntime.for_session), a runner's or the hosted one.
+      Agents::CredentialDelivery.new.deliver(credential, sessions: holders)
     end
 
     def heal_due?
@@ -251,7 +253,7 @@ module Sessions
     end
 
     def container_runtime
-      @runtime ||= ContainerRuntime.build
+      @runtime ||= ContainerRuntime.for_session(session)
     end
 
     def log(level, message)

@@ -41,4 +41,36 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
                            token_digest: "x", family_id: SecureRandom.uuid, expires_at: 1.hour.from_now).save!(validate: false)
     end
   end
+
+  # The key is checked at the commit, which a transactional test never reaches,
+  # so the test asks for the check at once.
+  test "the database ties the session that holds a machine to the machine's company" do
+    environment = create(:runner_environment, runner: @runner)
+    other_session = create(:runner_session)
+    assert_not_equal environment.company_id, other_session.company_id
+
+    error = assert_raises(ActiveRecord::InvalidForeignKey) do
+      RunnerEnvironment.transaction(requires_new: true) do
+        environment.update_columns(current_session_id: other_session.id)
+        check_session_company_key
+      end
+    end
+    assert_match "fk_runner_environments_current_session_company", error.message
+  end
+
+  test "a deleted session stops holding its machine, which the company key lets through" do
+    environment = create(:runner_environment, runner: @runner)
+    session = create(:runner_session, :holding, environment: environment)
+
+    session.destroy!
+
+    assert_nothing_raised { check_session_company_key }
+    assert_nil environment.reload.current_session_id
+  end
+
+  private
+
+  def check_session_company_key
+    RunnerEnvironment.connection.execute("SET CONSTRAINTS fk_runner_environments_current_session_company IMMEDIATE")
+  end
 end

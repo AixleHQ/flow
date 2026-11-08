@@ -24,11 +24,11 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 	classes := map[string]bool{
 		host.ClassUnsupportedOp: true, host.ClassInterrupted: true, host.ClassResultTooLarge: true,
 		ClassInvalidPayload: true, ClassDockerError: true, ClassImagePull: true,
-		ClassNoSessionContainer: true, ClassContainerExists: true, ClassImageNotFound: true,
+		ClassNoSessionContainer: true, ClassContainerExists: true,
 		ClassForbiddenMount: true, ClassContainerStartFailed: true, ClassVolumeNotOwned: true, ClassContainerNotOwned: true,
 		ClassExecFailed: true, ClassExecTimeout: true, ClassWriteFailed: true, ClassFileNotFound: true,
 		ClassNotAFile: true, ClassFileTooLarge: true, ClassBatchStepFailed: true,
-		ClassScrubFailed: true, ClassResetFailed: true,
+		ClassScrubFailed: true, ClassResetFailed: true, ClassSessionMismatch: true, ClassSessionRequired: true,
 	}
 	h := newEnvironment(t)
 	handlers := h.env.Handlers()
@@ -43,6 +43,7 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 				Given   string          `json:"given"`
 				As      string          `json:"as"`
 				Op      string          `json:"op"`
+				Session string          `json:"session"`
 				Payload json.RawMessage `json:"payload"`
 				Request *struct {
 					Path string         `json:"path"`
@@ -65,8 +66,17 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 					continue
 				}
 				// Each payload runs against an empty daemon: what matters is that it
-				// gets past the payload's checks.
-				r := handler(context.Background(), step.Payload)
+				// gets past the payload's checks. An op enqueued for a session
+				// carries one in its envelope, as the gateway delivers it.
+				var session *int64
+				if step.Session != "" {
+					id := sessionID
+					session = &id
+				}
+				r := handler(context.Background(), session, step.Payload)
+				if r.Error != nil && r.Error.Class == ClassSessionRequired {
+					t.Errorf("%s: the %s op is enqueued without a session", filepath.Base(file), step.Op)
+				}
 				if r.Error != nil && r.Error.Class == ClassInvalidPayload {
 					t.Errorf("%s: the %s payload %s is refused: %s", filepath.Base(file), step.Op, step.Payload, r.Error.Message)
 				}

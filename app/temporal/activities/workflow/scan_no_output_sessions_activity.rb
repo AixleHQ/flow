@@ -26,6 +26,9 @@ module Activities
         skipped    = 0
 
         candidate_sessions.find_each do |session|
+          # A runner session's ops are capped, so a machine that does not answer
+          # cannot hold up the sweep.
+          runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
           watchdog = Sessions::NoOutputWatchdog.new(session, runtime: runtime)
           unless watchdog.stale?
             skipped += 1
@@ -52,10 +55,6 @@ module Activities
           .where("mode IS NULL OR mode <> 'interactive'")
           .where.not(container_id: [ nil, "" ])
           .where.not(id: TerminalSession.auth_paused.select(:id))
-      end
-
-      def runtime
-        @runtime ||= ContainerRuntime.build
       end
     end
   end

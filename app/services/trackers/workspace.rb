@@ -31,7 +31,7 @@ module Trackers
       return if session&.container_id.blank?
 
       uid = AgentCredentialsService.for(session.agent_type).adapter.container_uid
-      new(runtime: ContainerRuntime.build, container: session.container_id, uid: uid)
+      new(runtime: ContainerRuntime.for_session(session), container: session.container_id, uid: uid)
     end
 
     def initialize(runtime:, container:, uid:)

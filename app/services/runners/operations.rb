@@ -4,9 +4,11 @@ module Runners
   # The queue between the platform and an environment's runner
   # (docs/design/agent-runtimes/DESIGN.md §2.3, §6.1, §6.4):
   #
-  #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now)
+  #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now, session:)  # nil unless session holds it
   #   ops = Runners::Operations.poll(environment, after: 41, wait: 25)   # GET /runner/v1/ops
   #   Runners::Operations.record_result!(operation, status: "ok", result: {...})
+  #   Runners::Operations.await(operation)                               # ContainerRuntime::RunnerRuntime
+  #   Runners::Operations.expire_overdue! / prune!                       # RunnerOperationsSweepWorkflow
   #
   # An enqueue wakes the environment's waiting polls through Action Cable's
   # pub/sub (Redis, config/cable.yml) on `runner_env_<id>`, once its transaction
@@ -34,24 +36,122 @@ module Runners
 
     RESULT_STATES = { "ok" => "completed", "error" => "failed", "expired" => "expired" }.freeze
 
+    # How long past its deadline an op that nobody waits for still waits for
+    # the runner's own answer before the sweep expires it (#expire_overdue!). A
+    # runner that received the op in time posts its result a moment after the
+    # deadline at most. The wait of #await has no grace: it ends at the deadline.
+    EXPIRY_GRACE = 10.seconds
+    # Finished ops older than this are pruned (DESIGN.md §2.3).
+    RETENTION = 7.days
+    PRUNE_BATCH = 1000
+
     module_function
 
-    # Puts a `pending` op with the environment's next sequence on its queue.
-    # The producer is ContainerRuntime::RunnerRuntime (§15 task 8); until then
-    # tests and local development call this.
-    def enqueue!(environment, op:, payload:, deadline_at:)
+    # Puts a `pending` op with the environment's next sequence on its queue,
+    # for `session`, and answers it, or nil when the session no longer holds
+    # the environment (runner_environments.current_session_id): then nothing
+    # is created. The hold is checked under the environment's row lock, which
+    # Runners::Machines takes too, so an op read for a session that has since
+    # released the machine never reaches the next session's machine, an
+    # environment op (`env.reset`) included.
+    #
+    # A session op carries its session in the envelope as `session_id`; an
+    # environment op carries none on the wire (RunnerOperation). The producer
+    # is ContainerRuntime::RunnerRuntime.
+    #
+    # The next sequence is the environment's own counter
+    # (runner_environments.op_sequence), so the prune and a session's deletion
+    # can remove any finished op.
+    def enqueue!(environment, op:, payload:, deadline_at:, session:)
       raise ArgumentError, "payload must be a Hash" unless payload.is_a?(Hash)
+      raise ArgumentError, "session is required" if session.nil?
 
       RunnerOperation.transaction do
-        # Serializes the enqueues of one environment, so the next sequence is
-        # taken by one of them at a time.
+        # Serializes the enqueues of one environment, and reads its holder and
+        # its counter fresh.
         environment.lock!
-        sequence = RunnerOperation.where(runner_environment_id: environment.id).maximum(:sequence).to_i + 1
-        operation = RunnerOperation.create!(runner_environment: environment, sequence: sequence, op: op,
-                                            payload: payload, deadline_at: deadline_at, state: :pending)
+        next nil unless environment.current_session_id == session.id
+
+        sequence = environment.op_sequence + 1
+        environment.update_columns(op_sequence: sequence)
+        operation = RunnerOperation.create!(runner_environment: environment,
+                                            terminal_session: (session unless RunnerOperation::ENVIRONMENT_OPS.include?(op)),
+                                            sequence: sequence, op: op, payload: payload,
+                                            deadline_at: deadline_at, state: :pending)
         ActiveRecord.after_all_transactions_commit { wake(environment.id, sequence) }
+        instrument("enqueued", environment.id, operation: operation)
         operation
       end
+    end
+
+    # Waits for the op's result and returns the op, finished. An op still
+    # without a result at its deadline is expired here, so the caller, whose
+    # activity the deadline was set inside, learns the outcome before the
+    # activity ends. Must not be called inside a transaction, which would hide
+    # the result from it.
+    #
+    # `on_wait` runs between two looks, an activity's heartbeat and
+    # cancellation check for one.
+    #
+    # Waiting by polling the database is to be revisited with P1 (DESIGN.md
+    # §16), for example with a wake-up on the pub/sub the long-poll already
+    # uses (#wake).
+    def await(operation, poll_interval: Settings.runners.op_poll_interval.to_f, on_wait: nil)
+      interval = poll_interval
+      loop do
+        operation = RunnerOperation.uncached { RunnerOperation.find(operation.id) }
+        return operation unless operation.deliverable?
+
+        if Time.current >= operation.deadline_at
+          expire!(operation)
+          return operation.reload
+        end
+
+        on_wait&.call
+        sleep(interval) if interval.positive?
+        interval = [ interval * 2, 1.0 ].min if interval.positive?
+      end
+    end
+
+    # Expires one op that has no result, as a runner's `expired` result would:
+    # the payload is nulled, and a result that arrives later changes nothing,
+    # since the first outcome wins.
+    def expire!(operation)
+      RunnerOperation.transaction do
+        operation.lock!
+        if operation.deliverable?
+          operation.payload = nil
+          operation.update!(state: :expired, completed_at: Time.current)
+        end
+      end
+      operation
+    end
+
+    # Expires every op past its deadline and EXPIRY_GRACE that has no result,
+    # `pending` or `delivered`, the ops nobody waits for:
+    # `delivered` does not prove the runner received an op (§5.4), so a runner
+    # that never answers must not leave it open.
+    # Rows a result holds are skipped, and the next sweep sees them settled.
+    def expire_overdue!(now: Time.current)
+      expired = 0
+      RunnerOperation.deliverable.where(deadline_at: ...(now - EXPIRY_GRACE)).in_batches(of: PRUNE_BATCH) do |batch|
+        RunnerOperation.transaction do
+          ids = batch.lock("FOR UPDATE SKIP LOCKED").pluck(:id)
+          expired += RunnerOperation.where(id: ids).deliverable.update_all(
+            state: "expired", encrypted_payload: nil, completed_at: now, updated_at: now
+          )
+        end
+      end
+      expired
+    end
+
+    # Deletes finished ops older than RETENTION. The sequence lives on the
+    # environment's counter (#enqueue!), so no row has to stay for it.
+    def prune!(now: Time.current)
+      scope = RunnerOperation.where(state: RunnerOperation::FINISHED_STATES).where(completed_at: ...(now - RETENTION))
+      pruned = 0
+      scope.in_batches(of: PRUNE_BATCH) { |batch| pruned += batch.delete_all }
+      pruned
     end
 
     # The environment's ops with `sequence > after`, oldest first, at most
@@ -162,8 +262,8 @@ module Runners
       ActiveRecord::Base.connection_pool.release_connection
     end
 
-    def instrument(event, environment_id, &)
-      ActiveSupport::Notifications.instrument("#{event}.runner_operations", environment_id: environment_id, &)
+    def instrument(event, environment_id, **payload, &)
+      ActiveSupport::Notifications.instrument("#{event}.runner_operations", environment_id: environment_id, **payload, &)
     end
 
     def monotonic_now

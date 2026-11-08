@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
@@ -22,7 +24,6 @@ import (
 // Result error classes of `container.start` (runner/protocol/PROTOCOL.md §6.2).
 const (
 	ClassContainerExists      = "container_exists"
-	ClassImageNotFound        = "image_not_found"
 	ClassForbiddenMount       = "forbidden_mount"
 	ClassContainerStartFailed = "container_start_failed"
 	// ClassVolumeNotOwned: a volume has the environment's name but not its label.
@@ -43,12 +44,13 @@ const WorkspaceTarget = "/workspace"
 // kills the container.
 const StopTimeout = 10
 
-// ContainerStartPayload is the payload of `container.start`.
+// ContainerStartPayload is the payload of `container.start`. The session is the
+// envelope's `session_id`, not a payload field.
 type ContainerStartPayload struct {
-	Image     string            `json:"image"`
-	Digest    string            `json:"digest"`
-	SessionID int64             `json:"session_id"`
-	Env       map[string]string `json:"env"`
+	// Image is the agent image's reference, a tag or a digest, as the platform
+	// was given it. `container.start` pulls it.
+	Image string            `json:"image"`
+	Env   map[string]string `json:"env"`
 	// WorkspaceVolume mounts `aixle-ws-<key>` at /workspace. Absent means true.
 	WorkspaceVolume     *bool      `json:"workspace_volume"`
 	Mounts              []Mount    `json:"mounts"`
@@ -104,13 +106,6 @@ func validTarget(field, p string) *protocol.Result {
 	return nil
 }
 
-func validSessionID(id int64) *protocol.Result {
-	if id <= 0 {
-		return invalid("`session_id` must be a positive integer, got %d", id)
-	}
-	return nil
-}
-
 // within says whether p is dir or inside it.
 func within(p, dir string) bool {
 	return p == dir || dir == "/" || strings.HasPrefix(p, dir+"/")
@@ -153,13 +148,10 @@ func (e *Environment) checkBind(source string) *protocol.Result {
 	return nil
 }
 
-func (e *Environment) containerSpec(p ContainerStartPayload) (*container.Config, *container.HostConfig, []string, *protocol.Result) {
-	ref, err := ImageEnsurePayload{Image: p.Image, Digest: p.Digest}.Reference()
+func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*container.Config, *container.HostConfig, []string, *protocol.Result) {
+	ref, err := imageReference(p.Image)
 	if err != nil {
 		return nil, nil, nil, invalid("%s", err.Error())
-	}
-	if r := validSessionID(p.SessionID); r != nil {
-		return nil, nil, nil, r
 	}
 
 	env := make([]string, 0, len(p.Env))
@@ -254,38 +246,67 @@ func (e *Environment) containerSpec(p ContainerStartPayload) (*container.Config,
 		Env:   env,
 		Labels: map[string]string{
 			LabelEnvironment: e.Key,
-			LabelSession:     strconv.FormatInt(p.SessionID, 10),
+			LabelSession:     strconv.FormatInt(sessionID, 10),
 		},
 	}
 	return config, host, volumes, nil
 }
 
-// ContainerStart is `container.start`: it creates and starts the session's agent
-// container from the image pinned by digest, running the image's own entrypoint
-// and command, as a hosted pod does. Nothing of the runner goes into it: no
-// binary, no socket, no token and nothing of the state directory.
-func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) protocol.Result {
+// ContainerStart is `container.start`: it pulls the payload's image, always, then
+// creates and starts the session's agent container from it, running the image's
+// own entrypoint and command, as a hosted pod does. Docker's create API does not
+// pull, and a failed pull is `image_pull_failed`, with nothing created. The container is
+// named and labelled with the envelope's session. Nothing of the runner goes into
+// it: no binary, no socket, no token and nothing of the state directory. Over
+// another session's container it answers `session_mismatch`; over its own, or
+// over a container of the environment that names no session, `container_exists`.
+//
+// The pull, the volumes, the create and the start run until the op's
+// `deadline_at` at most. Past it, nobody waits for the result, so nothing is
+// created, and the serial ops loop moves on to the session's next op, the
+// cleanup's `container.stop` and `env.reset` among them.
+func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
+	if deadline, ok := protocol.OpDeadline(ctx); ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
+	}
 	var p ContainerStartPayload
 	if r := decodePayload(raw, &p, "a container.start payload"); r != nil {
 		return *r
 	}
-	config, host, volumes, r := e.containerSpec(p)
+	config, host, volumes, r := e.containerSpec(p, sessionID)
 	if r != nil {
 		return *r
 	}
-	name := e.ContainerName(p.SessionID)
+	name := e.ContainerName(sessionID)
 
 	existing, err := e.containers(ctx)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, "listing the environment's containers failed: "+err.Error())
 	}
 	if len(existing) > 0 {
+		session := strconv.FormatInt(sessionID, 10)
 		var names []string
 		for _, c := range existing {
+			if other := c.Labels[LabelSession]; other != "" && other != session {
+				return protocol.ErrorResult(ClassSessionMismatch, fmt.Sprintf(
+					"environment %s has the session container %s of session %s, not the op's session %d; nothing was started",
+					e.Key, containerLabel(c), other, sessionID))
+			}
 			names = append(names, containerLabel(c))
 		}
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf(
 			"environment %s already has a container (%s): run container.stop or env.scrub first", e.Key, strings.Join(names, ", ")))
+	}
+
+	// Pulled once the cheap refusals above are out of the way, so a session
+	// that cannot start here pulls nothing.
+	if err := pull(ctx, e.API, config.Image); err != nil {
+		if r := pastDeadline(ctx, "the pull of "+config.Image); r != nil {
+			return *r
+		}
+		return protocol.ErrorResult(ClassImagePull, fmt.Sprintf("pulling %s failed: %v", config.Image, err))
 	}
 
 	// The volumes are created with the environment's label, so that reset finds
@@ -295,6 +316,9 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	for _, v := range volumes {
 		res, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}})
 		if err != nil {
+			if r := pastDeadline(ctx, "creating the volume "+v); r != nil {
+				return *r
+			}
 			return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("creating the volume %s failed: %v", v, err))
 		}
 		if got := res.Volume.Labels[LabelEnvironment]; got != e.Key {
@@ -304,11 +328,21 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 		}
 	}
 
+	if r := pastDeadline(ctx, "creating "+name); r != nil {
+		return *r
+	}
 	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Config: config, HostConfig: host})
 	switch {
 	case err == nil:
-	case cerrdefs.IsNotFound(err):
-		return protocol.ErrorResult(ClassImageNotFound, fmt.Sprintf("the daemon does not have %s: run image.ensure first (%v)", config.Image, err))
+	case ctx.Err() != nil:
+		// The daemon may have created it before the answer was cut off: by the
+		// op's deadline, or by the runner stopping. Either way it is removed.
+		removal := e.removeAfterFailedStart(ctx, name)
+		if r := pastDeadline(ctx, "creating "+name); r != nil {
+			return *r
+		}
+		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf(
+			"creating %s was cut short (%v); %s", name, ctx.Err(), removal))
 	case cerrdefs.IsConflict(err):
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf("creating %s failed: %v", name, err))
 	default:
@@ -316,10 +350,52 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	}
 	if _, err := e.API.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
 		// A container that never started is not left behind.
-		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), created.ID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
-		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("starting %s failed: %v", name, err))
+		removal := e.removeAfterFailedStart(ctx, created.ID)
+		if r := pastDeadline(ctx, "starting "+name); r != nil {
+			return *r
+		}
+		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("starting %s failed: %v; %s", name, err, removal))
 	}
 	return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"container_id": created.ID, "name": name}}
+}
+
+// defaultRemoveTimeout bounds the removal after a failed or cut-short
+// `container.start` when Environment.RemoveTimeout is zero.
+const defaultRemoveTimeout = 30 * time.Second
+
+// removeAfterFailedStart removes what a failed or cut-short `container.start`
+// may have left, and says in the answer's words what became of it. The removal
+// runs under its own timeout, not under the op's context, which has ended or
+// is about to: a stalled daemon then cannot hold up the serial ops loop. A
+// removal that fails is logged, and the answer stays `container_start_failed`:
+// the session still holds its machine, and the cleanup's `env.reset` removes a
+// container that is left (PROTOCOL.md §6.2).
+func (e *Environment) removeAfterFailedStart(ctx context.Context, ref string) string {
+	timeout := e.RemoveTimeout
+	if timeout <= 0 {
+		timeout = defaultRemoveTimeout
+	}
+	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+	_, err := e.API.ContainerRemove(removeCtx, ref, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	if err == nil || cerrdefs.IsNotFound(err) {
+		return "nothing was left"
+	}
+	e.logger().Warn("removing the container of a failed container.start failed; env.reset removes what is left",
+		"environment", e.Key, "container", ref, "error", err)
+	return fmt.Sprintf("removing what the daemon made failed (%v), and env.reset removes it", err)
+}
+
+// pastDeadline is the answer of a `container.start` whose deadline_at passed
+// during step, or nil while it has not. A context that ended because the runner
+// is stopping is not a deadline: the loop discards that result (host.Loop).
+func pastDeadline(ctx context.Context, step string) *protocol.Result {
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return nil
+	}
+	r := protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf(
+		"the op's deadline_at passed during %s; nobody waits for this result, so nothing was created", step))
+	return &r
 }
 
 func containerLabel(c container.Summary) string {
@@ -329,28 +405,26 @@ func containerLabel(c container.Summary) string {
 	return c.ID
 }
 
-// ContainerStopPayload is the payload of `container.stop`.
-type ContainerStopPayload struct {
-	SessionID int64 `json:"session_id"`
-}
+// ContainerStopPayload is the payload of `container.stop`: `{}`. The session is
+// the envelope's `session_id`.
+type ContainerStopPayload struct{}
 
-// ContainerStop is `container.stop`: it stops the session's container, giving the
-// entrypoint StopTimeout seconds to shut down, and removes it with its anonymous
-// volumes. The named volumes stay. A container that is already gone is not an
-// error. The name alone does not prove the container is the session's: one
-// without the environment's and the session's labels is refused and not touched.
-func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) protocol.Result {
+// ContainerStop is `container.stop`: it stops the envelope's session's container,
+// giving the entrypoint StopTimeout seconds to shut down, and removes it with its
+// anonymous volumes. The named volumes stay. The name alone does not prove the
+// container is the session's: one without the environment's and the session's
+// labels is refused and not touched. Without this session's container it answers
+// an error and touches nothing: `session_mismatch` when the environment's session
+// container is another session's, `no_session_container` when there is none.
+func (e *Environment) ContainerStop(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p ContainerStopPayload
-	if r := decodePayload(raw, &p, "{session_id}"); r != nil {
+	if r := decodePayload(raw, &p, "{}"); r != nil {
 		return *r
 	}
-	if r := validSessionID(p.SessionID); r != nil {
-		return *r
-	}
-	name := e.ContainerName(p.SessionID)
+	name := e.ContainerName(sessionID)
 	inspected, err := e.API.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
 	if cerrdefs.IsNotFound(err) {
-		return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"removed": false}}
+		return e.noContainerOf(ctx, sessionID)
 	}
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, fmt.Sprintf("inspecting %s failed: %v", name, err))
@@ -359,7 +433,7 @@ func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) pr
 	if inspected.Container.Config != nil {
 		labels = inspected.Container.Config.Labels
 	}
-	session := strconv.FormatInt(p.SessionID, 10)
+	session := strconv.FormatInt(sessionID, 10)
 	if labels[LabelEnvironment] != e.Key || labels[LabelSession] != session {
 		return protocol.ErrorResult(ClassContainerNotOwned, fmt.Sprintf(
 			"the container %s does not carry the labels %s=%s and %s=%s, so it is not this session's; it was not stopped or removed",
@@ -371,6 +445,23 @@ func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) pr
 		return protocol.ErrorResult(ClassDockerError, err.Error())
 	}
 	return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"removed": removed}}
+}
+
+// noContainerOf is the answer of `container.stop` when the environment has no
+// container of the session's name: the environment's session container, when it
+// has one, is another session's.
+func (e *Environment) noContainerOf(ctx context.Context, sessionID int64) protocol.Result {
+	c, err := e.sessionContainer(ctx)
+	if err != nil {
+		return protocol.ErrorResult(ClassDockerError, "finding the session container failed: "+err.Error())
+	}
+	if c != nil {
+		if r := checkSession(c, sessionID); r != nil {
+			return *r
+		}
+	}
+	return protocol.ErrorResult(ClassNoSessionContainer, fmt.Sprintf(
+		"environment %s has no container of session %d: nothing was stopped", e.Key, sessionID))
 }
 
 // removeContainer stops (when graceful) and removes a container. It answers

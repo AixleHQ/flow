@@ -41,3 +41,9 @@ agents:
 # uses stub_feature_env (test/support/feature_flags_helper.rb).
 feature_flags:
   env: ~
+
+# ContainerRuntime::RunnerRuntime looks for an op's result without sleeping:
+# the test's runner (ContainerRuntime::FakeHostRunner) answers an op as it is
+# enqueued.
+runners:
+  op_poll_interval: 0

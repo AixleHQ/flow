@@ -33,7 +33,7 @@ module Sessions
 
     def initialize(session, runtime: nil)
       @session = session
-      @runtime = runtime || ContainerRuntime.build
+      @runtime = runtime || ContainerRuntime.for_session(session)
     end
 
     def tail(lines:)

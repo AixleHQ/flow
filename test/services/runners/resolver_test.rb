@@ -17,13 +17,37 @@ class Runners::ResolverTest < ActiveSupport::TestCase
     assert_nil Runners::Resolver.resolve!(@run)
   end
 
-  test "a runner that passes every check is still refused in phase 1" do
+  test "a runner with no machine registered is unreachable, named, with what to do" do
     @run.update!(runner: @runner)
+    create(:runner_environment, runner: @runner, state: :gone)
 
     refusal = with_feature(:external_runners, true, company: @company) { refusal_for(@run) }
 
-    assert_equal "runner_execution_not_enabled", refusal.reason
-    assert_equal "Runner \"Prod VPC\" can't take sessions yet: runner execution not enabled.", refusal.message
+    assert_equal "runner_unreachable", refusal.reason
+    assert_equal "Runner \"Prod VPC\" has no machine registered. Register a machine on it, or pick another runner " \
+                 "on the workflow.", refusal.message
+  end
+
+  test "a runner whose every machine failed is unreachable, with the machines and how to bring one back" do
+    @run.update!(runner: @runner)
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01")
+    Runners::Machines.fail!(machine, "env.reset failed after session 3: the runner did not answer")
+
+    refusal = with_feature(:external_runners, true, company: @company) { refusal_for(@run) }
+
+    assert_equal "runner_unreachable", refusal.reason
+    assert_match(/\ARunner "Prod VPC" has no machine that can take a session: its machine failed: build-01 \(env.reset failed/,
+                 refusal.message)
+    assert_match(/run `aixle-runner unregister` on it, then `aixle-runner configure` again, or pick another runner on the workflow\.\z/,
+                 refusal.message)
+  end
+
+  test "a runner that passes every check and has a registered machine is returned, busy or not" do
+    @run.update!(runner: @runner)
+    machine = create(:runner_environment, runner: @runner)
+    machine.update!(current_session: create(:runner_session, environment: machine))
+
+    assert_equal @runner, with_feature(:external_runners, true, company: @company) { Runners::Resolver.resolve!(@run) }
   end
 
   test "without the flag for the company the runner is unavailable" do

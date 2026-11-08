@@ -71,6 +71,12 @@ workflows:
       - name: tool_results_cleanup_activity
         task_queue: aixle_ruby
 
+  - name: runner_operations_sweep_workflow
+    owner: aixle_ruby
+    activities:
+      - name: runner_operations_sweep_activity
+        task_queue: aixle_ruby
+
   - name: membership_invitation_reminder_workflow
     owner: aixle_ruby
     activities:

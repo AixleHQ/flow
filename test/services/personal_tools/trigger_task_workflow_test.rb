@@ -203,7 +203,7 @@ module PersonalTools
         [ picked, hosted ]
       end
 
-      assert_equal [ picked_runner.id, "failed", "runner_execution_not_enabled" ],
+      assert_equal [ picked_runner.id, "failed", "runner_unreachable" ],
                    [ picked.runner_id, picked.state, picked.failure_reason ]
       assert_nil hosted.runner_id
       assert_not_equal "failed", hosted.state

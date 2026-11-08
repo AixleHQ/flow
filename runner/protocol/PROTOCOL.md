@@ -250,7 +250,8 @@ Fixtures: `register/`, `headers/`.
 
 `aixle-runner unregister`: the machine leaves its runner. No body. `204 No Content` with an empty
 body. The machine's environment is marked gone and every token of the machine is revoked, so its
-next request is `invalid_token`.
+next request is `invalid_token`. A session that runs on the machine is not waited for (§8): the
+platform enqueues none of its ops from then on.
 
 Fixtures: `unregister/`.
 
@@ -291,7 +292,8 @@ Anything else is `400 invalid_request`.
 ```json
 {
   "ops": [
-    { "id": 1031, "sequence": 7, "op": "exec", "deadline_at": "2026-10-31T14:05:00Z", "payload": { } }
+    { "id": 1031, "sequence": 7, "op": "exec", "session_id": 123, "deadline_at": "2026-10-31T14:05:00Z", "payload": { } },
+    { "id": 1032, "sequence": 8, "op": "env.reset", "deadline_at": "2026-10-31T14:15:00Z", "payload": { } }
   ]
 }
 ```
@@ -367,19 +369,44 @@ An op, as `GET ops` returns it:
 | `id` | integer | The op's identity, used in its result's path and to recognise a redelivery. |
 | `sequence` | integer | Its position in the machine's queue. Each op's is greater than every earlier op's. |
 | `op` | string | The op's name, below. |
+| `session_id` | integer | The session a session op is for, above 0. A session op always has it; an environment op (`env.scrub`, `env.reset`) never has the key. |
 | `deadline_at` | timestamp | A runner that receives the op after this time does not run it, and reports `expired`. |
 | `payload` | object | The op's arguments. |
 
 The result shape is the body of §5.5.
 
+**The session ops** are `exec`, `write_file`, `read_file`, `batch`, `status`, `logs`,
+`container.start`, `container.stop`, `session.start` and `session.stop`. Every one of them acts
+for the session its envelope names, and for no other (§6.2, §6.3):
+
+- A session op whose envelope has no `session_id` is not run: it answers an `error` result with
+  `error.class` `session_required`.
+- A session op that finds the environment's session container labelled with another session
+  (`aixle.com/session`) does not touch it: it answers an `error` result with `error.class`
+  `session_mismatch`. This holds for `container.start` and `container.stop` too (§6.2). So a late
+  op of a finished session never reaches the next session's container.
+- A session op that finds no session container answers `no_session_container` (`status`
+  answers `missing` instead, §6.3).
+
+The platform sends a session's ops only while the session holds the machine; once it has
+released it, the platform answers them itself, as `no_session_container`, and enqueues nothing.
+The runner's check is the safety net for an op enqueued just before the release.
+
+**The platform's side of a deadline.** The platform stops waiting for an op at its `deadline_at`
+and marks it `expired`, as if the runner had answered `expired`. An op that nobody waits for any
+more, still without a result 10 seconds past its `deadline_at`, `pending` or `delivered`, is
+marked `expired` by the platform's sweep: `delivered` does not prove the runner received it
+(§5.4). A result that arrives later changes nothing (§5.5, the first result wins). Finished ops
+are kept 7 days. `sequence` comes from a per-machine counter, so it keeps growing after a prune.
+
 The op names of protocol 1 (DESIGN.md §6.4): `exec`, `write_file`, `read_file`, `batch`, `status`,
-`logs`, `session.start`, `session.stop`, `image.ensure`, `container.start`, `container.stop`,
-`env.scrub` and `env.reset`.
+`logs`, `session.start`, `session.stop`, `container.start`, `container.stop`, `env.scrub` and
+`env.reset`. There is no op that only pulls an image: `container.start` pulls it (§6.1).
 
 **Payload and result schemas.** The gateway carries the payload as an opaque object. Each op's
-payload and result, with its fixtures, are specified below: `image.ensure` (§6.1), the agent
-container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform side that
-enqueues them is task 8. `session.start` and `session.stop` are reserved and have no schema:
+payload and result, with its fixtures, are specified below: the agent image (§6.1), the agent
+container (§6.2), the session ops (§6.3) and scrub and reset (§6.4). The platform enqueues
+them from `ContainerRuntime::RunnerRuntime`, one op per runtime call of the session's strategy. `session.start` and `session.stop` are reserved and have no schema:
 a runner answers them `unsupported_op` (below).
 
 **Who runs them.** On `manual` the host runner runs every op of this section itself. It runs the
@@ -418,35 +445,30 @@ daemon, not to the runner, so a runner restart does not stop it: a command an `e
 keeps running in the container, and the restarted runner finds the container again by its
 labels.
 
-### 6.1 `image.ensure`
+### 6.1 The agent image
 
-A host-runner op (`manual`, and `coder` later): the runner makes sure the machine's Docker daemon
-has an agent image, pinned by digest, pulling it when it is missing.
+The agent image is pulled by `container.start` (§6.2), as a Kubernetes pod pulls its image: the
+platform never sends an op that only pulls, and its own pull phase does nothing on a runner.
 
-Payload:
+An `image` in a payload is an image reference as the platform was given it, by tag or by digest,
+e.g. `ghcr.io/aixlehq/flow-agent-claude-code:latest` or
+`ghcr.io/aixlehq/flow-agent-claude-code@sha256:…`. A reference with neither is read as `:latest`,
+as `docker pull` reads it. A value that is not a reference is `invalid_payload`.
 
-| Field | Type | Rule |
-| --- | --- | --- |
-| `image` | string | Required. The repository, without a digest, e.g. `ghcr.io/aixlehq/flow-agent-claude-code`. |
-| `digest` | string | Required. `sha256:` and 64 lowercase hex digits. |
+`container.start` always pulls the reference through the Docker Engine API before it creates the
+container, because Docker's create API does not pull. A tag that moved is followed, and the
+daemon downloads only the layers it lacks. There is no pull policy, and no digest is returned:
+the platform never contacts a registry.
 
-Other payload fields are ignored. The runner works on the reference `<image>@<digest>`. If the
-daemon has it, nothing is pulled. Otherwise the runner pulls it through the Docker Engine API.
-
-Results:
-
-| Outcome | `status` | `data` | `error.class` |
-| --- | --- | --- | --- |
-| The image is there, pulled or not | `ok` | `{"pulled": <boolean>, "duration_ms": <integer>}`: whether it was pulled, and how long the op took in milliseconds | |
-| The pull failed | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied` |
-| The daemon could not be asked whether it has the image | `error` | | `docker_error` |
-| The payload is not the one above | `error` | | `invalid_payload` |
-
-```json
-{ "status": "ok", "data": { "pulled": true, "duration_ms": 41250 } }
-```
-
-Fixtures: `ops/image_ensure.json`.
+The runner pulls with the Docker credentials of the user it runs as, resolved as the Docker CLI
+resolves them for `docker pull`: from that user's Docker configuration (`$DOCKER_CONFIG`, or
+`~/.docker/config.json`), credential helpers included, for the image's registry. Docker Hub's
+credentials are looked up under `https://index.docker.io/v1/`, where `docker login` stores them,
+for a reference on `docker.io` or `index.docker.io`. An operator who
+runs agent images from a private registry runs `docker login`, or configures a credential helper,
+as that user. With no credentials for the registry, the pull is anonymous. A pull that fails is the `container.start` outcome
+`image_pull_failed`, even with an older copy of the image on the daemon, and its message carries
+the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied`.
 
 ### 6.2 The agent container: `container.start` and `container.stop`
 
@@ -456,14 +478,18 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 
 | What | Name | Label |
 | --- | --- | --- |
-| The session container | `aixle-<key>-<session_id>` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
+| The session container | `aixle-<key>-<session_id>`, with the envelope's `session_id` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
 | The workspace volume | `aixle-ws-<key>` | `aixle.com/environment=<key>` |
 | A cache volume | `aixle-cache-<key>-<name>` | `aixle.com/environment=<key>` |
 
 #### `container.start`
 
-Creates and starts the session's agent container from the agent image pinned by digest. The
-container runs the image's own entrypoint and command, unchanged, as a hosted pod does. The
+Pulls the agent image (§6.1), then creates and starts the session's agent container from it,
+named and labelled with the envelope's `session_id`. The pull, the volumes, the create and the
+start run until the op's `deadline_at` at most: past it nobody waits for the result, so the op
+creates nothing more, removes a container whose create the deadline cut off, and answers
+`container_start_failed`, and the runner moves on to the next op. The container runs the image's own entrypoint and
+command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
 
@@ -471,9 +497,7 @@ Payload:
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `image` | string | Required. As in `image.ensure` (§6.1): the repository, without a digest. |
-| `digest` | string | Required. As in `image.ensure`. The daemon must have `<image>@<digest>`: `image.ensure` pulls it. |
-| `session_id` | integer | Required, above 0. The session's id, in the container's name and label. |
+| `image` | string | Required. The agent image's reference (§6.1), which the op always pulls before it creates the container. |
 | `env` | object | Optional, string to string. The container's environment variables, on top of the image's. A name must not be empty or contain `=`. |
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
@@ -513,11 +537,12 @@ Results:
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | The container runs | `ok` | `{"container_id": <string>, "name": <string>}` | |
-| The environment already has a container, of a session or left over | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
-| The daemon does not have the image | `error` | | `image_not_found` |
+| The environment has another session's container | `error` | | `session_mismatch`; the message names it and both sessions, and nothing is started |
+| The environment already has a container: this session's own, or one left over that names no session | `error` | | `container_exists`; the message names it. Run `container.stop` or `env.scrub` first. |
+| The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words (§6.1). Nothing is created. |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
-| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
+| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 ```json
@@ -526,17 +551,21 @@ Results:
 
 #### `container.stop`
 
-Stops the session's container, sending SIGTERM and SIGKILL 10 seconds later, and removes it with
-its anonymous volumes. The workspace and cache volumes stay. The name alone is not proof: a
-container named `aixle-<key>-<session_id>` that does not carry both
+Stops the container of the envelope's session, sending SIGTERM and SIGKILL 10 seconds later, and
+removes it with its anonymous volumes. The workspace and cache volumes stay. The name alone is
+not proof: a container named `aixle-<key>-<session_id>` that does not carry both
 `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
-`container_not_owned`, and is neither stopped nor removed.
+`container_not_owned`, and is neither stopped nor removed. Without a container of this session
+the op answers an `error` and touches nothing, so that the platform can tell "this session's
+container is already gone" from "the machine holds another session".
 
-Payload: `{"session_id": <integer above 0>}`.
+Payload: `{}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
-| The container is gone | `ok` | `{"removed": <boolean>}`: `false` when there was no container `aixle-<key>-<session_id>` to remove | |
+| The container is gone | `ok` | `{"removed": <boolean>}`: `false` only when the container went away while it was being stopped | |
+| The environment's session container is another session's | `error` | | `session_mismatch`; the container is not touched |
+| The environment has no session container | `error` | | `no_session_container` |
 | A container has the name but not both labels | `error` | | `container_not_owned`; the container is not touched |
 | The daemon refused | `error` | | `docker_error` |
 | The payload is not the one above | `error` | | `invalid_payload` |
@@ -546,9 +575,14 @@ Fixtures: `ops/container_start.json`, `ops/container_stop.json`.
 ### 6.3 The session ops
 
 `exec`, `write_file`, `read_file`, `batch`, `status` and `logs` act on the environment's session
-container, the one labelled `aixle.com/environment=<key>` and `aixle.com/session`. Protocol 1 has
-no `session_id` in the op envelope yet (§8): the environment's one session container is the
-target.
+container, the one labelled `aixle.com/environment=<key>` and `aixle.com/session`, and only when
+its `aixle.com/session` is the envelope's `session_id` (§6). Every step of a `batch` is checked
+the same way.
+
+| Outcome | `status` | `error.class` |
+| --- | --- | --- |
+| The envelope has no `session_id` | `error` | `session_required`; nothing is run |
+| The session container is another session's | `error` | `session_mismatch`; the message names the container and both sessions, and the container is not touched. `status` answers this too, not `missing`. |
 
 **Without a session container.** `exec`, and an `exec` in a `batch`, need the container
 running. `write_file`, `read_file` and `logs` need it to exist, and work on a container that has
@@ -566,13 +600,13 @@ Runs a command in the session container through the daemon's exec API, without a
 | `env` | object | Optional, string to string. Added to the container's environment for this command. |
 | `cwd` | string | Optional, an absolute path. Default: the image's working directory. |
 | `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
-| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. Absent or `0`: the op's `deadline_at` bounds the command instead, the same way, with the seconds left until it when the command starts (at least 1). After the deadline nobody waits for the result, and the runner runs one op at a time. |
+| `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. The op's `deadline_at` bounds it too: absent or `0`, or longer than the seconds left until `deadline_at` when the command starts, the command gets those seconds instead (at least 1), the same way. After the deadline nobody waits for the result, and the runner runs one op at a time. |
 | `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
 
 | Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
 | --- | --- | --- | --- | --- | --- |
 | The command ran, whatever its exit code | `ok` | Its exit code | Each up to the output cap | `{"stdout_truncated": <boolean>, "stderr_truncated": <boolean>}` | |
-| The command ran past its `timeout`, or without one past the op's `deadline_at`, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
+| The command ran past its `timeout`, or past the op's `deadline_at` when that came first, and was ended | `error` | `124` (or `137` after SIGKILL), when the daemon reported it | What it wrote, capped | as above | `exec_timeout` |
 | The daemon refused the exec | `error` | | | | `exec_failed` |
 | No running session container | `error` | | | | `no_session_container` |
 | The payload is not the one above | `error` | | | | `invalid_payload` |
@@ -694,8 +728,8 @@ Repository checkouts, the cache volumes and the pulled images stay. A workspace 
 not carry `aixle.com/environment=<key>` is not the environment's: step 3 does not mount it, nothing
 is emptied, and the scrub answers `scrub_failed` naming it.
 
-Payload: `{"image": <string>, "digest": <string>}`, as in `image.ensure`: the agent image the
-container of step 3 runs. The daemon must have it.
+Payload: `{"image": <string>}`, a reference as in §6.1: the agent image the container of step 3
+runs. The daemon must have it: the session's `container.start` pulled it.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
@@ -737,24 +771,21 @@ Fixtures: `ops/env_scrub_and_reset.json`.
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
-- `POST /runner/v1/check-in`, `POST /runner/v1/heartbeat`, `POST /runner/v1/sessions/:id/log`,
-  `POST /runner/v1/sessions/:id/events` and the callback proxy `/runner/v1/proxy/:route/*`: task 8
-  and later.
-- `session_id` in the op envelope: task 8. Until then the session ops act on the environment's one
-  session container (§6.3), so a late op of a finished session could reach the next session's
-  container. Task 8 moves it:
-  - `session_id` leaves the payloads of `container.start` and `container.stop` for the envelope.
-    Nothing is released, so no compatibility is needed;
-  - every session op checks the container's `aixle.com/session` label against it, and refuses on
-    a mismatch.
+- The callback proxy `/runner/v1/proxy/:route/*`: task 8b. `POST /runner/v1/check-in`,
+  `POST /runner/v1/heartbeat` and `POST /runner/v1/sessions/:id/log`: task 8c.
+  `POST /runner/v1/sessions/:id/events`: later.
 - Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
-  and `read_file` refuses a larger file. How larger output and files come back is task 8. Until
-  then a result whose encoded body is over the gateway's 2 MiB cap is answered
+  and `read_file` refuses a larger file. They come back through an upload to a signed URL with
+  task 8c. Until then a result whose encoded body is over the gateway's 2 MiB cap is answered
   `result_too_large` (§6).
 - `session.start` and `session.stop`: reserved, answered `unsupported_op`.
 - The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
   `GET /runner/v1/releases/:version/checksums`: task 10.
-- `409 busy` on `DELETE /registration` while a session runs: the first task that assigns a session
-  to a machine.
+- `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
+  without it: a machine unregistered during a session stops holding that session, the session's
+  next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
+  container is gone. That session's container keeps running on the machine: nothing can stop it,
+  because the runner is unregistered and its credentials are revoked, so the operator removes it
+  by hand. Scrub and return to service are tasks 11 and 13.
 - An endpoint that issues registration tokens ("Add machine"): task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.

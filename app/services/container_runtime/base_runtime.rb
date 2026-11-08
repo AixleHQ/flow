@@ -32,9 +32,27 @@ module ContainerRuntime
   #                                                ImagePullError when it can never start
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
+  # == Session
+  #   session_identity(session)                  → String, the runtime_id the create will have
+  #   cleanup_session(id)                        → void, removes the session's objects
+  #   session_absent?(id)                        → true/false
+  #   cleanup_ready?(id)                         → true/false
+  #
   # == Garbage collection
   #   list_session_resources                     → [ContainerRuntime::SessionResource]
   #   delete_session_resource(resource)          → true/false
+  #
+  # == Transactions
+  # A runtime call is external I/O: a Docker or Kubernetes request, or an op
+  # an external runner executes. It is never made inside a database
+  # transaction, on any runtime, hosted included. RunnerRuntime enqueues its op
+  # (Runners::Operations.enqueue!), which may join a caller's transaction, and
+  # then waits for the op's result: inside a transaction the runner's gateway
+  # cannot see the op until it commits, which it does only once the wait ends,
+  # so the op expires unanswered. Enqueueing atomically with other writes is
+  # legitimate; waiting for a result inside that transaction is what
+  # deadlocks. The test suite fails a runtime call made inside an application
+  # transaction (test/support/runtime_transaction_guard.rb).
   #
   # Raised by #wait_container when `timeout` elapses with the workload still running.
   class WaitTimeout < StandardError; end
@@ -74,6 +92,35 @@ module ContainerRuntime
     # Returns a digest String or nil. Docker-specific; nil by default.
     def image_digest(_image)
       nil
+    end
+
+    # -- Session --------------------------------------------------------------
+
+    # The identity (runtime_id) the session's create will have, known before
+    # the create runs, so the cleanup can find the object even if the answer
+    # to the create never arrives (AdmittedPhaseActivity).
+    def session_identity(_session)
+      raise NotImplementedError, "#{self.class.name} must implement #session_identity"
+    end
+
+    # Removes what the runtime holds for the session `id` names. Already gone
+    # counts as done.
+    def cleanup_session(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #cleanup_session"
+    end
+
+    # Whether the runtime holds nothing of the session `id` names any more.
+    def session_absent?(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #session_absent?"
+    end
+
+    # Whether the cleanup of the session `id` names may run now. False while
+    # the runtime still runs an earlier request of the session, so that the
+    # cleanup is not queued behind it (AdmittedPhaseActivity#cleanup retries).
+    # Every request of a hosted runtime has returned by the time its cleanup
+    # runs.
+    def cleanup_ready?(_id)
+      true
     end
 
     # -- Execution ------------------------------------------------------------

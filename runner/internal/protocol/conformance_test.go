@@ -463,6 +463,7 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		As      string          `json:"as"`
 		Name    string          `json:"name"`
 		Machine string          `json:"machine"`
+		Session string          `json:"session"`
 		Op      string          `json:"op"`
 		Payload json.RawMessage `json:"payload"`
 		Seconds int64           `json:"seconds"`
@@ -479,8 +480,14 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		w.define(s.As+".access_token", randomToken("aracc_"))
 		w.define(s.As+".refresh_token", randomToken("arref_"))
 		w.define(s.As+".environment_id", w.next())
+	case "session_on_machine":
+		w.lookup(s.Machine + ".access_token")
+		w.define(s.As+".id", w.next())
 	case "op_enqueued":
 		w.lookup(s.Machine + ".access_token")
+		if s.Session != "" {
+			w.lookup(s.Session + ".id")
+		}
 		var payload map[string]any
 		if json.Unmarshal(s.Payload, &payload) != nil || s.Op == "" {
 			t.Fatalf("op_enqueued needs an op and an object payload: %s", raw)

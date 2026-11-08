@@ -12,7 +12,7 @@ import (
 var t0 = time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 
 func op(id, seq int64) protocol.Op {
-	return protocol.Op{ID: id, Sequence: seq, Op: "image.ensure", DeadlineAt: t0.Add(5 * time.Minute)}
+	return protocol.Op{ID: id, Sequence: seq, Op: "env.scrub", DeadlineAt: t0.Add(5 * time.Minute)}
 }
 
 func TestEmptyJournalStartsAtZero(t *testing.T) {

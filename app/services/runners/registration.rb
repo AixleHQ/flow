@@ -5,7 +5,7 @@ module Runners
   # (docs/design/agent-runtimes/DESIGN.md §5.2, §6.2, §6.3): `aixle-runner
   # configure` spends a registration token on a new environment and its
   # access/refresh pair, and `aixle-runner unregister` marks the environment
-  # `gone` and revokes its credentials.
+  # `gone`, ends its hold on a session and revokes its credentials.
   module Registration
     Result = Data.define(:environment, :pair)
 
@@ -49,11 +49,16 @@ module Runners
     # revokes the same credential rows (Runner#revoke_credentials); a rotation
     # racing this either sees the environment `gone` or has its pair revoked
     # here.
+    #
+    # A session that holds the machine loses it: its next ops are not created
+    # and answer `no_session_container`, so the session fails as one whose
+    # container is gone, and its cleanup finds it absent and releases its
+    # admission (PROTOCOL.md §8).
     def unregister!(environment)
       RunnerEnvironment.transaction do
         Credentials.lock_live_runner!(environment.runner_id)
         environment.lock!
-        environment.update!(state: :gone)
+        environment.update!(state: :gone, current_session_id: nil)
         now = Time.current
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
       end

@@ -82,6 +82,22 @@ module Sessions
       assert_equal "rt-2", delivered_refresh_token
     end
 
+    # heal! renews the grant, then delivers it to every holder, on a real runtime
+    # (FakeRuntime), which test/support/runtime_transaction_guard.rb checks: no
+    # runtime call is made inside a database transaction, the renewal's included.
+    test "a heal that renews and delivers makes no runtime call inside a database transaction" do
+      travel 30.minutes
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: hash_including("refresh_token" => "rt-1"))
+        .to_return(status: 200, body: { access_token: "at-2", refresh_token: "rt-2", expires_in: 28_800 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :resumed, observe
+
+      assert_equal "rt-2", delivered_refresh_token
+      assert_empty RuntimeTransactionGuard.take
+    end
+
     test "pauses the step and its run when the login cannot be renewed" do
       @credential.mark_refresh_error!("invalid_grant", permanent: true)
 
@@ -185,6 +201,32 @@ module Sessions
     test "types nothing into a session that is not paused" do
       refute AuthPause.new(@session, runtime: @runtime).resume!
       refute_includes @runtime.execs, RESUME_PROMPT_TYPED
+    end
+
+    # A heal hands the grant to every holder of the credential, each through its
+    # own runtime (ContainerRuntime.for_session): a runner holder's goes to its
+    # machine, a hosted holder's to the hosted runtime.
+    test "a heal writes a runner holder through its machine and a hosted holder through the hosted runtime" do
+      runner = create(:runner, :manual, company: @company, created_by: @user)
+      machine = create(:runner_environment, runner: runner)
+      runner_holder = create(:runner_session, environment: machine, user: @user, company: @company, project: @project,
+                                              agent_type: "claude_code", state: "ready", started_at: 1.hour.ago,
+                                              container_id: "aixle-#{machine.key}-runner")
+      machine.update!(current_session: runner_holder)
+      ContainerRuntime::FakeHostRunner.identify!(runner_holder, runner_holder.container_id)
+      host_runner = ContainerRuntime::FakeHostRunner.new(machine)
+      host_runner.machine.start(runner_holder.id)
+
+      assert_equal :resumed, observe
+
+      assert_equal "rt-1", delivered_refresh_token, "the paused hosted session took it through the hosted runtime"
+      write = host_runner.operations.find { |op| op[:op] == "write_file" }
+      assert write, "the runner holder was written through its machine: #{host_runner.ops.inspect}"
+      assert_equal runner_holder.id, write[:session_id]
+      written = host_runner.machine.container.files["/home/claude/.claude/.credentials.json"]
+      assert_equal "rt-1", JSON.parse(written).dig("claudeAiOauth", "refreshToken")
+    ensure
+      host_runner&.stop
     end
   end
 end

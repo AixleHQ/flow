@@ -104,6 +104,15 @@ module ContainerRuntime
       container.exec(cmd, opts)
     end
 
+    # See BaseRuntime#exec!: a container the daemon does not know is
+    # unreachable, not a command that failed.
+    def exec!(id, cmd, opts = {})
+      container = resolve_container(id)
+      raise ContainerUnreachableError.new(nil, container_identifier: container_identifier(id)) if container.nil?
+
+      exec(container, cmd, opts)
+    end
+
     # -- File I/O -------------------------------------------------------------
 
     def write_file(id, path, content, mode: 0o644, uid: 0, gid: 0)

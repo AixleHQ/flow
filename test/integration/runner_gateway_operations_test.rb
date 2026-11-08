@@ -45,7 +45,7 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_operator elapsed, :<, 5
     assert_equal "no-store", response.headers["Cache-Control"]
-    assert_equal [ { "id" => operation.id, "sequence" => 1, "op" => "exec",
+    assert_equal [ { "id" => operation.id, "sequence" => 1, "op" => "exec", "session_id" => operation.terminal_session_id,
                      "deadline_at" => operation.deadline_at.iso8601, "payload" => { "cmd" => [ "true" ] } } ],
                  response.parsed_body["ops"]
     operation.reload
@@ -393,8 +393,11 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
   private
 
+  # An op is for the session that holds the machine.
   def enqueue(environment = @environment, op: "exec", payload: { "cmd" => "true" })
-    Runners::Operations.enqueue!(environment, op: op, payload: payload, deadline_at: 5.minutes.from_now.change(usec: 0))
+    session = environment.reload.current_session || create(:runner_session, :holding, environment: environment)
+    Runners::Operations.enqueue!(environment, op: op, payload: payload, session: session,
+                                              deadline_at: 5.minutes.from_now.change(usec: 0))
   end
 
   def headers_for(token)

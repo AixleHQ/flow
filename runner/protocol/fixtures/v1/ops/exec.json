@@ -6,8 +6,14 @@
       "as": "m"
     },
     {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "ran",
       "op": "exec",
       "payload": {
@@ -30,6 +36,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "failed",
       "op": "exec",
       "payload": {
@@ -44,6 +51,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "capped",
       "op": "exec",
       "payload": {
@@ -56,6 +64,7 @@
     {
       "given": "op_enqueued",
       "machine": "m",
+      "session": "s",
       "as": "timed_out",
       "op": "exec",
       "payload": {
@@ -84,6 +93,9 @@
                 "$var": "ran.sequence"
               },
               "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "ran.deadline_at"
               },
@@ -112,6 +124,9 @@
                 "$var": "failed.sequence"
               },
               "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "failed.deadline_at"
               },
@@ -132,6 +147,9 @@
                 "$var": "capped.sequence"
               },
               "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "capped.deadline_at"
               },
@@ -150,6 +168,9 @@
                 "$var": "timed_out.sequence"
               },
               "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
               "deadline_at": {
                 "$var": "timed_out.deadline_at"
               },

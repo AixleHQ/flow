@@ -36,8 +36,13 @@ type fakeEngine struct {
 	pullError string
 	// pullStatus, when set, refuses the pull with that HTTP status before streaming.
 	pullStatus int
-	pulls      []string
-	rootDir    string
+	// pullDelay holds every pull that long before it answers, or until the
+	// client gives up.
+	pullDelay time.Duration
+	pulls     []string
+	// pullAuths is the X-Registry-Auth of every pull, "" for an anonymous one.
+	pullAuths []string
+	rootDir   string
 
 	containers map[string]*fakeContainer
 	execs      map[string]*fakeExec
@@ -52,7 +57,15 @@ type fakeEngine struct {
 	// release ends every exec that is still blocked when the test ends.
 	release chan struct{}
 	creates []container.CreateRequest
-	removed []string
+	// onCreate, when set, runs once a create has made its container. The create
+	// then never answers: it waits until the client gives up.
+	onCreate func()
+	removed  []string
+	// removeBlocks keeps every container removal from answering until the
+	// client gives up, as a stalled daemon does.
+	removeBlocks bool
+	// removeError refuses every container removal with a 500.
+	removeError string
 }
 
 type fakeContainer struct {
@@ -144,8 +157,22 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"Id": "sha256:" + strings.Repeat("0", 64), "RepoDigests": []string{ref}})
 	case p == "/images/create" && r.Method == http.MethodPost:
-		ref := r.URL.Query().Get("fromImage") + "@" + r.URL.Query().Get("tag")
+		// The SDK sends a digest as the `tag`, as the daemon's API takes it.
+		tag := r.URL.Query().Get("tag")
+		separator := ":"
+		if strings.HasPrefix(tag, "sha256:") {
+			separator = "@"
+		}
+		ref := r.URL.Query().Get("fromImage") + separator + tag
 		f.pulls = append(f.pulls, ref)
+		f.pullAuths = append(f.pullAuths, r.Header.Get("X-Registry-Auth"))
+		if f.pullDelay > 0 {
+			select {
+			case <-time.After(f.pullDelay):
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if f.pullStatus != 0 {
 			writeJSON(w, f.pullStatus, map[string]any{"message": "pull access denied for " + r.URL.Query().Get("fromImage")})
 			return
@@ -153,12 +180,12 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		enc := json.NewEncoder(w)
-		_ = enc.Encode(map[string]any{"status": "Pulling from " + r.URL.Query().Get("fromImage"), "id": r.URL.Query().Get("tag")})
+		_ = enc.Encode(map[string]any{"status": "Pulling from " + r.URL.Query().Get("fromImage"), "id": tag})
 		if f.pullError != "" {
 			_ = enc.Encode(map[string]any{"errorDetail": map[string]any{"message": f.pullError}, "error": f.pullError})
 			return
 		}
-		_ = enc.Encode(map[string]any{"status": "Digest: " + r.URL.Query().Get("tag")})
+		_ = enc.Encode(map[string]any{"status": "Digest: " + tag})
 		f.images[ref] = true
 	default:
 		notFound(w, r)
@@ -217,6 +244,15 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		f.waitContainer(w, r, ref)
 		return
 	}
+	if action == "" && r.Method == http.MethodDelete {
+		f.mu.Lock()
+		blocks := f.removeBlocks
+		f.mu.Unlock()
+		if blocks {
+			<-r.Context().Done()
+			return
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	c := f.lookup(ref)
@@ -247,6 +283,10 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		config, host := c.Config, c.Host
 		writeJSON(w, http.StatusOK, container.InspectResponse{ID: c.ID, Name: "/" + c.Name, State: &state, Config: &config, HostConfig: &host, Image: "sha256:" + strings.Repeat("1", 64)})
 	case action == "" && r.Method == http.MethodDelete:
+		if f.removeError != "" {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": f.removeError})
+			return
+		}
 		if c.State.Running && r.URL.Query().Get("force") != "1" {
 			writeJSON(w, http.StatusConflict, map[string]any{"message": "container is running"})
 			return
@@ -336,6 +376,15 @@ func (f *fakeEngine) createContainer(w http.ResponseWriter, r *http.Request) {
 	c := &fakeContainer{ID: f.nextID(), Name: name, Config: *req.Config, Host: *req.HostConfig,
 		State: container.State{Status: container.StateCreated}, Files: map[string]*fakeFile{}, exited: make(chan struct{})}
 	f.containers[c.ID] = c
+	if f.onCreate != nil {
+		// The container exists, but its answer waits until the client gives up.
+		hook := f.onCreate
+		f.mu.Unlock()
+		hook()
+		<-r.Context().Done()
+		f.mu.Lock()
+		return
+	}
 	writeJSON(w, http.StatusCreated, map[string]any{"Id": c.ID, "Warnings": []string{}})
 }
 
@@ -578,6 +627,8 @@ func newFakeEngine(t *testing.T) (*fakeEngine, *client.Client) {
 		containers: map[string]*fakeContainer{}, execs: map[string]*fakeExec{}, volumes: map[string]*fakeVolume{},
 		release: make(chan struct{}),
 	}
+	// No credentials of the machine the tests run on reach a pull.
+	withDockerConfig(t, `{}`)
 	server := httptest.NewServer(f)
 	t.Cleanup(server.Close)
 	t.Cleanup(func() { close(f.release) })

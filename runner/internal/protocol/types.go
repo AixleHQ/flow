@@ -24,6 +24,8 @@ type deadlineKey struct{}
 
 // WithOpDeadline carries an op's `deadline_at` to its handler. It is a value, not
 // a context deadline: the context ending still means that the runner is stopping.
+// A handler that must stop at the deadline (`container.start`) derives a context
+// deadline from it for its own steps.
 func WithOpDeadline(ctx context.Context, deadline time.Time) context.Context {
 	return context.WithValue(ctx, deadlineKey{}, deadline)
 }
@@ -66,11 +68,13 @@ type Registration struct {
 	TokenPair
 }
 
-// Op is one op of a GET ops answer (§6).
+// Op is one op of a GET ops answer (§6). SessionID is set on a session op and
+// absent on an environment op.
 type Op struct {
 	ID         int64           `json:"id"`
 	Sequence   int64           `json:"sequence"`
 	Op         string          `json:"op"`
+	SessionID  *int64          `json:"session_id,omitempty"`
 	DeadlineAt time.Time       `json:"deadline_at"`
 	Payload    json.RawMessage `json:"payload"`
 }

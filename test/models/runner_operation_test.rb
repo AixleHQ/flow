@@ -67,6 +67,17 @@ class RunnerOperationTest < ActiveSupport::TestCase
     end
   end
 
+  test "the database ties an op's session to the op's company" do
+    other_session = create(:runner_session)
+    assert_not_equal @environment.company_id, other_session.company_id
+
+    error = assert_raises(ActiveRecord::InvalidForeignKey) do
+      build_operation(op: "exec", terminal_session: other_session, runner: @environment.runner,
+                      company: @environment.company).save!(validate: false)
+    end
+    assert_match "fk_runner_operations_session_company", error.message
+  end
+
   test "an environment's ops go with it" do
     build_operation.save!
 
@@ -78,7 +89,7 @@ class RunnerOperationTest < ActiveSupport::TestCase
   private
 
   def build_operation(payload: { "cmd" => "true" }, **attributes)
-    RunnerOperation.new({ runner_environment: @environment, sequence: 1, op: "exec", state: :pending,
+    RunnerOperation.new({ runner_environment: @environment, sequence: 1, op: "env.scrub", state: :pending,
                           deadline_at: 1.minute.from_now, payload: payload }.merge(attributes))
   end
 

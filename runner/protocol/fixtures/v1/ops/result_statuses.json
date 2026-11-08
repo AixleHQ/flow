@@ -2,9 +2,10 @@
   "description": "A result's `status` sets the op's state: `ok` completes it, `error` fails it and `expired` expires it. The answer is {id, state}.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
-    {"given": "op_enqueued", "machine": "m", "as": "a", "op": "exec", "payload": {"cmd": ["true"]}},
-    {"given": "op_enqueued", "machine": "m", "as": "b", "op": "exec", "payload": {"cmd": ["true"]}},
-    {"given": "op_enqueued", "machine": "m", "as": "c", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
+    {"given": "op_enqueued", "machine": "m", "session": "s", "as": "a", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "op_enqueued", "machine": "m", "session": "s", "as": "b", "op": "exec", "payload": {"cmd": ["true"]}},
+    {"given": "op_enqueued", "machine": "m", "session": "s", "as": "c", "op": "exec", "payload": {"cmd": ["true"]}},
     {
       "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
       "response": {"status": 200}

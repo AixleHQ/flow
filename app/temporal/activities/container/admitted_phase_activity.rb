@@ -15,10 +15,16 @@ module Activities
       # stay usable instead of needing an operator. Every client we speak to
       # raises its own error class on the wire — Kubeclient::HttpError,
       # Docker::Error::*, Errno, OpenSSL, Timeout — so none of these can be a
-      # half-sent RPC. Anything outside this list keeps AD-5's default: unknown
-      # means the slot is held.
+      # half-sent RPC. Runners::Machines::NoMachine is raised by
+      # RunnerRuntime#create_container's machine acquisition, before this
+      # attempt sends any runner op: a machine unregistered or failed after the
+      # launch resolved its runner. A replayed create whose first attempt was
+      # dispatched is resolved the same way: its machine is out of rotation, so
+      # no other session meets that container. Anything outside this list keeps
+      # AD-5's default: unknown means the slot is held.
       NEVER_DISPATCHED = [
-        ActiveRecord::ActiveRecordError, NoMethodError, NameError, ArgumentError, TypeError, KeyError
+        ActiveRecord::ActiveRecordError, NoMethodError, NameError, ArgumentError, TypeError, KeyError,
+        Runners::Machines::NoMachine
       ].freeze
 
       def run(input)
@@ -45,9 +51,11 @@ module Activities
           return operation.result.deep_symbolize_keys if operation.state == "completed"
 
           if phase == "create_container"
-            runtime = ContainerRuntime.build
-            # Identity is persisted before the create so cleanup can find the
-            # object even if the answer to the create never arrives.
+            runtime = ContainerRuntime.for_session(session)
+            # Identity is persisted before the create, for every runtime, so
+            # cleanup can find the object even if the answer to the create
+            # never arrives, and a failure or a stop in this phase (a runner's
+            # pull included) still reaches `cleanup_session`.
             admission.update!(runtime_id: runtime.session_identity(session), runtime_kind: runtime.class.name)
             state.delete(:container_id)
           end
@@ -104,7 +112,8 @@ module Activities
 
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
         resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) } ||
-          cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError)
+          cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError) ||
+          cause.is_a?(ContainerRuntime::CreateRefusedError)
         operation.update!(state: resolved ? "retryable" : "uncertain", error: "#{cause.class}: #{error.message}")
       end
 
@@ -117,11 +126,15 @@ module Activities
           unresolved = admission.session_runtime_operations.pinning.exists?
         end
 
-        runtime = ContainerRuntime.build
+        runtime = ContainerRuntime.for_session(session)
         raise "Runtime changed; operator reconciliation required" if admission.runtime_kind && admission.runtime_kind != runtime.class.name
 
         absent = admission.runtime_id.blank? || runtime.session_absent?(admission.runtime_id)
-        unless absent
+        # A runtime that still runs an earlier request of the session (an
+        # external runner's `container.start` the stop cut short) takes no
+        # cleanup behind it: the pass comes back pending and is retried, until
+        # that request has its answer or its deadline.
+        if !absent && runtime.cleanup_ready?(admission.runtime_id)
           state = collect_outputs(admission, session, state)
           runtime.cleanup_session(admission.runtime_id)
           absent = runtime.session_absent?(admission.runtime_id)
