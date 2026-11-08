@@ -50,7 +50,7 @@ module Sessions
       AuthPause.new(session.reload, runtime: @runtime).observe(BANNER_PANE)
     end
 
-    RESUME_PROMPT_TYPED = [ "tmux", "send-keys", "-t", "agent", "-l", Agents::BaseAdapter::AUTH_RESUME_PROMPT ].freeze
+    RESUME_PROMPT_TYPED = PaneInput.command(Agents::BaseAdapter::AUTH_RESUME_PROMPT).freeze
 
     def delivered_refresh_token
       written = @runtime.read_file(nil, "/home/claude/.claude/.credentials.json")
@@ -155,7 +155,6 @@ module Sessions
       assert AuthPause.new(@session, runtime: @runtime).resume!
 
       assert_includes @runtime.execs, RESUME_PROMPT_TYPED
-      assert_includes @runtime.execs, [ "tmux", "send-keys", "-t", "agent", "Enter" ]
       refute AuthPause.paused?(@session.reload)
       assert_equal "running", @run.reload.state
     end

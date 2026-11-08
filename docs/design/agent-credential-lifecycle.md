@@ -289,7 +289,8 @@ population that causes the incident.
 **What shipped in place of the first sketch of 2c.** The sweep no longer stands down on
 every held credential. It splits them: a credential whose every holder has been silent for
 ten minutes (`IDLE_BEFORE_REFRESH`, read through the same pane the no-output watchdog
-reads, and judged like it by whether the screen changed rather than by bytes) is refreshed
+reads, and judged like it: by whether the screen changed for Kiro, by the log's bytes for
+the other runtimes) is refreshed
 and the result delivered; one with a holder mid-turn still defers, and
 an unreadable container counts as working rather than as idle. That covers the incident
 shape — a session parked for twenty hours — without rotating a grant under an agent that

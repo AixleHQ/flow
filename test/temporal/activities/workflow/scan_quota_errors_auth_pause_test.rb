@@ -44,7 +44,7 @@ module Activities
 
         assert_equal 0, result[:auth_paused]
         refute Sessions::AuthPause.paused?(@session.reload)
-        assert_includes @runtime.execs, [ "tmux", "send-keys", "-t", "agent", "-l", Agents::BaseAdapter::AUTH_RESUME_PROMPT ]
+        assert_includes @runtime.execs, Sessions::PaneInput.command(Agents::BaseAdapter::AUTH_RESUME_PROMPT)
       end
 
       test "still fails a step that ran out of credit" do

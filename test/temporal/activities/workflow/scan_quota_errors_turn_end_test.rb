@@ -33,7 +33,7 @@ module Activities
 
         assert_equal 1, result[:nudged]
         assert_equal 0, result[:cleaned]
-        assert_includes @runtime.execs, [ "tmux", "send-keys", "-t", "agent", "-l", Sessions::TurnEndNudge::MESSAGE ]
+        assert_includes @runtime.execs, Sessions::PaneInput.command(Sessions::TurnEndNudge::MESSAGE)
         assert_equal "ready", @session.reload.state
       end
 

@@ -207,7 +207,8 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
   reminder typed into its terminal a minute or two later, up to 3 times. If it
   stops a fourth time, the step fails with a message saying so. Nothing is typed
   while someone has typed into the session's terminal in the last 10 minutes.
-  On every runtime, a step whose terminal screen has not changed for 30 minutes
-  fails.
+  A step whose terminal stays unchanged fails 30 to 35 minutes later. For Kiro,
+  "unchanged" means its screen, even while the terminal keeps redrawing it; for
+  other runtimes, that the terminal sent no output at all.
 
 Writing the instructions themselves: see the [Prompt guide](prompt-guide.md).

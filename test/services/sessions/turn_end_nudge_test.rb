@@ -4,7 +4,7 @@ require "test_helper"
 
 module Sessions
   class TurnEndNudgeTest < ActiveSupport::TestCase
-    REMINDER = [ "tmux", "send-keys", "-t", "agent", "-l", TurnEndNudge::MESSAGE ].freeze
+    REMINDER = PaneInput.command(TurnEndNudge::MESSAGE).freeze
 
     setup do
       @user = create(:user, :with_company)
@@ -43,7 +43,6 @@ module Sessions
       assert_equal :nudged, observe_twice(pane("turn_ended"))
 
       assert_equal 1, reminders
-      assert_includes @runtime.execs, [ "tmux", "send-keys", "-t", "agent", "Enter" ]
       assert_equal 1, @session.reload.metadata[TurnEndNudge::COUNT_KEY]
       assert_equal "ready", @session.state
     end
@@ -94,6 +93,44 @@ module Sessions
 
       assert_equal :pending, observe_twice(pane("turn_ended"))
       assert_equal 0, reminders
+    end
+
+    # The reminder is counted, and the confirmed screen forgotten, before it is typed: a
+    # Temporal retry of a scan that was cut off after tmux took the keys finds nothing
+    # confirmed and types nothing.
+    test "an interruption after the keys were sent does not send the reminder again" do
+      @runtime.raise_on_exec("send-keys", error: Timeout::Error.new("worker cut off"))
+
+      assert_equal :pending, observe_twice(pane("turn_ended"))
+      assert_equal 1, reminders, "tmux was handed the reminder once"
+      assert_equal 1, @session.reload.metadata[TurnEndNudge::COUNT_KEY]
+
+      assert_equal :pending, TurnEndNudge.new(@session.reload, runtime: @runtime).observe(pane("turn_ended"))
+      assert_equal 1, reminders
+    end
+
+    test "two scans that confirmed the same screen send one reminder" do
+      TurnEndNudge.new(@session, runtime: @runtime).observe(pane("turn_ended"))
+      travel 1.minute
+      first = TurnEndNudge.new(@session.reload, runtime: @runtime)
+      second = TurnEndNudge.new(@session.reload, runtime: @runtime)
+
+      assert_equal :nudged, first.observe(pane("turn_ended"))
+      assert_equal :pending, second.observe(pane("turn_ended"))
+
+      assert_equal 1, reminders
+      assert_equal 1, @session.reload.metadata[TurnEndNudge::COUNT_KEY]
+    end
+
+    test "a reminder that could not be typed still counts toward the limit" do
+      @runtime.fail_exec("send-keys", times: 1)
+
+      assert_equal :pending, observe_twice(pane("turn_ended"))
+      assert_equal 1, @session.reload.metadata[TurnEndNudge::COUNT_KEY]
+
+      travel 1.minute
+      assert_equal :nudged, observe_twice(pane("turn_ended"))
+      assert_equal 2, @session.reload.metadata[TurnEndNudge::COUNT_KEY]
     end
 
     test "the turn end after the last reminder fails the session with a clear message" do

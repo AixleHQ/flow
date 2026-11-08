@@ -58,7 +58,7 @@ class TurnEndDetector
   end
 
   def self.current_screen(text)
-    text.to_s.dup.force_encoding(Encoding::UTF_8).scrub.lines.map(&:rstrip).reject(&:empty?).last(TAIL_LINES)
+    Sessions::ScreenDigest.lines(text, last: TAIL_LINES)
   end
   private_class_method :current_screen
 end

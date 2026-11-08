@@ -15,9 +15,20 @@ module Sessions
   # When the screen has not changed for NO_OUTPUT_THRESHOLD the session is stuck: blocked
   # on an interactive prompt, parked at its prompt after a turn that ended without
   # `finish_session`, or dead without signalling. A working session keeps its screen
-  # changing: Kiro shows `Kiro is working · 1m 15s`, Claude Code and Codex a ticking timer.
+  # changing: Kiro shows `Kiro is working · 1m 15s`.
+  #
+  # The screen rule applies only to the runtimes in SCREEN_RULE_RUNTIMES, whose working
+  # screen was measured to change on every read. Every other runtime keeps the log-mtime
+  # rule: an indicator that animates only through colour, or a spinner without a timer,
+  # can give the same capture on two reads while the agent works, and the screen rule
+  # would then reap a working session and let the token-refresh sweep rotate a grant
+  # under an agent mid-turn.
   class NoOutputWatchdog
     NO_OUTPUT_THRESHOLD = 30.minutes
+
+    # Opt-in, like TurnEndDetector::SIGNATURES: a runtime joins once its working screen,
+    # tool calls included, has been captured on its pinned CLI and shown to change.
+    SCREEN_RULE_RUNTIMES = %w[kiro_cli].freeze
 
     # Enough of the pane to carry the banner a stalled CLI last printed. The mtime the
     # staleness check needs comes with the same read, so naming the cause costs nothing.
@@ -31,11 +42,16 @@ module Sessions
       @runtime = runtime
     end
 
+    def self.screen_rule?(agent_type)
+      SCREEN_RULE_RUNTIMES.include?(agent_type.to_s)
+    end
+
     def stale?
       silent_for?(NO_OUTPUT_THRESHOLD)
     end
 
-    # Whether the screen has not changed for at least `duration`. Callers other than the
+    # Whether the screen has not changed for at least `duration`; for a runtime outside
+    # SCREEN_RULE_RUNTIMES, whether the log got no bytes for that long. Callers other than the
     # watchdog use a shorter one: the token-refresh sweep asks it to tell a session that
     # is merely parked at a prompt from one with an agent mid-turn, because rotating a
     # grant under the first is recoverable and under the second is not. Both callers'
@@ -76,6 +92,7 @@ module Sessions
     def observe_screen
       return nil unless tail.status == :ok
       return nil if tail.last_output_at.nil?
+      return tail.last_output_at unless self.class.screen_rule?(session.agent_type)
 
       digest = ScreenDigest.of(tail.text)
       metadata = session.metadata || {}

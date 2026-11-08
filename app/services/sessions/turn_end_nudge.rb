@@ -80,10 +80,13 @@ module Sessions
       return remember(digest) unless confirmed?(digest)
       return :pending if person_working?
       return give_up if nudges >= LIMIT
-      return :pending unless type_message
+      return :pending unless claim(digest)
 
-      session.merge_jsonb!(:metadata, COUNT_KEY => nudges + 1)
-      session.remove_jsonb_keys!(:metadata, SCREEN_KEY, SEEN_AT_KEY)
+      unless PaneInput.type(session, MESSAGE, runtime: container_runtime)
+        log(:warn, "could not type reminder #{nudges}/#{LIMIT}; it counts toward the limit")
+        return :pending
+      end
+
       log(:info, "nudged (#{nudges}/#{LIMIT})")
       :nudged
     end
@@ -118,6 +121,23 @@ module Sessions
       session.remove_jsonb_keys!(:metadata, SCREEN_KEY, SEEN_AT_KEY)
     end
 
+    # Takes this confirmed turn end for one reminder, before anything is typed. Under the
+    # session's row lock it checks again that the session still takes reminders, that the
+    # confirmed screen is still the recorded one and that one is left, then counts the
+    # reminder and forgets the screen. A Temporal retry of the scan, or a second scan
+    # reading the same screen, then finds no confirmed screen and types nothing. The cost
+    # is that a reminder whose typing failed is used up, and the next turn end gets the
+    # next one: a lost reminder is better than a repeated one.
+    def claim(digest)
+      session.with_lock do
+        next false unless self.class.applies_to?(session) && metadata[SCREEN_KEY] == digest && nudges < LIMIT
+
+        session.merge_jsonb!(:metadata, COUNT_KEY => nudges + 1)
+        session.remove_jsonb_keys!(:metadata, SCREEN_KEY, SEEN_AT_KEY)
+        true
+      end
+    end
+
     def give_up
       SessionService.fail_session(session: session, error_message: self.class.message_after_limit)
       log(:info, "stopped again after #{LIMIT} reminders; failed")
@@ -138,16 +158,6 @@ module Sessions
     rescue StandardError => e
       log(:warn, "could not read the terminal's clients: #{e.class}: #{e.message}")
       true
-    end
-
-    def type_message
-      typed = container_runtime.exec(container, [ "tmux", "send-keys", "-t", "agent", "-l", MESSAGE ])
-      return false unless Array(typed)[2].to_i.zero?
-
-      Array(container_runtime.exec(container, [ "tmux", "send-keys", "-t", "agent", "Enter" ]))[2].to_i.zero?
-    rescue StandardError => e
-      log(:warn, "could not type the reminder: #{e.class}: #{e.message}")
-      false
     end
 
     def container

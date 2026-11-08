@@ -148,8 +148,7 @@ class QuotaErrorDetector
   # tmux pads capture-pane output to the pane height, so blank lines carry no signal:
   # dropping them is what makes the tail the last thing the CLI actually rendered.
   def self.current_screen(text)
-    text.to_s.dup.force_encoding(Encoding::UTF_8).scrub
-        .lines.map(&:rstrip).reject(&:empty?).last(TAIL_LINES).join("\n")
+    Sessions::ScreenDigest.lines(text, last: TAIL_LINES).join("\n")
   end
 
   def self.extract_message(text, patterns)

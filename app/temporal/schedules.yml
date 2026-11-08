@@ -40,10 +40,13 @@ schedules:
   # Terminates sessions that have been `ready` (agent working) but produced no
   # terminal output for 30 minutes. Catches agents blocked on an interactive
   # prompt (e.g. claude.ai spend-limit dialog) that the quota scanner misses
-  # because the blocking prompt may appear before any quota-error text.
+  # because the blocking prompt may appear before any quota-error text. Kiro is
+  # judged by its rendered screen instead of the log's bytes (task #208). Every
+  # 5 minutes: each sweep reads every unattended step, young ones included, so a
+  # silent session is ended 30 to 35 minutes after it stopped changing.
   # SKIP overlap: same sessions could be processed by two concurrent sweeps.
   - workflow: no_output_scan_workflow
-    cron: "* * * * *"
+    cron: "*/5 * * * *"
     overlap: skip
     enabled: true
 
