@@ -95,7 +95,9 @@ module Sessions
       # between "the agent went quiet" and "reconnect this agent". 41% of the sessions this
       # watchdog reaped in the 14 days to 2026-09-17 carried such a banner.
       def message(snapshot)
-        auth = AuthErrorDetector.detect(snapshot.screen.join("\n"))
+        # Redacted before it is parsed, as LiveLogReader#tail did: the whole screen, so a
+        # secret wrapped across two lines is masked too.
+        auth = AuthErrorDetector.detect(redact(snapshot.screen.join("\n")))
         return "Session terminated: agent authentication failed — #{auth.message}" if auth.auth_error?
 
         if TurnEndDetector.idle?(snapshot.scrollback, agent_type: session.agent_type)

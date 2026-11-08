@@ -49,7 +49,7 @@ module Sessions
           return stop(pause.expire! { |locked| self.class.applies_to?(locked) } ? :failed : :taken_over)
         end
 
-        pause.heal! if pause.heal_due?
+        pause.heal!(if_due: true)
         stop(Sessions::AuthPause.paused?(session.reload) ? :paused : :resumed)
       end
 
