@@ -12,7 +12,7 @@ class TerminalSession < ApplicationRecord
 
   # What the cancellation path reports for every reason a session can be cancelled
   # for — including the ones something already diagnosed precisely: a spend limit read
-  # off the terminal by ScanQuotaErrorsActivity, a node that took the pod with it,
+  # off the terminal by Sessions::Checks::QuotaError, a node that took the pod with it,
   # caught by ScanDeadContainersActivity.
   #
   # Both write the real reason here first and both were then overwritten by this

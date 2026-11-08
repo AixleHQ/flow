@@ -14,16 +14,15 @@ module Sessions
   # the result to every holder, typing #resume!'s prompt into each paused one. A login nobody
   # can renew waits for its owner to sign in again, which is delivered the same way, until
   # the pause limit fails the session as before.
+  #
+  # This class holds the actions: pausing, healing, expiring and resuming. Deciding from
+  # a workflow step's pane when to take them is Sessions::Checks::AuthPause's, on the
+  # snapshot Sessions::Monitor reads once a minute; a refused login written back by the CLI
+  # reaches #login_refused! without any pane read.
   class AuthPause
     # The heal counters outlive a pause: a grant that keeps getting refused must not be
     # retried for every episode it causes.
     PAUSE_KEYS = %w[auth_paused_at auth_pause_reason].freeze
-
-    # The banner has to be the last thing the agent did, a minute ago at least.
-    QUIET_BEFORE_PAUSE = 1.minute
-    # Read from the end of the pane: Claude Code draws its prompt box and status line below
-    # the banner, a few lines each.
-    TAIL_LINES = 40
 
     # Each attempt is a refresh against the vendor; repeating one sooner only repeats its answer.
     HEAL_INTERVAL = 5.minutes
@@ -46,28 +45,14 @@ module Sessions
       @runtime = runtime
     end
 
-    # One look at a live session's pane (ScanQuotaErrorsActivity, once a minute).
-    # @return [Symbol, nil] :paused, :resumed, :failed, or nil when the pane shows no refused login
-    def observe(pane)
-      return nil if pane.blank? # the pane could not be read: nothing to decide on
-      return continue(pane) if self.class.paused?(session)
-
-      banner = banner_in(pane)
-      return nil if banner.nil? || !quiet?
-
-      pause!(banner)
-      heal!
-      self.class.paused?(session.reload) ? :paused : :resumed
-    end
-
     # The CLI in this session's container was refused its refresh and blanked its own
     # credentials (AgentCredentialSyncController: the write-back of that blank block). Read
     # off the write-back rather than the pane, so it reaches interactive sessions too without
     # an exec into every one of them every minute.
     def login_refused!
       return if self.class.paused?(session)
+      return unless pause!("The #{adapter_label} login was refused in this session")
 
-      pause!("The #{adapter_label} login was refused in this session")
       credential = session_credential
       return unless credential&.active?
 
@@ -104,54 +89,26 @@ module Sessions
       false
     end
 
-    private
+    # Records the pause, then pauses the workflow run. A compare-and-set under the session's
+    # row lock: a session that is already paused, or for which `still` (when given) no longer
+    # holds, is left as it is.
+    # @return [Boolean] whether the session was paused
+    def pause!(banner, &still)
+      paused = session.with_lock do
+        next false if self.class.paused?(session) || (still && !still.call(session))
 
-    attr_reader :session
+        session.update_jsonb_keys!(:metadata, set: { "auth_paused_at" => Time.current.iso8601,
+                                                     "auth_pause_reason" => banner },
+                                              remove: %w[auth_renewed_at])
+        true
+      end
+      return false unless paused
 
-    # Only what the pane says can end a pause. Its log's mtime cannot: opening the session's
-    # terminal in a browser redraws the CLI and moves it.
-    def continue(pane)
-      return unpause_quietly if banner_in(pane).nil?
-      return expire! if paused_at < self.class.limit.ago
-
-      heal! if heal_due?
-      self.class.paused?(session.reload) ? :paused : :resumed
-    end
-
-    def banner_in(pane)
-      pattern = adapter.auth_banner_pattern
-      return nil if pattern.nil?
-
-      lines = ScreenDigest.lines(pane, last: TAIL_LINES)
-      banner_at = lines.rindex { |line| line.match?(pattern) }
-      return nil if banner_at.nil?
-
-      marker = adapter.auth_resume_prompt[0, 30]
-      nudged_at = lines.rindex { |line| line.include?(marker) }
-      return nil if nudged_at && nudged_at > banner_at
-
-      lines[banner_at].strip.truncate(500)
-    end
-
-    # False when the container cannot say: an unknown pane is not a quiet one.
-    def quiet?
-      last_output_at.present? && last_output_at < QUIET_BEFORE_PAUSE.ago
-    end
-
-    def last_output_at
-      return @last_output_at if defined?(@last_output_at)
-
-      tail = Sessions::LiveLogReader.new(session, runtime: container_runtime).tail(lines: 1)
-      @last_output_at = tail.status == :ok ? tail.last_output_at : nil
-    end
-
-    def pause!(banner)
-      session.merge_jsonb!(:metadata, "auth_paused_at" => Time.current.iso8601, "auth_pause_reason" => banner)
-      session.remove_jsonb_keys!(:metadata, "auth_renewed_at")
       announce
       run = session.step_run&.workflow_run
       run.pause! if run&.may_pause?
       log(:info, "paused: #{banner}")
+      true
     end
 
     # Renews the login if the platform can, then hands whatever is stored to every holder,
@@ -184,6 +141,40 @@ module Sessions
       attempted.nil? || attempted < HEAL_INTERVAL.ago
     end
 
+    # Nobody signed in again within the pause limit.
+    def expired?
+      paused_at < self.class.limit.ago
+    end
+
+    # Fails the session after the pause limit: a compare-and-set
+    # (SessionService.fail_session_if), so a session that was unpaused, or started
+    # finishing, since it was read is left as it is.
+    # @return [Boolean] whether the session was failed
+    def expire!(&still)
+      reason = session.metadata["auth_pause_reason"].presence || "login expired"
+      failed = SessionService.fail_session_if(
+        session: session, expected_state: session.state,
+        error_message: "Session terminated: agent authentication failed — #{reason}. " \
+                       "Nobody signed in again within #{self.class.limit.inspect}."
+      ) { |locked| self.class.paused?(locked) && (still.nil? || still.call(locked)) }
+      log(:info, failed ? "nobody signed in again; failed" : "no longer paused; not failed")
+      failed
+    end
+
+    # The banner left the pane's tail: someone signed in from the session's own terminal, or
+    # the agent went on by itself.
+    # @return [Boolean] whether the session was unpaused
+    def unpause_quietly(&still)
+      return false unless unpause!(&still)
+
+      log(:info, "is working again")
+      true
+    end
+
+    private
+
+    attr_reader :session
+
     def heal_attempts
       session.metadata["auth_heal_attempts"].to_i
     end
@@ -193,34 +184,25 @@ module Sessions
       granted.present? && granted > FRESH_GRANT.ago
     end
 
-    def expire!
-      reason = session.metadata["auth_pause_reason"].presence || "login expired"
-      SessionService.fail_session(
-        session: session,
-        error_message: "Session terminated: agent authentication failed — #{reason}. " \
-                       "Nobody signed in again within #{self.class.limit.inspect}."
-      )
-      log(:info, "nobody signed in again; failed")
-      :failed
-    end
+    # Under the session's row lock, as #pause!: a session another path unpaused meanwhile
+    # (a delivery's #resume!, a pass's #unpause_quietly) is not unpaused twice.
+    def unpause!(renewed: false, &still)
+      unpaused = session.with_lock do
+        next false unless self.class.paused?(session) && (still.nil? || still.call(session))
 
-    # The banner left the pane's tail: someone signed in from the session's own terminal, or
-    # the agent went on by itself.
-    def unpause_quietly
-      unpause!
-      log(:info, "is working again")
-      :resumed
-    end
+        session.update_jsonb_keys!(:metadata, set: renewed ? { "auth_renewed_at" => Time.current.iso8601 } : {},
+                                              remove: PAUSE_KEYS)
+        true
+      end
+      return false unless unpaused
 
-    def unpause!(renewed: false)
-      session.remove_jsonb_keys!(:metadata, *PAUSE_KEYS)
-      session.merge_jsonb!(:metadata, "auth_renewed_at" => Time.current.iso8601) if renewed
       announce
       run = session.step_run&.workflow_run
-      return unless run&.paused?
-      return if run.step_runs.joins(:terminal_session).merge(TerminalSession.active.auth_paused).exists?
+      return true unless run&.paused?
+      return true if run.step_runs.joins(:terminal_session).merge(TerminalSession.active.auth_paused).exists?
 
       run.resume!
+      true
     end
 
     def nudge

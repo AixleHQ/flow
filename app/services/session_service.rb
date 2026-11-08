@@ -150,6 +150,39 @@ class SessionService
       session
     end
 
+    # fail_session as a compare-and-set, for a caller that decided on a copy of the row
+    # that may be stale (Sessions::Checks). The session is failed only if, under its row
+    # lock, it is still in `expected_state` and the block (when given) still holds for the
+    # locked row; the check and the transition are one transaction, so a finish_session or
+    # an auth pause cannot land between them. The container workflow is woken after the
+    # commit, as by fail_session.
+    #
+    # @return [Boolean] whether the session was failed
+    def fail_session_if(session:, expected_state:, error_message: nil, &guard)
+      still = ->(locked) { locked.state == expected_state.to_s && (guard.nil? || guard.call(locked)) }
+
+      if unreleased_admission?(session)
+        return false unless SessionAdmissionService.fail_if!(session, error_message: error_message, &still)
+
+        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
+        WorkflowService.notify_container_finished(step_run: session.step_run) if session.step_run
+        return true
+      end
+
+      failed = session.with_lock do
+        next false unless still.call(session) && session.may_fail?
+
+        session.update!(error_message: error_message) if error_message.present?
+        session.fail!
+        true
+      end
+      return false unless failed
+
+      stop_admission_operations(session)
+      signal_container_finished(session) if session.temporal_workflow_id.present?
+      true
+    end
+
     # Built first and admitted second, in separate transactions. Building renders
     # the instructions and attaches every resolved resource, and doing that under
     # the installation-wide writer lock stalled every other admission decision for

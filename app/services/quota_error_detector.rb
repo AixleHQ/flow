@@ -8,7 +8,7 @@
 #
 #   - .detect reads a session's stored error message. Every caller passes the
 #     session's agent_type, so only its own provider counts.
-#   - .detect_on_screen reads terminal output: a live pane (ScanQuotaErrorsActivity,
+#   - .detect_on_screen reads terminal output: a live pane (Sessions::Checks::QuotaError,
 #     Sessions::LogTail) or a finished session's stored log (CompleteStepActivity,
 #     Sessions::LogTail). That text is mostly the agent's own work, and an agent greps,
 #     reads, edits and tests code that names these errors: this class, its tests, the

@@ -24,8 +24,8 @@
 # moved past startup. A pane whose last word is not the dialog's is a pane whose
 # agent is still producing output, so it is not wedged on the dialog.
 #
-# Sibling of QuotaErrorDetector — same shape, same caller
-# (Activities::Workflow::ScanQuotaErrorsActivity), different blocker.
+# Sibling of QuotaErrorDetector — same shape, a different blocker. Its caller is
+# Sessions::Checks::BlockingPrompt, on the snapshot Sessions::Monitor reads.
 class InteractivePromptDetector
   MAX_MESSAGE_LENGTH = 500
 

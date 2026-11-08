@@ -46,8 +46,12 @@ module Sessions
                              "expiresAt" => (6.hours.from_now.to_f * 1000).to_i } }
     end
 
-    def observe(session = @session)
-      AuthPause.new(session.reload, runtime: @runtime).observe(BANNER_PANE)
+    # One pass of the monitor over the session with only Checks::AuthPause, on the pane the
+    # runtime shows (BANNER_PANE, quiet for 5 minutes, unless the test set another).
+    # @return [Symbol, nil] the check's outcome
+    def observe(session = @session, pane: nil)
+      @runtime.set_terminal_pane(pane, last_output_at: 5.minutes.ago) if pane
+      Monitor.new(checks: [ Checks::AuthPause ]).visit(session.reload).last&.outcome
     end
 
     RESUME_PROMPT_TYPED = PaneInput.command(Agents::BaseAdapter::AUTH_RESUME_PROMPT).freeze
@@ -121,7 +125,7 @@ module Sessions
     test "does not pause again on a banner the agent was already sent past" do
       pane = "#{BANNER_PANE}\n> #{Agents::BaseAdapter::AUTH_RESUME_PROMPT}\n● Continuing with the test suite\n"
 
-      assert_nil AuthPause.new(@session, runtime: @runtime).observe(pane)
+      assert_nil observe(pane: pane)
     end
 
     test "never pauses a runtime that does not name its expired-login banner" do
@@ -131,7 +135,7 @@ module Sessions
     end
 
     test "decides nothing on a pane it could not read" do
-      assert_nil AuthPause.new(@session, runtime: @runtime).observe("")
+      assert_nil observe(pane: "")
     end
 
     test "fails the step once nobody has signed in again within the limit" do
@@ -145,11 +149,35 @@ module Sessions
       assert_match(/agent authentication failed — Login expired/, @session.error_message)
     end
 
+    # The pass loaded the row before it read the pane; the step started finishing while the
+    # read was in flight. The pause is a compare-and-set under the row lock.
+    test "does not pause a step that started finishing while the pass read it" do
+      @credential.mark_refresh_error!("invalid_grant", permanent: true)
+      @runtime.on_next_exec("capture-pane") { TerminalSession.find(@session.id).update!(state: "finishing") }
+
+      assert_equal :taken_over, observe
+
+      refute AuthPause.paused?(@session.reload)
+      assert_equal "running", @run.reload.state
+    end
+
+    test "does not fail a paused step at the limit once it was unpaused meanwhile" do
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => (AuthPause.limit + 1.minute).ago.iso8601)
+      @runtime.on_next_exec("capture-pane") do
+        TerminalSession.find(@session.id).remove_jsonb_keys!(:metadata, *AuthPause::PAUSE_KEYS)
+      end
+
+      assert_equal :taken_over, observe
+
+      assert_equal "ready", @session.reload.state
+      assert_nil @session.error_message
+    end
+
     test "lets a paused step go once the banner has left its pane" do
       @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
       @run.pause!
 
-      assert_equal :resumed, AuthPause.new(@session.reload, runtime: @runtime).observe("● tick-12\n● tick-13\n> \n")
+      assert_equal :resumed, observe(pane: "● tick-12\n● tick-13\n> \n")
       refute AuthPause.paused?(@session.reload)
       assert_equal "running", @run.reload.state
     end

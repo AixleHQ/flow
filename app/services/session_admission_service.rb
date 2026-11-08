@@ -115,6 +115,32 @@ class SessionAdmissionService
       session.reload
     end
 
+    # cancel!(session, outcome: "failed") as a compare-and-set: nothing is stopped or
+    # failed unless the block holds for the session's row, read under its lock inside the
+    # writer lock. The error message is written in the same transaction, so a session
+    # that is not failed does not get one either (SessionService.fail_session_if).
+    # @return [Boolean] whether the session was failed
+    def fail_if!(session, error_message: nil)
+      failed = transaction do
+        admission = session.session_admission&.lock!
+        next false unless admission
+
+        session.lock!
+        next false if session.state.in?(TerminalSession::TERMINAL_STATES) || !yield(session)
+
+        admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
+        session.update!(error_message: error_message) if error_message.present?
+        if admission.admitted_at.nil? || (admission.launch_state == "pending" && admission.claimed_at.nil?)
+          close_queued!(admission, "failed")
+        else
+          conclude!(session, "failed")
+        end
+        true
+      end
+      session.reload
+      failed
+    end
+
     # Read-only permit check. Deliberately takes no lock: it is called on every
     # container phase, and a stop marker that lands a millisecond later is
     # caught by #begin_operation!, which does lock.

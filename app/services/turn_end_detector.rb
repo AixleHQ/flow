@@ -10,9 +10,9 @@
 # 30-minute no-output watchdog after a provider error ended its turn).
 #
 # Unlike InteractivePromptDetector this is not a blocker: its caller,
-# Sessions::TurnEndNudge, types a reminder into the pane rather than failing the
-# session. Same shape and the same caller (Activities::Workflow::ScanQuotaErrorsActivity),
-# and the same rule that only the current screen counts, never the scrollback.
+# Sessions::Checks::TurnEnd, types a reminder into the pane rather than failing the
+# session. Same shape as InteractivePromptDetector, and the same rule that only the
+# current screen counts, never the scrollback.
 #
 # Only runtimes measured in their TUI have a signature. A runtime without one is still
 # ended by Sessions::NoOutputWatchdog once its screen stops changing.
