@@ -814,7 +814,10 @@ pass and hands the snapshot to them (task #211).
   - failing goes through `SessionService.fail_session_if` (and, for an
     admitted session, `SessionAdmissionService.fail_if!` under the writer lock),
     which reports whether it applied. Only the Temporal signal that wakes the
-    container workflow is sent after the commit;
+    container workflow is sent after the commit. The message is passed through
+    `Sessions::SecretRedactor.for_session` first (`Checks::Base#fail_session`),
+    and `Checks::NoOutput` redacts the whole screen before `AuthErrorDetector`
+    reads it, as `Sessions::LiveLogReader` did;
   - `Sessions::AuthPause#pause!`, `#unpause_quietly` and `#expire!` do the same.
     A pause or an unpause is one transaction that locks the workflow run, then
     the session, and changes the marker and the run's state together, so a

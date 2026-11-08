@@ -7,6 +7,8 @@ module Sessions
     # The no-output watchdog's tests (task #208), carried over onto the snapshot: the same
     # verdicts, messages and skips, read through Sessions::Monitor.
     class NoOutputTest < ActiveSupport::TestCase
+      include SecretLeakAssertions
+
       setup do
         @user = create(:user, :with_company)
         @project = create(:project, owner: @user, company: @user.companies.first)
@@ -82,6 +84,20 @@ module Sessions
         pass("> /login\nLogin expired · Please run /login\n", last_output_at: 40.minutes.ago)
 
         assert_match(/agent authentication failed — .*Login expired/, @session.reload.error_message)
+      end
+
+      # LiveLogReader#tail redacted the pane before the message was built from it; the
+      # message reaches error_message, the step's error and the Slack failure notice.
+      test "a secret on the banner line does not reach the failure message" do
+        @session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
+                                                              value: RECORDED_SECRET)
+
+        assert_equal :failed, pass("> /login\nLogin expired for #{RECORDED_SECRET} · Please run /login\n",
+                                   last_output_at: 40.minutes.ago)
+
+        message = @session.reload.error_message
+        assert_match(/agent authentication failed — .*Login expired/, message)
+        assert_no_secret message
       end
 
       test "says the agent stopped without finish_session when the pane shows its idle prompt" do
