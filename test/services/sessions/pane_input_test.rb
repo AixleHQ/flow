@@ -6,7 +6,9 @@ module Sessions
   class PaneInputTest < ActiveSupport::TestCase
     setup do
       @runtime = stub_container_runtime
-      @session = create(:terminal_session, container_id: "ctr-pane")
+      user = create(:user, :with_company)
+      project = create(:project, owner: user, company: user.companies.first)
+      @session = create(:terminal_session, user: user, project: project, container_id: "ctr-pane")
       Rails.logger.stubs(:warn)
     end
 

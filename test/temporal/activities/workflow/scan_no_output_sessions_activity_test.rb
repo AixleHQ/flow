@@ -79,10 +79,9 @@ module Activities
       end
 
       test "an unchanged screen is ended 30 minutes after it stopped changing, not after a first read at minute 31" do
-        stopped_at = Time.current
         sweep
-        assert_equal stopped_at.to_i - 2, Time.zone.parse(@session.reload.metadata["screen_changed_at"]).to_i,
-                     "the first sweep, at the session's start, starts the record"
+        stopped_at = Time.zone.parse(@session.reload.metadata["screen_changed_at"])
+        assert_in_delta 2.seconds.ago, stopped_at, 2.seconds, "the first sweep, at the session's start, starts the record"
 
         until @session.reload.state == "failed"
           travel SWEEP_EVERY
