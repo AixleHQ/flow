@@ -12,9 +12,15 @@ module Activities
     # watching can answer a dialog in the web terminal themselves. So is a step
     # waiting for its agent's login to be renewed: Sessions::AuthPause bounds that
     # wait itself.
+    #
+    # Every candidate is read, however young: for a runtime judged by its screen
+    # (Sessions::NoOutputWatchdog::SCREEN_RULE_RUNTIMES) the first read starts the
+    # record of when the screen last changed, so a session whose screen froze early
+    # is ended 30 minutes after that, not 30 minutes after a first read at minute 31.
+    # The sweep runs every 5 minutes to keep those reads affordable, so a silent
+    # session is ended 30 to 35 minutes after its screen (or, for other runtimes, its
+    # log) stopped changing.
     class ScanNoOutputSessionsActivity < ::Activities::Base
-      MIN_AGE = Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD + 1.minute
-
       def run(_input = nil)
         terminated = 0
         skipped    = 0
@@ -45,7 +51,6 @@ module Activities
           .where(state: "ready", session_type: :workflow_step)
           .where("mode IS NULL OR mode <> 'interactive'")
           .where.not(container_id: [ nil, "" ])
-          .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
           .where.not(id: TerminalSession.auth_paused.select(:id))
       end
 

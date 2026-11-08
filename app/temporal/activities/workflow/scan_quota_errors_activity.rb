@@ -40,9 +40,10 @@ module Activities
           terminal = live_terminal_output(session)
           message = blocker_message_for(session, terminal)
           if message.blank?
-            auth = Sessions::AuthPause.new(session, runtime: runtime).observe(terminal)
-            auth_paused += 1 if auth == :paused
-            next if auth
+            auth = Sessions::AuthPause.new(session, runtime: runtime).observe(terminal).to_s.inquiry
+            auth_paused += 1 if auth.paused?
+            # A session AuthPause paused, resumed or failed on this read is its own.
+            next if auth.present?
 
             case Sessions::TurnEndNudge.new(session, runtime: runtime).observe(terminal)
             when :nudged then nudged += 1

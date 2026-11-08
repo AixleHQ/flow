@@ -758,9 +758,12 @@ error ended the turn. Two sweeps cover that state:
 - **The reminder (Kiro).** `Activities::Workflow::ScanQuotaErrorsActivity` reads
   each session's pane once a minute. When `TurnEndDetector` sees Kiro's idle
   prompt under a `▸ Credits: turn …` summary on two reads of the same screen,
-  `Sessions::TurnEndNudge` types a reminder into the pane with `tmux send-keys`:
-  call `finish_session` if the work is done, otherwise continue. The agent
-  takes it as its next message.
+  `Sessions::TurnEndNudge` types a reminder into the pane: call
+  `finish_session` if the work is done, otherwise continue. The agent takes it
+  as its next message. `Sessions::PaneInput` sends the text and `Enter` in one
+  `tmux send-keys -l … ; send-keys Enter` call, so a partial failure cannot
+  leave an unsent draft; `Sessions::AuthPause` types its resume prompt the same
+  way.
   - Only `ready`, `non_interactive` workflow-step sessions are reminded. A
     session paused on an expired login (`Sessions::AuthPause`) is not.
   - Nothing is typed while a writable terminal client
@@ -768,25 +771,42 @@ error ended the turn. Two sweeps cover that state:
     10 minutes. Attaching counts as input, so opening the session's terminal
     holds reminders for 10 minutes. A read-only viewer never does.
   - At most 3 reminders per session (`turn_end_nudges` in the session's
-    metadata). The turn end after the third fails the session with a message
-    that says the agent ended its turn without `finish_session` 4 times.
-- **The silence watchdog (every runtime).** `Sessions::NoOutputWatchdog` fails a
-  session whose rendered screen has not changed for 30 minutes. It keeps a
-  digest of the pane (`screen_digest`, `screen_changed_at`) rather than reading
-  the mtime of `/tmp/terminal_output.log`, because an idle TUI repaints its
-  unchanged screen whenever the pane is resized, for example by an attached web
-  terminal. When the pane shows the idle prompt, the failure says the agent
-  stopped without `finish_session`. The token-refresh sweep reads the same
-  record through `silent_for?(10.minutes)`: a session parked at its prompt
-  counts as parked even while it repaints, and a working one, whose indicator
-  ticks (`Kiro is working · 1m 15s`, Claude Code's and Codex's timers), does not.
+    metadata). The reminder is counted, and the confirmed screen forgotten,
+    under the session's row lock before anything is typed. A Temporal retry of
+    the scan, or a second scan of the same screen, then types nothing. A
+    reminder whose typing failed is used up. The turn end after the third fails
+    the session with a message that says the agent ended its turn without
+    `finish_session` 4 times.
+- **The silence watchdog.** `ScanNoOutputSessionsActivity` runs every 5 minutes
+  and reads every unattended `ready` step from its start, so a silent session is
+  ended 30 to 35 minutes after it stopped changing.
+  - **Kiro: judged by its screen.** `Sessions::NoOutputWatchdog` keeps a digest
+    of the pane (`screen_digest`, `screen_changed_at`) and fails the session
+    once its rendered screen has not changed for 30 minutes. The mtime of
+    `/tmp/terminal_output.log` is not enough, because an idle TUI repaints its
+    unchanged screen whenever the pane is resized, for example by an attached
+    web terminal. A working Kiro keeps its screen changing
+    (`Kiro is working · 1m 15s`).
+  - **Other runtimes: judged by the log's mtime, as before.** The screen rule is
+    opt-in through `NoOutputWatchdog::SCREEN_RULE_RUNTIMES`, which holds
+    `kiro_cli` only. A runtime joins once its working screen, tool calls
+    included, has been captured on its pinned CLI and shown to change between
+    reads; an indicator that animates only through colour would otherwise read
+    as silence while its agent works.
+  - When the pane shows Kiro's idle prompt, the failure says the agent stopped
+    without `finish_session`.
+  - The token-refresh sweep reads the same verdict through
+    `silent_for?(10.minutes)`. A Kiro session parked at its prompt counts as
+    parked even while it repaints, and a working one does not. Other runtimes
+    count as parked only when their log got no bytes for 10 minutes, as before.
 
 Kiro's `Stop` hook was measured as an alternative on kiro-cli 3.0.0 and not
 used: a `{"decision":"block"}` answer makes the agent continue, but the hook
 runs only once per prompt, does not run when a provider error ends the turn,
 and receives only the CLI's own `session_id`, `hook_event_name` and `cwd`.
-Other runtimes have the same gap and get only the watchdog until a signature
-for their idle prompt is measured.
+Other runtimes have the same gap and get only the mtime watchdog until a
+signature for their idle prompt and a capture of their working screen are
+measured.
 
 ### 6.1 list_sub_steps
 

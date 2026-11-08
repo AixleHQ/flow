@@ -57,7 +57,7 @@ module Activities
 
         fan_out
 
-        assert_includes @runtime.execs, [ "tmux", "send-keys", "-t", "agent", "-l", Agents::BaseAdapter::AUTH_RESUME_PROMPT ]
+        assert_includes @runtime.execs, Sessions::PaneInput.command(Agents::BaseAdapter::AUTH_RESUME_PROMPT)
         refute Sessions::AuthPause.paused?(session.reload)
       end
 

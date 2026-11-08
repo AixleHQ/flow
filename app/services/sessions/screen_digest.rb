@@ -12,8 +12,16 @@ module Sessions
     LINES = 40
 
     def self.of(text)
-      lines = text.to_s.dup.force_encoding(Encoding::UTF_8).scrub.lines.map(&:rstrip).reject(&:empty?)
-      Digest::SHA256.hexdigest(lines.last(LINES).join("\n"))
+      Digest::SHA256.hexdigest(lines(text, last: LINES).join("\n"))
+    end
+
+    # The pane's current screen as every reader of it sees it: its last `last` nonblank
+    # lines, right-trimmed. tmux pads capture-pane output to the pane height and TUIs draw
+    # blank separator rows, so blank lines carry no signal, and dropping them is what makes
+    # "the last line" the last thing the CLI rendered. Invalid UTF-8 is replaced rather
+    # than raised on, since a pane can end in the middle of a multibyte character.
+    def self.lines(text, last:)
+      text.to_s.dup.force_encoding(Encoding::UTF_8).scrub.lines.map(&:rstrip).reject(&:empty?).last(last)
     end
   end
 end

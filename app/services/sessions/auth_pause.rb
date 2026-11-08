@@ -122,7 +122,7 @@ module Sessions
       pattern = adapter.auth_banner_pattern
       return nil if pattern.nil?
 
-      lines = pane.to_s.dup.force_encoding(Encoding::UTF_8).scrub.lines.map(&:rstrip).reject(&:empty?).last(TAIL_LINES)
+      lines = ScreenDigest.lines(pane, last: TAIL_LINES)
       banner_at = lines.rindex { |line| line.match?(pattern) }
       return nil if banner_at.nil?
 
@@ -222,16 +222,7 @@ module Sessions
     end
 
     def nudge
-      return false if session.container_id.blank?
-
-      container = container_runtime.resolve_container(session.container_id)
-      typed = container_runtime.exec(container, [ "tmux", "send-keys", "-t", "agent", "-l", adapter.auth_resume_prompt ])
-      return false unless Array(typed)[2].to_i.zero?
-
-      Array(container_runtime.exec(container, [ "tmux", "send-keys", "-t", "agent", "Enter" ]))[2].to_i.zero?
-    rescue StandardError => e
-      log(:warn, "could not type the resume prompt: #{e.class}: #{e.message}")
-      false
+      PaneInput.type(session, adapter.auth_resume_prompt, runtime: container_runtime)
     end
 
     def paused_at
