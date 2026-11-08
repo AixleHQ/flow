@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -258,10 +259,16 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 // it: no binary, no socket, no token and nothing of the state directory. Over
 // another session's container it answers `session_mismatch`; over its own, or
 // over a container of the environment that names no session, `container_exists`.
-func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) protocol.Result {
-	sessionID, r := opSession(ctx)
-	if r != nil {
-		return *r
+//
+// The pull, the volumes, the create and the start run until the op's
+// `deadline_at` at most. Past it, nobody waits for the result, so nothing is
+// created, and the serial ops loop moves on to the session's next op, the
+// cleanup's `container.stop` and `env.reset` among them.
+func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
+	if deadline, ok := protocol.OpDeadline(ctx); ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, deadline)
+		defer cancel()
 	}
 	var p ContainerStartPayload
 	if r := decodePayload(raw, &p, "a container.start payload"); r != nil {
@@ -295,6 +302,9 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	// Pulled once the cheap refusals above are out of the way, so a session
 	// that cannot start here pulls nothing.
 	if err := pull(ctx, e.API, config.Image); err != nil {
+		if r := pastDeadline(ctx, "the pull of "+config.Image); r != nil {
+			return *r
+		}
 		return protocol.ErrorResult(ClassImagePull, fmt.Sprintf("pulling %s failed: %v", config.Image, err))
 	}
 
@@ -305,6 +315,9 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	for _, v := range volumes {
 		res, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}})
 		if err != nil {
+			if r := pastDeadline(ctx, "creating the volume "+v); r != nil {
+				return *r
+			}
 			return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("creating the volume %s failed: %v", v, err))
 		}
 		if got := res.Volume.Labels[LabelEnvironment]; got != e.Key {
@@ -314,9 +327,16 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 		}
 	}
 
+	if r := pastDeadline(ctx, "creating "+name); r != nil {
+		return *r
+	}
 	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Config: config, HostConfig: host})
 	switch {
 	case err == nil:
+	case ctx.Err() != nil:
+		// The daemon may have created it before the answer was cut off.
+		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), name, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+		return *pastDeadline(ctx, "creating "+name)
 	case cerrdefs.IsConflict(err):
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf("creating %s failed: %v", name, err))
 	default:
@@ -325,9 +345,24 @@ func (e *Environment) ContainerStart(ctx context.Context, raw json.RawMessage) p
 	if _, err := e.API.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
 		// A container that never started is not left behind.
 		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), created.ID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+		if r := pastDeadline(ctx, "starting "+name); r != nil {
+			return *r
+		}
 		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("starting %s failed: %v", name, err))
 	}
 	return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"container_id": created.ID, "name": name}}
+}
+
+// pastDeadline is the answer of a `container.start` whose deadline_at passed
+// during step, or nil while it has not. A context that ended because the runner
+// is stopping is not a deadline: the loop discards that result (host.Loop).
+func pastDeadline(ctx context.Context, step string) *protocol.Result {
+	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return nil
+	}
+	r := protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf(
+		"the op's deadline_at passed during %s; nobody waits for this result, so nothing was created", step))
+	return &r
 }
 
 func containerLabel(c container.Summary) string {
@@ -348,11 +383,7 @@ type ContainerStopPayload struct{}
 // labels is refused and not touched. Without this session's container it answers
 // an error and touches nothing: `session_mismatch` when the environment's session
 // container is another session's, `no_session_container` when there is none.
-func (e *Environment) ContainerStop(ctx context.Context, raw json.RawMessage) protocol.Result {
-	sessionID, r := opSession(ctx)
-	if r != nil {
-		return *r
-	}
+func (e *Environment) ContainerStop(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p ContainerStopPayload
 	if r := decodePayload(raw, &p, "{}"); r != nil {
 		return *r

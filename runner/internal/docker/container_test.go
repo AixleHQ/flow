@@ -2,12 +2,15 @@ package docker
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -51,25 +54,32 @@ func startPayload(extra map[string]any) map[string]any {
 	return p
 }
 
-// sessionCtx is the context of an op whose envelope names the session id.
-func sessionCtx(id int64) context.Context {
-	return protocol.WithOpSession(context.Background(), &id)
-}
-
-func (h *harness) run(handler Handler, payload any) protocol.Result {
+func (h *harness) run(handler SessionHandler, payload any) protocol.Result {
 	h.t.Helper()
 	return h.runAs(sessionID, handler, payload)
 }
 
-// runAs runs an op whose envelope names the session id.
-func (h *harness) runAs(id int64, handler Handler, payload any) protocol.Result {
+// runAs runs a session op whose envelope names the session id.
+func (h *harness) runAs(id int64, handler SessionHandler, payload any) protocol.Result {
 	h.t.Helper()
-	return handler(sessionCtx(id), mustJSON(h.t, payload))
+	return handler(context.Background(), id, mustJSON(h.t, payload))
+}
+
+// runEnvelope runs a handler as the loop does, with the envelope's session id.
+func (h *harness) runEnvelope(id int64, handler Handler, payload any) protocol.Result {
+	h.t.Helper()
+	return handler(context.Background(), &id, mustJSON(h.t, payload))
+}
+
+// runEnv runs an environment op.
+func (h *harness) runEnv(handler EnvironmentHandler, payload any) protocol.Result {
+	h.t.Helper()
+	return handler(context.Background(), mustJSON(h.t, payload))
 }
 
 func (h *harness) start(env *Environment, extra map[string]any) protocol.Result {
 	h.t.Helper()
-	r := env.ContainerStart(sessionCtx(sessionID), mustJSON(h.t, startPayload(extra)))
+	r := env.ContainerStart(context.Background(), sessionID, mustJSON(h.t, startPayload(extra)))
 	if r.Status != protocol.StatusOK {
 		h.t.Fatalf("container.start: %#v %v", r, r.Error)
 	}
@@ -279,6 +289,54 @@ func TestContainerStartAlwaysPullsTheImageThenCreatesTheContainer(t *testing.T) 
 	h.start(h.env, nil)
 	if len(h.engine.pulls) != 1 || h.engine.pulls[0] != pinned {
 		t.Fatalf("pulls %v: every container.start pulls", h.engine.pulls)
+	}
+}
+
+func TestThePullSendsTheDockerCredentialsOfTheImagesRegistry(t *testing.T) {
+	h := newEnvironment(t)
+	login := base64.StdEncoding.EncodeToString([]byte("agent-bot:s3cret"))
+	withDockerConfig(t, `{"auths": {"ghcr.io": {"auth": "`+login+`"}, "registry.internal": {"auth": "b3RoZXI6b3RoZXI="}}}`)
+	h.start(h.env, map[string]any{"image": tagged})
+	if len(h.engine.pullAuths) != 1 || h.engine.pullAuths[0] == "" {
+		t.Fatalf("pull auths %q: the pull carried no credentials", h.engine.pullAuths)
+	}
+	decoded, err := base64.URLEncoding.DecodeString(h.engine.pullAuths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sent map[string]string
+	if err := json.Unmarshal(decoded, &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["username"] != "agent-bot" || sent["password"] != "s3cret" || sent["serveraddress"] != "ghcr.io" {
+		t.Fatalf("sent %v: not ghcr.io's credentials", sent)
+	}
+}
+
+func TestAPullWithNoCredentialsForItsRegistryIsAnonymous(t *testing.T) {
+	h := newEnvironment(t)
+	withDockerConfig(t, `{"auths": {"registry.internal": {"auth": "b3RoZXI6b3RoZXI="}}}`)
+	h.start(h.env, map[string]any{"image": tagged})
+	if len(h.engine.pullAuths) != 1 || h.engine.pullAuths[0] != "" {
+		t.Fatalf("pull auths %q: another registry's credentials were sent", h.engine.pullAuths)
+	}
+}
+
+func TestContainerStartCreatesNothingPastItsDeadline(t *testing.T) {
+	h := newEnvironment(t)
+	h.engine.pullDelay = 10 * time.Second
+	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(200*time.Millisecond))
+	started := time.Now()
+	r := h.env.ContainerStart(ctx, sessionID, mustJSON(t, startPayload(map[string]any{"image": tagged})))
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("container.start ran %s, past its deadline", elapsed)
+	}
+	if r.Status != protocol.StatusError || r.Error.Class != ClassContainerStartFailed || !strings.Contains(r.Error.Message, "deadline_at") {
+		t.Fatalf("%#v", r)
+	}
+	if len(h.engine.containers) != 0 || len(h.engine.creates) != 0 || len(h.engine.volumes) != 0 {
+		t.Fatalf("something was created past the deadline: %d containers, %d creates, %d volumes",
+			len(h.engine.containers), len(h.engine.creates), len(h.engine.volumes))
 	}
 }
 

@@ -24,6 +24,8 @@ type deadlineKey struct{}
 
 // WithOpDeadline carries an op's `deadline_at` to its handler. It is a value, not
 // a context deadline: the context ending still means that the runner is stopping.
+// A handler that must stop at the deadline (`container.start`) derives a context
+// deadline from it for its own steps.
 func WithOpDeadline(ctx context.Context, deadline time.Time) context.Context {
 	return context.WithValue(ctx, deadlineKey{}, deadline)
 }
@@ -32,23 +34,6 @@ func WithOpDeadline(ctx context.Context, deadline time.Time) context.Context {
 func OpDeadline(ctx context.Context) (time.Time, bool) {
 	d, ok := ctx.Value(deadlineKey{}).(time.Time)
 	return d, ok && !d.IsZero()
-}
-
-type sessionKey struct{}
-
-// WithOpSession carries an op's `session_id` to its handler. A nil id, the
-// envelope of an environment op, carries nothing.
-func WithOpSession(ctx context.Context, sessionID *int64) context.Context {
-	if sessionID == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, sessionKey{}, *sessionID)
-}
-
-// OpSession is the `session_id` of the op a handler runs, when its envelope has one.
-func OpSession(ctx context.Context) (int64, bool) {
-	id, ok := ctx.Value(sessionKey{}).(int64)
-	return id, ok
 }
 
 // Environment is the machine as register returns it (§5.1). The runner does not

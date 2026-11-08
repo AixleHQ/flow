@@ -250,7 +250,8 @@ Fixtures: `register/`, `headers/`.
 
 `aixle-runner unregister`: the machine leaves its runner. No body. `204 No Content` with an empty
 body. The machine's environment is marked gone and every token of the machine is revoked, so its
-next request is `invalid_token`.
+next request is `invalid_token`. A session that runs on the machine is not waited for (§8): the
+platform enqueues none of its ops from then on.
 
 Fixtures: `unregister/`.
 
@@ -457,7 +458,13 @@ as `docker pull` reads it. A value that is not a reference is `invalid_payload`.
 `container.start` always pulls the reference through the Docker Engine API before it creates the
 container, because Docker's create API does not pull. A tag that moved is followed, and the
 daemon downloads only the layers it lacks. There is no pull policy, and no digest is returned:
-the platform never contacts a registry. A pull that fails is the `container.start` outcome
+the platform never contacts a registry.
+
+The runner pulls with the Docker credentials of the user it runs as, resolved as the Docker CLI
+resolves them for `docker pull`: from that user's Docker configuration (`$DOCKER_CONFIG`, or
+`~/.docker/config.json`), credential helpers included, for the image's registry. An operator who
+runs agent images from a private registry runs `docker login`, or configures a credential helper,
+as that user. With no credentials for the registry, the pull is anonymous. A pull that fails is the `container.start` outcome
 `image_pull_failed`, even with an older copy of the image on the daemon, and its message carries
 the registry's or the daemon's own words, e.g. `manifest unknown` or `pull access denied`.
 
@@ -476,7 +483,10 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 #### `container.start`
 
 Pulls the agent image (§6.1), then creates and starts the session's agent container from it,
-named and labelled with the envelope's `session_id`. The container runs the image's own entrypoint and
+named and labelled with the envelope's `session_id`. The pull, the volumes, the create and the
+start run until the op's `deadline_at` at most: past it nobody waits for the result, so the op
+creates nothing more, removes a container whose create the deadline cut off, and answers
+`container_start_failed`, and the runner moves on to the next op. The container runs the image's own entrypoint and
 command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
@@ -770,7 +780,8 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
 - The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
   `GET /runner/v1/releases/:version/checksums`: task 10.
 - `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
-  without it, so a machine unregistered during a session leaves that session's next ops
-  unanswered until they expire, and the session fails as one whose container is gone.
+  without it: a machine unregistered during a session stops holding that session, the session's
+  next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
+  container is gone.
 - An endpoint that issues registration tokens ("Add machine"): task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.

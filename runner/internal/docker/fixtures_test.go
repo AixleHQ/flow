@@ -68,11 +68,12 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 				// Each payload runs against an empty daemon: what matters is that it
 				// gets past the payload's checks. An op enqueued for a session
 				// carries one in its envelope, as the gateway delivers it.
-				ctx := context.Background()
+				var session *int64
 				if step.Session != "" {
-					ctx = sessionCtx(sessionID)
+					id := sessionID
+					session = &id
 				}
-				r := handler(ctx, step.Payload)
+				r := handler(context.Background(), session, step.Payload)
 				if r.Error != nil && r.Error.Class == ClassSessionRequired {
 					t.Errorf("%s: the %s op is enqueued without a session", filepath.Base(file), step.Op)
 				}

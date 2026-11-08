@@ -36,8 +36,13 @@ type fakeEngine struct {
 	pullError string
 	// pullStatus, when set, refuses the pull with that HTTP status before streaming.
 	pullStatus int
-	pulls      []string
-	rootDir    string
+	// pullDelay holds every pull that long before it answers, or until the
+	// client gives up.
+	pullDelay time.Duration
+	pulls     []string
+	// pullAuths is the X-Registry-Auth of every pull, "" for an anonymous one.
+	pullAuths []string
+	rootDir   string
 
 	containers map[string]*fakeContainer
 	execs      map[string]*fakeExec
@@ -152,6 +157,14 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 		}
 		ref := r.URL.Query().Get("fromImage") + separator + tag
 		f.pulls = append(f.pulls, ref)
+		f.pullAuths = append(f.pullAuths, r.Header.Get("X-Registry-Auth"))
+		if f.pullDelay > 0 {
+			select {
+			case <-time.After(f.pullDelay):
+			case <-r.Context().Done():
+				return
+			}
+		}
 		if f.pullStatus != 0 {
 			writeJSON(w, f.pullStatus, map[string]any{"message": "pull access denied for " + r.URL.Query().Get("fromImage")})
 			return
@@ -584,6 +597,8 @@ func newFakeEngine(t *testing.T) (*fakeEngine, *client.Client) {
 		containers: map[string]*fakeContainer{}, execs: map[string]*fakeExec{}, volumes: map[string]*fakeVolume{},
 		release: make(chan struct{}),
 	}
+	// No credentials of the machine the tests run on reach a pull.
+	withDockerConfig(t, `{}`)
 	server := httptest.NewServer(f)
 	t.Cleanup(server.Close)
 	t.Cleanup(func() { close(f.release) })

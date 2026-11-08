@@ -139,7 +139,7 @@ func newHarness(t *testing.T, dir string, gw *gateway) *harness {
 		Tokens:  source,
 		Journal: j,
 		Handlers: map[string]Handler{
-			"env.scrub": func(_ context.Context, payload json.RawMessage) protocol.Result {
+			"env.scrub": func(_ context.Context, _ *int64, payload json.RawMessage) protocol.Result {
 				var p struct {
 					ID int64 `json:"id"`
 				}
@@ -295,7 +295,7 @@ func TestAGracefulStopDuringAnOpIsAnsweredAsInterrupted(t *testing.T) {
 	defer cancel()
 	// The handler runs until the runner is stopped, as a long op does on SIGTERM, and
 	// then fails because of the cancellation.
-	first.loop.Handlers["env.scrub"] = func(ctx context.Context, _ json.RawMessage) protocol.Result {
+	first.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
 		cancel()
 		<-ctx.Done()
 		return protocol.ErrorResult("scrub_failed", "scrubbing failed: "+ctx.Err().Error())

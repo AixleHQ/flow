@@ -38,8 +38,9 @@ const (
 // less a margin, so that a result near the cap is never refused with `413`.
 const ResultLimit = protocol.MaxBodyBytes - 16<<10
 
-// Handler runs one op. It always returns a result: a failure is an `error` result.
-type Handler func(ctx context.Context, payload json.RawMessage) protocol.Result
+// Handler runs one op, with the `session_id` of its envelope, nil for an
+// environment op. It always returns a result: a failure is an `error` result.
+type Handler func(ctx context.Context, sessionID *int64, payload json.RawMessage) protocol.Result
 
 // Gateway is the part of the protocol client the loop uses.
 type Gateway interface {
@@ -194,7 +195,7 @@ func (l *Loop) resultFor(ctx context.Context, op protocol.Op, log *slog.Logger) 
 	}
 	log.Info("running op")
 	started := l.Now()
-	result := handler(protocol.WithOpSession(protocol.WithOpDeadline(ctx, op.DeadlineAt), op.SessionID), op.Payload)
+	result := handler(protocol.WithOpDeadline(ctx, op.DeadlineAt), op.SessionID, op.Payload)
 	if ctx.Err() != nil {
 		// The runner is stopping, so the handler's result says why it was cut short,
 		// not how the op went. The entry stays begun: the next start answers

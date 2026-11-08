@@ -123,8 +123,8 @@ func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
 		}
 		return fakeRun{}
 	}
-	ctx := protocol.WithOpDeadline(sessionCtx(sessionID), time.Now().Add(time.Second))
-	r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"sleep", "infinity"}}))
+	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Second))
+	r := h.env.Exec(ctx, sessionID, mustJSON(t, map[string]any{"cmd": []string{"sleep", "infinity"}}))
 	if r.Status != protocol.StatusError || r.Error.Class != ClassExecTimeout || !strings.Contains(r.Error.Message, "deadline_at") {
 		t.Fatalf("%#v %v", r, r.Error)
 	}
@@ -137,8 +137,8 @@ func TestAnExecWithoutATimeoutEndsAtTheOpsDeadline(t *testing.T) {
 	h.engine.mu.Lock()
 	h.engine.execs = map[string]*fakeExec{}
 	h.engine.mu.Unlock()
-	ctx = protocol.WithOpDeadline(sessionCtx(sessionID), time.Now().Add(time.Hour))
-	if r := h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"true"}, "timeout": 30})); r.Status != protocol.StatusOK {
+	ctx = protocol.WithOpDeadline(context.Background(), time.Now().Add(time.Hour))
+	if r := h.env.Exec(ctx, sessionID, mustJSON(t, map[string]any{"cmd": []string{"true"}, "timeout": 30})); r.Status != protocol.StatusOK {
 		t.Fatalf("%#v", r)
 	}
 	for _, x := range h.engine.execs {
@@ -376,7 +376,7 @@ func TestSessionOpsWithoutASessionContainer(t *testing.T) {
 	}
 	handlers := h.env.Handlers()
 	for op, p := range ops {
-		r := h.run(handlers[op], p)
+		r := h.runEnvelope(sessionID, handlers[op], p)
 		if r.Status != protocol.StatusError {
 			t.Errorf("%s: %#v", op, r)
 			continue
@@ -414,9 +414,11 @@ func TestAStoppingRunnerCutsAnExecShort(t *testing.T) {
 	h.session()
 	block := make(chan struct{})
 	h.engine.run = func(*fakeExec, []byte) fakeRun { return fakeRun{Block: block} }
-	ctx, cancel := context.WithCancel(sessionCtx(sessionID))
+	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan protocol.Result)
-	go func() { done <- h.env.Exec(ctx, mustJSON(t, map[string]any{"cmd": []string{"sleep", "30"}})) }()
+	go func() {
+		done <- h.env.Exec(ctx, sessionID, mustJSON(t, map[string]any{"cmd": []string{"sleep", "30"}}))
+	}()
 	time.Sleep(100 * time.Millisecond)
 	cancel()
 	select {
@@ -447,7 +449,7 @@ func TestASessionOpOfAnotherSessionIsRefused(t *testing.T) {
 	}
 	handlers := h.env.Handlers()
 	for op, p := range ops {
-		r := h.runAs(124, handlers[op], p)
+		r := h.runEnvelope(124, handlers[op], p)
 		if r.Status != protocol.StatusError {
 			t.Errorf("%s: %#v", op, r)
 			continue
@@ -476,10 +478,13 @@ func TestASessionOpWithoutASessionIsRefused(t *testing.T) {
 	h := newEnvironment(t)
 	h.session()
 	handlers := h.env.Handlers()
+	zero := int64(0)
 	for _, op := range []string{"container.start", "container.stop", "exec", "write_file", "read_file", "batch", "status", "logs"} {
-		r := handlers[op](context.Background(), mustJSON(t, map[string]any{}))
-		if r.Status != protocol.StatusError || r.Error.Class != ClassSessionRequired {
-			t.Errorf("%s: %#v", op, r)
+		for _, id := range []*int64{nil, &zero} {
+			r := handlers[op](context.Background(), id, mustJSON(t, map[string]any{}))
+			if r.Status != protocol.StatusError || r.Error.Class != ClassSessionRequired {
+				t.Errorf("%s with session_id %v: %#v", op, id, r)
+			}
 		}
 	}
 	if len(h.engine.execs) != 0 || len(h.engine.creates) != 1 {

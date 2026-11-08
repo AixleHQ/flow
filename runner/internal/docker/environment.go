@@ -39,8 +39,16 @@ const (
 // cap is a constant of the protocol.
 const OutputCap = 1 << 20
 
-// Handler runs one op. It always returns a result: a failure is an `error` result.
-type Handler = func(ctx context.Context, payload json.RawMessage) protocol.Result
+// Handler runs one op, with the `session_id` of its envelope, nil for an
+// environment op. It always returns a result: a failure is an `error` result.
+type Handler = func(ctx context.Context, sessionID *int64, payload json.RawMessage) protocol.Result
+
+// SessionHandler runs a session op for the envelope's session, which sessionOp
+// has checked.
+type SessionHandler = func(ctx context.Context, sessionID int64, payload json.RawMessage) protocol.Result
+
+// EnvironmentHandler runs an environment op, which names no session.
+type EnvironmentHandler = func(ctx context.Context, payload json.RawMessage) protocol.Result
 
 // Environment is the host runner's view of one environment on the machine's
 // Docker daemon: its session container, its volumes, and the ops on them.
@@ -127,14 +135,10 @@ func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectR
 // requireSession is the session container a session op acts on. `running` asks
 // for a running one, as `exec` needs; the archive API of the file ops works on a
 // container that has exited too. Without one, the op answers
-// `no_session_container`. The container must carry the session of the op's
-// envelope: one labelled with another session answers `session_mismatch`, so a
-// late op of a finished session never reaches the next session's container.
-func (e *Environment) requireSession(ctx context.Context, running bool) (*container.InspectResponse, *protocol.Result) {
-	sessionID, r := opSession(ctx)
-	if r != nil {
-		return nil, r
-	}
+// `no_session_container`. The container must carry sessionID, the session of the
+// op's envelope: one labelled with another session answers `session_mismatch`, so
+// a late op of a finished session never reaches the next session's container.
+func (e *Environment) requireSession(ctx context.Context, sessionID int64, running bool) (*container.InspectResponse, *protocol.Result) {
 	c, err := e.sessionContainer(ctx)
 	if err != nil {
 		r := protocol.ErrorResult(ClassDockerError, "finding the session container failed: "+err.Error())
@@ -158,17 +162,6 @@ func (e *Environment) requireSession(ctx context.Context, running bool) (*contai
 	return c, nil
 }
 
-// opSession is the session of the op's envelope. A session op without one is
-// refused before anything is run.
-func opSession(ctx context.Context) (int64, *protocol.Result) {
-	id, ok := protocol.OpSession(ctx)
-	if !ok || id <= 0 {
-		r := protocol.ErrorResult(ClassSessionRequired, "a session op needs the session_id of its envelope, a positive integer; the op was not run")
-		return 0, &r
-	}
-	return id, nil
-}
-
 // checkSession refuses a container that is labelled with another session than id.
 func checkSession(c *container.InspectResponse, id int64) *protocol.Result {
 	var label string
@@ -183,13 +176,22 @@ func checkSession(c *container.InspectResponse, id int64) *protocol.Result {
 	return nil
 }
 
-// sessionOp refuses a session op whose envelope names no session, before its
+// sessionOp reads the envelope's `session_id` once and passes it on. A session op
+// whose envelope names no session, or not a positive id, is refused before its
 // payload is read.
-func sessionOp(h Handler) Handler {
-	return func(ctx context.Context, payload json.RawMessage) protocol.Result {
-		if _, r := opSession(ctx); r != nil {
-			return *r
+func sessionOp(h SessionHandler) Handler {
+	return func(ctx context.Context, sessionID *int64, payload json.RawMessage) protocol.Result {
+		if sessionID == nil || *sessionID <= 0 {
+			return protocol.ErrorResult(ClassSessionRequired, "a session op needs the session_id of its envelope, a positive integer; the op was not run")
 		}
+		return h(ctx, *sessionID, payload)
+	}
+}
+
+// environmentOp runs an environment op. It takes no session, and the platform
+// sends it none (PROTOCOL.md §5.4).
+func environmentOp(h EnvironmentHandler) Handler {
+	return func(ctx context.Context, _ *int64, payload json.RawMessage) protocol.Result {
 		return h(ctx, payload)
 	}
 }
@@ -215,7 +217,7 @@ func (e *Environment) Handlers() map[string]Handler {
 		"batch":           sessionOp(e.Batch),
 		"status":          sessionOp(e.Status),
 		"logs":            sessionOp(e.Logs),
-		"env.scrub":       e.Scrub,
-		"env.reset":       e.Reset,
+		"env.scrub":       environmentOp(e.Scrub),
+		"env.reset":       environmentOp(e.Reset),
 	}
 }

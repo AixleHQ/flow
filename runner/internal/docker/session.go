@@ -151,7 +151,7 @@ func (p ExecPayload) validate() *protocol.Result {
 // Exec is `exec`: it runs a command in the running session container through the
 // daemon's exec API, as `ContainerRuntime::DockerRuntime#exec` does. The result
 // carries the exit code, whatever it is, and each stream capped at OutputCap.
-func (e *Environment) Exec(ctx context.Context, raw json.RawMessage) protocol.Result {
+func (e *Environment) Exec(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p ExecPayload
 	if r := decodePayload(raw, &p, "an exec payload"); r != nil {
 		return *r
@@ -159,11 +159,11 @@ func (e *Environment) Exec(ctx context.Context, raw json.RawMessage) protocol.Re
 	if r := p.validate(); r != nil {
 		return *r
 	}
-	return e.exec(ctx, p)
+	return e.exec(ctx, sessionID, p)
 }
 
-func (e *Environment) exec(ctx context.Context, p ExecPayload) protocol.Result {
-	c, r := e.requireSession(ctx, true)
+func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) protocol.Result {
+	c, r := e.requireSession(ctx, sessionID, true)
 	if r != nil {
 		return *r
 	}
@@ -324,7 +324,7 @@ func (p WriteFilePayload) validate() ([]byte, *protocol.Result) {
 // WriteFile is `write_file`: it writes one file into the session container through
 // the daemon's archive API (what `docker cp` does), with its mode and owner, as
 // `DockerRuntime#write_file` does. Missing parent directories are created.
-func (e *Environment) WriteFile(ctx context.Context, raw json.RawMessage) protocol.Result {
+func (e *Environment) WriteFile(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p WriteFilePayload
 	if r := decodePayload(raw, &p, "a write_file payload"); r != nil {
 		return *r
@@ -333,11 +333,11 @@ func (e *Environment) WriteFile(ctx context.Context, raw json.RawMessage) protoc
 	if r != nil {
 		return *r
 	}
-	return e.writeFile(ctx, p, content)
+	return e.writeFile(ctx, sessionID, p, content)
 }
 
-func (e *Environment) writeFile(ctx context.Context, p WriteFilePayload, content []byte) protocol.Result {
-	c, r := e.requireSession(ctx, false)
+func (e *Environment) writeFile(ctx context.Context, sessionID int64, p WriteFilePayload, content []byte) protocol.Result {
+	c, r := e.requireSession(ctx, sessionID, false)
 	if r != nil {
 		return *r
 	}
@@ -387,7 +387,7 @@ type ReadFilePayload struct {
 
 // ReadFile is `read_file`: it reads one file of the session container through the
 // archive API, up to OutputCap. A larger file is refused (PROTOCOL.md §6.3).
-func (e *Environment) ReadFile(ctx context.Context, raw json.RawMessage) protocol.Result {
+func (e *Environment) ReadFile(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p ReadFilePayload
 	if r := decodePayload(raw, &p, "{path}"); r != nil {
 		return *r
@@ -395,11 +395,11 @@ func (e *Environment) ReadFile(ctx context.Context, raw json.RawMessage) protoco
 	if r := validTarget("path", p.Path); r != nil {
 		return *r
 	}
-	return e.readFile(ctx, p)
+	return e.readFile(ctx, sessionID, p)
 }
 
-func (e *Environment) readFile(ctx context.Context, p ReadFilePayload) protocol.Result {
-	c, r := e.requireSession(ctx, false)
+func (e *Environment) readFile(ctx context.Context, sessionID int64, p ReadFilePayload) protocol.Result {
+	c, r := e.requireSession(ctx, sessionID, false)
 	if r != nil {
 		return *r
 	}
@@ -496,7 +496,7 @@ var batchOps = []string{"exec", "write_file", "read_file"}
 // Batch is `batch`: it runs its ops in order until the first that fails, which is
 // one with an `error` result or an exec with a non-zero exit code. Every step is
 // checked before the first runs, so an invalid batch runs nothing.
-func (e *Environment) Batch(ctx context.Context, raw json.RawMessage) protocol.Result {
+func (e *Environment) Batch(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p BatchPayload
 	if r := decodePayload(raw, &p, "{ops}"); r != nil {
 		return *r
@@ -506,7 +506,7 @@ func (e *Environment) Batch(ctx context.Context, raw json.RawMessage) protocol.R
 	}
 	steps := make([]func(context.Context) protocol.Result, len(p.Ops))
 	for i, step := range p.Ops {
-		run, r := e.batchStep(step)
+		run, r := e.batchStep(sessionID, step)
 		if r != nil {
 			r.Error.Message = fmt.Sprintf("ops[%d]: %s", i, r.Error.Message)
 			return *r
@@ -546,7 +546,7 @@ func stepFailed(r protocol.Result) (bool, string) {
 	return false, ""
 }
 
-func (e *Environment) batchStep(step BatchStep) (func(context.Context) protocol.Result, *protocol.Result) {
+func (e *Environment) batchStep(sessionID int64, step BatchStep) (func(context.Context) protocol.Result, *protocol.Result) {
 	raw := step.Payload
 	if len(raw) == 0 || string(raw) == "null" {
 		raw = json.RawMessage(`{}`)
@@ -560,7 +560,7 @@ func (e *Environment) batchStep(step BatchStep) (func(context.Context) protocol.
 		if r := p.validate(); r != nil {
 			return nil, r
 		}
-		return func(ctx context.Context) protocol.Result { return e.exec(ctx, p) }, nil
+		return func(ctx context.Context) protocol.Result { return e.exec(ctx, sessionID, p) }, nil
 	case "write_file":
 		var p WriteFilePayload
 		if r := decodePayload(raw, &p, "a write_file payload"); r != nil {
@@ -570,7 +570,7 @@ func (e *Environment) batchStep(step BatchStep) (func(context.Context) protocol.
 		if r != nil {
 			return nil, r
 		}
-		return func(ctx context.Context) protocol.Result { return e.writeFile(ctx, p, content) }, nil
+		return func(ctx context.Context) protocol.Result { return e.writeFile(ctx, sessionID, p, content) }, nil
 	case "read_file":
 		var p ReadFilePayload
 		if r := decodePayload(raw, &p, "{path}"); r != nil {
@@ -579,7 +579,7 @@ func (e *Environment) batchStep(step BatchStep) (func(context.Context) protocol.
 		if r := validTarget("path", p.Path); r != nil {
 			return nil, r
 		}
-		return func(ctx context.Context) protocol.Result { return e.readFile(ctx, p) }, nil
+		return func(ctx context.Context) protocol.Result { return e.readFile(ctx, sessionID, p) }, nil
 	}
 	return nil, invalid("`op` must be one of %s, got %q", strings.Join(batchOps, ", "), step.Op)
 }
@@ -596,11 +596,7 @@ const (
 // `DockerRuntime#container_status` reads it. A paused container counts as
 // running: it has not exited. A terminated one also reports its exit code. A
 // container of another session is refused with `session_mismatch`.
-func (e *Environment) Status(ctx context.Context, _ json.RawMessage) protocol.Result {
-	sessionID, r := opSession(ctx)
-	if r != nil {
-		return *r
-	}
+func (e *Environment) Status(ctx context.Context, sessionID int64, _ json.RawMessage) protocol.Result {
 	c, err := e.sessionContainer(ctx)
 	if err != nil {
 		return protocol.ErrorResult(ClassDockerError, "finding the session container failed: "+err.Error())
@@ -640,7 +636,7 @@ type LogsPayload struct {
 // Logs is `logs`: the tail of the terminal-output file the entrypoint writes,
 // /tmp/terminal_output.log (DESIGN.md §6.5). Before the agent has written
 // anything the file does not exist, and the tail is empty.
-func (e *Environment) Logs(ctx context.Context, raw json.RawMessage) protocol.Result {
+func (e *Environment) Logs(ctx context.Context, sessionID int64, raw json.RawMessage) protocol.Result {
 	var p LogsPayload
 	if r := decodePayload(raw, &p, "{bytes}"); r != nil {
 		return *r
@@ -652,7 +648,7 @@ func (e *Environment) Logs(ctx context.Context, raw json.RawMessage) protocol.Re
 	if limit == 0 {
 		limit = OutputCap
 	}
-	c, r := e.requireSession(ctx, false)
+	c, r := e.requireSession(ctx, sessionID, false)
 	if r != nil {
 		return *r
 	}
