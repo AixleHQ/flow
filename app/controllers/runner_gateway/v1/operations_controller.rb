@@ -14,20 +14,23 @@ module RunnerGateway
     # off while the poll waited gets the refusal, not the payload. The ops the
     # poll selected stay deliverable until `after` acknowledges them, so
     # refusing then loses none.
+    #
+    # The parameters are checked against
+    # runner/protocol/schemas/v1/ops.query.json, whose `after` is at most
+    # 2^63 - 1: runner_operations.sequence is a bigint, so a larger one cannot
+    # be bound to the query.
     class OperationsController < ApplicationController
-      # runner_operations.sequence is a bigint: a larger `after` cannot be
-      # bound to the query.
-      MAX_SEQUENCE = (2**63) - 1
-
       before_action { authenticate(:access) }
 
       def index
-        after = non_negative_integer(params[:after], default: 0)
-        wait = non_negative_integer(params[:wait], default: Runners::Operations::MAX_WAIT)
-        if after.nil? || wait.nil? || after > MAX_SEQUENCE
+        query = request.query_parameters.slice("after", "wait").transform_values { |value| decimal(value) }
+        unless Runners::ProtocolSchema.valid?("ops.query", query)
           return refuse(:bad_request, "invalid_request",
-                        "`after` and `wait` must be non-negative integers, and `after` at most #{MAX_SEQUENCE}.")
+                        "`after` and `wait` must be non-negative integers, and `after` at most 9223372036854775807.")
         end
+
+        after = query.fetch("after", 0)
+        wait = query.fetch("wait", Runners::Operations::MAX_WAIT)
 
         operations = Runners::Operations.poll(@credential.runner_environment, after: after, wait: wait)
         if wait.positive?
@@ -49,11 +52,10 @@ module RunnerGateway
         Rails.cache.with_local_cache { ActiveRecord::Base.uncached { authenticate(:access) } }
       end
 
-      def non_negative_integer(value, default:)
-        return default if value.nil?
-
-        integer = Integer(value, 10, exception: false) if value.is_a?(String)
-        integer if integer && integer >= 0
+      # A query parameter written as a base-10 integer, as that integer; any
+      # other value as it came, for the schema to refuse.
+      def decimal(value)
+        (Integer(value, 10, exception: false) if value.is_a?(String)) || value
       end
     end
   end

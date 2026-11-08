@@ -49,15 +49,36 @@ class Runner < ApplicationRecord
   validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :integration_usable, if: -> { coder? && integration.present? }
-  validate :config_matches_schema, if: -> { runner_type.present? }
+  # Only when config or the type changes: a stored config that a later, tighter
+  # schema refuses must not block its runner's revoke or delete, which save
+  # with whiny_persistence.
+  validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
-  # What a picker offers: the company's runners and the project's own, live
-  # ones only. What a reference may name, deleted ones included, is
-  # TenantScope.owned(Runner, project:).
-  scope :visible_for_project, ->(project) {
-    where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id)).not_deleted
+  # Which runners belong to a project, the one place the rule is written: the
+  # runners of a tenant are its company's company-level runners plus the
+  # project's own, deleted ones included. A deleted runner counts on purpose: a
+  # stored reference to one deleted since stays valid (DESIGN.md §3.4), the
+  # launch (Runners::Resolver) finds it and refuses it by name, and the version
+  # history shows its name. Without a company the tenant owns none; without a
+  # project, only the company-level ones. TenantScope.owned(Runner) is this
+  # scope, and #of_tenant? the same rule for a row already loaded.
+  scope :of_tenant, ->(company_id:, project_id: nil) {
+    if company_id.blank?
+      none
+    elsif project_id
+      where(company_id: company_id, project_id: [ nil, project_id ])
+    else
+      where(company_id: company_id, project_id: nil)
+    end
   }
+  # What a picker offers: the tenant's runners, live ones only.
+  scope :visible_for_project, ->(project) { of_tenant(company_id: project.company_id, project_id: project.id).not_deleted }
+
+  # The rule of .of_tenant for this row, without a query.
+  def of_tenant?(company_id:, project_id: nil)
+    company_id.present? && self.company_id == company_id && (self.project_id.nil? || self.project_id == project_id)
+  end
 
   # Who runs the machines a session's credential goes to (§3.2, §11).
   def operated_by
@@ -101,6 +122,12 @@ class Runner < ApplicationRecord
     errors.add(:integration, project_id ? "must be company-wide or this project's" : "must be company-wide")
   end
 
+  def config_or_type_changing?
+    will_save_change_to_config? || will_save_change_to_runner_type?
+  end
+
+  # The schema and the type's rules (Runners::ConfigSchema), pure checks of
+  # the config hash: a model validation does no IO and calls no service.
   def config_matches_schema
     Runners::ConfigSchema.errors(config, runner_type).each { |message| errors.add(:config, message) }
   end

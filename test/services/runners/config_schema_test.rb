@@ -5,6 +5,10 @@ require "test_helper"
 class Runners::ConfigSchemaTest < ActiveSupport::TestCase
   def errors(config, type = "manual") = Runners::ConfigSchema.errors(config, type)
 
+  # The manual type's rules beyond its schema, which ConfigSchema.errors
+  # returns once the schema passes.
+  def manual_rules(container) = errors("container" => container)
+
   def patterns_in(node)
     case node
     when Hash then node.flat_map { |name, value| name == "pattern" ? [ value ] : patterns_in(value) }
@@ -109,6 +113,51 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     assert_equal 900, Runners::ConfigSchema.value(runner.config, "reconnect_grace")
     assert_equal "host", Runners::ConfigSchema.value(runner.config, "container.network")
     assert_equal "private", Runners::ConfigSchema.value(runner.config, "container.pid")
+  end
+
+  test "a home mount needs the path of the home directory to mount" do
+    assert_equal [ "container.home_mount.path is required on a manual runner" ], manual_rules("home_mount" => { "writable" => false })
+    assert_empty manual_rules("home_mount" => { "path" => "/home/op" })
+    assert_empty manual_rules("home_mount" => nil)
+  end
+
+  test "every writable host mount must be acknowledged by its target path" do
+    container = {
+      "home_mount" => { "path" => "/home/op", "writable" => true },
+      "extra_mounts" => [ { "source" => "/srv/out", "target" => "/out", "writable" => true },
+                          { "source" => "/srv/in", "target" => "/in" } ],
+      "cache_mounts" => [ { "host_path" => "/var/cache/pip", "target" => "/cache/pip" },
+                          { "name" => "npm", "target" => "/cache/npm" } ]
+    }
+
+    assert_equal %w[/home/op /out /cache/pip].map { |t| "container.acknowledged_writable_mounts must list #{t}: it is a writable host mount" },
+                 manual_rules(container)
+    assert_empty manual_rules(container.merge("acknowledged_writable_mounts" => %w[/home/op /out /cache/pip]))
+  end
+
+  test "the Docker socket needs privileged mounts allowed" do
+    assert_equal [ "container.docker_socket requires container.allow_privileged_mounts: it gives the agent root on the machine" ],
+                 manual_rules("docker_socket" => true)
+    assert_empty manual_rules("docker_socket" => true, "allow_privileged_mounts" => true)
+  end
+
+  test "the type's rules run only once the schema passes, and only for their type" do
+    assert_equal [ "container.home_mount.path must be an absolute path" ],
+                 manual_rules("home_mount" => { "path" => "home", "writable" => true })
+    coder = { "template_id" => SecureRandom.uuid,
+              "container" => { "extra_mounts" => [ { "source" => "/a", "target" => "/b", "writable" => true } ] } }
+    assert_empty errors(coder, "coder"), "a coder runner acknowledges no mounts"
+  end
+
+  test "writable_host_mounts lists the home mount by its path and the others by their target" do
+    config = { "container" => {
+      "home_mount" => { "path" => "/home/op", "writable" => true },
+      "extra_mounts" => [ { "source" => "/srv/out", "target" => "/out", "writable" => true },
+                          { "source" => "/srv/in", "target" => "/in" } ],
+      "cache_mounts" => [ { "host_path" => "/var/cache/pip", "target" => "/cache/pip" }, { "name" => "npm", "target" => "/cache/npm" } ]
+    } }
+
+    assert_equal %w[/home/op /out /cache/pip], Runners::ConfigSchema.writable_host_mounts(config)
   end
 
   test "a runner whose config the schema refuses is invalid" do

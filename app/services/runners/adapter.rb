@@ -28,10 +28,9 @@ module Runners
     def type = self.class.type
     def config_schema = self.class.config_schema
 
+    # The behaviour layer: what the type does, which for coder and kubernetes
+    # calls their APIs. The config rules are not here: they are data and pure
+    # functions in ConfigSchema, which `Runner`'s validation calls.
     def capabilities(_runner) = raise(NotImplementedError)
-
-    # Errors for the rules one key's schema cannot express. Called once
-    # `config` has passed ConfigSchema, so values have their declared types.
-    def validate_config(_runner) = []
   end
 end

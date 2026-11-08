@@ -22,6 +22,11 @@ module Runners
   # poll of that environment that hears another poll's announcement stops
   # waiting and answers an empty list. Its ops stay deliverable until `after`
   # acknowledges them, so none is lost.
+  #
+  # The channel carries JSON messages told apart by their `type`:
+  #
+  #   {"type":"op_enqueued","sequence":42}      an enqueue's wake-up (#wake)
+  #   {"type":"poll_waiting","poll_id":"<uuid>"} a waiting poll's announcement (#announce)
   module Operations
     MAX_WAIT = 25
     BATCH_SIZE = 20
@@ -29,10 +34,9 @@ module Runners
     # reads anyway. Without that confirmation, an op enqueued in the gap is
     # still delivered, at the latest when the wait ends.
     SUBSCRIBE_TIMEOUT = 2
-    # Starts a waiting poll's announcement on the channel, followed by the
-    # poll's own id. An enqueue publishes a bare sequence, which never starts
-    # with it.
-    ANNOUNCEMENT = "poll:"
+    # The `type` of each message on the channel.
+    WAKE_UP = "op_enqueued"
+    ANNOUNCEMENT = "poll_waiting"
 
     RESULT_STATES = { "ok" => "completed", "error" => "failed", "expired" => "expired" }.freeze
 
@@ -167,15 +171,18 @@ module Runners
 
       deadline = monotonic_now + wait
       channel = channel_for(environment.id)
-      announcement = "#{ANNOUNCEMENT}#{SecureRandom.uuid}"
+      poll_id = SecureRandom.uuid
       messages = Thread::Queue.new
-      on_message = ->(message) { messages << message unless message == announcement }
+      on_message = lambda do |raw|
+        message = decode(raw) || {}
+        messages << message unless own_announcement?(message, poll_id)
+      end
       confirmed = Thread::Queue.new
       release_connection
       pubsub.subscribe(channel, on_message, -> { confirmed << true })
       confirmed.pop(timeout: SUBSCRIBE_TIMEOUT)
       instrument("subscribed", environment.id)
-      announce(channel, announcement)
+      announce(channel, poll_id)
 
       loop do
         operations = deliver!(environment.id, after: after)
@@ -184,7 +191,7 @@ module Runners
 
         release_connection
         message = instrument("wait", environment.id) { messages.pop(timeout: remaining) }
-        if message&.start_with?(ANNOUNCEMENT)
+        if message && message["type"] == ANNOUNCEMENT
           instrument("replaced", environment.id)
           return []
         end
@@ -232,7 +239,7 @@ module Runners
     end
 
     def wake(environment_id, sequence)
-      pubsub.broadcast(channel_for(environment_id), sequence.to_s)
+      pubsub.broadcast(channel_for(environment_id), { type: WAKE_UP, sequence: sequence }.to_json)
     rescue StandardError => e
       # The op is committed: a poll that missed this wake-up still takes it at
       # its next read, at the latest when its wait ends.
@@ -243,11 +250,26 @@ module Runners
     # subscription. Sent once subscribed, so of two polls that start together
     # at least the later one's announcement reaches the earlier one: at most
     # one of them keeps waiting, and both may answer empty.
-    def announce(channel, announcement)
-      pubsub.broadcast(channel, announcement)
+    def announce(channel, poll_id)
+      pubsub.broadcast(channel, { type: ANNOUNCEMENT, poll_id: poll_id }.to_json)
     rescue StandardError => e
       # The older poll then waits out its own `wait`, as before this rule.
       Rails.logger.warn("[Runners::Operations] announcing a poll on #{channel} failed: #{e.class}: #{e.message}")
+    end
+
+    # A message heard on the channel as a Hash, or nil for one that is not a
+    # JSON object. Any message other than another poll's announcement makes
+    # the waiting poll read the queue again, so an unreadable one costs a read
+    # and loses nothing.
+    def decode(raw)
+      message = JSON.parse(raw.to_s)
+      message if message.is_a?(Hash)
+    rescue JSON::ParserError
+      nil
+    end
+
+    def own_announcement?(message, poll_id)
+      message["type"] == ANNOUNCEMENT && message["poll_id"] == poll_id
     end
 
     def channel_for(environment_id)

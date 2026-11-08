@@ -67,6 +67,17 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
+  # PROTOCOL.md §5.1: ephemeral_not_supported, then invalid_registration.
+  test "an ephemeral registration is refused as such even when the rest of its body is invalid" do
+    token = Runners::Credentials.mint_registration!(@runner)
+
+    register(token, { ephemeral: true, facts: nil })
+    assert_refused :unprocessable_entity, "ephemeral_not_supported"
+    register(token, REGISTRATION.merge(name: 5))
+    assert_refused :unprocessable_entity, "invalid_registration"
+    assert_equal 0, RunnerEnvironment.count
+  end
+
   # == POST /runner/v1/token ==
 
   test "a refresh token rotates once, and reusing it after the new pair is used revokes the family" do
