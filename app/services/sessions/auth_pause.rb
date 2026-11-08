@@ -73,13 +73,17 @@ module Sessions
       return false unless self.class.paused?(session)
 
       if interactive_session?
-        unpause!(renewed: true)
+        return already_unpaused unless unpause!(renewed: true)
+
         log(:info, "login renewed")
         return true
       end
+      # Typed before the compare-and-set: typing is an exec, which must not run inside a
+      # database transaction, and typing after the unpause would leave the agent without a
+      # prompt when typing fails. Two deliveries at once can type it twice; that is accepted.
       return false unless nudge
+      return already_unpaused unless unpause!
 
-      unpause!
       log(:info, "resumed")
       true
     rescue StandardError => e
@@ -89,24 +93,24 @@ module Sessions
       false
     end
 
-    # Records the pause, then pauses the workflow run. A compare-and-set under the session's
-    # row lock: a session that is already paused, or for which `still` (when given) no longer
-    # holds, is left as it is.
+    # Records the pause and pauses the workflow run, in one transaction under the run's row
+    # lock, then the session's (#transition). A compare-and-set: a session that is already
+    # paused, or for which `still` (when given) no longer holds, is left as it is, and a
+    # delivery cannot unpause the session between the marker and the run's pause.
     # @return [Boolean] whether the session was paused
     def pause!(banner, &still)
-      paused = session.with_lock do
+      paused = transition do |run|
         next false if self.class.paused?(session) || (still && !still.call(session))
 
         session.update_jsonb_keys!(:metadata, set: { "auth_paused_at" => Time.current.iso8601,
                                                      "auth_pause_reason" => banner },
                                               remove: %w[auth_renewed_at])
+        run.pause! if run&.may_pause?
         true
       end
       return false unless paused
 
       announce
-      run = session.step_run&.workflow_run
-      run.pause! if run&.may_pause?
       log(:info, "paused: #{banner}")
       true
     end
@@ -114,12 +118,15 @@ module Sessions
     # Renews the login if the platform can, then hands whatever is stored to every holder,
     # here in the worker. Delivery is what resumes this session, so it runs even when no
     # refresh was needed.
-    def heal!
+    #
+    # The attempt is counted under the session's row lock, from the counter read inside it.
+    # With `if_due: true` the attempt is made only when #heal_due? still holds there, so
+    # two passes cannot both spend one.
+    def heal!(if_due: false)
       credential = session_credential
       return unless credential&.active?
+      return unless count_heal_attempt(if_due: if_due)
 
-      session.merge_jsonb!(:metadata, "auth_heal_attempts" => heal_attempts + 1,
-                                      "auth_heal_attempted_at" => Time.current.iso8601)
       unless fresh_grant?(credential)
         result = AgentCredential.delivering_inline do
           credential.renew!(source: :auth_pause, margin_ms: FORCE_REFRESH_MARGIN_MS, blocks: adapter.base_refresh_blocks)
@@ -184,25 +191,55 @@ module Sessions
       granted.present? && granted > FRESH_GRANT.ago
     end
 
-    # Under the session's row lock, as #pause!: a session another path unpaused meanwhile
-    # (a delivery's #resume!, a pass's #unpause_quietly) is not unpaused twice.
+    # In one transaction under the run's row lock, then the session's, as #pause!: a session
+    # another path unpaused meanwhile (a delivery's #resume!, a pass's #unpause_quietly) is
+    # not unpaused twice, and of two sessions of one run unpaused at once, the second sees
+    # the first's marker gone and resumes the run.
     def unpause!(renewed: false, &still)
-      unpaused = session.with_lock do
+      unpaused = transition do |run|
         next false unless self.class.paused?(session) && (still.nil? || still.call(session))
 
         session.update_jsonb_keys!(:metadata, set: renewed ? { "auth_renewed_at" => Time.current.iso8601 } : {},
                                               remove: PAUSE_KEYS)
+        run.resume! if run&.paused? && !other_step_auth_paused?(run)
         true
       end
       return false unless unpaused
 
       announce
-      run = session.step_run&.workflow_run
-      return true unless run&.paused?
-      return true if run.step_runs.joins(:terminal_session).merge(TerminalSession.active.auth_paused).exists?
-
-      run.resume!
       true
+    end
+
+    # Locks the workflow run (for a workflow step), then the session, in that order, as the
+    # admission paths do, and yields the locked run inside the transaction. No other lock is
+    # taken and no external call is made inside it. An interactive session has no run.
+    def transition
+      run = session.step_run&.workflow_run
+      TerminalSession.transaction do
+        run&.lock!
+        session.lock!
+        yield run
+      end
+    end
+
+    def other_step_auth_paused?(run)
+      run.step_runs.joins(:terminal_session).merge(TerminalSession.active.auth_paused)
+         .where.not(terminal_session_id: session.id).exists?
+    end
+
+    def count_heal_attempt(if_due:)
+      session.with_lock do
+        next false if if_due && !heal_due?
+
+        session.merge_jsonb!(:metadata, "auth_heal_attempts" => heal_attempts + 1,
+                                        "auth_heal_attempted_at" => Time.current.iso8601)
+        true
+      end
+    end
+
+    def already_unpaused
+      log(:info, "already unpaused by another path")
+      false
     end
 
     def nudge

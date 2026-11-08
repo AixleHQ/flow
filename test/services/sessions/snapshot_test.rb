@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "open3"
 require "test_helper"
 
 module Sessions
@@ -121,6 +122,43 @@ module Sessions
       assert_equal "one\ntwo\n", parsed[:scrollback]
       refute parsed.key?(:log_mtime), "a fragment that exited non-zero was not read"
       assert_equal "1700000000\n0 1699999990\n", parsed[:clients]
+    end
+
+    # The script itself, through a real /bin/sh, against stub `tmux` and `stat` on PATH: the
+    # footer on its own line after output with no final newline, each fragment's own status,
+    # `date && tmux list-clients` failing as one unit, and the client format reaching tmux
+    # as a literal.
+    test "the script read through a real shell parses into its parts and leaves out a failed one" do
+      Dir.mktmpdir do |bin|
+        stub_tool(bin, "tmux", <<~'SH')
+          case "$1" in
+            capture-pane) printf '● Working\n> ' ;;
+            list-clients)
+              [ "$5" = '#{client_readonly} #{client_activity}' ] || exit 3
+              echo '0 1699999990' ;;
+            *) exit 2 ;;
+          esac
+        SH
+        stub_tool(bin, "stat", "echo 'stat: cannot stat' >&2; exit 1")
+        command = Snapshot::Command.new(%i[scrollback log_mtime clients])
+
+        stdout, status = Open3.capture2({ "PATH" => "#{bin}:#{ENV.fetch('PATH')}" }, *command.argv)
+        parsed = command.parse(stdout)
+
+        assert status.success?, stdout
+        assert_equal "● Working\n> ", parsed[:scrollback]
+        refute parsed.key?(:log_mtime), "the fragment whose stat exited non-zero was not read"
+        clock, client = parsed[:clients].split("\n")
+        assert_match(/\A\d+\z/, clock, "the container's clock comes first")
+        assert_equal "0 1699999990", client
+        assert_equal [ [ false, 1_699_999_990 ] ], Snapshot::Parts.fetch(:clients).parse.call(parsed[:clients]).rows
+      end
+    end
+
+    def stub_tool(bin, name, body)
+      path = File.join(bin, name)
+      File.write(path, "#!/bin/sh\n#{body}\n")
+      File.chmod(0o755, path)
     end
   end
 end

@@ -814,7 +814,14 @@ pass and hands the snapshot to them (task #211).
     admitted session, `SessionAdmissionService.fail_if!` under the writer lock),
     which reports whether it applied. Only the Temporal signal that wakes the
     container workflow is sent after the commit;
-  - `Sessions::AuthPause#pause!`, `#unpause_quietly` and `#expire!` do the same;
+  - `Sessions::AuthPause#pause!`, `#unpause_quietly` and `#expire!` do the same.
+    A pause or an unpause is one transaction that locks the workflow run, then
+    the session, and changes the marker and the run's state together, so a
+    delivery between the two cannot leave a paused run with no paused session,
+    and two sessions of one run unpaused at once resume it. A delivery's
+    `resume!` types its prompt before that compare-and-set, never inside a
+    transaction, and returns whether the unpause applied. `heal!` counts its
+    attempt under the session's row lock, from the counter read there;
   - a reminder is counted under the lock before it is typed.
   If the change did not apply, another path (`finish_session`, an auth pause, a
   delivery) has taken the session over, and the check stops with `:taken_over`.
