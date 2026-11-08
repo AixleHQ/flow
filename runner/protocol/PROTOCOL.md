@@ -542,7 +542,7 @@ Results:
 | The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words (§6.1). Nothing is created. |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
-| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed. |
+| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 ```json
@@ -784,6 +784,8 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
 - `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
   without it: a machine unregistered during a session stops holding that session, the session's
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
-  container is gone.
+  container is gone. That session's container keeps running on the machine: nothing can stop it,
+  because the runner is unregistered and its credentials are revoked, so the operator removes it
+  by hand. Scrub and return to service are tasks 11 and 13.
 - An endpoint that issues registration tokens ("Add machine"): task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.

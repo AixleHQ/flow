@@ -1018,7 +1018,9 @@ session's machine, its `env.reset` included, and the runner's `session_mismatch`
 net on the machine. A machine unregistered during a session stops holding it
 (`Runners::Registration.unregister!`): the session's next ops answer `no_session_container`, the
 session fails as one whose container is gone, and its cleanup finds it absent and releases its
-admission. `CleanupStaleActivity` sends nothing to a runner: a stale runner session
+admission. The container itself keeps running on the machine: nothing can stop it, because the
+runner is unregistered and its credentials are revoked, so the operator removes it by hand
+until scrub and return to service (tasks 11 and 13). `CleanupStaleActivity` sends nothing to a runner: a stale runner session
 should hold no machine, since its admission is released only once the machine is free or
 `failed`, and one that still holds one moves it to `failed` ("held by stale session <id>"). A
 reset under the scanners' 15 s cap could fail a healthy machine, and without the cap one silent
@@ -1628,7 +1630,9 @@ task 8.
   contains or is inside the state directory is refused with `forbidden_mount`. An environment
   that already has a container is refused with `container_exists`, or `session_mismatch` when
   it is another session's (8a), so it has at most one session container. A container that was
-  created but did not start is removed.
+  created but did not start is removed, under a 30 s timeout of its own, so a stalled daemon does
+  not hold up the serial ops loop. A removal that fails is logged, the answer stays
+  `container_start_failed`, and the cleanup's `env.reset` removes what is left.
 - **`container.stop`** stops the container (SIGTERM, SIGKILL 10 s later) and removes it with
   its anonymous volumes; the named volumes stay. In 6b a container already gone was `removed:
   false`; since 8a the op without this session's container answers an error and touches

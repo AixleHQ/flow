@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
@@ -336,12 +337,12 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	case ctx.Err() != nil:
 		// The daemon may have created it before the answer was cut off: by the
 		// op's deadline, or by the runner stopping. Either way it is removed.
-		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), name, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+		removal := e.removeAfterFailedStart(ctx, name)
 		if r := pastDeadline(ctx, "creating "+name); r != nil {
 			return *r
 		}
 		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf(
-			"creating %s was cut short (%v); nothing was created", name, ctx.Err()))
+			"creating %s was cut short (%v); %s", name, ctx.Err(), removal))
 	case cerrdefs.IsConflict(err):
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf("creating %s failed: %v", name, err))
 	default:
@@ -349,13 +350,40 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	}
 	if _, err := e.API.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
 		// A container that never started is not left behind.
-		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), created.ID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+		removal := e.removeAfterFailedStart(ctx, created.ID)
 		if r := pastDeadline(ctx, "starting "+name); r != nil {
 			return *r
 		}
-		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("starting %s failed: %v", name, err))
+		return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("starting %s failed: %v; %s", name, err, removal))
 	}
 	return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"container_id": created.ID, "name": name}}
+}
+
+// defaultRemoveTimeout bounds the removal after a failed or cut-short
+// `container.start` when Environment.RemoveTimeout is zero.
+const defaultRemoveTimeout = 30 * time.Second
+
+// removeAfterFailedStart removes what a failed or cut-short `container.start`
+// may have left, and says in the answer's words what became of it. The removal
+// runs under its own timeout, not under the op's context, which has ended or
+// is about to: a stalled daemon then cannot hold up the serial ops loop. A
+// removal that fails is logged, and the answer stays `container_start_failed`:
+// the session still holds its machine, and the cleanup's `env.reset` removes a
+// container that is left (PROTOCOL.md §6.2).
+func (e *Environment) removeAfterFailedStart(ctx context.Context, ref string) string {
+	timeout := e.RemoveTimeout
+	if timeout <= 0 {
+		timeout = defaultRemoveTimeout
+	}
+	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	defer cancel()
+	_, err := e.API.ContainerRemove(removeCtx, ref, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+	if err == nil || cerrdefs.IsNotFound(err) {
+		return "nothing was left"
+	}
+	e.logger().Warn("removing the container of a failed container.start failed; env.reset removes what is left",
+		"environment", e.Key, "container", ref, "error", err)
+	return fmt.Sprintf("removing what the daemon made failed (%v), and env.reset removes it", err)
 }
 
 // pastDeadline is the answer of a `container.start` whose deadline_at passed

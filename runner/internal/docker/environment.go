@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -61,6 +62,11 @@ type Environment struct {
 	StateDir string
 	// Now is replaced in tests.
 	Now func() time.Time
+	// RemoveTimeout bounds the removal after a failed or cut-short
+	// `container.start`. Zero is 30 seconds.
+	RemoveTimeout time.Duration
+	// Logger receives what an op cannot put in its answer. Nil is slog.Default().
+	Logger *slog.Logger
 }
 
 func (e *Environment) now() time.Time {
@@ -68,6 +74,13 @@ func (e *Environment) now() time.Time {
 		return time.Now()
 	}
 	return e.Now()
+}
+
+func (e *Environment) logger() *slog.Logger {
+	if e.Logger == nil {
+		return slog.Default()
+	}
+	return e.Logger
 }
 
 // ContainerName is the session container's name, `aixle-<key>-<session id>`.

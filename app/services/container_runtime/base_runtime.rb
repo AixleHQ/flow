@@ -32,6 +32,12 @@ module ContainerRuntime
   #                                                ImagePullError when it can never start
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
+  # == Session
+  #   session_identity(session)                  → String, the runtime_id the create will have
+  #   cleanup_session(id)                        → void, removes the session's objects
+  #   session_absent?(id)                        → true/false
+  #   cleanup_ready?(id)                         → true/false
+  #
   # == Garbage collection
   #   list_session_resources                     → [ContainerRuntime::SessionResource]
   #   delete_session_resource(resource)          → true/false
@@ -86,6 +92,26 @@ module ContainerRuntime
     # Returns a digest String or nil. Docker-specific; nil by default.
     def image_digest(_image)
       nil
+    end
+
+    # -- Session --------------------------------------------------------------
+
+    # The identity (runtime_id) the session's create will have, known before
+    # the create runs, so the cleanup can find the object even if the answer
+    # to the create never arrives (AdmittedPhaseActivity).
+    def session_identity(_session)
+      raise NotImplementedError, "#{self.class.name} must implement #session_identity"
+    end
+
+    # Removes what the runtime holds for the session `id` names. Already gone
+    # counts as done.
+    def cleanup_session(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #cleanup_session"
+    end
+
+    # Whether the runtime holds nothing of the session `id` names any more.
+    def session_absent?(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #session_absent?"
     end
 
     # Whether the cleanup of the session `id` names may run now. False while

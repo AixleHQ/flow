@@ -71,7 +71,7 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		"platform", creds.URL, "environment", creds.Environment.Key)
 	// The host runner runs every op itself, the session ops included, through the
 	// Docker API against the environment's session container (DESIGN.md §6.8).
-	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir}
+	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
 	handlers := map[string]host.Handler{}
 	for name, handler := range env.Handlers() {
 		handlers[name] = handler

@@ -196,6 +196,27 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_empty @host_runner.operations
   end
 
+  # Runners::Machines::NoMachine is raised before any op exists, so the create
+  # is never dispatched: the cleanup releases the admission at once, with no
+  # absence window (AdmittedPhaseActivity::NEVER_DISPATCHED).
+  test "a machine lost between the launch and the create fails with the runner's message and releases the admission at once" do
+    session = launch
+    run_phases(session, %w[pull_image])
+    Runners::Machines.fail!(@machine, "lost after the launch")
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "create_container") }
+    assert_includes error.message, "Runner \"Build farm\" has no machine that can take a session"
+    admission = session.session_admission.reload
+    assert_equal "retryable", admission.session_runtime_operations.find_by!(phase: "create_container").state,
+                 "no op was dispatched, so the create pins nothing"
+
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert admission.reload.released_at, "the admission is released at once"
+    assert_empty @host_runner.operations, "nothing was sent to the runner"
+  end
+
   test "the scanners and the live log read a runner session through its machine, not the hosted runtime" do
     session = launch
     run_phases(session, %w[pull_image create_container start_container exec])

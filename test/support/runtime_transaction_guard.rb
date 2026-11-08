@@ -12,15 +12,28 @@
 # Every ContainerRuntime::BaseRuntime subclass is checked, ContainerRuntime::FakeRuntime
 # included. A violation is recorded rather than raised, because the code under
 # test may rescue what a runtime call raises, and the test fails at its teardown.
+#
+# Only calls on real runtime objects are checked. A Mocha double is not: a
+# `mock("runtime")` is no BaseRuntime, and `runtime.stubs(:write_file)` puts
+# the stub on the object's singleton class, in front of the check. A path
+# tested only on doubles gets no check from here, so the main session-scoped
+# callers each have a test on FakeRuntime or on RunnerRuntime with
+# ContainerRuntime::FakeHostRunner: SessionContextService's assembly,
+# Agents::CredentialDelivery, Sessions::AuthPause#heal! and
+# Sessions::SecretRegistry.publish!.
 module RuntimeTransactionGuard
-  # The calls that reach a container, a cluster or a runner.
-  CALLS = %i[
-    pull_image create_container start_container wait_for_ready stop_container remove_container remove_image
-    exec exec! write_file read_file
-    container_status container_termination wait_container container_logs
-    session_absent? cleanup_ready? cleanup_session
-    list_session_resources delete_session_resource
-  ].freeze
+  # Public methods of the runtime interface that make no external I/O, with
+  # the reason. Every other one is checked.
+  EXEMPT = {
+    container_identifier: "reads the identifier off a handle it is given",
+    session_identity: "names the session's object from the session row"
+  }.freeze
+
+  # The runtime interface's public methods (ContainerRuntime::BaseRuntime), the
+  # ones a runtime adds to it included: each reaches a container, a cluster, a
+  # registry or a runner. Taken from the interface, so a new runtime method is
+  # checked without a change here.
+  CALLS = (ContainerRuntime::BaseRuntime.public_instance_methods(false) - EXEMPT.keys).sort.freeze
 
   @violations = []
   @mutex = Mutex.new
