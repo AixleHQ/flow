@@ -29,6 +29,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconClipboardList,
+  IconClock,
   IconCode,
   IconCursorText,
   IconDots,
@@ -448,6 +449,12 @@ function ConnectAgentsStep({
               chipEl = (
                 <Badge variant="light" color="green" size="sm" leftSection={<IconCheck size={10} />}>
                   Connected
+                </Badge>
+              );
+            } else if (session?.state === 'queued') {
+              chipEl = (
+                <Badge variant="outline" color="gray" size="sm" leftSection={<IconClock size={10} />}>
+                  Queued
                 </Badge>
               );
             } else if (hasActiveSession && session?.state !== 'failed') {

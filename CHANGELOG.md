@@ -57,6 +57,9 @@ governance, community health — carry none.
 - **Company settings**: the AWS Marketplace emails — confirming a request, asking
   administrators to accept it, and the answer — are readable again: their text
   was near-black on the emails' dark background.
+- **Sign-in & onboarding**: on the "Connect your agents" step, an agent whose login
+  is waiting for a free slot reads *Queued* instead of *Connecting*. Two agent logins
+  run at a time, and the rest used to look like they were stuck connecting.
 - **Sessions & Runs**: an automatic Kiro step whose agent ends its turn without
   `finish_session` no longer waits for a person. A minute or two later the agent
   is reminded in its terminal to finish or continue, up to 3 times, and the step
