@@ -330,10 +330,10 @@ func (m *Manager) Unit() ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	err := unitTemplate.Execute(&buf, map[string]any{
-		"Binary":   m.Binary,
-		"StateDir": m.StateDir,
-		"User":     User,
-		"Group":    DockerGroup,
+		"Binary":      m.Binary,
+		"StateDir":    m.StateDir,
+		"User":        User,
+		"Group":       DockerGroup,
 		"ExitStop":    ExitStop,
 		"ExitUpdated": ExitUpdated,
 	})

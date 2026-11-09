@@ -220,7 +220,7 @@ func TestConfigureRefusals(t *testing.T) {
 		"runner_version_unsupported": {answer{400, map[string]any{
 			"error": "runner_version_unsupported", "message": "aixle-runner 0.0.0-dev is no longer supported (minimum 0.1.0)."}},
 			"is no longer supported (minimum 0.1.0). The registration token was not spent: update aixle-runner"},
-		"runner_revoked":          {refused(401, "runner_revoked"), "revoked or deleted"},
+		"runner_revoked": {refused(401, "runner_revoked"), "revoked or deleted"},
 	}
 	for name, tc := range cases {
 		_, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {tc.answer}})

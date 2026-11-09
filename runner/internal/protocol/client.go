@@ -229,7 +229,6 @@ func (c *Client) newRequest(ctx context.Context, endpoint Endpoint, method, path
 	return req, nil
 }
 
-
 // maxResponseBytes bounds what the runner reads of one answer. The largest is a
 // batch of 20 ops, each payload well under the gateway's own 2 MiB body cap.
 const maxResponseBytes = 64 << 20

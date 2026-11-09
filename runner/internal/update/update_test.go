@@ -53,7 +53,7 @@ type server struct {
 }
 
 func (s *server) serve(body string) { s.mu.Lock(); s.body = body; s.mu.Unlock() }
-func (s *server) count() int       { s.mu.Lock(); defer s.mu.Unlock(); return s.downloads }
+func (s *server) count() int        { s.mu.Lock(); defer s.mu.Unlock(); return s.downloads }
 
 type fixture struct {
 	t        *testing.T
