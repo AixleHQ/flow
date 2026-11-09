@@ -634,8 +634,16 @@ where their credential is going (§11).
 
 Policies: `Web::Company::RunnersPolicy` (company, `admin?`) and
 `Web::Company::Projects::RunnersPolicy` (`admin? || project.owner_id == user.id` for
-writes, `project_accessible?` for reads). Unlike the integrations controller's
-`project_id.nil?` check, the company-scope rule lives in the policy.
+writes, `project_accessible?` for reads). As every policy does through `dynamic_authorize!`,
+they authorize the action only (task #209). Which runner a request may touch is decided by
+the controller's lookup, as in the integrations controllers: on the project page, update,
+destroy, `disable`, `enable` and `revoke` find the runner among the project's own runners,
+and in company settings among the company-level ones; index and show find it among the
+runners the page lists. A company runner is then not found (`404`) by a write from a project
+page. The show page's `can_manage` is the policy's answer for the action and whether the
+runner is one of the page's own. The actions live in the two controllers
+(`Web::Company::RunnersController`, `Web::Company::Projects::RunnersController`), and what
+they share, the form's attributes and its runner types, is `Runners::Form`.
 
 ### 3.3 Precedence
 
@@ -828,12 +836,11 @@ module Runners
   class Adapter
     # Registration
     def self.type                                    # => :coder
-    def self.config_schema                           # => JSON schema the form and #validate_config use
+    def self.config_schema                           # => the type's JSON schema (Runners::ConfigSchema), for the form
     def capabilities(runner)                         # => Runners::Capabilities
 
     # Runner-level
-    def validate_config(runner)                      # => [errors] — template exists, namespace valid, …
-    def check_health(runner)                         # => Runners::Health(status:, reason:, facts:)
+    def check_health(runner)                         # => Runners::Health(status:, reason:, facts:); may call the provider
 
     # Environment lifecycle — the whole contract; nothing here runs during a session
     def provision(environment)                       # create; => {external_id:}; raises CapacityError / ProvisionError
@@ -846,17 +853,34 @@ module Runners
 end
 ```
 
-**What v1 has so far** (§15 task 2): `Runners::Adapter` with `type`, `config_schema`,
-`capabilities` and `validate_config`, and a registry that holds `Runners::ManualAdapter`
+**What v1 has so far** (§15 task 2, reworked by task #209): `Runners::Adapter` with `type`,
+`config_schema` and `capabilities`, and a registry that holds `Runners::ManualAdapter`
 only. A type without an adapter cannot be created: `Runners::Adapter.for` raises
 `Runners::Adapter::UnavailableType`, and the controllers refuse a `coder` or `kubernetes`
-runner as "not available yet" until task 17 and phase 6. `ManualAdapter#validate_config`
-checks the `config.container` rules one key's schema cannot express: `home_mount.path`,
-the acknowledgement of every writable host mount, and `docker_socket` behind
-`allow_privileged_mounts`. `Runners::Save` runs it on create and update and saves nothing
-when it returns errors. `check_health` is not there yet: on `manual` health comes from
-machine heartbeats, so it lands with task 12. The environment lifecycle methods land with
-the tasks that call them.
+runner as "not available yet" until task 17 and phase 6. `check_health` is not there yet:
+on `manual` health comes from machine heartbeats, so it lands with task 12. The
+environment lifecycle methods land with the tasks that call them.
+
+**Config checks do no IO (task #209).** The adapter is the behaviour layer, which for
+`coder` and `kubernetes` calls their APIs, so the model never calls it. A runner's `config`
+is checked by `Runner`'s own validation, which calls only `Runners::ConfigSchema`: the
+type's JSON Schema, then the type's rules one key's schema cannot express, as pure
+functions of the config hash (`ConfigSchema::TYPE_RULES`). On `manual` those are
+`home_mount.path`, the acknowledgement of every writable host mount, and `docker_socket`
+behind `allow_privileged_mounts`. The rule for every check of this kind:
+
+- A model validation has no side effects, no IO and no dependency on services or higher
+  layers. It may read the model's own associations, query for uniqueness, and call pure data
+  and rule code.
+- A check that needs an external call, such as whether a Coder template exists, belongs in a
+  service or the health check (`check_health`), never in a model validation.
+- The config checks run only when `config` or `runner_type` changes, so a stored config
+  that a later, tighter schema refuses does not block the runner's revoke or delete, which
+  save with `whiny_persistence`.
+
+`Runners::Save` stays thin: it stores the capabilities the adapter derives, turns an
+unavailable type and the unique-name race into errors, and saves with a plain `save`, which
+runs the model's validations.
 
 `Runners::Adapter.for(runner)` is a registry keyed by type
 (`Runners::ManualAdapter`, `Runners::CoderAdapter`, `Runners::KubernetesAdapter`). Adding a
@@ -890,8 +914,8 @@ The per-type mapping:
 
 | Method | `manual` (nothing to call) | `coder` (outside, Coder API via `Coder::Api`) | `kubernetes` (via controller ops) |
 | --- | --- | --- | --- |
-| `validate_config` | `config.container` options only (§2.7, §6.8) | Template exists, parameters valid, integration visible, `config.container` options | Namespace, `config.container.resources` and `image_override` valid |
-| `check_health` | Derived from machine heartbeats (§2.5). No outbound call | Coder API reachable, template valid | Controller heartbeat and its RBAC report |
+| Config checks (`Runners::ConfigSchema`, no IO) | `config.container` options only (§2.7, §6.8) | Parameters valid, `config.container` options; the integration usable is `Runner`'s own validation | Namespace, `config.container.resources` and `image_override` valid |
+| `check_health` | Derived from machine heartbeats (§2.5). No outbound call | Coder API reachable, template exists and is valid | Controller heartbeat and its RBAC report |
 | `provision` | **No-op.** Never called: `provisionable: false` | `WorkspaceService` create from `config.template_id` with `config.parameters`, name = `key` | `controller.provision {key, image, resources, labels}`. The controller creates Pod, ServiceAccount and Secret (bootstrap) in its namespace |
 | `prepare` | **No-op**, returns `:ready`: the machine is the operator's and is already running | Await build. Start the workspace if it is stopped | Await pod `Ready` (controller reports) |
 | `inject_bootstrap` | **No-op**: the operator installed the runner (§14.4) | `Coder::SshRunner`-style `coder ssh <ws> -- sh -s` with the install script **on stdin**, so the token never appears in argv or `ps`. It installs and starts `aixle-runner --mode host` (§6.8) | No-op: the controller mounts the bootstrap Secret and the pod's init container installs the runner (§9.6) |
@@ -1087,8 +1111,13 @@ answers `413` before it reads a body over the cap, chunked bodies included, so a
 never reaches Rails.
 
 **The long-poll's wake-up (§15 task 5b).** `Runners::Operations` (`app/services/runners/operations.rb`):
-- **Publishing.** `enqueue!` publishes the op's sequence on `runner_env_<id>` through
-  `ActionCable.server.pubsub` once its transaction commits
+- **The channel's messages (task #209).** `runner_env_<id>` carries JSON objects told apart
+  by their `type`: `{"type": "op_enqueued", "sequence": 42}`, an enqueue's wake-up, and
+  `{"type": "poll_waiting", "poll_id": "<uuid>"}`, a waiting poll's announcement. A message
+  that is not a JSON object, or of another type, makes a waiting poll read the queue again
+  and ends nothing.
+- **Publishing.** `enqueue!` publishes an `op_enqueued` message with the op's sequence on
+  `runner_env_<id>` through `ActionCable.server.pubsub` once its transaction commits
   (`ActiveRecord.after_all_transactions_commit`). A rolled-back enqueue wakes nothing. A
   failed publish is logged and does not undo the op, which the next read delivers.
 - **No missed wake-up.** `poll` subscribes to the channel and waits up to 2 s for Redis to
@@ -1101,11 +1130,11 @@ never reaches Rails.
   connection to the pool before it subscribes and before every wait, and takes one again
   to read. A waiting poll holds a Puma thread but no connection.
 - **One waiting poll per environment (task #206, §16).** A poll that is going to wait
-  (`wait` above 0) publishes an announcement, `poll:<uuid>`, on the same `runner_env_<id>`
-  once it is subscribed, and ignores its own. A waiting poll of the environment that hears
-  another poll's announcement stops waiting and answers `{"ops": []}` at once, freeing its
-  gateway thread, and the newer poll waits. An enqueue publishes a bare sequence, so the two
-  are told apart. A `wait=0` poll does not announce, so it ends no other poll. Of two polls
+  (`wait` above 0) publishes a `poll_waiting` announcement with its own `poll_id` on the same
+  `runner_env_<id>` once it is subscribed, and ignores its own. A waiting poll of the
+  environment that hears another poll's announcement stops waiting and answers `{"ops": []}`
+  at once, freeing its gateway thread, and the newer poll waits. The two kinds of message are
+  told apart by their `type`. A `wait=0` poll does not announce, so it ends no other poll. Of two polls
   that start together at least the later announcement reaches the earlier poll, so at most
   one keeps waiting; both may answer empty. No op is lost, since an op stays deliverable
   until `after` acknowledges it, and the replaced poll goes through the controller's check
@@ -1127,6 +1156,17 @@ deployment task.
 The controllers are `RunnerGateway::V1::*` (`app/controllers/runner_gateway/v1/`),
 `ActionController::API` with no cookie session and no CSRF. Before anything else, every
 request is checked for the protocol and version headers (`PROTOCOL.md` §1 and §3).
+
+**Request schemas (task #209).** Each gateway request body, and the long-poll's query, has a
+JSON Schema in `runner/protocol/schemas/v1/`, next to the protocol it belongs to
+(`PROTOCOL.md` §5). The controllers check a request with one shared helper,
+`Runners::ProtocolSchema.valid?(name, document)`, through `json_schemer`, the way
+`Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`, and
+answer the endpoint's own refusal (`invalid_registration`, `invalid_result`,
+`invalid_request`) when it fails. A rule that needs the value itself stays where it is: a
+`name` blank once trimmed, and a value over its column, are `RunnerEnvironment`'s
+validations, as is the shape of `facts`. Every new gateway endpoint that takes a body or
+parameters, in 8b and 8c, adds its schema there.
 
 Rack::Attack throttles `/runner/v1/*` per bearer token (keyed on its digest) and per IP, so a
 client that sends a new bearer value on every request is still bounded, and `register` per IP
@@ -2740,7 +2780,7 @@ changes is the pool an external session belongs to:
 | --- | --- |
 | **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, environments busy/total, last seen. "New runner" for admins. |
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
-| **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs `validate_config` + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
+| **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs the config checks + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
@@ -3362,7 +3402,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | --- | --- | --- |
 | 1a | 1 | **Flag and the client-flag resource.** Declare `external_runners` in `config/feature_flags.yml` exactly as in §12.1 (`introduced` set to the PR's date). Replace the hand-written `FeatureFlagName` with an Alba `FeaturesResource` and `useFeatureFlag(name: keyof Features)`, which touches every existing `useFeatureFlag` consumer, and retire `test/config/feature_flag_name_test.rb` (§11). Override on for the test company from `/admin`. Platform cleanup triggered by the first client flag, not runner-specific: a prerequisite for task 3, not for 1b, and reviewed on its own. |
 | 1b | 1 | **The `runners` table and the `Runner` model**, only what task 2 reads and writes. The `runners` migration (§2.1, without `encrypted_secrets`): the unique name index, the four check constraints and the two composite tenant keys (§2, §2.4). `Runner` with enumerize `runner_type` and `reuse_policy` (defaulted by type, §2.7), validations mirroring the database, the §2.6 integration rule, `visible_for_project` (§3.1), and the status state machine with soft delete (§2.5). No flag check here: nothing reaches the model until task 2's controllers, which check it. Every other table and column of §2 lands with the first task that reads or writes it. |
-| 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refuses writes on a company runner, from the record), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config`. The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
+| 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refused writes on a company runner, from the record; task #209 moved that to the controllers' lookup, §3.2), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config` (task #209 moved its rules to `Runners::ConfigSchema`, §5.1). The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
 | 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |

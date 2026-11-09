@@ -24,7 +24,7 @@ describe('runnerConfig', () => {
     });
   });
 
-  it('lists the writable host mounts as ManualAdapter does: home by path, the others by target', () => {
+  it('lists the writable host mounts as Runners::ConfigSchema does: home by path, the others by target', () => {
     const config = {
       container: {
         home_mount: { path: '/home/ci', writable: true },

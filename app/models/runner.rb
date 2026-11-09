@@ -49,7 +49,10 @@ class Runner < ApplicationRecord
   validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :integration_usable, if: -> { coder? && integration.present? }
-  validate :config_matches_schema, if: -> { runner_type.present? }
+  # Only when config or the type changes: a stored config that a later, tighter
+  # schema refuses must not block its runner's revoke or delete, which save
+  # with whiny_persistence.
+  validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
   # What a picker offers: the company's runners and the project's own, live
@@ -101,6 +104,12 @@ class Runner < ApplicationRecord
     errors.add(:integration, project_id ? "must be company-wide or this project's" : "must be company-wide")
   end
 
+  def config_or_type_changing?
+    will_save_change_to_config? || will_save_change_to_runner_type?
+  end
+
+  # The schema and the type's rules (Runners::ConfigSchema), pure checks of
+  # the config hash: a model validation does no IO and calls no service.
   def config_matches_schema
     Runners::ConfigSchema.errors(config, runner_type).each { |message| errors.add(:config, message) }
   end

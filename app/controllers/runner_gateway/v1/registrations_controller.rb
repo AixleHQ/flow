@@ -9,15 +9,23 @@ module RunnerGateway
       before_action(only: :create) { authenticate(:registration) }
       before_action(only: :destroy) { authenticate(:access) }
 
-      # Body: {name, os, arch, facts, ephemeral}. The token is spent only by a
-      # registration that succeeds.
+      # Body: {name, os, arch, facts, ephemeral}, checked against
+      # runner/protocol/schemas/v1/register.request.json after the ephemeral
+      # refusal, which comes first (PROTOCOL.md §5.1). The token is spent only
+      # by a registration that succeeds.
       def create
         body = request.request_parameters
+        ephemeral = ActiveModel::Type::Boolean.new.cast(body["ephemeral"]) == true
+        if !ephemeral && !Runners::ProtocolSchema.valid?("register.request", body)
+          return refuse(:unprocessable_entity, "invalid_registration",
+                        "`name` is required and must be a string, `facts` must be an object, and `os` and `arch` at most " \
+                        "255 characters.")
+        end
+
         result = Runners::Registration.register!(
           @credential,
-          name: body["name"].is_a?(String) ? body["name"].strip : nil,
-          os: string_or_nil(body["os"]), arch: string_or_nil(body["arch"]),
-          facts: body.fetch("facts", {}), ephemeral: ActiveModel::Type::Boolean.new.cast(body["ephemeral"]) == true,
+          name: (body["name"].strip if body["name"].is_a?(String)), os: ignored_unless_string(body["os"]), arch: ignored_unless_string(body["arch"]),
+          facts: body.fetch("facts", {}), ephemeral: ephemeral,
           runner_version: runner_version, protocol_version: PROTOCOL_VERSION
         )
         render_pair(result.pair, status: :created,
@@ -35,7 +43,9 @@ module RunnerGateway
 
       private
 
-      def string_or_nil(value)
+      # The schema lets an `os` or `arch` that is not a string through, and the
+      # protocol says it is ignored.
+      def ignored_unless_string(value)
         value if value.is_a?(String)
       end
     end
