@@ -10,6 +10,7 @@ module Runners
   #   Runners::Release.protocol_supported?("1")             # X-Aixle-Runner-Protocol
   #   Runners::Release.unsupported_version?("0.0.9")        # below min_version: register refuses it
   #   Runners::Release.binary("0.1.0", "linux-amd64")       # => Binary, or nil when not pinned
+  #   Runners::Release.below_recommended?("0.1.0")          # an update may be offered
   #   Runners::Release.update_for(environment, runner_version: "0.1.0") # => Offer, or nil
   #
   # The pins are read on every call, so a test that stubs Settings sees its own,
@@ -85,14 +86,20 @@ module Runners
     def update_for(environment, runner_version:)
       current = pins
       recommended = current.recommended_version
-      version = Version.parse(runner_version)
-      return nil if recommended.nil? || version.nil? || version >= recommended
+      return nil unless below_recommended?(runner_version, current)
       return nil unless environment.state == "registered" && environment.current_session_id.nil?
       return nil unless environment.auto_update && ConfigSchema.value(environment.runner.config, "auto_update") != false
 
       platform = "#{environment.os}-#{environment.arch}"
       digest = current.binaries.dig(recommended.to_s, platform)
       digest && Offer.new(version: recommended.to_s, platform: platform, sha256: digest)
+    end
+
+    # Whether the platform recommends a version above `runner_version`.
+    def below_recommended?(runner_version, current = pins)
+      recommended = current.recommended_version
+      version = Version.parse(runner_version)
+      recommended.present? && version.present? && version < recommended
     end
 
     # == validation ==

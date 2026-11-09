@@ -54,9 +54,13 @@ module RunnerGateway
 
       private
 
-      # The machine is read again: a session may have taken it during the wait.
+      # The machine is read again, and only when the platform recommends a
+      # newer version than the request's: a session may have taken it during
+      # the wait.
       def update_offer
-        environment = ActiveRecord::Base.uncached { RunnerEnvironment.includes(:runner).find(@credential.runner_environment_id) }
+        return nil unless Runners::Release.below_recommended?(runner_version)
+
+        environment = ActiveRecord::Base.uncached { RunnerEnvironment.find(@credential.runner_environment_id) }
         offer = Runners::Release.update_for(environment, runner_version: runner_version)
         return nil if offer.nil?
 
