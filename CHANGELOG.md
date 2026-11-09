@@ -43,6 +43,9 @@ governance, community health — carry none.
   project's connection with the company. Other members who can change a project
   connect it for that project. Moving a project to another company switches off
   the Slack or Teams connection that was made for it.
+- **Company settings**: a new hosted workspace's free trial lasts 14 days on one
+  worker instead of 30 (`TRIAL_DAYS` now defaults to 14). A workspace already on
+  a trial keeps the length it started with.
 
 ### Changed
 - **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.318, Codex 0.166.0,

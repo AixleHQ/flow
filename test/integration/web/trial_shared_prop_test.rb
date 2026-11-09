@@ -43,9 +43,9 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     props = trial_prop
 
     assert_equal "trialing", props[:state]
-    assert_equal 30, props[:days]
-    assert_equal 30, props[:daysLeft]
-    assert_equal (Date.current + 29).iso8601, props[:lastDay]
+    assert_equal 14, props[:days]
+    assert_equal 14, props[:daysLeft]
+    assert_equal (Date.current + 13).iso8601, props[:lastDay]
   end
 
   # The banner must not offer a card where there is nowhere to pay.
