@@ -40,7 +40,8 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     assert_equal '{"jsonrpc":"2.0","id":1,"result":{}}', response.body
     assert_equal "mcp-1", response.headers["Mcp-Session-Id"]
     assert_nil response.headers["X-Aixle-Runner-Refusal"]
-    assert_requested(upstream) do |request|
+    assert_requested(upstream)
+    assert_requested(:post, Settings.mcp.server_url) do |request|
       request.body == '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' &&
         request.headers["X-Session-Key"] == @session.mcp_key &&
         request.headers["Content-Type"] == "application/json" &&

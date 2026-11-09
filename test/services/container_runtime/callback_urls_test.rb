@@ -7,6 +7,11 @@ require "test_helper"
 # Settings values unchanged; RunnerRuntime answers the session's proxy
 # (Runners::ProxyTest).
 class ContainerRuntime::CallbackUrlsTest < ActiveSupport::TestCase
+  setup do
+    company = create(:company)
+    @session = create(:terminal_session, user: create(:user, company: company))
+  end
+
   HOSTED = {
     mcp: -> { Settings.mcp.server_url },
     agent_credential_sync: -> { Settings.agents.credential_sync_url },
@@ -19,7 +24,7 @@ class ContainerRuntime::CallbackUrlsTest < ActiveSupport::TestCase
   }.freeze
 
   test "a hosted runtime answers every callback with the Settings value, unchanged" do
-    session = create(:terminal_session)
+    session = @session
     expected = HOSTED.transform_values(&:call)
 
     [ ContainerRuntime::DockerRuntime.allocate, ContainerRuntime::KubernetesRuntime.allocate,
@@ -31,7 +36,7 @@ class ContainerRuntime::CallbackUrlsTest < ActiveSupport::TestCase
   end
 
   test "a hosted session's runtime is the hosted one, so its callbacks are the Settings values" do
-    session = create(:terminal_session)
+    session = @session
 
     assert_equal Settings.mcp.server_url, ContainerRuntime.for_session(session).callback_url(:mcp, session)
   end

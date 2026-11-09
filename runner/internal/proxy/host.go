@@ -44,6 +44,10 @@ func NewHost(stateDir, binary string, handler http.Handler, logger *slog.Logger)
 	if logger == nil {
 		logger = slog.Default()
 	}
+	// The daemon takes only an absolute bind source.
+	if abs, err := filepath.Abs(stateDir); err == nil {
+		stateDir = abs
+	}
 	return &Host{StateDir: stateDir, Handler: handler, Logger: logger, binary: binary, servers: map[int64]*http.Server{}}
 }
 
