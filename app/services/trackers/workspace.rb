@@ -31,13 +31,18 @@ module Trackers
       return if session&.container_id.blank?
 
       uid = AgentCredentialsService.for(session.agent_type).adapter.container_uid
-      new(runtime: ContainerRuntime.for_session(session), container: session.container_id, uid: uid)
+      runtime = ContainerRuntime.for_session(session)
+      new(runtime: runtime, container: session.container_id, uid: uid,
+          asset_host: runtime.callback_url(:container_assets, session))
     end
 
-    def initialize(runtime:, container:, uid:)
+    # `asset_host` is where the container downloads stored files from: the
+    # session runtime's `callback_url(:container_assets)`.
+    def initialize(runtime:, container:, uid:, asset_host:)
       @runtime = runtime
       @container = container
       @uid = uid
+      @asset_host = asset_host
     end
 
     # A stored file, fetched by the container itself so the bytes never pass
@@ -45,7 +50,7 @@ module Trackers
     def fetch(url, path)
       dir = Shellwords.escape(File.dirname(path))
       target = Shellwords.escape(path)
-      source = Shellwords.escape(ContainerAssetUrl.call(url, host: Settings.container_asset_host))
+      source = Shellwords.escape(ContainerAssetUrl.call(url, host: @asset_host))
       _out, _err, code = @runtime.exec(@container, [ "sh", "-c",
                                                      "mkdir -p #{dir} && curl -fsSL -o #{target} #{source} && chown -R #{@uid}:#{@uid} #{Shellwords.escape(ROOT)}" ])
       code.to_i.zero?

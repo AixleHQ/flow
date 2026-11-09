@@ -372,7 +372,7 @@ module Agents
 
     # Default environment variables for Codex CLI runtime.
     # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
-    def default_env_vars(session)
+    def default_env_vars(session, callbacks: nil)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
@@ -826,7 +826,9 @@ module Agents
         migrations.each { |from, to| toml << "\"#{from}\" = \"#{to}\"\n" }
       end
 
-      otel_endpoint = Settings.otel.endpoint
+      # The session's OTLP endpoint (SessionContextService#credential_workflow_config,
+      # from its runtime); nil for a runner session, which has none yet.
+      otel_endpoint = workflow_config.fetch(:otel_endpoint) { ContainerRuntime::CallbackUrls.hosted(:otel) }
       if otel_endpoint.present?
         toml << <<~TOML
 

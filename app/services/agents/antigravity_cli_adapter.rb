@@ -213,7 +213,7 @@ module Agents
     # happened, against which endpoint, with what status.
     MITM_DOMAINS = %w[googleapis.com google.com].freeze
 
-    def default_env_vars(_session)
+    def default_env_vars(_session, callbacks: nil)
       {
         "AGY_CLI_HIDE_LOGO" => "1",
         # Without it the CLI, run as root, replaces the pinned /usr/local/bin/agy with the

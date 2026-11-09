@@ -58,6 +58,10 @@ type ContainerStartPayload struct {
 	PID                 string     `json:"pid"`
 	Resources           *Resources `json:"resources"`
 	PrivilegeEscalation bool       `json:"privilege_escalation"`
+	// ProxyPort is the session's port of the callback proxy on the machine's
+	// 127.0.0.1, required with `network: host` and ignored otherwise: then the
+	// sidecar listens on protocol.ProxyPort in the session's own namespace.
+	ProxyPort int `json:"proxy_port"`
 }
 
 // Mount is one entry of `container.start`'s `mounts`: a cache volume of the
@@ -199,7 +203,11 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 	switch network {
 	case "":
 		network = "bridge"
-	case "bridge", "host":
+	case "bridge":
+	case "host":
+		if p.ProxyPort < MinProxyPort || p.ProxyPort > MaxProxyPort {
+			return nil, nil, nil, invalid("with network \"host\", `proxy_port` must be an integer from %d to %d, got %d", MinProxyPort, MaxProxyPort, p.ProxyPort)
+		}
 	default:
 		return nil, nil, nil, invalid("`network` must be \"bridge\" or \"host\", got %q", p.Network)
 	}
@@ -257,7 +265,11 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 // own entrypoint and command, as a hosted pod does. Docker's create API does not
 // pull, and a failed pull is `image_pull_failed`, with nothing created. The container is
 // named and labelled with the envelope's session. Nothing of the runner goes into
-// it: no binary, no socket, no token and nothing of the state directory. Over
+// it: no binary, no socket, no token and nothing of the state directory. With a
+// Proxy, the session's proxy sidecar is created and started first, and the agent
+// container joins its network namespace; the runner's binary and the relay's
+// socket go into the sidecar only. With `network: host` the relay listens on the
+// payload's `proxy_port` instead, and there is no sidecar. Over
 // another session's container it answers `session_mismatch`; over its own, or
 // over a container of the environment that names no session, `container_exists`.
 //
@@ -328,6 +340,41 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 		}
 	}
 
+	// The callback proxy (PROTOCOL.md §5.6): the sidecar is created first and
+	// owns the network namespace the agent joins, so that it outlives the
+	// agent's last call; with `network: host` the host runner listens itself.
+	sidecar := ""
+	if e.Proxy != nil {
+		if host.NetworkMode == "host" {
+			if r := e.openListener(sessionID, p.ProxyPort); r != nil {
+				return *r
+			}
+			config.Labels[LabelProxyPort] = strconv.Itoa(p.ProxyPort)
+		} else {
+			id, r := e.startSidecar(ctx, sessionID, config.Image, host.NetworkMode)
+			if r != nil {
+				return *r
+			}
+			sidecar = id
+			host.NetworkMode = container.NetworkMode("container:" + id)
+		}
+	}
+	result := e.startAgent(ctx, name, config, host)
+	if result.Status != protocol.StatusOK {
+		if e.Proxy != nil {
+			e.abandonSidecar(ctx, sessionID, sidecar)
+		}
+		return result
+	}
+	if sidecar != "" {
+		e.watchSidecar(sessionID, sidecar)
+	}
+	return result
+}
+
+// startAgent creates and starts the agent container of `container.start`. A
+// container that was created but did not start is removed.
+func (e *Environment) startAgent(ctx context.Context, name string, config *container.Config, host *container.HostConfig) protocol.Result {
 	if r := pastDeadline(ctx, "creating "+name); r != nil {
 		return *r
 	}
@@ -442,6 +489,11 @@ func (e *Environment) ContainerStop(ctx context.Context, sessionID int64, raw js
 	// By ID, so that what is removed is the container whose labels were checked.
 	removed, err := e.removeContainer(ctx, inspected.Container.ID, true)
 	if err != nil {
+		return protocol.ErrorResult(ClassDockerError, err.Error())
+	}
+	// The sidecar goes with the agent's container, after it: the agent's last
+	// call has been answered by then.
+	if err := e.removeSidecar(ctx, sessionID); err != nil {
 		return protocol.ErrorResult(ClassDockerError, err.Error())
 	}
 	return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{"removed": removed}}

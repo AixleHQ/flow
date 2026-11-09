@@ -1062,8 +1062,11 @@ module Agents
       { status: "unavailable" }
     end
 
-    # Default environment variables for Claude Code runtime.
-    def default_env_vars(session)
+    # Default environment variables for Claude Code runtime. `callbacks` are the
+    # session's callback addresses (ContainerRuntime::CallbackUrls); without an
+    # OTLP endpoint (a runner session) the CLI's telemetry stays off.
+    def default_env_vars(session, callbacks: nil)
+      callbacks ||= ContainerRuntime::CallbackUrls.hosted_all
       {
         # MITM proxy — intercept Anthropic API traffic
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
@@ -1074,12 +1077,7 @@ module Agents
         # endpoint, status and timing are the whole point.
         "MITM_TRACKED_DOMAINS" => "api.anthropic.com,platform.claude.com,console.anthropic.com",
         # OTLP telemetry
-        "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
-        "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
-        "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
-        "OTEL_METRICS_EXPORTER" => "otlp",
-        "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
-        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session),
+        **telemetry_env(session, callbacks[:otel]),
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
         "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s,
         # The CLI picks its fullscreen renderer on a fresh install, which every container
@@ -1088,13 +1086,28 @@ module Agents
         # nothing to scroll back to. This forces the classic renderer, which prints the
         # conversation into the scrollback.
         "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" => "1"
-      }.merge(cloud_credential_env(session)).compact
+      }.merge(cloud_credential_env(session, callbacks)).compact
+    end
+
+    # OTLP telemetry, to the session's collector. None for a session without
+    # one (a runner session: there is no OTLP route through its proxy yet).
+    def telemetry_env(session, endpoint)
+      return {} if endpoint.nil?
+
+      {
+        "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => endpoint,
+        "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
+        "OTEL_METRICS_EXPORTER" => "otlp",
+        "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
+      }
     end
 
     # Only a session that actually vends gets a vending key. These go in process env
     # rather than the settings file because the helper is spawned by the AWS SDK, not by
     # Claude Code, and must work regardless of which process resolves credentials.
-    def cloud_credential_env(session)
+    def cloud_credential_env(session, callbacks = ContainerRuntime::CallbackUrls.hosted_all)
       block = bedrock_block(CloudAuth::CredentialLookup.for_session(session)&.config_data || {})
       connected = block.present? && block["credential_process"].present?
       # An auth container gets the vending env even with no connection: reporting that
@@ -1102,7 +1115,7 @@ module Agents
       return {} unless connected || session.session_type == "auth_setup"
 
       {
-        "AIXLE_CLOUD_CREDENTIALS_URL" => Settings.cloud.credentials_url,
+        "AIXLE_CLOUD_CREDENTIALS_URL" => callbacks[:cloud_credentials],
         "AIXLE_CLOUD_KEY" => CloudAuth::SessionKey.generate(session)
       }
     end

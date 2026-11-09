@@ -24,6 +24,7 @@ const (
 	EndpointToken        Endpoint = "token"
 	EndpointOps          Endpoint = "ops"
 	EndpointResult       Endpoint = "result"
+	EndpointProxy        Endpoint = "proxy"
 )
 
 // Client calls the gateway. It holds no credentials: every call takes the token
@@ -32,6 +33,9 @@ type Client struct {
 	baseURL *url.URL
 	version string
 	http    *http.Client
+	// proxy carries the callback proxy's requests (§5.6). It has no overall
+	// timeout: an MCP answer may stream for as long as a tool runs.
+	proxy *http.Client
 }
 
 // NewClient returns a client of the platform at platformURL, sending version in
@@ -42,14 +46,16 @@ func NewClient(platformURL, version string, httpClient *http.Client) (*Client, e
 	if err != nil {
 		return nil, err
 	}
+	proxyClient := httpClient
 	if httpClient == nil {
 		httpClient = &http.Client{
 			// The long-poll is held for up to 25 s; the margin covers the gateway's own
 			// work before and after the wait.
 			Timeout: MaxWait + 35*time.Second,
 		}
+		proxyClient = &http.Client{}
 	}
-	return &Client{baseURL: u, version: version, http: httpClient}, nil
+	return &Client{baseURL: u, version: version, http: httpClient, proxy: proxyClient}, nil
 }
 
 // ParsePlatformURL checks the --url a runner is configured with.
@@ -121,6 +127,54 @@ func (c *Client) PostResult(ctx context.Context, accessToken string, opID int64,
 	path := "/runner/v1/ops/" + strconv.FormatInt(opID, 10) + "/result"
 	err := c.do(ctx, EndpointResult, http.MethodPost, path, accessToken, result, http.StatusOK, &out)
 	return out, err
+}
+
+// Proxy sends one request of the callback proxy (§5.6) to
+// `/runner/v1/proxy/<path>`: method, path below the prefix with its query,
+// the agent's headers and body, unchanged, with the access token as the bearer
+// and the protocol's headers. The gateway's own refusal, which carries
+// X-Aixle-Runner-Refusal, is returned as a *Refusal. Any other answer is the
+// internal endpoint's, returned as it is, for the caller to stream and close.
+func (c *Client) Proxy(ctx context.Context, accessToken, method, path string, header http.Header, body []byte) (*http.Response, error) {
+	// path is as the agent sent it, percent-encoded, and stays so.
+	below, query, _ := strings.Cut(path, "?")
+	parsed, err := url.Parse(strings.TrimRight(c.baseURL.EscapedPath(), "/") + ProxyPathPrefix + strings.TrimLeft(below, "/"))
+	if err != nil {
+		return nil, fmt.Errorf("building the proxy request: %w", err)
+	}
+	target := *c.baseURL
+	target.Path, target.RawPath, target.RawQuery = parsed.Path, parsed.RawPath, query
+
+	var reader io.Reader
+	if len(body) > 0 {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target.String(), reader)
+	if err != nil {
+		return nil, fmt.Errorf("building the proxy request: %w", err)
+	}
+	for name, values := range header {
+		for _, v := range values {
+			req.Header.Add(name, v)
+		}
+	}
+	req.Header.Set("X-Aixle-Runner-Protocol", ProtocolVersion)
+	req.Header.Set("X-Aixle-Runner-Version", c.version)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := c.proxy.Do(req)
+	if err != nil {
+		// net/http names the URL in its error, never a header, so no key is in it.
+		return nil, &NetworkError{Endpoint: EndpointProxy, Err: err}
+	}
+	if resp.Header.Get(RefusalHeader) == "" {
+		return resp, nil
+	}
+	defer resp.Body.Close()
+	refusal, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, &NetworkError{Endpoint: EndpointProxy, Err: err}
+	}
+	return nil, newRefusal(EndpointProxy, resp.StatusCode, refusal)
 }
 
 func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token string, body any, want int, out any) error {

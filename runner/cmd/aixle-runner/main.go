@@ -16,6 +16,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/cli"
 	"github.com/aixlehq/aixle-runner/internal/docker"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
+	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/service"
 )
 
@@ -24,6 +25,10 @@ const usage = `Usage:
   aixle-runner unregister [--state-dir <dir>]
   aixle-runner service install | uninstall | start | stop
   aixle-runner --mode host [--state-dir <dir>]
+  aixle-runner --mode proxy --socket <path> --listen <address>
+
+--mode proxy is the callback proxy's sidecar, which the host runner starts next
+to a session's agent container; it is not run by hand.
 
 service install copies this binary to /usr/local/bin/aixle-runner, owned by
 root, and the service runs that copy.
@@ -147,13 +152,24 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 
 func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
 	fs, stateDir := newFlags("aixle-runner", stderr)
-	mode := fs.String("mode", "", "the runner's mode: host")
+	mode := fs.String("mode", "", "the runner's mode: host, or proxy for the callback proxy's sidecar")
+	socket := fs.String("socket", "", "proxy mode: the host runner's relay socket")
+	listen := fs.String("listen", "", "proxy mode: the address the agent calls")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	if *mode != "host" {
-		return errUsage
-	}
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
-	return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger})
+	switch *mode {
+	case "host":
+		if *socket != "" || *listen != "" {
+			return errUsage
+		}
+		return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger})
+	case "proxy":
+		if *socket == "" || *listen == "" {
+			return errUsage
+		}
+		return proxy.RunSidecar(ctx, proxy.SidecarOptions{Socket: *socket, Listen: *listen, Logger: logger})
+	}
+	return errUsage
 }

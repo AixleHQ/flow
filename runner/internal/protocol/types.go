@@ -16,6 +16,20 @@ const ProtocolVersion = "1"
 // MaxWait is the longest long-poll the gateway holds (§5.4).
 const MaxWait = 25 * time.Second
 
+// ProxyPort is the port of the callback proxy's sidecar on 127.0.0.1 of the
+// agent's network namespace (§5.6). It is outside the agent image's own ports
+// (7681, 7682, 4040, 4041, 8443, 8888).
+const ProxyPort = 7690
+
+// ProxyPathPrefix is the gateway's path of the callback proxy (§5.6): a
+// request for `/<route>/…` of the local proxy goes to ProxyPathPrefix +
+// `<route>/…`.
+const ProxyPathPrefix = "/runner/v1/proxy/"
+
+// RefusalHeader marks the gateway's own refusal on the proxy route, so that it
+// is not taken for the internal endpoint's answer (§5.6).
+const RefusalHeader = "X-Aixle-Runner-Refusal"
+
 // MaxBodyBytes is the gateway's cap on a request body (§2). A larger body is
 // answered `413` and never resent.
 const MaxBodyBytes = 2 << 20

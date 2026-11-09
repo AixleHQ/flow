@@ -151,6 +151,15 @@ module ContainerRuntime
       Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}", holder: session)
     end
 
+    # -- Callbacks ------------------------------------------------------------
+
+    # A runner session calls the platform back through its callback proxy on
+    # 127.0.0.1 (Runners::Proxy, DESIGN.md §6.6), never on the internal
+    # address. There is no OTLP route yet, so `:otel` is nil.
+    def callback_url(name, session)
+      Runners::Proxy.local_url(name, session)
+    end
+
     # -- Lifecycle ------------------------------------------------------------
 
     # The runner pulls the image in `container.start` (create_container).
@@ -439,9 +448,12 @@ module ContainerRuntime
       setting(config, "container.image_override").presence || image
     end
 
+    # With `network: host` there is no proxy sidecar: the host runner
+    # listens on the machine's 127.0.0.1 on `proxy_port`, the session's own
+    # port (PROTOCOL.md §6.2).
     def container_payload(session, spec)
       config = session.runner&.config || {}
-      {
+      payload = {
         "image" => runner_image(config, spec[:image]),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
@@ -451,6 +463,8 @@ module ContainerRuntime
         "resources" => resources(config, (spec[:host_config] || {}).stringify_keys),
         "privilege_escalation" => spec[:privilege_escalation] == true
       }
+      payload["proxy_port"] = Runners::Proxy.host_port(session) if Runners::Proxy.host_network?(session)
+      payload
     end
 
     def env_hash(env_vars)

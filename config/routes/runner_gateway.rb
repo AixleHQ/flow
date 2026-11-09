@@ -9,4 +9,8 @@ scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, default
   post "token", to: "tokens#create"
   get "ops", to: "operations#index"
   post "ops/:id/result", to: "operation_results#create", as: :op_result
+  # The callback proxy (PROTOCOL.md §5.6): any method reaches the controller,
+  # which passes only the allow-listed ones. `format: false` keeps a path such
+  # as `store/report.json` whole.
+  match "proxy/:route(/*path)", to: "proxies#forward", via: :all, as: :proxy, format: false
 end

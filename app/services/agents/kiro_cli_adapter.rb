@@ -763,19 +763,33 @@ module Agents
     # the export's default target is the vendor's own collector, so pointing it here
     # moves that traffic rather than copying it. `KIRO_DISABLE_TELEMETRY` is deliberately
     # not set — measured, it stops this export too, taking the cost figures with it.
-    def default_env_vars(session)
+    #
+    # `callbacks` are the session's callback addresses (ContainerRuntime::CallbackUrls).
+    # A session without an OTLP endpoint (a runner session: its proxy has no OTLP route
+    # yet) gets `KIRO_DISABLE_TELEMETRY` instead, so the export does not fall back to the
+    # vendor's collector.
+    def default_env_vars(session, callbacks: nil)
+      callbacks ||= ContainerRuntime::CallbackUrls.hosted_all
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => mitm_tracked_domains.join(","),
         # Opens 127.0.0.1:MCP_FORWARD_PORT onto the platform's MCP service, which is
         # what makes the loopback URL in mcp.json resolve. See #loopback_url.
         "MCP_FORWARD_PORT" => MCP_FORWARD_PORT.to_s,
-        "MCP_FORWARD_TARGET" => mcp_forward_target,
+        "MCP_FORWARD_TARGET" => mcp_forward_target(callbacks[:mcp]),
+        **telemetry_env(session, callbacks[:otel])
+      }.compact_blank
+    end
+
+    def telemetry_env(session, endpoint)
+      return { "KIRO_DISABLE_TELEMETRY" => "1" } if endpoint.nil?
+
+      {
         "KIRO_TELEMETRY_OTEL" => "1",
-        "KIRO_TELEMETRY_OTLP_ENDPOINT" => Settings.otel.endpoint,
+        "KIRO_TELEMETRY_OTLP_ENDPOINT" => endpoint,
         "KIRO_TELEMETRY_EXPORT_INTERVAL_MS" => OTEL_EXPORT_INTERVAL_MS,
         "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
-      }.compact_blank
+      }
     end
 
     def mitm_tracked_domains
@@ -1123,10 +1137,10 @@ module Agents
       uri.scheme == "http" && uri.host.present? && !LOOPBACK_HOSTS.include?(uri.host)
     end
 
-    # The upstream the container forwards to, as "host:port", or nil when the configured
-    # MCP URL needs no forwarding.
-    def mcp_forward_target
-      uri = URI.parse(Settings.mcp.server_url.to_s)
+    # The upstream the container forwards to, as "host:port", or nil when the session's
+    # MCP URL needs no forwarding (a runner session's is its loopback proxy already).
+    def mcp_forward_target(mcp_url)
+      uri = URI.parse(mcp_url.to_s)
       return nil unless forwardable_uri?(uri)
 
       "#{uri.host}:#{uri.port || 80}"

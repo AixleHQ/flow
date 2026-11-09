@@ -200,7 +200,7 @@ module Agents
 
     # Env for the MITM proxy, which is where session usage comes from (see
     # #collect_usage), plus the API key when the credential is an API-key login.
-    def default_env_vars(session)
+    def default_env_vars(session, callbacks: nil)
       env = {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")

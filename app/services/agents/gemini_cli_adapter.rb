@@ -85,7 +85,8 @@ module Agents
       workspace = workflow_config[:workspace] || "/workspace"
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
-          model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key"
+          model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key",
+          otel_endpoint: workflow_config.fetch(:otel_endpoint) { ContainerRuntime::CallbackUrls.hosted(:otel) }
         ).to_json
       }.merge(trusted_folders_files(workspace))
     end
@@ -110,7 +111,7 @@ module Agents
     end
 
     # Pass API key as env var — Gemini CLI picks it up automatically
-    def default_env_vars(session)
+    def default_env_vars(session, callbacks: nil)
       env = { "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }
 
       # Inject the API key from the credential of THIS session's company: keys are per
@@ -273,7 +274,10 @@ module Agents
 
     private
 
-    def generate_settings(model: nil, auth_type: "gemini-api-key", effort: nil)
+    # `otel_endpoint` is the session's OTLP endpoint; nil (a runner session, which has
+    # none yet) turns the CLI's telemetry off.
+    def generate_settings(model: nil, auth_type: "gemini-api-key", effort: nil,
+                          otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel))
       settings = {
         "security" => {
           "auth" => { "selectedType" => auth_type },
@@ -301,13 +305,17 @@ module Agents
           "usageStatisticsEnabled" => true  # Allow telemetry in containers
         },
         # Telemetry (OpenTelemetry)
-        "telemetry" => {
-          "enabled" => true,
-          "target" => "local",
-          "otlpEndpoint" => Settings.otel.endpoint.to_s,
-          "otlpProtocol" => "http",
-          "logPrompts" => false
-        },
+        "telemetry" => if otel_endpoint.nil?
+                         { "enabled" => false }
+                       else
+                         {
+                           "enabled" => true,
+                           "target" => "local",
+                           "otlpEndpoint" => otel_endpoint.to_s,
+                           "otlpProtocol" => "http",
+                           "logPrompts" => false
+                         }
+                       end,
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
           "sandbox" => false,                # Container is already sandboxed
