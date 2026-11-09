@@ -53,8 +53,10 @@ module RunnerGateway
 
       before_action { authenticate(:access) }
 
+      # The route comes from the path alone: `params` would parse the agent's
+      # body, which is not the gateway's.
       def forward
-        route = Runners::Proxy.route(params[:route])
+        route = Runners::Proxy.route(request.path_parameters[:route])
         below = route && below_route(route)
         unless route&.allows?(request.request_method, below)
           return refuse(:not_found, "route_not_allowed",

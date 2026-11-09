@@ -36,12 +36,12 @@ module Runners
     # (ContainerRuntime::CallbackUrls), the methods it takes, whether a path
     # below it passes (`prefix`, the first segment it must start with) and
     # the session key it is checked by.
-    Route = Data.define(:name, :callback, :methods, :prefix, :key) do
+    Route = Data.define(:name, :callback, :verbs, :prefix, :key) do
       # Whether a request of this method, with this path below the route (as
       # it was sent, percent-encoded), passes. A route without a prefix takes
       # no path below it, and no segment may lead out of the prefix.
       def allows?(method, path)
-        return false unless methods.include?(method.to_s.upcase)
+        return false unless verbs.include?(method.to_s.upcase)
 
         path = path.to_s
         return path.empty? if prefix.nil?
@@ -52,19 +52,19 @@ module Runners
     end
 
     ROUTES = [
-      Route.new(name: "mcp", callback: :mcp, methods: %w[GET POST DELETE], prefix: nil, key: :mcp),
-      Route.new(name: "agent-credentials", callback: :agent_credential_sync, methods: %w[POST], prefix: nil, key: :agent),
-      Route.new(name: "agent-credentials-refresh", callback: :agent_credential_refresh, methods: %w[POST], prefix: nil,
+      Route.new(name: "mcp", callback: :mcp, verbs: %w[GET POST DELETE], prefix: nil, key: :mcp),
+      Route.new(name: "agent-credentials", callback: :agent_credential_sync, verbs: %w[POST], prefix: nil, key: :agent),
+      Route.new(name: "agent-credentials-refresh", callback: :agent_credential_refresh, verbs: %w[POST], prefix: nil,
                 key: :agent),
-      Route.new(name: "git-credentials", callback: :git_credentials, methods: %w[POST], prefix: nil, key: :git),
-      Route.new(name: "azure-git-credentials", callback: :azure_git_credentials, methods: %w[POST], prefix: nil,
+      Route.new(name: "git-credentials", callback: :git_credentials, verbs: %w[POST], prefix: nil, key: :git),
+      Route.new(name: "azure-git-credentials", callback: :azure_git_credentials, verbs: %w[POST], prefix: nil,
                 key: :azure_git),
-      Route.new(name: "cloud-credentials", callback: :cloud_credentials, methods: %w[POST], prefix: nil, key: :cloud),
+      Route.new(name: "cloud-credentials", callback: :cloud_credentials, verbs: %w[POST], prefix: nil, key: :cloud),
       # Stored files on the filesystem storage, which Rails serves under
       # /store without a key: a presigned S3 URL is never rewritten
       # (ContainerAssetUrl), so only these reach the proxy. They carry no
       # session key, so the route needs only a session on the environment.
-      Route.new(name: "assets", callback: :container_assets, methods: %w[GET HEAD], prefix: "store/", key: nil)
+      Route.new(name: "assets", callback: :container_assets, verbs: %w[GET HEAD], prefix: "store/", key: nil)
     ].index_by(&:name).freeze
 
     # The header that carries each credential endpoint's key, next to
