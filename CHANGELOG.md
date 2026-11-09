@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-11-09
+
 ### Added
 - **Triggers & gates**: a company admin or the project owner can change who an
   existing schedule, chat, webhook or task tracker trigger runs as, picking any
@@ -46,8 +48,6 @@ governance, community health — carry none.
 - **Company settings**: a new hosted workspace's free trial lasts 14 days on one
   worker instead of 30 (`TRIAL_DAYS` now defaults to 14). A workspace already on
   a trial keeps the length it started with.
-
-### Changed
 - **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.318, Codex 0.166.0,
   Antigravity CLI 1.5.0 and Kiro CLI 3.0.0. Claude Code's new check that asks
   before a command sends the account email is turned off, so an automatic run
@@ -71,7 +71,7 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Kiro step whose terminal screen has not changed for 30
   minutes now fails even when the terminal keeps redrawing the same screen, for
   example while its web terminal is open. Before, such a step could stay
-  running for hours. Silent steps on every runtime are now ended 30 to 35
+  running for hours. Silent steps on every runtime are now ended 30 to 31
   minutes after they went quiet.
 - **Sessions & Runs**: a run's live console reads *Session finishing…* while a
   session is ending, instead of *Session starting…* as if it were starting again.
@@ -1181,7 +1181,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.10.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.11.0...develop
+[1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
