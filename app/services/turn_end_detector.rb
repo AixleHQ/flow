@@ -15,7 +15,7 @@
 # current screen counts, never the scrollback.
 #
 # Only runtimes measured in their TUI have a signature. A runtime without one is still
-# ended by Sessions::NoOutputWatchdog once its screen stops changing.
+# ended by Sessions::Checks::NoOutput once its screen stops changing.
 class TurnEndDetector
   # The pane's trailing block, as in InteractivePromptDetector: blank rows carry no
   # signal, and a TUI's idle screen is a handful of chrome lines under the last turn.

@@ -85,13 +85,22 @@ module Activities
         log(:warn, "credential #{credential.id}: #{result.failed} holder(s) could not take the refreshed token")
       end
 
-      # "Parked" is the absence of recent terminal output, read from the container the same
-      # way the no-output watchdog reads it. A container that cannot be reached answers
-      # false — unknown must never pass for idle.
+      # "Parked" is the absence of recent terminal output, judged by the no-output check
+      # (Sessions::Checks::NoOutput) on a snapshot read right now, through the session
+      # monitor's read path (Sessions::Monitor.snapshot). A pass's kept record is not enough:
+      # it is up to a minute old, and an agent that started a turn since then would read as
+      # parked and have its grant rotated mid-turn, the 2026-09-05 incident. This read feeds
+      # the same record as the passes. A container that cannot be reached answers false:
+      # unknown must never pass for idle.
       def parked?(session)
         return true if session.container_id.blank? # queued: it has not been handed anything yet
 
-        ::Sessions::NoOutputWatchdog.new(session).silent_for?(IDLE_BEFORE_REFRESH)
+        check = ::Sessions::Checks::NoOutput
+        snapshot = ::Sessions::Monitor.snapshot(session, parts: check.parts)
+        kept = ::Sessions::Checks::KeptState.new(session)
+        parked = check.new(session, runtime: nil, kept: kept.for(check)).silent_for?(snapshot, IDLE_BEFORE_REFRESH)
+        kept.write!
+        parked
       rescue StandardError => e
         log(:warn, "session #{session.id} idle probe failed: #{e.class}: #{e.message}")
         false

@@ -505,7 +505,7 @@ module Agents
         "hasSeenAutoDefaultNudge" => true,
         # Suppresses the "You've spent $5 on the Anthropic API this session." notice that
         # an API-billed session gets once it crosses $5. It waits for a keypress, so an
-        # automatic session went silent until Sessions::NoOutputWatchdog killed it (runs
+        # automatic session went silent until the no-output watchdog killed it (runs
         # 3390 and 5341, both after finishing their work). Claude Code writes this flag
         # itself once the notice is answered.
         "hasAcknowledgedCostThreshold" => true,

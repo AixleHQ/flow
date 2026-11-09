@@ -10,7 +10,9 @@
 #   - a refused login pauses it until it is renewed (Checks::AuthPause);
 #   - an automatic session's agent that ended its turn without `finish_session` is typed a
 #     reminder, and failed once it has stopped again after the last one (Checks::TurnEnd,
-#     task #208).
+#     task #208);
+#   - an unattended step whose screen (Kiro) or log has not changed for 30 minutes is
+#     failed (Checks::NoOutput).
 #
 # A failure goes through SessionService.fail_session_if, which completes the step and wakes
 # the session's own container workflow so its cleanup runs, instead of it waiting out its

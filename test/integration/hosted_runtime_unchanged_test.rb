@@ -76,8 +76,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
         tail: Sessions::LiveLogReader.new(session).tail(lines: 10).status,
         dead: Activities::Session::ScanDeadContainersActivity.new.run,
         # The pass's duration is measured, not traced.
-        monitor: Activities::Workflow::MonitorSessionsActivity.new.run.except(:duration_ms),
-        no_output: Activities::Workflow::ScanNoOutputSessionsActivity.new.run
+        monitor: Activities::Workflow::MonitorSessionsActivity.new.run.except(:duration_ms)
       }
     end
     # Out of the next trace's scans.

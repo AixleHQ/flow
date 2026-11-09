@@ -16,7 +16,7 @@ module Sessions
       end
 
       test "the checks run in today's order of precedence" do
-        assert_equal [ QuotaError, BlockingPrompt, AuthPause, TurnEnd ], Monitor::CHECKS
+        assert_equal [ QuotaError, BlockingPrompt, AuthPause, TurnEnd, NoOutput ], Monitor::CHECKS
       end
 
       test "no two checks keep the same key" do

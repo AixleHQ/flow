@@ -8,8 +8,8 @@ module Sessions
   # collected into a SessionLog during the container workflow's cleanup phase —
   # so while a session runs, the only way to see it is to ask the container.
   # It serves the reads for people and agents (Sessions::LogTail: the live
-  # terminal's tail and `get_session_log`) and the no-output watchdog. The
-  # checks of Sessions::Monitor read through Sessions::Snapshot instead.
+  # terminal's tail and `get_session_log`). The checks of Sessions::Monitor read
+  # through Sessions::Snapshot instead.
   #
   # `capture-pane` rather than the raw file on purpose: it returns the rendered
   # screen plus scrollback, already free of the ANSI redraw stream that makes

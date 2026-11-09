@@ -62,8 +62,11 @@ module Sessions
       # apply to it, and `still` (when given) must still hold, or nothing is changed. A
       # session that started finishing, was finished or was auth-paused since the pass read
       # it is another path's, and the check stops.
+      #
+      # The message is redacted first (#redact): it quotes the pane, it is stored in
+      # `error_message`, and from there it reaches the step's error and the Slack notice.
       def fail_session(message, &still)
-        failed = SessionService.fail_session_if(session: session, error_message: message,
+        failed = SessionService.fail_session_if(session: session, error_message: redact(message),
                                                 expected_state: session.state) do |locked|
           self.class.applies_to?(locked) && (still.nil? || still.call(locked))
         end
@@ -76,6 +79,13 @@ module Sessions
       def log(level, message)
         Rails.logger.public_send(level, "[#{self.class.name}] session=#{session.id} #{message}")
         nil
+      end
+
+      # Masks the session's secret config items, as Sessions::LiveLogReader does for a live
+      # read: the pane is the same bytes the stored log would carry.
+      def redact(text)
+        @redactor ||= Sessions::SecretRedactor.for_session(session)
+        @redactor.call(text)
       end
     end
   end
