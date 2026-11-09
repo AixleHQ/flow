@@ -26,13 +26,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     cleanup_runtime_overrides
   end
 
-  # A hosted runtime's callback addresses, the Settings values.
-  def stub_hosted_callbacks(runtime)
-    ContainerRuntime::CallbackUrls::NAMES.each do |name|
-      runtime.stubs(:callback_url).with(name, anything).returns(ContainerRuntime::CallbackUrls.hosted(name))
-    end
-  end
-
   # One assembly, on the runtime the test hands it.
   def context_service(session, container_id = "ctr1", runtime: @default_runtime_mock)
     stub_hosted_callbacks(runtime) if runtime.is_a?(Mocha::Mock)
@@ -919,6 +912,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session_runtime.stubs(:write_file).with { |ctr, path, *| written << [ ctr, path ] }.returns(true)
     session_runtime.stubs(:exec).returns([ [], [], 0 ])
     session_runtime.stubs(:read_file).returns(nil)
+    stub_hosted_callbacks(session_runtime)
     ContainerRuntime.expects(:for_session).with(session).once.returns(session_runtime)
     ContainerRuntime.expects(:build).never
 
