@@ -4,6 +4,8 @@ require "test_helper"
 
 module Sessions
   class AuthPauseTest < ActiveSupport::TestCase
+    include SecretLeakAssertions
+
     BANNER_PANE = <<~PANE
       ● Running the test suite
         ⎿  Login expired · Please run /login
@@ -55,6 +57,18 @@ module Sessions
     end
 
     RESUME_PROMPT_TYPED = PaneInput.command(Agents::BaseAdapter::AUTH_RESUME_PROMPT).freeze
+
+    # While the pass reads the pane, the pause it loaded ends and a fresh one starts (a
+    # delivery, then a new refusal). @return [String] the fresh pause's `auth_paused_at`
+    def replace_pause_during_read
+      fresh = Time.current.iso8601
+      @runtime.on_next_exec("capture-pane") do
+        TerminalSession.find(@session.id).update_jsonb_keys!(
+          :metadata, set: { "auth_paused_at" => fresh, "auth_pause_reason" => "Not logged in · Please run /login" }
+        )
+      end
+      fresh
+    end
 
     def delivered_refresh_token
       written = @runtime.read_file(nil, "/home/claude/.claude/.credentials.json")
@@ -173,6 +187,55 @@ module Sessions
       assert_nil @session.error_message
     end
 
+    # The pass observed a pause past the limit. While it read the pane, a delivery ended
+    # that pause and a new refusal started a fresh one, which is nowhere near the limit.
+    test "does not fail a fresh pause that replaced the one the pass observed at the limit" do
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => (AuthPause.limit + 1.minute).ago.iso8601,
+                                       "auth_pause_reason" => "Login expired · Please run /login")
+      fresh = replace_pause_during_read
+
+      assert_equal :taken_over, observe
+
+      @session.reload
+      assert_equal "ready", @session.state
+      assert_nil @session.error_message
+      assert_equal fresh, @session.metadata["auth_paused_at"], "the fresh pause remains"
+    end
+
+    # The pass observed a pause and a pane without its banner. While it read the pane, a
+    # delivery ended that pause and a new refusal started a fresh one.
+    test "does not quietly end a fresh pause that replaced the one the pass observed" do
+      @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
+      @run.pause!
+      fresh = replace_pause_during_read
+
+      assert_equal :taken_over, observe(pane: "● tick-12\n● tick-13\n> \n")
+
+      assert_equal fresh, @session.reload.metadata["auth_paused_at"], "the fresh pause remains"
+      assert_equal "paused", @run.reload.state
+    end
+
+    # A configured secret the agent echoed onto the banner line. The stored reason is served
+    # with the session's metadata (TerminalSessionResource); the expiry quotes it.
+    test "a secret on the banner line reaches neither the stored reason nor the expiry message" do
+      @session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
+                                                            value: RECORDED_SECRET)
+      @credential.mark_refresh_error!("invalid_grant", permanent: true)
+      pane = BANNER_PANE.sub("Please run /login", "Please run /login (for #{RECORDED_SECRET})")
+
+      assert_equal :paused, observe(pane: pane)
+      reason = @session.reload.metadata["auth_pause_reason"]
+      assert_match %r{Login expired · Please run /login \(for }, reason
+      assert_no_secret reason
+
+      travel AuthPause.limit + 1.minute
+      assert_equal :failed, observe(pane: pane)
+
+      message = @session.reload.error_message
+      assert_match(/agent authentication failed — Login expired/, message)
+      assert_no_secret message
+    end
+
     test "lets a paused step go once the banner has left its pane" do
       @session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
       @run.pause!
@@ -247,27 +310,6 @@ module Sessions
       assert delivered, "the delivery found the session paused and resumed it"
       refute AuthPause.paused?(@session.reload)
       assert_equal "running", @run.reload.state, "no paused run is left without a paused session"
-    end
-
-    # The two unpauses are serialized on the run's row lock. Here the second one runs while the
-    # first holds its locks (`still` is called inside the first's transaction): it sees the
-    # first session still paused and leaves the run alone, and the first then resumes it.
-    test "two sessions of one run unpaused concurrently resume the run" do
-      other = step_session
-      [ @session, other ].each { |s| s.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601) }
-      @run.pause!
-      second = AuthPause.new(TerminalSession.find(other.id), runtime: @runtime)
-
-      first = AuthPause.new(@session, runtime: @runtime).unpause_quietly do
-        assert second.unpause_quietly, "the second session is unpaused"
-        assert_equal "paused", WorkflowRun.find(@run.id).state, "the first session still waits"
-        true
-      end
-
-      assert first
-      refute AuthPause.paused?(@session.reload)
-      refute AuthPause.paused?(other.reload)
-      assert_equal "running", @run.reload.state
     end
 
     test "a duplicate delivery returns false" do

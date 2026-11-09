@@ -36,6 +36,13 @@ module Sessions
       session.metadata&.dig("auth_paused_at").present?
     end
 
+    # The pause episode a row is in: its `auth_paused_at`, or nil when it is not paused. Two
+    # episodes cannot start in the same second, because a delivery and a new refusal have to
+    # come between them, so this tells them apart.
+    def self.episode(session)
+      session.metadata&.dig("auth_paused_at").presence
+    end
+
     def self.limit
       Settings.agents.auth_pause_limit_minutes.to_i.minutes
     end
@@ -97,8 +104,14 @@ module Sessions
     # lock, then the session's (#transition). A compare-and-set: a session that is already
     # paused, or for which `still` (when given) no longer holds, is left as it is, and a
     # delivery cannot unpause the session between the marker and the run's pause.
+    #
+    # The banner is a line of the pane, and a configured secret the agent echoed can be on
+    # it, so it is redacted before it is stored: `auth_pause_reason` is served with the
+    # session's metadata (TerminalSessionResource), and #expire! quotes it in the session's
+    # error_message and the failure notice.
     # @return [Boolean] whether the session was paused
     def pause!(banner, &still)
+      banner = SecretRedactor.for_session(session).call(banner)
       paused = transition do |run|
         next false if self.class.paused?(session) || (still && !still.call(session))
 
@@ -149,30 +162,33 @@ module Sessions
     end
 
     # Nobody signed in again within the pause limit.
-    def expired?
-      paused_at < self.class.limit.ago
+    def expired?(row = session)
+      paused_at(row) < self.class.limit.ago
     end
 
     # Fails the session after the pause limit: a compare-and-set
-    # (SessionService.fail_session_if), so a session that was unpaused, or started
-    # finishing, since it was read is left as it is.
+    # (SessionService.fail_session_if). Under the session's lock the row must still be in
+    # `episode`, the pause the caller observed, and that pause must be past the limit by the
+    # locked row. A session that was unpaused, paused again since, or started finishing is
+    # left as it is.
     # @return [Boolean] whether the session was failed
-    def expire!(&still)
+    def expire!(episode:, &still)
       reason = session.metadata["auth_pause_reason"].presence || "login expired"
       failed = SessionService.fail_session_if(
         session: session, expected_state: session.state,
         error_message: "Session terminated: agent authentication failed — #{reason}. " \
                        "Nobody signed in again within #{self.class.limit.inspect}."
-      ) { |locked| self.class.paused?(locked) && (still.nil? || still.call(locked)) }
-      log(:info, failed ? "nobody signed in again; failed" : "no longer paused; not failed")
+      ) { |locked| in_episode?(locked, episode) && expired?(locked) && (still.nil? || still.call(locked)) }
+      log(:info, failed ? "nobody signed in again; failed" : "no longer in the observed pause; not failed")
       failed
     end
 
     # The banner left the pane's tail: someone signed in from the session's own terminal, or
-    # the agent went on by itself.
+    # the agent went on by itself. Only `episode`, the pause the caller observed, is ended:
+    # a pause that started since is another banner, which this pass did not see.
     # @return [Boolean] whether the session was unpaused
-    def unpause_quietly(&still)
-      return false unless unpause!(&still)
+    def unpause_quietly(episode:, &still)
+      return false unless unpause!(episode: episode, &still)
 
       log(:info, "is working again")
       true
@@ -194,10 +210,12 @@ module Sessions
     # In one transaction under the run's row lock, then the session's, as #pause!: a session
     # another path unpaused meanwhile (a delivery's #resume!, a pass's #unpause_quietly) is
     # not unpaused twice, and of two sessions of one run unpaused at once, the second sees
-    # the first's marker gone and resumes the run.
-    def unpause!(renewed: false, &still)
+    # the first's marker gone and resumes the run. With `episode`, only that pause is ended
+    # (#unpause_quietly); a delivery ends whichever pause the session is in.
+    def unpause!(renewed: false, episode: nil, &still)
       unpaused = transition do |run|
-        next false unless self.class.paused?(session) && (still.nil? || still.call(session))
+        next false unless self.class.paused?(session) && (episode.nil? || in_episode?(session, episode)) &&
+                          (still.nil? || still.call(session))
 
         session.update_jsonb_keys!(:metadata, set: renewed ? { "auth_renewed_at" => Time.current.iso8601 } : {},
                                               remove: PAUSE_KEYS)
@@ -246,8 +264,12 @@ module Sessions
       PaneInput.type(session, adapter.auth_resume_prompt, runtime: container_runtime)
     end
 
-    def paused_at
-      Time.zone.parse(session.metadata["auth_paused_at"].to_s) || Time.current
+    def paused_at(row = session)
+      Time.zone.parse(row.metadata&.dig("auth_paused_at").to_s) || Time.current
+    end
+
+    def in_episode?(row, episode)
+      episode.present? && self.class.episode(row) == episode
     end
 
     def interactive_session?

@@ -41,12 +41,17 @@ module Sessions
 
       private
 
+      # The pause this pass observed is the one it may end or fail (Sessions::AuthPause.episode):
+      # a delivery and a new refusal can replace it with a fresh pause before the action takes
+      # the lock, and that one is not this snapshot's to judge.
       def still_paused(snapshot)
+        episode = Sessions::AuthPause.episode(session)
         if banner_on(snapshot).nil?
-          return stop(pause.unpause_quietly { |locked| self.class.applies_to?(locked) } ? :resumed : :taken_over)
+          resumed = pause.unpause_quietly(episode: episode) { |locked| self.class.applies_to?(locked) }
+          return stop(resumed ? :resumed : :taken_over)
         end
         if pause.expired?
-          return stop(pause.expire! { |locked| self.class.applies_to?(locked) } ? :failed : :taken_over)
+          return stop(pause.expire!(episode: episode) { |locked| self.class.applies_to?(locked) } ? :failed : :taken_over)
         end
 
         pause.heal!(if_due: true)
