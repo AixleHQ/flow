@@ -11,6 +11,9 @@ module Web
       # Stricter than integrations, where any writer connects one: a runner
       # receives the launching user's agent credential, so only someone with
       # authority over the project's trust boundary may point it somewhere.
+      #
+      # It authorizes the action only. Which runner a request may touch is the
+      # controller's lookup: a write finds the project's own runners only.
       class RunnersPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def show? = index?
@@ -24,12 +27,8 @@ module Web
 
         private
 
-        # The record is the runner when the controller has one, and the
-        # `:runners` symbol when Pundit authorizes the action before the lookup.
         def manage?
-          return false unless project_accessible? && (admin? || project.owner_id == current_user.id)
-
-          !record.is_a?(Runner) || record.project_id == project.id
+          project_accessible? && (admin? || project.owner_id == current_user.id)
         end
       end
     end

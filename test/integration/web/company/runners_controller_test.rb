@@ -111,7 +111,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "a config the schema or the manual adapter refuses is not saved" do
+  test "a config the schema or the type's rules refuse is not saved, with the same message" do
     sign_in_as(@admin)
 
     assert_no_difference -> { Runner.count } do
@@ -120,6 +120,12 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
 
       post company_settings_runners_path, params: runner_params(config: { container: { docker_socket: true } }), as: :json
       assert_match(/docker_socket requires container.allow_privileged_mounts/, Array(session["inertia_errors"][:config]).to_sentence)
+
+      post company_settings_runners_path, params: runner_params(config: {
+        container: { extra_mounts: [ { source: "/srv/out", target: "/out", writable: true } ] }
+      }), as: :json
+      assert_equal [ "container.acknowledged_writable_mounts must list /out: it is a writable host mount" ],
+                   Array(session["inertia_errors"][:config])
     end
   end
 
@@ -166,8 +172,17 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
 
     get company_settings_runner_path(project_runner)
     assert_response :not_found
+    patch company_settings_runner_path(project_runner), params: { runner: { name: "Hijacked" } }, as: :json
+    assert_response :not_found
+    %i[disable enable revoke].each do |action|
+      post public_send(:"#{action}_company_settings_runner_path", project_runner)
+      assert_response :not_found
+    end
     delete company_settings_runner_path(project_runner)
     assert_response :not_found
-    assert_not project_runner.reload.deleted?
+    project_runner.reload
+    assert_not project_runner.deleted?
+    assert_equal "pending", project_runner.status
+    assert_not_equal "Hijacked", project_runner.name
   end
 end

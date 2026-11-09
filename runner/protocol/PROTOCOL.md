@@ -13,6 +13,10 @@ that builds them (§8).
   one of them (`test/integration/runner_protocol_conformance_test.rb`), so a change to a status,
   an error code or a response shape fails CI. The README lists the few clauses that are verified
   outside the fixtures, such as the `413` and the `429`.
+- **The request schemas** in [`schemas/v1/`](schemas/v1/) are the JSON Schemas (draft 2020-12)
+  of the bodies and parameters the endpoints take (§5). The gateway checks every request against
+  its schema, and a request that fails it gets the endpoint's own refusal. A new endpoint that
+  takes a body or parameters adds its schema there.
 - **Self-contained.** Nothing here needs the Rails code. The protocol lives with the runner,
   under `runner/`, and the runner's code is written against this directory, never against
   the gateway's code (DESIGN.md §14.1).
@@ -244,6 +248,10 @@ Its own refusals: `422 ephemeral_not_supported`, then `422 invalid_registration`
 token. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
+Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the
+`ephemeral` refusal; `name` blank once trimmed and a value over 255 characters are checked when
+the machine is recorded, with the same refusal.
+
 Fixtures: `register/`, `headers/`.
 
 ### 5.2 `DELETE /runner/v1/registration`
@@ -285,7 +293,9 @@ The long-poll a runner takes its machine's ops from.
 | `after` | `0` | A non-negative integer, at most `9223372036854775807` (2^63 − 1). The highest `sequence` the runner has taken. |
 | `wait` | `25` | A non-negative integer, in seconds. A value above 25 is treated as 25. `0` answers at once. |
 
-Anything else is `400 invalid_request`.
+Anything else is `400 invalid_request`. Schema:
+[`schemas/v1/ops.query.json`](schemas/v1/ops.query.json); a parameter written as a base-10
+integer is read as that integer before it is checked.
 
 `200 OK`, with `Cache-Control: no-store`:
 
@@ -357,6 +367,9 @@ it again.
 
 Its own refusals: `404 not_found`, for an op of another machine or no op at all, and
 `422 invalid_result`.
+
+Schema: [`schemas/v1/op_result.request.json`](schemas/v1/op_result.request.json). JSON Schema
+counts `1.0` as an integer, so an `exit_code` of `1.0` is accepted, and stored as `1`.
 
 Fixtures: `ops/`.
 

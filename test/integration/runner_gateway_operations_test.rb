@@ -171,6 +171,34 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     assert_empty replaced
   end
 
+  # The channel's messages are typed JSON: an enqueue's wake-up and a poll's
+  # announcement are told apart by `type`, not by the shape of a string.
+  test "a waiting poll announces itself with a typed message, and an enqueue wakes with one" do
+    pubsub = ActionCable.server.pubsub
+    channel = "runner_env_#{@environment.id}"
+    pubsub.clear_messages(channel)
+
+    poll(@pair, wait: 1)
+    enqueue
+
+    announcement, wake_up = pubsub.broadcasts(channel).map { |message| JSON.parse(message) }
+    assert_equal "poll_waiting", announcement["type"]
+    assert_match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/, announcement["poll_id"])
+    assert_equal({ "type" => "op_enqueued", "sequence" => 1 }, wake_up)
+  end
+
+  test "a message on the channel that is not another poll's announcement does not end a waiting poll" do
+    older = waiting_poll(@pair)
+
+    [ "not json", "[1]", { type: "something_else" }.to_json ].each do |message|
+      ActionCable.server.pubsub.broadcast("runner_env_#{@environment.id}", message)
+    end
+    enqueue
+
+    status, body, = older.value
+    assert_equal [ 200, [ 1 ] ], [ status, body["ops"].pluck("sequence") ]
+  end
+
   test "after leaves out acknowledged ops, and ops past it are delivered again until acknowledged" do
     3.times { enqueue }
 
@@ -304,6 +332,16 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     end
     assert operation.reload.pending?
     assert_equal({ "cmd" => "true" }, operation.payload)
+  end
+
+  test "a null field of a result counts as absent, and an exit_code of 1.0 is stored as an integer" do
+    operation = enqueue
+
+    post_result(@pair, operation, status: "error", exit_code: 1.0, stdout: nil, data: nil, error: nil, extra: "ignored")
+
+    assert_response :ok
+    assert_equal({ "exit_code" => 1 }, operation.reload.result)
+    assert_kind_of Integer, operation.result["exit_code"]
   end
 
   test "another environment's op, or an unknown one, is not found" do

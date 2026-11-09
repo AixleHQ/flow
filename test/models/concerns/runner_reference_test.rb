@@ -69,6 +69,17 @@ class RunnerReferenceTest < ActiveSupport::TestCase
     assert_raises(ActiveRecord::InvalidForeignKey) { workflow.update_column(:runner_id, foreign.id) }
   end
 
+  test "owned_runner is the preloaded runner only when it is in the record's tenant" do
+    workflow = create(:workflow, scope: @project, runner: @project_runner)
+    assert_equal @project_runner, workflow.owned_runner
+    @project_runner.soft_delete!
+    assert_equal @project_runner, workflow.reload.owned_runner, "a runner deleted since is still the record's"
+
+    elsewhere = create(:runner, company: @company, created_by: @user, project: create(:project, company: @company, owner: @user))
+    Workflow.where(id: workflow.id).update_all(runner_id: elsewhere.id)
+    assert_nil workflow.reload.owned_runner
+  end
+
   test "a runner removed with its project takes its references with it" do
     workflow = create(:workflow, scope: create(:project, company: @company, owner: @user))
     runner = create(:runner, company: @company, created_by: @user, project: workflow.scope)

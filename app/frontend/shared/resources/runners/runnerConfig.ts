@@ -100,7 +100,7 @@ const asList = (value: unknown): Record<string, unknown>[] => (Array.isArray(val
 
 /**
  * The host paths the agent could write to outside Aixle's labels (§7.2), as
- * ManualAdapter#validate_config lists them: a writable `home_mount` by its `path` (it has no target
+ * Runners::ConfigSchema.writable_host_mounts lists them: a writable `home_mount` by its `path` (it has no target
  * of its own), every writable `extra_mounts` entry and every host-path `cache_mounts` entry by
  * their `target`.
  */

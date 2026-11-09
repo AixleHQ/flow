@@ -227,6 +227,7 @@ What the controllers return — no envelope around the resource:
 - **Never** hand-write a tenant check for a stored id (`validate :x_within_project`) → use `validates :x, tenant_ids: { model: X }`
 - **Never** repeat a `TenantScope` ownership rule in a model scope → add the model to `TenantScope.owned`; `visible_for_*` is for pickers, not for validating references
 - **Never** resolve a stored or user-supplied id across every company (`X.find(id)`, `X.find_by(id:)`) → use `TenantScope.owned(X, project:).find_by(id:)`
+- **Never** do IO, call a service or reach a higher layer from a model validation → a validation may read the model's own associations, query for uniqueness and call pure data and rule code (e.g. `Runners::ConfigSchema`); a check that needs an external call belongs in a service or a health check (DESIGN.md §5.1 of agent-runtimes)
 - **Never** skip `# frozen_string_literal: true`
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`

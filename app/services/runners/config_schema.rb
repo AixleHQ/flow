@@ -9,6 +9,12 @@ module Runners
   # Defaults live here and are never written into `config` (§2.7): `value`
   # applies them at read time, so a later change of a default reaches every
   # runner that does not set the key.
+  #
+  # The rules one key's schema cannot express live here too, per type (TYPE_RULES),
+  # as pure functions of the config hash. Every check here does no IO: a check
+  # that needs an external call, such as whether a Coder template exists,
+  # belongs in a service or the health check, never in `Runner`'s validation
+  # (§5.1).
   module ConfigSchema
     Key = Data.define(:path, :types, :schema, :default, :required, :later) do
       def applies_to?(type) = types.include?(type.to_s)
@@ -92,6 +98,9 @@ module Runners
     # `{"container" => {"network" => ...}}`).
     GROUPS = KEYS.keys.filter_map { |path| path.split(".").first if path.include?(".") }.uniq.freeze
 
+    # The rules of each type beyond its schema, run in this order.
+    TYPE_RULES = { "manual" => %i[home_mount_errors acknowledgement_errors docker_socket_errors] }.freeze
+
     EPHEMERAL = "ephemeral is not a config key: it is set per machine at registration"
     TYPE_NAMES = { "string" => "a string", "integer" => "an integer", "number" => "a number", "boolean" => "true or false",
                    "object" => "an object", "array" => "a list", "null" => "null" }.freeze
@@ -119,14 +128,31 @@ module Runners
       end
 
       # Every reason `config` is refused for a runner of `type`, as messages
-      # that name the key.
+      # that name the key: the schema's errors, and once the schema passes, so
+      # that values have their declared types, the type's rules.
       def errors(config, type)
         return [ "must be an object" ] unless config.is_a?(Hash)
 
-        refusals = key_refusals(config.deep_stringify_keys, type.to_s)
+        config = config.deep_stringify_keys
+        refusals = key_refusals(config, type.to_s)
         return refusals if refusals.any?
 
-        value_errors(config.deep_stringify_keys, type.to_s)
+        refusals = value_errors(config, type.to_s)
+        return refusals if refusals.any?
+
+        rule_errors(config, type.to_s)
+      end
+
+      # The host paths the agent could write to outside Aixle's labels (§7.2),
+      # each of which a manual runner acknowledges. The home mount has no
+      # target of its own, so it is listed by the host path it mounts.
+      def writable_host_mounts(config)
+        home = value(config, "container.home_mount")
+        extra = value(config, "container.extra_mounts").select { |m| m["writable"] == true }
+        cache = value(config, "container.cache_mounts").select { |m| m["host_path"].present? }
+
+        [ (home["path"] if home&.dig("writable") == true && home["path"].present?),
+          *extra.pluck("target"), *cache.pluck("target") ].compact.uniq
       end
 
       # The value `config` holds for `path`, or the key's default.
@@ -170,6 +196,35 @@ module Runners
         return if key.applies_to?(type)
 
         "#{path} applies only to #{key.types.to_sentence} runners"
+      end
+
+      def rule_errors(config, type)
+        TYPE_RULES.fetch(type, []).flat_map { |rule| send(rule, config) }
+      end
+
+      # §2.7 and §6.8: the home directory to mount is the operator's to name.
+      def home_mount_errors(config)
+        home = value(config, "container.home_mount")
+        return [] if home.nil? || home["path"].present?
+
+        [ "container.home_mount.path is required on a manual runner" ]
+      end
+
+      # A writable host mount is outside the scrub guarantee (§7.2), so each
+      # one is acknowledged.
+      def acknowledgement_errors(config)
+        acknowledged = value(config, "container.acknowledged_writable_mounts")
+        (writable_host_mounts(config) - acknowledged).map do |target|
+          "container.acknowledged_writable_mounts must list #{target}: it is a writable host mount"
+        end
+      end
+
+      # The Docker socket is root on the machine.
+      def docker_socket_errors(config)
+        return [] unless value(config, "container.docker_socket") == true
+        return [] if value(config, "container.allow_privileged_mounts") == true
+
+        [ "container.docker_socket requires container.allow_privileged_mounts: it gives the agent root on the machine" ]
       end
 
       def value_errors(config, type)
