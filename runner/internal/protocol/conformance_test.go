@@ -452,11 +452,9 @@ type coverage struct {
 // with the reason. Every other fixture must drive at least one, so that a new
 // fixture the client cannot express fails here instead of passing unseen.
 var gatewayOnly = map[string]string{
-	"headers/checked_before_the_token": "every request has a bad protocol header, which this client never sends",
-	"headers/invalid_runner_version":   "every request has a bad X-Aixle-Runner-Version, which this client never sends",
-	"headers/unsupported_protocol":     "every request has a protocol header other than 1, which this client never sends",
-	"ops/invalid_poll_parameters":      "every poll has a malformed after or wait, which this client never sends",
-	"ops/invalid_result":               "every result has a body this client never sends",
+	// None yet: every fixture of protocol 1 drives at least one exchange. A
+	// fixture that tests only the gateway's checks goes here, as
+	// "area/name": "why the client cannot send any of its requests".
 }
 
 // refusalHeader says whether a fixture's response is marked as the gateway's

@@ -61,7 +61,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
       "mounts" => [ { "type" => "cache", "name" => "pip", "target" => "/home/agent/.cache/pip" } ],
       "network" => "host", "pid" => "private",
       "resources" => { "cpus" => 2, "memory_bytes" => 8.gigabytes, "pids_limit" => 4096 },
-      "privilege_escalation" => false
+      "privilege_escalation" => false,
+      "proxy_port" => Runners::Proxy::HOST_PORT_BASE + (@session.id % Runners::Proxy::HOST_PORT_SPAN)
     }, start[:payload])
     assert_not start[:payload].key?("session_id"), "the session is in the envelope, not the payload"
     assert_equal [ IMAGE ], @host_runner.machine.images, "container.start pulled the image"

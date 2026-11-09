@@ -519,6 +519,32 @@ module Agents
       refute_includes env.keys, "KIRO_DISABLE_TELEMETRY"
     end
 
+    test "default_env_vars of a runner session turns the export off and forwards no MCP port" do
+      session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-123")
+      callbacks = ContainerRuntime::CallbackUrls.hosted_all.merge(mcp: "http://127.0.0.1:7690/mcp", otel: nil)
+
+      env = @adapter.default_env_vars(session, callbacks: callbacks)
+
+      # Without an endpoint the export would fall back to the vendor's collector.
+      assert_equal "1", env["KIRO_DISABLE_TELEMETRY"]
+      assert_empty env.keys & %w[KIRO_TELEMETRY_OTEL KIRO_TELEMETRY_OTLP_ENDPOINT OTEL_RESOURCE_ATTRIBUTES]
+      # The proxy's address is loopback already, so nothing is forwarded.
+      assert_not env.key?("MCP_FORWARD_TARGET")
+    end
+
+    test "default_env_vars of a runner session turns the export off and forwards no MCP port" do
+      session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-123")
+      callbacks = ContainerRuntime::CallbackUrls.hosted_all.merge(mcp: "http://127.0.0.1:7690/mcp", otel: nil)
+
+      env = @adapter.default_env_vars(session, callbacks: callbacks)
+
+      # Without an endpoint the export would fall back to the vendor's collector.
+      assert_equal "1", env["KIRO_DISABLE_TELEMETRY"]
+      assert_empty env.keys & %w[KIRO_TELEMETRY_OTEL KIRO_TELEMETRY_OTLP_ENDPOINT OTEL_RESOURCE_ATTRIBUTES]
+      # The proxy's address is loopback already, so nothing is forwarded.
+      assert_not env.key?("MCP_FORWARD_TARGET")
+    end
+
     # One OTLP batch in the exact shape the platform's collector forwards, taken from a
     # live session: a DELTA sum, credits in `asDouble`, `terminal_session_token` on the
     # resource and `model`/`session_id` on the data point.

@@ -567,6 +567,30 @@ module Agents
       assert_equal "90000", env["MCP_TIMEOUT"]
     end
 
+    test "default_env_vars sends telemetry to the session's OTLP endpoint, and none without one" do
+      callbacks = ContainerRuntime::CallbackUrls.hosted_all.merge(otel: "http://collector:4318")
+      env = @adapter.default_env_vars(@session, callbacks: callbacks)
+      assert_equal "1", env["CLAUDE_CODE_ENABLE_TELEMETRY"]
+      assert_equal "http://collector:4318", env["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+      # A runner session: its callback proxy has no OTLP route yet.
+      env = @adapter.default_env_vars(@session, callbacks: callbacks.merge(otel: nil))
+      assert_empty env.keys.grep(/\AOTEL_|TELEMETRY/)
+      assert_equal "90000", env["MCP_TIMEOUT"]
+    end
+
+    test "default_env_vars sends telemetry to the session's OTLP endpoint, and none without one" do
+      callbacks = ContainerRuntime::CallbackUrls.hosted_all.merge(otel: "http://collector:4318")
+      env = @adapter.default_env_vars(@session, callbacks: callbacks)
+      assert_equal "1", env["CLAUDE_CODE_ENABLE_TELEMETRY"]
+      assert_equal "http://collector:4318", env["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+      # A runner session: its callback proxy has no OTLP route yet.
+      env = @adapter.default_env_vars(@session, callbacks: callbacks.merge(otel: nil))
+      assert_empty env.keys.grep(/\AOTEL_|TELEMETRY/)
+      assert_equal "90000", env["MCP_TIMEOUT"]
+    end
+
     test "default_env_vars keeps the CLI off the alternate screen so the session log scrolls" do
       env = @adapter.default_env_vars(@session)
 
