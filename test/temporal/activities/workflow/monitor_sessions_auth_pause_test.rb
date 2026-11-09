@@ -4,9 +4,9 @@ require "test_helper"
 
 module Activities
   module Workflow
-    # The quota scan's one pane read per session also decides whether an agent is waiting
-    # for its login (Sessions::AuthPause, covered in its own test). Here: that the scan asks.
-    class ScanQuotaErrorsAuthPauseTest < ActiveSupport::TestCase
+    # The pass's one read per session also decides whether an agent is waiting for its login
+    # (Sessions::Checks::AuthPause, covered in its own test). Here: that the pass asks.
+    class MonitorSessionsAuthPauseTest < ActiveSupport::TestCase
       setup do
         @user = create(:user, :with_company)
         @company = @user.companies.first
@@ -29,7 +29,7 @@ module Activities
         @credential.mark_refresh_error!("invalid_grant", permanent: true)
         @runtime.set_terminal_pane("  ⎿  Login expired · Please run /login\n> \n", last_output_at: 5.minutes.ago)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:auth_paused]
         assert_equal 0, result[:cleaned]
@@ -40,7 +40,7 @@ module Activities
       test "sends a step straight back to work when the stored login is a working one" do
         @runtime.set_terminal_pane("  ⎿  Login expired · Please run /login\n> \n", last_output_at: 5.minutes.ago)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 0, result[:auth_paused]
         refute Sessions::AuthPause.paused?(@session.reload)
@@ -51,7 +51,7 @@ module Activities
         @runtime.set_terminal_pane("Credit balance too low · Add funds: https://platform.claude.com/settings/billing\n",
                                    last_output_at: 5.minutes.ago)
 
-        result = run_activity(ScanQuotaErrorsActivity)
+        result = run_activity(MonitorSessionsActivity)
 
         assert_equal 1, result[:cleaned]
         refute Sessions::AuthPause.paused?(@session.reload)

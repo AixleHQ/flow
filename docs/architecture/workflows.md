@@ -749,16 +749,125 @@ written through `finish_session` / `fail_session`; promoting an output to a
 project-level Asset is handled by `AssetExportService` (via the post-workflow
 export UI), not an agent tool.
 
+### Session monitoring: one snapshot per session per pass
+
+Several checks watch a live workflow step's terminal. They do not read it
+themselves: one mechanism, `Sessions::Monitor`, reads each session once per
+pass and hands the snapshot to them (task #211).
+
+- **The pass.** `session_monitor_workflow` runs
+  `Activities::Workflow::MonitorSessionsActivity` on the schedule's cron
+  (`app/temporal/schedules.yml`), every minute for now, with `overlap: skip`.
+  A pass is one sweep over the live workflow steps (`running` or `ready`, with
+  a container). A pass that runs longer than a minute drops the next one, so the
+  time between reads grows; every pass logs
+  `[Sessions::Monitor] pass read=<sessions read> duration_ms=<ms> …`, which
+  makes that visible. For each session the pass:
+  1. asks every check whether it applies (`applies_to?`). A session no check
+     applies to is not read at all;
+  2. collects the snapshot parts the applicable checks need;
+  3. reads the union of those parts with **one** exec, through
+     `ContainerRuntime.for_session` (one runner op on a runner session, capped
+     at `Settings.runners.scan_op_timeout`);
+  4. hands the snapshot to the applicable checks in order, until one stops;
+  5. writes what the checks keep between passes in one update.
+  A session whose container is gone (`ContainerUnreachableError`) is skipped
+  and left to the dead-container watchdog.
+- **The parts registry** (`Sessions::Snapshot::Parts::REGISTRY`). Each part is
+  one shell fragment in the read's script, delimited by a header and a footer
+  with the fragment's exit status and a per-read random marker
+  (`Sessions::Snapshot::Command`), so a part that fails leaves the others
+  readable and the agent's own output cannot forge a delimiter.
+
+  | Part | Fragment | What a check takes from it |
+  |---|---|---|
+  | `scrollback` | `tmux capture-pane -t agent -p -S -1000` | the pane; the current screen, its last 40 nonblank lines, right-trimmed (`Snapshot#screen`, `#screen_digest`, through `Sessions::ScreenDigest`) |
+  | `log_mtime` | `stat -c %Y /tmp/terminal_output.log` | when the pane last sent a byte (`Snapshot#last_output_at`, `#quiet_for?`), counted only from a read that also captured the pane |
+  | `clients` | `date +%s && tmux list-clients -t agent -F '#{client_readonly} #{client_activity}'` | whether a writable client typed recently, on the container's clock (`Clients#input_within?`) |
+
+  The snapshot's source is replaceable per runtime (`Snapshot.source_for`).
+  Today it is always an exec (`Sessions::Snapshot::ExecSource`); with task 8c a
+  runner session's snapshot comes from the live log its runner pushes.
+- **The interface** (`Sessions::Checks::Base`). A check implements
+  `.applies_to?(session)`, `.parts`, `.kept_keys` and `#call(snapshot)`, which
+  returns a `Sessions::Checks::Result`: an outcome (`:failed`, `:paused`,
+  `:resumed`, `:nudged`, `:pending`, `:taken_over`, or none) and whether
+  processing of this session stops there, because the check took the session
+  over or found another path had. The existing `*Detector` classes stay as the
+  text parsers the checks use. A check reads nothing itself; it acts itself.
+- **The checks, in order.**
+
+  | Check | Applies to | Parts | Action |
+  |---|---|---|---|
+  | `Checks::QuotaError` | live steps older than a minute | `scrollback`, `log_mtime` | fails the session on its recorded error, or on its own provider's quota message on the current screen once the pane has been quiet for a minute (`QuotaErrorDetector`) |
+  | `Checks::BlockingPrompt` | the same, `non_interactive` only | `scrollback` | fails the session on a dialog it cannot answer (`InteractivePromptDetector`) |
+  | `Checks::AuthPause` | the same as `QuotaError` | `scrollback`, `log_mtime` | pauses, heals, unpauses or expires a refused login (`Sessions::AuthPause`) |
+  | `Checks::TurnEnd` | `ready`, `non_interactive`, not auth-paused | `scrollback`, `clients` | types a reminder after a turn end, fails after the last one (below) |
+
+- **The re-check before acting, and the conditional state change.** The
+  snapshot and the row it came with can be seconds old. Every state change a
+  check makes is a compare-and-set that reads the row again under its lock and
+  checks that the session is still in the state the pass read, that the check
+  still applies (state, mode, auth pause) and that the check's own condition
+  still holds, then changes it in the same transaction:
+  - failing goes through `SessionService.fail_session_if` (and, for an
+    admitted session, `SessionAdmissionService.fail_if!` under the writer lock),
+    which reports whether it applied. Only the Temporal signal that wakes the
+    container workflow is sent after the commit;
+  - `Sessions::AuthPause#pause!`, `#unpause_quietly` and `#expire!` do the same.
+    A pause or an unpause is one transaction that locks the workflow run, then
+    the session, and changes the marker and the run's state together, so a
+    delivery between the two cannot leave a paused run with no paused session,
+    and two sessions of one run unpaused at once resume it. A delivery's
+    `resume!` types its prompt before that compare-and-set, never inside a
+    transaction, and returns whether the unpause applied. `heal!` counts its
+    attempt under the session's row lock, from the counter read there.
+    `#unpause_quietly` and `#expire!` act only on the pause episode the pass
+    observed: under the lock the row's `auth_paused_at` must be exactly the
+    value the pass read, and `#expire!` computes the expiry from the locked row,
+    so a fresh pause that replaced the observed one between the read and the
+    action is left alone. `#pause!` redacts the banner
+    (`Sessions::SecretRedactor.for_session`) before it stores it as
+    `auth_pause_reason`, which the session's metadata serves and the expiry
+    message quotes;
+  - a reminder is counted under the lock before it is typed, and the failure
+    after the last one requires the confirmation the pass acted on: the locked
+    row's `turn_end_screen` and `turn_end_seen_at` must be the ones it confirmed.
+  If the change did not apply, another path (`finish_session`, an auth pause, a
+  delivery) has taken the session over, and the check stops with `:taken_over`.
+  Every action is safe under a Temporal retry of the pass.
+- **Kept state.** The snapshot is thrown away after the pass. What a check's
+  later passes need lives in `terminal_sessions.metadata`, under keys that
+  check owns (`Sessions::Checks::KeptState`, which refuses another check's
+  key), and the pass writes all of a session's changes in one update:
+
+  | Check | Kept between passes | Written by its action, under the row lock |
+  |---|---|---|
+  | `QuotaError` | nothing | — |
+  | `BlockingPrompt` | nothing | — |
+  | `AuthPause` | nothing | `auth_paused_at`, `auth_pause_reason`, `auth_renewed_at`, `auth_heal_attempts`, `auth_heal_attempted_at` (also written by a delivery's `resume!` and by a refused login the CLI writes back) |
+  | `TurnEnd` | `turn_end_screen`, `turn_end_seen_at` (the turn end seen on an earlier pass) | `turn_end_nudges` (the reminder count) |
+
+- **Outside the mechanism.** `ScanDeadContainersActivity` reads the pod status
+  through the runtime API, with no exec; `CleanupStaleActivity` reads only
+  timestamps. The live terminal in the UI, `get_session_log` and the
+  `session_log` tool (`Sessions::LogTail`, `Sessions::LiveLogReader`) are reads
+  for people and agents, and the launch-time wait for the shell prompt
+  (`AgentBaseStrategy`) is part of starting the CLI. The no-output watchdog
+  (`ScanNoOutputSessionsActivity`) and the token-refresh sweep's idle probe
+  still read through `Sessions::LiveLogReader` until step 2 of task #211 moves
+  them onto the mechanism.
+
 ### When an automatic session's agent stops without `finish_session`
 
 Automatic sessions run each CLI's TUI. When a turn ends, the TUI waits at its
 prompt for a person, whether the model forgot `finish_session` or a provider
 error ended the turn. Two sweeps cover that state:
 
-- **The reminder (Kiro).** `Activities::Workflow::ScanQuotaErrorsActivity` reads
-  each session's pane once a minute. When `TurnEndDetector` sees Kiro's idle
-  prompt under a `▸ Credits: turn …` summary on two reads of the same screen,
-  `Sessions::TurnEndNudge` types a reminder into the pane: call
+- **The reminder (Kiro).** `Sessions::Monitor` reads each session's pane once
+  a minute. When `TurnEndDetector` sees Kiro's idle prompt under a
+  `▸ Credits: turn …` summary on two reads of the same screen,
+  `Sessions::Checks::TurnEnd` types a reminder into the pane: call
   `finish_session` if the work is done, otherwise continue. The agent takes it
   as its next message. `Sessions::PaneInput` sends the text and `Enter` in one
   `tmux send-keys -l … ; send-keys Enter` call, so a partial failure cannot
@@ -773,12 +882,12 @@ error ended the turn. Two sweeps cover that state:
   - At most 3 reminders per session (`turn_end_nudges` in the session's
     metadata). The reminder is counted, and the confirmed screen forgotten,
     under the session's row lock before anything is typed. A Temporal retry of
-    the scan, or a second scan of the same screen, then types nothing. A
+    the pass, or a second pass over the same screen, then types nothing. A
     reminder whose typing failed is used up. The turn end after the third fails
     the session with a message that says the agent ended its turn without
-    `finish_session` 4 times. Before failing, the session is read again under
-    its row lock: one that started finishing or was auth-paused since the scan
-    loaded it is left as it is.
+    `finish_session` 4 times. The failure is a compare-and-set under the row
+    lock: a session that started finishing, was finished or was auth-paused
+    since the pass loaded it is left as it is.
   - The prompt is matched on its start (`› ask a question`), because a narrow
     pane wraps the placeholder. The signature is checked against captures at
     30x20, 80x24, 160x45 and 220x50.

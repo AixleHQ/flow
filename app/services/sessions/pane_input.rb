@@ -2,8 +2,8 @@
 
 module Sessions
   # Types a message into a session's agent pane and submits it, the way a person at the
-  # terminal would. Sessions::AuthPause sends its resume prompt with it, Sessions::TurnEndNudge
-  # its reminder.
+  # terminal would. Sessions::AuthPause sends its resume prompt with it,
+  # Sessions::Checks::TurnEnd its reminder.
   #
   # The text and its `Enter` go in one tmux invocation (`send-keys -l TEXT ; send-keys Enter`).
   # Two execs could fail between them and leave the text as an unsent draft in the prompt box,

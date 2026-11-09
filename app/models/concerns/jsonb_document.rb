@@ -20,6 +20,11 @@ module JsonbDocument
     update_jsonb_keys(column, {}, keys)
   end
 
+  # Sets some top-level keys and removes others in the same single UPDATE.
+  def update_jsonb_keys!(column, set: {}, remove: [])
+    update_jsonb_keys(column, set, remove)
+  end
+
   # For a change computed from what is there (append to a list, merge into a
   # map): yields the stored document under a row lock and writes back what the
   # block leaves. With `callbacks: true` it saves through the model, for writes

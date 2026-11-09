@@ -33,8 +33,16 @@ schedules:
     enabled: true
     overlap: skip
 
-  - workflow: quota_error_scan_workflow
+  # Sessions::Monitor: reads each live workflow step's terminal once, with one exec, and
+  # hands the snapshot to the checks (Sessions::Checks: quota stop, blocking prompt,
+  # refused login, turn end). The cron is the pass's interval, N = 1 minute for now; the
+  # checks' timings assume it (Checks::TurnEnd confirms a turn end on two passes).
+  # SKIP overlap: a pass that runs long drops the next one rather than racing it over the
+  # same sessions, so the time between reads grows; every pass logs its duration and the
+  # number of sessions it read.
+  - workflow: session_monitor_workflow
     cron: "* * * * *"
+    overlap: skip
     enabled: true
 
   # Terminates sessions that have been `ready` (agent working) but produced no

@@ -140,7 +140,8 @@ module ContainerRuntime
     end
 
     # The pane `tmux capture-pane` is asked for, and the mtime `stat` reports for
-    # the captured log. Both back Sessions::LiveLogReader's single exec.
+    # the captured log. Both back Sessions::LiveLogReader's single exec and
+    # Sessions::Snapshot's.
     def set_terminal_pane(text, last_output_at: nil)
       @terminal_pane = text
       @terminal_log_mtime = last_output_at
@@ -191,10 +192,26 @@ module ContainerRuntime
 
     # -- Execution ------------------------------------------------------------
 
+    # Runs once, the next time a command matching `substring` is executed, before it is
+    # answered: what else happens while an exec is in flight (another path finishing the
+    # session while a check reads its terminal).
+    def on_next_exec(substring, &block)
+      (@exec_hooks ||= []) << [ substring, block ]
+      self
+    end
+
     def exec(_id, cmd, _opts = {})
       @execs << cmd
+      if (hook = @exec_hooks&.find { |substring, _| command_string(cmd).include?(substring) })
+        @exec_hooks.delete(hook)
+        hook.last.call
+      end
       raising = @raising_execs.find { |r| command_string(cmd).include?(r[:substring]) }
       raise raising[:error] if raising
+
+      # Sessions::Snapshot reads every part in one exec. Each part is answered on its own,
+      # and a fail_exec on a part's command fails only that part, as the shell would.
+      return snapshot_read(command_string(cmd)) if command_string(cmd).include?(::Sessions::Snapshot::Command::MARKER_PREFIX)
 
       failure = @exec_failures.find do |f|
         command_string(cmd).include?(f[:substring]) && (f[:remaining].nil? || f[:remaining].positive?)
@@ -474,6 +491,35 @@ module ContainerRuntime
 
       mtime = @terminal_log_mtime ? "#{@terminal_log_mtime.to_i}\n" : ""
       "#{mtime}#{::Sessions::LiveLogReader::MARKER}\n#{pane}"
+    end
+
+    # The output of Sessions::Snapshot::Command's script: per part, its header, what its
+    # fragment printed, and a footer with its exit status. A fragment answers from the same
+    # state the separate commands above answer from.
+    def snapshot_read(cmd_str)
+      marker = cmd_str[/(#{Regexp.escape(::Sessions::Snapshot::Command::MARKER_PREFIX)}\h+__)/, 1]
+      sections = cmd_str.scan(/echo '#{Regexp.escape(marker)} (\w+)'; (.*?); s=\$\?;/).map do |name, fragment|
+        output, status = snapshot_part(name.to_sym, fragment)
+        "#{marker} #{name}\n#{output}\n#{marker} end #{status}\n"
+      end
+      [ [ sections.join ], [ "" ], 0 ]
+    end
+
+    def snapshot_part(name, fragment)
+      failure = @exec_failures.find do |f|
+        fragment.include?(f[:substring]) && (f[:remaining].nil? || f[:remaining].positive?)
+      end
+      if failure
+        failure[:remaining] -= 1 if failure[:remaining]
+        return [ "", failure[:exit_code] ]
+      end
+
+      case name
+      when :scrollback then [ @terminal_pane.to_s, 0 ]
+      when :log_mtime then @terminal_log_mtime ? [ "#{@terminal_log_mtime.to_i}\n", 0 ] : [ "", 1 ]
+      when :clients then [ "#{terminal_clients}\n", 0 ]
+      else [ "", 127 ]
+      end
     end
 
     # `date +%s` and then one `#{client_readonly} #{client_activity}` line per client.
