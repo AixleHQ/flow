@@ -14,8 +14,10 @@ get. Both sides run them:
   fixture's response, its matchers filled in with concrete values; the client must read that
   answer as the protocol says. An exchange the client never sends (a protocol header other than
   `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
-  checks, which the Rails side runs. The test fails if no register, token, unregister or ops
-  exchange was driven. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
+  checks, which the Rails side runs. The test fails if no register, token, unregister, ops or
+  releases exchange was driven, and it fails for a fixture of which it drives no exchange at
+  all, unless the fixture is on its `gatewayOnly` list with the reason (empty today). It runs in
+  the Go CI job. `runner/internal/docker/fixtures_test.go` also
   ties the `ops/` fixtures to the runner's handlers: every payload a fixture enqueues for an op
   the runner implements passes that op's payload checks, and every error class a fixture posts
   for such an op is one the runner reports.
@@ -98,8 +100,10 @@ defined once per scenario.
 
 A setup step is `{"given": "<name>", ...arguments}`. A harness implements each with the real
 services it tests: the Rails harness calls `Runners::Credentials.mint_registration!`,
-`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke, and
-creates a session of the machine for `session_on_machine`.
+`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke,
+creates a session of the machine for `session_on_machine`, and gives `Runners::Release` the
+pins of `release_pins`. The Go fake replays the fixture's answers, so it only checks a setup
+step's arguments.
 
 | `given` | Arguments | What it does | Defines |
 | --- | --- | --- | --- |
@@ -111,6 +115,7 @@ creates a session of the machine for `session_on_machine`.
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |
 | `flag_on` | none | Turns it back on. | nothing |
 | `time_passes` | `seconds` (an integer) | Moves the gateway's clock forward. | nothing |
+| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of `config/runner_release.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `config/runner_release.yml`, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum, no recommendation and no binary yet. | nothing |
 
 ## Exchanges
 
@@ -129,7 +134,9 @@ creates a session of the machine for `session_on_machine`.
 | `body` | no | A JSON value, sent serialized with `Content-Type: application/json`. Without it, the request has no body. |
 
 Every request carries `X-Aixle-Runner-Protocol: 1` and `X-Aixle-Runner-Version: 1.4.0` unless
-`headers` replaces or removes them. Header names are case-insensitive.
+`headers` replaces or removes them. Header names are case-insensitive. A `302` (the release
+redirect, `PROTOCOL.md` §5.6) has no body to match: its `Location` and `X-Aixle-Runner-Sha256`
+are checked as `headers`, and the Go client must read them back.
 
 ### `response`
 
