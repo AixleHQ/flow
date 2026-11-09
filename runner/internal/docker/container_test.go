@@ -163,6 +163,7 @@ func TestContainerStartAppliesMountsNetworkPidAndResources(t *testing.T) {
 			{"type": "bind", "source": cache, "target": "/home/agent/.npm", "writable": true},
 		},
 		"network":              "host",
+		"proxy_port":           20123,
 		"pid":                  "host",
 		"resources":            map[string]any{"cpus": 1.5, "memory_bytes": 4 << 30, "pids_limit": 512},
 		"privilege_escalation": true,

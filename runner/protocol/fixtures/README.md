@@ -14,8 +14,9 @@ get. Both sides run them:
   fixture's response, its matchers filled in with concrete values; the client must read that
   answer as the protocol says. An exchange the client never sends (a protocol header other than
   `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
-  checks, which the Rails side runs. The test fails if no register, token, unregister or ops
-  exchange was driven. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
+  checks, which the Rails side runs. The test fails if no register, token, unregister, ops or proxy
+  exchange was driven, and for any fixture that drives no exchange at all, unless that fixture is
+  on the test's `gatewayOnly` list with the reason. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
   ties the `ops/` fixtures to the runner's handlers: every payload a fixture enqueues for an op
   the runner implements passes that op's payload checks, and every error class a fixture posts
   for such an op is one the runner reports.
@@ -39,6 +40,7 @@ the table of §3 in `TestClassify`).
 | The `404` for a path the gateway does not serve (§1) | It comes from the gateway process's routing, not from an endpoint, and its body is the framework's not-found page, which is not part of the contract. | `test/integration/process_mode_routes_test.rb` ("inside the gateway, only /runner/v1/* and /up are routed") |
 | `401 runner_revoked` (§3) | Revoking a runner also revokes its tokens, so a scenario sees `invalid_token` first. `runner_revoked` needs only the runner's status to change, which no setup step does. | `test/integration/runner_gateway_test.rb` ("a revocation reaches the gateway within five seconds") |
 | The `400` for a body that is not valid JSON (§3) | A harness always serialises `body`, so it cannot send malformed JSON. | Not tested. It is the framework's own answer, documented as built. |
+| The callback proxy's forward (§5.6): the request as the platform's endpoint receives it (`X-Aixle-Runner-Environment` added, the bearer and the gateway's headers left out), an answer streamed as it comes, the key check of every credential route, and `502 upstream_unavailable` | The fixtures see only the gateway's side of the wire, one exchange at a time; the internal endpoint is behind it. | `test/integration/runner_gateway_proxy_test.rb`, and on the runner's side `runner/internal/proxy/proxy_test.go` |
 
 ## Files
 
@@ -105,7 +107,9 @@ creates a session of the machine for `session_on_machine`.
 | --- | --- | --- | --- |
 | `registration_token` | `as` | Mints a registration token for the runner, as "Add machine" will. There is no endpoint for this yet. | `<as>`: the token |
 | `registered_machine` | `as`, `name` (optional, default: the value of `as`) | Registers one machine of the runner with a fresh registration token, as a successful `POST /runner/v1/register` does, with protocol `1` and runner version `1.4.0`. | `<as>.access_token`, `<as>.refresh_token`, `<as>.environment_id` (an integer) |
-| `session_on_machine` | `machine` (a `registered_machine`'s `as`), `as` | Creates a session of the runner that runs on that machine, as the platform assigns one. | `<as>.id` (an integer: the `session_id` its ops carry) |
+| `session_on_machine` | `machine` (a `registered_machine`'s `as`), `as` | Creates a session of the runner that runs on that machine, as the platform assigns one. It does not hold the machine yet. | `<as>.id` (an integer: the `session_id` its ops carry), `<as>.mcp_key` (the key its MCP calls carry in `X-Session-Key`) |
+| `session_holds_machine` | `machine` (a `registered_machine`'s `as`), `session` (a `session_on_machine`'s `as`) | Makes the session the one that holds the machine now, as the platform's allocation does. | nothing |
+| `upstream_answers` | `route` (a proxy route of PROTOCOL.md §5.6), `status` (an integer), `body` (optional, a JSON value) | The platform's endpoint behind that route answers every request with this status and JSON body. The runner's harness has nothing to set up: its fake gateway sends the fixture's response. | nothing |
 | `op_enqueued` | `machine` (a `registered_machine`'s `as`), `session` (optional, a `session_on_machine`'s `as` of the same machine), `as`, `op` (an op name), `payload` (an object) | Puts an op on that machine's queue with a deadline 5 minutes ahead, in whole seconds. A session op (PROTOCOL.md §6) needs `session`, and its envelope then carries that session's `session_id`; an environment op takes none. The platform enqueues an op only while its session holds the machine, so the step first makes `session`, or for an environment op a session of the machine, its holder. | `<as>.id` and `<as>.sequence` (integers), `<as>.deadline_at` (the ISO 8601 string the gateway sends) |
 | `runner_revoked` | none | Revokes the runner, which revokes all of its credentials. | nothing |
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |

@@ -242,7 +242,9 @@ func strictDecode(t *testing.T, raw []byte, out any) bool {
 type call struct {
 	endpoint string
 	version  string
-	run      func(ctx context.Context, c *protocol.Client) (any, error)
+	// forwarded are the agent's headers a proxy request carries.
+	forwarded http.Header
+	run       func(ctx context.Context, c *protocol.Client) (any, error)
 }
 
 var (
@@ -254,14 +256,49 @@ var (
 // when this client cannot send that request.
 func clientCall(t *testing.T, method, path, token string, headers map[string]*string, body []byte) (call, bool) {
 	c := call{version: fixtureVersion}
+	// The proxy route carries the agent's own headers; every other endpoint
+	// takes only the protocol's.
+	proxied := strings.HasPrefix(path, protocol.ProxyPathPrefix)
+	forwarded := http.Header{}
 	for name, value := range headers {
-		if !strings.EqualFold(name, "X-Aixle-Runner-Version") || value == nil {
+		switch {
+		case strings.EqualFold(name, "X-Aixle-Runner-Version") && value != nil:
+			c.version = *value
+		case proxied && value != nil && !strings.HasPrefix(strings.ToLower(name), "x-aixle-runner-") && !strings.EqualFold(name, "Authorization"):
+			forwarded.Set(name, *value)
+		default:
 			return call{}, false
 		}
-		c.version = *value
 	}
+	c.forwarded = forwarded
 
 	switch {
+	case proxied && token != "":
+		c.endpoint = "proxy"
+		below := strings.TrimPrefix(path, protocol.ProxyPathPrefix)
+		header := forwarded.Clone()
+		if body != nil {
+			header.Set("Content-Type", "application/json")
+		}
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) {
+			resp, err := cl.Proxy(ctx, token, method, below, header, body)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+			raw, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			if len(raw) == 0 {
+				return nil, nil
+			}
+			var out any
+			if err := json.Unmarshal(raw, &out); err != nil {
+				return nil, err
+			}
+			return out, nil
+		}
 	case method == http.MethodPost && path == "/runner/v1/register":
 		var req protocol.RegisterRequest
 		if body == nil || !strictDecode(t, body, &req) {
@@ -317,9 +354,11 @@ type fakeGateway struct {
 type expectedExchange struct {
 	method, path, token, version string
 	body                         []byte
-	status                       int
-	headers                      map[string]*string
-	response                     []byte
+	// forwarded are the request headers a proxy request must carry.
+	forwarded http.Header
+	status    int
+	headers   map[string]*string
+	response  []byte
 }
 
 func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -349,6 +388,11 @@ func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if got := r.Header.Get("Authorization"); got != wantAuth {
 		g.t.Errorf("Authorization is %q, the fixture's is %q", got, wantAuth)
+	}
+	for name := range e.forwarded {
+		if got := r.Header.Get(name); got != e.forwarded.Get(name) {
+			g.t.Errorf("%s is %q, the fixture's is %q", name, got, e.forwarded.Get(name))
+		}
 	}
 	got, _ := io.ReadAll(r.Body)
 	if e.body == nil {
@@ -400,6 +444,30 @@ type coverage struct {
 	mu      sync.Mutex
 	driven  map[string]int
 	skipped int
+	// perFixture counts the exchanges each fixture drove through the client.
+	perFixture map[string]int
+}
+
+// gatewayOnly are the fixtures that drive no exchange through the client, each
+// with the reason. Every other fixture must drive at least one, so that a new
+// fixture the client cannot express fails here instead of passing unseen.
+var gatewayOnly = map[string]string{
+	"headers/checked_before_the_token": "every request has a bad protocol header, which this client never sends",
+	"headers/invalid_runner_version":   "every request has a bad X-Aixle-Runner-Version, which this client never sends",
+	"headers/unsupported_protocol":     "every request has a protocol header other than 1, which this client never sends",
+	"ops/invalid_poll_parameters":      "every poll has a malformed after or wait, which this client never sends",
+	"ops/invalid_result":               "every result has a body this client never sends",
+}
+
+// refusalHeader says whether a fixture's response is marked as the gateway's
+// own refusal of the proxy route.
+func refusalHeader(headers map[string]*string) bool {
+	for name, value := range headers {
+		if strings.EqualFold(name, protocol.RefusalHeader) && value != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func TestConformanceFixtures(t *testing.T) {
@@ -408,15 +476,34 @@ func TestConformanceFixtures(t *testing.T) {
 		t.Fatalf("no fixtures under %s: %v", fixturesDir, err)
 	}
 	sort.Strings(files)
-	cov := &coverage{driven: map[string]int{}}
+	cov := &coverage{driven: map[string]int{}, perFixture: map[string]int{}}
 
+	names := map[string]bool{}
 	for _, file := range files {
 		name := strings.TrimSuffix(strings.TrimPrefix(filepath.ToSlash(file), fixturesDir+"/"), ".json")
-		t.Run(name, func(t *testing.T) { runFixture(t, file, cov) })
+		names[name] = true
+		t.Run(name, func(t *testing.T) {
+			runFixture(t, name, file, cov)
+			cov.mu.Lock()
+			driven := cov.perFixture[name]
+			cov.mu.Unlock()
+			reason, listed := gatewayOnly[name]
+			switch {
+			case driven == 0 && !listed:
+				t.Errorf("the fixture drove no exchange through the client: express it, or list it in gatewayOnly with the reason")
+			case driven > 0 && listed:
+				t.Errorf("the fixture is listed as gateway-only (%s), but drove %d exchanges", reason, driven)
+			}
+		})
+	}
+	for name := range gatewayOnly {
+		if !names[name] {
+			t.Errorf("gatewayOnly lists %s, which is not a fixture", name)
+		}
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "token", "unregister", "ops"} {
+	for _, endpoint := range []string{"register", "token", "unregister", "ops", "proxy"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}
@@ -424,7 +511,7 @@ func TestConformanceFixtures(t *testing.T) {
 	t.Logf("driven exchanges per endpoint: %v; skipped (not expressible by the client): %d", cov.driven, cov.skipped)
 }
 
-func runFixture(t *testing.T, file string, cov *coverage) {
+func runFixture(t *testing.T, name, file string, cov *coverage) {
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +540,7 @@ func runFixture(t *testing.T, file string, cov *coverage) {
 			setup(t, w, rawStep)
 			continue
 		}
-		exchange(t, w, gateway, server.URL, i, rawStep, cov)
+		exchange(t, w, gateway, server.URL, name, i, rawStep, cov)
 	}
 }
 
@@ -467,6 +554,9 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		Op      string          `json:"op"`
 		Payload json.RawMessage `json:"payload"`
 		Seconds int64           `json:"seconds"`
+		Route   string          `json:"route"`
+		Status  int             `json:"status"`
+		Body    json.RawMessage `json:"body"`
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -483,6 +573,15 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 	case "session_on_machine":
 		w.lookup(s.Machine + ".access_token")
 		w.define(s.As+".id", w.next())
+		w.define(s.As+".mcp_key", randomToken("mcpkey_"))
+	case "session_holds_machine":
+		w.lookup(s.Machine + ".access_token")
+		w.lookup(s.Session + ".id")
+	case "upstream_answers":
+		// The fake replays the forwarded answer the fixture expects.
+		if s.Route == "" || s.Status == 0 {
+			t.Fatalf("upstream_answers needs a route and a status: %s", raw)
+		}
 	case "op_enqueued":
 		w.lookup(s.Machine + ".access_token")
 		if s.Session != "" {
@@ -505,7 +604,7 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 	}
 }
 
-func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, index int, raw json.RawMessage, cov *coverage) {
+func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL, fixture string, index int, raw json.RawMessage, cov *coverage) {
 	var x struct {
 		Request  fixtureRequest    `json:"request"`
 		Response fixtureResponse   `json:"response"`
@@ -565,11 +664,12 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, inde
 	}
 	cov.mu.Lock()
 	cov.driven[c.endpoint]++
+	cov.perFixture[fixture]++
 	cov.mu.Unlock()
 
 	gateway.mu.Lock()
 	gateway.expected = &expectedExchange{
-		method: x.Request.Method, path: path, token: token, version: c.version, body: body,
+		method: x.Request.Method, path: path, token: token, version: c.version, body: body, forwarded: c.forwarded,
 		status: x.Response.Status, headers: x.Response.Headers, response: response,
 	}
 	seenBefore := gateway.seen
@@ -587,7 +687,7 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, inde
 	}
 	gateway.mu.Unlock()
 
-	if x.Response.Status < 300 {
+	if x.Response.Status < 300 || (c.endpoint == "proxy" && !refusalHeader(x.Response.Headers)) {
 		if err != nil {
 			t.Fatalf("step %d: %s %s: the client failed on a %d: %v", index, x.Request.Method, path, x.Response.Status, err)
 		}

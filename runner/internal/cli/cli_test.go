@@ -290,8 +290,13 @@ func TestUnregisterOfAnUnconfiguredMachine(t *testing.T) {
 	}
 }
 
-// hostDocker is the Docker of a host runner that is given no op to run.
+// hostDocker is the Docker of a host runner that is given no op to run, on a
+// machine with no container of the environment to serve a proxy for again.
 type hostDocker struct{ docker.API }
+
+func (hostDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
+	return client.ContainerListResult{}, nil
+}
 
 func TestConfigureDeletesTheJournalOfAPreviousRegistration(t *testing.T) {
 	dir := t.TempDir()
