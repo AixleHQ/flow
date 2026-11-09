@@ -3,10 +3,10 @@
 require "test_helper"
 
 class Billing::TrialTest < ActiveSupport::TestCase
-  # A company that signs up at 10:00 on Oct 30 gets thirty days, Oct 30 to the
-  # end of Nov 28: 29 days and 13 whole hours.
+  # A company that signs up at 10:00 on Oct 30 gets fourteen days, Oct 30 to the
+  # end of Nov 12: 13 days and 13 whole hours.
   SIGNUP = Time.utc(2026, 10, 30, 10)
-  LENGTH = (29 * 24) + 13
+  LENGTH = (13 * 24) + 13
 
   setup do
     saas!
@@ -34,27 +34,27 @@ class Billing::TrialTest < ActiveSupport::TestCase
     Settings.stubs(:trial).returns(Hashie::Mash.new(days: days))
   end
 
-  test "a trial is thirty days unless the installation says otherwise" do
-    assert_equal 30, Billing::Trial.days
-    assert_equal 720, Billing::Trial.default_hours
+  test "a trial is fourteen days unless the installation says otherwise" do
+    assert_equal 14, Billing::Trial.days
+    assert_equal 336, Billing::Trial.default_hours
   end
 
   # Today is the first day, and the trial ends with the last one's end — the
   # same end an operator's last day has.
   test "a new trial runs to the end of its last day" do
     assert_equal LENGTH, @company.trial_hours
-    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(@company)
-    assert_equal 30, Billing::Trial.days_left(@company)
-    assert_equal 30, Billing::Trial.length_in_days(@company)
+    assert_equal Date.new(2026, 11, 12), Billing::Trial.last_day(@company)
+    assert_equal 14, Billing::Trial.days_left(@company)
+    assert_equal 14, Billing::Trial.length_in_days(@company)
   end
 
   test "a new trial is as long as the installation says" do
-    trial_days!(14)
+    trial_days!(30)
 
-    assert_equal (13 * 24) + 13, create(:company, :trialing).trial_hours
+    assert_equal (29 * 24) + 13, create(:company, :trialing).trial_hours
   end
 
-  # A trial promised thirty days stays thirty days.
+  # A trial promised fourteen days stays fourteen days.
   test "a company keeps the length of the trial it started" do
     trial_days!(7)
 
@@ -80,13 +80,13 @@ class Billing::TrialTest < ActiveSupport::TestCase
     metered!(company, 47, from: SIGNUP + 1.hour)
     travel_to SIGNUP + 2.days + 55.minutes
 
-    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
-    assert_equal 28, Billing::Trial.days_left(company)
+    assert_equal Date.new(2026, 11, 12), Billing::Trial.last_day(company)
+    assert_equal 12, Billing::Trial.days_left(company)
 
-    metered!(company, 708 - 47, from: SIGNUP + 48.hours)
-    travel_to Time.utc(2026, 11, 28, 23, 20)
+    metered!(company, LENGTH - 1 - 47, from: SIGNUP + 48.hours)
+    travel_to Time.utc(2026, 11, 12, 23, 20)
 
-    assert_equal Date.new(2026, 11, 28), Billing::Trial.last_day(company)
+    assert_equal Date.new(2026, 11, 12), Billing::Trial.last_day(company)
     assert_equal 1, Billing::Trial.days_left(company)
   end
 
