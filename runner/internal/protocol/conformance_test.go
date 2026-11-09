@@ -11,7 +11,8 @@ package protocol_test
 // An exchange the client cannot express is skipped, with the fixture's state kept
 // going: a request with a protocol header other than 1, a malformed `after`, a
 // body this client never sends. Those exchanges test the gateway's checks, which
-// the Rails side of the suite runs.
+// the Rails side of the suite runs. A fixture of which no exchange is driven fails,
+// unless gatewayOnly names it with the reason.
 
 import (
 	"bytes"
@@ -243,12 +244,21 @@ type call struct {
 	endpoint string
 	version  string
 	run      func(ctx context.Context, c *protocol.Client) (any, error)
+	// check, when set, checks a successful answer the response has no body for.
+	check func(t *testing.T, got any, headers map[string]*string)
 }
 
 var (
-	opsPath    = regexp.MustCompile(`^/runner/v1/ops\?after=(\d+)&wait=(\d+)$`)
-	resultPath = regexp.MustCompile(`^/runner/v1/ops/(\d+)/result$`)
+	opsPath       = regexp.MustCompile(`^/runner/v1/ops\?after=(\d+)&wait=(\d+)$`)
+	resultPath    = regexp.MustCompile(`^/runner/v1/ops/(\d+)/result$`)
+	checksumsPath = regexp.MustCompile(`^/runner/v1/releases/([0-9A-Za-z.+-]+)/checksums$`)
+	releasePath   = regexp.MustCompile(`^/runner/v1/releases/([0-9A-Za-z.+-]+)/([a-z0-9]+-[a-z0-9_]+)$`)
 )
+
+// gatewayOnly are the fixtures of which this client drives no exchange, each with
+// the reason. Every other fixture must drive at least one, so a scenario of an
+// endpoint the client speaks cannot pass here by being skipped whole.
+var gatewayOnly = map[string]string{}
 
 // clientCall maps an exchange to the client call that sends it, or returns false
 // when this client cannot send that request.
@@ -284,11 +294,36 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 		}
 		c.endpoint = "ops"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) {
-			ops, err := cl.PollOps(ctx, token, after, time.Duration(wait)*time.Second)
+			poll, err := cl.PollOps(ctx, token, after, time.Duration(wait)*time.Second)
 			if err != nil {
 				return nil, err
 			}
-			return map[string]any{"ops": ops}, nil
+			return poll, nil
+		}
+	// The release endpoints take no token: the client sends none.
+	case method == http.MethodGet && checksumsPath.MatchString(path) && body == nil && token == "":
+		v := checksumsPath.FindStringSubmatch(path)[1]
+		c.endpoint = "releases"
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.Checksums(ctx, v) }
+	case method == http.MethodGet && releasePath.MatchString(path) && body == nil && token == "":
+		m := releasePath.FindStringSubmatch(path)
+		c.endpoint = "releases"
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.Release(ctx, m[1], m[2]) }
+		c.check = func(t *testing.T, got any, headers map[string]*string) {
+			loc := got.(protocol.ReleaseLocation)
+			want := protocol.ReleaseLocation{}
+			for name, value := range headers {
+				switch {
+				case value == nil:
+				case strings.EqualFold(name, "Location"):
+					want.Location = *value
+				case strings.EqualFold(name, "X-Aixle-Runner-Sha256"):
+					want.SHA256 = *value
+				}
+			}
+			if loc != want {
+				t.Errorf("the client read the redirect as %+v, the gateway sent %+v", loc, want)
+			}
 		}
 	case method == http.MethodPost && resultPath.MatchString(path):
 		id, err := strconv.ParseInt(resultPath.FindStringSubmatch(path)[1], 10, 64)
@@ -400,6 +435,8 @@ type coverage struct {
 	mu      sync.Mutex
 	driven  map[string]int
 	skipped int
+	// fixtures counts the driven exchanges of each fixture file.
+	fixtures map[string]int
 }
 
 func TestConformanceFixtures(t *testing.T) {
@@ -408,15 +445,34 @@ func TestConformanceFixtures(t *testing.T) {
 		t.Fatalf("no fixtures under %s: %v", fixturesDir, err)
 	}
 	sort.Strings(files)
-	cov := &coverage{driven: map[string]int{}}
+	cov := &coverage{driven: map[string]int{}, fixtures: map[string]int{}}
 
+	names := map[string]bool{}
 	for _, file := range files {
 		name := strings.TrimSuffix(strings.TrimPrefix(filepath.ToSlash(file), fixturesDir+"/"), ".json")
-		t.Run(name, func(t *testing.T) { runFixture(t, file, cov) })
+		names[name] = true
+		t.Run(name, func(t *testing.T) {
+			runFixture(t, file, cov)
+			cov.mu.Lock()
+			driven := cov.fixtures[file]
+			cov.mu.Unlock()
+			reason, listed := gatewayOnly[name]
+			switch {
+			case driven == 0 && !listed:
+				t.Errorf("no exchange of %s was driven through the client: drive one, or add it to gatewayOnly with the reason", name)
+			case driven > 0 && listed:
+				t.Errorf("%s is in gatewayOnly (%s), and the client drives %d of its exchanges: take it off the list", name, reason, driven)
+			}
+		})
+	}
+	for name := range gatewayOnly {
+		if !names[name] {
+			t.Errorf("gatewayOnly names %s, which is no fixture", name)
+		}
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "token", "unregister", "ops"} {
+	for _, endpoint := range []string{"register", "token", "unregister", "ops", "releases"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}
@@ -453,20 +509,23 @@ func runFixture(t *testing.T, file string, cov *coverage) {
 			setup(t, w, rawStep)
 			continue
 		}
-		exchange(t, w, gateway, server.URL, i, rawStep, cov)
+		exchange(t, w, gateway, server.URL, file, i, rawStep, cov)
 	}
 }
 
 func setup(t *testing.T, w *world, raw json.RawMessage) {
 	var s struct {
-		Given   string          `json:"given"`
-		As      string          `json:"as"`
-		Name    string          `json:"name"`
-		Machine string          `json:"machine"`
-		Session string          `json:"session"`
-		Op      string          `json:"op"`
-		Payload json.RawMessage `json:"payload"`
-		Seconds int64           `json:"seconds"`
+		Given              string          `json:"given"`
+		As                 string          `json:"as"`
+		Name               string          `json:"name"`
+		Machine            string          `json:"machine"`
+		Session            string          `json:"session"`
+		Op                 string          `json:"op"`
+		Payload            json.RawMessage `json:"payload"`
+		Seconds            int64           `json:"seconds"`
+		MinVersion         *string         `json:"min_version"`
+		RecommendedVersion *string         `json:"recommended_version"`
+		Binaries           json.RawMessage `json:"binaries"`
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -497,7 +556,7 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		w.define(s.As+".deadline_at", w.timestamp(5*time.Minute))
 	case "time_passes":
 		w.clock = w.clock.Add(time.Duration(s.Seconds) * time.Second)
-	case "runner_revoked", "flag_off", "flag_on":
+	case "runner_revoked", "flag_off", "flag_on", "release_pins":
 		// The gateway's state is in the fixture's expected answers, which the fake
 		// replays.
 	default:
@@ -505,7 +564,7 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 	}
 }
 
-func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, index int, raw json.RawMessage, cov *coverage) {
+func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL, file string, index int, raw json.RawMessage, cov *coverage) {
 	var x struct {
 		Request  fixtureRequest    `json:"request"`
 		Response fixtureResponse   `json:"response"`
@@ -565,6 +624,7 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, inde
 	}
 	cov.mu.Lock()
 	cov.driven[c.endpoint]++
+	cov.fixtures[file]++
 	cov.mu.Unlock()
 
 	gateway.mu.Lock()
@@ -587,12 +647,16 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL string, inde
 	}
 	gateway.mu.Unlock()
 
-	if x.Response.Status < 300 {
+	// A 302 is the release endpoint's success (PROTOCOL.md §5.6).
+	if x.Response.Status < 400 {
 		if err != nil {
 			t.Fatalf("step %d: %s %s: the client failed on a %d: %v", index, x.Request.Method, path, x.Response.Status, err)
 		}
 		if hasAnswer && !sameJSON(t, got, answer) {
 			t.Errorf("step %d: the client read %s, the gateway sent %s", index, toJSON(t, got), response)
+		}
+		if c.check != nil {
+			c.check(t, got, x.Response.Headers)
 		}
 		return
 	}

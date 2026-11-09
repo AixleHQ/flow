@@ -1,0 +1,136 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+# Runners::Release: the platform's runner pins, config/runner_release.yml read as
+# Settings.runners.release (docs/design/agent-runtimes/DESIGN.md §14.2, §14.4).
+class Runners::ReleaseTest < ActiveSupport::TestCase
+  AMD64 = "a" * 64
+  ARM64 = "b" * 64
+  PINS = {
+    "protocol_supported" => [ 1 ], "min_version" => "1.2.0", "recommended_version" => "1.5.0",
+    "download_url" => "https://github.com/AixleHQ/flow/releases/download/runner-v%{version}/aixle-runner-%{platform}",
+    "binaries" => { "1.5.0" => { "linux-amd64" => { "sha256" => AMD64 }, "linux-arm64" => { "sha256" => ARM64.upcase } } }
+  }.freeze
+
+  setup do
+    @runner = create(:runner, :manual)
+    @environment = registered_environment
+  end
+
+  def pin(overrides = {})
+    Runners::Release.stubs(:pins).returns(Runners::Release.parse(PINS.merge(overrides)))
+  end
+
+  def registered_environment(arch: "amd64")
+    create(:runner_environment, runner: @runner, os: "linux", arch: arch, runner_version: "1.4.0", protocol_version: "1")
+  end
+
+  test "the committed pins are valid and read through Settings" do
+    committed = YAML.safe_load_file(Rails.root.join("config/runner_release.yml"))
+
+    assert_equal committed, Settings.runners.release.to_h.deep_stringify_keys
+    pins = Runners::Release.pins
+    assert_equal [ 1 ], pins.protocol_supported
+    assert_includes pins.download_url, "%{version}"
+  end
+
+  test "the pins parse into versions and lowercase digests" do
+    pins = Runners::Release.parse(PINS)
+
+    assert_equal Runners::Version.parse("1.2.0"), pins.min_version
+    assert_equal Runners::Version.parse("1.5.0"), pins.recommended_version
+    assert_equal({ "linux-amd64" => AMD64, "linux-arm64" => ARM64 }, pins.binaries["1.5.0"])
+  end
+
+  test "invalid pins are refused with the key that is wrong" do
+    {
+      { "protocol_supported" => [] } => "protocol_supported",
+      { "protocol_supported" => [ 1, 2 ] } => "does not implement",
+      { "protocol_supported" => [ "1" ] } => "protocol_supported",
+      { "min_version" => "1.2" } => "min_version",
+      { "recommended_version" => "v1.5.0" } => "recommended_version",
+      { "min_version" => "1.6.0" } => "below min_version",
+      { "recommended_version" => "1.6.0" } => "no pinned binaries",
+      { "download_url" => "https://example.com/aixle-runner" } => "download_url",
+      { "download_url" => "ftp://example.com/%{version}/%{platform}" } => "download_url",
+      { "binaries" => [] } => "binaries",
+      { "binaries" => { "latest" => { "linux-amd64" => { "sha256" => AMD64 } } } } => "not a semantic version",
+      { "binaries" => { "1.5.0" => {} } } => "map of platforms",
+      { "binaries" => { "1.5.0" => { "darwin-arm64" => { "sha256" => AMD64 } } } } => "darwin-arm64",
+      { "binaries" => { "1.5.0" => { "linux-amd64" => { "sha256" => "abc" } } } } => "sha256",
+      { "binaries" => { "1.5.0" => { "linux-amd64" => { "sha256" => AMD64, "url" => "x" } } } } => "sha256",
+      { "signing" => true } => "unknown keys"
+    }.each do |overrides, message|
+      error = assert_raises(Runners::Release::InvalidPins, overrides.inspect) { Runners::Release.parse(PINS.merge(overrides)) }
+      assert_includes error.message, message, overrides.inspect
+    end
+  end
+
+  test "the minimum and the protocol come from the pins" do
+    pin
+
+    assert Runners::Release.unsupported_version?("1.1.9")
+    assert Runners::Release.unsupported_version?("1.2.0-rc.1")
+    assert_not Runners::Release.unsupported_version?("1.2.0")
+    assert_not Runners::Release.unsupported_version?("2.0.0")
+    assert Runners::Release.protocol_supported?("1")
+    [ "2", "1.0", "01", "", nil ].each { |value| assert_not Runners::Release.protocol_supported?(value), value.inspect }
+
+    pin("min_version" => nil)
+    assert_not Runners::Release.unsupported_version?("0.0.0-dev")
+  end
+
+  test "a pinned binary has the asset URL and the pinned digest; anything unpinned is nil" do
+    pin
+
+    binary = Runners::Release.binary("1.5.0", "linux-arm64")
+    assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-arm64", binary.url
+    assert_equal ARM64, binary.sha256
+    assert_nil Runners::Release.binary("1.4.0", "linux-amd64")
+    assert_nil Runners::Release.binary("1.5.0", "darwin-arm64")
+    assert_equal({ "linux-amd64" => AMD64, "linux-arm64" => ARM64 }, Runners::Release.checksums("1.5.0").binaries)
+    assert_nil Runners::Release.checksums("1.4.0")
+  end
+
+  test "an idle machine below the recommended version is offered its platform's binary" do
+    pin
+
+    offer = Runners::Release.update_for(@environment, runner_version: "1.4.0")
+    assert_equal Runners::Release::Offer.new(version: "1.5.0", platform: "linux-amd64", sha256: AMD64), offer
+    arm = registered_environment(arch: "arm64")
+    assert_equal ARM64, Runners::Release.update_for(arm, runner_version: "1.5.0-rc.1").sha256
+  end
+
+  test "no update at or above the recommended version, without a recommendation, or without the machine's binary" do
+    pin
+    assert_nil Runners::Release.update_for(@environment, runner_version: "1.5.0")
+    assert_nil Runners::Release.update_for(@environment, runner_version: "1.6.0")
+    assert_nil Runners::Release.update_for(registered_environment(arch: "riscv64"), runner_version: "1.4.0")
+
+    pin("recommended_version" => nil)
+    assert_nil Runners::Release.update_for(@environment, runner_version: "1.4.0")
+  end
+
+  test "no update while the machine holds a session or is not registered" do
+    pin
+    create(:runner_session, :holding, environment: @environment)
+    assert_nil Runners::Release.update_for(@environment.reload, runner_version: "1.4.0")
+
+    @environment.update!(current_session_id: nil, state: "failed")
+    assert_nil Runners::Release.update_for(@environment, runner_version: "1.4.0")
+  end
+
+  test "no update for a machine or a runner that opted out" do
+    pin
+    @environment.update!(auto_update: false)
+    assert_nil Runners::Release.update_for(@environment, runner_version: "1.4.0")
+
+    @environment.update!(auto_update: true)
+    @runner.update!(config: { "auto_update" => false })
+    assert_nil Runners::Release.update_for(@environment.reload, runner_version: "1.4.0")
+
+    @runner.update!(config: { "auto_update" => true })
+    assert_not_nil Runners::Release.update_for(@environment.reload, runner_version: "1.4.0")
+  end
+end

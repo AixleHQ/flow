@@ -24,6 +24,7 @@ const (
 	EndpointToken        Endpoint = "token"
 	EndpointOps          Endpoint = "ops"
 	EndpointResult       Endpoint = "result"
+	EndpointReleases     Endpoint = "releases"
 )
 
 // Client calls the gateway. It holds no credentials: every call takes the token
@@ -101,18 +102,60 @@ func (c *Client) Refresh(ctx context.Context, refreshToken string) (TokenPair, e
 }
 
 // PollOps is the long-poll (§5.4). wait is sent in whole seconds.
-func (c *Client) PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) ([]Op, error) {
+func (c *Client) PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) (Poll, error) {
 	path := "/runner/v1/ops?after=" + strconv.FormatInt(after, 10) + "&wait=" + strconv.Itoa(int(wait/time.Second))
-	var out struct {
-		Ops []Op `json:"ops"`
-	}
+	var out Poll
 	if err := c.do(ctx, EndpointOps, http.MethodGet, path, accessToken, nil, http.StatusOK, &out); err != nil {
-		return nil, err
+		return Poll{}, err
 	}
 	if out.Ops == nil {
 		out.Ops = []Op{}
 	}
-	return out.Ops, nil
+	return out, nil
+}
+
+// Checksums reads the pinned digests of a release (§5.7). It takes no token.
+func (c *Client) Checksums(ctx context.Context, version string) (Checksums, error) {
+	var out Checksums
+	err := c.do(ctx, EndpointReleases, http.MethodGet, releasePath(version, "checksums"), "", nil, http.StatusOK, &out)
+	return out, err
+}
+
+// Release asks where a release's binary for platform (`linux-amd64`) is (§5.6).
+// It does not follow the `302`: it returns its Location and the digest the
+// platform pins, so the caller downloads from there and verifies. It takes no
+// token.
+func (c *Client) Release(ctx context.Context, version, platform string) (ReleaseLocation, error) {
+	req, err := c.newRequest(ctx, EndpointReleases, http.MethodGet, releasePath(version, platform), "", nil)
+	if err != nil {
+		return ReleaseLocation{}, err
+	}
+	noRedirect := *c.http
+	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		return ReleaseLocation{}, &NetworkError{Endpoint: EndpointReleases, Err: err}
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return ReleaseLocation{}, &NetworkError{Endpoint: EndpointReleases, Err: err}
+	}
+	if resp.StatusCode != http.StatusFound {
+		return ReleaseLocation{}, newRefusal(EndpointReleases, resp.StatusCode, raw)
+	}
+	out := ReleaseLocation{Location: resp.Header.Get("Location"), SHA256: resp.Header.Get("X-Aixle-Runner-Sha256")}
+	if out.Location == "" || out.SHA256 == "" {
+		return ReleaseLocation{}, &NetworkError{Endpoint: EndpointReleases,
+			Err: errors.New("the gateway's 302 lacks Location or X-Aixle-Runner-Sha256")}
+	}
+	return out, nil
+}
+
+// releasePath is a release's path. The caller passes a version it has parsed as
+// a semantic version and a platform of `[a-z0-9-]`, so neither needs escaping.
+func releasePath(version, leaf string) string {
+	return "/runner/v1/releases/" + version + "/" + leaf
 }
 
 // PostResult reports an op's outcome (§5.5).
@@ -124,36 +167,10 @@ func (c *Client) PostResult(ctx context.Context, accessToken string, opID int64,
 }
 
 func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token string, body any, want int, out any) error {
-	var reader io.Reader
-	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("encoding the %s request: %w", endpoint, err)
-		}
-		reader = bytes.NewReader(encoded)
-	}
-
-	target := *c.baseURL
-	target.Path = strings.TrimRight(target.Path, "/") + path
-	if i := strings.IndexByte(target.Path, '?'); i >= 0 {
-		target.RawQuery = target.Path[i+1:]
-		target.Path = target.Path[:i]
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, target.String(), reader)
+	req, err := c.newRequest(ctx, endpoint, method, path, token, body)
 	if err != nil {
-		return fmt.Errorf("building the %s request: %w", endpoint, err)
+		return err
 	}
-	req.Header.Set("X-Aixle-Runner-Protocol", ProtocolVersion)
-	req.Header.Set("X-Aixle-Runner-Version", c.version)
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// net/http names the URL in its error, never a header, so no token is in it.
@@ -176,6 +193,42 @@ func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token 
 	}
 	return nil
 }
+
+// newRequest builds a request with the protocol's headers (§1), and the token as
+// the bearer when there is one.
+func (c *Client) newRequest(ctx context.Context, endpoint Endpoint, method, path, token string, body any) (*http.Request, error) {
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("encoding the %s request: %w", endpoint, err)
+		}
+		reader = bytes.NewReader(encoded)
+	}
+
+	target := *c.baseURL
+	target.Path = strings.TrimRight(target.Path, "/") + path
+	if i := strings.IndexByte(target.Path, '?'); i >= 0 {
+		target.RawQuery = target.Path[i+1:]
+		target.Path = target.Path[:i]
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, target.String(), reader)
+	if err != nil {
+		return nil, fmt.Errorf("building the %s request: %w", endpoint, err)
+	}
+	req.Header.Set("X-Aixle-Runner-Protocol", ProtocolVersion)
+	req.Header.Set("X-Aixle-Runner-Version", c.version)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req, nil
+}
+
 
 // maxResponseBytes bounds what the runner reads of one answer. The largest is a
 // batch of 20 ops, each payload well under the gateway's own 2 MiB body cap.

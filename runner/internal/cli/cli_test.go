@@ -153,6 +153,43 @@ func TestConfigureRegistersAndStoresTheCredentials(t *testing.T) {
 	}
 }
 
+func TestConfigureWithoutTheOptOutSendsNoAutoUpdate(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	if err := Configure(context.Background(), configureOpts(url, dir)); err != nil {
+		t.Fatal(err)
+	}
+	if _, sent := p.requests[0].body["auto_update"]; sent {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, _ := credentials.NewStore(dir).Load()
+	if creds.AutoUpdate != nil || !creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v", creds.AutoUpdate)
+	}
+}
+
+func TestConfigureNoAutoUpdateTellsThePlatformAndKeepsTheOptOut(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	opts := configureOpts(url, dir)
+	opts.NoAutoUpdate = true
+	var out bytes.Buffer
+	opts.Out = &out
+	if err := Configure(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if v, sent := p.requests[0].body["auto_update"]; !sent || v != false {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, err := credentials.NewStore(dir).Load()
+	if err != nil || creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v, %v", creds.AutoUpdate, err)
+	}
+	if !strings.Contains(out.String(), "Self-update is off") {
+		t.Fatalf("printed %q", out.String())
+	}
+}
+
 func TestAFailedPreflightRegistersNothing(t *testing.T) {
 	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
 	dir := t.TempDir()
@@ -180,6 +217,9 @@ func TestConfigureRefusals(t *testing.T) {
 		"ephemeral_not_supported": {refused(422, "ephemeral_not_supported"), "was not spent"},
 		"runners_disabled":        {refused(403, "runners_disabled"), "try again later with the same token"},
 		"unsupported_protocol":    {refused(400, "unsupported_protocol"), "update aixle-runner"},
+		"runner_version_unsupported": {answer{400, map[string]any{
+			"error": "runner_version_unsupported", "message": "aixle-runner 0.0.0-dev is no longer supported (minimum 0.1.0)."}},
+			"is no longer supported (minimum 0.1.0). The registration token was not spent: update aixle-runner"},
 		"runner_revoked":          {refused(401, "runner_revoked"), "revoked or deleted"},
 	}
 	for name, tc := range cases {

@@ -23,8 +23,9 @@ const (
 	ActionReuseDetected
 	// ActionRevoked: the runner was revoked or deleted. Stop.
 	ActionRevoked
-	// ActionUpdate: the gateway does not speak this runner's protocol or version.
-	// Stop and report that aixle-runner must be updated.
+	// ActionUpdate: the gateway does not speak this runner's protocol or version,
+	// or the version is below the platform's minimum. Stop and report that
+	// aixle-runner must be updated.
 	ActionUpdate
 	// ActionBug: the runner sent something the gateway cannot take (`invalid_request`,
 	// `invalid_result`, a body that is not JSON, a 413). Report it and do not resend
@@ -81,7 +82,7 @@ func Classify(err error) Action {
 	}
 
 	switch r.Code {
-	case "unsupported_protocol", "invalid_runner_version":
+	case "unsupported_protocol", "invalid_runner_version", "runner_version_unsupported":
 		return ActionUpdate
 	case "invalid_token":
 		switch r.Endpoint {

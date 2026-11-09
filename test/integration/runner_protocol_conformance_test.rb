@@ -42,7 +42,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     "runner_revoked" => {},
     "flag_off" => {},
     "flag_on" => {},
-    "time_passes" => { "seconds" => true }
+    "time_passes" => { "seconds" => true },
+    "release_pins" => { "min_version" => false, "recommended_version" => false, "binaries" => false }
   }.freeze
   EXCHANGE_KEYS = %w[request response capture].freeze
   REQUEST_KEYS = %w[method path token headers body].freeze
@@ -144,7 +145,21 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
       raise FixtureError, "#{where}: `seconds` must be a positive integer" unless step["seconds"].is_a?(Integer) && step["seconds"].positive?
 
       travel step["seconds"].seconds
+    when "release_pins"
+      pin_release(step, where)
     end
+  end
+
+  # The platform's pins for the rest of the scenario: the committed
+  # config/runner_release.yml with the step's keys in place of its own, a key
+  # the step leaves out being null (`binaries`: none).
+  def pin_release(step, where)
+    committed = YAML.safe_load_file(Rails.root.join("config/runner_release.yml"))
+    pins = committed.merge("min_version" => step["min_version"], "recommended_version" => step["recommended_version"],
+                           "binaries" => step.fetch("binaries", {}))
+    Runners::Release.stubs(:pins).returns(Runners::Release.parse(pins))
+  rescue Runners::Release::InvalidPins => e
+    raise FixtureError, "#{where}: #{e.message}"
   end
 
   def register_machine(as, name, where)

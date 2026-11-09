@@ -30,6 +30,9 @@ type ConfigureOptions struct {
 	Token    string
 	Name     string
 	StateDir string
+	// NoAutoUpdate is `--no-auto-update`: the machine never updates itself, and
+	// the platform is told so at registration (DESIGN.md §14.4).
+	NoAutoUpdate bool
 	// Preflight is the machine the preflight inspects.
 	Preflight  preflight.Env
 	HTTPClient *http.Client
@@ -98,17 +101,23 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 		return fmt.Errorf("deleting the journal of the previous registration: %w", err)
 	}
 
-	reg, err := client.Register(ctx, opts.Token, protocol.RegisterRequest{
+	req := protocol.RegisterRequest{
 		Name:  name,
 		OS:    report.OS,
 		Arch:  report.Arch,
 		Facts: report.Facts(),
-	})
+	}
+	var autoUpdate *bool
+	if opts.NoAutoUpdate {
+		off := false
+		autoUpdate, req.AutoUpdate = &off, &off
+	}
+	reg, err := client.Register(ctx, opts.Token, req)
 	if err != nil {
 		return registerError(err)
 	}
 
-	creds := credentials.Credentials{URL: opts.URL, Environment: reg.Environment, TokenPair: reg.TokenPair}
+	creds := credentials.Credentials{URL: opts.URL, Environment: reg.Environment, TokenPair: reg.TokenPair, AutoUpdate: autoUpdate}
 	if err := store.Save(creds); err != nil {
 		return fmt.Errorf("the machine was registered, but its credentials could not be stored, so this machine cannot use them: unregister it on the runner page and run configure again with a new token: %w", err)
 	}
@@ -116,6 +125,9 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 		return err
 	}
 	fmt.Fprintf(opts.Out, "Registered this machine as %q. Its credentials are in %s.\n", reg.Environment.DisplayName, store.Path())
+	if opts.NoAutoUpdate {
+		fmt.Fprintln(opts.Out, "Self-update is off on this machine: update aixle-runner yourself when the runner page says an update is available.")
+	}
 	return nil
 }
 
@@ -127,6 +139,9 @@ func registerError(err error) error {
 	case protocol.ActionFixConfiguration:
 		return fmt.Errorf("the platform refused the registration: %s (%s). The registration token was not spent: fix the input and run configure again with the same token", r.Message, r.Code)
 	case protocol.ActionUpdate:
+		if r != nil && r.Message != "" {
+			return fmt.Errorf("the platform does not accept this version of aixle-runner (%s): %s The registration token was not spent: update aixle-runner, then run configure again with the same token", version.Version, r.Message)
+		}
 		return fmt.Errorf("the platform does not accept this version of aixle-runner (%s): update aixle-runner, then run configure again", version.Version)
 	case protocol.ActionRevoked:
 		return errors.New("the runner this token belongs to was revoked or deleted: use a registration token of a live runner")

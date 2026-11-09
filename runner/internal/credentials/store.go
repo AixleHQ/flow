@@ -33,6 +33,14 @@ type Credentials struct {
 	URL         string               `json:"url"`
 	Environment protocol.Environment `json:"environment"`
 	protocol.TokenPair
+	// AutoUpdate is false on a machine configured with `--no-auto-update`, which
+	// never updates itself (DESIGN.md §14.4). Absent means true.
+	AutoUpdate *bool `json:"auto_update,omitempty"`
+}
+
+// AutoUpdateEnabled says whether the machine updates itself.
+func (c Credentials) AutoUpdateEnabled() bool {
+	return c.AutoUpdate == nil || *c.AutoUpdate
 }
 
 // Store reads and writes the file.

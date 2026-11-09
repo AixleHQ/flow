@@ -36,13 +36,15 @@ type gateway struct {
 	maxInFlight int
 	// idle is called by a poll that has nothing to return, to end the test.
 	idle func()
+	// update is offered by every poll that has no ops.
+	update *protocol.Update
 }
 
 func newGateway(ops ...protocol.Op) *gateway {
 	return &gateway{ops: ops, results: map[int64]protocol.Result{}, posts: map[int64]int{}}
 }
 
-func (g *gateway) PollOps(_ context.Context, access string, after int64, wait time.Duration) ([]protocol.Op, error) {
+func (g *gateway) PollOps(_ context.Context, access string, after int64, wait time.Duration) (protocol.Poll, error) {
 	g.mu.Lock()
 	g.inFlight++
 	if g.inFlight > g.maxInFlight {
@@ -58,7 +60,7 @@ func (g *gateway) PollOps(_ context.Context, access string, after int64, wait ti
 	if len(g.pollErrs) > 0 {
 		err := g.pollErrs[0]
 		g.pollErrs = g.pollErrs[1:]
-		return nil, err
+		return protocol.Poll{}, err
 	}
 	var out []protocol.Op
 	for _, op := range g.ops {
@@ -66,10 +68,14 @@ func (g *gateway) PollOps(_ context.Context, access string, after int64, wait ti
 			out = append(out, op)
 		}
 	}
-	if len(out) == 0 && g.idle != nil {
-		g.idle()
+	poll := protocol.Poll{Ops: out}
+	if len(out) == 0 {
+		poll.Update = g.update
+		if g.idle != nil {
+			g.idle()
+		}
 	}
-	return out, nil
+	return poll, nil
 }
 
 func (g *gateway) PostResult(_ context.Context, access string, id int64, r protocol.Result) (protocol.ResultState, error) {
@@ -474,5 +480,74 @@ func TestNoTokenReachesTheLog(t *testing.T) {
 		if strings.Contains(h.logs.String(), prefix) {
 			t.Fatalf("the log carries a token:\n%s", h.logs)
 		}
+	}
+}
+
+// updater records the updates the loop offers it.
+type updater struct {
+	offers  []protocol.Update
+	ranThen []int
+	apply   bool
+	h       *harness
+	cancel  context.CancelFunc
+}
+
+func (u *updater) Apply(_ context.Context, offer protocol.Update) bool {
+	u.offers = append(u.offers, offer)
+	u.ranThen = append(u.ranThen, len(u.h.ran))
+	if !u.apply && len(u.offers) == 2 && u.cancel != nil {
+		u.cancel()
+	}
+	return u.apply
+}
+
+var offer = protocol.Update{Version: "1.5.0", URL: "https://flow.aixle.com/runner/v1/releases/1.5.0/linux-amd64", SHA256: "ab"}
+
+func TestAnUpdateThatReplacedTheBinaryEndsTheLoop(t *testing.T) {
+	gw := newGateway()
+	gw.update = &offer
+	h := newHarness(t, t.TempDir(), gw)
+	u := &updater{apply: true, h: h}
+	h.loop.Updater = u
+
+	err := h.loop.Run(context.Background())
+	if !errors.Is(err, ErrUpdated) {
+		t.Fatalf("got %v", err)
+	}
+	if len(u.offers) != 1 || u.offers[0] != offer {
+		t.Fatalf("offers %v", u.offers)
+	}
+}
+
+func TestAnUpdateNotTakenKeepsThePollGoing(t *testing.T) {
+	gw := newGateway()
+	gw.update = &offer
+	h := newHarness(t, t.TempDir(), gw)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	u := &updater{h: h, cancel: cancel}
+	h.loop.Updater = u
+
+	if err := h.loop.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(u.offers) != 2 {
+		t.Fatalf("offered %d times, want 2", len(u.offers))
+	}
+}
+
+func TestAnUpdateIsOfferedOnlyOnceTheOpsAreDone(t *testing.T) {
+	gw := newGateway(envOp(1, 1), envOp(2, 2))
+	gw.update = &offer
+	h := newHarness(t, t.TempDir(), gw)
+	u := &updater{apply: true, h: h}
+	h.loop.Updater = u
+
+	if err := h.loop.Run(context.Background()); !errors.Is(err, ErrUpdated) {
+		t.Fatalf("got %v", err)
+	}
+	// The gateway offers an update only with no ops, and both ops ran before it.
+	if len(u.ranThen) != 1 || u.ranThen[0] != 2 || gw.posts[1] != 1 || gw.posts[2] != 1 {
+		t.Fatalf("offered after %v ops, posts %v", u.ranThen, gw.posts)
 	}
 }

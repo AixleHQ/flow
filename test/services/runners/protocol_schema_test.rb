@@ -51,3 +51,24 @@ class Runners::ProtocolSchemaTest < ActiveSupport::TestCase
     invalid.each { |query| assert_not Runners::ProtocolSchema.valid?("ops.query", query), query.inspect }
   end
 end
+
+class Runners::ProtocolSchemaReleasesTest < ActiveSupport::TestCase
+  test "a registration's auto_update is true or false" do
+    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "auto_update" => false })
+    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "auto_update" => true })
+    [ nil, "false", 0 ].each do |value|
+      assert_not Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "auto_update" => value }), value.inspect
+    end
+  end
+
+  test "a release names a strict semantic version and an os-arch platform" do
+    valid = [ { "version" => "0.1.0" }, { "version" => "1.5.0-rc.1+build.7", "platform" => "linux-amd64" },
+              { "version" => "1.4.0", "platform" => "darwin-arm64" } ]
+    invalid = [ {}, { "version" => "v1.4.0" }, { "version" => "1.4" }, { "version" => "01.2.3" }, { "version" => "1.2.3-01" },
+                { "version" => "1.4.0", "platform" => "linux" }, { "version" => "1.4.0", "platform" => "Linux-AMD64" },
+                { "version" => "1.4.0", "platform" => "linux-amd64/../x" } ]
+
+    valid.each { |params| assert Runners::ProtocolSchema.valid?("releases.params", params), params.inspect }
+    invalid.each { |params| assert_not Runners::ProtocolSchema.valid?("releases.params", params), params.inspect }
+  end
+end

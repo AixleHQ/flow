@@ -9,4 +9,10 @@ scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, default
   post "token", to: "tokens#create"
   get "ops", to: "operations#index"
   post "ops/:id/result", to: "operation_results#create", as: :op_result
+  # Public: an operator downloads the binary before the machine has a token.
+  # The version may carry dots and a `+`, so neither segment takes a format.
+  get "releases/:version/checksums", to: "releases#checksums", as: :release_checksums,
+                                     constraints: { version: %r{[^/]+} }, format: false
+  get "releases/:version/:platform", to: "releases#show", as: :release,
+                                     constraints: { version: %r{[^/]+}, platform: %r{[^/]+} }, format: false
 end

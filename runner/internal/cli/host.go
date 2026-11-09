@@ -13,6 +13,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
+	"github.com/aixlehq/aixle-runner/internal/update"
 	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
@@ -22,12 +23,14 @@ type HostOptions struct {
 	HTTPClient *http.Client
 	Docker     docker.API
 	Logger     *slog.Logger
+	// Binary is the file a self-update replaces. Empty is the running binary.
+	Binary string
 }
 
 // RunHost runs the host runner until ctx is done. It holds the state directory's
 // lock while it runs, and refuses at once if another process holds it. A failure
 // that needs an operator, such as a refusal or missing credentials, satisfies
-// NeedsOperator.
+// NeedsOperator. A self-update that replaced the binary returns host.ErrUpdated.
 func RunHost(ctx context.Context, opts HostOptions) error {
 	lock, err := lockForHost(opts.StateDir)
 	if err != nil {
@@ -68,7 +71,7 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	}
 
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key)
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", creds.AutoUpdateEnabled())
 	// The host runner runs every op itself, the session ops included, through the
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
@@ -76,12 +79,26 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	for name, handler := range env.Handlers() {
 		handlers[name] = handler
 	}
+	binary := opts.Binary
+	if binary == "" {
+		if binary, err = update.BinaryPath(); err != nil {
+			return fmt.Errorf("finding the running binary: %w", err)
+		}
+	}
 	loop := &host.Loop{
 		Gateway:  client,
 		Tokens:   tokens.NewSource(store, client, creds),
 		Journal:  j,
 		Handlers: handlers,
-		Logger:   opts.Logger,
+		Updater: &update.Updater{
+			Releases: client,
+			Current:  version.Version,
+			Binary:   binary,
+			Disabled: !creds.AutoUpdateEnabled(),
+			Busy:     env.HoldsSession,
+			Logger:   opts.Logger,
+		},
+		Logger: opts.Logger,
 	}
 	return loop.Run(ctx)
 }

@@ -1,6 +1,7 @@
 // Package service is `aixle-runner service install | uninstall | start | stop`: a
-// systemd unit that runs `/usr/local/bin/aixle-runner --mode host` as the dedicated
-// `aixle-runner` system user, in the `docker` group (DESIGN.md §6.3, §9.7).
+// systemd unit that runs `aixle-runner --mode host` as the dedicated
+// `aixle-runner` system user, in the `docker` group (DESIGN.md §6.3, §9.7), from a
+// directory that user owns, so the runner can update itself (§14.4).
 package service
 
 import (
@@ -33,10 +34,19 @@ const (
 	// operator (re-registration, a revoked runner, an update). systemd does not
 	// restart it.
 	ExitStop = 3
-	// BinaryPath is the binary the unit runs. `install` copies the running binary
-	// there, owned by root, so a user who can write the file `install` ran from
-	// cannot replace what the service runs (§9.7).
-	BinaryPath = "/usr/local/bin/aixle-runner"
+	// ExitUpdated is the exit code of a host runner that replaced its binary with
+	// a newer one. systemd restarts it on the new binary, and so does a supervisor
+	// that restarts only on a failure, such as the `local` adapter's Compose
+	// service.
+	ExitUpdated = 4
+	// BinaryPath is the binary the unit runs: `bin/aixle-runner` in the state
+	// directory. `install` copies the running binary there, owned by the service
+	// user, in a directory that user owns, the way the GitHub Actions runner lives
+	// in its own user's directory: a self-update replaces it in place, with no
+	// root helper. Whoever runs as that user is root-equivalent anyway, through
+	// the docker group (§9.7). A user who can write the file `install` ran from
+	// still cannot replace what the service runs.
+	BinaryPath = "/var/lib/aixle-runner/bin/aixle-runner"
 )
 
 // Account is the service user's uid and gid.
@@ -85,7 +95,8 @@ type Manager struct {
 	Runner Runner
 	// UnitDir is where the unit file goes, /etc/systemd/system.
 	UnitDir string
-	// Binary is the binary the unit runs, BinaryPath.
+	// Binary is the binary the unit runs, BinaryPath. Its directory is the service
+	// user's.
 	Binary string
 	// StateDir is the runner's state directory, which the service user owns.
 	StateDir string
@@ -133,10 +144,10 @@ func (m *Manager) requireRoot() error {
 	return nil
 }
 
-// Install copies the running binary to Binary, creates the service user, adds it
-// to the docker group, hands it the state directory and installs and enables the
-// unit. Running it again updates the binary and the unit and leaves the rest as it
-// is.
+// Install creates the service user, adds it to the docker group, hands it the
+// state directory and the binary's directory, copies the running binary to
+// Binary, owned by that user, and installs and enables the unit. Running it again
+// updates the binary and the unit and leaves the rest as it is.
 func (m *Manager) Install(ctx context.Context) error {
 	if err := m.requireRoot(); err != nil {
 		return err
@@ -144,9 +155,15 @@ func (m *Manager) Install(ctx context.Context) error {
 	if !filepath.IsAbs(m.Binary) {
 		return fmt.Errorf("the binary path %q is not absolute", m.Binary)
 	}
-	if err := m.installBinary(); err != nil {
-		return err
+	// The running binary is opened first, and both decided on and copied from that
+	// one descriptor, so a user who can write the path `install` was started from
+	// cannot swap in other bytes meanwhile.
+	self, err := m.OpenSelf()
+	if err != nil {
+		return fmt.Errorf("opening the running binary: %w", err)
 	}
+	defer self.Close()
+
 	if _, exists, err := LookupAccount(m.LookupUser); err != nil {
 		return err
 	} else if !exists {
@@ -158,7 +175,11 @@ func (m *Manager) Install(ctx context.Context) error {
 	if err := m.Runner.Run(ctx, "usermod", "--append", "--groups", DockerGroup, User); err != nil {
 		return fmt.Errorf("adding %s to the %s group (is Docker installed?): %w", User, DockerGroup, err)
 	}
-	if err := m.ownStateDir(); err != nil {
+	acct, err := m.ownDirectories()
+	if err != nil {
+		return err
+	}
+	if err := m.installBinary(self, acct); err != nil {
 		return err
 	}
 
@@ -175,50 +196,63 @@ func (m *Manager) Install(ctx context.Context) error {
 	return m.Runner.Run(ctx, "systemctl", "enable", UnitName)
 }
 
-// ownStateDir gives the state directory and everything in it to the service user,
-// so the credentials stay readable only by the runner's own user (§6.3).
-func (m *Manager) ownStateDir() error {
+// ownDirectories gives the state directory and everything in it to the service
+// user, so the credentials stay readable only by the runner's own user (§6.3), and
+// creates the binary's directory and gives it to that user too, so a self-update
+// can put the new binary next to the old one and rename it over (§14.4).
+func (m *Manager) ownDirectories() (Account, error) {
 	acct, exists, err := LookupAccount(m.LookupUser)
 	if err != nil {
-		return err
+		return Account{}, err
 	}
 	if !exists {
-		return fmt.Errorf("the user %s does not exist after it was created", User)
+		return Account{}, fmt.Errorf("the user %s does not exist after it was created", User)
 	}
-	uid, gid := acct.UID, acct.GID
 	if err := os.MkdirAll(m.StateDir, 0o700); err != nil {
-		return fmt.Errorf("creating %s: %w", m.StateDir, err)
+		return Account{}, fmt.Errorf("creating %s: %w", m.StateDir, err)
 	}
 	if err := os.Chmod(m.StateDir, 0o700); err != nil {
-		return fmt.Errorf("restricting %s: %w", m.StateDir, err)
+		return Account{}, fmt.Errorf("restricting %s: %w", m.StateDir, err)
 	}
-	return filepath.WalkDir(m.StateDir, func(path string, _ fs.DirEntry, err error) error {
+	binDir := filepath.Dir(m.Binary)
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return Account{}, fmt.Errorf("creating %s: %w", binDir, err)
+	}
+	own := func(path string, _ fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if err := m.Chown(path, uid, gid); err != nil {
+		if err := m.Chown(path, acct.UID, acct.GID); err != nil {
 			return fmt.Errorf("handing %s to %s: %w", path, User, err)
 		}
 		return nil
-	})
+	}
+	if err := filepath.WalkDir(m.StateDir, own); err != nil {
+		return Account{}, err
+	}
+	if !within(binDir, m.StateDir) {
+		if err := own(binDir, nil, nil); err != nil {
+			return Account{}, err
+		}
+	}
+	return acct, nil
 }
 
-// installBinary copies the running binary to Binary atomically, owned by root
-// with mode 0755, unless Binary is that already. It opens the running binary once
-// and both decides and copies from that descriptor, so a user who can write the
-// path `install` was started from cannot swap in other bytes meanwhile. The
-// rename replaces whatever is at Binary, a symlink included, not its target.
-func (m *Manager) installBinary() error {
-	self, err := m.OpenSelf()
-	if err != nil {
-		return fmt.Errorf("opening the running binary: %w", err)
-	}
-	defer self.Close()
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
+}
+
+// installBinary copies self to Binary atomically, owned by the service user with
+// mode 0755, unless Binary is that already. The copy is given to the user before
+// it appears at its path. The rename replaces whatever is at Binary, a symlink
+// included, not its target.
+func (m *Manager) installBinary(self *os.File, acct Account) error {
 	selfInfo, err := self.Stat()
 	if err != nil {
 		return fmt.Errorf("checking the running binary: %w", err)
 	}
-	installed, err := m.isInstalled(selfInfo)
+	installed, err := m.isInstalled(selfInfo, acct)
 	if err != nil {
 		return err
 	}
@@ -226,7 +260,7 @@ func (m *Manager) installBinary() error {
 		return nil
 	}
 	err = fsutil.CopyFileAtomic(self, m.Binary, 0o755, func(name string) error {
-		return m.Chown(name, 0, 0)
+		return m.Chown(name, acct.UID, acct.GID)
 	})
 	if err != nil {
 		return fmt.Errorf("installing the binary the service runs: %w", err)
@@ -235,10 +269,10 @@ func (m *Manager) installBinary() error {
 }
 
 // isInstalled says whether Binary already is what installBinary would make of
-// self: the same regular file, not through a link, owned by root, with mode
-// exactly 0755. Any other mode is copied over, so a root-owned 0700 binary the
-// service user could not execute is replaced too. A missing Binary is not.
-func (m *Manager) isInstalled(self fs.FileInfo) (bool, error) {
+// self: the same regular file, not through a link, owned by the service user,
+// with mode exactly 0755. Anything else is copied over. A missing Binary is not
+// installed.
+func (m *Manager) isInstalled(self fs.FileInfo, acct Account) (bool, error) {
 	info, err := os.Lstat(m.Binary)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
@@ -248,7 +282,7 @@ func (m *Manager) isInstalled(self fs.FileInfo) (bool, error) {
 	}
 	return info.Mode().IsRegular() &&
 		os.SameFile(self, info) &&
-		m.Owner(info) == 0 &&
+		m.Owner(info) == acct.UID &&
 		info.Mode().Perm() == 0o755, nil
 }
 
@@ -300,7 +334,8 @@ func (m *Manager) Unit() ([]byte, error) {
 		"StateDir": m.StateDir,
 		"User":     User,
 		"Group":    DockerGroup,
-		"ExitStop": ExitStop,
+		"ExitStop":    ExitStop,
+		"ExitUpdated": ExitUpdated,
 	})
 	return buf.Bytes(), err
 }
@@ -317,7 +352,9 @@ User={{.User}}
 Group={{.User}}
 SupplementaryGroups={{.Group}}
 ExecStart={{.Binary}} --mode host --state-dir {{.StateDir}}
-Restart=on-failure
+# Always: a self-update replaces the binary and exits ({{.ExitUpdated}}), and the
+# restart runs the new one.
+Restart=always
 RestartSec=5
 # Exit {{.ExitStop}}: a refusal that needs an operator (re-registration, a revoked
 # runner, an update). Restarting cannot fix it.

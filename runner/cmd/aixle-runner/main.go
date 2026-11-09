@@ -15,18 +15,23 @@ import (
 
 	"github.com/aixlehq/aixle-runner/internal/cli"
 	"github.com/aixlehq/aixle-runner/internal/docker"
+	"github.com/aixlehq/aixle-runner/internal/host"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/service"
+	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
 const usage = `Usage:
-  aixle-runner configure --url <platform> --token <registration token> --name <name> [--state-dir <dir>]
+  aixle-runner configure --url <platform> --token <registration token> --name <name> [--no-auto-update] [--state-dir <dir>]
   aixle-runner unregister [--state-dir <dir>]
   aixle-runner service install | uninstall | start | stop
   aixle-runner --mode host [--state-dir <dir>]
+  aixle-runner version
 
-service install copies this binary to /usr/local/bin/aixle-runner, owned by
-root, and the service runs that copy.
+service install copies this binary to /var/lib/aixle-runner/bin/aixle-runner,
+owned by the service's own user, and the service runs that copy. The runner
+updates that copy itself while the machine is idle, to the version the platform
+recommends, unless configure was run with --no-auto-update.
 `
 
 func main() {
@@ -50,6 +55,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = unregister(ctx, args[1:], stdout, stderr)
 	case "service":
 		err = serviceCommand(ctx, args[1:], stderr)
+	case "version", "--version":
+		if len(args) > 1 {
+			fmt.Fprint(stderr, usage)
+			return 2
+		}
+		fmt.Fprintln(stdout, version.Version)
+		return 0
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return 0
@@ -63,6 +75,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case errors.Is(err, errUsage):
 		fmt.Fprint(stderr, usage)
 		return 2
+	case errors.Is(err, host.ErrUpdated):
+		// The new binary is in place: systemd starts it (Restart=always).
+		fmt.Fprintln(stderr, "aixle-runner:", err)
+		return service.ExitUpdated
 	}
 	fmt.Fprintln(stderr, "aixle-runner:", err)
 	if cli.NeedsOperator(err) {
@@ -95,6 +111,7 @@ func configure(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	url := fs.String("url", "", "the platform's address, e.g. https://flow.aixle.com")
 	token := fs.String("token", "", "the registration token from \"Add machine\" on the runner page")
 	name := fs.String("name", "", "how the machine is listed on the runner page")
+	noAutoUpdate := fs.Bool("no-auto-update", false, "never update aixle-runner on this machine; its operator updates it")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -104,7 +121,7 @@ func configure(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	}
 	defer api.Close()
 	return cli.Configure(ctx, cli.ConfigureOptions{
-		URL: *url, Token: *token, Name: *name, StateDir: *stateDir,
+		URL: *url, Token: *token, Name: *name, StateDir: *stateDir, NoAutoUpdate: *noAutoUpdate,
 		Preflight: preflight.Env{Docker: api},
 		Out:       stdout,
 	})
@@ -130,7 +147,7 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 		return err
 	}
 	// install copies the running binary (/proc/self/exe) to service.BinaryPath,
-	// which the unit runs.
+	// in the service user's own directory, which the unit runs.
 	m := service.NewManager(cli.DefaultStateDir)
 	switch args[0] {
 	case "install":
