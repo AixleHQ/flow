@@ -39,7 +39,7 @@ module Sessions
                                           user: @user, project: @project, company: @company, agent_type: "claude_code",
                                           container_id: "ctr-#{SecureRandom.hex(3)}", started_at: 1.hour.ago,
                                           initial_prompt: "do the work")
-      create(:step_run, :running, workflow_run: @run, terminal_session: session)
+      create(:step_run, :running, workflow_run: @run, step: create(:step, workflow: @run.workflow), terminal_session: session)
       session
     end
 
@@ -218,8 +218,8 @@ module Sessions
     # A configured secret the agent echoed onto the banner line. The stored reason is served
     # with the session's metadata (TerminalSessionResource); the expiry quotes it.
     test "a secret on the banner line reaches neither the stored reason nor the expiry message" do
-      @session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
-                                                            value: RECORDED_SECRET)
+      secret = create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY", value: RECORDED_SECRET)
+      @session.step_run.step.update!(config_item_ids: [ secret.id ])
       @credential.mark_refresh_error!("invalid_grant", permanent: true)
       pane = BANNER_PANE.sub("Please run /login", "Please run /login (for #{RECORDED_SECRET})")
 
@@ -232,7 +232,7 @@ module Sessions
       assert_equal :failed, observe(pane: pane)
 
       message = @session.reload.error_message
-      assert_match(/agent authentication failed — Login expired/, message)
+      assert_match(/agent authentication failed — .*Login expired/, message)
       assert_no_secret message
     end
 
