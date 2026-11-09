@@ -1,14 +1,36 @@
-<p>Hello,</p>
+<%
+  font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+  strong = "color:#d1cfcd; font-weight:600;"
+%>
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
-<% if @accepted %>
-  <p>Your AWS Marketplace subscription has been applied to
-  <strong><%= @company.name %></strong>. That workspace is billed through AWS from now on,
-  and your usage appears on your AWS bill.</p>
-<% else %>
-  <p>An administrator of <strong><%= @company.name %></strong> did not accept the request to
-  apply your AWS Marketplace subscription to that workspace.</p>
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="<%= font %> font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          <%= @accepted ? "Your AWS Marketplace subscription is set up" : "Your request was not accepted" %>
+        </td>
+      </tr>
 
-  <p>Your subscription is unchanged and is not attached to anything. If this was a
-  misunderstanding, speak to someone at <%= @company.email_domain %> and ask again, or
-  unsubscribe in AWS Marketplace if you no longer want it.</p>
-<% end %>
+      <!-- Body -->
+      <tr>
+        <td style="<%= font %> font-size:14px; line-height:22px; color:#9f9d9c;">
+          <% if @accepted %>
+            Your AWS Marketplace subscription has been applied to
+            <strong style="<%= strong %>"><%= @company.name %></strong>. That workspace is billed through AWS from now on,
+            and your usage appears on your AWS bill.
+          <% else %>
+            An administrator of <strong style="<%= strong %>"><%= @company.name %></strong> did not accept the request to
+            apply your AWS Marketplace subscription to that workspace.<br><br>
+            Your subscription is unchanged and is not attached to anything. If this was a
+            misunderstanding, speak to someone at <%= @company.email_domain %> and ask again, or
+            unsubscribe in AWS Marketplace if you no longer want it.
+          <% end %>
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

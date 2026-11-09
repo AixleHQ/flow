@@ -54,6 +54,9 @@ governance, community health — carry none.
   edits a build file or runs a command on a path an earlier command printed.
 
 ### Fixed
+- **Company settings**: the AWS Marketplace emails — confirming a request, asking
+  administrators to accept it, and the answer — are readable again: their text
+  was near-black on the emails' dark background.
 - **Sessions & Runs**: an automatic Kiro step whose agent ends its turn without
   `finish_session` no longer waits for a person. A minute or two later the agent
   is reminded in its terminal to finish or continue, up to 3 times, and the step
