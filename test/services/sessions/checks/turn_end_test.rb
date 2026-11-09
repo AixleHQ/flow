@@ -183,6 +183,28 @@ module Sessions
         assert_nil @session.error_message
       end
 
+      # A newer observer saw the agent working and forgot the confirmed turn end.
+      test "a session whose confirmation was cleared after the scan read it is not failed at the limit" do
+        result = give_up_on_a_stale_copy { |other| other.remove_jsonb_keys!(:metadata, TurnEnd::SCREEN_KEY, TurnEnd::SEEN_AT_KEY) }
+
+        assert_equal :taken_over, result
+        @session.reload
+        assert_equal "ready", @session.state
+        assert_nil @session.error_message
+      end
+
+      # ...and then saw a turn end again, which is not confirmed yet: same screen, a later time.
+      test "a session whose confirmation was replaced after the scan read it is not failed at the limit" do
+        result = give_up_on_a_stale_copy do |other|
+          other.merge_jsonb!(:metadata, TurnEnd::SEEN_AT_KEY => Time.current.iso8601)
+        end
+
+        assert_equal :taken_over, result
+        @session.reload
+        assert_equal "ready", @session.state
+        assert_nil @session.error_message
+      end
+
       test "every reminder counts toward the limit" do
         TurnEnd::LIMIT.times do |i|
           assert_equal :nudged, observe_twice(pane(i.even? ? "turn_ended" : "turn_ended_after_nudge"))

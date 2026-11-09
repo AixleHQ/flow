@@ -821,8 +821,18 @@ pass and hands the snapshot to them (task #211).
     and two sessions of one run unpaused at once resume it. A delivery's
     `resume!` types its prompt before that compare-and-set, never inside a
     transaction, and returns whether the unpause applied. `heal!` counts its
-    attempt under the session's row lock, from the counter read there;
-  - a reminder is counted under the lock before it is typed.
+    attempt under the session's row lock, from the counter read there.
+    `#unpause_quietly` and `#expire!` act only on the pause episode the pass
+    observed: under the lock the row's `auth_paused_at` must be exactly the
+    value the pass read, and `#expire!` computes the expiry from the locked row,
+    so a fresh pause that replaced the observed one between the read and the
+    action is left alone. `#pause!` redacts the banner
+    (`Sessions::SecretRedactor.for_session`) before it stores it as
+    `auth_pause_reason`, which the session's metadata serves and the expiry
+    message quotes;
+  - a reminder is counted under the lock before it is typed, and the failure
+    after the last one requires the confirmation the pass acted on: the locked
+    row's `turn_end_screen` and `turn_end_seen_at` must be the ones it confirmed.
   If the change did not apply, another path (`finish_session`, an auth pause, a
   delivery) has taken the session over, and the check stops with `:taken_over`.
   Every action is safe under a Temporal retry of the pass.

@@ -72,7 +72,7 @@ module Sessions
         digest = snapshot.screen_digest
         return remember(digest) unless confirmed?(digest)
         return continue(:pending) if person_working?(snapshot)
-        return give_up if nudges >= LIMIT
+        return give_up(digest) if nudges >= LIMIT
         return continue(:pending) unless claim(digest)
 
         unless PaneInput.type(session, MESSAGE, runtime: runtime)
@@ -123,10 +123,17 @@ module Sessions
         end
       end
 
-      # Fails the session after its last reminder, if it still takes reminders and has used
-      # them all (Base#fail_session).
-      def give_up
-        result = fail_session(self.class.message_after_limit) { |locked| locked.metadata&.dig(COUNT_KEY).to_i >= LIMIT }
+      # Fails the session after its last reminder, if it still takes reminders, has used them
+      # all, and still holds the confirmation this pass acted on (Base#fail_session): under
+      # the session's lock the recorded screen and its time must be the ones this pass
+      # confirmed, as #claim requires for a reminder. Another observer that saw the agent
+      # working since cleared or replaced them, and that session is not this snapshot's to fail.
+      def give_up(digest)
+        seen_at = kept[SEEN_AT_KEY]
+        result = fail_session(self.class.message_after_limit) do |locked|
+          metadata = locked.metadata || {}
+          metadata[SCREEN_KEY] == digest && metadata[SEEN_AT_KEY] == seen_at && metadata[COUNT_KEY].to_i >= LIMIT
+        end
         log(:info, "stopped again after #{LIMIT} reminders; failed") if result.outcome == :failed
         result
       end
