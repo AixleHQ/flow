@@ -177,29 +177,22 @@ class RunnerTest < ActiveSupport::TestCase
     assert deleted.revoked?
   end
 
-  # == the tenant rule ==
+  # == the tenant rule (TenantScope) ==
 
-  test "of_tenant is the company's company-level runners and the project's own, deleted ones included" do
+  test "TenantScope owns the company's company-level runners and the project's own, deleted ones included" do
     own = create(:runner, company: @company, created_by: @user, project: @project)
     company_runner = create(:runner, company: @company, created_by: @user)
     deleted = create(:runner, company: @company, created_by: @user, project: @project).tap(&:soft_delete!)
     other_project = create(:runner, company: @company, created_by: @user, project: create(:project, company: @company, owner: @user))
     foreign = create(:runner, company: create(:company))
 
-    ids = ->(**tenant) { Runner.of_tenant(**tenant).pluck(:id).sort }
-    assert_equal [ own.id, company_runner.id, deleted.id ].sort, ids.call(company_id: @company.id, project_id: @project.id)
-    assert_equal [ company_runner.id ], ids.call(company_id: @company.id)
-    assert_empty ids.call(company_id: nil, project_id: @project.id)
-    assert_equal ids.call(company_id: @company.id, project_id: @project.id),
-                 TenantScope.owned(Runner, project: @project).pluck(:id).sort
+    assert_equal [ own.id, company_runner.id, deleted.id ].sort, TenantScope.owned(Runner, project: @project).pluck(:id).sort
     assert_equal [ company_runner.id ], TenantScope.owned(Runner, company: @company).pluck(:id)
 
     tenant = { company_id: @company.id, project_id: @project.id }
-    [ own, company_runner, deleted ].each { |runner| assert runner.of_tenant?(**tenant), runner.name }
-    [ other_project, foreign ].each { |runner| assert_not runner.of_tenant?(**tenant), runner.name }
-    assert company_runner.of_tenant?(company_id: @company.id)
-    assert_not own.of_tenant?(company_id: @company.id)
-    assert_not company_runner.of_tenant?(company_id: nil, project_id: @project.id)
+    [ own, company_runner, deleted ].each { |runner| assert TenantScope.owns_runner?(runner, **tenant), runner.name }
+    [ other_project, foreign ].each { |runner| assert_not TenantScope.owns_runner?(runner, **tenant), runner.name }
+    assert_not TenantScope.owns_runner?(company_runner, company_id: nil, project_id: @project.id)
   end
 
   # == visible_for_project ==

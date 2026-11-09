@@ -73,6 +73,8 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
 
     register(token, { ephemeral: true, facts: nil })
     assert_refused :unprocessable_entity, "ephemeral_not_supported"
+    register(token, { ephemeral: true, name: 5 })
+    assert_refused :unprocessable_entity, "ephemeral_not_supported"
     register(token, REGISTRATION.merge(name: 5))
     assert_refused :unprocessable_entity, "invalid_registration"
     assert_equal 0, RunnerEnvironment.count

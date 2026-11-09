@@ -24,7 +24,7 @@ module RunnerGateway
 
         result = Runners::Registration.register!(
           @credential,
-          name: body["name"]&.strip, os: ignored_unless_string(body["os"]), arch: ignored_unless_string(body["arch"]),
+          name: (body["name"].strip if body["name"].is_a?(String)), os: ignored_unless_string(body["os"]), arch: ignored_unless_string(body["arch"]),
           facts: body.fetch("facts", {}), ephemeral: ephemeral,
           runner_version: runner_version, protocol_version: PROTOCOL_VERSION
         )

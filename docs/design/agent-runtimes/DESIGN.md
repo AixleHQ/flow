@@ -436,17 +436,7 @@ resolver's `runner_forbidden` check and the version revert use the same rule. A 
 or a frozen run therefore keeps naming a runner that went away, and a System workflow, which has
 no project, refuses any runner. What a person may *pick* (the flag, a runner that is not deleted,
 `Runner.visible_for_project`) is `Runners::Selection`, checked at the endpoints that take a pick
-(§3.3).
-
-**The rule is written once, in `Runner` (task #209).** `Runner.of_tenant(company_id:,
-project_id:)` is the runners of a tenant: the company's company-level runners plus the
-project's own, deleted ones included, because a stored reference to a runner deleted since
-stays valid (§3.4), the launch (`Runners::Resolver`) finds it and refuses it by name, and the
-version history shows its name. `Runner#of_tenant?` is the same rule for a row already loaded.
-`TenantScope.owned(Runner)` calls the scope, `Runner.visible_for_project` is the scope plus
-`not_deleted`, and `RunnerReference#owned_runner` calls the instance method on the preloaded
-`runner`: the lists that show the "Runs on" badge preload it and can mix projects, and a stored
-`runner_id` can be stale, for example after a project moved to another company. A runner leaves the database only with its project or company, and
+(§3.3). A runner leaves the database only with its project or company, and
 `has_many … dependent: :nullify` clears the references first so that delete is not blocked.
 **What v1 has so far (§15 task 8a).** `db/migrate/20261107100000_add_runner_session_references.rb`
 adds `terminal_sessions.runner_environment_id`, the machine the session ran on, kept after the
@@ -620,8 +610,7 @@ constrained in SQL:
 ### 3.1 Visibility
 
 A project can see its own runners plus its company's non-deleted runners:
-`Runner.visible_for_project(project)`, the same shape as `Integration.visible_for_project`, and
-`Runner.of_tenant` plus `not_deleted` (§2.4).
+`Runner.visible_for_project(project)`, the same shape as `Integration.visible_for_project`.
 A runner is never visible across companies. System workflows (`scope_type: "System"`, e.g.
 Aixle Builder) have no project, so they can only use `hosted`.
 
@@ -2846,7 +2835,7 @@ type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `Runne
 - **"Runs on"** shows `Hosted` or "name · type", linking to the runner, in the session and run
   headers, on each session card of the run page, and on the board task's run tiles. The badge
   serializes a runner only when it is in the record's tenant (`RunnerReference#owned_runner`,
-  `Runner#of_tenant?` checked on the preloaded row). A stale `runner_id` that names another
+  the `TenantScope` rule checked on the preloaded row). A stale `runner_id` that names another
   project's or company's runner sends no name or type, and the badge reads "Runner not
   available" rather than `Hosted`.
 - **The runner page** does not show where the runner is used: no "Workflows using it" list,

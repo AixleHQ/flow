@@ -55,30 +55,12 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
-  # Which runners belong to a project, the one place the rule is written: the
-  # runners of a tenant are its company's company-level runners plus the
-  # project's own, deleted ones included. A deleted runner counts on purpose: a
-  # stored reference to one deleted since stays valid (DESIGN.md §3.4), the
-  # launch (Runners::Resolver) finds it and refuses it by name, and the version
-  # history shows its name. Without a company the tenant owns none; without a
-  # project, only the company-level ones. TenantScope.owned(Runner) is this
-  # scope, and #of_tenant? the same rule for a row already loaded.
-  scope :of_tenant, ->(company_id:, project_id: nil) {
-    if company_id.blank?
-      none
-    elsif project_id
-      where(company_id: company_id, project_id: [ nil, project_id ])
-    else
-      where(company_id: company_id, project_id: nil)
-    end
+  # What a picker offers: the company's runners and the project's own, live
+  # ones only. What a reference may name, deleted ones included, is
+  # TenantScope.owned(Runner, project:).
+  scope :visible_for_project, ->(project) {
+    where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id)).not_deleted
   }
-  # What a picker offers: the tenant's runners, live ones only.
-  scope :visible_for_project, ->(project) { of_tenant(company_id: project.company_id, project_id: project.id).not_deleted }
-
-  # The rule of .of_tenant for this row, without a query.
-  def of_tenant?(company_id:, project_id: nil)
-    company_id.present? && self.company_id == company_id && (self.project_id.nil? || self.project_id == project_id)
-  end
 
   # Who runs the machines a session's credential goes to (§3.2, §11).
   def operated_by
