@@ -222,6 +222,9 @@ services:
   # Only with the `runners` profile, so `make up` does not start it. It shares
   # web's network namespace to reach the runner gateway on 127.0.0.1, and drives
   # this machine's Docker daemon, where it starts the session containers.
+  # Its binary and state live in RUNNER_LOCAL_DIR, a directory of this machine
+  # mounted at the same path: the daemon resolves the proxy sidecar's bind
+  # mounts on this machine (runner/protocol/PROTOCOL.md §5.6).
   runner-local:
     profiles: [ runners ]
     build:
@@ -231,11 +234,13 @@ services:
     network_mode: "service:web"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - runner_local_state:/var/lib/aixle-runner
+      - ${RUNNER_LOCAL_DIR:-/tmp/aixle-runner-local}:${RUNNER_LOCAL_DIR:-/tmp/aixle-runner-local}
       # The preflight measures the free space of the daemon's root directory as a
       # path of its own filesystem. A volume lives on that filesystem, on Linux
       # and in Docker Desktop's VM alike, so mounting one there measures it.
       - runner_local_docker_root:/var/lib/docker:ro
+    environment:
+      RUNNER_LOCAL_DIR: ${RUNNER_LOCAL_DIR:-/tmp/aixle-runner-local}
     depends_on:
       web:
         condition: service_healthy
@@ -255,7 +260,6 @@ services:
 volumes:
   pg_data:
   redis_data:
-  runner_local_state:
   runner_local_docker_root:
 
 networks:

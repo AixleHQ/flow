@@ -1376,10 +1376,12 @@ public.
 
 **Decision:** the session runner listens on `127.0.0.1:<port>` next to the agent (inside
 the agent container, on every type) and forwards an
-**allow-list of routes** through `ANY /runner/v1/proxy/:route/*`. The env vars
-the strategy sets (`Settings.mcp.server_url`, `CREDENTIAL_SYNC_URL`,
-`AIXLE_GIT_CREDENTIALS_URL`, …) are rewritten to `http://127.0.0.1:<port>/<route>/…` by
-`RunnerRuntime`. That is a `RunnerRuntime` concern, so no strategy change is needed. The
+**allow-list of routes** through `ANY /runner/v1/proxy/:route/*`. A session's callback
+addresses (`Settings.mcp.server_url`, `CREDENTIAL_SYNC_URL`, `AIXLE_GIT_CREDENTIALS_URL`, …)
+are resolved through its runtime, `runtime.callback_url(:mcp, session)`: a hosted runtime
+answers the `Settings` value unchanged, and `RunnerRuntime` answers
+`http://127.0.0.1:<port>/<route>`. Every place that hands the container an address reads it
+there, and nothing rewrites a string afterwards (task 8b, decision 6). The
 gateway:
 
 1. authenticates the environment credential,
@@ -1398,6 +1400,39 @@ owner: the host runner over a Unix socket mounted into the sidecar only (`manual
 or the controller with a per-session proxy key (`kubernetes`, §6.9.7). The owner adds the
 environment credential, so steps 1 to 3 above, the per-endpoint session-key checks included,
 are unchanged. With `network: host` the host runner listens itself.
+
+**As built (§15 task 8b), on `manual`.** The wire is `PROTOCOL.md` §5.6.
+
+- **The seam** is `ContainerRuntime::CallbackUrls`: the names `:mcp`, `:agent_credential_sync`,
+  `:agent_credential_refresh`, `:git_credentials`, `:azure_git_credentials`,
+  `:cloud_credentials`, `:container_assets` and `:otel`, and `BaseRuntime#callback_url`, whose
+  hosted arm is the `Settings` value. `RunnerRuntime#callback_url` answers `Runners::Proxy`'s
+  address. The readers: the strategy's env vars (`AgentBaseStrategy#build_env_vars`, which hands
+  the adapters' `default_env_vars` the session's addresses, and the git setups'
+  `container_env`), the MCP config (`SessionContextService#build_internal_mcp`), the asset URLs
+  of the context, the step's assets and the tracker files (`ContainerAssetUrl`, which now puts a
+  URL's path below a host that has one), `read_tool_result`'s output, and the OTLP endpoint of
+  the Codex and Gemini config files (`credential_workflow_config`).
+- **The allow-list** (decision 7) is `Runners::Proxy::ROUTES`: `mcp`, `agent-credentials`,
+  `agent-credentials-refresh`, `git-credentials` (GitHub, GitLab, Bitbucket),
+  `azure-git-credentials`, `cloud-credentials` and `assets` (`GET` and `HEAD` under `store/`,
+  the filesystem storage's files; a presigned S3 URL is never rewritten). Each route names the
+  methods it takes, and only `assets` takes a path below it.
+- **The session check** (step 2) is `Runners::Proxy.holder`: the MCP key in `X-Session-Key`
+  must resolve to the session that holds the machine (`current_session_id`); a credential route
+  needs that session's id in `X-Session-Id` and its own key for that endpoint (`X-Agent-Key`,
+  `X-Git-Key`, `X-Azure-Git-Key`, `X-Cloud-Key`). `assets` carries no key, on the internal
+  address either, so it needs only a session on the machine.
+- **The forward** (decision 8) is `RunnerGateway::V1::ProxiesController`: an HTTP request to the
+  route's hosted address inside the platform, the agent's request unchanged, the bearer and the
+  gateway's headers left out, `X-Aixle-Runner-Environment` added, and the answer streamed back
+  with `ActionController::Live`, chunk by chunk. No body schema (decision 9). Every refusal of
+  the route carries `X-Aixle-Runner-Refusal`, so the runner tells it from the endpoint's own
+  answer.
+- **No OTLP route yet** (decision 7): `RunnerRuntime#callback_url(:otel)` is nil, so a runner
+  session gets no OTLP variable. Claude Code and Gemini CLI then have telemetry off, Codex no
+  `[otel]` block, and Kiro CLI `KIRO_DISABLE_TELEMETRY`, since its export would otherwise fall
+  back to the vendor's collector. The route comes with a later task.
 
 ### 6.7 Heartbeat, reconnect and resume
 
@@ -1722,11 +1757,12 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 | `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. |
 
 The container receives the same environment variables the hosted pod spec sets for the
-image, with the callback URLs rewritten to the session runner's local proxy (§6.6). How
-that env is assembled is a `RunnerRuntime` concern, so there is no strategy change. On
+image, with the callback addresses of the session's local proxy (§6.6). On
 `manual` there is no session runner (task 6b, decision 1): where the proxy runs is task #205.
-**Decided (§6.9.3):** the URLs are rewritten to the proxy sidecar on `127.0.0.1:<port>`, or
-to the host runner's own listener with `network: host`.
+**Decided (§6.9.3):** the addresses are the proxy sidecar's on `127.0.0.1:<port>`, or the host
+runner's own listener with `network: host`. **As built (task 8b):** the strategy reads them
+through the session's runtime (`callback_url`, §6.6), so the strategy code is the same on both,
+and `RunnerRuntime` rewrites nothing.
 
 **Image size.** Agent images are pulled from GHCR on the machine (or through the customer's
 registry mirror) and kept on its disk between sessions, so only the first session on an
@@ -2015,8 +2051,9 @@ already gives up, and the form's wording for it should say so.
 **Decision (Alex, 2026-11-05): a, the proxy sidecar, on every type.** It keeps the agent on
 `127.0.0.1`, with no image change and no change to how the MITM stack routes traffic, keeps the
 environment credential with the owner, and does not depend on firewall rules on machines we do
-not control. It does need a Docker daemon that sees the host runner's files, which the host
-runner checks at start (§6.9.7); the session runner of §6.8 needed the same. Its cost is a
+not control. It does need a Docker daemon that sees the host runner's files; the session runner
+of §6.8 needed the same. There is no start check for it: the first session's error names the
+cause (decision 4, §6.9.7). Its cost is a
 second container per session, which the label scheme of §6.8 and the scrub of §7.2 already
 cover.
 
@@ -2034,7 +2071,44 @@ The details task 8 fills in:
   No second image to pull, and the proxy is the host runner's version by construction. On
   `kubernetes` it is the runner image the chart already names (§9.6).
 - **The port** is a constant of `PROTOCOL.md`, outside the image's ports (7681, 7682, 4040, 4041,
-  8443, 8888), and `RunnerRuntime` rewrites the callback URLs to it (§6.6).
+  8443, 8888), and `RunnerRuntime#callback_url` answers it (§6.6).
+
+**As built (§15 task 8b), on `manual`.**
+
+- **The port is 7690.** With `network: host` the session's port on the machine is
+  `20000 + session id mod 10000` (`Runners::Proxy.host_port`), and `container.start`'s payload
+  carries it as `proxy_port`. It is a port per session, not per environment: the strategy builds
+  the container's environment before the session takes a machine (`create_container`), so the
+  address cannot depend on the machine. Two `network: host` sessions on one machine whose ids
+  collide on it are rare, and the second one fails with `proxy_port_in_use`.
+- **The sidecar** is `aixle-<key>-<session>-proxy`, labelled with the environment, the session
+  and `aixle.com/role=proxy`, so no session op takes it for the session container. It runs as
+  `65534:65534`, with every capability dropped, `no-new-privileges`, a read-only root
+  filesystem and no environment of the session's. Its mounts are the host runner's binary
+  (`/aixle-runner`) and the session's socket directory (`<state dir>/proxy/<session>`, at
+  `/run/aixle-proxy`), both read-only. The directory, not the socket, is mounted, so that a
+  restarted host runner re-creates the socket in it and a running sidecar reaches the new one
+  (`Environment.Resume`). The state directory is `0700`, so only the runner's user reaches the
+  socket on the machine.
+- **The relay** (`proxy.Relay`) serves `/runner/v1/proxy/*` only, and answers anything else
+  `404 not_proxied`. It drops the agent's `Authorization`, its `X-Aixle-Runner-*` headers and
+  the hop-by-hop ones, adds the environment's access token, refreshes once on an
+  `invalid_token`, and streams the answer back with a flush per chunk. The sidecar
+  (`aixle-runner --mode proxy`) is a reverse proxy to the socket that adds no header.
+- **The lifecycle.** `container.start` opens the relay, then starts the sidecar, then the agent
+  in its namespace; a failure removes what was started. `container.stop` removes the agent's
+  container, then the sidecar, and closes the relay. `env.scrub` and `env.reset` remove the
+  sidecars with every container of the environment, and close every relay.
+- **A sidecar that exits** (decision 10): the host runner watches each sidecar
+  (`ContainerWait`). When one it did not remove itself stops, it logs the exit code and the
+  last 50 lines of the sidecar's log, and stops the agent's container, which stays, so the
+  session fails through the existing dead-container path with its generic message.
+- **A Docker daemon that does not see the host runner's files** (decision 4): the daemon refuses
+  the sidecar's bind mount with "bind source path does not exist", and `container.start` answers
+  `docker_files_not_visible`, whose message names the paths and the cause (a remote
+  `DOCKER_HOST`, or a daemon that runs elsewhere). The session fails with it. There is no start
+  check. The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory
+  of the machine mounted at the same path, for this reason.
 
 #### 6.9.4 Question 3: the live log and how a session ends (§6.5, task 8)
 
@@ -3007,7 +3081,8 @@ Every change to a shared file is a guarded branch whose hosted arm is today's co
 - `ContainerRuntime.for_session` (§5.3);
 - one line in `pool_configuration` (§10);
 - `WHERE runner_id IS NULL` on the two hosted scanners;
-- the env-var rewrite, which lives in `RunnerRuntime`;
+- the callback-URL seam (`runtime.callback_url`, §6.6, task 8b), whose hosted arm answers the
+  `Settings` values unchanged;
 - nullable columns.
 
 **One deliberate change to hosted (task 8a).** `DockerRuntime#exec!`, the development
@@ -3034,7 +3109,8 @@ and not assumed. It is `test/integration/hosted_runtime_unchanged_test.rb` (task
 standalone session and a workflow step go through the real admission and launch relay and the
 container phases on the runtime seam, once with the flag off and once on, and the runtime
 calls, the admission and the outcome must match. In phase 6 the same test runs with `external_runners_kubernetes` enabled
-for that company too.
+for that company too. Task 8b extends it: the callback addresses the hosted container is created
+with must be the same with the flag on, and the `Settings` values (`callback_env`).
 
 **Tech debt this creates, with its exit condition.** Leaving hosted untouched means **two
 execution models live side by side for an open-ended period**: outside-in for hosted
@@ -3411,7 +3487,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 6b | 2 | **Done.** The agent container on `manual`, with the session ops run by the host runner through the Docker API (decision 1, Alex 2026-11-05: no runner inside the agent container; the host runner is the environment's only poller, §16). `container.start` creates and starts `aixle-<key>-<session_id>`, labelled `aixle.com/environment` and `aixle.com/session`, from the image pinned by digest (8a removed the digest: the image is the reference as given, which the runner always pulls) with its own entrypoint, with the payload's env, workspace and cache volumes (created with the environment's label), read-only-by-default binds, network, pid, resources and `no-new-privileges`, restart policy `no`, nothing of the runner inside (a bind that would expose the state directory is `forbidden_mount`), and at most one container per environment (`container_exists`); `container.stop` stops and removes it. The session ops `exec` (user, env, cwd, `timeout` through coreutils `timeout`, stdin), `write_file` (mode, owner), `read_file`, `batch` (until the first failure), `status` (as `DockerRuntime#container_status`) and `logs` (the tail of `/tmp/terminal_output.log`), found by label for every op, answering `no_session_container` without one; output and files capped at 1 MiB, a constant of `PROTOCOL.md` (decision 2), with larger output moved to task 8. A host-runner restart leaves the container running, and a cut-off op is answered `interrupted`. The journal drops a result once it is accepted. `env.scrub` and `env.reset` by label and name (§7.2, "As built"). `session.start`/`session.stop` stay reserved (`unsupported_op`). Each op's schema and fixtures are in `PROTOCOL.md` §6.2 to §6.4. The in-container session runner (`--mode session` as PID 1) and its Unix-socket relay moved to task #205, with the callback proxy, the live log, the tunnel and how `kubernetes` runs the session ops. Fix CR round 1 (Alex, 2026-11-06) added: a result over the gateway's body cap answered `result_too_large`; an `exec` without a `timeout` bounded by the op's `deadline_at`; ownership checks before acting on a name (`volume_not_owned` in `container.start`, `container_not_owned` in `container.stop`, and `scrub_failed`/`reset_failed` for a volume with the environment's name and without its label); and `write_file` refusing an absent or `null` `content`. |
 | 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
 | 8a | 2 | **Done.** `ContainerRuntime::RunnerRuntime` and the op path (Alex, 2026-11-07: row 8 is three tasks, 8a, 8b and 8c, each written against the code the one before merged). `ContainerRuntime.for_session(session)` gives a session with a runner `RunnerRuntime` and every other session `ContainerRuntime.build`, unchanged, and every call site that acts on one session goes through it: `BaseStrategy#runtime`, `AdmittedPhaseActivity`, `SessionContextService` (and the credential write it makes), `Sessions::LiveLogReader`, `Sessions::AuthPause`, `Sessions::SecretRegistry`, `Trackers::Workspace`, `Agents::CredentialDelivery`, the internal tools that read a session's files, and the scanners (`ScanDeadContainersActivity`, `ScanQuotaErrorsActivity`, `ScanNoOutputSessionsActivity`, `CleanupStaleActivity`); `ContainerSweepOrphanedResourcesActivity` sweeps the hosted runtime's own objects and stays as it was. `for_session` is the only place that picks a runtime (Alex, Fix CR round 2): the runtime reaches the code that uses it as an argument or a constructor dependency, never through `Thread.current`, a global or class-level state, and `SessionContextService` assembles a session's context through one object per assembly that holds the session, its runtime and the context log. **One runtime call of a strategy is one runner op** (requirement 2): `RunnerRuntime` enqueues it with `Runners::Operations.enqueue!`, waits for its result (`Runners::Operations.await`, heartbeating the activity) and answers what `DockerRuntime` answers; an op that ends `error` or `expired` answers as a hosted failure does (`ContainerUnreachableError` from `exec!` without the session's container, exit code 1 from `exec`, `false` from `write_file`, `nil` from `read_file`, `:missing` from `container_status`). No `batch` grouping (decision 5). An op's `deadline_at` is its own budget, and at most the end of the activity that sends it less 5 s (`RunnerRuntime::ACTIVITY_MARGIN`), and the wait stops at it and expires the op, so the strategy gets the expired outcome before Temporal times the activity out. The budgets: an `exec`'s `timeout` plus 30 s, `Settings.runners.op_timeout` (60 s, what `DockerRuntime#exec` waits by default) for the other session ops, `Settings.runners.lifecycle_op_timeout` (600 s) for `container.start`, `container.stop` and `env.reset`; the scanners cap theirs at `Settings.runners.scan_op_timeout` (15 s), so a machine that does not answer reads as unknown, never as dead or idle, and costs a scanner exactly that cap. The phases (§5.3, "What 8a built"). **Fix CR round 3 (Alex, 2026-11-07):** `RunnerRuntime#pull_image` does nothing, as `KubernetesRuntime#pull_image`, and the machine is taken in `create_container`; `container.start` always pulls the image reference, then creates and starts the container, and a failed pull is its `image_pull_failed`; the `image.ensure` op is removed from the platform, `PROTOCOL.md`, the fixtures and the Go runner, and with it `identity_before_pull?`, since the admission's identity is persisted before `create_container` for every runtime; the agent session's `create_container` budget is 600 s (§12.3). `RunnerRuntime` is not bound to a session, like `DockerRuntime`: `create_container` finds the session from the spec's `aixle.session_id` label, and every other call from the admission whose `runtime_id` its container id or cleanup identity is (a partial index on `session_admissions.runtime_id` for runner admissions); `op_timeout` stays the caller's budget. The wait for an op checks the activity's cancellation on every look, as `ToolStrategy#wait_with_heartbeat` does. A reused refresh token moves the machine to `failed` (§9.2), so it is given no session. **No digest** (Alex, Fix CR round 1): `container.start` and the helper container of `env.scrub` take the image reference as the user gave it, a tag or a digest, `container.image_override` included; the runner always pulls it, and no op returns a digest. The platform never contacts a registry, which it may not reach when a customer runs the runner in their own network. The dev `local` adapter therefore needs agent images from a registry: a pull always happens. The container's options come from the runner's `config.container` (§2.7), its resources from the hosted container's limits unless `container.resources` sets them. `Runners::Resolver` no longer refuses a `manual` runner with `runner_execution_not_enabled`: a runner without a registered machine, or whose every machine is `failed`, is refused `runner_unreachable` at launch, with a message that names it (and the failed machines, their reasons and how to bring one back). **Which machine takes a session** (decision 2): `Runners::Machines`, a free `registered` machine of the session's runner, one session per machine, taken under its row lock (`FOR UPDATE SKIP LOCKED`) and recorded in `runner_environments.current_session_id` and `terminal_sessions.runner_environment_id`; every machine busy raises `ContainerRuntime::CapacityError`, so the session waits in `capacity_wait`; the machine is taken in `create_container`, the first phase that needs it, and the admission's identity is persisted before that phase, as for every runtime, so a failure or a stop in it, the pull included, still runs the cleanup; after the session the machine gets `env.reset` and is free again, and a machine whose reset failed, or was not answered, moves to `failed` (§5.2), held by no session, with the reason in `state_reason`, so nothing that happens to the session, its deletion included, returns it to rotation (Return to service stays task 11). A session's ops reach its machine only while it holds it. `CleanupStaleActivity` sends a runner nothing, and moves a machine a stale session still holds to `failed`. **`session_id` in the op envelope** (requirement 1): `runner_operations.terminal_session_id`; a session op must name its session, an environment op names none, and every op is created only while its session holds the machine, checked by `enqueue!` under the machine's lock; `session_id` left the payloads of `container.start` and `container.stop`; the host runner refuses a session op without one (`session_required`) and one whose container is labelled with another session (`session_mismatch`), `container.start` and `container.stop` included, `container.stop` answers `no_session_container` without any session container, and `container.start` names and labels the container from the envelope (`PROTOCOL.md` §6, with the fixtures and the new `session_on_machine` setup step). **The queue's housekeeping**: an op still without a result is expired by the platform, with its payload nulled: at its `deadline_at` by the wait that sent it, and 10 s past it, `pending` or `delivered`, by `RunnerOperationsSweepWorkflow` every 5 minutes for the ops nobody waits for; the same sweep prunes finished ops older than 7 days. The sequence is a counter on the environment's row, `runner_environments.op_sequence` (Fix CR round 4: chosen over keeping each environment's newest op for `MAX(sequence) + 1`, which a session's deletion, taking its ops with it, broke), so the prune and that deletion remove any finished op. **The dev `local` adapter** (§12.2): the `runner-local` Compose service (profile `runners`), `aixle-runner` built from `runner/` with `docker/runner/local/Dockerfile` (the runner images live under `docker/runner/`), image `${RUNNER_IMAGE:-runner}`, and run in web's network namespace with this machine's Docker socket, and `bin/runner-local register <runner id>`, which mints a registration token and runs `configure`. **Fix CR round 4 (Alex, 2026-11-08):** `enqueue!` takes the session of every op and checks its hold under the machine's lock, which replaced the model's check that the session ran on the machine; `Machines.acquire!` no longer touches the caller's session and is idempotent for one session; `Machines.fail!(…, holder:)` is a compare-and-set, as `release!`; unregistering a machine ends its hold; `Machines.availability` answers `:available`, `:none_registered` or `:all_failed`, and one method words the refusal; the company keys of the session references; the cleanup sends nothing while an op of the session is unfinished, and `container.start` stops at its `deadline_at`; an answered `container.start` refusal is a `ContainerRuntime::CreateRefusedError` and pins no reservation; the runner pulls with the Docker credentials of the user it runs as; the Go session handlers take the envelope's `session_id` as a parameter (`SessionHandler`). **Fix CR round 5 (Alex, 2026-11-08):** Docker Hub's credentials are looked up under `https://index.docker.io/v1/`, as the Docker CLI's `getAuthConfigKey` maps them; a runner stopped during `ContainerCreate` removes what the daemon may have created and answers `container_start_failed`; a runtime call is external I/O and is never made inside a database transaction, on any runtime (`BaseRuntime`), which a test-time check enforces, and `Sessions::SecretRegistry#publish!` serializes a session's publications with a connection-level advisory lock instead of a transaction's; the cleanup waits for any unfinished op on the machine the session holds, an `env.reset` included; `create_container` returns the platform's container name, never the runner's. **Fix CR round 7 (Alex, 2026-11-08):** the host runner cuts an `exec`'s positive `timeout` to the seconds left until the op's `deadline_at`, as it bounds an `exec` without one, so an `exec` never holds the serial ops loop past its op's deadline. Tests: the contract test (`test/services/container_runtime/runner_runtime_contract_test.rb`) runs the same scenarios on `DockerRuntime`, against the Docker Engine API served by WebMock from an in-memory machine, and on `RunnerRuntime`, whose ops `ContainerRuntime::FakeHostRunner` answers from that machine with the results of `PROTOCOL.md` §6. |
-| 8b | 2 | The callback proxy (§6.6, §6.9.3): the proxy sidecar (`aixle-runner --mode proxy`) in the agent's network namespace, with the host runner's Unix-socket relay that serves the proxy routes only; a sidecar exit fails the session (no pause container); the URL rewrite to `127.0.0.1:<port>`; with `network: host`, the host runner's own listener. MCP, `finish_session`, and the git and cloud credential endpoints then reach the platform from a runner session. **Decision 4 (Alex, 2026-11-07), instead of a start check that the Docker daemon sees the host runner's files:** Docker refuses a bind mount whose source path does not exist ("bind source path does not exist"), and 6b mounts through the Mounts API, so 8b turns that refusal into a clear error when it starts the proxy sidecar. Operators learn of an unsupported Docker setup from the first session's error, and the operator docs (task 12) state the limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). |
+| 8b | 2 | **Done.** The callback proxy (§6.6, §6.9.3; `PROTOCOL.md` §5.6). An agent on a `manual` runner reaches MCP, `finish_session` included, the agent credential sync and refresh, git credentials (GitHub, GitLab, Bitbucket, Azure DevOps), cloud credentials and stored files through a local proxy. **The Go side:** `aixle-runner --mode proxy`, the sidecar (`internal/proxy.RunSidecar`), a reverse proxy on `127.0.0.1:7690` to the host runner's relay socket; the relay (`proxy.Relay`), served by `proxy.Host` on a Unix socket per session under the state directory (mounted read-only into the sidecar only), or with `network: host` on the session's port of the machine's `127.0.0.1`, which serves `/runner/v1/proxy/*` only and adds the environment credential; `container.start` creates the sidecar first, from the agent image with the host runner's binary bind-mounted read-only as its entrypoint, and the agent joins its network namespace; `container.stop`, `env.scrub` and `env.reset` remove it with the agent's container and close the relay; a restarted host runner serves the running sidecars again (`Environment.Resume`). **Decision 10:** a sidecar that exits stops the agent's container, so the session fails through the dead-container path, and its exit code and log tail are logged. **Decision 4:** a daemon that refuses the sidecar's bind mount ("bind source path does not exist") gives `docker_files_not_visible`, naming the cause. **The platform:** the gateway route `ANY /runner/v1/proxy/:route/*` (`RunnerGateway::V1::ProxiesController`): the environment credential, the allow-list (`Runners::Proxy::ROUTES`, **decision 7**: no OTLP route, deferred, so a runner session gets no OTLP endpoint), the key of the session that holds the environment (`Runners::Proxy.holder`), then an HTTP forward to the internal endpoint with `X-Aixle-Runner-Environment`, streamed back (**decision 8**), with no body schema (**decision 9**), and `X-Aixle-Runner-Refusal` on every refusal of the route. **Decision 6:** the callback-URL seam, `runtime.callback_url(name, session)` (`ContainerRuntime::CallbackUrls`), the `Settings` value on hosted and `http://127.0.0.1:<port>/<route>` on a runner, read by the env vars, the MCP config, the asset URLs of the context and the instructions, `read_tool_result` and the OTLP endpoint of the agent configs; `RunnerRuntime` rewrites no string. **An implementation decision for review:** with `network: host` the port is per session (`20000 + id mod 10000`), sent as `container.start`'s `proxy_port`, not per environment, because the container's environment is built before the session takes a machine (§6.9.3). `PROTOCOL.md` §5.6 and §6.2 describe the proxy, the port, the socket, the headers, the refusals (`route_not_allowed`, `session_not_on_environment`, `upstream_unavailable`; on the runner `not_proxied`, `relay_failed`, `body_too_large`) and the changed `container.start` (`proxy_port`, `docker_files_not_visible`, `proxy_port_in_use`, `proxy_start_failed`), with the fixtures in `fixtures/v1/proxy/` and the setup steps `session_holds_machine` and `upstream_answers`. The Go conformance test fails for a fixture that drives no exchange unless it is on its `gatewayOnly` list (none is). The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory of the machine mounted at the same path, so the daemon sees them. Tests: `test/integration/runner_gateway_proxy_test.rb`, `test/services/runners/proxy_test.rb`, `test/services/container_runtime/callback_urls_test.rb`, the §12.3 test extended, and on the Go side `internal/proxy` and `internal/docker/proxy_test.go`. |
 | 8c | 2 | The live log and parity with hosted (§6.5, §6.9.4): the host runner's `check-in` and heartbeat, the live log followed from the container's own log (the `local` log driver set per container) and shipped as `session_live_log_chunks`, which `Sessions::LiveLogReader` and the session monitor's snapshot (`Sessions::Snapshot.source_for`, task #211) read instead of `exec` ops; the live text of a runner session for `get_session_log` and `AuthErrorDetector`; larger output and files through an upload to a signed URL in the result (decision 3, Alex 2026-11-07), until which the 1 MiB cap of 6b stays and a terminal log over 1 MiB is not collected whole: `read_file` refuses it, and the cleanup stores the tail the `logs` op returns (at most the output cap) as `terminal_output.log` instead (Alex, Fix CR round 7); 8c replaces that tail with the full log through a signed URL. The live log skipped after a restart past a rotation is a known limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
 | 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update`, §14.4), moved from task 6. |

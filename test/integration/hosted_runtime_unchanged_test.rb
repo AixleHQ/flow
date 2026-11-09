@@ -47,6 +47,16 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     assert_empty on[:runner_gateway_queries]
   end
 
+  test "a hosted session's callback addresses are the Settings values with the flag on" do
+    on = with_feature(:external_runners, true, company: @company) { trace { launch_standalone } }
+
+    assert_includes on[:callback_env], "CREDENTIAL_SYNC_URL=#{Settings.agents.credential_sync_url}"
+    assert_includes on[:callback_env], "OTEL_EXPORTER_OTLP_ENDPOINT=#{Settings.otel.endpoint}"
+    assert_includes on[:callback_env], "CLAUDE_CODE_ENABLE_TELEMETRY=1"
+    session = TerminalSession.order(:id).last
+    assert_equal ContainerRuntime::CallbackUrls.hosted_all, ContainerRuntime.for_session(session).callback_urls(session)
+  end
+
   test "the live log and the session scanners read a hosted session the same with the flag on" do
     off = scan_trace
     on = with_feature(:external_runners, true, company: @company) { scan_trace }
@@ -123,9 +133,19 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
       uploads: runtime.uploads.map { |upload| normalize(upload.inspect) },
       written: runtime.written_paths.map { |path| normalize(path) },
       cleaned: runtime.cleaned_sessions.map { |id| normalize(id) },
+      callback_env: callback_env(runtime),
       state: session.reload.state,
       runner_gateway_queries: sql.grep(/runner_(environments|credentials|operations)/)
     }
+  end
+
+  # The callback addresses the container is created with (task 8b): read
+  # through the runtime seam, they must be the Settings values on hosted, with
+  # the flag on as with it off.
+  def callback_env(runtime)
+    names = %w[CREDENTIAL_SYNC_URL CREDENTIAL_REFRESH_URL AIXLE_GIT_CREDENTIALS_URL AIXLE_AZURE_GIT_URL
+               AIXLE_CLOUD_CREDENTIALS_URL OTEL_EXPORTER_OTLP_ENDPOINT CLAUDE_CODE_ENABLE_TELEMETRY]
+    runtime.created_specs.flat_map { |spec| Array(spec[:env_vars]) }.select { |entry| names.include?(entry.split("=", 2).first) }.sort
   end
 
   # The phases the hosted container workflow runs for an admitted session.
