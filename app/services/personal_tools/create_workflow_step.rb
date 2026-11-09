@@ -49,16 +49,19 @@ module PersonalTools
             items: { type: "integer" }
       param :input_asset_specs, type: :array,
             description: "Expected input files. Entries are required unless marked optional.",
-            items: { type: "object", properties: { name: { type: "string" }, required: { type: "boolean" },
-                                                   asset_type: { type: "string" }, name_pattern: { type: "string" } } }
+            items: { type: "object", additionalProperties: false,
+                     properties: { name: { type: "string" }, required: { type: "boolean" },
+                                   asset_type: { type: "string" } } }
       param :output_asset_specs, type: :array,
             description: "Expected output files or globs under /workspace/outputs.",
-            items: { type: "object", properties: { name: { type: "string" }, required: { type: "boolean" },
-                                                   asset_type: { type: "string" }, name_pattern: { type: "string" },
-                                                   min_size: { type: "integer" },
-                                                   required_sections: { type: "array", items: { type: "string" } } } }
+            items: { type: "object", additionalProperties: false,
+                     properties: { name: { type: "string" }, required: { type: "boolean" },
+                                   asset_type: { type: "string" }, name_pattern: { type: "string" },
+                                   min_size: { type: "integer" },
+                                   required_sections: { type: "array", items: { type: "string" } } } }
       param :on_failure, type: :string, description: "Action when the step fails.", enum: Step.on_failure.values
-      param :max_retries, type: :integer, description: "Maximum retries when on_failure is retry."
+      param(:max_retries, type: :integer, description: "Maximum retries when on_failure is retry.")
+        .merge!("minimum" => 0, "maximum" => 5)
       param :skip_policy, type: :string, description: "When to skip this step.", enum: Step.skip_policy.values
       param :config_item_ids, type: :array,
             description: "Config item ids (secrets / environment variables) this step's agent may read with " \

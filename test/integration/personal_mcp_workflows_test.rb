@@ -158,7 +158,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
       asset_ids: [ create(:asset, scope: @project).id ],
       input_asset_specs: [ { name: "brief.md", required: true } ],
       output_asset_specs: [ { name: "reports/*.md", required: true } ],
-      on_failure: "retry", max_retries: 2, skip_policy: "if_outputs_exist"
+      on_failure: "retry", max_retries: 5, skip_policy: "if_outputs_exist"
     }
     keys = attributes.keys.map(&:to_s)
 
@@ -190,26 +190,62 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "workflow step tools require string input name patterns" do
+  test "workflow step tools require string output name patterns" do
     workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
     invalid_specs = [ { name_pattern: 42 } ]
 
     assert_no_difference("Step.count") do
       invalid = call_tool("create_workflow_step",
-                          workflow_args.merge(name: "Invalid pattern", input_asset_specs: invalid_specs))
+                          workflow_args.merge(name: "Invalid pattern", output_asset_specs: invalid_specs))
       assert error?(invalid)
       assert_match(/name_pattern/, text(invalid))
     end
 
     specs = [ { name_pattern: "^report-[0-9]+[.]md$" } ]
-    created = call_tool("create_workflow_step", workflow_args.merge(name: "Report", input_asset_specs: specs))
+    created = call_tool("create_workflow_step", workflow_args.merge(name: "Report", output_asset_specs: specs))
     assert_not error?(created)
     step_args = workflow_args.merge(step_id: payload(created).fetch("id"))
 
-    invalid = call_tool("update_workflow_step", step_args.merge(input_asset_specs: invalid_specs))
+    invalid = call_tool("update_workflow_step", step_args.merge(output_asset_specs: invalid_specs))
     assert error?(invalid)
     assert_match(/name_pattern/, text(invalid))
-    assert_equal specs.as_json, payload(call_tool("get_workflow_step", step_args))["input_asset_specs"]
+    assert_equal specs.as_json, payload(call_tool("get_workflow_step", step_args))["output_asset_specs"]
+  end
+
+  test "workflow step tools reject unsupported asset spec fields" do
+    step = create(:step, workflow: @workflow)
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+    invalid_specs = {
+      input_asset_specs: [ { name_pattern: "^report-[0-9]+[.]md$" } ],
+      output_asset_specs: [ { name: "report.md", unknown_field: true } ]
+    }
+
+    invalid_specs.each do |key, specs|
+      assert_no_difference("Step.count") do
+        result = call_tool("create_workflow_step", workflow_args.merge(name: "Invalid spec", key => specs))
+        assert error?(result)
+      end
+
+      result = call_tool("update_workflow_step", workflow_args.merge(step_id: step.id, key => specs))
+      assert error?(result)
+    end
+  end
+
+  test "workflow step tools reject retry counts outside zero through five" do
+    step = create(:step, workflow: @workflow, max_retries: 2)
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+
+    [ -1, 6 ].each do |max_retries|
+      assert_no_difference("Step.count") do
+        result = call_tool("create_workflow_step", workflow_args.merge(name: "Invalid retry count", max_retries: max_retries))
+        assert error?(result)
+      end
+
+      result = call_tool("update_workflow_step", workflow_args.merge(step_id: step.id, max_retries: max_retries))
+      assert error?(result)
+    end
+
+    assert_equal 2, step.reload.max_retries
   end
 
   test "workflow step tools refuse repository and asset ids from another project" do
@@ -229,7 +265,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
       assert_match(/outside this project/, text(updated))
     end
     assert_equal [ [], [] ], [ step.reload.repository_ids, step.asset_ids ]
-    refute_equal "Must fail", step.name
+    assert_not_equal "Must fail", step.name
   end
 
   test "update_workflow_step toggles bmad_enabled and allow_non_interactive" do
