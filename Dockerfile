@@ -141,8 +141,9 @@ COPY --chown=app:app package.json yarn.lock .yarnrc.yml ./
 RUN corepack install
 RUN yarn install --immutable
 
-# The Temporal test server the workflow tests boot, fetched here once instead of by every
-# test run (see bin/seed-temporal-test-server). Its version follows temporalio's.
+# The Temporal servers the tests boot (the time-skipping test server and the CLI dev
+# server), fetched here once instead of by every test run (see
+# bin/seed-temporal-test-server). Their versions follow temporalio's.
 # World-writable like GEM_HOME: the dev stack runs as the host's uid, and a temporalio
 # bump in the bundle volume downloads its own server version next to the seeded one.
 USER root
