@@ -339,6 +339,24 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('Connecting')).toBeInTheDocument();
   });
 
+  it('shows a login waiting for a free slot as Queued, not Connecting', () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2', configuredAgents: [] }),
+        authSessions: [
+          buildTerminalSession({ id: 1, agentType: 'claude_code', state: 'ready' }),
+          buildTerminalSession({ id: 2, agentType: 'cursor_cli', state: 'running' }),
+          buildTerminalSession({ id: 3, agentType: 'codex', state: 'queued' }),
+          buildTerminalSession({ id: 4, agentType: 'gemini_cli', state: 'queued' }),
+        ],
+      },
+    });
+
+    expect(screen.getAllByText('Connecting')).toHaveLength(2);
+    expect(screen.getAllByText('Queued')).toHaveLength(2);
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(3);
+  });
+
   it('clicking Connect for an agent expands the terminal inline', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
