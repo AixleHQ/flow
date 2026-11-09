@@ -31,23 +31,24 @@ module Sessions
       @runtime = stub_container_runtime
     end
 
+    # Nil-safe: a setup that failed half way still cleans up what it created.
     teardown do
       cleanup_runtime_overrides
-      StepRun.where(workflow_run_id: @run.id).delete_all
-      TerminalSession.where(id: @sessions.map(&:id)).delete_all
-      WorkflowRun.where(id: @run.id).delete_all
-      Step.where(workflow_id: @workflow.id).delete_all
-      Workflow.where(id: @workflow.id).delete_all
+      StepRun.where(workflow_run_id: @run.id).delete_all if @run
+      TerminalSession.where(user_id: @user.id).delete_all if @user
+      WorkflowRun.where(id: @run.id).delete_all if @run
+      Step.where(workflow_id: @workflow.id).delete_all if @workflow
+      Workflow.where(id: @workflow.id).delete_all if @workflow
       # Before the user: projects.owner_id references it. Rows are deleted directly, so
       # `dependent: :destroy` never fires and every dependent is cleared by hand.
-      @project.delete
-      @user.company_memberships.delete_all
-      UserIdentity.where(user_id: @user.id).delete_all
-      UserSession.where(user_id: @user.id).delete_all
-      @user.delete
-      CompanyAuthPolicy.where(company_id: @company.id).delete_all
-      IdentityProvider.where(company_id: @company.id).delete_all
-      @company.delete
+      @project&.delete
+      @user&.company_memberships&.delete_all
+      UserIdentity.where(user_id: @user.id).delete_all if @user
+      UserSession.where(user_id: @user.id).delete_all if @user
+      @user&.delete
+      CompanyAuthPolicy.where(company_id: @company.id).delete_all if @company
+      IdentityProvider.where(company_id: @company.id).delete_all if @company
+      @company&.delete
     end
 
     test "two sessions of one run unpaused concurrently resume the run" do
@@ -96,7 +97,8 @@ module Sessions
     def paused_step_session
       session = create(:terminal_session, session_type: "workflow_step", state: "ready", mode: "non_interactive",
                                           user: @user, project: @project, company: @company, agent_type: "claude_code",
-                                          container_id: "ctr-#{SecureRandom.hex(3)}", started_at: 1.hour.ago)
+                                          container_id: "ctr-#{SecureRandom.hex(3)}", started_at: 1.hour.ago,
+                                          initial_prompt: "do the work")
       create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: session)
       session.merge_jsonb!(:metadata, "auth_paused_at" => 5.minutes.ago.iso8601)
       session
