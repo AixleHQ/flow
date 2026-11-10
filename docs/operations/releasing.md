@@ -61,10 +61,12 @@ Pushing `vX.Y.Z` runs two workflows:
 
 `aixle-runner`, the program a customer runs on their own machine, has versions of its own,
 independent of the application's (docs/design/agent-runtimes/DESIGN.md §14.2). What the platform
-accepts is pinned in a committed file, `config/runner_release.yml`:
+accepts is pinned in committed configuration, the `runners.release` block of
+`config/settings.yml`:
 
 - **Platform `X.Y` supports runner protocol versions `[N-1, N]` and runners at or above
-  `min_version`, as `config/runner_release.yml` declares at that release.** Its
+  `min_version`, as the `runners.release` block of `config/settings.yml` declares at that
+  release.** Its
   `protocol_supported` lists the protocol versions (`[1]` until the first protocol bump, the
   current and the previous one after it), and a runner below `min_version` is refused when it
   registers, with a message that names the minimum. A session is never stopped because a newer
@@ -76,9 +78,9 @@ accepts is pinned in a committed file, `config/runner_release.yml`:
   serves nothing else: `GET /runner/v1/releases/:version/:os-:arch` redirects only to a pinned
   binary, with its pinned digest.
 
-Changing any of these is an application PR to that file, and the changelog entry of that PR says
-what changed, so the release notes state each release's runner compatibility. An invalid file
-fails the application's boot.
+Changing any of these is an application PR to the `runners.release` block of
+`config/settings.yml`, and the changelog entry of that PR says what changed, so the release notes
+state each release's runner compatibility. An invalid block fails the application's boot.
 
 ## Releasing the runner
 
@@ -104,9 +106,11 @@ nor `release.yml`.
    The image does not update itself: it sets `AIXLE_RUNNER_NO_SELF_UPDATE=1`, because in a
    container the image tag is the version (DESIGN.md §14.4).
 3. **Pin it.** Publishing changes nothing on the platform yet. An application PR adds the
-   version and the digests of the run's `checksums.txt` under `binaries` in
-   `config/runner_release.yml`, and moves `recommended_version` (and, when older runners must
-   go, `min_version`) with a changelog entry. Machines start updating once that PR is deployed.
+   version and the SHA-256 of `linux-amd64` and `linux-arm64` under `binaries` in the
+   `runners.release` block of `config/settings.yml`, taken from the release's `checksums.txt`
+   (`gh release download runner-vX.Y.Z -R AixleHQ/flow -p checksums.txt`), and moves
+   `recommended_version` (and, when older runners must go, `min_version`) with a changelog entry.
+   Machines start updating once that PR is deployed.
 
 ## Writing the changelog
 

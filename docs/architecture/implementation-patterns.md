@@ -205,6 +205,9 @@ What the controllers return — no envelope around the resource:
   `bin/temporal_worker`, which runs after `config/environment`).
 
 ### Error Handling
+- **Input checks and refusals live in the service.** The service checks the input it is given (a request body against its schema, a business rule, a refusal that must come before another) and raises a named error. Examples: `WorkflowAggregateSave::Invalid`, `Chat::ConnectCodes::Refused`, `Templates::Package` (checks `template.yaml` against its schema itself), and the runner gateway's `Runners::Registration.register!` and `Runners::Operations.record_result!`, which check their bodies against the protocol schemas and raise `Runners::Credentials::Refused`.
+- **The controller maps the error to a status,** through `rescue_from` (the runner gateway's `Runners::Credentials::Refused` → `REFUSAL_STATUS`) or a `rescue` in the action (`aggregates_controller.rb`, `chat_connect_codes_controller.rb`). It does not repeat the service's checks, and it does not decide their order.
+- **The controller itself checks only transport:** headers (their presence and form), authentication, and a parameter's type. E.g. the runner gateway checks the form of `X-Aixle-Runner-Protocol` and `X-Aixle-Runner-Version`, the bearer token, and the ops long-poll's `after`/`wait` query; whether a runner version is too long to record or below `min_version` is `register!`'s refusal.
 - **Controllers:** `rescue_from` in the base controllers — `Api::V1::ApplicationController` (JSON 403, 404, and 422 for invalid records and CSRF failures) and `Web::Company::ApplicationController` (Pundit refusals)
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`

@@ -63,16 +63,40 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     { "ok" => "completed", "error" => "failed", "expired" => "expired" }.each do |status, state|
       operation = enqueue
 
-      Runners::Operations.record_result!(operation, status: status, result: { "exit_code" => 0 })
+      Runners::Operations.record_result!(operation, { "status" => status, "exit_code" => 0 })
 
       operation.reload
       assert_equal state, operation.state
       assert_equal({ "exit_code" => 0 }, operation.result)
       assert_nil operation.encrypted_payload
 
-      Runners::Operations.record_result!(operation, status: "ok", result: { "exit_code" => 1 })
+      Runners::Operations.record_result!(operation, { "status" => "ok", "exit_code" => 1 })
       assert_equal [ state, { "exit_code" => 0 } ], [ operation.reload.state, operation.result ]
     end
+  end
+
+  test "a result body that fails the schema is refused and changes nothing" do
+    operation = enqueue
+
+    [ {}, { "status" => "done" }, { "status" => "ok", "exit_code" => "0" }, { "status" => "ok", "stdout" => 1 },
+      { "status" => "ok", "data" => [] }, { "status" => "error", "error" => { "class" => "E" } },
+      { "status" => "error", "error" => { "class" => "E", "message" => "m", "trace" => "" } } ].each do |body|
+      error = assert_raises(Runners::Credentials::Refused, body.inspect) { Runners::Operations.record_result!(operation, body) }
+      assert_equal "invalid_result", error.reason, body.inspect
+      assert_match(/`status` must be ok, error or expired/, error.message)
+    end
+    assert operation.reload.pending?
+    assert_not_nil operation.encrypted_payload
+  end
+
+  test "the stored result is the body's known fields, a null one left out and exit_code an integer" do
+    operation = enqueue
+
+    Runners::Operations.record_result!(operation, { status: "ok", exit_code: 1.0, stdout: "out", stderr: nil,
+                                                    data: { "size" => 3 }, extra: "ignored" })
+
+    assert_equal({ "exit_code" => 1, "stdout" => "out", "data" => { "size" => 3 } }, operation.reload.result)
+    assert_kind_of Integer, operation.result["exit_code"]
   end
 
   test "a session op names its session; an environment op names none, and both need the session that holds the machine" do
@@ -114,7 +138,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
 
   test "await returns the op once it has its result" do
     operation = enqueue
-    Runners::Operations.record_result!(operation, status: "ok", result: { "data" => { "removed_volumes" => [] } })
+    Runners::Operations.record_result!(operation, { "status" => "ok", "data" => { "removed_volumes" => [] } })
 
     awaited = Runners::Operations.await(operation)
 
@@ -131,7 +155,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     assert awaited.expired?
     assert_nil awaited.encrypted_payload
     assert_not_nil awaited.completed_at
-    Runners::Operations.record_result!(awaited, status: "ok", result: {})
+    Runners::Operations.record_result!(awaited, { "status" => "ok" })
     assert awaited.reload.expired?, "a late result changes nothing"
   end
 
@@ -142,7 +166,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     in_grace = enqueue(deadline_at: 5.seconds.ago)
     future = enqueue(deadline_at: 5.minutes.from_now)
     answered = enqueue(deadline_at: 2.minutes.ago)
-    Runners::Operations.record_result!(answered, status: "ok", result: {})
+    Runners::Operations.record_result!(answered, { "status" => "ok" })
 
     assert_equal 2, Runners::Operations.expire_overdue!
 
@@ -158,11 +182,11 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     old = 3.times.map { enqueue }
     open_op = enqueue
     other_op = enqueue(other)
-    (old + [ other_op ]).each { |op| Runners::Operations.record_result!(op, status: "ok", result: {}) }
+    (old + [ other_op ]).each { |op| Runners::Operations.record_result!(op, { "status" => "ok" }) }
     young = enqueue
-    Runners::Operations.record_result!(young, status: "error", result: {})
+    Runners::Operations.record_result!(young, { "status" => "error" })
     newest = enqueue
-    Runners::Operations.record_result!(newest, status: "ok", result: {})
+    Runners::Operations.record_result!(newest, { "status" => "ok" })
     RunnerOperation.where(id: old + [ other_op, newest ]).update_all(completed_at: 8.days.ago)
 
     assert_equal 5, Runners::Operations.prune!
@@ -178,7 +202,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
       Runners::Operations.enqueue!(@environment, op: "exec", payload: { "cmd" => [ "true" ] },
                                                  deadline_at: 1.minute.from_now, session: session)
     end
-    ops.each { |op| Runners::Operations.record_result!(op, status: "ok", result: {}) }
+    ops.each { |op| Runners::Operations.record_result!(op, { "status" => "ok" }) }
     acknowledged = ops.last.sequence
     Runners::Machines.release!(@environment, session)
 

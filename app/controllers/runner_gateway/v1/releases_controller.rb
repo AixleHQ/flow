@@ -8,7 +8,7 @@ module RunnerGateway
     # §5.6, §5.7): the platform's own URL of a runner binary, the only one an
     # installer or a self-updating runner knows. The redirect points at the
     # `runner-v*` release's asset and carries the digest from the platform's
-    # pins (config/runner_release.yml), and the checksums answer the same
+    # pins (`runners.release` in config/settings.yml), and the checksums answer the same
     # digests, so an asset changed on the asset host fails verification.
     #
     # Public: no token and no protocol headers, since an operator downloads

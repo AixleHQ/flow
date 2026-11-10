@@ -125,8 +125,8 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
     # The runner answers late: the pull ended within the start's deadline, and the container runs.
     container = @host_runner.machine.start(session.id, @host_runner.operations.first[:payload])
-    Runners::Operations.record_result!(start, status: "ok",
-                                              result: { "data" => { "container_id" => container.id, "name" => container.name } })
+    Runners::Operations.record_result!(start, { "status" => "ok",
+                                                "data" => { "container_id" => container.id, "name" => container.name } })
     run_phase(session, "cleanup")
 
     assert_equal "container.start", @host_runner.ops.first

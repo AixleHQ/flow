@@ -260,7 +260,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
                                                            session: @session)
 
     assert_not @runtime.cleanup_ready?(handle)
-    Runners::Operations.record_result!(operation, status: "ok", result: { "data" => { "tail" => "" } })
+    Runners::Operations.record_result!(operation, { "status" => "ok", "data" => { "tail" => "" } })
     assert @runtime.cleanup_ready?(handle)
     assert @runtime.cleanup_ready?("not-an-admission"), "a session without a machine has nothing queued"
   end
@@ -282,7 +282,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     finished_reset = Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now,
                                                                 session: @session)
     assert_not @runtime.cleanup_ready?(handle)
-    Runners::Operations.record_result!(finished_reset, status: "ok", result: { "data" => { "removed_containers" => [] } })
+    Runners::Operations.record_result!(finished_reset, { "status" => "ok", "data" => { "removed_containers" => [] } })
     assert @runtime.cleanup_ready?(handle), "a finished reset holds the cleanup up no longer"
     assert_equal %w[env.reset], @host_runner.ops, "nothing but the test's own reset was queued"
   end
