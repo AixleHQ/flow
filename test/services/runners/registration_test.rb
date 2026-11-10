@@ -34,8 +34,8 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
   end
 
   test "an ephemeral or invalid registration is refused and leaves the token unspent" do
-    ephemeral = assert_raises(Runners::Credentials::Refused) { register("ephemeral" => true) }
-    invalid = assert_raises(Runners::Credentials::Refused) { register("name" => "") }
+    ephemeral = assert_raises(Runners::Credentials::Refused) { register({ "ephemeral" => true }) }
+    invalid = assert_raises(Runners::Credentials::Refused) { register({ "name" => "" }) }
 
     assert_equal "ephemeral_not_supported", ephemeral.reason
     assert_equal "invalid_registration", invalid.reason
@@ -55,7 +55,7 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     too_long = assert_raises(Runners::Credentials::Refused) { register(invalid_body, runner_version: "1.0.0+#{'a' * 250}") }
     below = assert_raises(Runners::Credentials::Refused) { register(invalid_body, runner_version: "1.1.0") }
     ephemeral = assert_raises(Runners::Credentials::Refused) { register(invalid_body) }
-    schema = assert_raises(Runners::Credentials::Refused) { register("name" => 7) }
+    schema = assert_raises(Runners::Credentials::Refused) { register({ "name" => 7 }) }
 
     assert_equal [ "invalid_registration", "X-Aixle-Runner-Version must be at most 255 characters." ],
                  [ too_long.reason, too_long.message ]

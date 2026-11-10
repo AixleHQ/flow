@@ -54,11 +54,12 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     settings = Config.load_files({ "runners" => { "release" => PINS.merge("min_version" => "1.2") } })
     Settings.stubs(:runners).returns(settings.runners)
     Runners::Release.reset!
+    initializer = Rails.root.join("config/initializers/runner_release.rb").to_s
     hook = nil
     config = Object.new
     config.define_singleton_method(:after_initialize) { |&block| hook = block }
     Rails.application.stubs(:config).returns(config)
-    load Rails.root.join("config/initializers/runner_release.rb").to_s
+    load initializer
     Rails.application.unstub(:config)
 
     error = assert_raises(Runners::Release::InvalidPins) { hook.call }
