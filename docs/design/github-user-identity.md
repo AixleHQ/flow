@@ -1,6 +1,12 @@
 # Agents act as the user on GitHub
 
-**Task:** #214 · **Status:** proposal · **Date:** 2026-11-10
+**Task:** #214 · **Status:** proposal, revised after review · **Date:** 2026-11-10
+
+**Revision 2 (2026-11-10).** Alex's design review accepted §2.1–§2.3, the consent
+table, masking and the token-endpoint fix. It replaced the `Sessions::ActingUser`
+rule with `session.user` everywhere. §2.4, the tool rules in §4.3, implementation
+step 4 and decisions D1–D5 and D7 are rewritten for that, D13–D15 are new, and R7
+now describes the attribution change instead of the live assignee read.
 
 A user connects their own GitHub account. An agent can then ask for a token that
 acts as that user, push commits authored by them, and open the pull request in
@@ -29,8 +35,9 @@ use them:
    plus the identity to commit with.
 3. **Consent per project**, two independent switches: "act as me in my tasks" and
    "use my account in tasks that aren't mine".
-4. **One rule for "the session's user"**, `Sessions::ActingUser`, used by the new
-   tools and by per-user MCP credentials.
+4. **One current user per session: `session.user`.** It is set once when the session
+   is created. The new tools read it, and so do the board and tracker tools, which
+   compute their own user today (§2.4).
 
 ## 2. Approach
 
@@ -110,46 +117,119 @@ return the token. If arming fails, the tool refuses.
 The value is kept, not only a hash, because served logs are redacted when they are
 read (`LiveLogReader`, `LogTail`, the API log tail), long after the call.
 
-### 2.4 One rule for the session's user
+### 2.4 The session's current user is `session.user`
 
-`Sessions::ActingUser.for(session)` returns the user and the source of the decision:
+A session has one current user, `session.user`. It is decided once, when the
+session is created, and nothing computes it again.
 
-1. `session.step_run&.workflow_run&.board_task&.assignee`, read when called: `:task_assignee`;
-2. otherwise `session.step_run&.workflow_run&.user`, the run's owner: `:run_starter`;
-3. otherwise `session.user`, the person who started a standalone session: `:session_user`;
-4. otherwise `nil`.
+**How it is set today, and stays set.** There are two places that create a session,
+and both already set `user` the way the task asks:
 
-It returns the user only. Membership and consent are checked by the callers that
-need them (§4.3).
+| Session | Set in | `session.user` |
+|---|---|---|
+| Interactive: the terminal, Builder, the API, the personal MCP server | `SessionService.create_and_start` (`user.terminal_sessions.build`) | the user who launched it |
+| A workflow step | `SessionService#build_for_workflow_step` (`TerminalSession.create!(user: workflow_run.user)`) | a copy of `workflow_run.user`, chosen when the run starts |
 
-**Every place that decides "the session's user" today, and what changes:**
+`workflow_run.user` is chosen once per run:
+
+- for a card, by `TaskService.run_owner_for`: the assignee if they can own runs,
+  otherwise whoever moved the card or pressed **Run**;
+- for a manual run without a card, whoever started it;
+- for a trigger, its run-as user (`WorkflowTriggers::RunAs`).
+
+No code changes `terminal_sessions.user_id` after creation today. The change makes
+that a rule: `TerminalSession` gets `attr_readonly :user_id` (D13).
+
+**One reader in the tools.** `InternalTools::Base` gets a private `session_user`
+that returns `session&.user`. Every internal tool that needs the session's user
+calls it. The three copies of `resolve_actor` and the other formulas are deleted.
+
+**Every place that reads the session's user, today's formula, and what changes.**
+The first group changes. The rest already read `session.user` and stay as they are.
+
+*Changes: the board, gate, asset and tracker tools*
 
 | Place | Today | After |
 |---|---|---|
-| `SessionContextService#inject_oauth_token!` (per-user MCP token) | `session.user` | `ActingUser.for(session)` (decision D1) |
-| `SessionService#refresh_oauth_tokens_for_session` (workflow-step pre-start refresh) | `session.user` | `ActingUser.for(session)` (D1) |
-| `Oauth::Preflight.missing_connections(servers, user:)` and `SessionService#preflight_oauth!` (interactive launch) | the launching user | unchanged: an interactive launch has no task, so rule 3 returns the same user |
-| `github_user_token` | n/a | `ActingUser.for(session)` |
-| `TaskService.run_owner_for` (who owns a run: the assignee if they can own runs, otherwise the requester) | unchanged | unchanged. It decides whose agent credential runs the session and who pays, which is a different question |
-| `SessionService#preflight_agent_credential!(workflow_run.user)` | unchanged | unchanged, for the same reason |
-| `ConfigItemAccess.record!(user: session.user)` | unchanged | unchanged: an audit of whom the session ran for |
+| `InternalTools::BoardMoveTask` (the actor passed to `TaskService.move`) | `resolve_actor`: `task.assignee \|\| workflow_run&.user` | `session_user` |
+| `InternalTools::BoardAddComment` (`author`) | `resolve_actor`, same formula | `session_user` |
+| `InternalTools::BoardAttachAsset` (`author`) | `resolve_actor`, same formula | `session_user` |
+| `InternalTools::BoardCreateGate` (`creator`) | `workflow_run.user` | `session_user` |
+| `InternalTools::PromoteAsset` (`promoter`) | `workflow_run&.user` | `session_user` |
+| `InternalTools::TrackerAttachFiles` (`AttachmentExporter user:`) | `workflow_run&.user \|\| session&.user` | `session_user` |
+| `InternalTools::TrackerDownloadAttachments` (`AttachmentImporter user:`) | `workflow_run&.user \|\| session&.user` | `session_user` |
+| `github_user_token`, `github_user_token_for` | new | `session_user` (§4.3) |
+| The comment above `TaskService.run_owner_for` | describes `task.assignee \|\| workflow_run&.user` as the tools' actor | describes `session.user` |
 
-**D1: this changes whose per-user MCP credential a session uses in one case.**
-`session.user` is the run owner, which `TaskService.run_owner_for` already sets to
-the assignee when the assignee can own runs. The two rules differ only when a task
-has an assignee who is not the run owner:
+For a step session, `session.user` equals `workflow_run.user`, so the gate, asset and
+tracker rows change in code only. The three `resolve_actor` tools change behaviour
+(below).
 
-- the assignee cannot own runs (a viewer, an inactive member, or no agent credential
-  in the company), so the person who moved the card became the owner; or
-- the task was reassigned after the run started.
+*No change: these already read `session.user`*
 
-In those cases the MCP token would switch from the run owner's to the assignee's,
-and a session whose assignee has not connected that MCP server would stop at
-`Oauth::ReauthRequired` where it runs today. **This is a decision for Alex.** The
-design recommends unifying (one rule, as the task asks). The alternative keeps MCP
-on `session.user` and uses `ActingUser` only for the new tools. Either choice is one
-line in each of the two MCP call sites. Implementation step 4 is written for the
-recommendation and is the only step that changes if Alex chooses otherwise.
+| Area | Places |
+|---|---|
+| Agent credential and billing | `SessionService#preflight_agent_credential!` (launch and revalidation); credential injection in `ContainerStrategies::AgentSessionStrategy`; the Kiro credential write-back (`AgentCredential.from_artifacts(session.user_id, …)` in `AgentSessionStrategy` and `AgentAuthStrategy`); `SessionCompany.membership_for` / `agent_credentials_for` |
+| Admission and revalidation | `SessionService` revalidation (`authenticatable?`, `project.accessible_by?`, the active membership); `SessionAdmissionService#pool_configuration` (the per-user pool of a project-less agent login) |
+| Per-user MCP tokens and the cloud preflight | `SessionContextService#inject_oauth_token!`; `SessionService#refresh_oauth_tokens_for_session`; `preflight_oauth!` and `preflight_cloud!` |
+| Config items | `SessionConfigResolver#user`; `ConfigItemAccess.record!` in `SessionContextService` and `InternalTools::GetConfigItem` |
+| Session outputs | asset authors (`created_by`, `uploaded_by`) and the output company (`resolve_output_scope`) in `AgentSessionStrategy` |
+| Supervision tools | `InternalTools::Concerns::SessionScope#supervision_owner` |
+| Chat | `InternalTools::ChatPostMessage` (`Teams::FileSender user:`) |
+| Audit records | `PullRequestContext` and `TrackerContext` operation rows (`user_id: session&.user_id`); `AzureDevopsContext` (`user: session&.user`) |
+| BMAD | `BmadMethodInjector` developer name |
+| **Found by this revision, not in the review's list** | `InternalTools::ShareAsset` → `PubliclyShareable#share!` (`shared_by: session&.user`); Builder: `Tools::BuilderToolset` (the tools act with `user: session.user`) and `ContextBuilders::AixleBuilder`; `InternalTools::CoderAllocateMachine` (the machine label carries `session.user.email`); `ContainerRuntime::KubernetesRuntime` (the per-user namespace) |
+| Who may see or control a session | `Api::V1::Internal::WsAuthController` (owner-only surfaces), `TerminalSessionResource`, `StepRunResource`, `SessionListEntryResource`, `RunListEntryResource`, `PersonalTools::ListSessions`, `PersonalTools::StopSession`, `RecentActivityService`. These answer "whose session is this", and the answer is already `session.user` |
+
+*Not a session's user: these stay on `workflow_run.user`.* `WorkflowService`
+(retrying a run, and the board activity for a run's start and end),
+`Chat::StatusCard` ("started by") and `PersonalTools::Base` (who may control a run)
+read the run's owner. They are about the run, not about one of its sessions, and
+`workflow_run.user` is the value every step session copies.
+
+*No user recorded.* `board_create_task`, `board_update_task` and `board_manage_tags`
+record no actor today. They stay that way.
+
+**How this was checked.** A search of `app/` for `session.user`, `session&.user`,
+`session.user_id`, `workflow_run.user`, `run.user` and `assignee ||` returns
+exactly the rows above. The implementation repeats that search (step 4), and after it
+`rg -n "resolve_actor|assignee \|\| workflow_run|workflow_run&?\.user" app/services/internal_tools`
+is empty.
+
+**Behaviour changes.**
+
+- **Someone else's card: comment or asset.** An agent's comment or asset on a card
+  is authored by the session's user. Today it is authored by that card's assignee.
+  The case arises when an agent works on a card other than its own run's card, or
+  when the run's card has an assignee who could not own the run.
+- **Someone else's card: move.** The move's actor is the session's user.
+  `run_owner_for` still picks the next run's owner: the card's assignee if they can
+  own runs, otherwise the session's user. Today the actor is the assignee, so an
+  assignee who can't own runs became the requester, and so the next run's owner, and
+  that run then failed its agent-credential preflight. The board activity row for the
+  move also names the session's user.
+- **The GitHub tools.** When the session's card's assignee can't own runs, the run's
+  owner (the person who moved the card or pressed **Run**) is `session.user`, and the
+  tools act as them.
+- **Reassignment.** Reassigning the card mid-run doesn't change the session's user.
+  The next run on that card is owned per `run_owner_for` as before.
+- **Per-user MCP credentials** don't change: they already read `session.user`.
+
+**No user.** `session.user` can be nil only when `workflow_run.user` is nil. Those
+sessions already fail the agent-credential preflight before they start, so no running
+session has one today. The tools still guard it: the GitHub tools answer with an error
+(§4.3), and the board, gate and asset tools keep their existing "Cannot determine …"
+errors, now on `session_user`. `BoardMoveTask` and `BoardCreateGate`, which have no
+such guard today, get one ("Cannot determine the acting user").
+
+**Alternatives considered**
+
+- *`Sessions::ActingUser`, a rule computed on each call* (the task's assignee, then the
+  run's owner, then `session.user`). This was revision 1. Alex's review rejected it:
+  it makes a second current user beside `session.user`, and it changes with
+  reassignment while the session's credentials don't.
+- *Leave the board tools on `resolve_actor` and use `session.user` only for the new
+  tools.* That keeps two answers to the same question. Rejected by the review.
 
 ## 3. Data model changes
 
@@ -279,14 +359,17 @@ gets" is met.
 
 | Tool | Params | User | Consent checked |
 |---|---|---|---|
-| `github_user_token` | none | `Sessions::ActingUser.for(session)` | `in_own_tasks` |
-| `github_user_token_for` | `user_id` (integer, required; from `board_list_members` or a task's `assignee_id`) | that user | `in_own_tasks` if the user is `ActingUser.for(session)`, otherwise `in_others_tasks` |
+| `github_user_token` | none | `session_user` | `in_own_tasks` |
+| `github_user_token_for` | `user_id` (integer, required; from `board_list_members` or a task's `assignee_id`) | that user | `in_own_tasks` if the user is `session_user`, otherwise `in_others_tasks` |
 
 Shared logic goes in `InternalTools::Concerns::GithubUserTokenContext`. The steps
 below run in order, and the first failure answers with an `error(...)`:
 
-1. **Resolve the user.** If there is none, the error is: "No user to act as: this
-   session has no task assignee and no user who started it."
+1. **Resolve the user.** Both tools first require `session_user`. If it is nil, the
+   error is: "This session has no user, so there is no one to act as." Then
+   `github_user_token` uses `session_user`, and `github_user_token_for` resolves
+   `user_id` among the members of the session's company (an unknown id gives "No
+   member with id <id> in this company.").
 2. **Check the user.**
    - They must be `User.authenticatable`.
    - They must have an active membership in `session.company`.
@@ -390,9 +473,28 @@ here, so other providers are not affected.
    - `Sessions::SecretRegistry#values`: union the issuance tokens for the session.
    - `Sessions::SecretRedactor.secret_values_for`: union them too. The early
      `return [] if ids.blank?` must not skip the issuances.
-4. **`Sessions::ActingUser`** in `app/services/sessions/acting_user.rb`. Switch
-   `SessionContextService#inject_oauth_token!` and
-   `SessionService#refresh_oauth_tokens_for_session` to it (D1).
+4. **One current user: `session.user`** (§2.4). This step needs none of 1–3 and can
+   be merged first.
+   - `TerminalSession`: add `attr_readonly :user_id` (D13).
+   - `InternalTools::Base`: add the private `session_user` (`session&.user`).
+   - `BoardMoveTask`, `BoardAddComment`, `BoardAttachAsset`: delete `resolve_actor` and
+     use `session_user`. Add the missing nil guard to `BoardMoveTask`.
+   - `BoardCreateGate` (`creator:`), `PromoteAsset` (`promoter`),
+     `TrackerAttachFiles` and `TrackerDownloadAttachments` (`user:`): use
+     `session_user`. Add the nil guard to `BoardCreateGate`.
+   - Rewrite the comment above `TaskService.run_owner_for` so it describes the tools'
+     actor as `session.user`.
+   - Repeat the §2.4 search. Any reader it finds that is not in the §2.4 tables gets
+     a row in this document in the implementation pull request, and is switched to
+     `session.user` if it computes the session's user another way.
+   - Docs: in `docs/user-guide/index.md` and its mirrors
+     `app/frontend/pages/Docs/data/pages/user-guide.md` and `starting-work.md`, extend
+     the "A session runs on a person's credential" paragraph: the session also acts as
+     that person, so the agent's board comments, attachments, moves and gates, and its
+     tracker uploads, are recorded under their name.
+   - `CHANGELOG.md`: an entry under `### Changed` with the **Tasks** area, saying that
+     an agent's board comments, attachments and moves are now recorded under the
+     session's user instead of the card's assignee.
 5. **Tools.**
    - Add `InternalTools::GithubUserToken`, `InternalTools::GithubUserTokenFor` and
      the `GithubUserTokenContext` concern.
@@ -432,8 +534,8 @@ git -c credential.helper= \
 GH_TOKEN="$TOKEN" gh pr create -R owner/repo --base develop --head feature/x --title "..." --body "..."
 ```
 
-Steps 1–3 can be merged on their own, because nothing calls them yet. Steps 4 and 5
-need 1–3. Step 6 needs 1–2.
+Steps 1–3 can be merged on their own, because nothing calls them yet. Step 4 is
+independent of the others. Step 5 needs 1–4. Step 6 needs 1–2.
 
 ## 6. Testing approach
 
@@ -452,11 +554,24 @@ in adapter contract tests.
 - **Models:** `ActAsConsent` (defaults, uniqueness, `allows?`, the project and
   company agreement) and `UserTokenIssuance` (encryption round trip; the token is
   never in `inspect` or `attributes`).
-- **`Sessions::ActingUser`:** the four outcomes, and a reassigned task (the live read).
+- **`session.user` (step 4):**
+  - `test/models/terminal_session_test.rb`: changing `user_id` on a persisted session
+    does not change the stored value (`attr_readonly`).
+  - `test/services/internal_tools/board_write_tools_test.rb`: replace "uses
+    workflow_run user as fallback author" with tests where the card's assignee is
+    someone other than the session's user. The comment, the asset and the move's
+    board activity name the session's user. A move of a card whose assignee can't
+    own runs fires the next run owned by the session's user.
+  - `board_create_gate_test.rb` and `promote_asset_test.rb`: the creator and the
+    promoter are the session's user, and a session without a user gets the error.
+  - `tracker_attachment_tools_test.rb`: the exporter and importer receive the
+    session's user.
 - **Tools** (`test/services/internal_tools/github_user_token_test.rb` and
   `github_user_token_for_test.rb`, in the shape of `get_config_item_test.rb`):
-  - every error in §4.3, and the consent matrix (own versus others, the named user
-    being the acting user);
+  - every error in §4.3, including a session without a user, and the consent matrix
+    (own versus others, the named user being the session's user);
+  - a card whose assignee is not the session's user: `github_user_token` returns the
+    session's user, not the assignee;
   - several owners giving several tokens, and PAT repositories in `skipped`;
   - a refusal when `SecretRegistry.publish!` fails;
   - the issuance row is written, and the token appears in `SecretRegistry#values` and
@@ -464,9 +579,8 @@ in adapter contract tests.
   - no token in any error.
 - **Masking:** `secret_registry_test.rb` and `secret_redactor_test.rb` cover a session
   with issuances and no secret config items.
-- **MCP (D1):** update `session_context_service_test.rb` and the `session_service`
-  refresh test so that a task with an assignee who is not the run owner injects the
-  assignee's per-user credential.
+- **MCP:** no change. The existing `session_context_service_test.rb` tests already
+  pin the per-user credential to `session.user`.
 - **Requests:** `test/integration/web/profile_connections_test.rb` covers the page
   props, a consent update (and 404 for a project outside the company), and disconnect
   (grant revoked through the fake, rows removed, issuances kept).
@@ -510,9 +624,13 @@ in adapter contract tests.
   `redact.list` filters, the collected terminal output and transcripts, and served
   logs. A value the agent transforms (base64, split) is not masked. That limit also
   applies to config-item secrets today.
-- **R7. Live assignee.** `ActingUser` reads the assignee at call time. After a
-  reassignment mid-session, the MCP token injected at start stays the old user's,
-  while a later tool call returns the new assignee's.
+- **R7. Attribution moves for three board tools.** After step 4, an agent's comments,
+  attachments and moves on a card whose assignee isn't the session's user are
+  recorded under the session's user (§2.4, behaviour changes). A workflow or a report
+  that reads "comments by the assignee" to find agent output would see them under
+  another name. `board_get_comments` filters by `author_type` and tag, not by author,
+  so the tools themselves are not affected. The changelog entry for step 4 states the
+  change.
 - **R8. The user's own access.** A scoped token is created even where the user can
   only read. The push then fails at GitHub with a 403, which the agent sees in git's
   output. The design does not pre-check permissions per repository.
@@ -525,18 +643,21 @@ in adapter contract tests.
 
 | # | Decision | Source |
 |---|---|---|
-| D1 | `ActingUser` also governs per-user MCP credentials. This changes behaviour only when a task's assignee is not the run owner (§2.4). **For Alex to confirm.** | Task: "If unifying would change whose MCP credential a session uses today, the design names that as a decision for Alex" |
-| D2 | "The user who started the run" is `workflow_run.user`. For a run started by a trigger, that is the binding's run-as user (`WorkflowTriggers::RunAs`, `created_by`). There is no other "started by" record. | `WorkflowRun belongs_to :user`, `TriggerEngine.fire_workflow(actor:)`. **Reviewer to confirm.** |
-| D3 | The task's assignee wins even when they cannot own runs. The agent credential and billing stay with the run owner (`run_owner_for`). | Task §4 ("the assignee of the session's board task"), and the existing `run_owner_for` |
-| D4 | `github_user_token_for` for the session's own acting user checks "in my tasks". Any other user needs "in tasks that aren't mine". | Task §3: "their own tasks" versus "tasks that aren't theirs" |
-| D5 | Consent applies to sessions in that project, whether or not the session has a task. A no-task session counts as "own" only for the user `ActingUser` returns. | Task §3 and §4 |
+| D1 | The session's current user is `session.user`, everywhere. There is no `Sessions::ActingUser`. The board, gate, asset and tracker tools switch to it; per-user MCP credentials already read it. | Alex's design review, 2026-11-10 |
+| D2 | `session.user` is set once at creation: the launching user for an interactive session, a copy of `workflow_run.user` for a step. `workflow_run.user` is chosen at run start by `run_owner_for` for a card, the starter for a manual run, and the run-as user for a trigger. | Alex's design review; `SessionService.create_and_start`, `SessionService#build_for_workflow_step` |
+| D3 | The agent credential, billing and the GitHub tools all act as the same person, `session.user`. When a card's assignee can't own runs, that is the run's owner. | Alex's design review |
+| D4 | `github_user_token_for` checks "in my tasks" when the named user is `session.user`. Any other user needs "in tasks that aren't mine". | Alex's design review |
+| D5 | "In my tasks" means "in sessions whose user I am", in that project, whether or not the session has a card and whoever the card's assignee is. | Alex's design review (D4 and D5) |
 | D6 | The connection is user-level, one GitHub account per Flow user across companies. Consent is per project. The profile page lists the projects of the current company. | Task §1 ("in the user's own settings"); the profile pages render in the current company |
-| D7 | Disconnect revokes the grant at GitHub and deletes the user's GitHub consents. Reconnecting starts with both switches off. A reconnect from `needs_reconnect` (no disconnect) keeps them. | Least privilege. **Reviewer to confirm.** |
+| D7 | Disconnect revokes the grant at GitHub and deletes the user's GitHub consents. Reconnecting starts with both switches off. A reconnect from `needs_reconnect` (no disconnect) keeps them. | Accepted in Alex's design review |
 | D8 | The tools are `user_attachable` with no auto-injection. They appear in the picker under "GitHub as a user". | Task §2: "whoever configures a workflow or a session decides which tool the agent gets" |
 | D9 | Only repositories on a GitHub **App** connection are covered. PAT-connected repositories are skipped with a reason. | The scoped endpoint needs the App installed on the target |
 | D10 | `user_id` is the only way to name a user. | Board tools expose member ids (`board_list_members`, `assignee_id`) |
 | D11 | No new environment variable. The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature. | `config/settings.yml` `github.*` |
 | D12 | The platform does not set the commit identity, sign-off or `gh` credentials for the session. It returns the identity, and the instructions apply it. | Task: "a workflow's instructions decide how to use it" |
+| D13 | "Set once" is enforced: `TerminalSession` gets `attr_readonly :user_id`. No code updates it today, so nothing breaks. **Reviewer to confirm.** | Alex's review: "set when the session is created, and it doesn't change"; the §2.4 search |
+| D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Alex's review: "nothing computes it again" |
+| D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | It is the value every step session copies; §2.4 |
 
 ## 9. Deferred questions
 
