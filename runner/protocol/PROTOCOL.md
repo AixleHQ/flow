@@ -474,7 +474,9 @@ that does not answer is `502 upstream_unavailable`.
 
 **Telling the two apart.** Every refusal of the gateway on this route, the common ones of §3
 included, carries `X-Aixle-Runner-Refusal: <error>`. An answer without it is the endpoint's, and
-the runner passes it on as it is: a `401` of the MCP server is the MCP server's.
+the runner passes it on as it is: a `401` of the MCP server is the MCP server's. A redirect is
+an answer like any other: the runner passes the `3xx` on and never follows it, so neither its
+access token nor the agent's session-key headers go anywhere but this route.
 
 Fixtures: `proxy/`. The streamed answer, the forwarded headers and the key of each credential
 route are tested by the gateway's own tests (fixtures README).

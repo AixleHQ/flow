@@ -46,7 +46,7 @@ func NewClient(platformURL, version string, httpClient *http.Client) (*Client, e
 	if err != nil {
 		return nil, err
 	}
-	proxyClient := httpClient
+	var proxyClient *http.Client
 	if httpClient == nil {
 		httpClient = &http.Client{
 			// The long-poll is held for up to 25 s; the margin covers the gateway's own
@@ -54,6 +54,16 @@ func NewClient(platformURL, version string, httpClient *http.Client) (*Client, e
 			Timeout: MaxWait + 35*time.Second,
 		}
 		proxyClient = &http.Client{}
+	} else {
+		// A copy, so the caller's client keeps its own redirect policy.
+		clone := *httpClient
+		proxyClient = &clone
+	}
+	// The endpoint's answer comes back unchanged (§5.6), a redirect included.
+	// Following one would send the bearer to a path outside the proxy prefix, or
+	// the agent's session-key headers to another origin.
+	proxyClient.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
 	}
 	return &Client{baseURL: u, version: version, http: httpClient, proxy: proxyClient}, nil
 }
