@@ -180,16 +180,18 @@ func canonical(below string) bool {
 
 // readBody reads a request's body, up to the gateway's cap and within
 // bodyReadTimeout, and answers the refusal itself when it cannot. The read
-// deadline is set only while a body is read, and cleared after: a deadline
-// left on the connection would cut the answer's stream.
+// deadline is set only while a body is read, and cleared once it has been:
+// a deadline left on the connection would cut the answer's stream. After a
+// failed read it stays, so that the server's own drain of the unread body,
+// before it writes the refusal, fails at once instead of waiting for it.
 func readBody(w http.ResponseWriter, req *http.Request) ([]byte, bool) {
 	rc := http.NewResponseController(w)
 	bounded := req.ContentLength != 0 && rc.SetReadDeadline(time.Now().Add(bodyReadTimeout)) == nil
 	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, protocol.MaxBodyBytes))
-	if bounded {
-		_ = rc.SetReadDeadline(time.Time{})
-	}
 	if err == nil {
+		if bounded {
+			_ = rc.SetReadDeadline(time.Time{})
+		}
 		return body, true
 	}
 	var tooLarge *http.MaxBytesError

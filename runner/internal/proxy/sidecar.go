@@ -88,8 +88,10 @@ func sidecarProxy(socket string, logger *slog.Logger) *httputil.ReverseProxy {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", socket)
 		},
-		MaxIdleConns:    16,
-		IdleConnTimeout: 90 * time.Second,
+		// A connection per call: the socket is local and cheap to dial, and a
+		// pooled connection to a relay that was replaced (a restarted host
+		// runner) would fail the next call instead of reaching the new one.
+		DisableKeepAlives: true,
 	}
 	return &httputil.ReverseProxy{
 		// Rewrite, not Director: no X-Forwarded-* header is added, and the
