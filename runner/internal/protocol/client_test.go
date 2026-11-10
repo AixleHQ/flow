@@ -85,6 +85,8 @@ func TestClassify(t *testing.T) {
 		{"413", refusal(EndpointResult, 413, ""), ActionBug},
 		{"unsupported_protocol", refusal(EndpointOps, 400, "unsupported_protocol"), ActionUpdate},
 		{"invalid_runner_version", refusal(EndpointRegister, 400, "invalid_runner_version"), ActionUpdate},
+		{"runner_version_unsupported", refusal(EndpointRegister, 400, "runner_version_unsupported"), ActionUpdate},
+		{"release not_found", refusal(EndpointReleases, 404, "not_found"), ActionBug},
 		{"invalid_request", refusal(EndpointOps, 400, "invalid_request"), ActionBug},
 		{"invalid_result", refusal(EndpointResult, 422, "invalid_result"), ActionBug},
 		{"400 without the JSON shape", refusal(EndpointResult, 400, ""), ActionBug},

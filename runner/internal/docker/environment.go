@@ -145,6 +145,14 @@ func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectR
 	return nil, nil
 }
 
+// HoldsSession says whether the environment has a session container, running or
+// not: the machine then holds a session, and the runner does not update itself
+// (DESIGN.md §14.4). `container.stop` removes the container when the session ends.
+func (e *Environment) HoldsSession(ctx context.Context) (bool, error) {
+	c, err := e.sessionContainer(ctx)
+	return c != nil, err
+}
+
 // requireSession is the session container a session op acts on. `running` asks
 // for a running one, as `exec` needs; the archive API of the file ops works on a
 // container that has exited too. Without one, the op answers

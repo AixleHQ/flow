@@ -1,0 +1,52 @@
+{
+  "description": "The platform's release URL of a pinned binary answers 302 to the release asset, with the digest the platform pins in X-Aixle-Runner-Sha256, not cacheable. It takes no token, and no protocol headers either: an operator downloads the binary before the machine has them.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.5.0/linux-amd64"
+      },
+      "response": {
+        "status": 302,
+        "headers": {
+          "Location": "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-amd64",
+          "X-Aixle-Runner-Sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+          "Cache-Control": "no-store",
+          "Set-Cookie": null
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.5.0/linux-arm64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 302,
+        "headers": {
+          "Location": "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-arm64",
+          "X-Aixle-Runner-Sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "description": "An answer without ops to a machine that holds no session and reports a version below the recommended one carries `update`: the recommended version and the SHA-256 the platform pins for the machine's os and arch. A machine at the recommended version, an answer with ops, and a machine that holds a session get none.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "ops": [],
+          "update": {
+            "version": "1.5.0",
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.5.0"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
+      "as": "o",
+      "op": "status",
+      "payload": {}
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "o.id"
+              },
+              "sequence": {
+                "$var": "o.sequence"
+              },
+              "op": "status",
+              "session_id": {
+                "$var": "s.id"
+              },
+              "deadline_at": {
+                "$var": "o.deadline_at"
+              },
+              "payload": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{o.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "status": "running"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "o.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after={{o.sequence}}&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

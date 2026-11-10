@@ -69,6 +69,7 @@ import {
   siblingNames,
 } from './folderTree';
 import { MoveToFolderModal } from './MoveToFolderModal';
+import { assetToPreviewItem } from './previewItem';
 import { useAssetMutations } from './useAssetMutations';
 import { useAssetSelection } from './useAssetSelection';
 import { useAssetViewState } from './useAssetViewState';
@@ -96,6 +97,8 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 // Shrine's :cache storage prefix, which is what /presign signs under. Server-side twin:
 // Api::V1::AssetsController#cache_key.
 const CACHE_PREFIX = 'cache/';
+
+const noop = () => {};
 
 // Mirrors Asset::FOLDER_MAX_LENGTH / Folder::PATH_FORMAT / Folder::RESERVED_SEGMENTS. Catching it
 // here keeps the file — already uploaded to cache storage by the time the folder is typed — from
@@ -898,9 +901,10 @@ export function AssetsContent({
 
       {/* Preview Modal */}
       <AssetPreviewModal
-        asset={previewAsset}
+        items={previewAsset ? [assetToPreviewItem(previewAsset, downloadUrl(previewAsset))] : []}
+        index={previewAsset ? 0 : null}
+        onIndexChange={noop}
         onClose={() => setPreviewAsset(null)}
-        downloadUrl={previewAsset ? downloadUrl(previewAsset) : ''}
         onUnshare={canExecute ? (asset) => assetMutations.unshare(asset.id) : undefined}
       />
 
