@@ -39,9 +39,7 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
   # config/initializers/_config_settings.rb, so dotted version keys and the
   # `<os>-<arch>` keys go through the Config gem's options and back.
   test "pinned binaries and a recommended version survive the Config gem" do
-    settings = Config.load_files
-    settings.add_source!({ "runners" => { "release" => PINS.deep_dup } })
-    settings.reload!
+    settings = Config.load_files({ "runners" => { "release" => PINS.deep_dup } })
     Settings.stubs(:runners).returns(settings.runners)
     Runners::Release.reset!
 
